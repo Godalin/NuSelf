@@ -9,6 +9,8 @@ from nuself.cli import main
 from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.protocol import DaemonResponse
 from nuself.daemon.lifecycle import DaemonStatus
+from nuself.domain.memory import MemoryEntry
+from nuself.memory.repository import MemoryEntryRepository
 
 
 class CaptureResult(Protocol):
@@ -347,7 +349,7 @@ def test_memory_preview_limits_entries(tmp_path: Path, capsys: CaptureFixture) -
     assert "... 1 more." in captured.out
 
 
-def test_memory_update_curates_working_memory(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_update_defers_without_agent_decision(tmp_path: Path, capsys: CaptureFixture) -> None:
     ThreadStore(tmp_path).save(
         ThreadState(
             thread_id="default",
@@ -362,8 +364,25 @@ def test_memory_update_curates_working_memory(tmp_path: Path, capsys: CaptureFix
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Memory curator: processed=2 created=1 updated=0 ignored=0" in captured.out
-    assert "Conversation:" in main_memory_preview(tmp_path)
+    assert "Memory curator: processed=0 created=0 updated=0 ignored=0" in captured.out
+    assert main_memory_preview(tmp_path) == ""
+
+
+def test_memory_optimize_defers_without_agent_decision(tmp_path: Path, capsys: CaptureFixture) -> None:
+    MemoryEntryRepository(tmp_path).save(
+        MemoryEntry(
+            type="belief",
+            title="Messy memory",
+            body="This entry needs later optimization.",
+        )
+    )
+
+    result = main(["--project-root", str(tmp_path), "memory", "optimize"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Memory optimizer: reviewed=0 updated=0 deleted=0 ignored=0" in captured.out
+    assert "Messy memory" in main_memory_preview(tmp_path)
 
 
 def test_memory_add_list_show_delete(tmp_path: Path, capsys: CaptureFixture) -> None:

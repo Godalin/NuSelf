@@ -14,6 +14,7 @@ from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
 
 MemoryActionType: TypeAlias = Literal["create", "update", "ignore"]
+DecisionStatus: TypeAlias = Literal["ready", "deferred"]
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,15 @@ class MemoryAction:
     reason: str = ""
 
 
+@dataclass(frozen=True)
+class MemoryDecision:
+    """Structured decision returned by the curator agent."""
+
+    status: DecisionStatus
+    actions: tuple[MemoryAction, ...] = ()
+    reason: str = ""
+
+
 class MemoryCurator:
     """Summarize new working-memory turns into durable memory entries."""
 
@@ -91,11 +101,24 @@ class MemoryCurator:
             )
 
         source_ref = f"thread:{thread_id}:{cursor}-{len(state.messages)}"
-        actions = self._decide_actions(thread_id, state, cursor, new_messages)
+        decision = self._decide_actions(thread_id, state, cursor, new_messages)
+        if decision.status == "deferred":
+            self._append_log(
+                f"memory_curator_deferred thread={thread_id} source={source_ref} "
+                f"processed=0 reason={decision.reason!r}"
+            )
+            return MemoryCuratorResult(
+                processed_messages=0,
+                created=0,
+                updated=0,
+                ignored=0,
+                log_path=self._memory_log_path(),
+            )
+
         created = 0
         updated = 0
         ignored = 0
-        for action in actions:
+        for action in decision.actions:
             if action.action == "create":
                 self._create_entry(action, source_ref)
                 created += 1
@@ -126,15 +149,18 @@ class MemoryCurator:
         state: ThreadState,
         cursor: int,
         messages: list[ThreadMessage],
-    ) -> list[MemoryAction]:
+    ) -> MemoryDecision:
         prompt = [
             ChatMessage(
                 role="system",
                 content=(
                     "You are the NuSelf Memory Curator Agent. Decide whether new working-memory turns "
-                    "should create or update long-term memory. Return only JSON with an actions array. "
-                    "Prefer concise episode memories for discussion summaries. Use update only when an "
-                    "existing memory id clearly matches. Allowed actions are create, update, ignore."
+                    "should create, update, or ignore long-term memory. Return only JSON with an actions array. "
+                    "Be conservative. Ignore trivial greetings, name pings, acknowledgements, and idle small talk. "
+                    "Prefer updating or refining an existing memory when the meaning is already represented. "
+                    "Create only when the discussion contains a durable preference, decision, open question, "
+                    "important episode, or instruction. Never copy raw chat transcripts into memory bodies; "
+                    "write compressed summaries with evidence-aware wording. Allowed actions are create, update, ignore."
                 ),
             ),
             ChatMessage(
@@ -146,7 +172,9 @@ class MemoryCurator:
                     f"New turns {cursor}-{cursor + len(messages)}:\n{_render_transcript(messages)}\n\n"
                     "Return JSON like: "
                     '{"actions":[{"action":"create","type":"episode","title":"...","body":"...",'
-                    '"confidence":0.7,"reason":"..."}]}'
+                    '"confidence":0.7,"reason":"..."}]}\n'
+                    "For low-value chat, return: "
+                    '{"actions":[{"action":"ignore","reason":"trivial greeting or no durable memory"}]}'
                 ),
             ),
         ]
@@ -154,10 +182,10 @@ class MemoryCurator:
             raw = self._llm.complete(prompt)
             actions = _parse_actions(raw)
         except (RuntimeError, ValueError):
-            actions = []
+            return MemoryDecision(status="deferred", reason="curator agent unavailable or returned invalid JSON")
         if actions:
-            return actions
-        return [_local_episode_action(messages)]
+            return MemoryDecision(status="ready", actions=tuple(actions))
+        return MemoryDecision(status="deferred", reason="curator agent returned no valid actions")
 
     def _existing_memory_context(self) -> str:
         lines: list[str] = []
@@ -242,23 +270,8 @@ def _render_transcript(messages: list[ThreadMessage]) -> str:
     return "\n".join(f"{message.role}: {message.content}" for message in messages)
 
 
-def _local_episode_action(messages: list[ThreadMessage]) -> MemoryAction:
-    user_messages = [message.content for message in messages if message.role == "user"]
-    title_source = user_messages[-1] if user_messages else "Conversation update"
-    title = _compact(title_source, 80)
-    body = _compact(_render_transcript(messages), 600)
-    return MemoryAction(
-        action="create",
-        type="episode",
-        title=f"Conversation: {title}",
-        body=body,
-        confidence=0.45,
-        reason="local fallback summary",
-    )
-
-
 def _parse_actions(raw: str) -> list[MemoryAction]:
-    parsed: object = json.loads(raw)
+    parsed: object = json.loads(_extract_json_object(raw))
     if not isinstance(parsed, dict):
         return []
     actions_value = cast(dict[str, object], parsed).get("actions")
@@ -281,6 +294,8 @@ def _parse_action(raw: dict[str, object]) -> MemoryAction | None:
     title = _string_field(raw, "title")
     body = _string_field(raw, "body")
     if action_value != "ignore" and (title == "" or body == ""):
+        return None
+    if action_value != "ignore" and _looks_like_raw_transcript(body):
         return None
     memory_type = _memory_type(raw.get("type"))
     return MemoryAction(
@@ -321,8 +336,15 @@ def _clamp_confidence(value: float) -> float:
     return max(0.0, min(value, 1.0))
 
 
-def _compact(text: str, limit: int) -> str:
-    compact = " ".join(text.split())
-    if len(compact) <= limit:
-        return compact
-    return compact[: max(limit - 3, 0)].rstrip() + "..."
+def _extract_json_object(raw: str) -> str:
+    stripped = raw.strip()
+    if stripped.startswith("```"):
+        lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+        stripped = "\n".join(lines).strip()
+    return stripped
+
+
+def _looks_like_raw_transcript(text: str) -> bool:
+    normalized = text.casefold()
+    markers = normalized.count("user:") + normalized.count("assistant:")
+    return markers >= 2

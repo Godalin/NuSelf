@@ -89,7 +89,7 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
     assert updated.source_refs == ["thread:default:0-2"]
 
 
-def test_memory_curator_uses_local_episode_when_llm_is_unavailable(tmp_path: Path) -> None:
+def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None:
     thread_store = ThreadStore(tmp_path)
     thread_store.save(
         ThreadState(
@@ -105,5 +105,80 @@ def test_memory_curator_uses_local_episode_when_llm_is_unavailable(tmp_path: Pat
 
     result = curator.run_once()
 
+    assert result.processed_messages == 0
+    assert result.created == 0
+    assert repo.list() == []
+
+
+def test_memory_curator_ignores_trivial_chat_when_agent_says_ignore(tmp_path: Path) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(role="user", content="NuSelf"),
+                ThreadMessage(role="assistant", content="I am here."),
+            ],
+        )
+    )
+    llm = FakeCuratorLLM('{"actions":[{"action":"ignore","reason":"trivial name ping"}]}')
+    repo = MemoryEntryRepository(tmp_path)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+
+    result = curator.run_once()
+    second_result = curator.run_once()
+
+    assert result.processed_messages == 2
+    assert result.ignored == 1
+    assert second_result.processed_messages == 0
+    assert repo.list() == []
+
+
+def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(role="user", content="We need conservative memory updates."),
+                ThreadMessage(role="assistant", content="I will avoid raw transcript memory."),
+            ],
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"create","type":"episode","title":"Raw transcript",'
+        '"body":"user: We need conservative memory updates. assistant: I will avoid raw transcript memory.",'
+        '"confidence":0.9,"reason":"bad raw transcript"}]}'
+    )
+    repo = MemoryEntryRepository(tmp_path)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+
+    result = curator.run_once()
+
+    assert result.processed_messages == 0
+    assert repo.list() == []
+
+
+def test_memory_curator_accepts_fenced_json(tmp_path: Path) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(role="user", content="Use agent decisions for memory updates."),
+                ThreadMessage(role="assistant", content="I will dispatch structured actions."),
+            ],
+        )
+    )
+    llm = FakeCuratorLLM(
+        '```json\n{"actions":[{"action":"create","type":"episode","title":"Structured memory decisions",'
+        '"body":"The user wants memory updates to be decided by an agent and dispatched as structured actions.",'
+        '"confidence":0.82,"reason":"durable memory-system decision"}]}\n```'
+    )
+    repo = MemoryEntryRepository(tmp_path)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+
+    result = curator.run_once()
+
     assert result.created == 1
-    assert repo.list()[0].title.startswith("Conversation:")
+    assert repo.list()[0].title == "Structured memory decisions"

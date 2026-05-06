@@ -17,6 +17,7 @@ from nuself.agent.chat import ChatAgent
 from nuself.daemon import client, lifecycle
 from nuself.domain.memory import MemoryEntry, MemoryEntryType
 from nuself.memory.curator import MemoryCurator
+from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
@@ -91,6 +92,9 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("query")
     _add_handler(search_parser, handle_memory_search)
     _add_handler(memory_subparsers.add_parser("update"), handle_memory_update)
+    optimize_parser = memory_subparsers.add_parser("optimize")
+    optimize_parser.add_argument("--limit", type=int, default=50)
+    _add_handler(optimize_parser, handle_memory_optimize)
     _add_handler(memory_subparsers.add_parser("reindex"), handle_memory_reindex)
 
     return parser
@@ -263,6 +267,13 @@ def handle_memory_reindex(args: argparse.Namespace) -> int:
 def handle_memory_update(args: argparse.Namespace) -> int:
     result = MemoryCurator(args.project_root).run_once()
     print(f"Memory curator: {result.summary()} log={result.log_path}")
+    return 0
+
+
+def handle_memory_optimize(args: argparse.Namespace) -> int:
+    settings = MemoryOptimizerSettings(memory_limit=args.limit)
+    result = MemoryOptimizer(args.project_root, settings=settings).run_once()
+    print(f"Memory optimizer: {result.summary()} log={result.log_path}")
     return 0
 
 
