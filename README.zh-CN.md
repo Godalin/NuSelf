@@ -22,11 +22,10 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 
 ### 当前目标
 
-- [ ] 构建 typed memory pipeline foundation。
-- [ ] 添加 `MemoryObject` envelope。
-- [ ] 添加 `MemoryTypeDescriptor` registry。
-- [ ] 添加 `belief`、`preference`、`episode` 和 `instruction` 内置 descriptors。
-- [ ] 让 curator 和 optimizer 的改动经过 descriptor validation。
+- [ ] 添加 memory candidate review queue。
+- [ ] 添加 candidate `list`、`show`、`accept`、`edit`、`merge` 和 `reject` 命令。
+- [ ] 让 accepted 和 edited candidates 经过 descriptor validation。
+- [ ] 将 candidate records 以可检查格式保存在 ignored `private/` 下。
 
 ### 项目基础
 
@@ -61,8 +60,9 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加低频 Memory Optimizer Agent，用于批量清理、合并和删除重复长期记忆。
 - [x] 添加手动 `memory optimize`。
 - [ ] 添加 memory candidate review queue：list、show、accept、edit、merge、reject。
-- [ ] 添加开放的 `MemoryObject + MemoryTypeDescriptor` registry，用于 typed memory 行为。
-- [ ] 添加 preference、belief、goal、concept、episode 和 instruction memory 的内置 descriptors。
+- [x] 添加开放的 `MemoryObject + MemoryTypeDescriptor` registry，用于 typed memory 行为。
+- [x] 添加 preference、belief、episode 和 instruction memory 的内置 descriptors。
+- [ ] 添加 goal 和 concept memory 的内置 descriptors。
 - [ ] 添加派生向量、hybrid 和 graph 索引。
 - [ ] 添加开放 symbolic graph，并用 `RelationDescriptor` 描述支持、矛盾、细化、偏好、依赖和未来关系。
 - [ ] 添加 memory stats 和更丰富的 query 命令。

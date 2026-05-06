@@ -20,6 +20,7 @@ This project is an AI-Mirror of most ideas of one person, for those who want to 
 - Keep refactors intentional: update documentation and validation together with the code change.
 - When commands, configuration, runtime behavior, or user-facing workflows change in a way users need to learn, update both English and Chinese README files in the same change.
 - When completing a feature or changing the development plan, update the project TODOs in [README.md](README.md) and keep [README.zh-CN.md](README.zh-CN.md) synchronized.
+- Commit feature implementation and current-task/progress updates separately. The first commit should contain the functional code and tests; the second commit should contain `docs/current-goal.md`, README TODO progress, and development-guidance updates.
 - Before starting non-trivial implementation work, check [docs/current-goal.md](docs/current-goal.md). If the requested task conflicts with the current goal, mention the conflict before proceeding.
 - When the user changes the current focus, update [docs/current-goal.md](docs/current-goal.md) and README TODOs in the same change.
 - Keep implementation constraints and small behavior polish in scoped `AGENTS.md` files near the code rather than overloading the user README.

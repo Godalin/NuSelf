@@ -22,11 +22,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Current Goal
 
-- [ ] Build the typed memory pipeline foundation.
-- [ ] Add a `MemoryObject` envelope.
-- [ ] Add a `MemoryTypeDescriptor` registry.
-- [ ] Add built-in descriptors for `belief`, `preference`, `episode`, and `instruction`.
-- [ ] Route curator and optimizer changes through descriptor validation.
+- [ ] Add memory candidate review queue.
+- [ ] Add candidate `list`, `show`, `accept`, `edit`, `merge`, and `reject` commands.
+- [ ] Keep accepted and edited candidates routed through descriptor validation.
+- [ ] Keep candidate records inspectable under ignored `private/`.
 
 ### Project Foundation
 
@@ -61,8 +60,9 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add low-frequency Memory Optimizer Agent for batch cleanup, merging, and deletion of duplicate long-term memories.
 - [x] Add manual `memory optimize`.
 - [ ] Add memory candidate review queue: list, show, accept, edit, merge, reject.
-- [ ] Add open `MemoryObject + MemoryTypeDescriptor` registry for typed memory behavior.
-- [ ] Add built-in descriptors for preference, belief, goal, concept, episode, and instruction memory.
+- [x] Add open `MemoryObject + MemoryTypeDescriptor` registry for typed memory behavior.
+- [x] Add built-in descriptors for preference, belief, episode, and instruction memory.
+- [ ] Add built-in descriptors for goal and concept memory.
 - [ ] Add derived vector, hybrid, and graph indexes.
 - [ ] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, preference, dependency, and future relations.
 - [ ] Add memory stats and richer query commands.

@@ -96,7 +96,8 @@ Deliverables:
 
 - `MemoryObject` envelope with open `type`, typed `payload`, metadata, confidence, source refs, privacy, review state, and timestamps.
 - `MemoryTypeDescriptor` protocol with validation, summarize, merge, decay, conflict, retrieval, and reflection hooks.
-- Built-in descriptors for preference, belief, goal, concept, episode, instruction, and the current entry types.
+- Foundation descriptors for preference, belief, episode, instruction, and the current entry-backed types.
+- Later descriptors for goal and concept memory.
 - Registry that can load core descriptors and later trusted plugin descriptors.
 - Unknown-type policy that stores unknown objects only as draft or quarantined records.
 - Curator and optimizer routing through descriptor validation and merge rules.
