@@ -61,10 +61,14 @@ Use one executable, tentatively `nuself`.
 Core commands:
 
 ```text
+nuself daemon
+nuself --message "..."
 nuself daemon start
 nuself daemon stop
 nuself daemon status
+nuself daemon list
 nuself daemon logs
+nuself daemon attach
 
 nuself chat
 nuself chat --new
@@ -98,6 +102,11 @@ The default `nuself chat` behavior:
 - If a daemon is running, connect to it and create or resume the default interactive thread.
 - If no daemon is running, start an embedded one-shot runtime for immediate chat unless `--require-daemon` is set.
 - If daemon auto-start is enabled later, start the daemon and then attach.
+- Without `--message`, `chat`, `attach`, and `daemon attach` stay in an interactive loop until `:q`, `:quit`, `:exit`, or EOF.
+- `nuself` is the shortest daemon-backed entrypoint: it connects to the current daemon, or creates a new daemon and then connects.
+- `nuself daemon` without a subcommand shows daemon subcommand help.
+- Interactive input starting with `:` is always parsed as a command. Unknown commands print interactive help and keep the session open.
+- Interactive mode should use readline-backed line editing and arrow-key history when available, persisted under `private/runtime/interactive_history`.
 
 ## Chat Modes
 

@@ -56,7 +56,15 @@ examples/private/
 没有守护进程时，可以使用 one-shot 聊天：
 
 ```bash
+uv run nuself chat
 uv run nuself chat --message "hello"
+```
+
+最短的 daemon-backed 入口是根命令。它会连接当前守护进程；如果没有正在运行的守护进程，会创建一个新进程，然后连接：
+
+```bash
+uv run nuself
+uv run nuself --message "hello"
 ```
 
 如果守护进程正在运行，`chat` 会把消息发送给守护进程：
@@ -76,8 +84,13 @@ uv run nuself chat --require-daemon --message "hello"
 连接到已有守护进程会话：
 
 ```bash
+uv run nuself attach
 uv run nuself attach --message "continue"
+uv run nuself daemon attach
+uv run nuself daemon attach --message "continue"
 ```
+
+不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。以 `:` 开头的输入会被识别为交互指令。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
 
 当前聊天回复只是占位 echo。真实的 mirror graph 后续会替换这部分 runtime。
 
@@ -88,9 +101,13 @@ uv run nuself attach --message "continue"
 ```bash
 uv run nuself daemon start
 uv run nuself daemon status
+uv run nuself daemon list
 uv run nuself daemon logs
+uv run nuself daemon attach --message "continue"
 uv run nuself daemon stop
 ```
+
+不带子命令时，`daemon` 会显示守护进程子命令帮助。
 
 守护进程运行时文件存放在：
 
@@ -188,4 +205,3 @@ private/derived/memory_index.json
 NuSelf 处于早期快速开发阶段。接口预计会快速变化。除非当前文档明确要求兼容，否则不要保留过时的 CLI 命令、协议字段、数据 schema 或 Python API。
 
 功能、命令、配置、运行方式或用户可见行为发生变化时，必须同步更新 [README.md](README.md) 和 [README.zh-CN.md](README.zh-CN.md)。
-

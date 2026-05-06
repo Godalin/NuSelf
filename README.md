@@ -56,7 +56,15 @@ Use the sample directory for documentation, tests, and demos. Do not put real pe
 One-shot chat works without a daemon:
 
 ```bash
+uv run nuself chat
 uv run nuself chat --message "hello"
+```
+
+The shortest daemon-backed entrypoint is the root command. It connects to the current daemon, or creates one and then connects:
+
+```bash
+uv run nuself
+uv run nuself --message "hello"
 ```
 
 If a daemon is running, `chat` sends the message to the daemon:
@@ -76,8 +84,13 @@ uv run nuself chat --require-daemon --message "hello"
 Attach to an existing daemon conversation:
 
 ```bash
+uv run nuself attach
 uv run nuself attach --message "continue"
+uv run nuself daemon attach
+uv run nuself daemon attach --message "continue"
 ```
+
+Without `--message`, `chat` and `attach` enter interactive mode. When terminal support is available, line editing and arrow-key history are backed by `private/runtime/interactive_history`. Input starting with `:` is treated as an interactive command. Type `:q`, `:quit`, `:exit`, or send EOF to leave; unknown commands print interactive help and keep the session open.
 
 Current chat replies are placeholder echoes. The real mirror graph will replace this runtime later.
 
@@ -88,9 +101,13 @@ Start, inspect, and stop the local daemon:
 ```bash
 uv run nuself daemon start
 uv run nuself daemon status
+uv run nuself daemon list
 uv run nuself daemon logs
+uv run nuself daemon attach --message "continue"
 uv run nuself daemon stop
 ```
+
+Without a subcommand, `daemon` shows daemon subcommand help.
 
 Daemon runtime files are stored under:
 

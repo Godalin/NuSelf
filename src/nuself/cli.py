@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 import sys
 
-from nuself.config import runtime_paths
+try:
+    import readline
+except ImportError:  # pragma: no cover - platform fallback
+    readline = None  # type: ignore[assignment]
+
+from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.daemon import client, lifecycle
 from nuself.domain.memory import MemoryEntry, MemoryEntryType
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
@@ -16,25 +21,32 @@ from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    command = getattr(args, "command", None)
-    if command is None:
-        parser.print_help()
+    handler = getattr(args, "handler", None)
+    if handler is None:
+        help_parser = getattr(args, "help_parser", parser)
+        help_parser.print_help()
         return 0
-    handler = getattr(args, "handler")
     return handler(args)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nuself")
     parser.add_argument("--project-root", type=Path, default=None)
+    parser.add_argument("--message", "-m", default=None)
+    _add_handler(parser, handle_default_entrypoint)
     subparsers = parser.add_subparsers(dest="command")
 
     daemon_parser = subparsers.add_parser("daemon")
+    daemon_parser.set_defaults(handler=None, help_parser=daemon_parser)
     daemon_subparsers = daemon_parser.add_subparsers(dest="daemon_command")
     _add_handler(daemon_subparsers.add_parser("start"), handle_daemon_start)
     _add_handler(daemon_subparsers.add_parser("stop"), handle_daemon_stop)
     _add_handler(daemon_subparsers.add_parser("status"), handle_daemon_status)
+    _add_handler(daemon_subparsers.add_parser("list"), handle_daemon_list)
     _add_handler(daemon_subparsers.add_parser("logs"), handle_daemon_logs)
+    daemon_attach_parser = daemon_subparsers.add_parser("attach")
+    daemon_attach_parser.add_argument("--message", "-m", default=None)
+    _add_handler(daemon_attach_parser, handle_attach)
 
     chat_parser = subparsers.add_parser("chat")
     chat_parser.add_argument("--message", "-m", default=None)
@@ -46,6 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(attach_parser, handle_attach)
 
     memory_parser = subparsers.add_parser("memory")
+    memory_parser.set_defaults(handler=None, help_parser=memory_parser)
     memory_subparsers = memory_parser.add_subparsers(dest="memory_command")
     _add_handler(memory_subparsers.add_parser("list"), handle_memory_list)
     show_parser = memory_subparsers.add_parser("show")
@@ -96,6 +109,28 @@ def handle_daemon_status(args: argparse.Namespace) -> int:
     return 0 if result.running else 1
 
 
+def handle_daemon_list(args: argparse.Namespace) -> int:
+    result = lifecycle.status(args.project_root)
+    print(_format_daemon_list(result))
+    return 0
+
+
+def handle_default_entrypoint(args: argparse.Namespace) -> int:
+    result = lifecycle.status(args.project_root)
+    if result.running:
+        print(f"Using current daemon: {_format_status(result)}")
+    else:
+        print("Creating new daemon...")
+        result = lifecycle.start(args.project_root)
+        if not result.running:
+            print(f"Failed to create daemon: {_format_status(result)}", file=sys.stderr)
+            return 1
+        print(f"Created daemon: {_format_status(result)}")
+    if args.message is not None:
+        return _send_chat(args.message, args.project_root)
+    return _interactive_loop(lambda message: _send_chat(message, args.project_root), args.project_root)
+
+
 def handle_daemon_logs(args: argparse.Namespace) -> int:
     paths = runtime_paths(args.project_root)
     try:
@@ -106,22 +141,26 @@ def handle_daemon_logs(args: argparse.Namespace) -> int:
 
 
 def handle_chat(args: argparse.Namespace) -> int:
-    message = args.message or _read_interactive_message()
     if lifecycle.status(args.project_root).running:
-        return _send_chat(message, args.project_root)
+        if args.message is not None:
+            return _send_chat(args.message, args.project_root)
+        return _interactive_loop(lambda message: _send_chat(message, args.project_root), args.project_root)
     if args.require_daemon:
         print("NuSelf daemon is not running.", file=sys.stderr)
         return 1
-    print(_one_shot_reply(message))
-    return 0
+    if args.message is not None:
+        print(_one_shot_reply(args.message))
+        return 0
+    return _interactive_loop(_send_one_shot_chat, args.project_root)
 
 
 def handle_attach(args: argparse.Namespace) -> int:
     if not lifecycle.status(args.project_root).running:
         print("NuSelf daemon is not running.", file=sys.stderr)
         return 1
-    message = args.message or _read_interactive_message()
-    return _send_chat(message, args.project_root)
+    if args.message is not None:
+        return _send_chat(args.message, args.project_root)
+    return _interactive_loop(lambda message: _send_chat(message, args.project_root), args.project_root)
 
 
 def handle_memory_list(args: argparse.Namespace) -> int:
@@ -221,9 +260,135 @@ def _send_chat(message: str, project_root: Path | None) -> int:
     return 1
 
 
-def _read_interactive_message() -> str:
-    print("NuSelf> ", end="", flush=True)
-    return sys.stdin.readline().strip()
+def _interactive_loop(send_message: Callable[[str], int], project_root: Path | None) -> int:
+    history_path = _load_interactive_history(project_root)
+    print(_brand_banner())
+    print("νSelf interactive mode. Type :q, :quit, or :exit to leave.")
+    try:
+        while True:
+            try:
+                line = input("NuSelf> ")
+            except EOFError:
+                print()
+                return 0
+            message = line.strip()
+            if message == "":
+                continue
+            _remember_interactive_input(message)
+            if message.startswith(":"):
+                command_result = _handle_interactive_command(message)
+                if command_result == "exit":
+                    return 0
+                continue
+            result = send_message(message)
+            if result != 0:
+                return result
+    finally:
+        if history_path is not None:
+            _write_interactive_history(history_path)
+
+
+def _load_interactive_history(project_root: Path | None) -> Path | None:
+    if readline is None:
+        return None
+    paths = runtime_paths(project_root)
+    ensure_runtime_dirs(paths)
+    history_path = paths.runtime_dir / "interactive_history"
+    readline.clear_history()
+    try:
+        readline.read_history_file(str(history_path))
+    except FileNotFoundError:
+        pass
+    except OSError:
+        _load_plain_interactive_history(history_path)
+    _dedupe_interactive_history()
+    readline.set_history_length(1000)
+    return history_path
+
+
+def _load_plain_interactive_history(history_path: Path) -> None:
+    if readline is None:
+        return
+    try:
+        lines = history_path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return
+    for line in lines:
+        if line != "":
+            readline.add_history(line)
+
+
+def _write_interactive_history(history_path: Path) -> None:
+    if readline is None:
+        return
+    _dedupe_interactive_history()
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    readline.write_history_file(str(history_path))
+
+
+def _remember_interactive_input(message: str) -> None:
+    if readline is None:
+        return
+    history_length = readline.get_current_history_length()
+    if history_length > 0 and readline.get_history_item(history_length) == message:
+        return
+    readline.add_history(message)
+
+
+def _dedupe_interactive_history() -> None:
+    if readline is None:
+        return
+    history: list[str] = []
+    previous: str | None = None
+    for index in range(1, readline.get_current_history_length() + 1):
+        item = readline.get_history_item(index)
+        if item == previous:
+            continue
+        history.append(item)
+        previous = item
+    readline.clear_history()
+    for item in history:
+        readline.add_history(item)
+
+
+def _send_one_shot_chat(message: str) -> int:
+    print(_one_shot_reply(message))
+    return 0
+
+
+def _brand_banner() -> str:
+    return "\n".join(
+        [
+            "        ┌────┐       ┌─┐  ┌────┐",
+            "        │ ┌──┘       │ │  │ ┌──┘",
+            "╭─╮ ╭─╮ │ └──┐ ┌───┐ │ │  │ └─┐ ",
+            "│ │ │ │ └──┐ │ │┌─ │ │ │  │ ┌─┘ ",
+            "╰─┴─╯ │ ┌──┘ │ │└──╯ │ └┐ │ │   ",
+            "  ╰───╯ └────┘ ╰───╯ └──┘ └─┘   ",
+        ]
+    )
+
+
+def _handle_interactive_command(command: str) -> str | None:
+    if command in {":q", ":quit", ":exit"}:
+        return "exit"
+    print(_interactive_help(command))
+    return None
+
+
+def _interactive_help(command: str | None = None) -> str:
+    lines: list[str] = []
+    if command is not None:
+        lines.append(f"Unknown interactive command: {command}")
+    lines.extend(
+        [
+            "Interactive commands:",
+            "  :q      exit",
+            "  :quit   exit",
+            "  :exit   exit",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _one_shot_reply(message: str) -> str:
@@ -234,6 +399,17 @@ def _format_status(status: lifecycle.DaemonStatus) -> str:
     state = "running" if status.running else "stopped"
     pid = status.pid if status.pid is not None else "-"
     return f"daemon {state} pid={pid} socket={status.socket_path}"
+
+
+def _format_daemon_list(status: lifecycle.DaemonStatus) -> str:
+    state = "running" if status.running else "stopped"
+    pid = status.pid if status.pid is not None else "-"
+    return "\n".join(
+        [
+            "name status pid socket",
+            f"local {state} {pid} {status.socket_path}",
+        ]
+    )
 
 
 def _format_memory_summary(entry: MemoryEntry) -> str:
