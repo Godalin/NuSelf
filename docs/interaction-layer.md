@@ -236,10 +236,10 @@ Build the interaction layer in this order:
 
 1. CLI skeleton and command routing.
 2. Daemon start/status/stop with pid file and socket path under `private/runtime/`.
-3. JSONL socket protocol with health check and simple echo command.
-4. Attached chat command with fake in-memory graph.
-5. Memory entry CRUD over local files.
-6. Thread registry and persisted conversation metadata.
+3. JSONL socket protocol with health check and daemon-backed chat request.
+4. Memory entry CRUD over local files.
+5. Temporary memory-aware chat agent using OpenAI-compatible model calls when configured.
+6. Thread registry with persisted messages and compressed conversation summaries under `private/threads/`.
 7. Proactive reflection scheduler that only logs candidates.
 8. Outbox and log-only notification adapter.
 9. macOS notification adapter.

@@ -8,10 +8,11 @@ NuSelf 是一个本地 AI 镜像项目。它的目标是逐步成长为一个带
 
 - 本地 `nuself` 命令。
 - 可选的本地后台守护进程，通过 Unix socket 通信。
-- 没有守护进程时，可以用 one-shot 模式临时聊天。
+- 一个临时的带记忆聊天 agent，可以用 one-shot 模式运行，也可以通过守护进程运行。
 - 基于文件的记忆条目，可列出、查看、新增、编辑、删除、搜索和重建索引。
+- 持久化聊天线程，并能压缩较早的对话上下文。
 
-LangGraph/LangChain 集成、真实模型调用、主动反思、邮件和 macOS 通知目前是规划内容，还没有实现。
+LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规划内容，还没有实现。
 
 ## 环境要求
 
@@ -33,6 +34,30 @@ uv run pytest
 uvx pyright
 ```
 
+## LLM 配置
+
+NuSelf 从根目录下被忽略的私有文件读取模型配置：
+
+```text
+.env
+```
+
+可以从仓库中的样例开始：
+
+```bash
+cp examples/.env .env
+```
+
+然后填写：
+
+```text
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+当前客户端使用 OpenAI-compatible `/chat/completions` API。如果 `OPENAI_API_KEY` 为空，聊天会使用确定性的本地 fallback：它仍会保存线程，但不会进行真实模型推理。
+
 ## 私人目录
 
 真实个人数据放在被 Git 忽略的根目录：
@@ -41,7 +66,7 @@ uvx pyright
 private/
 ```
 
-这个目录不会被提交到 Git。它用于存放本地 profile 笔记、记忆条目、运行时文件、守护进程日志、派生索引，以及未来的私人配置。
+这个目录不会被提交到 Git。它用于存放本地 profile 笔记、记忆条目、聊天线程、运行时文件、守护进程日志、派生索引，以及未来的私人配置。
 
 仓库中包含一个安全的公开样例目录：
 
@@ -92,7 +117,17 @@ uv run nuself daemon attach --message "continue"
 
 不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。以 `:` 开头的输入会被识别为交互指令。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
 
-当前聊天回复只是占位 echo。真实的 mirror graph 后续会替换这部分 runtime。
+当前聊天使用一个临时 agent。它会读取 `private/memory/entries/` 中的记忆条目，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。
+
+上下文压缩可在 `.env` 中调整：
+
+```text
+NUSELF_CONTEXT_RECENT_MESSAGES=12
+NUSELF_CONTEXT_SUMMARY_TRIGGER_MESSAGES=18
+NUSELF_CONTEXT_SUMMARY_TARGET_CHARS=2400
+```
+
+真实的 mirror graph 后续会替换这部分临时 runtime。
 
 ## 守护进程
 

@@ -8,10 +8,11 @@ The current implementation is an early CLI-first skeleton:
 
 - Local `nuself` command.
 - Optional local background daemon over a Unix socket.
-- One-shot chat fallback when no daemon is running.
+- A temporary memory-aware chat agent that can run one-shot or through the daemon.
 - File-backed memory entries that can be listed, viewed, added, edited, deleted, searched, and re-indexed.
+- Persisted chat threads with compressed conversation context.
 
-LangGraph/LangChain integration, real model calls, proactive reflection, email, and macOS notifications are planned but not implemented yet.
+LangGraph/LangChain integration, proactive reflection, email, and macOS notifications are planned but not implemented yet.
 
 ## Requirements
 
@@ -33,6 +34,30 @@ uv run pytest
 uvx pyright
 ```
 
+## LLM Configuration
+
+NuSelf reads private model settings from the ignored root file:
+
+```text
+.env
+```
+
+Start from the committed example:
+
+```bash
+cp examples/.env .env
+```
+
+Then fill in:
+
+```text
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+The current client uses an OpenAI-compatible `/chat/completions` API. If `OPENAI_API_KEY` is empty, chat uses a deterministic local fallback that still persists the thread but does not perform real model reasoning.
+
 ## Private Directory
 
 Real personal data lives in the ignored root directory:
@@ -41,7 +66,7 @@ Real personal data lives in the ignored root directory:
 private/
 ```
 
-This directory is not committed to Git. It contains local profile notes, memory entries, runtime files, daemon logs, derived indexes, and future private configuration.
+This directory is not committed to Git. It contains local profile notes, memory entries, chat threads, runtime files, daemon logs, derived indexes, and future private configuration.
 
 The repository includes a safe public sample directory:
 
@@ -92,7 +117,17 @@ uv run nuself daemon attach --message "continue"
 
 Without `--message`, `chat` and `attach` enter interactive mode. When terminal support is available, line editing and arrow-key history are backed by `private/runtime/interactive_history`. Input starting with `:` is treated as an interactive command. Type `:q`, `:quit`, `:exit`, or send EOF to leave; unknown commands print interactive help and keep the session open.
 
-Current chat replies are placeholder echoes. The real mirror graph will replace this runtime later.
+Current chat uses a temporary agent that loads memory entries from `private/memory/entries/`, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows.
+
+Context compression can be tuned in `.env`:
+
+```text
+NUSELF_CONTEXT_RECENT_MESSAGES=12
+NUSELF_CONTEXT_SUMMARY_TRIGGER_MESSAGES=18
+NUSELF_CONTEXT_SUMMARY_TARGET_CHARS=2400
+```
+
+The real mirror graph will replace this temporary runtime later.
 
 ## Daemon
 
