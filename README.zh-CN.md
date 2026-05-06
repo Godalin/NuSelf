@@ -115,9 +115,11 @@ uv run nuself daemon attach
 uv run nuself daemon attach --message "continue"
 ```
 
-不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。以 `:` 开头的输入会被识别为交互指令。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
+不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。以 `:` 开头的输入会被识别为交互指令。输入 `:memory` 或 `:mem` 可以预览当前记忆条目。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
 
 当前聊天使用一个临时 agent。它会检索 `private/memory/entries/` 中的记忆条目，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。当前记忆检索是确定性的词法检索，并带有排序原因；向量索引和图索引会作为后续派生检索层加入。
+
+`private/threads/default.json` 是当前 NuSelf mind 的共享 working memory。多个终端连接同一个 daemon 时会共享它。thread store 会用锁串行化写入，避免并发对话互相覆盖。
 
 上下文压缩可在 `.env` 中调整：
 
@@ -125,7 +127,10 @@ uv run nuself daemon attach --message "continue"
 NUSELF_CONTEXT_RECENT_MESSAGES=12
 NUSELF_CONTEXT_SUMMARY_TRIGGER_MESSAGES=18
 NUSELF_CONTEXT_SUMMARY_TARGET_CHARS=2400
+NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS=300
 ```
+
+memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出时运行。它会把新的 working-memory 对话总结成长期记忆条目，并把更新事件写入 `private/logs/memory.log`。
 
 真实的 mirror graph 后续会替换这部分临时 runtime。
 
@@ -177,6 +182,13 @@ uv run nuself memory add \
 uv run nuself memory list
 ```
 
+预览近期记忆条目：
+
+```bash
+uv run nuself memory preview
+uv run nuself memory preview --limit 20
+```
+
 查看单个条目：
 
 ```bash
@@ -195,6 +207,12 @@ uv run nuself memory edit <entry-id> \
 
 ```bash
 uv run nuself memory search "clarity"
+```
+
+立即运行 memory curator：
+
+```bash
+uv run nuself memory update
 ```
 
 删除条目：

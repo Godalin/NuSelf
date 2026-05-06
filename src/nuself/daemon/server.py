@@ -10,8 +10,11 @@ import threading
 from typing import override
 
 from nuself.agent.chat import ChatAgent
-from nuself.config import ensure_runtime_dirs, runtime_paths
+from nuself.config import config_int, ensure_runtime_dirs, runtime_paths
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, ProtocolError
+from nuself.memory.curator import MemoryCurator
+
+DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
 
 
 class DaemonState:
@@ -21,6 +24,34 @@ class DaemonState:
         self.project_root = project_root
         self.shutdown_requested = threading.Event()
         self.chat_agent = ChatAgent(project_root)
+        self.memory_curator = MemoryCurator(project_root)
+        self.memory_curator_interval_seconds = config_int(
+            "NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS",
+            DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS,
+            project_root,
+        )
+        self._memory_curator_thread: threading.Thread | None = None
+
+    def start_background_memory_curator(self) -> None:
+        if self._memory_curator_thread is not None:
+            return
+        self._memory_curator_thread = threading.Thread(
+            target=self._run_background_memory_curator,
+            name="nuself-memory-curator",
+            daemon=True,
+        )
+        self._memory_curator_thread.start()
+
+    def stop_background_memory_curator(self) -> None:
+        if self._memory_curator_thread is not None:
+            self._memory_curator_thread.join(timeout=1.0)
+
+    def _run_background_memory_curator(self) -> None:
+        while not self.shutdown_requested.wait(self.memory_curator_interval_seconds):
+            try:
+                self.memory_curator.run_once()
+            except RuntimeError:
+                continue
 
 
 class NuSelfUnixServer(socketserver.ThreadingUnixStreamServer):
@@ -95,11 +126,13 @@ def run_daemon(project_root: Path | None = None) -> int:
 
     state = DaemonState(paths.project_root)
     try:
+        state.start_background_memory_curator()
         with NuSelfUnixServer(str(paths.socket_path), RequestHandler, state) as server:
             server.timeout = 0.2
             while not state.shutdown_requested.is_set():
                 server.handle_request()
     finally:
+        state.stop_background_memory_curator()
         if paths.socket_path.exists():
             paths.socket_path.unlink()
         if paths.pid_path.exists():

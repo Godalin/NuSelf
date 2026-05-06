@@ -10,6 +10,7 @@ Development constraints for `src/nuself/`.
 - `nuself daemon` without a subcommand must show daemon subcommand help.
 - Interactive input starting with `:` is always an interactive command.
 - Interactive chat exits on `:q`, `:quit`, `:exit`, or EOF.
+- Interactive `:memory` and `:mem` must preview current memory entries without invoking an LLM.
 - Interactive input should use readline-backed line editing/history when available, with history stored under ignored `private/runtime/interactive_history`.
 - Interactive history must skip consecutive duplicate entries.
 - Unknown interactive commands must print interactive help and keep the session open.
@@ -23,6 +24,7 @@ Development constraints for `src/nuself/`.
 - Protocol changes should directly update client, server, tests, and docs; do not keep old wire formats during early development.
 - Root `.env` is local private configuration and must stay ignored. Commit `examples/.env` when adding user-facing settings.
 - Chat thread state belongs under ignored `private/threads/`.
+- The default thread is shared working memory for the current NuSelf mind; writes must be serialized with a lock.
 - Temporary chat agent behavior must stay deterministic without an API key so tests do not require network access.
 
 ## Memory Entries
@@ -32,6 +34,7 @@ Development constraints for `src/nuself/`.
 - Derived indexes belong under `private/derived/` and should be rebuildable from entries.
 - Chat prompts must use `MemoryQueryService` or a successor query layer instead of loading all entries indiscriminately.
 - Memory query and context packing must remain independently testable without live LLM calls.
+- Memory curator logic must write structured memory entries through repositories, log updates to `private/logs/memory.log`, and remain testable with fake LLMs.
 
 ## Documentation Boundary
 

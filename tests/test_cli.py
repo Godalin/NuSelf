@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself import cli
+from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.cli import main
 from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.protocol import DaemonResponse
@@ -63,8 +64,38 @@ def test_unknown_interactive_command_shows_help_and_keeps_session_open(
     assert result == 0
     assert "Unknown interactive command: :bad" in captured.out
     assert "Interactive commands:" in captured.out
+    assert ":memory preview memory entries" in captured.out
     assert "LLM API is not configured yet" in captured.out
     assert "Last message: hello" in captured.out
+
+
+def test_interactive_memory_command_shows_preview(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "add",
+            "--type",
+            "belief",
+            "--title",
+            "Clarity",
+            "--body",
+            "State assumptions explicitly.",
+        ]
+    )
+    capsys.readouterr()
+    monkeypatch.setattr("sys.stdin", _TextInput(":memory\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Memory preview (1/1):" in captured.out
+    assert "Clarity" in captured.out
+    assert "State assumptions explicitly." in captured.out
 
 
 def test_interactive_history_skips_consecutive_duplicates(
@@ -286,7 +317,53 @@ def test_incomplete_memory_command_shows_subcommand_help(capsys: CaptureFixture)
     assert result == 0
     assert "usage: nuself memory" in captured.out
     assert "list" in captured.out
+    assert "preview" in captured.out
     assert "reindex" in captured.out
+
+
+def test_memory_preview_limits_entries(tmp_path: Path, capsys: CaptureFixture) -> None:
+    for title in ["First", "Second"]:
+        main(
+            [
+                "--project-root",
+                str(tmp_path),
+                "memory",
+                "add",
+                "--type",
+                "belief",
+                "--title",
+                title,
+                "--body",
+                f"{title} body with enough text to preview.",
+            ]
+        )
+        capsys.readouterr()
+
+    result = main(["--project-root", str(tmp_path), "memory", "preview", "--limit", "1"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Memory preview (1/2):" in captured.out
+    assert "... 1 more." in captured.out
+
+
+def test_memory_update_curates_working_memory(tmp_path: Path, capsys: CaptureFixture) -> None:
+    ThreadStore(tmp_path).save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(role="user", content="We need automatic memory curation."),
+                ThreadMessage(role="assistant", content="I will summarize conversations into memory."),
+            ],
+        )
+    )
+
+    result = main(["--project-root", str(tmp_path), "memory", "update"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Memory curator: processed=2 created=1 updated=0 ignored=0" in captured.out
+    assert "Conversation:" in main_memory_preview(tmp_path)
 
 
 def test_memory_add_list_show_delete(tmp_path: Path, capsys: CaptureFixture) -> None:
@@ -335,3 +412,9 @@ class _TextInput:
         if not self._lines:
             return ""
         return self._lines.pop(0)
+
+
+def main_memory_preview(project_root: Path) -> str:
+    from nuself.memory.repository import MemoryEntryRepository
+
+    return "\n".join(entry.title for entry in MemoryEntryRepository(project_root).list())

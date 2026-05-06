@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
+import fcntl
 import json
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, TypeVar, cast
 
 from nuself.config import config_int, runtime_paths
 from nuself.llm import ChatLLM, ChatMessage, default_llm
@@ -13,6 +15,7 @@ from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 
 ThreadRole = Literal["user", "assistant"]
+UpdateResult = TypeVar("UpdateResult")
 
 
 @dataclass(frozen=True)
@@ -117,6 +120,31 @@ class ThreadStore:
         self._threads_dir = paths.private_root / "threads"
 
     def load(self, thread_id: str) -> ThreadState:
+        with self._locked(thread_id):
+            return self._load_unlocked(thread_id)
+
+    def save(self, state: ThreadState) -> None:
+        with self._locked(state.thread_id):
+            self._save_unlocked(state)
+
+    def update(
+        self,
+        thread_id: str,
+        update: Callable[[ThreadState], tuple[ThreadState, UpdateResult]],
+    ) -> UpdateResult:
+        """Atomically update one working-memory stream under an exclusive lock."""
+
+        with self._locked(thread_id):
+            state = self._load_unlocked(thread_id)
+            updated, result = update(state)
+            self._save_unlocked(updated)
+            return result
+
+    def _locked(self, thread_id: str) -> "_ThreadLock":
+        self._threads_dir.mkdir(parents=True, exist_ok=True)
+        return _ThreadLock(self._lock_path_for(thread_id))
+
+    def _load_unlocked(self, thread_id: str) -> ThreadState:
         path = self._path_for(thread_id)
         if not path.exists():
             return ThreadState.empty(thread_id)
@@ -125,17 +153,43 @@ class ThreadStore:
             raise ValueError(f"thread file must contain an object: {path}")
         return ThreadState.from_wire(cast(dict[str, object], raw))
 
-    def save(self, state: ThreadState) -> None:
+    def _save_unlocked(self, state: ThreadState) -> None:
         self._threads_dir.mkdir(parents=True, exist_ok=True)
-        self._path_for(state.thread_id).write_text(
-            json.dumps(state.to_wire(), indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        path = self._path_for(state.thread_id)
+        tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+        tmp_path.write_text(json.dumps(state.to_wire(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        tmp_path.replace(path)
 
     def _path_for(self, thread_id: str) -> Path:
         if thread_id == "" or "/" in thread_id or thread_id in {".", ".."}:
             raise ValueError(f"invalid thread id: {thread_id}")
         return self._threads_dir / f"{thread_id}.json"
+
+    def _lock_path_for(self, thread_id: str) -> Path:
+        if thread_id == "" or "/" in thread_id or thread_id in {".", ".."}:
+            raise ValueError(f"invalid thread id: {thread_id}")
+        return self._threads_dir / f"{thread_id}.lock"
+
+
+class _ThreadLock:
+    """Advisory file lock for one working-memory stream."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._file = None
+
+    def __enter__(self) -> None:
+        self._file = self._path.open("a+b")
+        fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
+
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+        if self._file is None:
+            return
+        try:
+            fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
+        finally:
+            self._file.close()
+            self._file = None
 
 
 class ChatAgent:
@@ -157,22 +211,23 @@ class ChatAgent:
         self._memory_query_service = memory_query_service or MemoryQueryService(MemoryEntryRepository(project_root))
 
     def respond(self, message: str, thread_id: str = "default") -> ChatResult:
-        state = self._thread_store.load(thread_id)
-        base_messages = _drop_local_fallback_replies(state.messages)
-        messages = [*base_messages, ThreadMessage(role="user", content=message)]
-        prompt = self._build_prompt(
-            ThreadState(thread_id=thread_id, summary=state.summary, messages=messages),
-            message,
-        )
-        reply = self._llm.complete(prompt)
-        updated = ThreadState(
-            thread_id=thread_id,
-            summary=state.summary,
-            messages=[*messages, ThreadMessage(role="assistant", content=reply)],
-        )
-        compressed = self._compress_if_needed(updated)
-        self._thread_store.save(compressed)
-        return ChatResult(reply=reply, thread_id=thread_id)
+        def update(state: ThreadState) -> tuple[ThreadState, ChatResult]:
+            base_messages = _drop_local_fallback_replies(state.messages)
+            messages = [*base_messages, ThreadMessage(role="user", content=message)]
+            prompt = self._build_prompt(
+                ThreadState(thread_id=thread_id, summary=state.summary, messages=messages),
+                message,
+            )
+            reply = self._llm.complete(prompt)
+            updated = ThreadState(
+                thread_id=thread_id,
+                summary=state.summary,
+                messages=[*messages, ThreadMessage(role="assistant", content=reply)],
+            )
+            compressed = self._compress_if_needed(updated)
+            return compressed, ChatResult(reply=reply, thread_id=thread_id)
+
+        return self._thread_store.update(thread_id, update)
 
     def _build_prompt(self, state: ThreadState, user_message: str) -> list[ChatMessage]:
         prompt: list[ChatMessage] = [ChatMessage(role="system", content=self._system_prompt(user_message, state.summary))]

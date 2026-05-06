@@ -115,9 +115,11 @@ uv run nuself daemon attach
 uv run nuself daemon attach --message "continue"
 ```
 
-Without `--message`, `chat` and `attach` enter interactive mode. When terminal support is available, line editing and arrow-key history are backed by `private/runtime/interactive_history`. Input starting with `:` is treated as an interactive command. Type `:q`, `:quit`, `:exit`, or send EOF to leave; unknown commands print interactive help and keep the session open.
+Without `--message`, `chat` and `attach` enter interactive mode. When terminal support is available, line editing and arrow-key history are backed by `private/runtime/interactive_history`. Input starting with `:` is treated as an interactive command. Type `:memory` or `:mem` to preview current memory entries. Type `:q`, `:quit`, `:exit`, or send EOF to leave; unknown commands print interactive help and keep the session open.
 
 Current chat uses a temporary agent that searches memory entries from `private/memory/entries/`, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The memory search is currently deterministic lexical retrieval with ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
+
+`private/threads/default.json` is shared working memory for the current NuSelf mind. Multiple terminal attachments to the same daemon share it. The thread store serializes writes with a lock so concurrent turns do not overwrite each other.
 
 Context compression can be tuned in `.env`:
 
@@ -125,7 +127,10 @@ Context compression can be tuned in `.env`:
 NUSELF_CONTEXT_RECENT_MESSAGES=12
 NUSELF_CONTEXT_SUMMARY_TRIGGER_MESSAGES=18
 NUSELF_CONTEXT_SUMMARY_TARGET_CHARS=2400
+NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS=300
 ```
+
+The memory curator runs in the background in the daemon and also runs when interactive chat exits. It summarizes new working-memory turns into long-term memory entries and writes update events to `private/logs/memory.log`.
 
 The real mirror graph will replace this temporary runtime later.
 
@@ -177,6 +182,13 @@ List entries:
 uv run nuself memory list
 ```
 
+Preview recent memory entries:
+
+```bash
+uv run nuself memory preview
+uv run nuself memory preview --limit 20
+```
+
 Show one entry:
 
 ```bash
@@ -195,6 +207,12 @@ Search entries:
 
 ```bash
 uv run nuself memory search "clarity"
+```
+
+Run the memory curator immediately:
+
+```bash
+uv run nuself memory update
 ```
 
 Delete an entry:

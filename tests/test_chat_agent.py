@@ -119,3 +119,23 @@ def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
     assert "LLM API is not configured yet" not in prompt_text
     assert "LLM API is not configured yet" not in saved_text
     assert "old question" in prompt_text
+
+
+def test_thread_store_update_writes_under_transaction(tmp_path: Path) -> None:
+    thread_store = ThreadStore(tmp_path)
+
+    def add_message(state: ThreadState) -> tuple[ThreadState, str]:
+        return (
+            ThreadState(
+                thread_id=state.thread_id,
+                summary=state.summary,
+                messages=[*state.messages, ThreadMessage(role="user", content="locked write")],
+            ),
+            "done",
+        )
+
+    result = thread_store.update("default", add_message)
+    state = thread_store.load("default")
+
+    assert result == "done"
+    assert state.messages == [ThreadMessage(role="user", content="locked write")]

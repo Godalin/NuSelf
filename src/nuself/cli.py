@@ -16,9 +16,11 @@ from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.agent.chat import ChatAgent
 from nuself.daemon import client, lifecycle
 from nuself.domain.memory import MemoryEntry, MemoryEntryType
+from nuself.memory.curator import MemoryCurator
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
+DEFAULT_MEMORY_PREVIEW_LIMIT = 8
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -64,6 +66,9 @@ def build_parser() -> argparse.ArgumentParser:
     memory_parser.set_defaults(handler=None, help_parser=memory_parser)
     memory_subparsers = memory_parser.add_subparsers(dest="memory_command")
     _add_handler(memory_subparsers.add_parser("list"), handle_memory_list)
+    preview_parser = memory_subparsers.add_parser("preview")
+    preview_parser.add_argument("--limit", type=int, default=DEFAULT_MEMORY_PREVIEW_LIMIT)
+    _add_handler(preview_parser, handle_memory_preview)
     show_parser = memory_subparsers.add_parser("show")
     show_parser.add_argument("entry_id")
     _add_handler(show_parser, handle_memory_show)
@@ -85,6 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser = memory_subparsers.add_parser("search")
     search_parser.add_argument("query")
     _add_handler(search_parser, handle_memory_search)
+    _add_handler(memory_subparsers.add_parser("update"), handle_memory_update)
     _add_handler(memory_subparsers.add_parser("reindex"), handle_memory_reindex)
 
     return parser
@@ -176,6 +182,11 @@ def handle_memory_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_memory_preview(args: argparse.Namespace) -> int:
+    print(_format_memory_preview(args.project_root, args.limit))
+    return 0
+
+
 def handle_memory_show(args: argparse.Namespace) -> int:
     repo = MemoryEntryRepository(args.project_root)
     try:
@@ -249,6 +260,12 @@ def handle_memory_reindex(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_memory_update(args: argparse.Namespace) -> int:
+    result = MemoryCurator(args.project_root).run_once()
+    print(f"Memory curator: {result.summary()} log={result.log_path}")
+    return 0
+
+
 def _send_chat(message: str, project_root: Path | None) -> int:
     try:
         response = client.request(
@@ -287,7 +304,7 @@ def _interactive_loop(send_message: Callable[[str], int], project_root: Path | N
                 continue
             _remember_interactive_input(message)
             if message.startswith(":"):
-                command_result = _handle_interactive_command(message)
+                command_result = _handle_interactive_command(message, project_root)
                 if command_result == "exit":
                     return 0
                 continue
@@ -299,6 +316,7 @@ def _interactive_loop(send_message: Callable[[str], int], project_root: Path | N
     finally:
         if history_path is not None:
             _write_interactive_history(history_path)
+        _run_memory_curator(project_root)
 
 
 def _load_interactive_history(project_root: Path | None) -> Path | None:
@@ -373,6 +391,16 @@ def _send_one_shot_chat(message: str, project_root: Path | None) -> int:
         return 1
 
 
+def _run_memory_curator(project_root: Path | None) -> None:
+    try:
+        result = MemoryCurator(project_root).run_once()
+    except RuntimeError as exc:
+        print(f"[memory] curator failed: {exc}", file=sys.stderr)
+        return
+    if result.changed:
+        print(f"[memory] {result.summary()}")
+
+
 def _brand_banner() -> str:
     return "\n".join(
         [
@@ -386,9 +414,14 @@ def _brand_banner() -> str:
     )
 
 
-def _handle_interactive_command(command: str) -> str | None:
+def _handle_interactive_command(command: str, project_root: Path | None) -> str | None:
     if command in {":q", ":quit", ":exit"}:
         return "exit"
+    if command in {":memory", ":mem"}:
+        print()
+        print(_format_memory_preview(project_root))
+        print()
+        return None
     print()
     print(_interactive_help(command))
     print()
@@ -405,6 +438,8 @@ def _interactive_help(command: str | None = None) -> str:
             "  :q      exit",
             "  :quit   exit",
             "  :exit   exit",
+            "  :memory preview memory entries",
+            "  :mem    preview memory entries",
         ]
     )
     return "\n".join(lines)
@@ -453,6 +488,34 @@ def _format_memory_detail(entry: MemoryEntry) -> str:
             entry.body,
         ]
     )
+
+
+def _format_memory_preview(project_root: Path | None, limit: int = DEFAULT_MEMORY_PREVIEW_LIMIT) -> str:
+    normalized_limit = max(limit, 1)
+    entries = MemoryEntryRepository(project_root).list()
+    if not entries:
+        return "No memory entries."
+    shown = entries[:normalized_limit]
+    lines = [f"Memory preview ({len(shown)}/{len(entries)}):"]
+    for entry in shown:
+        body = _compact_text(entry.body, 96)
+        tags = ",".join(entry.tags) if entry.tags else "-"
+        lines.append(
+            f"- {entry.id} [{entry.type}] {entry.title} "
+            f"tags={tags} confidence={entry.confidence:.2f} state={entry.review_state}"
+        )
+        if body != "":
+            lines.append(f"  {body}")
+    if len(entries) > normalized_limit:
+        lines.append(f"... {len(entries) - normalized_limit} more. Use `nuself memory list` or `nuself memory preview --limit N`.")
+    return "\n".join(lines)
+
+
+def _compact_text(text: str, limit: int) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: max(limit - 3, 0)].rstrip() + "..."
 
 
 def _memory_type_choices() -> list[MemoryEntryType]:
