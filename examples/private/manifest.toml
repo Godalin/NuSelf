@@ -1,0 +1,15 @@
+[memory]
+id = "example"
+display_name = "Example Mirror"
+schema_version = "0.1"
+description = "Public sample data for developing and testing NuSelf."
+
+[privacy]
+contains_private_data = false
+shareable = true
+
+[paths]
+sources = "sources"
+profile = "profile.md"
+shares = "shares"
+

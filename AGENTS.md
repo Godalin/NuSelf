@@ -12,5 +12,12 @@ This project is an AI-Mirror of most ideas of one person, for those who want to 
 
 - Architecture overview: [docs/architecture.md](docs/architecture.md)
 - Development plan: [docs/development-plan.md](docs/development-plan.md)
+- Public sample memory directory: [examples/private/](examples/private/)
 
 Keep these documents current when changing the system shape, module boundaries, or milestone order.
+
+## Private Memory
+
+- Real personal memory lives in the root `private/` directory.
+- `private/` is ignored by Git and must not be committed.
+- Code should load private memory from `private/` by default, while tests and demos should use `examples/private/`.

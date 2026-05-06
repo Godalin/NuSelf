@@ -29,6 +29,27 @@ User Interface
   -> Evaluation Suite
 ```
 
+## Private Memory Layout
+
+NuSelf separates the public codebase from private personal memory.
+
+```text
+private/                     # ignored by Git; real local personal memory
+  manifest.toml
+  profile.md
+  sources/
+  shares/
+examples/private/            # committed sample memory for tests and demos
+  manifest.toml
+  profile.md
+  sources/
+  shares/
+```
+
+The application should actively link to the root `private/` directory at runtime. That means the default configuration resolves private memory from the project root, validates its manifest, and exposes it to ingestion, retrieval, profile loading, and export workflows. Tests, examples, and documentation should use `examples/private/` so the repository remains runnable without private data.
+
+Private memory can also be used for sharing. Shareable subsets should be written under `private/shares/` as explicit export bundles, never by exposing the whole private directory by accident.
+
 ## Core Modules
 
 ### Source Ingestion
@@ -38,6 +59,7 @@ Ingests raw personal material such as notes, essays, chat exports, bookmarks, ti
 Responsibilities:
 
 - Load source documents from local files.
+- Resolve the default source root from `private/`, with an explicit override for `examples/private/` in tests and demos.
 - Preserve source metadata such as title, date, origin, author, and privacy level.
 - Split material into stable chunks without losing citation context.
 - Reject malformed input with explicit validation errors.
@@ -51,6 +73,7 @@ Responsibilities:
 - Keep raw source references immutable once imported.
 - Maintain searchable indexes for retrieval.
 - Store derived facts, preferences, recurring claims, and known uncertainties separately from raw source text.
+- Keep committed sample memory and ignored private memory interchangeable at the repository interface boundary.
 - Support re-indexing without changing source identity.
 
 ### Mirror Profile
@@ -114,6 +137,7 @@ Responsibilities:
 src/nuself/
   __init__.py
   config.py
+  private.py
   domain/
     sources.py
     profile.py
@@ -144,6 +168,8 @@ tests/
   unit/
   integration/
   fixtures/
+examples/
+  private/
 ```
 
 ## Data Model Boundaries
@@ -152,6 +178,7 @@ Use typed domain models for all boundaries between modules.
 
 Important entities:
 
+- `MemoryRoot`: configured private or sample memory directory plus manifest metadata.
 - `SourceDocument`: original imported material plus metadata.
 - `SourceChunk`: indexed excerpt with source location.
 - `EvidenceRef`: pointer from an answer or profile item back to source material.
@@ -171,6 +198,7 @@ Required guardrails:
 - Prefer "I do not have enough evidence" over confident fabrication.
 - Keep high-impact advice, medical/legal/financial claims, and interpersonal escalation cautious and source-aware.
 - Keep raw private sources and derived summaries separated so future permission controls are possible.
+- Never commit real `private/` contents; only curated `private/shares/` bundles should be copied out intentionally.
 
 ## Initial Technical Choices
 
@@ -178,6 +206,7 @@ Required guardrails:
 - Static type checking with `uvx pyright`.
 - Pydantic or dataclasses for typed domain models.
 - A local file-backed store for the first version, with repository interfaces that can later support SQLite or vector databases.
+- Root `private/` as the default ignored local memory directory.
+- Committed `examples/private/` as the public sample memory directory.
 - Provider adapters for LLM calls, with no provider-specific code in domain modules.
 - Tests grouped by sub-component so ingestion, retrieval, profile logic, and orchestration can be validated independently.
-

@@ -1,0 +1,13 @@
+# Local private memory and personal configuration.
+/private/
+
+# Python build and tool output.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.venv/
+dist/
+build/
