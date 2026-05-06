@@ -7,6 +7,7 @@ NuSelf should use the LangChain ecosystem as its default agent stack. The core p
 - Use LangGraph as the primary agent runtime.
 - Use LangChain for model, tool, prompt, and provider abstractions.
 - Use NuSelf domain models for private memory, evidence, persona state, notifications, and review workflows.
+- Use LangMem-style memory managers/tools for candidate extraction and memory search once NuSelf's own memory schemas stabilize.
 - Treat LlamaIndex as an optional retrieval component later, not as the main runtime.
 - Defer CrewAI, AutoGen, Temporal, and Inngest unless a concrete milestone needs their specific strengths.
 
@@ -20,6 +21,8 @@ LangGraph is the right center of gravity because NuSelf needs:
 - Conditional routing between deterministic checks, retrieval, model calls, review gates, and notification actions.
 - Human-in-the-loop pauses before committing sensitive memory or sending proactive messages.
 - Time-travel and checkpoint history for debugging why the mirror said or initiated something.
+
+NuSelf should use LangGraph checkpointers for graph execution state, not as the core product memory boundary. NuSelf intentionally does not model the person as separate sessions; durable memory should be managed by the memory subsystem described in [docs/memory-management.md](memory-management.md).
 
 ## Lightweight Multi-Agent Model
 
@@ -97,4 +100,3 @@ Use other frameworks only when they provide a clear component advantage:
 - AutoGen is not the default because its multi-agent conversation model is heavier than the desired persona subgraph.
 - OpenAI Agents SDK is useful as a provider-specific reference, but NuSelf should keep provider boundaries narrow.
 - Temporal or Inngest can be revisited if proactive jobs need distributed scheduling, retry guarantees, or production-grade background orchestration.
-

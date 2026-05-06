@@ -65,7 +65,7 @@ Private memory can also be used for sharing. Shareable subsets should be written
 
 NuSelf uses the LangChain ecosystem by default. LangGraph is the primary runtime for stateful agent workflows, durable execution, thread persistence, long-term memory, human-in-the-loop pauses, and conditional routing. LangChain provides model, tool, prompt, and provider abstractions.
 
-The detailed framework decision is tracked in [docs/agent-framework.md](agent-framework.md).
+The detailed framework decision is tracked in [docs/agent-framework.md](agent-framework.md). The memory subsystem is detailed in [docs/memory-management.md](memory-management.md).
 
 Framework boundaries:
 
@@ -99,6 +99,8 @@ Responsibilities:
 - Store derived facts, preferences, recurring claims, and known uncertainties separately from raw source text.
 - Keep committed sample memory and ignored private memory interchangeable at the repository interface boundary.
 - Support re-indexing without changing source identity.
+- Treat user-visible memory entries as authoritative; vector, lexical, and graph indexes are derived artifacts.
+- Support query-driven retrieval instead of loading all memories into every prompt.
 
 ### Mirror Profile
 
@@ -201,6 +203,8 @@ Responsibilities:
 - Record why a profile item was added, changed, or rejected.
 - Allow human review before durable personal facts are updated.
 - Keep conversation-derived memory lower confidence than direct authored sources unless reviewed.
+- Use a dedicated memory curator for extraction, consolidation, contradiction detection, and candidate generation.
+- Commit durable memory only through review or explicit policy gates.
 
 ### Evaluation Suite
 

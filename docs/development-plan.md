@@ -75,6 +75,7 @@ Deliverables:
 - CLI commands for `memory list`, `show`, `add`, `edit`, `delete`, `search`, and `reindex`.
 - Review queue commands for accepting, editing, merging, and rejecting candidates.
 - Derived indexes under `private/derived/`.
+- Memory management design aligned with [docs/memory-management.md](memory-management.md).
 
 Validation:
 
@@ -130,11 +131,14 @@ Deliverables:
 - Baseline lexical retrieval.
 - Ranking hooks for future embedding or hybrid search.
 - Returned evidence references with source metadata.
+- `MemoryQueryService` that replaces prompt-wide loading of all memory entries.
+- Context packer with budget, ranking explanations, and contradiction inclusion.
 
 Validation:
 
 - Deterministic retrieval tests with small fixtures.
 - Tests for empty results and ambiguous queries.
+- Tests for memory ranking reasons and context budget behavior.
 
 ## Milestone 7: Mirror Response Orchestration
 
