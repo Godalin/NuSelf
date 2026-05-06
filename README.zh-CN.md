@@ -130,7 +130,7 @@ NUSELF_CONTEXT_SUMMARY_TARGET_CHARS=2400
 NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS=300
 ```
 
-memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出时运行。它会把新的 working-memory 对话总结成长期记忆条目，并把更新事件写入 `private/logs/memory.log`。
+memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出时运行。它会用 agent 判断新的 working-memory 对话应该新增、修改还是忽略长期记忆。无意义闲聊会被忽略，已有相似记忆会优先更新而不是重复创建，原始对话流水账会被拒绝写入。另有一个 memory optimizer 可以手动、低频运行，用来整合已经存在的杂乱条目。更新事件会写入 `private/logs/memory.log`。
 
 真实的 mirror graph 后续会替换这部分临时 runtime。
 
@@ -213,6 +213,13 @@ uv run nuself memory search "clarity"
 
 ```bash
 uv run nuself memory update
+```
+
+整合已经存在的记忆条目：
+
+```bash
+uv run nuself memory optimize
+uv run nuself memory optimize --limit 100
 ```
 
 删除条目：

@@ -190,6 +190,9 @@ Background writes:
 - Propose procedural updates when the user repeatedly corrects behavior.
 - Run periodically in the daemon when the working-memory stream is dirty.
 - Run when an interactive attachment exits, so useful discussion does not remain only in short-term working memory.
+- Defer when the curator agent is unavailable or returns invalid structure; do not use a local raw-transcript fallback.
+- Ignore trivial greetings, name pings, acknowledgements, and other low-value chatter.
+- Prefer updating or refining existing memories over creating duplicates when the same idea is already represented.
 
 The background writer should be a dedicated Memory Curator Agent. The conversation agent writes turns; the curator decides whether to create, update, supersede, or ignore long-term memories.
 
@@ -284,10 +287,26 @@ Use a separate curator agent for write management:
 - Apply low-risk episode memories automatically when policy allows.
 - Keep semantic and procedural updates as draft or low-confidence entries until the review model is mature.
 - Write each applied action to `private/logs/memory.log`.
+- Reject proposed memory bodies that look like raw chat transcripts.
 
 The curator can run in the background. It should not produce user-facing text.
 
 This matches LangMem's memory-manager-agent pattern while preserving NuSelf's user-review and file-backed source-of-truth requirements.
+
+### Memory Optimizer Agent
+
+Use a separate optimizer agent for low-frequency maintenance of existing long-term memory:
+
+- Review current entries in bounded batches, not one isolated agent call per entry.
+- Merge duplicate or overlapping entries by updating the strongest surviving entry with the consolidated summary.
+- Delete weaker duplicate entries only when their useful content is fully represented by the updated survivor.
+- Ignore entries that are already clear, unique, or too risky to rewrite.
+- Rewrite messy entries into concise summaries instead of preserving transcript-shaped text.
+- Do not create new entries during optimization; this pass cleans existing memory rather than extracting new memory.
+- Defer the run when the optimizer agent is unavailable or returns invalid output.
+- Log every applied update or deletion to `private/logs/memory.log`.
+
+This task is intentionally lower frequency than conversation curation. It is for cleaning accumulated memory drift, not for processing every chat turn.
 
 ## LangChain/LangGraph Fit
 

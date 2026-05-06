@@ -130,7 +130,7 @@ NUSELF_CONTEXT_SUMMARY_TARGET_CHARS=2400
 NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS=300
 ```
 
-The memory curator runs in the background in the daemon and also runs when interactive chat exits. It summarizes new working-memory turns into long-term memory entries and writes update events to `private/logs/memory.log`.
+The memory curator runs in the background in the daemon and also runs when interactive chat exits. It uses an agent to decide whether new working-memory turns should create, update, or ignore long-term memory. Trivial chat is ignored, similar existing memories should be updated instead of duplicated, and raw chat transcripts are rejected. A separate memory optimizer can be run manually, less frequently, to consolidate messy existing entries. Update events are written to `private/logs/memory.log`.
 
 The real mirror graph will replace this temporary runtime later.
 
@@ -213,6 +213,13 @@ Run the memory curator immediately:
 
 ```bash
 uv run nuself memory update
+```
+
+Consolidate existing memory entries:
+
+```bash
+uv run nuself memory optimize
+uv run nuself memory optimize --limit 100
 ```
 
 Delete an entry:

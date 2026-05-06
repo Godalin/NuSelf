@@ -35,6 +35,8 @@ Development constraints for `src/nuself/`.
 - Chat prompts must use `MemoryQueryService` or a successor query layer instead of loading all entries indiscriminately.
 - Memory query and context packing must remain independently testable without live LLM calls.
 - Memory curator logic must write structured memory entries through repositories, log updates to `private/logs/memory.log`, and remain testable with fake LLMs.
+- Memory optimizer logic must consolidate existing entries through structured agent actions and deterministic repository writes.
+- Do not commit raw chat transcripts as long-term memory. Curator writes require structured agent actions; unavailable or invalid curator output should defer instead of using a local transcript fallback.
 
 ## Documentation Boundary
 
