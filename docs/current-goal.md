@@ -15,6 +15,8 @@ Recently completed foundation slice:
 - Core descriptors cover `belief`, `preference`, `episode`, and `instruction`.
 - Existing file-backed memory entries remain inspectable and usable during migration.
 - Curator and optimizer writes pass through repository-level descriptor validation.
+- Chat now triggers memory curation after turns, so conversation is the primary memory source.
+- Manual `memory add` now infers type, title, tags, and confidence through a memory intake agent.
 
 ## Scope
 

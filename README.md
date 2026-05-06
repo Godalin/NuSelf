@@ -55,10 +55,12 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add context compression for long conversations.
 - [x] Add deterministic `MemoryQueryService` for relevant memory retrieval.
 - [x] Add background Memory Curator Agent for conversation-derived memory updates.
+- [x] Run memory curation after chat turns so conversation is the primary memory source.
 - [x] Make curator writes conservative: ignore trivial chat, update duplicates before creating, reject raw transcripts.
 - [x] Add manual `memory update`.
 - [x] Add low-frequency Memory Optimizer Agent for batch cleanup, merging, and deletion of duplicate long-term memories.
 - [x] Add manual `memory optimize`.
+- [x] Make manual `memory add` infer type and title through a memory intake agent.
 - [ ] Add memory candidate review queue: list, show, accept, edit, merge, reject.
 - [x] Add open `MemoryObject + MemoryTypeDescriptor` registry for typed memory behavior.
 - [x] Add built-in descriptors for preference, belief, episode, and instruction memory.
@@ -259,7 +261,9 @@ The first protocol is JSON lines over a Unix domain socket at `private/runtime/n
 
 ## Memory Entries
 
-Memory is managed as clear entries under:
+Chat is the primary source of new memory. After chat turns, NuSelf runs the Memory Curator Agent and prints a `[memory] ...` summary when durable memory changes are created or updated.
+
+Manual memory commands remain available as maintenance tools. Memory is stored as clear entries under:
 
 ```text
 private/memory/entries/
@@ -269,11 +273,11 @@ Add an entry:
 
 ```bash
 uv run nuself memory add \
-  --type belief \
-  --title "Clarity matters" \
   --body "Prefer explicit assumptions and source-aware reasoning." \
   --tag style
 ```
+
+`memory add` infers the memory type and title by default. Use `--type` or `--title` only when you need an explicit maintenance override.
 
 List entries:
 

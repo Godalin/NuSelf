@@ -30,6 +30,8 @@ Development constraints for `src/nuself/`.
 ## Memory Entries
 
 - User-visible memory must stay inspectable as clear entries.
+- Chat is the primary source of new memory; manual memory commands are maintenance tools, not the main user workflow.
+- Manual `memory add` should infer the memory type through the intake agent by default; explicit type/title flags are only overrides for maintenance.
 - Changes to memory entry schema must update repository code and tests together.
 - Do not add new long-term memory categories as only closed `Literal` tags when the behavior is type-specific; prefer a descriptor/registry path aligned with root memory architecture docs.
 - Future typed memory descriptors should own validation, summarization, merge, decay, conflict, retrieval, and reflection behavior.

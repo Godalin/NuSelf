@@ -55,10 +55,12 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加长对话上下文压缩。
 - [x] 添加确定性的 `MemoryQueryService` 用于相关记忆检索。
 - [x] 添加后台 Memory Curator Agent，用于从对话更新长期记忆。
+- [x] 在聊天轮次后运行 memory curation，让对话成为主要记忆来源。
 - [x] 收紧 curator 写入策略：忽略闲聊、优先更新重复项、拒绝原始对话流水账。
 - [x] 添加手动 `memory update`。
 - [x] 添加低频 Memory Optimizer Agent，用于批量清理、合并和删除重复长期记忆。
 - [x] 添加手动 `memory optimize`。
+- [x] 让手动 `memory add` 通过 memory intake agent 推断 type 和 title。
 - [ ] 添加 memory candidate review queue：list、show、accept、edit、merge、reject。
 - [x] 添加开放的 `MemoryObject + MemoryTypeDescriptor` registry，用于 typed memory 行为。
 - [x] 添加 preference、belief、episode 和 instruction memory 的内置 descriptors。
@@ -259,7 +261,9 @@ private/logs/
 
 ## 记忆条目
 
-记忆以清晰条目的形式管理，存放在：
+新记忆的主要来源是聊天。每轮聊天后，NuSelf 会运行 Memory Curator Agent；如果长期记忆被创建或更新，会打印 `[memory] ...` 摘要。
+
+手动记忆命令仍作为维护工具保留。记忆以清晰条目的形式存放在：
 
 ```text
 private/memory/entries/
@@ -269,11 +273,11 @@ private/memory/entries/
 
 ```bash
 uv run nuself memory add \
-  --type belief \
-  --title "Clarity matters" \
   --body "Prefer explicit assumptions and source-aware reasoning." \
   --tag style
 ```
+
+`memory add` 默认会推断 memory type 和 title。只有需要显式维护 override 时，才使用 `--type` 或 `--title`。
 
 列出条目：
 
