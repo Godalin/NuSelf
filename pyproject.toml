@@ -1,0 +1,28 @@
+[project]
+name = "nuself"
+version = "0.1.0"
+description = "A local AI mirror with private memory, daemonized interaction, and proactive reflection."
+readme = "AGENTS.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+nuself = "nuself.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+include = ["src", "tests"]
+typeCheckingMode = "strict"
+
