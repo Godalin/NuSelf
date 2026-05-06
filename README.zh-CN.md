@@ -14,6 +14,91 @@ NuSelf 是一个本地 AI 镜像项目。它的目标是逐步成长为一个带
 
 LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规划内容，还没有实现。
 
+## 项目 TODOs
+
+这是项目面向用户的进度面板。它汇总了 [docs/development-plan.md](docs/development-plan.md)、[docs/architecture.md](docs/architecture.md)、[docs/agent-framework.md](docs/agent-framework.md)、[docs/interaction-layer.md](docs/interaction-layer.md) 和 [docs/memory-management.md](docs/memory-management.md) 中的详细规划。完成功能或改变开发规划时，要同步更新本节、实现代码和相关规划文档。
+
+### 项目基础
+
+- [x] 创建标准 `uv` Python 项目和 typed package 布局。
+- [x] 将 `uv run pytest` 和 `uvx pyright` 作为基础验证命令。
+- [x] 将真实个人数据放在被忽略的根目录 `private/`。
+- [x] 提交安全的样例私人记忆目录 `examples/private/`。
+- [x] 用户可见变更同步维护英文和中文 README。
+
+### CLI 与守护进程
+
+- [x] 添加 `nuself` CLI 入口。
+- [x] 添加 daemon 生命周期命令：`start`、`stop`、`status`、`list`、`logs`。
+- [x] 添加 Unix socket JSONL daemon 协议。
+- [x] 添加 `chat`、`attach` 和 daemon-backed attach 流程。
+- [x] 让根命令 `nuself` 成为便捷的 daemon-backed chat 入口。
+- [x] 添加交互模式，支持 `:q`、`:memory`、指令帮助和 readline 历史。
+- [ ] 添加命名 thread 创建、分支、重命名和归档。
+- [ ] 添加可以打开已有 thread 或创建新 thread 的 deep link。
+
+### 记忆系统
+
+- [x] 在 `private/memory/entries/` 下添加 file-backed memory entries。
+- [x] 添加 `memory list`、`show`、`add`、`edit`、`delete`、`search`、`preview`、`reindex`。
+- [x] 添加共享默认 working memory：`private/threads/default.json`。
+- [x] 用锁串行化共享 working-memory 写入。
+- [x] 添加长对话上下文压缩。
+- [x] 添加确定性的 `MemoryQueryService` 用于相关记忆检索。
+- [x] 添加后台 Memory Curator Agent，用于从对话更新长期记忆。
+- [x] 收紧 curator 写入策略：忽略闲聊、优先更新重复项、拒绝原始对话流水账。
+- [x] 添加手动 `memory update`。
+- [x] 添加低频 Memory Optimizer Agent，用于批量清理、合并和删除重复长期记忆。
+- [x] 添加手动 `memory optimize`。
+- [ ] 添加 memory candidate review queue：list、show、accept、edit、merge、reject。
+- [ ] 添加派生向量、hybrid 和 graph 索引。
+- [ ] 添加 memory stats 和更丰富的 query 命令。
+- [ ] 为 memory entries 添加 source-linked evidence records。
+
+### 导入与知识库
+
+- [ ] 添加 Markdown 和纯文本本地 source ingestion。
+- [ ] 添加 source metadata 解析：title、path、date、tags、origin、privacy。
+- [ ] 添加保留 source references 的 chunking。
+- [ ] 添加 source documents、chunks、profile items 和 candidates 的 repositories。
+- [ ] 让 `memory reindex` 从权威来源重建所有派生 artifacts。
+
+### Agent Runtime
+
+- [x] 添加临时 memory-aware chat agent，使用 OpenAI-compatible `/chat/completions`。
+- [x] 添加被忽略的 `.env` 配置和提交的 `examples/.env`。
+- [x] 未配置 API key 时保持确定性的 fallback 行为。
+- [ ] 用 LangGraph conversation graph 替换临时 runtime。
+- [ ] 添加结构化 response schema：answer text、evidence references、confidence、epistemic status。
+- [ ] 添加 personal claims 的 unsupported-claim guard。
+- [ ] 为 conversation agent 添加 tool-based memory search。
+
+### 轻量多智能体分身
+
+- [ ] 添加 LangGraph persona subgraph。
+- [ ] 添加有界 personas：analyst、skeptic、builder、historian、care、synthesizer。
+- [ ] 按请求只路由相关 personas。
+- [ ] 让 synthesizer 成为唯一面向用户的声音。
+- [ ] 将 persona instructions 和 corrections 保存为 procedural memory。
+
+### 主动反思与通知
+
+- [ ] 添加低频 daemon reflection scheduler，支持 cooldowns 和 quiet hours。
+- [ ] 从近期 threads、memory 和 sources 中生成 idea candidates。
+- [ ] 添加 relevance gate：novelty、confidence、urgency、cooldown、interruption cost。
+- [ ] 添加 notification outbox，包含 idempotency keys 和 delivery state。
+- [ ] 添加 log-only notification adapter。
+- [ ] 添加 macOS notification adapter。
+- [ ] 添加使用 ignored private configuration 的 email adapter。
+- [ ] 将通知链接到新的或已有的 conversation。
+
+### 评估与质量
+
+- [ ] 添加 golden conversation fixtures。
+- [ ] 添加本地 evaluation command。
+- [ ] 评分 citation coverage、unsupported personal claims、uncertainty behavior 和 style fidelity。
+- [ ] 添加 proactive-notification evaluation cases。
+
 ## 环境要求
 
 - Python 3.12 或更新版本。

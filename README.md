@@ -14,6 +14,91 @@ The current implementation is an early CLI-first skeleton:
 
 LangGraph/LangChain integration, proactive reflection, email, and macOS notifications are planned but not implemented yet.
 
+## Project TODOs
+
+This checklist is the user-facing progress board for the project. It summarizes the detailed plans in [docs/development-plan.md](docs/development-plan.md), [docs/architecture.md](docs/architecture.md), [docs/agent-framework.md](docs/agent-framework.md), [docs/interaction-layer.md](docs/interaction-layer.md), and [docs/memory-management.md](docs/memory-management.md). When features are completed or the plan changes, update this section together with the implementation and planning docs.
+
+### Project Foundation
+
+- [x] Create a standard `uv` Python project with typed package layout.
+- [x] Add `uv run pytest` and `uvx pyright` as baseline validation.
+- [x] Keep real personal data under ignored root `private/`.
+- [x] Commit safe sample private memory under `examples/private/`.
+- [x] Keep English and Chinese README files synchronized for user-visible changes.
+
+### CLI And Daemon
+
+- [x] Add `nuself` CLI entrypoint.
+- [x] Add daemon lifecycle commands: `start`, `stop`, `status`, `list`, and `logs`.
+- [x] Add Unix socket JSONL daemon protocol.
+- [x] Add `chat`, `attach`, and daemon-backed attach flows.
+- [x] Make root `nuself` a convenient daemon-backed chat entrypoint.
+- [x] Add interactive mode with `:q`, `:memory`, command help, and readline history.
+- [ ] Add named thread creation, branching, renaming, and archival.
+- [ ] Add deep links that open an existing thread or create a new one.
+
+### Memory System
+
+- [x] Add file-backed memory entries under `private/memory/entries/`.
+- [x] Add `memory list`, `show`, `add`, `edit`, `delete`, `search`, `preview`, and `reindex`.
+- [x] Add shared default working memory under `private/threads/default.json`.
+- [x] Serialize shared working-memory writes with a lock.
+- [x] Add context compression for long conversations.
+- [x] Add deterministic `MemoryQueryService` for relevant memory retrieval.
+- [x] Add background Memory Curator Agent for conversation-derived memory updates.
+- [x] Make curator writes conservative: ignore trivial chat, update duplicates before creating, reject raw transcripts.
+- [x] Add manual `memory update`.
+- [x] Add low-frequency Memory Optimizer Agent for batch cleanup, merging, and deletion of duplicate long-term memories.
+- [x] Add manual `memory optimize`.
+- [ ] Add memory candidate review queue: list, show, accept, edit, merge, reject.
+- [ ] Add derived vector, hybrid, and graph indexes.
+- [ ] Add memory stats and richer query commands.
+- [ ] Add source-linked evidence records for memory entries.
+
+### Ingestion And Knowledge Store
+
+- [ ] Add local source ingestion for Markdown and plain text.
+- [ ] Add source metadata parsing for title, path, date, tags, origin, and privacy.
+- [ ] Add chunking that preserves source references.
+- [ ] Add repositories for source documents, chunks, profile items, and candidates.
+- [ ] Make `memory reindex` rebuild all derived artifacts from authoritative sources.
+
+### Agent Runtime
+
+- [x] Add temporary memory-aware chat agent with OpenAI-compatible `/chat/completions`.
+- [x] Add ignored `.env` configuration and committed `examples/.env`.
+- [x] Keep deterministic fallback behavior when no API key is configured.
+- [ ] Replace the temporary runtime with a LangGraph conversation graph.
+- [ ] Add structured response schema with answer text, evidence references, confidence, and epistemic status.
+- [ ] Add unsupported-claim guard for personal claims without evidence.
+- [ ] Add tool-based memory search for the conversation agent.
+
+### Lightweight Multi-Agent Selves
+
+- [ ] Add LangGraph persona subgraph.
+- [ ] Add bounded personas: analyst, skeptic, builder, historian, care, and synthesizer.
+- [ ] Route only relevant personas per request.
+- [ ] Make synthesizer the only user-facing voice.
+- [ ] Store persona instructions and corrections as procedural memory.
+
+### Proactive Reflection And Notifications
+
+- [ ] Add low-frequency daemon reflection scheduler with cooldowns and quiet hours.
+- [ ] Generate idea candidates from recent threads, memory, and sources.
+- [ ] Add relevance gate with novelty, confidence, urgency, cooldown, and interruption cost.
+- [ ] Add notification outbox with idempotency keys and delivery state.
+- [ ] Add log-only notification adapter.
+- [ ] Add macOS notification adapter.
+- [ ] Add email adapter using ignored private configuration.
+- [ ] Link notifications to a new or existing conversation.
+
+### Evaluation And Quality
+
+- [ ] Add golden conversation fixtures.
+- [ ] Add local evaluation command.
+- [ ] Score citation coverage, unsupported personal claims, uncertainty behavior, and style fidelity.
+- [ ] Add proactive-notification evaluation cases.
+
 ## Requirements
 
 - Python 3.12 or newer.

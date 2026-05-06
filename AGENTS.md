@@ -8,6 +8,7 @@ This project is an AI-Mirror of most ideas of one person, for those who want to 
 - Code must be type-checked with `uvx pyright`.
 - Sub-components must be tested individually.
 - User-facing workflow or feature changes must update both `README.md` and `README.zh-CN.md`.
+- Project progress is tracked in the TODOs section of `README.md`; completed features and planning changes must update that checklist.
 
 ## Development Style
 
@@ -17,10 +18,12 @@ This project is an AI-Mirror of most ideas of one person, for those who want to 
 - Aggressive refactoring is acceptable when it clarifies architecture, removes obsolete concepts, or aligns code with the current design.
 - Keep refactors intentional: update documentation and validation together with the code change.
 - When commands, configuration, runtime behavior, or user-facing workflows change in a way users need to learn, update both English and Chinese README files in the same change.
+- When completing a feature or changing the development plan, update the project TODOs in [README.md](README.md) and keep [README.zh-CN.md](README.zh-CN.md) synchronized.
 - Keep implementation constraints and small behavior polish in scoped `AGENTS.md` files near the code rather than overloading the user README.
 
 ## Project Design
 
+- User-facing project progress TODOs: [README.md](README.md)
 - Architecture overview: [docs/architecture.md](docs/architecture.md)
 - Development plan: [docs/development-plan.md](docs/development-plan.md)
 - Agent framework plan: [docs/agent-framework.md](docs/agent-framework.md)
