@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 from nuself.config import runtime_paths
-from nuself.domain.memory import MemoryEntry
+from nuself.domain.memory import MemoryEntry, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
 
 
 class MemoryEntryNotFound(KeyError):
@@ -17,9 +17,10 @@ class MemoryEntryNotFound(KeyError):
 class MemoryEntryRepository:
     """Stores one JSON file per memory entry under private/memory/entries."""
 
-    def __init__(self, project_root: Path | None = None) -> None:
+    def __init__(self, project_root: Path | None = None, *, registry: MemoryTypeRegistry | None = None) -> None:
         self._paths = runtime_paths(project_root)
         self._entries_dir = self._paths.private_root / "memory" / "entries"
+        self._registry = registry or default_memory_type_registry()
 
     @property
     def entries_dir(self) -> Path:
@@ -50,6 +51,7 @@ class MemoryEntryRepository:
         return self._read_path(path)
 
     def save(self, entry: MemoryEntry) -> MemoryEntry:
+        self._registry.validate(entry.to_memory_object())
         self.ensure()
         path = self._path_for(entry.id)
         path.write_text(
@@ -57,6 +59,11 @@ class MemoryEntryRepository:
             encoding="utf-8",
         )
         return entry
+
+    def save_object(self, memory: MemoryObject) -> MemoryObject:
+        self._registry.validate(memory)
+        self.save(MemoryEntry.from_memory_object(memory))
+        return memory
 
     def delete(self, entry_id: str) -> None:
         path = self._path_for(entry_id)
@@ -90,4 +97,7 @@ class MemoryEntryRepository:
         raw = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
             raise ValueError(f"memory entry file must contain an object: {path}")
-        return MemoryEntry.from_wire(cast(dict[str, object], raw))
+        data = cast(dict[str, object], raw)
+        if "payload" in data:
+            return MemoryEntry.from_memory_object(MemoryObject.from_wire(data))
+        return MemoryEntry.from_wire(data)

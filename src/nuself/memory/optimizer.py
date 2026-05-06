@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.domain.memory import MemoryEntry, MemoryEntryType, now_iso
+from nuself.domain.memory import MemoryEntry, MemoryEntryType, MemoryValidationError, now_iso
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
 
@@ -192,7 +192,11 @@ class MemoryOptimizer:
             updated_at=now_iso(),
             revisit_at=existing.revisit_at,
         )
-        self._repository.save(updated)
+        try:
+            self._repository.save(updated)
+        except MemoryValidationError as exc:
+            self._append_log(f"rejected optimized entry={updated.id} title={updated.title!r} reason={str(exc)!r}")
+            return False
         self._append_log(f"optimized entry={updated.id} title={updated.title!r} reason={action.reason!r}")
         return True
 
@@ -277,7 +281,16 @@ def _parse_optimize_action(raw: dict[str, object]) -> MemoryOptimizeAction | Non
 
 
 def _optional_memory_type(value: object) -> MemoryEntryType | None:
-    if value in {"source_note", "profile_fact", "belief", "style_trait", "episode", "open_question", "instruction"}:
+    if value in {
+        "source_note",
+        "profile_fact",
+        "belief",
+        "preference",
+        "style_trait",
+        "episode",
+        "open_question",
+        "instruction",
+    }:
         return cast(MemoryEntryType, value)
     return None
 

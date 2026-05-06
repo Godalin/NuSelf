@@ -534,6 +534,7 @@ def _memory_type_choices() -> list[MemoryEntryType]:
         "source_note",
         "profile_fact",
         "belief",
+        "preference",
         "style_trait",
         "episode",
         "open_question",

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.domain.memory import MemoryEntry
+from nuself.domain.memory import (
+    MemoryEntry,
+    MemoryObject,
+    MemoryValidationError,
+    default_memory_type_registry,
+)
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
 
 
@@ -40,3 +45,62 @@ def test_memory_repository_missing_entry(tmp_path: Path) -> None:
         return
     raise AssertionError("expected MemoryEntryNotFound")
 
+
+def test_memory_entry_has_memory_object_migration_shape() -> None:
+    entry = MemoryEntry(
+        type="preference",
+        title="CLI output style",
+        body="The user prefers concise command output.",
+        tags=["cli"],
+        source_refs=["thread:default:0-2"],
+        confidence=0.8,
+        review_state="reviewed",
+    )
+
+    memory = entry.to_memory_object()
+    restored = MemoryEntry.from_memory_object(memory)
+
+    assert memory.type == "preference"
+    assert memory.payload["title"] == "CLI output style"
+    assert memory.payload["body"] == "The user prefers concise command output."
+    assert memory.metadata["entry_schema"] == "MemoryEntry/v1"
+    assert restored == entry
+
+
+def test_default_registry_validates_and_summarizes_built_in_memory_object() -> None:
+    registry = default_memory_type_registry()
+    memory = MemoryObject(
+        type="instruction",
+        payload={
+            "title": "Validation first",
+            "body": "Run focused tests before widening validation.",
+            "tags": ["testing"],
+            "revisit_at": None,
+        },
+        confidence=0.9,
+        review_state="reviewed",
+    )
+
+    registry.validate(memory)
+
+    assert registry.summarize(memory) == "Validation first: Run focused tests before widening validation."
+
+
+def test_repository_rejects_invalid_descriptor_payload(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    invalid = MemoryEntry(type="belief", title="", body="Missing title.")
+
+    try:
+        repo.save(invalid)
+    except MemoryValidationError as exc:
+        assert exc.memory_type == "belief"
+        assert exc.issues[0].field == "payload.title"
+        return
+    raise AssertionError("expected MemoryValidationError")
+
+
+def test_repository_accepts_unknown_draft_entry_type_as_migration_escape_hatch(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    entry = repo.save(MemoryEntry(type="style_trait", title="Concise style", body="Keep summaries compact."))
+
+    assert repo.get(entry.id).title == "Concise style"

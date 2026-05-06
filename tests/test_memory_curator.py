@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
-from nuself.domain.memory import MemoryEntry
+from nuself.domain.memory import (
+    MemoryEntry,
+    MemoryObject,
+    MemoryTypeRegistry,
+    MemoryValidationIssue,
+)
 from nuself.llm import ChatMessage
 from nuself.memory.curator import MemoryCurator
 from nuself.memory.repository import MemoryEntryRepository
@@ -182,3 +187,42 @@ def test_memory_curator_accepts_fenced_json(tmp_path: Path) -> None:
 
     assert result.created == 1
     assert repo.list()[0].title == "Structured memory decisions"
+
+
+class RejectingEpisodeDescriptor:
+    @property
+    def type(self) -> str:
+        return "episode"
+
+    def validate(self, memory: MemoryObject) -> list[MemoryValidationIssue]:
+        return [MemoryValidationIssue("payload.body", "rejected by test descriptor")]
+
+    def summarize(self, memory: MemoryObject) -> str:
+        return "rejected"
+
+
+def test_memory_curator_ignores_descriptor_rejected_create(tmp_path: Path) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(role="user", content="Remember that descriptor validation gates memory writes."),
+                ThreadMessage(role="assistant", content="I will validate proposed memory objects before saving."),
+            ],
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"create","type":"episode","title":"Descriptor validation",'
+        '"body":"Curator writes should pass descriptor validation before persistence.",'
+        '"confidence":0.8,"reason":"typed memory pipeline"}]}'
+    )
+    repo = MemoryEntryRepository(tmp_path, registry=MemoryTypeRegistry([RejectingEpisodeDescriptor()]))
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+
+    result = curator.run_once()
+
+    assert result.created == 0
+    assert result.ignored == 1
+    assert repo.list() == []
+    assert "rejected entry" in result.log_path.read_text(encoding="utf-8")

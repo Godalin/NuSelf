@@ -9,7 +9,7 @@ from typing import Literal, TypeAlias, cast
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.domain.memory import MemoryEntry, MemoryEntryType, ReviewState, now_iso
+from nuself.domain.memory import MemoryEntry, MemoryEntryType, MemoryValidationError, ReviewState, now_iso
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
 
@@ -120,8 +120,10 @@ class MemoryCurator:
         ignored = 0
         for action in decision.actions:
             if action.action == "create":
-                self._create_entry(action, source_ref)
-                created += 1
+                if self._create_entry(action, source_ref):
+                    created += 1
+                else:
+                    ignored += 1
             elif action.action == "update":
                 if self._update_entry(action, source_ref):
                     updated += 1
@@ -193,7 +195,7 @@ class MemoryCurator:
             lines.append(f"- id={entry.id} type={entry.type} title={entry.title}: {entry.body}")
         return "\n".join(lines)
 
-    def _create_entry(self, action: MemoryAction, source_ref: str) -> None:
+    def _create_entry(self, action: MemoryAction, source_ref: str) -> bool:
         review_state: ReviewState = "reviewed" if action.type == "episode" else "draft"
         entry = MemoryEntry(
             type=action.type,
@@ -203,8 +205,13 @@ class MemoryCurator:
             confidence=_clamp_confidence(action.confidence),
             review_state=review_state,
         )
-        self._repository.save(entry)
+        try:
+            self._repository.save(entry)
+        except MemoryValidationError as exc:
+            self._append_log(f"rejected entry type={entry.type} title={entry.title!r} reason={str(exc)!r}")
+            return False
         self._append_log(f"created entry={entry.id} type={entry.type} title={entry.title!r} reason={action.reason!r}")
+        return True
 
     def _update_entry(self, action: MemoryAction, source_ref: str) -> bool:
         if action.entry_id is None:
@@ -227,7 +234,11 @@ class MemoryCurator:
             updated_at=now_iso(),
             revisit_at=existing.revisit_at,
         )
-        self._repository.save(updated)
+        try:
+            self._repository.save(updated)
+        except MemoryValidationError as exc:
+            self._append_log(f"rejected update entry={updated.id} title={updated.title!r} reason={str(exc)!r}")
+            return False
         self._append_log(f"updated entry={updated.id} title={updated.title!r} reason={action.reason!r}")
         return True
 
@@ -310,7 +321,16 @@ def _parse_action(raw: dict[str, object]) -> MemoryAction | None:
 
 
 def _memory_type(value: object) -> MemoryEntryType:
-    if value in {"source_note", "profile_fact", "belief", "style_trait", "episode", "open_question", "instruction"}:
+    if value in {
+        "source_note",
+        "profile_fact",
+        "belief",
+        "preference",
+        "style_trait",
+        "episode",
+        "open_question",
+        "instruction",
+    }:
         return cast(MemoryEntryType, value)
     return "episode"
 
