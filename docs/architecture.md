@@ -20,7 +20,13 @@ User Interface
     -> Retrieval Layer
     -> Mirror Profile
     -> Response Orchestrator
+    -> Persona Subgraphs
     -> Safety and Epistemic Guards
+  -> Proactive Agent Service
+    -> Reflection Scheduler
+    -> Idea Candidate Generator
+    -> Relevance Gate
+    -> Notification Outbox
   -> Memory Update Pipeline
     -> Source Ingestion
     -> Normalization
@@ -49,6 +55,19 @@ examples/private/            # committed sample memory for tests and demos
 The application should actively link to the root `private/` directory at runtime. That means the default configuration resolves private memory from the project root, validates its manifest, and exposes it to ingestion, retrieval, profile loading, and export workflows. Tests, examples, and documentation should use `examples/private/` so the repository remains runnable without private data.
 
 Private memory can also be used for sharing. Shareable subsets should be written under `private/shares/` as explicit export bundles, never by exposing the whole private directory by accident.
+
+## Agent Framework
+
+NuSelf uses the LangChain ecosystem by default. LangGraph is the primary runtime for stateful agent workflows, durable execution, thread persistence, long-term memory, human-in-the-loop pauses, and conditional routing. LangChain provides model, tool, prompt, and provider abstractions.
+
+The detailed framework decision is tracked in [docs/agent-framework.md](agent-framework.md).
+
+Framework boundaries:
+
+- Use LangGraph for the core conversation graph, proactive reflection graph, and lightweight multi-persona discussion.
+- Use NuSelf's own typed domain models for private memory, evidence, profile state, notification intents, and review workflows.
+- Treat LlamaIndex as an optional retrieval/indexing component later.
+- Defer CrewAI, AutoGen, Temporal, and Inngest until a concrete milestone needs their specific strengths.
 
 ## Core Modules
 
@@ -109,6 +128,51 @@ Responsibilities:
 - Run post-generation checks for unsupported claims and missing citations.
 - Keep provider-specific model code behind a narrow adapter boundary.
 
+### Persona Subgraphs
+
+Implements lightweight multi-agent discussion between thought selves.
+
+Responsibilities:
+
+- Route each question or proactive candidate to only the relevant personas.
+- Run bounded persona discussion rounds with structured outputs.
+- Keep persona claims grounded in evidence or clearly marked as inference.
+- Let a synthesizer integrate persona outputs before any user-facing response.
+- Store persona instructions and feedback as procedural memory, not as hard-coded scattered prompts.
+
+Default personas:
+
+- `analyst_self`: decomposes concepts, assumptions, and implications.
+- `skeptic_self`: looks for contradictions, missing evidence, and overconfidence.
+- `builder_self`: turns ideas into plans, artifacts, and next actions.
+- `historian_self`: retrieves related private memory and past conversations.
+- `care_self`: evaluates emotional, relational, and life-context consequences.
+- `synthesizer`: integrates the discussion and decides the next action.
+
+### Proactive Agent Service
+
+Allows NuSelf to initiate contact when it finds a worthwhile idea, tension, reminder, or question.
+
+Responsibilities:
+
+- Run scheduled or event-triggered reflection over private memory, recent threads, and new sources.
+- Generate idea candidates with evidence, confidence, novelty, and suggested thread routing.
+- Use persona subgraphs for bounded internal discussion of high-value candidates.
+- Apply relevance, cooldown, and interruption-cost gates before notification.
+- Write notification intents to an outbox instead of sending directly from agent nodes.
+- Link each notification to a new or existing conversation thread.
+
+### Notification Outbox
+
+Separates agent decisions from external side effects.
+
+Responsibilities:
+
+- Persist notification intents, delivery state, retries, and errors.
+- Support macOS notification and email adapters as initial delivery mechanisms.
+- Include deep links that open a local NuSelf thread or create a new thread from the candidate.
+- Prevent duplicate or repeated notifications through idempotency keys and cooldown metadata.
+
 ### Memory Update Pipeline
 
 Turns new conversations or new documents into candidate profile updates.
@@ -157,9 +221,23 @@ src/nuself/
     prompts.py
     orchestrator.py
     guards.py
+  personas/
+    definitions.py
+    graph.py
+    synthesis.py
   memory/
     candidates.py
     review.py
+  proactive/
+    scheduler.py
+    candidates.py
+    relevance.py
+    outbox.py
+  notifications/
+    adapters.py
+    email.py
+    macos.py
+    links.py
   evals/
     cases.py
     scoring.py
@@ -186,6 +264,10 @@ Important entities:
 - `ConversationTurn`: normalized user/assistant exchange.
 - `MirrorResponse`: answer text plus evidence, confidence, and epistemic status.
 - `MemoryCandidate`: proposed update created from new material or conversation.
+- `PersonaDefinition`: prompt, role, retrieval scope, and output schema for a thought self.
+- `PersonaContribution`: structured persona output with claims, evidence, concerns, questions, and confidence.
+- `IdeaCandidate`: proactive idea, contradiction, reminder, or question proposed for user attention.
+- `NotificationIntent`: outbox record for email, macOS notification, or local deep link delivery.
 
 ## Trust And Safety Boundaries
 
@@ -199,11 +281,15 @@ Required guardrails:
 - Keep high-impact advice, medical/legal/financial claims, and interpersonal escalation cautious and source-aware.
 - Keep raw private sources and derived summaries separated so future permission controls are possible.
 - Never commit real `private/` contents; only curated `private/shares/` bundles should be copied out intentionally.
+- Require a relevance gate before proactive notifications are delivered.
+- Keep notification side effects outside LangGraph reasoning nodes by using an outbox.
 
 ## Initial Technical Choices
 
 - Python package managed by `uv`.
 - Static type checking with `uvx pyright`.
+- LangGraph as the primary stateful agent runtime.
+- LangChain for model, prompt, tool, and provider abstractions.
 - Pydantic or dataclasses for typed domain models.
 - A local file-backed store for the first version, with repository interfaces that can later support SQLite or vector databases.
 - Root `private/` as the default ignored local memory directory.

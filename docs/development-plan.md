@@ -106,7 +106,26 @@ Validation:
 - Schema validation tests.
 - Guard tests for unsupported personal claims.
 
-## Milestone 6: Memory Candidate Review
+## Milestone 6: Lightweight Persona Subgraphs
+
+Goal: support bounded discussion between multiple thought selves.
+
+Deliverables:
+
+- LangGraph-based persona subgraph with routed persona nodes.
+- Persona definitions for analyst, skeptic, builder, historian, care, and synthesizer.
+- Structured output schema for persona contributions.
+- Synthesizer that creates the only user-facing response from persona outputs.
+- Configuration that limits persona count and critique rounds by default.
+
+Validation:
+
+- Unit tests with fake model outputs for each persona.
+- Routing tests proving only relevant personas run.
+- Tests that final responses come from the synthesizer.
+- Tests that unsupported persona claims are marked as inference or rejected.
+
+## Milestone 7: Memory Candidate Review
 
 Goal: convert new documents and conversations into reviewable profile updates.
 
@@ -124,7 +143,29 @@ Validation:
 - Tests that conversation-derived facts are lower confidence by default.
 - Share bundle tests proving exports include only explicitly selected records.
 
-## Milestone 7: Evaluation Harness
+## Milestone 8: Proactive Agent And Outbox
+
+Goal: let NuSelf surface new ideas without becoming a noisy chatbot.
+
+Deliverables:
+
+- Reflection scheduler interface for time-based and event-based triggers.
+- Idea candidate generator over recent threads, private memory, and new sources.
+- Relevance gate with novelty, confidence, urgency, cooldown, and interruption-cost fields.
+- Notification outbox with idempotency keys and delivery status.
+- macOS notification adapter stub.
+- Email adapter stub.
+- Deep link model for creating a new thread or opening an existing thread.
+
+Validation:
+
+- Scheduler tests with fake time.
+- Candidate generation tests with fixture memory and threads.
+- Relevance gate tests for low-value, duplicate, urgent, and cooldown cases.
+- Outbox tests proving graph nodes write intents without sending external notifications.
+- Adapter tests using fakes instead of real email or system notifications.
+
+## Milestone 9: Evaluation Harness
 
 Goal: prevent regressions in fidelity and uncertainty behavior.
 
@@ -138,8 +179,10 @@ Validation:
 
 - Evaluation command runs on fixtures without external services by using fake or recorded providers.
 - Regression tests fail when citations disappear from evidence-required answers.
+- Persona evaluation cases cover disagreement, synthesis, and overconfidence.
+- Proactive evaluation cases cover notification relevance and non-interruption behavior.
 
-## Milestone 8: First Usable Interface
+## Milestone 10: First Usable Interface
 
 Goal: expose the mirror through a practical local interface.
 
@@ -148,6 +191,7 @@ Deliverables:
 - CLI chat command or minimal local web interface.
 - Conversation history persistence.
 - Source/citation display in the interface.
+- Thread links that can open a proactive candidate as a new or existing conversation.
 - Configuration for model provider credentials outside committed files.
 
 Validation:
@@ -164,4 +208,7 @@ Validation:
 - Keep raw sources, derived profile state, and conversation logs separate.
 - Keep real `private/` ignored and out of commits.
 - Keep `examples/private/` public, minimal, and safe to publish.
+- Keep LangGraph as the default runtime unless a documented milestone requires a different framework.
+- Keep persona discussion bounded and routed to avoid unnecessary cost and noisy outputs.
+- Keep notification delivery behind an outbox so tests never send real messages.
 - Update `docs/architecture.md` when implementation changes the intended boundaries.
