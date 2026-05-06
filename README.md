@@ -117,7 +117,7 @@ uv run nuself daemon attach --message "continue"
 
 Without `--message`, `chat` and `attach` enter interactive mode. When terminal support is available, line editing and arrow-key history are backed by `private/runtime/interactive_history`. Input starting with `:` is treated as an interactive command. Type `:q`, `:quit`, `:exit`, or send EOF to leave; unknown commands print interactive help and keep the session open.
 
-Current chat uses a temporary agent that loads memory entries from `private/memory/entries/`, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows.
+Current chat uses a temporary agent that searches memory entries from `private/memory/entries/`, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The memory search is currently deterministic lexical retrieval with ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
 
 Context compression can be tuned in `.env`:
 

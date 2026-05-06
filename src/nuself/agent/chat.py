@@ -9,6 +9,7 @@ from typing import Literal, cast
 
 from nuself.config import config_int, runtime_paths
 from nuself.llm import ChatLLM, ChatMessage, default_llm
+from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 
 ThreadRole = Literal["user", "assistant"]
@@ -147,19 +148,22 @@ class ChatAgent:
         llm: ChatLLM | None = None,
         settings: ChatAgentSettings | None = None,
         thread_store: ThreadStore | None = None,
-        memory_repository: MemoryEntryRepository | None = None,
+        memory_query_service: MemoryQueryService | None = None,
     ) -> None:
         self._project_root = project_root
         self._llm = llm or default_llm(project_root)
         self._settings = settings or ChatAgentSettings.from_project(project_root)
         self._thread_store = thread_store or ThreadStore(project_root)
-        self._memory_repository = memory_repository or MemoryEntryRepository(project_root)
+        self._memory_query_service = memory_query_service or MemoryQueryService(MemoryEntryRepository(project_root))
 
     def respond(self, message: str, thread_id: str = "default") -> ChatResult:
         state = self._thread_store.load(thread_id)
         base_messages = _drop_local_fallback_replies(state.messages)
         messages = [*base_messages, ThreadMessage(role="user", content=message)]
-        prompt = self._build_prompt(ThreadState(thread_id=thread_id, summary=state.summary, messages=messages))
+        prompt = self._build_prompt(
+            ThreadState(thread_id=thread_id, summary=state.summary, messages=messages),
+            message,
+        )
         reply = self._llm.complete(prompt)
         updated = ThreadState(
             thread_id=thread_id,
@@ -170,32 +174,24 @@ class ChatAgent:
         self._thread_store.save(compressed)
         return ChatResult(reply=reply, thread_id=thread_id)
 
-    def _build_prompt(self, state: ThreadState) -> list[ChatMessage]:
-        prompt: list[ChatMessage] = [ChatMessage(role="system", content=self._system_prompt(state.summary))]
+    def _build_prompt(self, state: ThreadState, user_message: str) -> list[ChatMessage]:
+        prompt: list[ChatMessage] = [ChatMessage(role="system", content=self._system_prompt(user_message, state.summary))]
         for message in state.messages[-self._settings.recent_messages :]:
             prompt.append(ChatMessage(role=message.role, content=message.content))
         return prompt
 
-    def _system_prompt(self, summary: str) -> str:
+    def _system_prompt(self, user_message: str, summary: str) -> str:
         parts = [
             "You are NuSelf, a private AI mirror for one person.",
             "Use the user's memory entries as durable context. Do not invent memories.",
             "Answer directly, keep uncertainty explicit, and surface useful questions when appropriate.",
         ]
-        memory_context = self._memory_context()
-        if memory_context != "":
-            parts.extend(["", "Memory entries:", memory_context])
+        packed_memory = self._memory_query_service.pack(MemoryQuery(text=user_message))
+        if packed_memory.text != "":
+            parts.extend(["", "Relevant memory entries:", packed_memory.text])
         if summary != "":
             parts.extend(["", "Compressed conversation so far:", summary])
         return "\n".join(parts)
-
-    def _memory_context(self) -> str:
-        entries = self._memory_repository.list()
-        lines: list[str] = []
-        for entry in entries[:24]:
-            tags = f" tags={','.join(entry.tags)}" if entry.tags else ""
-            lines.append(f"- {entry.title} [{entry.type}{tags}]: {entry.body}")
-        return "\n".join(lines)
 
     def _compress_if_needed(self, state: ThreadState) -> ThreadState:
         if len(state.messages) <= self._settings.summary_trigger_messages:

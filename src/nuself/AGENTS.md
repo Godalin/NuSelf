@@ -30,6 +30,8 @@ Development constraints for `src/nuself/`.
 - User-visible memory must stay inspectable as clear entries.
 - Changes to memory entry schema must update repository code and tests together.
 - Derived indexes belong under `private/derived/` and should be rebuildable from entries.
+- Chat prompts must use `MemoryQueryService` or a successor query layer instead of loading all entries indiscriminately.
+- Memory query and context packing must remain independently testable without live LLM calls.
 
 ## Documentation Boundary
 

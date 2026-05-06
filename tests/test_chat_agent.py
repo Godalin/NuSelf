@@ -5,6 +5,7 @@ from pathlib import Path
 from nuself.agent.chat import ChatAgent, ChatAgentSettings, ThreadMessage, ThreadState, ThreadStore
 from nuself.domain.memory import MemoryEntry
 from nuself.llm import ChatMessage
+from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 
 
@@ -30,14 +31,34 @@ def test_chat_agent_includes_memory_entries(tmp_path: Path) -> None:
         )
     )
     llm = FakeLLM()
-    agent = ChatAgent(tmp_path, llm=llm, memory_repository=repo)
+    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(repo))
 
-    result = agent.respond("hello")
+    result = agent.respond("clarity assumptions")
 
     assert result.reply == "agent reply"
     system_prompt = llm.calls[0][0].content
     assert "Clarity matters" in system_prompt
     assert "Prefer explicit assumptions." in system_prompt
+
+
+def test_chat_agent_omits_irrelevant_memory_entries(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Clarity matters",
+            body="Prefer explicit assumptions.",
+            tags=["style"],
+        )
+    )
+    llm = FakeLLM()
+    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(repo))
+
+    agent.respond("weather forecast")
+
+    system_prompt = llm.calls[0][0].content
+    assert "Relevant memory entries:" not in system_prompt
+    assert "Clarity matters" not in system_prompt
 
 
 def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:
