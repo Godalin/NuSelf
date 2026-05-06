@@ -7,6 +7,7 @@ This project is an AI-Mirror of most ideas of one person, for those who want to 
 - Standard Python project managed by `uv`.
 - Code must be type-checked with `uvx pyright`.
 - Sub-components must be tested individually.
+- User-facing functionality changes must update both `README.md` and `README.zh-CN.md`.
 
 ## Development Style
 
@@ -15,6 +16,7 @@ This project is an AI-Mirror of most ideas of one person, for those who want to 
 - Do not preserve old CLI commands, protocol fields, data schemas, or module APIs unless a current document explicitly requires them.
 - Aggressive refactoring is acceptable when it clarifies architecture, removes obsolete concepts, or aligns code with the current design.
 - Keep refactors intentional: update documentation and validation together with the code change.
+- When commands, configuration, runtime behavior, or user-visible behavior changes, update both English and Chinese README files in the same change.
 
 ## Project Design
 

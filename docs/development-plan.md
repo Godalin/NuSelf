@@ -9,6 +9,7 @@ This plan turns the architecture into small, testable milestones. Each milestone
 - When a boundary changes, update every caller, test, example, and document in the same milestone.
 - Prefer aggressive refactoring over incremental compatibility when it makes the architecture clearer.
 - Keep each milestone validated with tests and `uvx pyright`.
+- User-facing functionality, commands, configuration, and runtime behavior changes must update both `README.md` and `README.zh-CN.md`.
 
 ## Milestone 0: Project Skeleton
 
