@@ -13,9 +13,12 @@ except ImportError:  # pragma: no cover - platform fallback
     readline = None  # type: ignore[assignment]
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
+from nuself.agent.chat import ChatAgent
 from nuself.daemon import client, lifecycle
 from nuself.domain.memory import MemoryEntry, MemoryEntryType
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
+
+CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -149,9 +152,8 @@ def handle_chat(args: argparse.Namespace) -> int:
         print("NuSelf daemon is not running.", file=sys.stderr)
         return 1
     if args.message is not None:
-        print(_one_shot_reply(args.message))
-        return 0
-    return _interactive_loop(_send_one_shot_chat, args.project_root)
+        return _send_one_shot_chat(args.message, args.project_root)
+    return _interactive_loop(lambda message: _send_one_shot_chat(message, args.project_root), args.project_root)
 
 
 def handle_attach(args: argparse.Namespace) -> int:
@@ -248,7 +250,16 @@ def handle_memory_reindex(args: argparse.Namespace) -> int:
 
 
 def _send_chat(message: str, project_root: Path | None) -> int:
-    response = client.request("chat", {"message": message}, project_root=project_root)
+    try:
+        response = client.request(
+            "chat",
+            {"message": message},
+            project_root=project_root,
+            timeout=CHAT_REQUEST_TIMEOUT_SECONDS,
+        )
+    except client.DaemonConnectionError as exc:
+        print(f"daemon request failed: {exc}", file=sys.stderr)
+        return 1
     if response.status == "error":
         print(response.error or "daemon returned an error", file=sys.stderr)
         return 1
@@ -280,7 +291,9 @@ def _interactive_loop(send_message: Callable[[str], int], project_root: Path | N
                 if command_result == "exit":
                     return 0
                 continue
+            print()
             result = send_message(message)
+            print()
             if result != 0:
                 return result
     finally:
@@ -351,9 +364,13 @@ def _dedupe_interactive_history() -> None:
         readline.add_history(item)
 
 
-def _send_one_shot_chat(message: str) -> int:
-    print(_one_shot_reply(message))
-    return 0
+def _send_one_shot_chat(message: str, project_root: Path | None) -> int:
+    try:
+        print(_one_shot_reply(message, project_root))
+        return 0
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
 
 def _brand_banner() -> str:
@@ -372,7 +389,9 @@ def _brand_banner() -> str:
 def _handle_interactive_command(command: str) -> str | None:
     if command in {":q", ":quit", ":exit"}:
         return "exit"
+    print()
     print(_interactive_help(command))
+    print()
     return None
 
 
@@ -391,8 +410,8 @@ def _interactive_help(command: str | None = None) -> str:
     return "\n".join(lines)
 
 
-def _one_shot_reply(message: str) -> str:
-    return f"NuSelf one-shot runtime received: {message}"
+def _one_shot_reply(message: str, project_root: Path | None) -> str:
+    return ChatAgent(project_root).respond(message, thread_id="default").reply
 
 
 def _format_status(status: lifecycle.DaemonStatus) -> str:

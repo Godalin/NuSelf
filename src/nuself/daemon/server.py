@@ -9,6 +9,7 @@ import socketserver
 import threading
 from typing import override
 
+from nuself.agent.chat import ChatAgent
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, ProtocolError
 
@@ -19,6 +20,7 @@ class DaemonState:
     def __init__(self, project_root: Path) -> None:
         self.project_root = project_root
         self.shutdown_requested = threading.Event()
+        self.chat_agent = ChatAgent(project_root)
 
 
 class NuSelfUnixServer(socketserver.ThreadingUnixStreamServer):
@@ -65,11 +67,15 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
         message = request.payload.get("message")
         if not isinstance(message, str):
             return DaemonResponse.fail(request.request_id, "chat request requires string payload field 'message'")
+        try:
+            result = state.chat_agent.respond(message)
+        except RuntimeError as exc:
+            return DaemonResponse.fail(request.request_id, str(exc))
         return DaemonResponse.ok(
             request,
             {
-                "reply": f"NuSelf daemon received: {message}",
-                "thread_id": "default",
+                "reply": result.reply,
+                "thread_id": result.thread_id,
             },
         )
     if request.type == "shutdown":

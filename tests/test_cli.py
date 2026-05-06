@@ -5,6 +5,8 @@ from typing import Protocol
 
 from nuself import cli
 from nuself.cli import main
+from nuself.daemon.client import DaemonConnectionError
+from nuself.daemon.protocol import DaemonResponse
 from nuself.daemon.lifecycle import DaemonStatus
 
 
@@ -26,7 +28,9 @@ def test_chat_uses_one_shot_when_daemon_is_missing(tmp_path: Path, capsys: Captu
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "one-shot runtime received: hello" in captured.out
+    assert "LLM API is not configured yet" in captured.out
+    assert "Last message: hello" in captured.out
+    assert (tmp_path / "private" / "threads" / "default.json").is_file()
 
 
 def test_chat_without_message_enters_one_shot_interactive_mode(
@@ -40,7 +44,8 @@ def test_chat_without_message_enters_one_shot_interactive_mode(
     assert result == 0
     assert "┌────┐" in captured.out
     assert "interactive mode" in captured.out
-    assert "one-shot runtime received: hello" in captured.out
+    assert "LLM API is not configured yet" in captured.out
+    assert "Last message: hello" in captured.out
     if cli.readline is not None:
         history_path = tmp_path / "private" / "runtime" / "interactive_history"
         assert history_path.is_file()
@@ -58,7 +63,8 @@ def test_unknown_interactive_command_shows_help_and_keeps_session_open(
     assert result == 0
     assert "Unknown interactive command: :bad" in captured.out
     assert "Interactive commands:" in captured.out
-    assert "one-shot runtime received: hello" in captured.out
+    assert "LLM API is not configured yet" in captured.out
+    assert "Last message: hello" in captured.out
 
 
 def test_interactive_history_skips_consecutive_duplicates(
@@ -182,6 +188,78 @@ def test_default_entrypoint_creates_daemon_when_missing(
     assert "Created daemon:" in captured.out
     assert "pid=456" in captured.out
     assert "sent hello" in captured.out
+
+
+def test_daemon_chat_uses_long_timeout(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    captured_timeout = 0.0
+    daemon_status = DaemonStatus(
+        running=True,
+        pid=123,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+
+    def fake_request(
+        request_type: object,
+        payload: object | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        nonlocal captured_timeout
+        captured_timeout = timeout
+        return DaemonResponse(
+            request_id="r1",
+            status="ok",
+            payload={"reply": "daemon reply"},
+        )
+
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        return daemon_status
+
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.cli.client.request", fake_request)
+
+    result = main(["--project-root", str(tmp_path), "attach", "--message", "hello"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "daemon reply" in captured.out
+    assert captured_timeout == cli.CHAT_REQUEST_TIMEOUT_SECONDS
+
+
+def test_daemon_chat_connection_error_is_reported(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    daemon_status = DaemonStatus(
+        running=True,
+        pid=123,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+
+    def fake_request(
+        request_type: object,
+        payload: object | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        raise DaemonConnectionError("timed out")
+
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        return daemon_status
+
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.cli.client.request", fake_request)
+
+    result = main(["--project-root", str(tmp_path), "attach", "--message", "hello"])
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "daemon request failed: timed out" in captured.err
 
 
 def test_daemon_list_reports_local_daemon(tmp_path: Path, capsys: CaptureFixture) -> None:
