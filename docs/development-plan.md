@@ -76,6 +76,7 @@ Deliverables:
 - Review queue commands for accepting, editing, merging, and rejecting candidates.
 - Derived indexes under `private/derived/`.
 - Memory management design aligned with [docs/memory-management.md](memory-management.md).
+- Shared working-memory lock and automatic episode curation from recent chat turns.
 
 Validation:
 
@@ -83,6 +84,8 @@ Validation:
 - CLI tests for list/show/delete flows.
 - Tests that deleted entries disappear from derived indexes after reindex.
 - Review flow tests for accept, edit, merge, and reject.
+- Tests that concurrent chat updates are serialized through the thread store.
+- Tests that the memory curator only processes new turns after its cursor.
 
 ## Milestone 4: Local Ingestion Pipeline
 

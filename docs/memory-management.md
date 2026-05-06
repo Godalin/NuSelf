@@ -50,6 +50,8 @@ Therefore, memory retrieval should answer: "What should this mirror remember now
 Design consequences:
 
 - The root `private/` memory store is authoritative.
+- The default conversation thread is shared working memory for the current NuSelf mind, not an isolated session.
+- Future non-default `thread_id` values can create branches for experiments or separate topics, but those branches should share long-term memory unless explicitly sandboxed.
 - Conversation threads are event history and evidence, not the main identity boundary.
 - Every durable claim needs provenance, confidence, timestamps, and review state.
 - Contradictions are first-class. New evidence should supersede, qualify, or conflict with older entries rather than silently delete them.
@@ -95,6 +97,8 @@ Storage:
 
 - Start with `private/threads/*.json` plus derived episode records under `private/memory/episodes/`.
 - Later add vector and temporal indexes under `private/derived/`.
+
+The default `private/threads/default.json` is the shared working memory stream for all terminals attached to the same NuSelf mind. Multiple terminals should read and write this stream with a lock. Branch threads are a future feature and should be treated as alternate working-memory streams, not separate people.
 
 ### 3. Semantic Memory
 
@@ -184,6 +188,10 @@ Background writes:
 - Detect contradictions.
 - Distill profile updates.
 - Propose procedural updates when the user repeatedly corrects behavior.
+- Run periodically in the daemon when the working-memory stream is dirty.
+- Run when an interactive attachment exits, so useful discussion does not remain only in short-term working memory.
+
+The background writer should be a dedicated Memory Curator Agent. The conversation agent writes turns; the curator decides whether to create, update, supersede, or ignore long-term memories.
 
 Deletion and forgetting:
 
@@ -273,6 +281,9 @@ Use a separate curator agent for write management:
 - Search existing memory before creating new entries.
 - Propose merges, updates, contradictions, and deletions.
 - Produce structured candidate records.
+- Apply low-risk episode memories automatically when policy allows.
+- Keep semantic and procedural updates as draft or low-confidence entries until the review model is mature.
+- Write each applied action to `private/logs/memory.log`.
 
 The curator can run in the background. It should not produce user-facing text.
 
@@ -410,6 +421,14 @@ The chat agent should eventually show memory citations on demand:
 - Add CLI list/show/accept/reject commands.
 - Add tests for candidate lifecycle.
 
+### Slice 1A: Automatic Episode Curator
+
+- Add a shared working-memory lock around `private/threads/default.json`.
+- Add a cursor that records which conversation turns have been summarized.
+- Add a Memory Curator Agent that periodically summarizes new turns into an `episode` memory entry.
+- Trigger the curator when interactive chat exits.
+- Log every memory update to `private/logs/memory.log`.
+
 ### Slice 2: Conversation-To-Candidate Extraction
 
 - After each chat turn, run a lightweight candidate extractor.
@@ -457,6 +476,7 @@ Authoritative memory:
   private/memory/entries/
   private/memory/candidates/
   private/memory/episodes/
+  private/memory/cursors/
 
 Derived retrieval:
   private/derived/lexical_index.json

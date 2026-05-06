@@ -99,7 +99,7 @@ nuself outbox dismiss <intent-id>
 
 The default `nuself chat` behavior:
 
-- If a daemon is running, connect to it and create or resume the default interactive thread.
+- If a daemon is running, connect to it and create or resume the shared default working-memory stream.
 - If no daemon is running, start an embedded one-shot runtime for immediate chat unless `--require-daemon` is set.
 - If daemon auto-start is enabled later, start the daemon and then attach.
 - Without `--message`, `chat`, `attach`, and `daemon attach` stay in an interactive loop until `:q`, `:quit`, `:exit`, or EOF.
@@ -112,13 +112,15 @@ The default `nuself chat` behavior:
 
 ### Attached Chat
 
-Attached chat connects to the daemon and uses persistent thread state. This is the default long-term mode.
+Attached chat connects to the daemon and uses the shared working-memory stream. This is the default long-term mode.
 
 Use cases:
 
-- Continue a previous conversation.
+- Continue the current NuSelf mind from another terminal.
 - Open a proactive idea from a notification.
 - Let background memory and indexes stay warm.
+
+Multiple terminal attachments to the same daemon should share short-term working memory. Writes to the default stream must be serialized with a lock. Future branch threads may create alternate working-memory streams, but they should still share long-term memory by default.
 
 ### One-Shot Chat
 
@@ -130,7 +132,7 @@ Use cases:
 - Debugging.
 - Temporary discussion without leaving a daemon running.
 
-One-shot chat may still write the resulting thread and memory candidates to `private/`, but it should not start the proactive scheduler.
+One-shot chat may still write the resulting working-memory stream and memory candidates to `private/`, but it should not start the proactive scheduler.
 
 ### Notification-Opened Chat
 
