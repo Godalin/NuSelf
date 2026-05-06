@@ -73,6 +73,7 @@ Deliverables:
 
 - File-backed `MemoryEntry` repository under `private/memory/entries/`.
 - CLI commands for `memory list`, `show`, `add`, `edit`, `delete`, `search`, and `reindex`.
+- Open typed memory design documented as `MemoryObject + MemoryTypeDescriptor`.
 - Review queue commands for accepting, editing, merging, and rejecting candidates.
 - Derived indexes under `private/derived/`.
 - Memory management design aligned with [docs/memory-management.md](memory-management.md).
@@ -86,6 +87,27 @@ Validation:
 - Review flow tests for accept, edit, merge, and reject.
 - Tests that concurrent chat updates are serialized through the thread store.
 - Tests that the memory curator only processes new turns after its cursor.
+
+## Milestone 3A: Open Typed Memory Registry
+
+Goal: replace closed memory-type literals as the conceptual boundary with extensible descriptors.
+
+Deliverables:
+
+- `MemoryObject` envelope with open `type`, typed `payload`, metadata, confidence, source refs, privacy, review state, and timestamps.
+- `MemoryTypeDescriptor` protocol with validation, summarize, merge, decay, conflict, retrieval, and reflection hooks.
+- Built-in descriptors for preference, belief, goal, concept, episode, instruction, and the current entry types.
+- Registry that can load core descriptors and later trusted plugin descriptors.
+- Unknown-type policy that stores unknown objects only as draft or quarantined records.
+- Curator and optimizer routing through descriptor validation and merge rules.
+
+Validation:
+
+- Descriptor registration tests.
+- Payload validation tests.
+- Unknown type quarantine tests.
+- Merge and conflict-rule tests with fake memory objects.
+- Curator/optimizer tests proving invalid descriptor output is deferred or rejected.
 
 ## Milestone 4: Local Ingestion Pipeline
 
@@ -136,12 +158,35 @@ Deliverables:
 - Returned evidence references with source metadata.
 - `MemoryQueryService` that replaces prompt-wide loading of all memory entries.
 - Context packer with budget, ranking explanations, and contradiction inclusion.
+- Descriptor-aware retrieval hooks for type-specific summaries and query expansion.
+- Relation-aware expansion for support, contradiction, refinement, dependency, and preference edges.
 
 Validation:
 
 - Deterministic retrieval tests with small fixtures.
 - Tests for empty results and ambiguous queries.
 - Tests for memory ranking reasons and context budget behavior.
+- Tests proving conflicts and supporting symbolic relations are surfaced when relevant.
+
+## Milestone 6A: Symbolic Memory Graph
+
+Goal: add a derived open-world graph over authoritative memory objects and evidence.
+
+Deliverables:
+
+- Symbolic node and edge domain models.
+- `RelationDescriptor` protocol with domain, range, symmetry, transitivity, inverse, temporal policy, confidence policy, inference rules, and retrieval rules.
+- Built-in relations for `supports`, `contradicts`, `refines`, `generalizes`, `instantiates`, `caused_by`, `preferred_over`, `related_to`, and `depends_on`.
+- Derived graph repository under `private/derived/graph/`.
+- Entity and relation extraction from memory objects and source evidence.
+- Rebuild path from authoritative files without losing evidence refs.
+
+Validation:
+
+- Relation validation tests.
+- Graph rebuild idempotence tests.
+- Contradiction and support retrieval tests.
+- Tests proving graph deletion/rebuild follows authoritative memory deletion.
 
 ## Milestone 7: Mirror Response Orchestration
 

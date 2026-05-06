@@ -31,6 +31,9 @@ Development constraints for `src/nuself/`.
 
 - User-visible memory must stay inspectable as clear entries.
 - Changes to memory entry schema must update repository code and tests together.
+- Do not add new long-term memory categories as only closed `Literal` tags when the behavior is type-specific; prefer a descriptor/registry path aligned with root memory architecture docs.
+- Future typed memory descriptors should own validation, summarization, merge, decay, conflict, retrieval, and reflection behavior.
+- Future symbolic graph relations should be registered through relation descriptors rather than hard-coded relation enums.
 - Derived indexes belong under `private/derived/` and should be rebuildable from entries.
 - Chat prompts must use `MemoryQueryService` or a successor query layer instead of loading all entries indiscriminately.
 - Memory query and context packing must remain independently testable without live LLM calls.

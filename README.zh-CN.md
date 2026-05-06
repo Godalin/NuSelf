@@ -51,7 +51,10 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加低频 Memory Optimizer Agent，用于批量清理、合并和删除重复长期记忆。
 - [x] 添加手动 `memory optimize`。
 - [ ] 添加 memory candidate review queue：list、show、accept、edit、merge、reject。
+- [ ] 添加开放的 `MemoryObject + MemoryTypeDescriptor` registry，用于 typed memory 行为。
+- [ ] 添加 preference、belief、goal、concept、episode 和 instruction memory 的内置 descriptors。
 - [ ] 添加派生向量、hybrid 和 graph 索引。
+- [ ] 添加开放 symbolic graph，并用 `RelationDescriptor` 描述支持、矛盾、细化、偏好、依赖和未来关系。
 - [ ] 添加 memory stats 和更丰富的 query 命令。
 - [ ] 为 memory entries 添加 source-linked evidence records。
 
@@ -72,6 +75,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [ ] 添加结构化 response schema：answer text、evidence references、confidence、epistemic status。
 - [ ] 添加 personal claims 的 unsupported-claim guard。
 - [ ] 为 conversation agent 添加 tool-based memory search。
+- [ ] 让 conversation retrieval 支持 descriptor-aware 和 relation-aware 检索。
 
 ### 轻量多智能体分身
 

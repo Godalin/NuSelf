@@ -15,9 +15,9 @@ Mainstream agent frameworks converge on the same split:
 Relevant current patterns:
 
 - LangChain/LangGraph separates short-term thread memory from long-term memory. Long-term memory is stored in LangGraph Stores as JSON documents under namespaces and keys, and tools can read/write through the runtime store. This fits NuSelf's need for cross-thread memory, but NuSelf should not make LangGraph thread IDs the product-level memory boundary.
-- LangMem adds memory managers and tools on top of LangGraph Store. It supports semantic, episodic, and procedural memory patterns, plus hot-path tools and background extraction. This is the closest match to NuSelf's preferred LangChain ecosystem.
+- LangMem adds memory managers and tools on top of LangGraph Store. It supports custom schemas, insert/update/delete behavior, semantic, episodic, and procedural memory patterns, plus hot-path tools and background extraction. This is the closest match to NuSelf's preferred LangChain ecosystem.
 - Letta/MemGPT emphasizes memory hierarchy: core memory in context, recall/conversation history, and archival memory outside context. The important lesson is that agents actively manage memory through tools, rather than only passively retrieving RAG chunks.
-- Zep/Graphiti models memory as a temporal knowledge graph. This is valuable for NuSelf because personal memory changes over time and contradictions should be represented instead of overwritten blindly.
+- Zep/Graphiti models memory as a temporal knowledge graph with entities, relationships, episodic provenance, custom entity types, and hybrid search. This is valuable for NuSelf because personal memory changes over time and contradictions should be represented instead of overwritten blindly.
 - LlamaIndex Memory uses short-term FIFO memory plus long-term memory blocks such as static blocks, fact extraction blocks, and vector blocks. Its memory-block priority model is useful, but it is more retrieval/index oriented than NuSelf's desired LangGraph orchestration.
 - CrewAI's newer unified Memory API uses LLM-assisted scope/category/importance inference and composite recall scoring. This reinforces the need for importance, recency, and semantic relevance in NuSelf ranking, even if CrewAI is not the main runtime.
 
@@ -30,7 +30,8 @@ Sources:
 - LangMem memory tools guide: https://langchain-ai.github.io/langmem/guides/memory_tools/
 - Letta memory overview: https://docs.letta.com/guides/agents/memory
 - Letta MemGPT architecture: https://docs.letta.com/guides/agents/architectures/memgpt
-- Zep Graphiti overview: https://help.getzep.com/graphiti/graphiti/overview
+- Zep Graphiti overview: https://help.getzep.com/graphiti/getting-started/overview
+- Zep graph overview: https://help.getzep.com/groups
 - LlamaIndex memory guide: https://docs.llamaindex.ai/en/stable/module_guides/deploying/agents/memory/
 - CrewAI memory: https://docs.crewai.com/en/concepts/memory
 
@@ -57,6 +58,137 @@ Design consequences:
 - Contradictions are first-class. New evidence should supersede, qualify, or conflict with older entries rather than silently delete them.
 - User-visible memory entries remain inspectable and editable. Derived vector, lexical, and graph indexes are rebuildable artifacts.
 - The model should not be allowed to write durable personal memory directly. It proposes candidates; deterministic code and human review decide what becomes durable.
+
+## Open Typed Symbolic Memory Model
+
+NuSelf should not model memory as a closed algebraic data type. Memory categories will evolve as the mirror learns new domains, new relationships, and new maintenance policies. The durable abstraction should be:
+
+```text
+Memory = MemoryObject + TypeDescriptor
+SymbolicMemory = Node/Edge + RelationDescriptor
+```
+
+### MemoryObject
+
+A memory object is the stable storage envelope:
+
+```text
+MemoryObject:
+  id
+  type
+  payload
+  metadata
+  confidence
+  source_refs
+  review_state
+  privacy
+  created_at
+  updated_at
+```
+
+The `type` is an open string key, not a sealed enum. The `payload` is validated by the registered type descriptor. Current `MemoryEntry` records are a simple first implementation of this idea; they should evolve toward a typed envelope with type-specific payloads.
+
+### MemoryTypeDescriptor
+
+Each memory type must carry behavior, not only a label:
+
+```text
+MemoryTypeDescriptor:
+  type
+  schema
+  validate(payload)
+  summarize(memory)
+  merge(existing, incoming, evidence)
+  decay(memory, now)
+  conflicts(a, b)
+  retrieve(query, budget)
+  reflect(memory, context)
+  update_policy
+```
+
+Examples:
+
+- `preference`: validates subject, preference, scope, strength, exceptions, and source evidence. Merge should refine scope and strength rather than append duplicates.
+- `belief`: validates claim, stance, confidence, evidence, counterevidence, and revisit policy. Conflict rules should preserve contradictory evidence instead of overwriting.
+- `goal`: validates desired state, status, horizon, blockers, and next review time. Decay should surface stale goals for review.
+- `concept`: validates name, aliases, definition, related concepts, and examples. Retrieval should prefer graph expansion and definitions.
+- `episode`: validates event summary, actors, outcome, lessons, and source range. Merge should be conservative because episodes are evidence-bearing.
+- `instruction`: validates behavior rule, scope, priority, and triggering context. Conflict rules should decide which instruction enters the always-visible layer.
+
+### Type Registry
+
+Descriptors should be registered by NuSelf core modules or future plugins:
+
+```text
+MemoryTypeRegistry:
+  register(descriptor)
+  get(type)
+  validate(memory)
+  merge(type, existing, incoming)
+  conflicts(type_a, type_b, memory_a, memory_b)
+  summarize(memory)
+```
+
+The registry should allow unknown types to be stored only as draft or quarantined objects until a descriptor is available. User-visible commands should show both the raw envelope and a descriptor-provided summary when possible.
+
+### Symbolic Graph Layer
+
+Symbolic memory should be a derived, rebuildable graph over authoritative memory objects:
+
+```text
+Node:
+  id
+  kind
+  label
+  payload
+  source_refs
+
+Edge:
+  id
+  relation
+  source
+  target
+  payload
+  confidence
+  valid_from
+  valid_until
+  source_refs
+```
+
+Common node kinds can include `Concept`, `Belief`, `Preference`, `Goal`, `Person`, `Project`, `Method`, and `Artifact`, but this list should remain open.
+
+Common relations can include `supports`, `contradicts`, `refines`, `generalizes`, `instantiates`, `caused_by`, `preferred_over`, `related_to`, and `depends_on`, but relations should also be open.
+
+### RelationDescriptor
+
+Relations need behavior too:
+
+```text
+RelationDescriptor:
+  name
+  domain
+  range
+  symmetry
+  transitivity
+  inverse
+  temporal_policy
+  confidence_policy
+  inference_rules
+  retrieval_rule
+```
+
+Examples:
+
+- `contradicts` is usually symmetric and should make both memories visible during retrieval.
+- `supports` is directional and should raise evidence weight for the target claim.
+- `refines` is directional and can help collapse coarse concepts into more specific concepts during summarization.
+- `preferred_over` is directional, scoped, and often comparative rather than globally true.
+
+### Authority Boundary
+
+The graph is not the source of truth in the first implementation. File-backed memory objects remain authoritative; graph nodes, graph edges, embeddings, lexical indexes, and LangGraph Store mirrors are derived artifacts under `private/derived/`.
+
+Later, if Graphiti or another temporal graph store is adopted, NuSelf should still preserve this rule: private file-backed memory objects and evidence references remain exportable and reviewable without depending on a hosted graph service.
 
 ## Memory Layers
 
@@ -115,14 +247,16 @@ Examples:
 Storage:
 
 - Current `MemoryEntry` records under `private/memory/entries/`.
+- Future `MemoryObject` records should store open `type` keys plus descriptor-validated payloads.
 - Add fields for `evidence_refs`, `valid_from`, `valid_until`, `supersedes`, `contradicts`, `importance`, and `last_used_at`.
+- Keep `MemoryTypeDescriptor` definitions under source control or safe plugin packages, not mixed into private memory entry files.
 
 Retrieval:
 
 - Lexical search for precise terms.
 - Vector search for conceptual relevance.
 - Metadata filtering by type, tag, review state, privacy, confidence, and time.
-- Optional graph search for entity relationships and contradictions.
+- Symbolic graph search for entity relationships, typed relations, support chains, contradictions, and concept expansion.
 
 ### 4. Procedural Memory
 
@@ -232,6 +366,13 @@ The retriever should combine:
 - Source evidence.
 - Open questions and contradictions.
 
+Descriptor-aware retrieval should add:
+
+- Type-specific query rewriting, such as expanding a `concept` query through aliases and examples.
+- Relation-aware expansion, such as including `supports` and `contradicts` edges for a belief.
+- Conflict inclusion based on `RelationDescriptor` rules.
+- Type-specific summaries, so prompts receive the form that best matches each memory kind.
+
 The packer enforces a budget:
 
 - Always include the minimal core profile.
@@ -335,14 +476,15 @@ Do not use checkpointer thread memory as NuSelf's main memory system, because Nu
 
 Use LangMem for:
 
-- Candidate extraction from messages.
+- Candidate extraction from messages into descriptor-compatible schemas.
 - Memory manager tools.
 - Semantic, episodic, and procedural extraction patterns.
-- Background consolidation once the MemoryEntry schemas stabilize.
+- Background consolidation once the MemoryObject and descriptor schemas stabilize.
 
 Keep NuSelf-owned code for:
 
 - File-backed authoritative entries.
+- Open type and relation descriptor registries.
 - Review state machine.
 - Evidence references.
 - Deletion policy.
@@ -358,6 +500,13 @@ Phase 1: File-backed authoritative memory.
 - Add `private/memory/episodes/*.json`.
 - Keep `private/derived/` rebuildable.
 
+Phase 1A: Open typed memory descriptors.
+
+- Introduce a `MemoryObject` envelope while preserving inspectable entry files.
+- Add a `MemoryTypeDescriptor` registry with built-in descriptors for preference, belief, goal, concept, episode, and instruction.
+- Route curator and optimizer actions through descriptor validation and merge rules.
+- Store unknown memory types only as draft/quarantined objects until a descriptor is registered.
+
 Phase 2: Local indexes.
 
 - Lexical index for deterministic search.
@@ -366,8 +515,9 @@ Phase 2: Local indexes.
 
 Phase 3: Temporal graph.
 
-- Add entity/relation extraction for people, projects, beliefs, places, concepts, and artifacts.
+- Add symbolic nodes and relation descriptors for people, projects, beliefs, preferences, goals, places, concepts, methods, and artifacts.
 - Track validity intervals and supersession.
+- Keep graph outputs derived from authoritative memory objects and source evidence.
 - Consider Graphiti if NuSelf needs high-quality temporal graph search before building its own.
 
 Phase 4: LangGraph Store bridge.
@@ -474,16 +624,26 @@ The chat agent should eventually show memory citations on demand:
 - Use fake model tests for schema and control flow.
 - Keep all LangMem outputs as candidates, not committed entries.
 
-### Slice 6: Derived Indexes
+### Slice 6: Open Typed Memory Registry
+
+- Add `MemoryObject` and descriptor domain models.
+- Add descriptor registry with validation, summary, merge, decay, conflict, and retrieval hooks.
+- Migrate current `MemoryEntryType` literals into built-in descriptors rather than a closed type boundary.
+- Update curator and optimizer prompts to request descriptor-compatible payloads.
+- Add tests for unknown types, validation failures, merge behavior, and conflict surfacing.
+
+### Slice 7: Derived Indexes
 
 - Add lexical index and metadata stats under `private/derived/`.
 - Add embedding index only after query service behavior is stable.
 - Make `memory reindex` rebuild all derived artifacts.
 
-### Slice 7: Temporal Memory
+### Slice 8: Symbolic Temporal Memory
 
-- Add fields for validity and supersession.
-- Add contradiction detection.
+- Add symbolic node and relation models.
+- Add relation descriptor registry.
+- Add entity/relation extraction from memory objects and source evidence.
+- Add validity, supersession, support, and contradiction handling.
 - Evaluate Graphiti integration against local file-backed needs.
 
 ## Immediate Design Decision
@@ -496,6 +656,7 @@ Authoritative memory:
   private/memory/candidates/
   private/memory/episodes/
   private/memory/cursors/
+  memory type descriptors in source code or trusted plugins
 
 Derived retrieval:
   private/derived/lexical_index.json
@@ -509,4 +670,4 @@ Runtime agents:
   proactive reflection agent
 ```
 
-This keeps personal memory inspectable and editable while allowing LangChain/LangGraph to provide orchestration, stores, tools, and background memory processing.
+This keeps personal memory inspectable and editable while allowing LangChain/LangGraph to provide orchestration, stores, tools, and background memory processing. The long-term target is an open typed graph with protocol-based memory objects: typed enough to validate and reason over, but not frozen into a closed enum that blocks future memory kinds.

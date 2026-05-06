@@ -51,7 +51,10 @@ This checklist is the user-facing progress board for the project. It summarizes 
 - [x] Add low-frequency Memory Optimizer Agent for batch cleanup, merging, and deletion of duplicate long-term memories.
 - [x] Add manual `memory optimize`.
 - [ ] Add memory candidate review queue: list, show, accept, edit, merge, reject.
+- [ ] Add open `MemoryObject + MemoryTypeDescriptor` registry for typed memory behavior.
+- [ ] Add built-in descriptors for preference, belief, goal, concept, episode, and instruction memory.
 - [ ] Add derived vector, hybrid, and graph indexes.
+- [ ] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, preference, dependency, and future relations.
 - [ ] Add memory stats and richer query commands.
 - [ ] Add source-linked evidence records for memory entries.
 
@@ -72,6 +75,7 @@ This checklist is the user-facing progress board for the project. It summarizes 
 - [ ] Add structured response schema with answer text, evidence references, confidence, and epistemic status.
 - [ ] Add unsupported-claim guard for personal claims without evidence.
 - [ ] Add tool-based memory search for the conversation agent.
+- [ ] Make conversation retrieval descriptor-aware and relation-aware.
 
 ### Lightweight Multi-Agent Selves
 

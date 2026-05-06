@@ -33,6 +33,13 @@ This project is an AI-Mirror of most ideas of one person, for those who want to 
 
 Keep these documents current when changing the system shape, module boundaries, or milestone order.
 
+## Memory Architecture Direction
+
+- Prefer open typed memory over closed enum-style memory categories.
+- Long-term memory should evolve toward `MemoryObject + MemoryTypeDescriptor`, where descriptors own schema validation, summarization, merge, decay, conflict, retrieval, and reflection rules.
+- Symbolic memory should evolve as a derived open graph with `RelationDescriptor` rules, not as hard-coded relation enums.
+- File-backed private memory remains authoritative; graph indexes, vector indexes, lexical indexes, and LangGraph Store mirrors are derived and rebuildable.
+
 ## Private Memory
 
 - Real personal memory lives in the root `private/` directory.

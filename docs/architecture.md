@@ -101,6 +101,10 @@ Responsibilities:
 - Support re-indexing without changing source identity.
 - Treat user-visible memory entries as authoritative; vector, lexical, and graph indexes are derived artifacts.
 - Support query-driven retrieval instead of loading all memories into every prompt.
+- Evolve memory from closed entry-type literals toward open `MemoryObject` envelopes plus registered `MemoryTypeDescriptor` behavior.
+- Maintain a symbolic graph layer with open `RelationDescriptor` definitions for support, contradiction, refinement, preference, dependency, and future relations.
+
+Typed memory should be protocol-based, not enum-bound. A memory type owns its schema, validation, merge rule, decay rule, conflict rule, retrieval rule, and reflection rule. A symbolic relation owns its domain/range expectations, symmetry, transitivity, inverse, temporal policy, confidence policy, and inference/retrieval behavior. File-backed memory objects remain authoritative; graph nodes, graph edges, embeddings, and LangGraph Store mirrors are derived artifacts.
 
 ### Mirror Profile
 
