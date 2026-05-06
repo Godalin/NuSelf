@@ -16,6 +16,8 @@ The initial implementation should be a modular Python application managed by `uv
 
 ```text
 User Interface
+  -> CLI
+  -> Daemon Client
   -> Conversation Service
     -> Retrieval Layer
     -> Mirror Profile
@@ -34,6 +36,8 @@ User Interface
     -> Profile Distillation
   -> Evaluation Suite
 ```
+
+The interaction layer is detailed in [docs/interaction-layer.md](interaction-layer.md). The product should be CLI-first, with a local daemon for long-lived state, background reflection, thread persistence, memory indexing, and notification dispatch.
 
 ## Private Memory Layout
 
@@ -116,6 +120,19 @@ Responsibilities:
 - Decide whether the answer should be evidence-heavy, exploratory, personal, or cautionary.
 - Produce responses that expose uncertainty instead of fabricating personal knowledge.
 - Return structured metadata for citations, confidence, and source usage.
+
+### Interaction Layer
+
+Provides the command-line application, daemon lifecycle controls, local IPC, and user-facing memory/thread management.
+
+Responsibilities:
+
+- Start, stop, inspect, and attach to the local daemon.
+- Connect CLI chat commands to an existing daemon when available.
+- Start a one-shot local runtime for immediate chat when no daemon is running.
+- Manage thread creation, resumption, renaming, and archival.
+- Expose memory entries as inspectable, editable, deletable records.
+- Keep local runtime files, sockets, pids, logs, and private settings under ignored `private/`.
 
 ### Response Orchestrator
 
@@ -202,6 +219,12 @@ src/nuself/
   __init__.py
   config.py
   private.py
+  cli.py
+  daemon/
+    client.py
+    server.py
+    protocol.py
+    lifecycle.py
   domain/
     sources.py
     profile.py
@@ -241,7 +264,6 @@ src/nuself/
   evals/
     cases.py
     scoring.py
-  cli.py
 tests/
   unit/
   integration/
@@ -262,8 +284,10 @@ Important entities:
 - `EvidenceRef`: pointer from an answer or profile item back to source material.
 - `ProfileItem`: durable belief, preference, life fact, style trait, or uncertainty.
 - `ConversationTurn`: normalized user/assistant exchange.
+- `ThreadRecord`: local conversation metadata and LangGraph thread mapping.
 - `MirrorResponse`: answer text plus evidence, confidence, and epistemic status.
 - `MemoryCandidate`: proposed update created from new material or conversation.
+- `MemoryEntry`: reviewed, editable, user-visible memory record.
 - `PersonaDefinition`: prompt, role, retrieval scope, and output schema for a thought self.
 - `PersonaContribution`: structured persona output with claims, evidence, concerns, questions, and confidence.
 - `IdeaCandidate`: proactive idea, contradiction, reminder, or question proposed for user attention.
@@ -283,6 +307,7 @@ Required guardrails:
 - Never commit real `private/` contents; only curated `private/shares/` bundles should be copied out intentionally.
 - Require a relevance gate before proactive notifications are delivered.
 - Keep notification side effects outside LangGraph reasoning nodes by using an outbox.
+- Keep daemon runtime files and logs under ignored `private/`.
 
 ## Initial Technical Choices
 
@@ -294,5 +319,6 @@ Required guardrails:
 - A local file-backed store for the first version, with repository interfaces that can later support SQLite or vector databases.
 - Root `private/` as the default ignored local memory directory.
 - Committed `examples/private/` as the public sample memory directory.
+- Unix domain socket IPC for the first local daemon protocol.
 - Provider adapters for LLM calls, with no provider-specific code in domain modules.
 - Tests grouped by sub-component so ingestion, retrieval, profile logic, and orchestration can be validated independently.

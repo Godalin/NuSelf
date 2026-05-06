@@ -14,20 +14,40 @@ Deliverables:
 - Developer commands documented in `AGENTS.md`.
 - `.gitignore` entry for root `private/`.
 - Committed `examples/private/` sample directory for tests, demos, and sharing format documentation.
+- CLI entrypoint placeholder for `nuself`.
 
 Validation:
 
 - `uv run pytest`
 - `uvx pyright`
 
-## Milestone 1: Typed Domain Model
+## Milestone 1: CLI And Daemon Skeleton
+
+Goal: establish the command-line control surface and local daemon lifecycle before implementing the full agent.
+
+Deliverables:
+
+- `nuself daemon start`, `stop`, `status`, and `logs` command shapes.
+- Daemon runtime paths under `private/runtime/` and logs under `private/logs/`.
+- Unix domain socket server with a minimal JSONL protocol.
+- Daemon client with health check and typed error handling.
+- `nuself chat` command that can attach to a running daemon or run a one-shot fake runtime.
+
+Validation:
+
+- Unit tests for protocol request/response models.
+- Lifecycle tests using temporary private roots.
+- CLI tests for daemon status when no daemon is running.
+- Fake attached chat test without model calls.
+
+## Milestone 2: Typed Domain Model
 
 Goal: define the core data contracts before implementing behavior.
 
 Deliverables:
 
 - Model for the memory root manifest.
-- Models for source documents, chunks, evidence references, profile items, conversation turns, mirror responses, and memory candidates.
+- Models for source documents, chunks, evidence references, profile items, memory entries, conversation turns, thread records, mirror responses, and memory candidates.
 - Serialization tests for each model.
 - Explicit enums or literals for source type, confidence level, epistemic status, and privacy level.
 
@@ -36,7 +56,25 @@ Validation:
 - Unit tests for model validation and round trips.
 - `uvx pyright` passes with strict-enough settings for the new package.
 
-## Milestone 2: Local Ingestion Pipeline
+## Milestone 3: Memory Entry Management
+
+Goal: make private memory inspectable and editable as clear entries.
+
+Deliverables:
+
+- File-backed `MemoryEntry` repository under `private/memory/entries/`.
+- CLI commands for `memory list`, `show`, `add`, `edit`, `delete`, `search`, and `reindex`.
+- Review queue commands for accepting, editing, merging, and rejecting candidates.
+- Derived indexes under `private/derived/`.
+
+Validation:
+
+- Repository CRUD tests with temporary private roots.
+- CLI tests for list/show/delete flows.
+- Tests that deleted entries disappear from derived indexes after reindex.
+- Review flow tests for accept, edit, merge, and reject.
+
+## Milestone 4: Local Ingestion Pipeline
 
 Goal: import local personal material into normalized source records.
 
@@ -56,7 +94,7 @@ Validation:
 - Chunk boundary tests.
 - Error tests for malformed metadata.
 
-## Milestone 3: File-Backed Knowledge Store
+## Milestone 5: File-Backed Knowledge Store
 
 Goal: persist source documents, chunks, and profile artifacts locally.
 
@@ -73,7 +111,7 @@ Validation:
 - Re-index idempotence test.
 - Tests proving raw source identifiers remain stable.
 
-## Milestone 4: Retrieval Layer
+## Milestone 6: Retrieval Layer
 
 Goal: retrieve relevant evidence for a user question.
 
@@ -89,7 +127,7 @@ Validation:
 - Deterministic retrieval tests with small fixtures.
 - Tests for empty results and ambiguous queries.
 
-## Milestone 5: Mirror Response Orchestration
+## Milestone 7: Mirror Response Orchestration
 
 Goal: generate source-aware mirror responses from typed context.
 
@@ -106,7 +144,7 @@ Validation:
 - Schema validation tests.
 - Guard tests for unsupported personal claims.
 
-## Milestone 6: Lightweight Persona Subgraphs
+## Milestone 8: Lightweight Persona Subgraphs
 
 Goal: support bounded discussion between multiple thought selves.
 
@@ -125,7 +163,7 @@ Validation:
 - Tests that final responses come from the synthesizer.
 - Tests that unsupported persona claims are marked as inference or rejected.
 
-## Milestone 7: Memory Candidate Review
+## Milestone 9: Memory Candidate Review
 
 Goal: convert new documents and conversations into reviewable profile updates.
 
@@ -143,13 +181,14 @@ Validation:
 - Tests that conversation-derived facts are lower confidence by default.
 - Share bundle tests proving exports include only explicitly selected records.
 
-## Milestone 8: Proactive Agent And Outbox
+## Milestone 10: Proactive Agent And Outbox
 
 Goal: let NuSelf surface new ideas without becoming a noisy chatbot.
 
 Deliverables:
 
 - Reflection scheduler interface for time-based and event-based triggers.
+- Randomized low-frequency daemon self-reflection events with cooldowns and quiet hours.
 - Idea candidate generator over recent threads, private memory, and new sources.
 - Relevance gate with novelty, confidence, urgency, cooldown, and interruption-cost fields.
 - Notification outbox with idempotency keys and delivery status.
@@ -160,12 +199,32 @@ Deliverables:
 Validation:
 
 - Scheduler tests with fake time.
+- Random trigger tests proving cooldowns and quiet hours are enforced.
 - Candidate generation tests with fixture memory and threads.
 - Relevance gate tests for low-value, duplicate, urgent, and cooldown cases.
 - Outbox tests proving graph nodes write intents without sending external notifications.
 - Adapter tests using fakes instead of real email or system notifications.
 
-## Milestone 9: Evaluation Harness
+## Milestone 11: Notification Adapters
+
+Goal: deliver interesting daemon thoughts through controlled channels.
+
+Deliverables:
+
+- Log-only notification adapter.
+- macOS notification adapter.
+- Email adapter using ignored private configuration.
+- Deep link or command payload that opens a new or existing thread.
+- Outbox commands for list, show, send, and dismiss.
+
+Validation:
+
+- Adapter tests with fakes or dry-run mode.
+- Tests that graph nodes never send notifications directly.
+- Tests that outbox delivery records attempts, failures, and success.
+- Tests that deep links resolve to a thread or new thread seed.
+
+## Milestone 12: Evaluation Harness
 
 Goal: prevent regressions in fidelity and uncertainty behavior.
 
@@ -182,13 +241,14 @@ Validation:
 - Persona evaluation cases cover disagreement, synthesis, and overconfidence.
 - Proactive evaluation cases cover notification relevance and non-interruption behavior.
 
-## Milestone 10: First Usable Interface
+## Milestone 13: First Usable Interface
 
 Goal: expose the mirror through a practical local interface.
 
 Deliverables:
 
 - CLI chat command or minimal local web interface.
+- `nuself attach` for connecting to an existing daemon conversation.
 - Conversation history persistence.
 - Source/citation display in the interface.
 - Thread links that can open a proactive candidate as a new or existing conversation.
