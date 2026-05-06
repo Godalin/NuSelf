@@ -10,6 +10,7 @@ NuSelf is primarily a command-line application with a local background daemon. T
 - Manage memory as clear, inspectable entries that can be reviewed, edited, deleted, and re-indexed.
 - Let the daemon occasionally trigger self-reflection without becoming noisy.
 - Notify the user through logs, email, or macOS notifications only after relevance gating.
+- Keep CLI and daemon protocol aligned with current design; do not preserve obsolete command names or protocol fields during early development.
 
 ## Process Model
 
@@ -50,6 +51,8 @@ Initial protocol:
 - Plain error responses with machine-readable codes and human-readable messages.
 
 The protocol should remain independent from LangGraph internals. The daemon may use LangGraph thread IDs internally, but the CLI should interact through NuSelf thread commands and returned metadata.
+
+During early development, protocol changes should be direct migrations. Update the server, client, tests, examples, and docs together instead of carrying old wire formats.
 
 ## CLI Shape
 
@@ -234,4 +237,3 @@ Build the interaction layer in this order:
 10. Email adapter.
 
 This keeps the daemon and CLI usable before the full LangGraph agent is complete.
-

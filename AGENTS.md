@@ -8,6 +8,14 @@ This project is an AI-Mirror of most ideas of one person, for those who want to 
 - Code must be type-checked with `uvx pyright`.
 - Sub-components must be tested individually.
 
+## Development Style
+
+- This project is in active early development; prefer direct, clean implementation over compatibility shims.
+- When an interface changes, update all callers, tests, examples, and docs to the new interface in the same change.
+- Do not preserve old CLI commands, protocol fields, data schemas, or module APIs unless a current document explicitly requires them.
+- Aggressive refactoring is acceptable when it clarifies architecture, removes obsolete concepts, or aligns code with the current design.
+- Keep refactors intentional: update documentation and validation together with the code change.
+
 ## Project Design
 
 - Architecture overview: [docs/architecture.md](docs/architecture.md)

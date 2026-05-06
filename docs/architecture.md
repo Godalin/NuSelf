@@ -9,6 +9,7 @@ NuSelf is an AI mirror for one person's ideas, memory, experience, and reasoning
 - Clear epistemic status: separate direct source material, stable profile knowledge, model inference, and speculation.
 - Incremental growth: every ingestion, profile update, and evaluation path should be testable as a small component.
 - Local-first core: the project should be usable as a standard Python application before adding hosted services.
+- Current-design implementation: during early development, update interfaces directly instead of preserving compatibility with obsolete local APIs.
 
 ## System Shape
 

@@ -2,6 +2,14 @@
 
 This plan turns the architecture into small, testable milestones. Each milestone should leave the project runnable and type-checkable with `uvx pyright`.
 
+## Development Policy
+
+- Build against the current design, not historical interfaces.
+- Do not add compatibility layers for old CLI commands, protocol fields, schemas, or Python APIs during this development phase.
+- When a boundary changes, update every caller, test, example, and document in the same milestone.
+- Prefer aggressive refactoring over incremental compatibility when it makes the architecture clearer.
+- Keep each milestone validated with tests and `uvx pyright`.
+
 ## Milestone 0: Project Skeleton
 
 Goal: create the minimum Python project structure.
