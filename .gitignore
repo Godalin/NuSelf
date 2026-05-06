@@ -1,5 +1,6 @@
 # Local private memory and personal configuration.
 /private/
+/.env
 
 # Python build and tool output.
 __pycache__/
