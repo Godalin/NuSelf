@@ -56,6 +56,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add deterministic `MemoryQueryService` for relevant memory retrieval.
 - [x] Add background Memory Curator Agent for conversation-derived memory updates.
 - [x] Run memory curation after chat turns so conversation is the primary memory source.
+- [x] Gate memory curation by discussion depth and durable signal instead of fixed turn count.
 - [x] Make curator writes conservative: ignore trivial chat, update duplicates before creating, reject raw transcripts.
 - [x] Add manual `memory update`.
 - [x] Add low-frequency Memory Optimizer Agent for batch cleanup, merging, and deletion of duplicate long-term memories.
@@ -262,6 +263,7 @@ The first protocol is JSON lines over a Unix domain socket at `private/runtime/n
 ## Memory Entries
 
 Chat is the primary source of new memory. After chat turns, NuSelf runs the Memory Curator Agent and prints a `[memory] ...` summary when durable memory changes are created or updated.
+Curator decisions are based on discussion depth, quality, and durable signal rather than a fixed number of chat turns.
 
 Manual memory commands remain available as maintenance tools. Memory is stored as clear entries under:
 

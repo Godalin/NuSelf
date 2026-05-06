@@ -56,6 +56,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加确定性的 `MemoryQueryService` 用于相关记忆检索。
 - [x] 添加后台 Memory Curator Agent，用于从对话更新长期记忆。
 - [x] 在聊天轮次后运行 memory curation，让对话成为主要记忆来源。
+- [x] 让 memory curation 按讨论深度和持久信号触发，而不是按固定轮次数。
 - [x] 收紧 curator 写入策略：忽略闲聊、优先更新重复项、拒绝原始对话流水账。
 - [x] 添加手动 `memory update`。
 - [x] 添加低频 Memory Optimizer Agent，用于批量清理、合并和删除重复长期记忆。
@@ -262,6 +263,7 @@ private/logs/
 ## 记忆条目
 
 新记忆的主要来源是聊天。每轮聊天后，NuSelf 会运行 Memory Curator Agent；如果长期记忆被创建或更新，会打印 `[memory] ...` 摘要。
+Curator 会根据讨论深度、质量和持久信号判断是否写入，而不是按固定聊天轮次数触发。
 
 手动记忆命令仍作为维护工具保留。记忆以清晰条目的形式存放在：
 

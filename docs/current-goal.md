@@ -16,6 +16,8 @@ Recently completed foundation slice:
 - Existing file-backed memory entries remain inspectable and usable during migration.
 - Curator and optimizer writes pass through repository-level descriptor validation.
 - Chat now triggers memory curation after turns, so conversation is the primary memory source.
+- Memory curation now uses discussion depth, quality, and durable signal instead of fixed turn-count gating.
+- Thread curation cursors now use absolute message indexes so compression does not skip later memory updates.
 - Manual `memory add` now infers type, title, tags, and confidence through a memory intake agent.
 
 ## Scope
