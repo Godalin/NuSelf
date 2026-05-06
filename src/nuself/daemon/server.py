@@ -11,8 +11,8 @@ from typing import override
 
 from nuself.agent.chat import ChatAgent
 from nuself.config import config_int, ensure_runtime_dirs, runtime_paths
-from nuself.daemon.protocol import DaemonRequest, DaemonResponse, ProtocolError
-from nuself.memory.curator import MemoryCurator
+from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
+from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
 
@@ -100,19 +100,27 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
             return DaemonResponse.fail(request.request_id, "chat request requires string payload field 'message'")
         try:
             result = state.chat_agent.respond(message)
+            memory_update = _run_memory_curator_once(state.memory_curator)
         except RuntimeError as exc:
             return DaemonResponse.fail(request.request_id, str(exc))
-        return DaemonResponse.ok(
-            request,
-            {
-                "reply": result.reply,
-                "thread_id": result.thread_id,
-            },
-        )
+        payload: dict[str, JsonValue] = {
+            "reply": result.reply,
+            "thread_id": result.thread_id,
+        }
+        if memory_update is not None and memory_update.changed:
+            payload["memory_update"] = memory_update.summary()
+        return DaemonResponse.ok(request, payload)
     if request.type == "shutdown":
         state.shutdown_requested.set()
         return DaemonResponse.ok(request, {"message": "shutdown requested"})
     return DaemonResponse.fail(request.request_id, f"unsupported request type: {request.type}")
+
+
+def _run_memory_curator_once(memory_curator: MemoryCurator) -> MemoryCuratorResult | None:
+    try:
+        return memory_curator.run_once()
+    except RuntimeError:
+        return None
 
 
 def run_daemon(project_root: Path | None = None) -> int:

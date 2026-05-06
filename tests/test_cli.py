@@ -26,6 +26,22 @@ class MonkeyPatchFixture(Protocol):
     def setattr(self, target: str, value: object) -> None: ...
 
 
+class FakeChangedCuratorResult:
+    changed = True
+    log_path = Path("memory.log")
+
+    def summary(self) -> str:
+        return "processed=2 created=1 updated=0 ignored=0"
+
+
+class FakeChangedCurator:
+    def __init__(self, project_root: Path | None = None) -> None:
+        self.project_root = project_root
+
+    def run_once(self) -> FakeChangedCuratorResult:
+        return FakeChangedCuratorResult()
+
+
 def test_chat_uses_one_shot_when_daemon_is_missing(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(["--project-root", str(tmp_path), "chat", "--message", "hello"])
     captured = capsys.readouterr()
@@ -34,6 +50,19 @@ def test_chat_uses_one_shot_when_daemon_is_missing(tmp_path: Path, capsys: Captu
     assert "LLM API is not configured yet" in captured.out
     assert "Last message: hello" in captured.out
     assert (tmp_path / "private" / "threads" / "default.json").is_file()
+
+
+def test_one_shot_chat_runs_memory_curator_after_reply(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("nuself.cli.MemoryCurator", FakeChangedCurator)
+
+    result = main(["--project-root", str(tmp_path), "chat", "--message", "remember this preference"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Last message: remember this preference" in captured.out
+    assert "[memory] processed=2 created=1 updated=0 ignored=0" in captured.out
 
 
 def test_chat_without_message_enters_one_shot_interactive_mode(
@@ -263,6 +292,46 @@ def test_daemon_chat_uses_long_timeout(
     assert captured_timeout == cli.CHAT_REQUEST_TIMEOUT_SECONDS
 
 
+def test_daemon_chat_prints_memory_update(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    daemon_status = DaemonStatus(
+        running=True,
+        pid=123,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+
+    def fake_request(
+        request_type: object,
+        payload: object | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        return DaemonResponse(
+            request_id="r1",
+            status="ok",
+            payload={
+                "reply": "daemon reply",
+                "memory_update": "processed=2 created=1 updated=0 ignored=0",
+            },
+        )
+
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        return daemon_status
+
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.cli.client.request", fake_request)
+
+    result = main(["--project-root", str(tmp_path), "attach", "--message", "remember this"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "daemon reply" in captured.out
+    assert "[memory] processed=2 created=1 updated=0 ignored=0" in captured.out
+
+
 def test_daemon_chat_connection_error_is_reported(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
@@ -421,6 +490,29 @@ def test_memory_add_list_show_delete(tmp_path: Path, capsys: CaptureFixture) -> 
     assert "Clarity" in list_output
     assert "State assumptions explicitly." in show_output
     assert f"Deleted memory entry: {entry_id}" in delete_output
+
+
+def test_memory_add_infers_type_without_manual_type(tmp_path: Path, capsys: CaptureFixture) -> None:
+    add_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "add",
+            "--body",
+            "I prefer terse CLI summaries with concrete next steps.",
+        ]
+    )
+    add_output = capsys.readouterr().out
+    entry_id = add_output.split(" ", 1)[0]
+
+    entry = MemoryEntryRepository(tmp_path).get(entry_id)
+
+    assert add_result == 0
+    assert entry.type == "preference"
+    assert entry.title.startswith("I prefer terse CLI summaries")
+    assert entry.title.endswith("...")
+    assert entry.body == "I prefer terse CLI summaries with concrete next steps."
 
 
 class _TextInput:

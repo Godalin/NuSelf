@@ -17,6 +17,7 @@ from nuself.agent.chat import ChatAgent
 from nuself.daemon import client, lifecycle
 from nuself.domain.memory import MemoryEntry, MemoryEntryType
 from nuself.memory.curator import MemoryCurator
+from nuself.memory.intake import MemoryIntakeAgent
 from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
 
@@ -74,8 +75,8 @@ def build_parser() -> argparse.ArgumentParser:
     show_parser.add_argument("entry_id")
     _add_handler(show_parser, handle_memory_show)
     add_parser = memory_subparsers.add_parser("add")
-    add_parser.add_argument("--type", required=True, choices=_memory_type_choices())
-    add_parser.add_argument("--title", required=True)
+    add_parser.add_argument("--type", choices=_memory_type_choices())
+    add_parser.add_argument("--title", default=None)
     add_parser.add_argument("--body", "--text", required=True)
     add_parser.add_argument("--tag", action="append", default=[])
     _add_handler(add_parser, handle_memory_add)
@@ -204,11 +205,18 @@ def handle_memory_show(args: argparse.Namespace) -> int:
 
 def handle_memory_add(args: argparse.Namespace) -> int:
     repo = MemoryEntryRepository(args.project_root)
-    entry = MemoryEntry(
-        type=args.type,
-        title=args.title,
+    inferred = MemoryIntakeAgent(args.project_root).infer(
         body=args.body,
+        title=args.title,
+        memory_type=args.type,
         tags=list(args.tag),
+    )
+    entry = MemoryEntry(
+        type=inferred.type,
+        title=inferred.title,
+        body=inferred.body,
+        tags=list(inferred.tags),
+        confidence=inferred.confidence,
     )
     repo.save(entry)
     repo.reindex()
@@ -294,6 +302,9 @@ def _send_chat(message: str, project_root: Path | None) -> int:
     reply = response.payload.get("reply")
     if isinstance(reply, str):
         print(reply)
+        memory_update = response.payload.get("memory_update")
+        if isinstance(memory_update, str) and memory_update != "":
+            print(f"[memory] {memory_update}")
         return 0
     print("daemon response did not include a reply", file=sys.stderr)
     return 1
@@ -396,6 +407,7 @@ def _dedupe_interactive_history() -> None:
 def _send_one_shot_chat(message: str, project_root: Path | None) -> int:
     try:
         print(_one_shot_reply(message, project_root))
+        _run_memory_curator(project_root)
         return 0
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
