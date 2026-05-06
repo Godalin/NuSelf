@@ -9,6 +9,7 @@ This project is an AI-Mirror of most ideas of one person, for those who want to 
 - Sub-components must be tested individually.
 - User-facing workflow or feature changes must update both `README.md` and `README.zh-CN.md`.
 - Project progress is tracked in the TODOs section of `README.md`; completed features and planning changes must update that checklist.
+- Short-term implementation focus is tracked in `docs/current-goal.md`.
 
 ## Development Style
 
@@ -19,10 +20,13 @@ This project is an AI-Mirror of most ideas of one person, for those who want to 
 - Keep refactors intentional: update documentation and validation together with the code change.
 - When commands, configuration, runtime behavior, or user-facing workflows change in a way users need to learn, update both English and Chinese README files in the same change.
 - When completing a feature or changing the development plan, update the project TODOs in [README.md](README.md) and keep [README.zh-CN.md](README.zh-CN.md) synchronized.
+- Before starting non-trivial implementation work, check [docs/current-goal.md](docs/current-goal.md). If the requested task conflicts with the current goal, mention the conflict before proceeding.
+- When the user changes the current focus, update [docs/current-goal.md](docs/current-goal.md) and README TODOs in the same change.
 - Keep implementation constraints and small behavior polish in scoped `AGENTS.md` files near the code rather than overloading the user README.
 
 ## Project Design
 
+- Current short-term goal: [docs/current-goal.md](docs/current-goal.md)
 - User-facing project progress TODOs: [README.md](README.md)
 - Architecture overview: [docs/architecture.md](docs/architecture.md)
 - Development plan: [docs/development-plan.md](docs/development-plan.md)

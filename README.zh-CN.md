@@ -18,6 +18,16 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 
 这是项目面向用户的进度面板。它汇总了 [docs/development-plan.md](docs/development-plan.md)、[docs/architecture.md](docs/architecture.md)、[docs/agent-framework.md](docs/agent-framework.md)、[docs/interaction-layer.md](docs/interaction-layer.md) 和 [docs/memory-management.md](docs/memory-management.md) 中的详细规划。完成功能或改变开发规划时，要同步更新本节、实现代码和相关规划文档。
 
+短期实现焦点放在 [docs/current-goal.md](docs/current-goal.md)。先用它作为当前开发目标，再从下面更大的 backlog 中拉取任务。
+
+### 当前目标
+
+- [ ] 构建 typed memory pipeline foundation。
+- [ ] 添加 `MemoryObject` envelope。
+- [ ] 添加 `MemoryTypeDescriptor` registry。
+- [ ] 添加 `belief`、`preference`、`episode` 和 `instruction` 内置 descriptors。
+- [ ] 让 curator 和 optimizer 的改动经过 descriptor validation。
+
 ### 项目基础
 
 - [x] 创建标准 `uv` Python 项目和 typed package 布局。

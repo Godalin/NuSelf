@@ -18,6 +18,16 @@ LangGraph/LangChain integration, proactive reflection, email, and macOS notifica
 
 This checklist is the user-facing progress board for the project. It summarizes the detailed plans in [docs/development-plan.md](docs/development-plan.md), [docs/architecture.md](docs/architecture.md), [docs/agent-framework.md](docs/agent-framework.md), [docs/interaction-layer.md](docs/interaction-layer.md), and [docs/memory-management.md](docs/memory-management.md). When features are completed or the plan changes, update this section together with the implementation and planning docs.
 
+Short-term implementation focus lives in [docs/current-goal.md](docs/current-goal.md). Use it as the active development target before pulling work from the broader backlog below.
+
+### Current Goal
+
+- [ ] Build the typed memory pipeline foundation.
+- [ ] Add a `MemoryObject` envelope.
+- [ ] Add a `MemoryTypeDescriptor` registry.
+- [ ] Add built-in descriptors for `belief`, `preference`, `episode`, and `instruction`.
+- [ ] Route curator and optimizer changes through descriptor validation.
+
 ### Project Foundation
 
 - [x] Create a standard `uv` Python project with typed package layout.
