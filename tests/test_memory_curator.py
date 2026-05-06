@@ -133,10 +133,82 @@ def test_memory_curator_ignores_trivial_chat_when_agent_says_ignore(tmp_path: Pa
     result = curator.run_once()
     second_result = curator.run_once()
 
-    assert result.processed_messages == 2
-    assert result.ignored == 1
+    assert result.processed_messages == 0
+    assert result.ignored == 0
     assert second_result.processed_messages == 0
+    assert llm.calls == []
     assert repo.list() == []
+
+
+def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "I decided that memory should be captured from the depth and quality of a discussion, "
+                        "not from a fixed number of chat turns, because concise but important decisions matter."
+                    ),
+                ),
+            ],
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"create","type":"belief","title":"Memory quality threshold",'
+        '"body":"The user wants memory curation to depend on discussion depth and quality, not turn count.",'
+        '"confidence":0.85,"reason":"explicit memory-system decision"}]}'
+    )
+    repo = MemoryEntryRepository(tmp_path)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+
+    result = curator.run_once()
+    entries = repo.list()
+
+    assert result.processed_messages == 1
+    assert result.created == 1
+    assert entries[0].type == "belief"
+    assert entries[0].source_refs == ["thread:default:0-1"]
+
+
+def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: Path) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            summary="Earlier compressed discussion.",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content="We decided that compressed threads must still allow new memory curation to continue.",
+                ),
+                ThreadMessage(role="assistant", content="I will keep using the absolute message range."),
+            ],
+            message_start_index=4,
+            next_message_index=6,
+        )
+    )
+    cursor_path = tmp_path / "private" / "memory" / "cursors" / "default.json"
+    cursor_path.parent.mkdir(parents=True)
+    cursor_path.write_text('{"thread_id":"default","processed_message_count":4}\n', encoding="utf-8")
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"create","type":"episode","title":"Compressed cursor continuity",'
+        '"body":"Memory curation should continue after thread compression by using absolute message indexes.",'
+        '"confidence":0.8,"reason":"cursor correctness"}]}'
+    )
+    repo = MemoryEntryRepository(tmp_path)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+
+    result = curator.run_once()
+    second_result = curator.run_once()
+    entries = repo.list()
+
+    assert result.processed_messages == 2
+    assert result.created == 1
+    assert second_result.processed_messages == 0
+    assert entries[0].source_refs == ["thread:default:4-6"]
 
 
 def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:

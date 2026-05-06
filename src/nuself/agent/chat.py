@@ -69,12 +69,20 @@ class ThreadState:
     thread_id: str
     summary: str = ""
     messages: list[ThreadMessage] = field(default_factory=empty_thread_messages)
+    message_start_index: int = 0
+    next_message_index: int = 0
+
+    def __post_init__(self) -> None:
+        if self.next_message_index == self.message_start_index and self.messages:
+            object.__setattr__(self, "next_message_index", self.message_start_index + len(self.messages))
 
     def to_wire(self) -> dict[str, object]:
         return {
             "thread_id": self.thread_id,
             "summary": self.summary,
             "messages": [message.to_wire() for message in self.messages],
+            "message_start_index": self.message_start_index,
+            "next_message_index": self.next_message_index,
         }
 
     @classmethod
@@ -86,21 +94,32 @@ class ThreadState:
         thread_id = data.get("thread_id")
         summary = data.get("summary")
         messages = data.get("messages")
+        message_start_index = data.get("message_start_index", 0)
+        next_message_index = data.get("next_message_index")
         if not isinstance(thread_id, str):
             raise ValueError("thread_id must be a string")
         if not isinstance(summary, str):
             raise ValueError("summary must be a string")
         if not isinstance(messages, list):
             raise ValueError("messages must be a list")
+        if not isinstance(message_start_index, int) or message_start_index < 0:
+            raise ValueError("message_start_index must be a non-negative integer")
         message_items = cast(list[object], messages)
+        parsed_messages = [
+            ThreadMessage.from_wire(cast(dict[str, object], item))
+            for item in message_items
+            if isinstance(item, dict)
+        ]
+        if next_message_index is None:
+            next_message_index = message_start_index + len(parsed_messages)
+        if not isinstance(next_message_index, int) or next_message_index < message_start_index:
+            raise ValueError("next_message_index must be an integer greater than or equal to message_start_index")
         return cls(
             thread_id=thread_id,
             summary=summary,
-            messages=[
-                ThreadMessage.from_wire(cast(dict[str, object], item))
-                for item in message_items
-                if isinstance(item, dict)
-            ],
+            messages=parsed_messages,
+            message_start_index=message_start_index,
+            next_message_index=next_message_index,
         )
 
 
@@ -223,6 +242,8 @@ class ChatAgent:
                 thread_id=thread_id,
                 summary=state.summary,
                 messages=[*messages, ThreadMessage(role="assistant", content=reply)],
+                message_start_index=state.message_start_index,
+                next_message_index=state.next_message_index + 2,
             )
             compressed = self._compress_if_needed(updated)
             return compressed, ChatResult(reply=reply, thread_id=thread_id)
@@ -254,7 +275,13 @@ class ChatAgent:
         recent = state.messages[-self._settings.recent_messages :]
         older = state.messages[: -self._settings.recent_messages]
         summary = self._summarize(state.summary, older)
-        return ThreadState(thread_id=state.thread_id, summary=summary, messages=recent)
+        return ThreadState(
+            thread_id=state.thread_id,
+            summary=summary,
+            messages=recent,
+            message_start_index=state.next_message_index - len(recent),
+            next_message_index=state.next_message_index,
+        )
 
     def _summarize(self, previous_summary: str, messages: list[ThreadMessage]) -> str:
         transcript = "\n".join(f"{message.role}: {message.content}" for message in messages)

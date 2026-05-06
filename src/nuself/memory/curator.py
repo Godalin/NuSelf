@@ -21,7 +21,7 @@ DecisionStatus: TypeAlias = Literal["ready", "deferred"]
 class MemoryCuratorSettings:
     """Policy for one background memory curation run."""
 
-    min_new_messages: int = 2
+    min_quality_chars: int = 120
     existing_memory_limit: int = 12
 
 
@@ -90,8 +90,25 @@ class MemoryCurator:
     def run_once(self, thread_id: str = "default") -> MemoryCuratorResult:
         state = self._thread_store.load(thread_id)
         cursor = self._load_cursor(thread_id)
-        new_messages = state.messages[cursor:]
-        if len(new_messages) < self._settings.min_new_messages:
+        visible_start = state.message_start_index
+        visible_end = state.next_message_index
+        if cursor >= visible_end:
+            return MemoryCuratorResult(
+                processed_messages=0,
+                created=0,
+                updated=0,
+                ignored=0,
+                log_path=self._memory_log_path(),
+            )
+        if cursor < visible_start:
+            self._append_log(
+                f"memory_curator_gap thread={thread_id} cursor={cursor} visible_start={visible_start} "
+                "older unprocessed turns were already compressed"
+            )
+        source_start = max(cursor, visible_start)
+        offset = source_start - visible_start
+        new_messages = state.messages[offset:]
+        if not _has_memory_worthy_signal(new_messages, self._settings.min_quality_chars):
             return MemoryCuratorResult(
                 processed_messages=0,
                 created=0,
@@ -100,8 +117,8 @@ class MemoryCurator:
                 log_path=self._memory_log_path(),
             )
 
-        source_ref = f"thread:{thread_id}:{cursor}-{len(state.messages)}"
-        decision = self._decide_actions(thread_id, state, cursor, new_messages)
+        source_ref = f"thread:{thread_id}:{source_start}-{visible_end}"
+        decision = self._decide_actions(thread_id, state, source_start, new_messages)
         if decision.status == "deferred":
             self._append_log(
                 f"memory_curator_deferred thread={thread_id} source={source_ref} "
@@ -131,7 +148,7 @@ class MemoryCurator:
                     ignored += 1
             else:
                 ignored += 1
-        self._save_cursor(thread_id, len(state.messages))
+        self._save_cursor(thread_id, visible_end)
         self._append_log(
             f"memory_curator thread={thread_id} source={source_ref} "
             f"processed={len(new_messages)} created={created} updated={updated} ignored={ignored}"
@@ -279,6 +296,29 @@ class MemoryCurator:
 
 def _render_transcript(messages: list[ThreadMessage]) -> str:
     return "\n".join(f"{message.role}: {message.content}" for message in messages)
+
+
+def _has_memory_worthy_signal(messages: list[ThreadMessage], min_quality_chars: int) -> bool:
+    user_text = "\n".join(message.content for message in messages if message.role == "user")
+    if len(user_text.strip()) >= min_quality_chars:
+        return True
+    normalized = user_text.casefold()
+    durable_markers = {
+        "prefer",
+        "remember",
+        "important",
+        "decide",
+        "decision",
+        "should",
+        "goal",
+        "plan",
+        "because",
+        "why",
+        "question",
+        "always",
+        "never",
+    }
+    return any(marker in normalized for marker in durable_markers)
 
 
 def _parse_actions(raw: str) -> list[MemoryAction]:
