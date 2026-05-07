@@ -145,6 +145,7 @@ def build_parser() -> argparse.ArgumentParser:
     graph_search_parser.add_argument("query")
     graph_search_parser.add_argument("--type", default=None)
     graph_search_parser.add_argument("--limit", type=int, default=8)
+    graph_search_parser.add_argument("--depth", type=int, default=1)
     _add_handler(graph_search_parser, handle_memory_graph_search)
     _add_handler(memory_subparsers.add_parser("update"), handle_memory_update)
     optimize_parser = memory_subparsers.add_parser("optimize")
@@ -457,6 +458,7 @@ def handle_memory_graph_search(args: argparse.Namespace) -> int:
         args.query,
         node_type=args.type,
         limit=args.limit,
+        depth=args.depth,
     )
     if not result.nodes:
         print("No symbolic graph matches.")

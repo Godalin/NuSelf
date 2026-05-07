@@ -263,3 +263,40 @@ def test_memory_query_expands_superseded_by_entries(tmp_path: Path) -> None:
 
     assert [match.entry.id for match in matches] == [old.id, replacement.id]
     assert matches[1].reasons == (f"superseded_by:{old.id}",)
+
+
+def test_memory_query_respects_retrieval_rule_score_penalty(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    superseded = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Old model",
+            body="Closed categories.",
+            review_state="reviewed",
+        )
+    )
+    neighbor = repo.save(
+        MemoryEntry(
+            type="concept",
+            title="Neighbor concept",
+            body="Just a linked idea.",
+            review_state="reviewed",
+        )
+    )
+    current = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Open descriptor model",
+            body="Types are descriptor-backed.",
+            review_state="reviewed",
+            relations={"supersedes": [superseded.id], "related_to": [neighbor.id]},
+        )
+    )
+    service = MemoryQueryService(repo)
+
+    matches = service.search(MemoryQuery(text="descriptor", limit=4))
+
+    assert matches[0].entry.id == current.id
+    superseded_match = next(m for m in matches if m.entry.id == superseded.id)
+    neighbor_match = next(m for m in matches if m.entry.id == neighbor.id)
+    assert superseded_match.score > neighbor_match.score

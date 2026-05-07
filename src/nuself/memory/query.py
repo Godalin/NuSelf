@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-from nuself.domain.memory import MemoryEntry, RelationDescriptorRegistry, ReviewState
+from nuself.domain.memory import MemoryEntry, RelationDescriptor, RelationDescriptorRegistry, ReviewState
 from nuself.domain.profile import ProfileItem
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceChunkMatch, SourceRepository
@@ -218,10 +218,10 @@ def _expand_related_matches(
     related_matches: dict[str, MemoryMatch] = {}
 
     for match in direct_matches:
-        for relation, entry_id in _outgoing_relation_refs(match.entry, registry):
-            _add_related_match(related_matches, by_id, direct_ids, match, entry_id, relation)
-        for relation, entry in _incoming_relation_refs(match.entry, eligible_entries, registry):
-            _add_related_match(related_matches, by_id, direct_ids, match, entry.id, relation)
+        for descriptor, entry_id in _outgoing_relation_refs(match.entry, registry):
+            _add_related_match(related_matches, by_id, direct_ids, match, entry_id, descriptor, descriptor.name)
+        for descriptor, entry in _incoming_relation_refs(match.entry, eligible_entries, registry):
+            _add_related_match(related_matches, by_id, direct_ids, match, entry.id, descriptor, descriptor.inverse or descriptor.name)
 
     related_sorted = sorted(related_matches.values(), key=_memory_match_sort_key)
     return [*direct_matches, *related_sorted][:limit]
@@ -231,25 +231,33 @@ def _memory_match_sort_key(match: MemoryMatch) -> tuple[float, str, str]:
     return (-match.score, match.entry.updated_at, match.entry.id)
 
 
-def _outgoing_relation_refs(entry: MemoryEntry, registry: RelationDescriptorRegistry) -> list[tuple[str, str]]:
-    refs: list[tuple[str, str]] = []
+def _outgoing_relation_refs(
+    entry: MemoryEntry, registry: RelationDescriptorRegistry
+) -> list[tuple[RelationDescriptor, str]]:
+    refs: list[tuple[RelationDescriptor, str]] = []
     for descriptor in registry:
         for target_id in entry.relations.get(descriptor.source_field, []):
-            refs.append((descriptor.name, target_id))
+            refs.append((descriptor, target_id))
     return refs
 
 
 def _incoming_relation_refs(
     entry: MemoryEntry, entries: list[MemoryEntry], registry: RelationDescriptorRegistry
-) -> list[tuple[str, MemoryEntry]]:
-    refs: list[tuple[str, MemoryEntry]] = []
+) -> list[tuple[RelationDescriptor, MemoryEntry]]:
+    refs: list[tuple[RelationDescriptor, MemoryEntry]] = []
     for candidate in entries:
         if candidate.id == entry.id:
             continue
         for descriptor in registry:
             if entry.id in candidate.relations.get(descriptor.source_field, []):
-                refs.append((descriptor.inverse or descriptor.name, candidate))
+                refs.append((descriptor, candidate))
     return refs
+
+
+def _relation_score_penalty(descriptor: RelationDescriptor) -> float:
+    if descriptor.retrieval_rule == "include_both_current_and_superseded":
+        return 0.5
+    return 0.75
 
 
 def _add_related_match(
@@ -258,15 +266,16 @@ def _add_related_match(
     direct_ids: set[str],
     source_match: MemoryMatch,
     entry_id: str,
-    relation: str,
+    descriptor: RelationDescriptor,
+    relation_name: str,
 ) -> None:
     if entry_id in direct_ids:
         return
     entry = by_id.get(entry_id)
     if entry is None:
         return
-    reason = f"{relation}:{source_match.entry.id}"
-    score = max(source_match.score - 0.75, 0.1)
+    reason = f"{relation_name}:{source_match.entry.id}"
+    score = max(source_match.score - _relation_score_penalty(descriptor), 0.1)
     current = related_matches.get(entry.id)
     if current is None:
         related_matches[entry.id] = MemoryMatch(entry=entry, score=score, reasons=(reason,))

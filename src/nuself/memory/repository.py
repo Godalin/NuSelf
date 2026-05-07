@@ -127,7 +127,7 @@ class SymbolicGraphEdgeFilters:
 
 @dataclass(frozen=True)
 class SymbolicGraphSearchResult:
-    """Text-matched graph nodes plus their one-hop edges."""
+    """Text-matched graph nodes plus edges up to the requested traversal depth."""
 
     nodes: tuple[SymbolicGraphNode, ...]
     edges: tuple[SymbolicGraphEdge, ...]
@@ -277,6 +277,7 @@ class MemoryEntryRepository:
         *,
         node_type: str | None = None,
         limit: int = 8,
+        depth: int = 1,
     ) -> SymbolicGraphSearchResult:
         graph = self._read_symbolic_graph()
         nodes = [
@@ -293,11 +294,43 @@ class MemoryEntryRepository:
             if _matches_graph_node_filters(node, SymbolicGraphNodeFilters(type=node_type))
             and _matches_graph_text(node, query)
         ][:limit]
+        if depth <= 0:
+            return SymbolicGraphSearchResult(nodes=tuple(matched_nodes), edges=())
+
+        # Build bidirectional adjacency (respect symmetry via descriptor metadata)
+        adjacency: dict[str, list[tuple[str, SymbolicGraphEdge]]] = {}
+        for edge in edges:
+            adjacency.setdefault(edge.source, []).append((edge.target, edge))
+            descriptor = self._relation_registry.get(edge.relation)
+            if descriptor is not None and descriptor.symmetric:
+                adjacency.setdefault(edge.target, []).append((edge.source, edge))
+            else:
+                adjacency.setdefault(edge.target, []).append((edge.source, edge))
+
+        frontier = {node.id for node in matched_nodes}
+        visited = set(frontier)
+        result_node_ids = set(frontier)
+        result_edges: list[SymbolicGraphEdge] = []
+        seen_edge_ids: set[str] = set()
+
+        for _ in range(depth):
+            next_frontier: set[str] = set()
+            for node_id in frontier:
+                for neighbor_id, edge in adjacency.get(node_id, []):
+                    if neighbor_id not in visited:
+                        next_frontier.add(neighbor_id)
+                        visited.add(neighbor_id)
+                        result_node_ids.add(neighbor_id)
+                    if edge.id not in seen_edge_ids:
+                        seen_edge_ids.add(edge.id)
+                        result_edges.append(edge)
+            frontier = next_frontier
+
+        node_by_id = {node.id: node for node in nodes}
         matched_ids = {node.id for node in matched_nodes}
-        matched_edges = [
-            edge for edge in edges if edge.source in matched_ids or edge.target in matched_ids
-        ]
-        return SymbolicGraphSearchResult(nodes=tuple(matched_nodes), edges=tuple(matched_edges))
+        expanded_ids = sorted(result_node_ids - matched_ids)
+        result_nodes = tuple(matched_nodes) + tuple(node_by_id[node_id] for node_id in expanded_ids if node_id in node_by_id)
+        return SymbolicGraphSearchResult(nodes=result_nodes, edges=tuple(result_edges))
 
     @property
     def symbolic_graph_path(self) -> Path:

@@ -182,8 +182,27 @@ def test_memory_repository_reindex_writes_symbolic_graph(tmp_path: Path) -> None
     assert {node.id for node in belief_nodes} == {source.id, target.id}
     assert related_edges[0].id == f"{source.id}:related_to:{target.id}"
     assert related_edges[0].relation == "related_to"
-    assert [node.id for node in search_result.nodes] == [target.id]
+    assert [node.id for node in search_result.nodes] == [target.id, source.id]
     assert [edge.id for edge in search_result.edges] == [f"{source.id}:related_to:{target.id}"]
+
+
+def test_memory_repository_search_graph_supports_depth(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    a = repo.save(MemoryEntry(type="belief", title="Start node", body="Beginning."))
+    b = repo.save(MemoryEntry(type="belief", title="Middle node", body="Connected."))
+    c = repo.save(MemoryEntry(type="belief", title="End node", body="Distant."))
+    # Chain a -> b -> c via related_to
+    repo.save(MemoryEntry(type="belief", title="Start node", body="Beginning.", id=a.id, relations={"related_to": [b.id]}))
+    repo.save(MemoryEntry(type="belief", title="Middle node", body="Connected.", id=b.id, relations={"related_to": [c.id]}))
+    repo.reindex()
+
+    depth0 = repo.search_graph("Start", depth=0)
+    depth1 = repo.search_graph("Start", depth=1)
+    depth2 = repo.search_graph("Start", depth=2)
+
+    assert [node.id for node in depth0.nodes] == [a.id]
+    assert [node.id for node in depth1.nodes] == [a.id, b.id]
+    assert {node.id for node in depth2.nodes} == {a.id, b.id, c.id}
 
 
 def test_default_relation_descriptor_registry_exposes_built_ins() -> None:
