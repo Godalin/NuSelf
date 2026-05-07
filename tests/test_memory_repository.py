@@ -205,6 +205,45 @@ def test_memory_repository_search_graph_supports_depth(tmp_path: Path) -> None:
     assert {node.id for node in depth2.nodes} == {a.id, b.id, c.id}
 
 
+def test_memory_repository_find_path(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    a = repo.save(MemoryEntry(type="belief", title="A", body="Node A."))
+    b = repo.save(MemoryEntry(type="belief", title="B", body="Node B."))
+    c = repo.save(MemoryEntry(type="belief", title="C", body="Node C."))
+    repo.save(MemoryEntry(type="belief", title="A", body="Node A.", id=a.id, relations={"related_to": [b.id]}))
+    repo.save(MemoryEntry(type="belief", title="B", body="Node B.", id=b.id, relations={"related_to": [c.id]}))
+    repo.reindex()
+
+    path_ac = repo.find_path(a.id, c.id)
+    path_ca = repo.find_path(c.id, a.id)
+    path_none = repo.find_path(a.id, "nonexistent")
+
+    assert len(path_ac) == 2
+    assert path_ac[0].relation == "related_to"
+    assert path_ac[1].relation == "related_to"
+    assert len(path_ca) == 2
+    assert len(path_none) == 0
+
+
+def test_memory_repository_transitive_closure(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    a = repo.save(MemoryEntry(type="goal", title="A", body="Goal A."))
+    b = repo.save(MemoryEntry(type="goal", title="B", body="Goal B."))
+    c = repo.save(MemoryEntry(type="goal", title="C", body="Goal C."))
+    d = repo.save(MemoryEntry(type="goal", title="D", body="Goal D."))
+    repo.save(MemoryEntry(type="goal", title="A", body="Goal A.", id=a.id, relations={"depends_on": [b.id]}))
+    repo.save(MemoryEntry(type="goal", title="B", body="Goal B.", id=b.id, relations={"depends_on": [c.id]}))
+    repo.save(MemoryEntry(type="goal", title="C", body="Goal C.", id=c.id, relations={"depends_on": [d.id]}))
+    repo.reindex()
+
+    closure_a = repo.transitive_closure(a.id, "depends_on")
+    closure_c = repo.transitive_closure(c.id, "depends_on")
+
+    assert {node.id for node in closure_a.nodes} == {a.id, b.id, c.id, d.id}
+    assert {node.id for node in closure_c.nodes} == {c.id, d.id}
+    assert len(closure_a.edges) == 3
+
+
 def test_default_relation_descriptor_registry_exposes_built_ins() -> None:
     registry = default_relation_descriptor_registry()
     supersedes = registry.require("supersedes")

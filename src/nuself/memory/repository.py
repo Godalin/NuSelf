@@ -332,6 +332,89 @@ class MemoryEntryRepository:
         result_nodes = tuple(matched_nodes) + tuple(node_by_id[node_id] for node_id in expanded_ids if node_id in node_by_id)
         return SymbolicGraphSearchResult(nodes=result_nodes, edges=tuple(result_edges))
 
+    def find_path(self, from_id: str, to_id: str) -> list[SymbolicGraphEdge]:
+        """Return the shortest path from from_id to to_id as a list of edges."""
+        graph = self._read_symbolic_graph()
+        edges = [
+            _symbolic_edge_from_wire(item)
+            for item in _expect_object_list(graph, "edges")
+        ]
+
+        # Build adjacency respecting symmetry
+        adjacency: dict[str, list[tuple[str, SymbolicGraphEdge]]] = {}
+        for edge in edges:
+            adjacency.setdefault(edge.source, []).append((edge.target, edge))
+            descriptor = self._relation_registry.get(edge.relation)
+            if descriptor is not None and descriptor.symmetric:
+                adjacency.setdefault(edge.target, []).append((edge.source, edge))
+            else:
+                adjacency.setdefault(edge.target, []).append((edge.source, edge))
+
+        if from_id not in adjacency:
+            return []
+
+        queue: list[tuple[str, list[SymbolicGraphEdge]]] = [(from_id, [])]
+        visited: set[str] = {from_id}
+
+        while queue:
+            current_id, path = queue.pop(0)
+            if current_id == to_id:
+                return path
+            for neighbor_id, edge in adjacency.get(current_id, []):
+                if neighbor_id not in visited:
+                    visited.add(neighbor_id)
+                    queue.append((neighbor_id, path + [edge]))
+        return []
+
+    def transitive_closure(
+        self, node_id: str, relation: str
+    ) -> SymbolicGraphSearchResult:
+        """Return all nodes and edges reachable from node_id via the given relation."""
+        graph = self._read_symbolic_graph()
+        nodes = [
+            _symbolic_node_from_wire(item)
+            for item in _expect_object_list(graph, "nodes")
+        ]
+        edges = [
+            _symbolic_edge_from_wire(item)
+            for item in _expect_object_list(graph, "edges")
+        ]
+
+        descriptor = self._relation_registry.get(relation)
+        is_symmetric = descriptor is not None and descriptor.symmetric
+
+        # Build adjacency filtered to the requested relation
+        adjacency: dict[str, list[tuple[str, SymbolicGraphEdge]]] = {}
+        for edge in edges:
+            if edge.relation != relation:
+                continue
+            adjacency.setdefault(edge.source, []).append((edge.target, edge))
+            if is_symmetric:
+                adjacency.setdefault(edge.target, []).append((edge.source, edge))
+
+        frontier = {node_id}
+        visited = set(frontier)
+        result_node_ids = set(frontier)
+        result_edges: list[SymbolicGraphEdge] = []
+        seen_edge_ids: set[str] = set()
+
+        while frontier:
+            next_frontier: set[str] = set()
+            for current_id in frontier:
+                for neighbor_id, edge in adjacency.get(current_id, []):
+                    if neighbor_id not in visited:
+                        next_frontier.add(neighbor_id)
+                        visited.add(neighbor_id)
+                        result_node_ids.add(neighbor_id)
+                    if edge.id not in seen_edge_ids:
+                        seen_edge_ids.add(edge.id)
+                        result_edges.append(edge)
+            frontier = next_frontier
+
+        node_by_id = {node.id: node for node in nodes}
+        result_nodes = tuple(node_by_id[node_id] for node_id in sorted(result_node_ids) if node_id in node_by_id)
+        return SymbolicGraphSearchResult(nodes=result_nodes, edges=tuple(result_edges))
+
     @property
     def symbolic_graph_path(self) -> Path:
         return self._paths.private_root / "derived" / "symbolic_graph.json"

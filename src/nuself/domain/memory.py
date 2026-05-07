@@ -700,6 +700,7 @@ def default_relation_descriptor_registry() -> RelationDescriptorRegistry:
                 source_field="depends_on",
                 domain=memory_node_types,
                 range=memory_node_types,
+                transitive=True,
                 inverse="required_by",
                 temporal_policy="independent",
                 confidence_policy="inherits_source",

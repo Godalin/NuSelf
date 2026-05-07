@@ -147,6 +147,14 @@ def build_parser() -> argparse.ArgumentParser:
     graph_search_parser.add_argument("--limit", type=int, default=8)
     graph_search_parser.add_argument("--depth", type=int, default=1)
     _add_handler(graph_search_parser, handle_memory_graph_search)
+    graph_path_parser = graph_subparsers.add_parser("path")
+    graph_path_parser.add_argument("from_id")
+    graph_path_parser.add_argument("to_id")
+    _add_handler(graph_path_parser, handle_memory_graph_path)
+    graph_closure_parser = graph_subparsers.add_parser("closure")
+    graph_closure_parser.add_argument("node_id")
+    graph_closure_parser.add_argument("--relation", choices=_relation_names, default=None)
+    _add_handler(graph_closure_parser, handle_memory_graph_closure)
     _add_handler(memory_subparsers.add_parser("update"), handle_memory_update)
     optimize_parser = memory_subparsers.add_parser("optimize")
     optimize_parser.add_argument("--limit", type=int, default=50)
@@ -462,6 +470,37 @@ def handle_memory_graph_search(args: argparse.Namespace) -> int:
     )
     if not result.nodes:
         print("No symbolic graph matches.")
+        return 0
+    print("Nodes:")
+    for node in result.nodes:
+        print(_format_symbolic_graph_node(node))
+    if result.edges:
+        print("Edges:")
+        for edge in result.edges:
+            print(_format_symbolic_graph_edge(edge))
+    return 0
+
+
+def handle_memory_graph_path(args: argparse.Namespace) -> int:
+    repo = MemoryEntryRepository(args.project_root)
+    path = repo.find_path(args.from_id, args.to_id)
+    if not path:
+        print("No path found.")
+        return 0
+    print("Path:")
+    for edge in path:
+        print(_format_symbolic_graph_edge(edge))
+    return 0
+
+
+def handle_memory_graph_closure(args: argparse.Namespace) -> int:
+    repo = MemoryEntryRepository(args.project_root)
+    if args.relation is None:
+        print("--relation is required for closure.")
+        return 1
+    result = repo.transitive_closure(args.node_id, args.relation)
+    if not result.nodes:
+        print("No closure nodes.")
         return 0
     print("Nodes:")
     for node in result.nodes:
