@@ -714,8 +714,7 @@ def test_memory_relations_lists_and_filters_derived_index(tmp_path: Path, capsys
             type="belief",
             title="New model",
             body="Open descriptors.",
-            supersedes=[old.id],
-            related_memory_ids=[related.id],
+            relations={"supersedes": [old.id], "related_to": [related.id]},
         )
     )
 
@@ -751,7 +750,7 @@ def test_memory_graph_lists_nodes_and_edges(tmp_path: Path, capsys: CaptureFixtu
             type="belief",
             title="Graph edge",
             body="A graph source.",
-            related_memory_ids=[target.id],
+            relations={"related_to": [target.id]},
         )
     )
 
@@ -771,14 +770,21 @@ def test_memory_graph_lists_nodes_and_edges(tmp_path: Path, capsys: CaptureFixtu
         ]
     )
     edges_output = capsys.readouterr().out
+    search_result = main(["--project-root", str(tmp_path), "memory", "graph", "search", "target"])
+    search_output = capsys.readouterr().out
 
     assert nodes_result == 0
     assert edges_result == 0
+    assert search_result == 0
     assert target.id in nodes_output
     assert "Graph node" in nodes_output
     assert source.id not in nodes_output
     assert f"{source.id}:related_to:{target.id}" in edges_output
     assert f"{source.id} --related_to-> {target.id}" in edges_output
+    assert "Nodes:" in search_output
+    assert "Edges:" in search_output
+    assert target.id in search_output
+    assert f"{source.id}:related_to:{target.id}" in search_output
 
 
 def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: CaptureFixture) -> None:

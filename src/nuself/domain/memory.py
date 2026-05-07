@@ -52,6 +52,38 @@ def empty_evidence_list() -> list["MemoryEvidence"]:
     return []
 
 
+def empty_relations_dict() -> dict[str, list[str]]:
+    return {}
+
+
+def merge_relations(
+    base: dict[str, list[str]], other: dict[str, list[str]]
+) -> dict[str, list[str]]:
+    """Merge two relations dicts, deduplicating target ids per relation."""
+    merged = {k: list(v) for k, v in base.items()}
+    for key, values in other.items():
+        seen = set(merged.get(key, []))
+        for value in values:
+            if value not in seen:
+                seen.add(value)
+                merged.setdefault(key, []).append(value)
+    return merged
+
+
+def _migrate_legacy_relations(data: dict[str, object]) -> dict[str, list[str]]:
+    """Backward-compat: read old supersedes/related_memory_ids into relations dict."""
+    relations = _optional_relations_dict(data, "relations")
+    if relations:
+        return relations
+    supersedes = _optional_str_list(data, "supersedes")
+    related = _optional_str_list(data, "related_memory_ids")
+    if supersedes:
+        relations["supersedes"] = supersedes
+    if related:
+        relations["related_to"] = related
+    return relations
+
+
 @dataclass(frozen=True)
 class MemoryEvidence:
     """Structured source evidence attached to a memory object."""
@@ -105,8 +137,7 @@ class MemoryEntry:
     valid_from: str | None = None
     valid_until: str | None = None
     temporal_note: str = ""
-    supersedes: list[str] = field(default_factory=empty_str_list)
-    related_memory_ids: list[str] = field(default_factory=empty_str_list)
+    relations: dict[str, list[str]] = field(default_factory=empty_relations_dict)
     evidence: list[MemoryEvidence] = field(default_factory=empty_evidence_list)
 
     def with_updates(
@@ -139,8 +170,7 @@ class MemoryEntry:
             valid_from=valid_from if valid_from is not None else self.valid_from,
             valid_until=valid_until if valid_until is not None else self.valid_until,
             temporal_note=temporal_note if temporal_note is not None else self.temporal_note,
-            supersedes=self.supersedes,
-            related_memory_ids=self.related_memory_ids,
+            relations=self.relations,
             evidence=self.evidence,
         )
 
@@ -162,8 +192,9 @@ class MemoryEntry:
             "valid_from": self.valid_from,
             "valid_until": self.valid_until,
             "temporal_note": self.temporal_note,
-            "supersedes": self.supersedes,
-            "related_memory_ids": self.related_memory_ids,
+            "relations": self.relations,
+            "supersedes": self.relations.get("supersedes", []),
+            "related_memory_ids": self.relations.get("related_to", []),
             "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
 
@@ -182,8 +213,9 @@ class MemoryEntry:
                 "valid_from": self.valid_from,
                 "valid_until": self.valid_until,
                 "temporal_note": self.temporal_note,
-                "supersedes": self.supersedes,
-                "related_memory_ids": self.related_memory_ids,
+                "relations": self.relations,
+                "supersedes": self.relations.get("supersedes", []),
+                "related_memory_ids": self.relations.get("related_to", []),
                 "evidence": [evidence.to_wire() for evidence in self.evidence],
             },
             metadata={"entry_schema": "MemoryEntry/v1"},
@@ -214,14 +246,21 @@ class MemoryEntry:
             valid_from=_optional_str(data, "valid_from"),
             valid_until=_optional_str(data, "valid_until"),
             temporal_note=_optional_str(data, "temporal_note") or "",
-            supersedes=_optional_str_list(data, "supersedes"),
-            related_memory_ids=_optional_str_list(data, "related_memory_ids"),
+            relations=_migrate_legacy_relations(data),
             evidence=_optional_evidence_list(data, "evidence"),
         )
 
     @classmethod
     def from_memory_object(cls, memory: "MemoryObject") -> "MemoryEntry":
         payload = memory.payload
+        relations = _optional_mapping_relations_dict(payload, "relations")
+        if not relations:
+            supersedes = _optional_mapping_str_list(payload, "supersedes")
+            related = _optional_mapping_str_list(payload, "related_memory_ids")
+            if supersedes:
+                relations["supersedes"] = supersedes
+            if related:
+                relations["related_to"] = related
         return cls(
             id=memory.id,
             type=_memory_object_type_as_entry_type(memory.type),
@@ -239,8 +278,7 @@ class MemoryEntry:
             valid_from=_expect_mapping_optional_str(payload, "valid_from"),
             valid_until=_expect_mapping_optional_str(payload, "valid_until"),
             temporal_note=_optional_payload_str(payload, "temporal_note"),
-            supersedes=_optional_mapping_str_list(payload, "supersedes"),
-            related_memory_ids=_optional_mapping_str_list(payload, "related_memory_ids"),
+            relations=relations,
             evidence=_optional_mapping_evidence_list(payload, "evidence"),
         )
 
@@ -268,8 +306,7 @@ class MemoryCandidate:
     valid_from: str | None = None
     valid_until: str | None = None
     temporal_note: str = ""
-    supersedes: list[str] = field(default_factory=empty_str_list)
-    related_memory_ids: list[str] = field(default_factory=empty_str_list)
+    relations: dict[str, list[str]] = field(default_factory=empty_relations_dict)
     evidence: list[MemoryEvidence] = field(default_factory=empty_evidence_list)
 
     def with_updates(
@@ -306,8 +343,7 @@ class MemoryCandidate:
             valid_from=valid_from if valid_from is not None else self.valid_from,
             valid_until=valid_until if valid_until is not None else self.valid_until,
             temporal_note=temporal_note if temporal_note is not None else self.temporal_note,
-            supersedes=self.supersedes,
-            related_memory_ids=self.related_memory_ids,
+            relations=self.relations,
             evidence=self.evidence,
         )
 
@@ -327,8 +363,7 @@ class MemoryCandidate:
             valid_from=self.valid_from,
             valid_until=self.valid_until,
             temporal_note=self.temporal_note,
-            supersedes=self.supersedes,
-            related_memory_ids=self.related_memory_ids,
+            relations=self.relations,
             evidence=self.evidence,
         )
 
@@ -353,8 +388,9 @@ class MemoryCandidate:
             "valid_from": self.valid_from,
             "valid_until": self.valid_until,
             "temporal_note": self.temporal_note,
-            "supersedes": self.supersedes,
-            "related_memory_ids": self.related_memory_ids,
+            "relations": self.relations,
+            "supersedes": self.relations.get("supersedes", []),
+            "related_memory_ids": self.relations.get("related_to", []),
             "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
 
@@ -380,8 +416,7 @@ class MemoryCandidate:
             valid_from=_optional_str(data, "valid_from"),
             valid_until=_optional_str(data, "valid_until"),
             temporal_note=_optional_str(data, "temporal_note") or "",
-            supersedes=_optional_str_list(data, "supersedes"),
-            related_memory_ids=_optional_str_list(data, "related_memory_ids"),
+            relations=_migrate_legacy_relations(data),
             evidence=_optional_evidence_list(data, "evidence"),
         )
 
@@ -509,6 +544,7 @@ class RelationDescriptor:
 
     name: str
     description: str
+    source_field: str
     domain: tuple[str, ...] = ()
     range: tuple[str, ...] = ()
     symmetric: bool = False
@@ -541,6 +577,9 @@ class RelationDescriptorRegistry:
 
     def names(self) -> tuple[str, ...]:
         return tuple(sorted(self._descriptors))
+
+    def __iter__(self):
+        return iter(self._descriptors.values())
 
 
 @dataclass(frozen=True)
@@ -602,6 +641,7 @@ def default_relation_descriptor_registry() -> RelationDescriptorRegistry:
             RelationDescriptor(
                 name="supersedes",
                 description="The source memory replaces or revises the target memory.",
+                source_field="supersedes",
                 domain=memory_node_types,
                 range=memory_node_types,
                 inverse="superseded_by",
@@ -612,10 +652,55 @@ def default_relation_descriptor_registry() -> RelationDescriptorRegistry:
             RelationDescriptor(
                 name="related_to",
                 description="The source memory is intentionally linked to the target memory.",
+                source_field="related_to",
                 domain=memory_node_types,
                 range=memory_node_types,
                 symmetric=True,
                 inverse="related_to",
+                temporal_policy="independent",
+                confidence_policy="inherits_source",
+                retrieval_rule="include_direct_neighbors",
+            ),
+            RelationDescriptor(
+                name="supports",
+                description="The source memory provides evidence or backing for the target memory.",
+                source_field="supports",
+                domain=memory_node_types,
+                range=memory_node_types,
+                inverse="supported_by",
+                temporal_policy="independent",
+                confidence_policy="inherits_source",
+                retrieval_rule="include_direct_neighbors",
+            ),
+            RelationDescriptor(
+                name="contradicts",
+                description="The source memory opposes or conflicts with the target memory.",
+                source_field="contradicts",
+                domain=memory_node_types,
+                range=memory_node_types,
+                inverse="contradicted_by",
+                temporal_policy="independent",
+                confidence_policy="inherits_source",
+                retrieval_rule="include_direct_neighbors",
+            ),
+            RelationDescriptor(
+                name="refines",
+                description="The source memory improves, clarifies, or narrows the target memory.",
+                source_field="refines",
+                domain=memory_node_types,
+                range=memory_node_types,
+                inverse="refined_by",
+                temporal_policy="source_validity_refines_target",
+                confidence_policy="inherits_source",
+                retrieval_rule="include_direct_neighbors",
+            ),
+            RelationDescriptor(
+                name="depends_on",
+                description="The source memory requires or depends on the target memory.",
+                source_field="depends_on",
+                domain=memory_node_types,
+                range=memory_node_types,
+                inverse="required_by",
                 temporal_policy="independent",
                 confidence_policy="inherits_source",
                 retrieval_rule="include_direct_neighbors",
@@ -777,6 +862,13 @@ def _validate_entry_payload(payload: Mapping[str, object]) -> list[MemoryValidat
         value = payload.get(field_name)
         if value is not None and not isinstance(value, str):
             issues.append(MemoryValidationIssue(f"payload.{field_name}", "must be a string or null"))
+    relations = payload.get("relations", {})
+    if not isinstance(relations, dict):
+        issues.append(MemoryValidationIssue("payload.relations", "must be an object"))
+    else:
+        for key, value in cast(dict[str, object], relations).items():
+            if not isinstance(value, list) or any(not isinstance(item, str) for item in cast(list[object], value)):
+                issues.append(MemoryValidationIssue(f"payload.relations.{key}", "must be a list of strings"))
     for field_name in ["supersedes", "related_memory_ids"]:
         value = payload.get(field_name, [])
         if not isinstance(value, list) or any(not isinstance(item, str) for item in cast(list[object], value)):
@@ -854,6 +946,42 @@ def _optional_mapping_evidence_list(data: Mapping[str, object], field_name: str)
         if not isinstance(item, dict):
             raise ValueError(f"field '{field_name}' must contain only objects")
         result.append(MemoryEvidence.from_wire(cast(dict[str, object], item)))
+    return result
+
+
+def _optional_relations_dict(data: dict[str, object], field_name: str) -> dict[str, list[str]]:
+    value = data.get(field_name)
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"field '{field_name}' must be an object or null")
+    result: dict[str, list[str]] = {}
+    for k, v in cast(dict[str, object], value).items():
+        if not isinstance(v, list):
+            raise ValueError(f"field '{field_name}.{k}' must be a list")
+        result[k] = []
+        for item in cast(list[object], v):
+            if not isinstance(item, str):
+                raise ValueError(f"field '{field_name}.{k}' must contain only strings")
+            result[k].append(item)
+    return result
+
+
+def _optional_mapping_relations_dict(data: Mapping[str, object], field_name: str) -> dict[str, list[str]]:
+    value = data.get(field_name)
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"field '{field_name}' must be an object or null")
+    result: dict[str, list[str]] = {}
+    for k, v in cast(dict[str, object], value).items():
+        if not isinstance(v, list):
+            raise ValueError(f"field '{field_name}.{k}' must be a list")
+        result[k] = []
+        for item in cast(list[object], v):
+            if not isinstance(item, str):
+                raise ValueError(f"field '{field_name}.{k}' must contain only strings")
+            result[k].append(item)
     return result
 
 

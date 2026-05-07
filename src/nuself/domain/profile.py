@@ -6,14 +6,17 @@ from dataclasses import dataclass, field
 from typing import cast
 from uuid import NAMESPACE_URL, uuid5
 
-from nuself.domain.memory import MemoryCandidate, MemoryEvidence, PrivacyLevel, now_iso
+from nuself.domain.memory import (
+    MemoryCandidate,
+    MemoryEvidence,
+    PrivacyLevel,
+    empty_evidence_list,
+    empty_relations_dict,
+    now_iso,
+)
 
 
 def empty_str_list() -> list[str]:
-    return []
-
-
-def empty_evidence_list() -> list[MemoryEvidence]:
     return []
 
 
@@ -41,8 +44,7 @@ class ProfileItem:
     valid_from: str | None = None
     valid_until: str | None = None
     temporal_note: str = ""
-    supersedes: list[str] = field(default_factory=empty_str_list)
-    related_memory_ids: list[str] = field(default_factory=empty_str_list)
+    relations: dict[str, list[str]] = field(default_factory=empty_relations_dict)
     evidence: list[MemoryEvidence] = field(default_factory=empty_evidence_list)
 
     def with_updates(
@@ -72,8 +74,7 @@ class ProfileItem:
             valid_from=valid_from if valid_from is not None else self.valid_from,
             valid_until=valid_until if valid_until is not None else self.valid_until,
             temporal_note=temporal_note if temporal_note is not None else self.temporal_note,
-            supersedes=self.supersedes,
-            related_memory_ids=self.related_memory_ids,
+            relations=self.relations,
             evidence=self.evidence,
         )
 
@@ -93,13 +94,22 @@ class ProfileItem:
             "valid_from": self.valid_from,
             "valid_until": self.valid_until,
             "temporal_note": self.temporal_note,
-            "supersedes": self.supersedes,
-            "related_memory_ids": self.related_memory_ids,
+            "relations": self.relations,
+            "supersedes": self.relations.get("supersedes", []),
+            "related_memory_ids": self.relations.get("related_to", []),
             "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> "ProfileItem":
+        relations = _optional_relations_dict(data, "relations")
+        if not relations:
+            supersedes = _optional_str_list(data, "supersedes")
+            related = _optional_str_list(data, "related_memory_ids")
+            if supersedes:
+                relations["supersedes"] = supersedes
+            if related:
+                relations["related_to"] = related
         return cls(
             id=_expect_str(data, "id"),
             type=_expect_str(data, "type"),
@@ -115,8 +125,7 @@ class ProfileItem:
             valid_from=_optional_str(data, "valid_from"),
             valid_until=_optional_str(data, "valid_until"),
             temporal_note=_optional_str(data, "temporal_note") or "",
-            supersedes=_optional_str_list(data, "supersedes"),
-            related_memory_ids=_optional_str_list(data, "related_memory_ids"),
+            relations=relations,
             evidence=_optional_evidence_list(data, "evidence"),
         )
 
@@ -135,8 +144,7 @@ class ProfileItem:
             valid_from=candidate.valid_from,
             valid_until=candidate.valid_until,
             temporal_note=candidate.temporal_note,
-            supersedes=candidate.supersedes,
-            related_memory_ids=candidate.related_memory_ids,
+            relations=candidate.relations,
             evidence=candidate.evidence,
         )
 
@@ -194,6 +202,24 @@ def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
         if not isinstance(item, str):
             raise ValueError(f"field '{field_name}' must contain only strings")
         result.append(item)
+    return result
+
+
+def _optional_relations_dict(data: dict[str, object], field_name: str) -> dict[str, list[str]]:
+    value = data.get(field_name)
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"field '{field_name}' must be an object or null")
+    result: dict[str, list[str]] = {}
+    for k, v in cast(dict[str, object], value).items():
+        if not isinstance(v, list):
+            raise ValueError(f"field '{field_name}.{k}' must be a list")
+        result[k] = []
+        for item in cast(list[object], v):
+            if not isinstance(item, str):
+                raise ValueError(f"field '{field_name}.{k}' must contain only strings")
+            result[k].append(item)
     return result
 
 

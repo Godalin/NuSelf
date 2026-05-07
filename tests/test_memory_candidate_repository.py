@@ -86,7 +86,7 @@ def test_memory_candidate_repository_merges_into_existing_entry(tmp_path: Path) 
             source_refs=["thread:default:4-6"],
             evidence=[MemoryEvidence(source_type="thread", source_ref="thread:default:4-6", summary="Follow-up")],
             observed_at="2026-05-07",
-            related_memory_ids=[existing.id],
+            relations={"related_to": [existing.id]},
         )
     )
 
@@ -97,7 +97,7 @@ def test_memory_candidate_repository_merges_into_existing_entry(tmp_path: Path) 
     assert merged.source_refs == ["thread:default:0-2", "thread:default:4-6"]
     assert merged.evidence[0].summary == "Follow-up"
     assert merged.observed_at == "2026-05-07"
-    assert merged.related_memory_ids == [existing.id]
+    assert merged.relations.get("related_to") == [existing.id]
     assert candidate_repo.get(candidate.id).review_state == "accepted"
 
 

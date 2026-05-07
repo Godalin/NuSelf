@@ -283,8 +283,7 @@ class MemoryCurator:
             valid_from=existing.valid_from,
             valid_until=existing.valid_until,
             temporal_note=existing.temporal_note,
-            supersedes=existing.supersedes,
-            related_memory_ids=existing.related_memory_ids,
+            relations=existing.relations,
         )
         self._candidate_repository.save(candidate)
         self._append_log(f"updated candidate={candidate.id} target={existing.id} title={candidate.title!r}")

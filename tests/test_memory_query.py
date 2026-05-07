@@ -224,7 +224,7 @@ def test_memory_query_expands_related_entries(tmp_path: Path) -> None:
             title="Current memory goal",
             body="Improve retrieval before graph migration.",
             tags=["memory"],
-            related_memory_ids=[related.id],
+            relations={"related_to": [related.id]},
             review_state="reviewed",
         )
     )
@@ -233,7 +233,7 @@ def test_memory_query_expands_related_entries(tmp_path: Path) -> None:
     matches = service.search(MemoryQuery(text="current goal", limit=4))
 
     assert [match.entry.id for match in matches] == [direct.id, related.id]
-    assert matches[1].reasons == (f"related:{direct.id}",)
+    assert matches[1].reasons == (f"related_to:{direct.id}",)
 
 
 def test_memory_query_expands_superseded_by_entries(tmp_path: Path) -> None:
@@ -253,7 +253,7 @@ def test_memory_query_expands_superseded_by_entries(tmp_path: Path) -> None:
             title="Open typed memory model",
             body="Memory types are descriptor-backed and open.",
             tags=["memory"],
-            supersedes=[old.id],
+            relations={"supersedes": [old.id]},
             review_state="reviewed",
         )
     )

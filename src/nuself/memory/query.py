@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-from nuself.domain.memory import MemoryEntry, ReviewState
+from nuself.domain.memory import MemoryEntry, RelationDescriptorRegistry, ReviewState
 from nuself.domain.profile import ProfileItem
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceChunkMatch, SourceRepository
@@ -62,10 +62,12 @@ class MemoryQueryService:
         repository: MemoryEntryRepository,
         source_repository: SourceRepository | None = None,
         profile_repository: ProfileItemRepository | None = None,
+        relation_registry: RelationDescriptorRegistry | None = None,
     ) -> None:
         self._repository = repository
         self._source_repository = source_repository
         self._profile_repository = profile_repository
+        self._relation_registry = relation_registry or repository.relation_registry
 
     def search(self, query: MemoryQuery) -> list[MemoryMatch]:
         tokens = _query_tokens(query.text)
@@ -81,7 +83,7 @@ class MemoryQueryService:
             match = _score_entry(entry, query.text, tokens)
             if match is not None:
                 matches.append(match)
-        return _expand_related_matches(matches, eligible_entries, query.limit)
+        return _expand_related_matches(matches, eligible_entries, query.limit, self._relation_registry)
 
     def search_sources(self, query: MemoryQuery) -> list[SourceChunkMatch]:
         if self._source_repository is None:
@@ -205,6 +207,7 @@ def _expand_related_matches(
     matches: list[MemoryMatch],
     eligible_entries: list[MemoryEntry],
     limit: int,
+    registry: RelationDescriptorRegistry,
 ) -> list[MemoryMatch]:
     direct_matches = sorted(matches, key=_memory_match_sort_key)
     if len(direct_matches) >= limit:
@@ -215,9 +218,9 @@ def _expand_related_matches(
     related_matches: dict[str, MemoryMatch] = {}
 
     for match in direct_matches:
-        for relation, entry_id in _outgoing_relation_refs(match.entry):
+        for relation, entry_id in _outgoing_relation_refs(match.entry, registry):
             _add_related_match(related_matches, by_id, direct_ids, match, entry_id, relation)
-        for relation, entry in _incoming_relation_refs(match.entry, eligible_entries):
+        for relation, entry in _incoming_relation_refs(match.entry, eligible_entries, registry):
             _add_related_match(related_matches, by_id, direct_ids, match, entry.id, relation)
 
     related_sorted = sorted(related_matches.values(), key=_memory_match_sort_key)
@@ -228,22 +231,24 @@ def _memory_match_sort_key(match: MemoryMatch) -> tuple[float, str, str]:
     return (-match.score, match.entry.updated_at, match.entry.id)
 
 
-def _outgoing_relation_refs(entry: MemoryEntry) -> list[tuple[str, str]]:
+def _outgoing_relation_refs(entry: MemoryEntry, registry: RelationDescriptorRegistry) -> list[tuple[str, str]]:
     refs: list[tuple[str, str]] = []
-    refs.extend(("supersedes", entry_id) for entry_id in entry.supersedes)
-    refs.extend(("related", entry_id) for entry_id in entry.related_memory_ids)
+    for descriptor in registry:
+        for target_id in entry.relations.get(descriptor.source_field, []):
+            refs.append((descriptor.name, target_id))
     return refs
 
 
-def _incoming_relation_refs(entry: MemoryEntry, entries: list[MemoryEntry]) -> list[tuple[str, MemoryEntry]]:
+def _incoming_relation_refs(
+    entry: MemoryEntry, entries: list[MemoryEntry], registry: RelationDescriptorRegistry
+) -> list[tuple[str, MemoryEntry]]:
     refs: list[tuple[str, MemoryEntry]] = []
     for candidate in entries:
         if candidate.id == entry.id:
             continue
-        if entry.id in candidate.supersedes:
-            refs.append(("superseded_by", candidate))
-        if entry.id in candidate.related_memory_ids:
-            refs.append(("related_by", candidate))
+        for descriptor in registry:
+            if entry.id in candidate.relations.get(descriptor.source_field, []):
+                refs.append((descriptor.inverse or descriptor.name, candidate))
     return refs
 
 
@@ -316,10 +321,9 @@ def _type_affinity_score(memory_type: str, query: str, tokens: tuple[str, ...]) 
 
 def _relation_context(entry: MemoryEntry) -> str:
     parts: list[str] = []
-    if entry.supersedes:
-        parts.append(f"supersedes:{','.join(entry.supersedes)}")
-    if entry.related_memory_ids:
-        parts.append(f"related:{','.join(entry.related_memory_ids)}")
+    for relation_name, target_ids in entry.relations.items():
+        if target_ids:
+            parts.append(f"{relation_name}:{','.join(target_ids)}")
     return ";".join(parts)
 
 

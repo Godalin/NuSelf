@@ -18,6 +18,7 @@ from nuself.domain.memory import (
     RelationDescriptorRegistry,
     default_memory_type_registry,
     default_relation_descriptor_registry,
+    merge_relations,
     now_iso,
 )
 from nuself.domain.profile import ProfileItem
@@ -93,6 +94,8 @@ class SymbolicGraphNode:
     kind: str
     type: str
     label: str
+    body: str
+    tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -122,6 +125,14 @@ class SymbolicGraphEdgeFilters:
     target_id: str | None = None
 
 
+@dataclass(frozen=True)
+class SymbolicGraphSearchResult:
+    """Text-matched graph nodes plus their one-hop edges."""
+
+    nodes: tuple[SymbolicGraphNode, ...]
+    edges: tuple[SymbolicGraphEdge, ...]
+
+
 class MemoryEntryNotFound(KeyError):
     """Raised when a memory entry does not exist."""
 
@@ -148,6 +159,10 @@ class MemoryEntryRepository:
     @property
     def entries_dir(self) -> Path:
         return self._entries_dir
+
+    @property
+    def relation_registry(self) -> RelationDescriptorRegistry:
+        return self._relation_registry
 
     def ensure(self) -> None:
         self._entries_dir.mkdir(parents=True, exist_ok=True)
@@ -255,6 +270,34 @@ class MemoryEntryRepository:
             for item in _expect_object_list(graph, "edges")
         ]
         return [edge for edge in edges if _matches_graph_edge_filters(edge, filters)]
+
+    def search_graph(
+        self,
+        query: str,
+        *,
+        node_type: str | None = None,
+        limit: int = 8,
+    ) -> SymbolicGraphSearchResult:
+        graph = self._read_symbolic_graph()
+        nodes = [
+            _symbolic_node_from_wire(item)
+            for item in _expect_object_list(graph, "nodes")
+        ]
+        edges = [
+            _symbolic_edge_from_wire(item)
+            for item in _expect_object_list(graph, "edges")
+        ]
+        matched_nodes = [
+            node
+            for node in nodes
+            if _matches_graph_node_filters(node, SymbolicGraphNodeFilters(type=node_type))
+            and _matches_graph_text(node, query)
+        ][:limit]
+        matched_ids = {node.id for node in matched_nodes}
+        matched_edges = [
+            edge for edge in edges if edge.source in matched_ids or edge.target in matched_ids
+        ]
+        return SymbolicGraphSearchResult(nodes=tuple(matched_nodes), edges=tuple(matched_edges))
 
     @property
     def symbolic_graph_path(self) -> Path:
@@ -426,8 +469,7 @@ class MemoryCandidateRepository:
             valid_from=candidate.valid_from or existing.valid_from,
             valid_until=candidate.valid_until or existing.valid_until,
             temporal_note=candidate.temporal_note or existing.temporal_note,
-            supersedes=[*existing.supersedes, *candidate.supersedes],
-            related_memory_ids=[*existing.related_memory_ids, *candidate.related_memory_ids],
+            relations=merge_relations(existing.relations, candidate.relations),
             evidence=[*existing.evidence, *candidate.evidence],
         )
         self._entry_repository.save(merged)
@@ -511,12 +553,9 @@ def _relation_index_records(
     registry: RelationDescriptorRegistry,
 ) -> list[dict[str, object]]:
     records: list[dict[str, object]] = []
-    supersedes = registry.require("supersedes")
-    related_to = registry.require("related_to")
-    for target_id in entry.supersedes:
-        records.append(_relation_index_record(entry, target_id, supersedes, by_id))
-    for target_id in entry.related_memory_ids:
-        records.append(_relation_index_record(entry, target_id, related_to, by_id))
+    for descriptor in registry:
+        for target_id in entry.relations.get(descriptor.source_field, []):
+            records.append(_relation_index_record(entry, target_id, descriptor, by_id))
     return records
 
 
@@ -612,11 +651,14 @@ def _relation_record_from_wire(data: dict[str, object]) -> MemoryRelationIndexRe
 
 
 def _symbolic_node_from_wire(data: dict[str, object]) -> SymbolicGraphNode:
+    payload = _expect_dict(data, "payload")
     return SymbolicGraphNode(
         id=_expect_str(data, "id"),
         kind=_expect_str(data, "kind"),
         type=_expect_str(data, "type"),
         label=_expect_str(data, "label"),
+        body=_optional_str(payload, "body") or "",
+        tags=tuple(_optional_str_list(payload, "tags")),
     )
 
 
@@ -639,6 +681,17 @@ def _matches_graph_node_filters(
     if filters.type is not None and node.type != filters.type:
         return False
     return True
+
+
+def _matches_graph_text(node: SymbolicGraphNode, query: str) -> bool:
+    normalized = query.casefold().strip()
+    if normalized == "":
+        return True
+    return (
+        normalized in node.label.casefold()
+        or normalized in node.body.casefold()
+        or any(normalized in tag.casefold() for tag in node.tags)
+    )
 
 
 def _matches_graph_edge_filters(
@@ -666,6 +719,13 @@ def _expect_object_list(data: dict[str, object], field_name: str) -> list[dict[s
             raise ValueError(f"field '{field_name}' must contain only objects")
         result.append(cast(dict[str, object], item))
     return result
+
+
+def _expect_dict(data: dict[str, object], field_name: str) -> dict[str, object]:
+    value = data.get(field_name)
+    if not isinstance(value, dict):
+        raise ValueError(f"field '{field_name}' must be an object")
+    return cast(dict[str, object], value)
 
 
 def _matches_relation_filters(
@@ -697,6 +757,20 @@ def _optional_str(data: dict[str, object], field_name: str) -> str | None:
     if not isinstance(value, str):
         raise ValueError(f"field '{field_name}' must be a string or null")
     return value
+
+
+def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
+    value = data.get(field_name)
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"field '{field_name}' must be a list or null")
+    result: list[str] = []
+    for item in cast(list[object], value):
+        if not isinstance(item, str):
+            raise ValueError(f"field '{field_name}' must contain only strings")
+        result.append(item)
+    return result
 
 
 def _expect_bool(data: dict[str, object], field_name: str) -> bool:

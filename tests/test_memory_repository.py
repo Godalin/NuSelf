@@ -64,8 +64,7 @@ def test_memory_repository_reindex_writes_relation_index(tmp_path: Path) -> None
             title="Open descriptors",
             body="Memory types are descriptor-backed.",
             review_state="reviewed",
-            supersedes=[old.id],
-            related_memory_ids=[related.id],
+            relations={"supersedes": [old.id], "related_to": [related.id]},
         )
     )
 
@@ -141,7 +140,7 @@ def test_memory_repository_reindex_writes_symbolic_graph(tmp_path: Path) -> None
             body="Memory entries can become graph nodes.",
             tags=["graph"],
             review_state="reviewed",
-            related_memory_ids=[target.id],
+            relations={"related_to": [target.id]},
         )
     )
 
@@ -178,10 +177,13 @@ def test_memory_repository_reindex_writes_symbolic_graph(tmp_path: Path) -> None
 
     belief_nodes = repo.list_graph_nodes()
     related_edges = repo.list_graph_edges()
+    search_result = repo.search_graph("rebuildable")
 
     assert {node.id for node in belief_nodes} == {source.id, target.id}
     assert related_edges[0].id == f"{source.id}:related_to:{target.id}"
     assert related_edges[0].relation == "related_to"
+    assert [node.id for node in search_result.nodes] == [target.id]
+    assert [edge.id for edge in search_result.edges] == [f"{source.id}:related_to:{target.id}"]
 
 
 def test_default_relation_descriptor_registry_exposes_built_ins() -> None:
@@ -189,7 +191,7 @@ def test_default_relation_descriptor_registry_exposes_built_ins() -> None:
     supersedes = registry.require("supersedes")
     related_to = registry.require("related_to")
 
-    assert registry.names() == ("related_to", "supersedes")
+    assert registry.names() == ("contradicts", "depends_on", "refines", "related_to", "supersedes", "supports")
     assert supersedes.inverse == "superseded_by"
     assert supersedes.retrieval_rule == "include_both_current_and_superseded"
     assert related_to.symmetric is True

@@ -15,7 +15,14 @@ except ImportError:  # pragma: no cover - platform fallback
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.agent.chat import ChatAgent
 from nuself.daemon import client, lifecycle
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, PrivacyLevel
+from nuself.domain.memory import (
+    MemoryCandidate,
+    MemoryEntry,
+    MemoryEntryType,
+    MemoryEvidence,
+    PrivacyLevel,
+    default_relation_descriptor_registry,
+)
 from nuself.domain.source import SourceChunk, SourceDocument
 from nuself.domain.profile import ProfileItem
 from nuself.memory.curator import MemoryCurator
@@ -118,7 +125,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(search_parser, handle_memory_search)
     _add_handler(memory_subparsers.add_parser("stats"), handle_memory_stats)
     relations_parser = memory_subparsers.add_parser("relations")
-    relations_parser.add_argument("--relation", choices=["supersedes", "related_to"], default=None)
+    _relation_names = default_relation_descriptor_registry().names()
+    relations_parser.add_argument("--relation", choices=_relation_names, default=None)
     relations_parser.add_argument("--source-id", default=None)
     relations_parser.add_argument("--target-id", default=None)
     _add_handler(relations_parser, handle_memory_relations)
@@ -129,10 +137,15 @@ def build_parser() -> argparse.ArgumentParser:
     graph_nodes_parser.add_argument("--type", default=None)
     _add_handler(graph_nodes_parser, handle_memory_graph_nodes)
     graph_edges_parser = graph_subparsers.add_parser("edges")
-    graph_edges_parser.add_argument("--relation", choices=["supersedes", "related_to"], default=None)
+    graph_edges_parser.add_argument("--relation", choices=_relation_names, default=None)
     graph_edges_parser.add_argument("--source-id", default=None)
     graph_edges_parser.add_argument("--target-id", default=None)
     _add_handler(graph_edges_parser, handle_memory_graph_edges)
+    graph_search_parser = graph_subparsers.add_parser("search")
+    graph_search_parser.add_argument("query")
+    graph_search_parser.add_argument("--type", default=None)
+    graph_search_parser.add_argument("--limit", type=int, default=8)
+    _add_handler(graph_search_parser, handle_memory_graph_search)
     _add_handler(memory_subparsers.add_parser("update"), handle_memory_update)
     optimize_parser = memory_subparsers.add_parser("optimize")
     optimize_parser.add_argument("--limit", type=int, default=50)
@@ -436,6 +449,25 @@ def handle_memory_graph_edges(args: argparse.Namespace) -> int:
         return 0
     for edge in edges:
         print(_format_symbolic_graph_edge(edge))
+    return 0
+
+
+def handle_memory_graph_search(args: argparse.Namespace) -> int:
+    result = MemoryEntryRepository(args.project_root).search_graph(
+        args.query,
+        node_type=args.type,
+        limit=args.limit,
+    )
+    if not result.nodes:
+        print("No symbolic graph matches.")
+        return 0
+    print("Nodes:")
+    for node in result.nodes:
+        print(_format_symbolic_graph_node(node))
+    if result.edges:
+        print("Edges:")
+        for edge in result.edges:
+            print(_format_symbolic_graph_edge(edge))
     return 0
 
 

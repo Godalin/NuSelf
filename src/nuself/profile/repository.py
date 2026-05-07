@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import cast
 
 from nuself.config import runtime_paths
-from nuself.domain.memory import MemoryCandidate, now_iso
+from nuself.domain.memory import MemoryCandidate, merge_relations, now_iso
 from nuself.domain.profile import ProfileItem
 
 
@@ -99,8 +99,7 @@ class ProfileItemRepository:
             valid_from=candidate.valid_from or existing.valid_from,
             valid_until=candidate.valid_until or existing.valid_until,
             temporal_note=candidate.temporal_note or existing.temporal_note,
-            supersedes=[*existing.supersedes, *candidate.supersedes],
-            related_memory_ids=[*existing.related_memory_ids, *candidate.related_memory_ids],
+            relations=merge_relations(existing.relations, candidate.relations),
             evidence=[*existing.evidence, *candidate.evidence],
         )
         self.save(merged)
