@@ -22,10 +22,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Current Goal
 
-- [ ] Add built-in goal and concept memory descriptors.
-- [ ] Add `goal` and `concept` memory types.
-- [ ] Keep `memory add`, curator, optimizer, and intake parser paths aligned.
-- [ ] Cover descriptor and CLI behavior with tests.
+- [ ] Add local source ingestion for Markdown and plain text.
+- [ ] Add source document records under ignored `private/sources/`.
+- [ ] Preserve source metadata and stable source references.
+- [ ] Add chunking and a CLI ingest command.
 
 ### Project Foundation
 
@@ -68,7 +68,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add source-linked evidence records for memory entries.
 - [x] Add open `MemoryObject + MemoryTypeDescriptor` registry for typed memory behavior.
 - [x] Add built-in descriptors for preference, belief, episode, and instruction memory.
-- [ ] Add built-in descriptors for goal and concept memory.
+- [x] Add built-in descriptors for goal and concept memory.
 - [ ] Add derived vector, hybrid, and graph indexes.
 - [ ] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, preference, dependency, and future relations.
 - [x] Add memory stats and richer query commands.

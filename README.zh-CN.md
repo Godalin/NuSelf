@@ -22,10 +22,10 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 
 ### 当前目标
 
-- [ ] 添加 goal 和 concept memory 的内置 descriptors。
-- [ ] 添加 `goal` 和 `concept` memory types。
-- [ ] 保持 `memory add`、curator、optimizer 和 intake parser 路径同步。
-- [ ] 用测试覆盖 descriptor 和 CLI 行为。
+- [ ] 添加 Markdown 和纯文本本地 source ingestion。
+- [ ] 在 ignored `private/sources/` 下添加 source document records。
+- [ ] 保留 source metadata 和稳定 source references。
+- [ ] 添加 chunking 和 CLI ingest 命令。
 
 ### 项目基础
 
@@ -68,7 +68,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 为 memory entries 添加 source-linked evidence records。
 - [x] 添加开放的 `MemoryObject + MemoryTypeDescriptor` registry，用于 typed memory 行为。
 - [x] 添加 preference、belief、episode 和 instruction memory 的内置 descriptors。
-- [ ] 添加 goal 和 concept memory 的内置 descriptors。
+- [x] 添加 goal 和 concept memory 的内置 descriptors。
 - [ ] 添加派生向量、hybrid 和 graph 索引。
 - [ ] 添加开放 symbolic graph，并用 `RelationDescriptor` 描述支持、矛盾、细化、偏好、依赖和未来关系。
 - [x] 添加 memory stats 和更丰富的 query 命令。

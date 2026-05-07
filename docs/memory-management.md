@@ -511,6 +511,7 @@ Phase 1: File-backed authoritative memory.
 - Route curator and optimizer proposals into the candidate queue before durable persistence.
 - Attach structured evidence records to candidates and accepted entries while preserving legacy `source_refs`.
 - Add compact stats and deterministic filtered query commands before derived indexes.
+- Add built-in goal and concept descriptors before source ingestion.
 - Add `private/memory/episodes/*.json`.
 - Keep `private/derived/` rebuildable.
 

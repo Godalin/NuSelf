@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Add built-in goal and concept memory descriptors.
+Add local source ingestion for Markdown and plain text.
 
 ## Status
 
@@ -26,14 +26,16 @@ Recently completed foundation slice:
 - Memory and candidate detail commands now show evidence records.
 - `memory stats` now reports type, review, candidate, evidence, and temporal coverage.
 - `memory search` now supports deterministic filters for type, tag, review state, observed time, and valid time.
+- Built-in `goal` and `concept` memory types now validate through the descriptor registry.
+- `memory add`, curator, optimizer, and intake parser paths now recognize `goal` and `concept`.
 
 ## Scope
 
-- Add `goal` and `concept` memory types.
-- Add descriptor validation and summaries for `goal` and `concept`.
-- Keep existing `MemoryEntry` CLI workflows usable with the new types.
-- Update curator, optimizer, and intake type parsing to recognize the new types.
-- Cover descriptor and CLI behavior with tests.
+- Add file-backed source document records under ignored `private/sources/`.
+- Add Markdown and plain text loaders.
+- Preserve source metadata: title, path, date, tags, origin, and privacy.
+- Add chunking that keeps stable source references.
+- Add a CLI command to ingest a local file or directory into the development store.
 
 ## Not Now
 
@@ -46,12 +48,12 @@ Recently completed foundation slice:
 - Full automatic conflict resolution.
 - Derived vector or graph indexes.
 - Automatic citation synthesis from imported source documents.
-- Local source ingestion.
 - Symbolic graph implementation.
+- Derived vector or graph indexes over ingested sources.
 
 ## Completion Criteria
 
-- `goal` and `concept` memory entries validate through the descriptor registry.
-- `memory add --type goal` and `memory add --type concept` work.
-- Curator/optimizer/intake parser paths accept the new types.
-- README TODOs and planning docs reflect the completed descriptor slice before moving to the next goal.
+- Source document and chunk models serialize round-trip.
+- Markdown and plain text ingestion are covered by tests.
+- Ingested chunks preserve source references.
+- README TODOs and planning docs reflect the completed ingestion slice before moving to the next goal.
