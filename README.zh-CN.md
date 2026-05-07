@@ -86,7 +86,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 为 `transitive=True` 的关系描述符添加传递闭包遍历。
 - [x] 添加特定记忆节点之间的路径查找命令。
 - [x] 将传递闭包接入 `MemoryQueryService` 的自动上下文扩展。
-- [ ] 将临时运行时替换为 LangGraph 对话图。
+- [x] 将临时运行时替换为 LangGraph 对话图。
 - [x] 添加 memory stats 和更丰富的 query 命令。
 
 ### 导入与知识库
@@ -107,7 +107,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 未配置 API key 时保持确定性的 fallback 行为。
 - [x] 添加用于 LangGraph 迁移的最小 conversation runtime boundary。
 - [x] 添加 typed conversation runtime state 和 node contracts。
-- [ ] 用 LangGraph conversation graph 替换临时 runtime。
+- [x] 用 LangGraph conversation graph 替换临时 runtime。
 - [x] 添加结构化 response schema：answer text、evidence references、confidence、epistemic status。
 - [x] 添加 personal claims 的 unsupported-claim guard。
 - [x] 为 conversation agent 添加 tool-based memory search。

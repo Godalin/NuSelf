@@ -86,7 +86,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add transitive-closure traversal for `transitive=True` relation descriptors.
 - [x] Add path-finding commands between specific memory nodes.
 - [x] Wire transitive-closure into `MemoryQueryService` automatic context expansion.
-- [ ] Replace the temporary runtime with a LangGraph conversation graph.
+- [x] Replace the temporary runtime with a LangGraph conversation graph.
 - [x] Add memory stats and richer query commands.
 
 ### Ingestion And Knowledge Store
@@ -107,7 +107,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Keep deterministic fallback behavior when no API key is configured.
 - [x] Add minimal conversation runtime boundary for the LangGraph migration.
 - [x] Add typed conversation runtime state and node contracts.
-- [ ] Replace the temporary runtime with a LangGraph conversation graph.
+- [x] Replace the temporary runtime with a LangGraph conversation graph.
 - [x] Add structured response schema with answer text, evidence references, confidence, and epistemic status.
 - [x] Add unsupported-claim guard for personal claims without evidence.
 - [x] Add tool-based memory search for the conversation agent.
