@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Add the memory candidate review queue.
+Add source-linked evidence records for memory.
 
 ## Status
 
@@ -19,14 +19,17 @@ Recently completed foundation slice:
 - Memory curation now uses discussion depth, quality, and durable signal instead of fixed turn-count gating.
 - Thread curation cursors now use absolute message indexes so compression does not skip later memory updates.
 - Manual `memory add` now infers type, title, tags, and confidence through a memory intake agent.
+- Memory candidates are now file-backed, inspectable, reviewable, and carry real-world temporal fields.
+- Candidate `accept`, `edit`, `merge`, and `reject` commands now exist and accepted memories pass through descriptor validation.
+- Curator and optimizer proposals now create inspectable candidates instead of directly mutating durable memory.
 
 ## Scope
 
-- Add file-backed candidate storage under ignored `private/`.
-- Add CLI commands for candidate `list`, `show`, `accept`, `edit`, `merge`, and `reject`.
-- Keep candidate records inspectable and review-state explicit.
-- Route accepted or edited candidates through `MemoryEntryRepository` so descriptor validation still gates durable memory writes.
-- Keep curator and optimizer direct writes working until they are migrated to propose candidates.
+- Add structured evidence records for memory entries and candidates.
+- Preserve thread ranges, source type, observed time, and short evidence summaries.
+- Keep legacy `source_refs` usable during migration.
+- Show evidence details in memory and candidate detail commands.
+- Keep evidence file-backed and inspectable.
 
 ## Not Now
 
@@ -36,11 +39,13 @@ Recently completed foundation slice:
 - Vector or graph indexes.
 - Proactive reflection and notification work.
 - Web or GUI interface work.
-- Replacing curator and optimizer direct writes with candidate-only workflows.
+- Full automatic conflict resolution.
+- Derived vector or graph indexes.
+- Automatic citation synthesis from imported source documents.
 
 ## Completion Criteria
 
-- Candidate repository CRUD is covered by tests.
-- CLI review commands are covered by tests.
-- Accept, edit, and merge operations validate through the typed memory repository.
-- README TODOs and planning docs reflect the completed review-queue slice before moving to the next goal.
+- Evidence record models and serialization are covered by tests.
+- Candidate accept/merge preserves structured evidence on durable entries.
+- CLI detail views show evidence records.
+- README TODOs and planning docs reflect the completed evidence slice before moving to the next goal.

@@ -22,10 +22,10 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 
 ### 当前目标
 
-- [ ] 添加 memory candidate review queue。
-- [ ] 添加 candidate `list`、`show`、`accept`、`edit`、`merge` 和 `reject` 命令。
-- [ ] 让 accepted 和 edited candidates 经过 descriptor validation。
-- [ ] 将 candidate records 以可检查格式保存在 ignored `private/` 下。
+- [ ] 为 memory 添加 source-linked evidence records。
+- [ ] 保留 thread ranges、source type、observed time 和短 evidence summaries。
+- [ ] 迁移期间保持 legacy `source_refs` 可用。
+- [ ] 在 memory 和 candidate detail 命令中显示 evidence details。
 
 ### 项目基础
 
@@ -62,7 +62,9 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加低频 Memory Optimizer Agent，用于批量清理、合并和删除重复长期记忆。
 - [x] 添加手动 `memory optimize`。
 - [x] 让手动 `memory add` 通过 memory intake agent 推断 type 和 title。
-- [ ] 添加 memory candidate review queue：list、show、accept、edit、merge、reject。
+- [x] 添加 memory candidate review queue：list、show、accept、edit、merge、reject。
+- [x] 为 entries 和 candidates 添加现实世界时间字段。
+- [x] 让 curator 和 optimizer 的 proposals 进入 memory candidate review queue。
 - [x] 添加开放的 `MemoryObject + MemoryTypeDescriptor` registry，用于 typed memory 行为。
 - [x] 添加 preference、belief、episode 和 instruction memory 的内置 descriptors。
 - [ ] 添加 goal 和 concept memory 的内置 descriptors。

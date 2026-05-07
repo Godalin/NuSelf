@@ -32,6 +32,8 @@ Development constraints for `src/nuself/`.
 - User-visible memory must stay inspectable as clear entries.
 - Chat is the primary source of new memory; manual memory commands are maintenance tools, not the main user workflow.
 - Memory curation must be based on discussion depth, quality, and durable signal, not a fixed number of chat turns.
+- Memory entries and candidates should preserve real-world temporal metadata so changes in thought remain visible over time.
+- Curator and optimizer proposals should enter the candidate review queue before becoming durable memory.
 - Manual `memory add` should infer the memory type through the intake agent by default; explicit type/title flags are only overrides for maintenance.
 - Changes to memory entry schema must update repository code and tests together.
 - Do not add new long-term memory categories as only closed `Literal` tags when the behavior is type-specific; prefer a descriptor/registry path aligned with root memory architecture docs.

@@ -22,10 +22,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Current Goal
 
-- [ ] Add memory candidate review queue.
-- [ ] Add candidate `list`, `show`, `accept`, `edit`, `merge`, and `reject` commands.
-- [ ] Keep accepted and edited candidates routed through descriptor validation.
-- [ ] Keep candidate records inspectable under ignored `private/`.
+- [ ] Add source-linked evidence records for memory.
+- [ ] Preserve thread ranges, source type, observed time, and short evidence summaries.
+- [ ] Keep legacy `source_refs` usable during migration.
+- [ ] Show evidence details in memory and candidate detail commands.
 
 ### Project Foundation
 
@@ -62,7 +62,9 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add low-frequency Memory Optimizer Agent for batch cleanup, merging, and deletion of duplicate long-term memories.
 - [x] Add manual `memory optimize`.
 - [x] Make manual `memory add` infer type and title through a memory intake agent.
-- [ ] Add memory candidate review queue: list, show, accept, edit, merge, reject.
+- [x] Add memory candidate review queue: list, show, accept, edit, merge, reject.
+- [x] Add real-world temporal fields to entries and candidates.
+- [x] Route curator and optimizer proposals through the memory candidate review queue.
 - [x] Add open `MemoryObject + MemoryTypeDescriptor` registry for typed memory behavior.
 - [x] Add built-in descriptors for preference, belief, episode, and instruction memory.
 - [ ] Add built-in descriptors for goal and concept memory.
