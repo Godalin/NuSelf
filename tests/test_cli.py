@@ -610,6 +610,59 @@ def test_memory_candidate_edit_merge_and_reject(tmp_path: Path, capsys: CaptureF
     assert candidate_repo.get(reject_candidate.id).review_state == "rejected"
 
 
+def test_memory_stats_and_filtered_search(tmp_path: Path, capsys: CaptureFixture) -> None:
+    MemoryEntryRepository(tmp_path).save(
+        MemoryEntry(
+            type="belief",
+            title="Temporal belief",
+            body="Memory should include time.",
+            tags=["memory"],
+            review_state="reviewed",
+            observed_at="2026-05-07",
+        )
+    )
+    MemoryEntryRepository(tmp_path).save(
+        MemoryEntry(
+            type="episode",
+            title="Unrelated episode",
+            body="Something else happened.",
+            tags=["event"],
+        )
+    )
+    MemoryCandidateRepository(tmp_path).save(
+        MemoryCandidate(type="belief", title="Pending belief", body="Candidate body.")
+    )
+
+    stats_result = main(["--project-root", str(tmp_path), "memory", "stats"])
+    stats_output = capsys.readouterr().out
+    search_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "search",
+            "time",
+            "--type",
+            "belief",
+            "--tag",
+            "memory",
+            "--review-state",
+            "reviewed",
+            "--observed-from",
+            "2026-05-01",
+        ]
+    )
+    search_output = capsys.readouterr().out
+
+    assert stats_result == 0
+    assert search_result == 0
+    assert "entries_total: 2" in stats_output
+    assert "pending_candidates: 1" in stats_output
+    assert "entries_by_type: belief=1, episode=1" in stats_output
+    assert "Temporal belief" in search_output
+    assert "Unrelated episode" not in search_output
+
+
 class _TextInput:
     def __init__(self, text: str) -> None:
         self._lines = text.splitlines(keepends=True)

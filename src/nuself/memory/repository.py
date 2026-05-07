@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 import json
 from pathlib import Path
 from typing import cast
@@ -15,6 +17,36 @@ from nuself.domain.memory import (
     default_memory_type_registry,
     now_iso,
 )
+
+
+def empty_str_counts() -> dict[str, int]:
+    return {}
+
+
+@dataclass(frozen=True)
+class MemorySearchFilters:
+    """Deterministic filters for entry search."""
+
+    type: str | None = None
+    tag: str | None = None
+    review_state: str | None = None
+    observed_from: str | None = None
+    observed_to: str | None = None
+    valid_on: str | None = None
+
+
+@dataclass(frozen=True)
+class MemoryStats:
+    """Compact summary of memory repository state."""
+
+    entries_total: int
+    candidates_total: int
+    entries_by_type: dict[str, int] = field(default_factory=empty_str_counts)
+    entries_by_review_state: dict[str, int] = field(default_factory=empty_str_counts)
+    candidates_by_review_state: dict[str, int] = field(default_factory=empty_str_counts)
+    entries_with_observed_at: int = 0
+    entries_with_evidence: int = 0
+    pending_candidates: int = 0
 
 
 class MemoryEntryNotFound(KeyError):
@@ -45,14 +77,12 @@ class MemoryEntryRepository:
         entries = [self._read_path(path) for path in sorted(self._entries_dir.glob("*.json"))]
         return sorted(entries, key=lambda entry: entry.updated_at, reverse=True)
 
-    def search(self, query: str) -> list[MemoryEntry]:
+    def search(self, query: str, filters: MemorySearchFilters | None = None) -> list[MemoryEntry]:
         normalized = query.casefold()
         return [
             entry
             for entry in self.list()
-            if normalized in entry.title.casefold()
-            or normalized in entry.body.casefold()
-            or any(normalized in tag.casefold() for tag in entry.tags)
+            if _matches_text(entry, normalized) and _matches_filters(entry, filters)
         ]
 
     def get(self, entry_id: str) -> MemoryEntry:
@@ -224,3 +254,58 @@ class MemoryCandidateRepository:
         if not isinstance(raw, dict):
             raise ValueError(f"memory candidate file must contain an object: {path}")
         return MemoryCandidate.from_wire(cast(dict[str, object], raw))
+
+
+def memory_stats(project_root: Path | None = None) -> MemoryStats:
+    """Return compact stats across durable entries and review candidates."""
+
+    entries = MemoryEntryRepository(project_root).list()
+    candidates = MemoryCandidateRepository(project_root).list(include_reviewed=True)
+    return MemoryStats(
+        entries_total=len(entries),
+        candidates_total=len(candidates),
+        entries_by_type=_counts(entry.type for entry in entries),
+        entries_by_review_state=_counts(entry.review_state for entry in entries),
+        candidates_by_review_state=_counts(candidate.review_state for candidate in candidates),
+        entries_with_observed_at=sum(1 for entry in entries if entry.observed_at is not None),
+        entries_with_evidence=sum(1 for entry in entries if entry.evidence),
+        pending_candidates=sum(1 for candidate in candidates if candidate.review_state == "pending"),
+    )
+
+
+def _matches_text(entry: MemoryEntry, normalized_query: str) -> bool:
+    if normalized_query == "":
+        return True
+    return (
+        normalized_query in entry.title.casefold()
+        or normalized_query in entry.body.casefold()
+        or any(normalized_query in tag.casefold() for tag in entry.tags)
+    )
+
+
+def _matches_filters(entry: MemoryEntry, filters: MemorySearchFilters | None) -> bool:
+    if filters is None:
+        return True
+    if filters.type is not None and entry.type != filters.type:
+        return False
+    if filters.tag is not None and filters.tag not in entry.tags:
+        return False
+    if filters.review_state is not None and entry.review_state != filters.review_state:
+        return False
+    if filters.observed_from is not None and (entry.observed_at is None or entry.observed_at < filters.observed_from):
+        return False
+    if filters.observed_to is not None and (entry.observed_at is None or entry.observed_at > filters.observed_to):
+        return False
+    if filters.valid_on is not None:
+        if entry.valid_from is not None and entry.valid_from > filters.valid_on:
+            return False
+        if entry.valid_until is not None and entry.valid_until < filters.valid_on:
+            return False
+    return True
+
+
+def _counts(values: Iterable[str]) -> dict[str, int]:
+    result: dict[str, int] = {}
+    for value in values:
+        result[value] = result.get(value, 0) + 1
+    return result

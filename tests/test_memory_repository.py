@@ -9,6 +9,7 @@ from nuself.domain.memory import (
     default_memory_type_registry,
 )
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
+from nuself.memory.repository import MemorySearchFilters, memory_stats
 
 
 def test_memory_repository_crud_and_reindex(tmp_path: Path) -> None:
@@ -104,3 +105,37 @@ def test_repository_accepts_unknown_draft_entry_type_as_migration_escape_hatch(t
     entry = repo.save(MemoryEntry(type="style_trait", title="Concise style", body="Keep summaries compact."))
 
     assert repo.get(entry.id).title == "Concise style"
+
+
+def test_memory_repository_search_filters_and_stats(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Temporal memory",
+            body="Memory should preserve time.",
+            tags=["memory"],
+            review_state="reviewed",
+            observed_at="2026-05-07",
+        )
+    )
+    repo.save(
+        MemoryEntry(
+            type="episode",
+            title="Other event",
+            body="A different event.",
+            tags=["event"],
+        )
+    )
+
+    filtered = repo.search(
+        "memory",
+        MemorySearchFilters(type="belief", tag="memory", review_state="reviewed", observed_from="2026-05-01"),
+    )
+    stats = memory_stats(tmp_path)
+
+    assert [entry.title for entry in filtered] == ["Temporal memory"]
+    assert stats.entries_total == 2
+    assert stats.entries_by_type == {"belief": 1, "episode": 1}
+    assert stats.entries_by_review_state["reviewed"] == 1
+    assert stats.entries_with_observed_at == 1

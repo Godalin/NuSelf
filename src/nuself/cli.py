@@ -24,6 +24,9 @@ from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryNotFound,
     MemoryEntryRepository,
+    MemoryStats,
+    MemorySearchFilters,
+    memory_stats,
 )
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
@@ -95,8 +98,15 @@ def build_parser() -> argparse.ArgumentParser:
     delete_parser.add_argument("entry_id")
     _add_handler(delete_parser, handle_memory_delete)
     search_parser = memory_subparsers.add_parser("search")
-    search_parser.add_argument("query")
+    search_parser.add_argument("query", nargs="?", default="")
+    search_parser.add_argument("--type", choices=_memory_type_choices(), default=None)
+    search_parser.add_argument("--tag", default=None)
+    search_parser.add_argument("--review-state", choices=["draft", "reviewed", "rejected"], default=None)
+    search_parser.add_argument("--observed-from", default=None)
+    search_parser.add_argument("--observed-to", default=None)
+    search_parser.add_argument("--valid-on", default=None)
     _add_handler(search_parser, handle_memory_search)
+    _add_handler(memory_subparsers.add_parser("stats"), handle_memory_stats)
     _add_handler(memory_subparsers.add_parser("update"), handle_memory_update)
     optimize_parser = memory_subparsers.add_parser("optimize")
     optimize_parser.add_argument("--limit", type=int, default=50)
@@ -290,12 +300,27 @@ def handle_memory_delete(args: argparse.Namespace) -> int:
 
 def handle_memory_search(args: argparse.Namespace) -> int:
     repo = MemoryEntryRepository(args.project_root)
-    entries = repo.search(args.query)
+    entries = repo.search(
+        args.query,
+        MemorySearchFilters(
+            type=args.type,
+            tag=args.tag,
+            review_state=args.review_state,
+            observed_from=args.observed_from,
+            observed_to=args.observed_to,
+            valid_on=args.valid_on,
+        ),
+    )
     if not entries:
         print("No matching memory entries.")
         return 0
     for entry in entries:
         print(_format_memory_summary(entry))
+    return 0
+
+
+def handle_memory_stats(args: argparse.Namespace) -> int:
+    print(_format_memory_stats(memory_stats(args.project_root)))
     return 0
 
 
@@ -674,6 +699,26 @@ def _format_memory_candidate_detail(candidate: MemoryCandidate) -> str:
             candidate.body,
         ]
     )
+
+
+def _format_memory_stats(stats: MemoryStats) -> str:
+    lines = [
+        f"entries_total: {stats.entries_total}",
+        f"candidates_total: {stats.candidates_total}",
+        f"pending_candidates: {stats.pending_candidates}",
+        f"entries_with_observed_at: {stats.entries_with_observed_at}",
+        f"entries_with_evidence: {stats.entries_with_evidence}",
+        f"entries_by_type: {_format_counts(stats.entries_by_type)}",
+        f"entries_by_review_state: {_format_counts(stats.entries_by_review_state)}",
+        f"candidates_by_review_state: {_format_counts(stats.candidates_by_review_state)}",
+    ]
+    return "\n".join(lines)
+
+
+def _format_counts(counts: dict[str, int]) -> str:
+    if not counts:
+        return "-"
+    return ", ".join(f"{key}={counts[key]}" for key in sorted(counts))
 
 
 def _format_evidence_lines(evidence_items: list[MemoryEvidence]) -> list[str]:
