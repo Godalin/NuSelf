@@ -28,7 +28,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Preserve source evidence links on source-derived candidates.
 - [x] Clarify deletion behavior for memories derived from raw private sources.
 - [x] Add profile item search and filter commands.
-- [ ] Add profile item retrieval to the query layer.
+- [x] Add profile item retrieval to the query layer.
 
 ### Project Foundation
 
@@ -84,8 +84,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add repositories for source documents and chunks.
 - [x] Add deterministic source search over imported document chunks.
 - [x] Make `memory reindex` rebuild source-derived chunk artifacts.
-- [ ] Add repositories for profile items.
-- [ ] Make `memory reindex` rebuild all derived artifacts from authoritative sources.
+- [x] Add repositories for profile items.
+- [x] Make `memory reindex` rebuild all derived artifacts from authoritative sources.
 
 ### Agent Runtime
 

@@ -28,7 +28,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 在 source-derived candidates 上保留 source evidence links。
 - [x] 明确 raw private sources 派生出的 memories 的删除行为。
 - [x] 添加 profile item 的 search 和 filter 命令。
-- [ ] 将 profile item 接入 query 层。
+- [x] 将 profile item 接入 query 层。
 
 ### 项目基础
 
@@ -84,8 +84,8 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加 source documents 和 chunks 的 repositories。
 - [x] 添加面向 imported document chunks 的确定性 source search。
 - [x] 让 `memory reindex` 重建 source-derived chunk artifacts。
-- [ ] 添加 profile items 的 repositories。
-- [ ] 让 `memory reindex` 从权威来源重建所有派生 artifacts。
+- [x] 添加 profile items 的 repositories。
+- [x] 让 `memory reindex` 从权威来源重建所有派生 artifacts。
 
 ### Agent Runtime
 

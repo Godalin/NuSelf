@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Expose derived profile items in the memory query and chat context layer.
+Stabilize downstream prompt surfaces that consume derived profile context.
 
 ## Status
 
@@ -42,10 +42,12 @@ Recently completed foundation slice:
 - `memory reindex` now rebuilds `private/derived/source_index.json` from authoritative source records.
 - `MemoryQueryService` now packs matching source chunks alongside durable memory entries.
 - The default chat agent now includes relevant source chunks in its memory context.
+- `MemoryQueryService` now also packs derived profile items alongside durable memory entries and source chunks.
+- The default chat agent now includes relevant profile items in its memory context.
 
 ## Scope
 
-- Add profile item retrieval to `MemoryQueryService` or its successor query layer.
+- Decide whether any remaining prompt templates should surface derived profile context.
 
 ## Not Now
 
@@ -70,3 +72,4 @@ Recently completed foundation slice:
 - CLI commands expose the candidate extraction/review path without committing durable memory directly.
 - README TODOs and planning docs reflect the source-to-candidate and deletion slices before moving to broader profile synthesis.
 - README TODOs and planning docs reflect the profile-search slice before moving to broader profile-query integration.
+- README TODOs and planning docs reflect the profile-query/chat slice before moving to any further prompt-surface work.
