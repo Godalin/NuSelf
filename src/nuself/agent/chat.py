@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import fcntl
 import json
 from pathlib import Path
@@ -18,6 +18,13 @@ from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 
 ThreadRole = Literal["user", "assistant"]
+ConversationNodeName = Literal[
+    "prepare_context",
+    "initial_response",
+    "tool_resolution",
+    "state_update",
+    "compression",
+]
 UpdateResult = TypeVar("UpdateResult")
 
 
@@ -159,6 +166,34 @@ class ConversationRuntimeResult:
 
     state: ThreadState
     result: ChatResult
+
+
+@dataclass(frozen=True)
+class ConversationTurnState:
+    """Typed state passed between conversation runtime nodes."""
+
+    thread_id: str
+    persisted_state: ThreadState
+    user_message: str
+    base_messages: tuple[ThreadMessage, ...] = ()
+    active_messages: tuple[ThreadMessage, ...] = ()
+    initial_response: ParsedChatResponse | None = None
+    tool_result: str | None = None
+    final_response: ParsedChatResponse | None = None
+    saved_messages: tuple[ThreadMessage, ...] = ()
+    updated_thread_state: ThreadState | None = None
+
+    @classmethod
+    def start(cls, state: ThreadState, message: str, thread_id: str) -> "ConversationTurnState":
+        return cls(thread_id=thread_id, persisted_state=state, user_message=message)
+
+
+@dataclass(frozen=True)
+class ConversationNodeResult:
+    """Result from one graph-ready conversation runtime node."""
+
+    node: ConversationNodeName
+    state: ConversationTurnState
 
 
 class ConversationRuntime(Protocol):
@@ -305,13 +340,16 @@ class ConversationGraphRuntime:
         }
 
     def run_turn(self, state: ThreadState, message: str, thread_id: str) -> ConversationRuntimeResult:
-        base_messages = self._prepare_thread_messages(state)
-        messages = [*base_messages, ThreadMessage(role="user", content=message)]
-        response = self._complete_initial_response(state, messages, message, thread_id)
-        final_response, final_messages = self._resolve_tool_or_response(state, messages, response, thread_id)
-        updated = self._build_updated_state(state, final_messages, base_messages, thread_id)
+        turn_state = ConversationTurnState.start(state, message, thread_id)
+        turn_state = self.prepare_context_node(turn_state).state
+        turn_state = self.initial_response_node(turn_state).state
+        turn_state = self.tool_resolution_node(turn_state).state
+        turn_state = self.state_update_node(turn_state).state
+        turn_state = self.compression_node(turn_state).state
+        updated = _require_thread_state(turn_state.updated_thread_state)
+        final_response = _require_chat_response(turn_state.final_response)
         return ConversationRuntimeResult(
-            state=self._compress_if_needed(updated),
+            state=updated,
             result=ChatResult(
                 answer=final_response.answer,
                 thread_id=thread_id,
@@ -321,59 +359,92 @@ class ConversationGraphRuntime:
             ),
         )
 
-    def _prepare_thread_messages(self, state: ThreadState) -> list[ThreadMessage]:
-        return _drop_local_fallback_replies(state.messages)
-
-    def _complete_initial_response(
-        self,
-        state: ThreadState,
-        messages: list[ThreadMessage],
-        user_message: str,
-        thread_id: str,
-    ) -> ParsedChatResponse:
-        prompt = self._build_prompt(
-            ThreadState(thread_id=thread_id, summary=state.summary, messages=messages),
-            user_message,
+    def prepare_context_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        base_messages = tuple(_drop_local_fallback_replies(state.persisted_state.messages))
+        active_messages = (*base_messages, ThreadMessage(role="user", content=state.user_message))
+        return ConversationNodeResult(
+            node="prepare_context",
+            state=replace(state, base_messages=base_messages, active_messages=active_messages),
         )
-        return _parse_chat_response(self._llm.complete(prompt))
 
-    def _resolve_tool_or_response(
-        self,
-        state: ThreadState,
-        messages: list[ThreadMessage],
-        response: ParsedChatResponse,
-        thread_id: str,
-    ) -> tuple[ParsedChatResponse, list[ThreadMessage]]:
+    def initial_response_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        prompt = self._build_prompt(
+            ThreadState(
+                thread_id=state.thread_id,
+                summary=state.persisted_state.summary,
+                messages=list(state.active_messages),
+            ),
+            state.user_message,
+        )
+        return ConversationNodeResult(
+            node="initial_response",
+            state=replace(state, initial_response=_parse_chat_response(self._llm.complete(prompt))),
+        )
+
+    def tool_resolution_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        response = _require_chat_response(state.initial_response)
         if response.tool is None or response.tool not in self._tools:
             final_response = _apply_unsupported_claim_guard(response)
-            return final_response, [*messages, ThreadMessage(role="assistant", content=final_response.answer)]
+            return ConversationNodeResult(
+                node="tool_resolution",
+                state=replace(
+                    state,
+                    final_response=final_response,
+                    saved_messages=(
+                        *state.active_messages,
+                        ThreadMessage(role="assistant", content=final_response.answer),
+                    ),
+                ),
+            )
 
         tool_result = self._invoke_tool(response)
         tool_message = ThreadMessage(
             role="assistant",
             content=f"[Tool call: {response.tool}]\n{tool_result}",
         )
-        messages_with_tool = [*messages, tool_message]
+        messages_with_tool = (*state.active_messages, tool_message)
         follow_up_prompt = self._build_follow_up_prompt(
-            ThreadState(thread_id=thread_id, summary=state.summary, messages=messages_with_tool),
+            ThreadState(
+                thread_id=state.thread_id,
+                summary=state.persisted_state.summary,
+                messages=list(messages_with_tool),
+            ),
             tool_result,
         )
         final_response = _apply_unsupported_claim_guard(_parse_chat_response(self._llm.complete(follow_up_prompt)))
-        return final_response, [*messages_with_tool, ThreadMessage(role="assistant", content=final_response.answer)]
+        return ConversationNodeResult(
+            node="tool_resolution",
+            state=replace(
+                state,
+                tool_result=tool_result,
+                final_response=final_response,
+                saved_messages=(
+                    *messages_with_tool,
+                    ThreadMessage(role="assistant", content=final_response.answer),
+                ),
+            ),
+        )
 
-    def _build_updated_state(
-        self,
-        state: ThreadState,
-        final_messages: list[ThreadMessage],
-        base_messages: list[ThreadMessage],
-        thread_id: str,
-    ) -> ThreadState:
-        return ThreadState(
-            thread_id=thread_id,
-            summary=state.summary,
-            messages=final_messages,
-            message_start_index=state.message_start_index,
-            next_message_index=state.next_message_index + len(final_messages) - len(base_messages),
+    def state_update_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        updated = ThreadState(
+            thread_id=state.thread_id,
+            summary=state.persisted_state.summary,
+            messages=list(state.saved_messages),
+            message_start_index=state.persisted_state.message_start_index,
+            next_message_index=(
+                state.persisted_state.next_message_index + len(state.saved_messages) - len(state.base_messages)
+            ),
+        )
+        return ConversationNodeResult(
+            node="state_update",
+            state=replace(state, updated_thread_state=updated),
+        )
+
+    def compression_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        updated = _require_thread_state(state.updated_thread_state)
+        return ConversationNodeResult(
+            node="compression",
+            state=replace(state, updated_thread_state=self._compress_if_needed(updated)),
         )
 
     def _build_prompt(self, state: ThreadState, user_message: str) -> list[ChatMessage]:
@@ -497,6 +568,18 @@ def _drop_local_fallback_replies(messages: list[ThreadMessage]) -> list[ThreadMe
 
 def _is_local_fallback_reply(message: ThreadMessage) -> bool:
     return message.role == "assistant" and message.content.startswith("LLM API is not configured yet.")
+
+
+def _require_chat_response(response: ParsedChatResponse | None) -> ParsedChatResponse:
+    if response is None:
+        raise RuntimeError("conversation runtime response is missing")
+    return response
+
+
+def _require_thread_state(state: ThreadState | None) -> ThreadState:
+    if state is None:
+        raise RuntimeError("conversation runtime thread state is missing")
+    return state
 
 
 @dataclass(frozen=True)

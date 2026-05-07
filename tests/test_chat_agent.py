@@ -6,6 +6,8 @@ from nuself.agent.chat import (
     ChatAgent,
     ChatAgentSettings,
     ChatResult,
+    ConversationGraphRuntime,
+    ConversationTurnState,
     ConversationRuntimeResult,
     ThreadMessage,
     ThreadState,
@@ -287,6 +289,40 @@ def test_chat_agent_delegates_turns_to_conversation_runtime(tmp_path: Path) -> N
         ThreadMessage(role="user", content="hello runtime"),
         ThreadMessage(role="assistant", content="runtime reply"),
     ]
+
+
+def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM('{"answer":"Runtime node reply.","evidence_references":["mem_node"],"confidence":0.8}')
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+    turn_state = ConversationTurnState.start(ThreadState.empty("default"), "node contracts", "default")
+
+    prepared = runtime.prepare_context_node(turn_state)
+    assert prepared.node == "prepare_context"
+    assert prepared.state.active_messages == (ThreadMessage(role="user", content="node contracts"),)
+
+    initial = runtime.initial_response_node(prepared.state)
+    assert initial.node == "initial_response"
+    assert initial.state.initial_response is not None
+    assert initial.state.initial_response.answer == "Runtime node reply."
+
+    resolved = runtime.tool_resolution_node(initial.state)
+    assert resolved.node == "tool_resolution"
+    assert resolved.state.final_response is not None
+    assert resolved.state.final_response.evidence_references == ("mem_node",)
+    assert resolved.state.saved_messages[-1] == ThreadMessage(role="assistant", content="Runtime node reply.")
+
+    updated = runtime.state_update_node(resolved.state)
+    assert updated.node == "state_update"
+    assert updated.state.updated_thread_state is not None
+    assert updated.state.updated_thread_state.next_message_index == 2
+
+    compressed = runtime.compression_node(updated.state)
+    assert compressed.node == "compression"
+    assert compressed.state.updated_thread_state == updated.state.updated_thread_state
 
 
 def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
