@@ -76,7 +76,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add descriptor-aware retrieval heuristics and type/tag filters to memory query tools.
 - [x] Add first-pass relation-aware retrieval expansion from existing memory links.
 - [x] Add rebuildable relation index derived from existing memory links.
-- [ ] Add `RelationDescriptor` registry for built-in relation behavior.
+- [x] Add `RelationDescriptor` registry for built-in relation behavior.
 - [ ] Add derived vector, hybrid, and graph indexes.
 - [ ] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, preference, dependency, and future relations.
 - [x] Add memory stats and richer query commands.
