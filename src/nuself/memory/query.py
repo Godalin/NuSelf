@@ -71,16 +71,17 @@ class MemoryQueryService:
         tokens = _query_tokens(query.text)
         if not tokens:
             return []
+        eligible_entries = [
+            entry
+            for entry in self._repository.list()
+            if entry.review_state in query.review_states and _matches_query_filters(entry.type, entry.tags, query)
+        ]
         matches: list[MemoryMatch] = []
-        for entry in self._repository.list():
-            if entry.review_state not in query.review_states:
-                continue
-            if not _matches_query_filters(entry.type, entry.tags, query):
-                continue
+        for entry in eligible_entries:
             match = _score_entry(entry, query.text, tokens)
             if match is not None:
                 matches.append(match)
-        return sorted(matches, key=lambda match: (-match.score, match.entry.updated_at, match.entry.id))[: query.limit]
+        return _expand_related_matches(matches, eligible_entries, query.limit)
 
     def search_sources(self, query: MemoryQuery) -> list[SourceChunkMatch]:
         if self._source_repository is None:
@@ -198,6 +199,81 @@ def _score_entry(entry: MemoryEntry, raw_query: str, tokens: tuple[str, ...]) ->
         score += min(entry.confidence, 1.0) * 0.25
         reasons.append("confidence")
     return MemoryMatch(entry=entry, score=score, reasons=tuple(reasons))
+
+
+def _expand_related_matches(
+    matches: list[MemoryMatch],
+    eligible_entries: list[MemoryEntry],
+    limit: int,
+) -> list[MemoryMatch]:
+    direct_matches = sorted(matches, key=_memory_match_sort_key)
+    if len(direct_matches) >= limit:
+        return direct_matches[:limit]
+
+    by_id = {entry.id: entry for entry in eligible_entries}
+    direct_ids = {match.entry.id for match in direct_matches}
+    related_matches: dict[str, MemoryMatch] = {}
+
+    for match in direct_matches:
+        for relation, entry_id in _outgoing_relation_refs(match.entry):
+            _add_related_match(related_matches, by_id, direct_ids, match, entry_id, relation)
+        for relation, entry in _incoming_relation_refs(match.entry, eligible_entries):
+            _add_related_match(related_matches, by_id, direct_ids, match, entry.id, relation)
+
+    related_sorted = sorted(related_matches.values(), key=_memory_match_sort_key)
+    return [*direct_matches, *related_sorted][:limit]
+
+
+def _memory_match_sort_key(match: MemoryMatch) -> tuple[float, str, str]:
+    return (-match.score, match.entry.updated_at, match.entry.id)
+
+
+def _outgoing_relation_refs(entry: MemoryEntry) -> list[tuple[str, str]]:
+    refs: list[tuple[str, str]] = []
+    refs.extend(("supersedes", entry_id) for entry_id in entry.supersedes)
+    refs.extend(("related", entry_id) for entry_id in entry.related_memory_ids)
+    return refs
+
+
+def _incoming_relation_refs(entry: MemoryEntry, entries: list[MemoryEntry]) -> list[tuple[str, MemoryEntry]]:
+    refs: list[tuple[str, MemoryEntry]] = []
+    for candidate in entries:
+        if candidate.id == entry.id:
+            continue
+        if entry.id in candidate.supersedes:
+            refs.append(("superseded_by", candidate))
+        if entry.id in candidate.related_memory_ids:
+            refs.append(("related_by", candidate))
+    return refs
+
+
+def _add_related_match(
+    related_matches: dict[str, MemoryMatch],
+    by_id: dict[str, MemoryEntry],
+    direct_ids: set[str],
+    source_match: MemoryMatch,
+    entry_id: str,
+    relation: str,
+) -> None:
+    if entry_id in direct_ids:
+        return
+    entry = by_id.get(entry_id)
+    if entry is None:
+        return
+    reason = f"{relation}:{source_match.entry.id}"
+    score = max(source_match.score - 0.75, 0.1)
+    current = related_matches.get(entry.id)
+    if current is None:
+        related_matches[entry.id] = MemoryMatch(entry=entry, score=score, reasons=(reason,))
+        return
+    if score > current.score:
+        related_matches[entry.id] = MemoryMatch(entry=entry, score=score, reasons=(*current.reasons, reason))
+    elif reason not in current.reasons:
+        related_matches[entry.id] = MemoryMatch(
+            entry=entry,
+            score=current.score,
+            reasons=(*current.reasons, reason),
+        )
 
 
 def _matches_query_filters(memory_type: str, tags: list[str], query: MemoryQuery) -> bool:

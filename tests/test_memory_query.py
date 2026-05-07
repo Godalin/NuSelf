@@ -205,3 +205,61 @@ def test_memory_query_filters_by_type_and_tag(tmp_path: Path) -> None:
 
     assert [match.entry.id for match in matches] == [goal.id]
     assert "type_descriptor" in matches[0].reasons
+
+
+def test_memory_query_expands_related_entries(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    related = repo.save(
+        MemoryEntry(
+            type="concept",
+            title="Descriptor retrieval",
+            body="Use type descriptors to shape retrieval.",
+            tags=["memory"],
+            review_state="reviewed",
+        )
+    )
+    direct = repo.save(
+        MemoryEntry(
+            type="goal",
+            title="Current memory goal",
+            body="Improve retrieval before graph migration.",
+            tags=["memory"],
+            related_memory_ids=[related.id],
+            review_state="reviewed",
+        )
+    )
+    service = MemoryQueryService(repo)
+
+    matches = service.search(MemoryQuery(text="current goal", limit=4))
+
+    assert [match.entry.id for match in matches] == [direct.id, related.id]
+    assert matches[1].reasons == (f"related:{direct.id}",)
+
+
+def test_memory_query_expands_superseded_by_entries(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    old = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Legacy category model",
+            body="Memory categories are fixed.",
+            tags=["memory"],
+            review_state="reviewed",
+        )
+    )
+    replacement = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Open typed memory model",
+            body="Memory types are descriptor-backed and open.",
+            tags=["memory"],
+            supersedes=[old.id],
+            review_state="reviewed",
+        )
+    )
+    service = MemoryQueryService(repo)
+
+    matches = service.search(MemoryQuery(text="legacy fixed categories", limit=4))
+
+    assert [match.entry.id for match in matches] == [old.id, replacement.id]
+    assert matches[1].reasons == (f"superseded_by:{old.id}",)
