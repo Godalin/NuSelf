@@ -11,6 +11,7 @@ from nuself.agent.chat import (
     ConversationGraphRuntime,
     ConversationTurnState,
     ConversationRuntimeResult,
+    ParsedChatResponse,
     ThreadMessage,
     ThreadState,
     ThreadStore,
@@ -319,7 +320,7 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
 
     detected = runtime.detect_tool_request_node(initial.state)
     assert detected.node == "detect_tool_request"
-    assert detected.state.tool_requested is False
+    assert detected.state.tool_call is None
 
     finalized = runtime.finalize_response_node(detected.state)
     assert finalized.node == "finalize_response"
@@ -406,6 +407,48 @@ def test_conversation_graph_runtime_routes_tool_calls_through_tool_node(tmp_path
     )
     assert result.state.messages[1].content.startswith("[Tool call: search_memory]")
     assert llm.call_count == 2
+
+
+def test_conversation_graph_runtime_keeps_unsupported_tools_on_no_tool_route(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM(
+        '{"answer":"I cannot run that tool.","tool":"unknown_tool","tool_args":{"query":"clarity"},'
+        '"epistemic_status":"uncertain"}'
+    )
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+
+    result = runtime.run_turn(ThreadState.empty("unsupported"), "try an unknown tool", "unsupported")
+
+    assert result.result.answer == "I cannot run that tool."
+    assert result.node_trace == (
+        "prepare_context",
+        "initial_response",
+        "detect_tool_request",
+        "finalize_response",
+        "state_update",
+        "compression",
+    )
+    assert len(llm.calls) == 1
+    detected = runtime.detect_tool_request_node(
+        ConversationTurnState(
+            thread_id="unsupported",
+            persisted_state=ThreadState.empty("unsupported"),
+            user_message="try an unknown tool",
+            initial_response=ParsedChatResponse(
+                answer="I cannot run that tool.",
+                tool="unknown_tool",
+                tool_args={"query": "clarity"},
+            ),
+        )
+    )
+    assert detected.state.tool_call is not None
+    assert detected.state.tool_call.name == "unknown_tool"
+    assert detected.state.tool_call.args == {"query": "clarity"}
+    assert detected.state.tool_call.supported is False
+    assert detected.state.tool_call.diagnostic == "unsupported tool request: unknown_tool"
 
 
 def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Path) -> None:

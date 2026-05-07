@@ -106,7 +106,8 @@ class ConversationGraphDriver:
         return self._run_node("finalize_response", state, self._runtime.finalize_response_node)
 
     def _route_after_tool_detection(self, state: ConversationGraphState) -> str:
-        return "tool" if state["turn_state"].tool_requested else "no_tool"
+        tool_call = state["turn_state"].tool_call
+        return "tool" if tool_call is not None and tool_call.supported else "no_tool"
 
     def _state_update(self, state: ConversationGraphState) -> ConversationGraphState:
         return self._run_node("state_update", state, self._runtime.state_update_node)

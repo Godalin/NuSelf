@@ -172,6 +172,16 @@ class ConversationRuntimeResult:
 
 
 @dataclass(frozen=True)
+class ConversationToolCall:
+    """Detected tool call request inside one conversation turn."""
+
+    name: str
+    args: dict[str, Any]
+    supported: bool
+    diagnostic: str = ""
+
+
+@dataclass(frozen=True)
 class ConversationTurnState:
     """Typed state passed between conversation runtime nodes."""
 
@@ -181,7 +191,7 @@ class ConversationTurnState:
     base_messages: tuple[ThreadMessage, ...] = ()
     active_messages: tuple[ThreadMessage, ...] = ()
     initial_response: ParsedChatResponse | None = None
-    tool_requested: bool = False
+    tool_call: ConversationToolCall | None = None
     tool_result: str | None = None
     final_response: ParsedChatResponse | None = None
     saved_messages: tuple[ThreadMessage, ...] = ()
@@ -396,11 +406,12 @@ class ConversationGraphRuntime:
 
     def detect_tool_request_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         response = _require_chat_response(state.initial_response)
+        tool_call = self._detect_tool_call(response)
         return ConversationNodeResult(
             node="detect_tool_request",
             state=replace(
                 state,
-                tool_requested=response.tool is not None and response.tool in self._tools,
+                tool_call=tool_call,
                 node_trace=(*state.node_trace, "detect_tool_request"),
             ),
         )
@@ -424,7 +435,7 @@ class ConversationGraphRuntime:
         )
 
     def finalize_response_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        if state.tool_requested:
+        if _is_supported_tool_call(state.tool_call):
             tool_result = _require_tool_result(state.tool_result)
             follow_up_prompt = self._build_follow_up_prompt(
                 ThreadState(
@@ -449,6 +460,19 @@ class ConversationGraphRuntime:
                 node_trace=(*state.node_trace, "finalize_response"),
             ),
         )
+
+    def _detect_tool_call(self, response: ParsedChatResponse) -> ConversationToolCall | None:
+        if response.tool is None:
+            return None
+        tool_args = response.tool_args if response.tool_args is not None else {}
+        if response.tool not in self._tools:
+            return ConversationToolCall(
+                name=response.tool,
+                args=tool_args,
+                supported=False,
+                diagnostic=f"unsupported tool request: {response.tool}",
+            )
+        return ConversationToolCall(name=response.tool, args=tool_args, supported=True)
 
     def state_update_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         updated = ThreadState(
@@ -619,6 +643,10 @@ def _require_tool_result(tool_result: str | None) -> str:
     if tool_result is None:
         raise RuntimeError("conversation runtime tool result is missing")
     return tool_result
+
+
+def _is_supported_tool_call(tool_call: ConversationToolCall | None) -> bool:
+    return tool_call is not None and tool_call.supported
 
 
 @dataclass(frozen=True)
