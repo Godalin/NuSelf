@@ -4,9 +4,9 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Move tool handling toward graph-native routing while preserving the current file-backed memory and retrieval boundaries.
+Harden the graph-native tool extension boundary while preserving the current file-backed memory and retrieval boundaries.
 
-The LangGraph conversation graph now has isolated driver failure handling and internal node traces. The next useful step is to make the existing `search_memory` tool path more graph-native, so tool execution can become a distinct route before adding persona subgraphs or richer agent routing.
+The conversation graph now has explicit no-tool and tool-call routes for the existing `search_memory` tool path. The next useful step is to make the tool boundary easier to extend before adding persona subgraphs or richer agent routing.
 
 ## Immediate Context
 
@@ -14,14 +14,15 @@ The LangGraph conversation graph now has isolated driver failure handling and in
 - `ChatAgent` now owns thread persistence while `ConversationGraphRuntime` owns turn execution.
 - `ConversationGraphDriver` is the only module that imports LangGraph and wraps graph failures as `ConversationGraphRuntimeError`.
 - Runtime results carry internal node traces without changing CLI or daemon response payloads.
+- Tool calls now route through `detect_tool_request`, optional `execute_tool`, and `finalize_response`.
 - File-backed private memory remains authoritative; derived indexes and future runtime mirrors must stay rebuildable.
 
 ## Next Steps
 
-1. Split tool request detection from tool execution in the runtime state.
-2. Add a graph route that skips tool execution when the initial response has no supported tool call.
+1. Make supported tool detection return structured tool-call state instead of a boolean only.
+2. Keep unsupported tool requests on the no-tool/final-response path with clear diagnostics.
 3. Preserve current response metadata, memory context packing, persistence, tool calls, diagnostics, and deterministic fallback behavior.
-4. Add focused tests for no-tool and tool-call graph routes.
+4. Add focused tests for supported and unsupported tool-call requests.
 
 ## Not Now
 
@@ -34,7 +35,7 @@ The LangGraph conversation graph now has isolated driver failure handling and in
 
 ## Completion Criteria
 
-- Tool and no-tool paths are explicit graph routes.
+- Supported and unsupported tool requests have explicit, tested graph behavior.
 - Existing chat entrypoints keep their current user-visible behavior.
-- Tests cover both routes without changing CLI or daemon payloads.
+- Tests cover the tool extension boundary without changing CLI or daemon payloads.
 - README TODOs track completed progress, while this file stays limited to the active goal.
