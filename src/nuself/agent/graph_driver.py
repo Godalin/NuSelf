@@ -6,11 +6,22 @@ from typing import Any, Protocol, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
 
-from nuself.agent.chat import ConversationNodeResult, ConversationTurnState
+from nuself.agent.chat import ConversationNodeName, ConversationNodeResult, ConversationTurnState
 
 
 class ConversationGraphRuntimeError(RuntimeError):
     """Raised when the conversation graph cannot complete a turn."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        node: ConversationNodeName | None = None,
+        node_trace: tuple[ConversationNodeName, ...] = (),
+    ) -> None:
+        super().__init__(message)
+        self.node = node
+        self.node_trace = node_trace
 
 
 class ConversationGraphState(TypedDict):
@@ -55,24 +66,53 @@ class ConversationGraphDriver:
     def run(self, state: ConversationTurnState) -> ConversationTurnState:
         try:
             output: object = self._graph.invoke({"turn_state": state})
+        except ConversationGraphRuntimeError:
+            raise
         except Exception as exc:
-            raise ConversationGraphRuntimeError(f"conversation graph failed while handling thread '{state.thread_id}'") from exc
+            raise ConversationGraphRuntimeError(
+                f"conversation graph failed while handling thread '{state.thread_id}'",
+                node_trace=state.node_trace,
+            ) from exc
         if not isinstance(output, dict):
-            raise ConversationGraphRuntimeError("conversation graph returned invalid state")
+            raise ConversationGraphRuntimeError("conversation graph returned invalid state", node_trace=state.node_trace)
         graph_state = cast(ConversationGraphState, output)
         return graph_state["turn_state"]
 
     def _prepare_context(self, state: ConversationGraphState) -> ConversationGraphState:
-        return {"turn_state": self._runtime.prepare_context_node(state["turn_state"]).state}
+        return self._run_node("prepare_context", state, self._runtime.prepare_context_node)
 
     def _initial_response(self, state: ConversationGraphState) -> ConversationGraphState:
-        return {"turn_state": self._runtime.initial_response_node(state["turn_state"]).state}
+        return self._run_node("initial_response", state, self._runtime.initial_response_node)
 
     def _tool_resolution(self, state: ConversationGraphState) -> ConversationGraphState:
-        return {"turn_state": self._runtime.tool_resolution_node(state["turn_state"]).state}
+        return self._run_node("tool_resolution", state, self._runtime.tool_resolution_node)
 
     def _state_update(self, state: ConversationGraphState) -> ConversationGraphState:
-        return {"turn_state": self._runtime.state_update_node(state["turn_state"]).state}
+        return self._run_node("state_update", state, self._runtime.state_update_node)
 
     def _compression(self, state: ConversationGraphState) -> ConversationGraphState:
-        return {"turn_state": self._runtime.compression_node(state["turn_state"]).state}
+        return self._run_node("compression", state, self._runtime.compression_node)
+
+    def _run_node(
+        self,
+        node: ConversationNodeName,
+        state: ConversationGraphState,
+        run: "ConversationGraphNode",
+    ) -> ConversationGraphState:
+        turn_state = state["turn_state"]
+        try:
+            return {"turn_state": run(turn_state).state}
+        except ConversationGraphRuntimeError:
+            raise
+        except Exception as exc:
+            raise ConversationGraphRuntimeError(
+                f"conversation graph node '{node}' failed while handling thread '{turn_state.thread_id}'",
+                node=node,
+                node_trace=(*turn_state.node_trace, node),
+            ) from exc
+
+
+class ConversationGraphNode(Protocol):
+    """Callable shape for one conversation graph node."""
+
+    def __call__(self, state: ConversationTurnState) -> ConversationNodeResult: ...

@@ -166,6 +166,7 @@ class ConversationRuntimeResult:
 
     state: ThreadState
     result: ChatResult
+    node_trace: tuple[ConversationNodeName, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -182,6 +183,7 @@ class ConversationTurnState:
     final_response: ParsedChatResponse | None = None
     saved_messages: tuple[ThreadMessage, ...] = ()
     updated_thread_state: ThreadState | None = None
+    node_trace: tuple[ConversationNodeName, ...] = ()
 
     @classmethod
     def start(cls, state: ThreadState, message: str, thread_id: str) -> "ConversationTurnState":
@@ -355,6 +357,7 @@ class ConversationGraphRuntime:
                 confidence=final_response.confidence,
                 epistemic_status=final_response.epistemic_status,
             ),
+            node_trace=turn_state.node_trace,
         )
 
     def prepare_context_node(self, state: ConversationTurnState) -> ConversationNodeResult:
@@ -362,7 +365,12 @@ class ConversationGraphRuntime:
         active_messages = (*base_messages, ThreadMessage(role="user", content=state.user_message))
         return ConversationNodeResult(
             node="prepare_context",
-            state=replace(state, base_messages=base_messages, active_messages=active_messages),
+            state=replace(
+                state,
+                base_messages=base_messages,
+                active_messages=active_messages,
+                node_trace=(*state.node_trace, "prepare_context"),
+            ),
         )
 
     def initial_response_node(self, state: ConversationTurnState) -> ConversationNodeResult:
@@ -376,7 +384,11 @@ class ConversationGraphRuntime:
         )
         return ConversationNodeResult(
             node="initial_response",
-            state=replace(state, initial_response=_parse_chat_response(self._llm.complete(prompt))),
+            state=replace(
+                state,
+                initial_response=_parse_chat_response(self._llm.complete(prompt)),
+                node_trace=(*state.node_trace, "initial_response"),
+            ),
         )
 
     def tool_resolution_node(self, state: ConversationTurnState) -> ConversationNodeResult:
@@ -392,6 +404,7 @@ class ConversationGraphRuntime:
                         *state.active_messages,
                         ThreadMessage(role="assistant", content=final_response.answer),
                     ),
+                    node_trace=(*state.node_trace, "tool_resolution"),
                 ),
             )
 
@@ -420,6 +433,7 @@ class ConversationGraphRuntime:
                     *messages_with_tool,
                     ThreadMessage(role="assistant", content=final_response.answer),
                 ),
+                node_trace=(*state.node_trace, "tool_resolution"),
             ),
         )
 
@@ -435,14 +449,22 @@ class ConversationGraphRuntime:
         )
         return ConversationNodeResult(
             node="state_update",
-            state=replace(state, updated_thread_state=updated),
+            state=replace(
+                state,
+                updated_thread_state=updated,
+                node_trace=(*state.node_trace, "state_update"),
+            ),
         )
 
     def compression_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         updated = _require_thread_state(state.updated_thread_state)
         return ConversationNodeResult(
             node="compression",
-            state=replace(state, updated_thread_state=self._compress_if_needed(updated)),
+            state=replace(
+                state,
+                updated_thread_state=self._compress_if_needed(updated),
+                node_trace=(*state.node_trace, "compression"),
+            ),
         )
 
     def _build_prompt(self, state: ThreadState, user_message: str) -> list[ChatMessage]:

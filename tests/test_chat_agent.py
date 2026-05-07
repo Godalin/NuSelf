@@ -349,6 +349,13 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
     assert result.result.answer == "Graph driver reply."
     assert result.result.evidence_references == ("mem_graph",)
     assert result.result.confidence == 0.9
+    assert result.node_trace == (
+        "prepare_context",
+        "initial_response",
+        "tool_resolution",
+        "state_update",
+        "compression",
+    )
     assert result.state.messages == [
         ThreadMessage(role="user", content="graph runtime"),
         ThreadMessage(role="assistant", content="Graph driver reply."),
@@ -371,9 +378,11 @@ def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Pat
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
-    with pytest.raises(ConversationGraphRuntimeError, match="conversation graph failed"):
+    with pytest.raises(ConversationGraphRuntimeError, match="conversation graph node 'initial_response' failed") as exc_info:
         agent.respond("new message")
 
+    assert exc_info.value.node == "initial_response"
+    assert exc_info.value.node_trace == ("prepare_context", "initial_response")
     state = thread_store.load("default")
     assert state.messages == [ThreadMessage(role="user", content="existing message")]
     assert state.next_message_index == 1
