@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import re
 from pathlib import Path
 from typing import cast
 
 from nuself.domain.memory import MemoryEntryType
 from nuself.llm import ChatLLM, ChatMessage, default_llm
+from nuself.profile.repository import ProfileItemRepository
+
+WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
 
 
 @dataclass(frozen=True)
@@ -25,7 +29,14 @@ class MemoryIntakeResult:
 class MemoryIntakeAgent:
     """Infer memory entry fields from a manually supplied note."""
 
-    def __init__(self, project_root: Path | None = None, *, llm: ChatLLM | None = None) -> None:
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        *,
+        llm: ChatLLM | None = None,
+        profile_repository: ProfileItemRepository | None = None,
+    ) -> None:
+        self._profile_repository = profile_repository or ProfileItemRepository(project_root)
         self._llm = llm or default_llm(project_root)
 
     def infer(
@@ -66,13 +77,15 @@ class MemoryIntakeAgent:
                     "You are the NuSelf Memory Intake Agent. Classify a user-supplied memory note into a "
                     "durable memory entry. Return only JSON. Allowed types are source_note, profile_fact, "
                     "belief, preference, goal, concept, style_trait, episode, open_question, instruction. Write a concise "
-                    "title and 0-4 short tags. Do not copy raw chat transcript markers into the title."
+                    "title and 0-4 short tags. Do not copy raw chat transcript markers into the title. Consider "
+                    "existing profile items when the note is a duplicate or refinement of already-derived context."
                 ),
             ),
             ChatMessage(
                 role="user",
                 content=(
                     f"Memory note:\n{body}\n\n"
+                    f"Existing profile items:\n{self._existing_profile_context(body) or '(none)'}\n\n"
                     "Return JSON like: "
                     '{"type":"preference","title":"Concise CLI output","tags":["cli"],"confidence":0.8}'
                 ),
@@ -83,6 +96,20 @@ class MemoryIntakeAgent:
             return _parse_intake_result(raw)
         except (RuntimeError, ValueError, json.JSONDecodeError):
             return _infer_locally(body)
+
+    def _existing_profile_context(self, body: str) -> str:
+        matches = self._profile_repository.search(body)
+        if not matches:
+            for token in WORD_RE.findall(body.casefold()):
+                for item in self._profile_repository.search(token):
+                    if item not in matches:
+                        matches.append(item)
+        lines: list[str] = []
+        for item in matches[:5]:
+            tags = f" tags={','.join(item.tags)}" if item.tags else ""
+            sources = f" sources={','.join(item.source_refs)}" if item.source_refs else ""
+            lines.append(f"- id={item.id} type={item.type} title={item.title}{tags}{sources}: {item.body}")
+        return "\n".join(lines)
 
 
 def _parse_intake_result(raw: str) -> MemoryIntakeResult:

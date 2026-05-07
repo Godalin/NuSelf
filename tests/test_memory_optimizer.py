@@ -3,9 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from nuself.domain.memory import MemoryEntry
+from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
 from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
+from nuself.profile.repository import ProfileItemRepository
 
 
 class FakeOptimizerLLM:
@@ -71,6 +73,30 @@ def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) 
     assert "memory_optimizer reviewed=2 updated=1 deleted=1 ignored=0" in result.log_path.read_text(encoding="utf-8")
 
 
+def test_memory_optimizer_includes_profile_context_in_prompt(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(type="belief", title="Keep memory concise", body="The user wants concise memory entries."))
+    profile_repo = ProfileItemRepository(tmp_path)
+    profile_repo.save(
+        ProfileItem(
+            type="profile_fact",
+            title="Concise output",
+            body="Prefers concise command output.",
+            tags=["cli"],
+            source_refs=["source:profile:0"],
+        )
+    )
+    llm = FakeOptimizerLLM('{"actions":[{"action":"ignore","entry_id":"unused","reason":"no changes"}]}')
+    optimizer = MemoryOptimizer(tmp_path, llm=llm, repository=repo, profile_repository=profile_repo)
+
+    optimizer.run_once()
+
+    system_prompt, user_prompt = llm.calls[0]
+    assert "Consider existing profile items" in system_prompt.content
+    assert "Existing profile items:" in user_prompt.content
+    assert "Concise output" in user_prompt.content
+
+
 def test_memory_optimizer_defers_without_agent_decision(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     entry = repo.save(
@@ -80,7 +106,11 @@ def test_memory_optimizer_defers_without_agent_decision(tmp_path: Path) -> None:
             body="The user wants concise memory entries.",
         )
     )
-    optimizer = MemoryOptimizer(tmp_path, repository=repo)
+    class FailingOptimizerLLM:
+        def complete(self, messages: list[ChatMessage]) -> str:
+            raise RuntimeError("LLM unavailable")
+
+    optimizer = MemoryOptimizer(tmp_path, llm=FailingOptimizerLLM(), repository=repo)
 
     result = optimizer.run_once()
 

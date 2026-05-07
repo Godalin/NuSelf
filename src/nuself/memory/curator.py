@@ -10,6 +10,7 @@ from typing import Literal, TypeAlias, cast
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.domain.memory import MemoryCandidate, MemoryEntryType, MemoryEvidence, now_iso
+from nuself.profile.repository import ProfileItemRepository
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 
@@ -80,6 +81,7 @@ class MemoryCurator:
         thread_store: ThreadStore | None = None,
         repository: MemoryEntryRepository | None = None,
         candidate_repository: MemoryCandidateRepository | None = None,
+        profile_repository: ProfileItemRepository | None = None,
     ) -> None:
         paths = runtime_paths(project_root)
         self._paths = paths
@@ -87,6 +89,7 @@ class MemoryCurator:
         self._settings = settings or MemoryCuratorSettings()
         self._thread_store = thread_store or ThreadStore(paths.project_root)
         self._repository = repository or MemoryEntryRepository(paths.project_root)
+        self._profile_repository = profile_repository or ProfileItemRepository(paths.project_root)
         self._candidate_repository = candidate_repository or MemoryCandidateRepository(
             paths.project_root,
             entry_repository=self._repository,
@@ -183,7 +186,8 @@ class MemoryCurator:
                     "Prefer updating or refining an existing memory when the meaning is already represented. "
                     "Create only when the discussion contains a durable preference, goal, concept, decision, "
                     "open question, important episode, or instruction. Never copy raw chat transcripts into memory bodies; "
-                    "write compressed summaries with evidence-aware wording. Allowed actions are create, update, ignore."
+                    "write compressed summaries with evidence-aware wording. Consider existing profile items before "
+                    "creating new profile facts or overlapping durable memories. Allowed actions are create, update, ignore."
                 ),
             ),
             ChatMessage(
@@ -192,6 +196,7 @@ class MemoryCurator:
                     f"Thread: {thread_id}\n"
                     f"Existing summary:\n{state.summary or '(none)'}\n\n"
                     f"Existing memories:\n{self._existing_memory_context() or '(none)'}\n\n"
+                    f"Existing profile items:\n{self._existing_profile_context() or '(none)'}\n\n"
                     f"New turns {cursor}-{cursor + len(messages)}:\n{_render_transcript(messages)}\n\n"
                     "Return JSON like: "
                     '{"actions":[{"action":"create","type":"episode","title":"...","body":"...",'
@@ -214,6 +219,14 @@ class MemoryCurator:
         lines: list[str] = []
         for entry in self._repository.list()[: self._settings.existing_memory_limit]:
             lines.append(f"- id={entry.id} type={entry.type} title={entry.title}: {entry.body}")
+        return "\n".join(lines)
+
+    def _existing_profile_context(self) -> str:
+        lines: list[str] = []
+        for item in self._profile_repository.list()[: self._settings.existing_memory_limit]:
+            tags = f" tags={','.join(item.tags)}" if item.tags else ""
+            sources = f" sources={','.join(item.source_refs)}" if item.source_refs else ""
+            lines.append(f"- id={item.id} type={item.type} title={item.title}{tags}{sources}: {item.body}")
         return "\n".join(lines)
 
     def _create_candidate(self, action: MemoryAction, source_ref: str) -> bool:

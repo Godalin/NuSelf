@@ -11,6 +11,7 @@ from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, now_iso
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
+from nuself.profile.repository import ProfileItemRepository
 
 MemoryOptimizeActionType: TypeAlias = Literal["update", "delete", "ignore"]
 OptimizeDecisionStatus: TypeAlias = Literal["ready", "deferred"]
@@ -75,12 +76,14 @@ class MemoryOptimizer:
         settings: MemoryOptimizerSettings | None = None,
         repository: MemoryEntryRepository | None = None,
         candidate_repository: MemoryCandidateRepository | None = None,
+        profile_repository: ProfileItemRepository | None = None,
     ) -> None:
         paths = runtime_paths(project_root)
         self._paths = paths
         self._llm = llm or default_llm(paths.project_root)
         self._settings = settings or MemoryOptimizerSettings()
         self._repository = repository or MemoryEntryRepository(paths.project_root)
+        self._profile_repository = profile_repository or ProfileItemRepository(paths.project_root)
         self._candidate_repository = candidate_repository or MemoryCandidateRepository(
             paths.project_root,
             entry_repository=self._repository,
@@ -146,8 +149,9 @@ class MemoryOptimizer:
                     "Be conservative: preserve unique user preferences, goals, concepts, decisions, instructions, "
                     "beliefs, open questions, and important episodes. Prefer merging duplicate or overlapping entries by "
                     "updating the strongest entry and deleting only entries whose content is fully represented "
-                    "elsewhere. Rewrite messy entries into clear compressed summaries. Never create new entries "
-                    "in this task and never copy raw chat transcripts into memory bodies."
+                    "elsewhere. Rewrite messy entries into clear compressed summaries. Consider existing profile items "
+                    "when deciding whether a memory entry is truly duplicate or should be refined instead. Never create "
+                    "new entries in this task and never copy raw chat transcripts into memory bodies."
                 ),
             ),
             ChatMessage(
@@ -155,6 +159,8 @@ class MemoryOptimizer:
                 content=(
                     "Existing memory entries:\n"
                     f"{_render_entries(entries)}\n\n"
+                    "Existing profile items:\n"
+                    f"{self._existing_profile_context()}\n\n"
                     "Return JSON like: "
                     '{"actions":[{"action":"update","entry_id":"mem_...","type":"belief",'
                     '"title":"...","body":"...","tags":["..."],"confidence":0.8,"reason":"merged duplicates"},'
@@ -174,6 +180,14 @@ class MemoryOptimizer:
         if actions:
             return MemoryOptimizeDecision(status="ready", actions=tuple(actions))
         return MemoryOptimizeDecision(status="deferred", reason="optimizer agent returned no valid actions")
+
+    def _existing_profile_context(self) -> str:
+        lines: list[str] = []
+        for item in self._profile_repository.list()[: self._settings.memory_limit]:
+            tags = f" tags={','.join(item.tags)}" if item.tags else ""
+            sources = f" sources={','.join(item.source_refs)}" if item.source_refs else ""
+            lines.append(f"- id={item.id} type={item.type} title={item.title}{tags}{sources}: {item.body}")
+        return "\n".join(lines)
 
     def _update_candidate(self, action: MemoryOptimizeAction, source_ref: str) -> bool:
         if action.entry_id is None or action.title == "" or action.body == "":
@@ -280,7 +294,6 @@ def _parse_optimize_actions(raw: str) -> list[MemoryOptimizeAction]:
         if action is not None:
             actions.append(action)
     return actions
-
 
 def _parse_optimize_action(raw: dict[str, object]) -> MemoryOptimizeAction | None:
     action_value = raw.get("action")

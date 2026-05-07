@@ -9,9 +9,11 @@ from nuself.domain.memory import (
     MemoryTypeRegistry,
     MemoryValidationIssue,
 )
+from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
 from nuself.memory.curator import MemoryCurator
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
+from nuself.profile.repository import ProfileItemRepository
 
 
 class FakeCuratorLLM:
@@ -99,6 +101,38 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
     assert repo.get(existing.id).body == "The user likes memory previews."
 
 
+def test_memory_curator_includes_profile_context_in_prompt(tmp_path: Path) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(role="user", content="I prefer concise memory previews."),
+                ThreadMessage(role="assistant", content="I will keep memory previews compact."),
+            ],
+        )
+    )
+    profile_repo = ProfileItemRepository(tmp_path)
+    profile_repo.save(
+        ProfileItem(
+            type="profile_fact",
+            title="Concise output",
+            body="Prefers concise command output.",
+            tags=["cli"],
+            source_refs=["source:profile:0"],
+        )
+    )
+    llm = FakeCuratorLLM('{"actions":[{"action":"ignore","reason":"no durable memory"}]}')
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, profile_repository=profile_repo)
+
+    curator.run_once()
+
+    system_prompt, user_prompt = llm.calls[0]
+    assert "Consider existing profile items" in system_prompt.content
+    assert "Existing profile items:" in user_prompt.content
+    assert "Concise output" in user_prompt.content
+
+
 def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None:
     thread_store = ThreadStore(tmp_path)
     thread_store.save(
@@ -110,8 +144,12 @@ def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None
             ],
         )
     )
+    class FailingCuratorLLM:
+        def complete(self, messages: list[ChatMessage]) -> str:
+            raise RuntimeError("LLM unavailable")
+
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, llm=FailingCuratorLLM(), thread_store=thread_store, repository=repo)
 
     result = curator.run_once()
 
