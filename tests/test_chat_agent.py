@@ -317,13 +317,17 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
     assert initial.state.initial_response is not None
     assert initial.state.initial_response.answer == "Runtime node reply."
 
-    resolved = runtime.tool_resolution_node(initial.state)
-    assert resolved.node == "tool_resolution"
-    assert resolved.state.final_response is not None
-    assert resolved.state.final_response.evidence_references == ("mem_node",)
-    assert resolved.state.saved_messages[-1] == ThreadMessage(role="assistant", content="Runtime node reply.")
+    detected = runtime.detect_tool_request_node(initial.state)
+    assert detected.node == "detect_tool_request"
+    assert detected.state.tool_requested is False
 
-    updated = runtime.state_update_node(resolved.state)
+    finalized = runtime.finalize_response_node(detected.state)
+    assert finalized.node == "finalize_response"
+    assert finalized.state.final_response is not None
+    assert finalized.state.final_response.evidence_references == ("mem_node",)
+    assert finalized.state.saved_messages[-1] == ThreadMessage(role="assistant", content="Runtime node reply.")
+
+    updated = runtime.state_update_node(finalized.state)
     assert updated.node == "state_update"
     assert updated.state.updated_thread_state is not None
     assert updated.state.updated_thread_state.next_message_index == 2
@@ -352,7 +356,8 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
     assert result.node_trace == (
         "prepare_context",
         "initial_response",
-        "tool_resolution",
+        "detect_tool_request",
+        "finalize_response",
         "state_update",
         "compression",
     )
@@ -360,6 +365,47 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
         ThreadMessage(role="user", content="graph runtime"),
         ThreadMessage(role="assistant", content="Graph driver reply."),
     ]
+
+
+def test_conversation_graph_runtime_routes_tool_calls_through_tool_node(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Clarity matters",
+            body="Prefer explicit assumptions.",
+            tags=["style"],
+        )
+    )
+
+    class ToolRequestLLM:
+        def __init__(self) -> None:
+            self.call_count = 0
+
+        def complete(self, messages: list[ChatMessage]) -> str:
+            self.call_count += 1
+            if self.call_count == 1:
+                return '{"answer":"Searching memory.","tool":"search_memory","tool_args":{"query":"clarity"}}'
+            return '{"answer":"You value clarity.","evidence_references":["mem_tool"],"epistemic_status":"grounded"}'
+
+    llm = ToolRequestLLM()
+    runtime = ConversationGraphRuntime(tmp_path, llm=llm, memory_query_service=MemoryQueryService(repo))
+
+    result = runtime.run_turn(ThreadState.empty("tool"), "what about clarity?", "tool")
+
+    assert result.result.answer == "You value clarity."
+    assert result.result.evidence_references == ("mem_tool",)
+    assert result.node_trace == (
+        "prepare_context",
+        "initial_response",
+        "detect_tool_request",
+        "execute_tool",
+        "finalize_response",
+        "state_update",
+        "compression",
+    )
+    assert result.state.messages[1].content.startswith("[Tool call: search_memory]")
+    assert llm.call_count == 2
 
 
 def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Path) -> None:

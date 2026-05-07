@@ -21,7 +21,9 @@ ThreadRole = Literal["user", "assistant"]
 ConversationNodeName = Literal[
     "prepare_context",
     "initial_response",
-    "tool_resolution",
+    "detect_tool_request",
+    "execute_tool",
+    "finalize_response",
     "state_update",
     "compression",
 ]
@@ -179,6 +181,7 @@ class ConversationTurnState:
     base_messages: tuple[ThreadMessage, ...] = ()
     active_messages: tuple[ThreadMessage, ...] = ()
     initial_response: ParsedChatResponse | None = None
+    tool_requested: bool = False
     tool_result: str | None = None
     final_response: ParsedChatResponse | None = None
     saved_messages: tuple[ThreadMessage, ...] = ()
@@ -391,49 +394,59 @@ class ConversationGraphRuntime:
             ),
         )
 
-    def tool_resolution_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+    def detect_tool_request_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         response = _require_chat_response(state.initial_response)
-        if response.tool is None or response.tool not in self._tools:
-            final_response = _apply_unsupported_claim_guard(response)
-            return ConversationNodeResult(
-                node="tool_resolution",
-                state=replace(
-                    state,
-                    final_response=final_response,
-                    saved_messages=(
-                        *state.active_messages,
-                        ThreadMessage(role="assistant", content=final_response.answer),
-                    ),
-                    node_trace=(*state.node_trace, "tool_resolution"),
-                ),
-            )
+        return ConversationNodeResult(
+            node="detect_tool_request",
+            state=replace(
+                state,
+                tool_requested=response.tool is not None and response.tool in self._tools,
+                node_trace=(*state.node_trace, "detect_tool_request"),
+            ),
+        )
 
+    def execute_tool_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        response = _require_chat_response(state.initial_response)
         tool_result = self._invoke_tool(response)
         tool_message = ThreadMessage(
             role="assistant",
             content=f"[Tool call: {response.tool}]\n{tool_result}",
         )
         messages_with_tool = (*state.active_messages, tool_message)
-        follow_up_prompt = self._build_follow_up_prompt(
-            ThreadState(
-                thread_id=state.thread_id,
-                summary=state.persisted_state.summary,
-                messages=list(messages_with_tool),
-            ),
-            tool_result,
-        )
-        final_response = _apply_unsupported_claim_guard(_parse_chat_response(self._llm.complete(follow_up_prompt)))
         return ConversationNodeResult(
-            node="tool_resolution",
+            node="execute_tool",
             state=replace(
                 state,
                 tool_result=tool_result,
-                final_response=final_response,
-                saved_messages=(
-                    *messages_with_tool,
-                    ThreadMessage(role="assistant", content=final_response.answer),
+                saved_messages=messages_with_tool,
+                node_trace=(*state.node_trace, "execute_tool"),
+            ),
+        )
+
+    def finalize_response_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        if state.tool_requested:
+            tool_result = _require_tool_result(state.tool_result)
+            follow_up_prompt = self._build_follow_up_prompt(
+                ThreadState(
+                    thread_id=state.thread_id,
+                    summary=state.persisted_state.summary,
+                    messages=list(state.saved_messages),
                 ),
-                node_trace=(*state.node_trace, "tool_resolution"),
+                tool_result,
+            )
+            final_response = _apply_unsupported_claim_guard(_parse_chat_response(self._llm.complete(follow_up_prompt)))
+            saved_messages = (*state.saved_messages, ThreadMessage(role="assistant", content=final_response.answer))
+        else:
+            response = _require_chat_response(state.initial_response)
+            final_response = _apply_unsupported_claim_guard(response)
+            saved_messages = (*state.active_messages, ThreadMessage(role="assistant", content=final_response.answer))
+        return ConversationNodeResult(
+            node="finalize_response",
+            state=replace(
+                state,
+                final_response=final_response,
+                saved_messages=saved_messages,
+                node_trace=(*state.node_trace, "finalize_response"),
             ),
         )
 
@@ -600,6 +613,12 @@ def _require_thread_state(state: ThreadState | None) -> ThreadState:
     if state is None:
         raise RuntimeError("conversation runtime thread state is missing")
     return state
+
+
+def _require_tool_result(tool_result: str | None) -> str:
+    if tool_result is None:
+        raise RuntimeError("conversation runtime tool result is missing")
+    return tool_result
 
 
 @dataclass(frozen=True)
