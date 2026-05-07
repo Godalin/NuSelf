@@ -76,6 +76,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 为 memory query tools 添加 descriptor-aware retrieval heuristics 和 type/tag filters。
 - [x] 基于现有 memory links 添加第一版 relation-aware retrieval expansion。
 - [x] 添加从现有 memory links 派生、可重建的 relation index。
+- [ ] 添加用于内置关系行为的 `RelationDescriptor` registry。
 - [ ] 添加派生向量、hybrid 和 graph 索引。
 - [ ] 添加开放 symbolic graph，并用 `RelationDescriptor` 描述支持、矛盾、细化、偏好、依赖和未来关系。
 - [x] 添加 memory stats 和更丰富的 query 命令。

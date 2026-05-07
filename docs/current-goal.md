@@ -4,11 +4,11 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Prepare for LangGraph integration: tool-based memory search is now available, and deterministic retrieval now has descriptor-aware type hints plus first-pass relation expansion.
+Build the open symbolic graph foundation: relation links are now inspectable, and the next slice should move relation behavior into `RelationDescriptor` definitions.
 
 ## Status
 
-Recently completed foundation slice:
+Recently completed retrieval foundation slice:
 
 - `MemoryEntry` now has a clear migration path into a `MemoryObject` envelope.
 - `MemoryTypeRegistry` validates descriptor-backed memory objects.
@@ -55,12 +55,15 @@ Recently completed foundation slice:
 
 ## Scope
 
-- Tool-based memory search, descriptor-aware retrieval heuristics, first-pass relation expansion, and inspectable relation indexes are ready. Next focus is optional: prepare LangGraph integration or design the open symbolic graph layer.
+- Define a `RelationDescriptor` registry for built-in memory relations.
+- Route relation index generation through registered descriptors.
+- Keep the graph layer derived and rebuildable from authoritative memory entries.
+- Keep relation inspection commands working while descriptor metadata grows.
 
 ## Not Now
 
 - Full LangGraph integration (requires refactoring chat agent architecture).
-- Symbolic graph implementation.
+- Full symbolic graph storage beyond the existing derived relation index.
 - Plugin loading.
 - Full decay and reflection rule execution.
 - Vector or graph indexes.
@@ -75,13 +78,8 @@ Recently completed foundation slice:
 
 ## Completion Criteria
 
-- Tool protocol defined and `MemorySearchTool` implements search_memory.
-- ChatAgent integrates tool descriptions in system prompt.
-- ChatAgent parses tool calls from LLM responses and executes them.
-- Tool results are fed back to LLM for follow-up processing.
-- Tests cover tool invocation, error handling, and result formatting.
-- Descriptor-aware retrieval boosts and filters are covered by query/tool tests.
-- Relation expansion over existing memory links is covered by query tests.
-- Relation index rebuilding is covered by repository and CLI tests.
-- Relation index inspection and filtering are covered by CLI tests.
+- `RelationDescriptor` and relation registry types exist in the memory domain layer.
+- Built-in descriptors cover `supersedes` and `related_to`.
+- Relation index records include descriptor-derived metadata.
+- Repository and CLI tests cover descriptor-backed relation index generation and inspection.
 - All chat agent and daemon tests pass.
