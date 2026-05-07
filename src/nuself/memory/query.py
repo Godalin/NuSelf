@@ -83,7 +83,13 @@ class MemoryQueryService:
             match = _score_entry(entry, query.text, tokens)
             if match is not None:
                 matches.append(match)
-        return _expand_related_matches(matches, eligible_entries, query.limit, self._relation_registry)
+        return _expand_related_matches(
+            matches,
+            eligible_entries,
+            query.limit,
+            self._relation_registry,
+            self._repository,
+        )
 
     def search_sources(self, query: MemoryQuery) -> list[SourceChunkMatch]:
         if self._source_repository is None:
@@ -208,6 +214,7 @@ def _expand_related_matches(
     eligible_entries: list[MemoryEntry],
     limit: int,
     registry: RelationDescriptorRegistry,
+    repository: MemoryEntryRepository,
 ) -> list[MemoryMatch]:
     direct_matches = sorted(matches, key=_memory_match_sort_key)
     if len(direct_matches) >= limit:
@@ -222,6 +229,17 @@ def _expand_related_matches(
             _add_related_match(related_matches, by_id, direct_ids, match, entry_id, descriptor, descriptor.name)
         for descriptor, entry in _incoming_relation_refs(match.entry, eligible_entries, registry):
             _add_related_match(related_matches, by_id, direct_ids, match, entry.id, descriptor, descriptor.inverse or descriptor.name)
+        for descriptor, entry_id in _transitive_relation_refs(match.entry, registry, repository):
+            _add_related_match(
+                related_matches,
+                by_id,
+                direct_ids,
+                match,
+                entry_id,
+                descriptor,
+                f"{descriptor.name}_closure",
+                extra_penalty=0.25,
+            )
 
     related_sorted = sorted(related_matches.values(), key=_memory_match_sort_key)
     return [*direct_matches, *related_sorted][:limit]
@@ -254,6 +272,23 @@ def _incoming_relation_refs(
     return refs
 
 
+def _transitive_relation_refs(
+    entry: MemoryEntry,
+    registry: RelationDescriptorRegistry,
+    repository: MemoryEntryRepository,
+) -> list[tuple[RelationDescriptor, str]]:
+    refs: list[tuple[RelationDescriptor, str]] = []
+    for descriptor in registry:
+        if not descriptor.transitive:
+            continue
+        direct_targets = set(entry.relations.get(descriptor.source_field, []))
+        closure = repository.transitive_closure(entry.id, descriptor.name)
+        for node in closure.nodes:
+            if node.id != entry.id and node.id not in direct_targets:
+                refs.append((descriptor, node.id))
+    return refs
+
+
 def _relation_score_penalty(descriptor: RelationDescriptor) -> float:
     if descriptor.retrieval_rule == "include_both_current_and_superseded":
         return 0.5
@@ -268,6 +303,7 @@ def _add_related_match(
     entry_id: str,
     descriptor: RelationDescriptor,
     relation_name: str,
+    extra_penalty: float = 0.0,
 ) -> None:
     if entry_id in direct_ids:
         return
@@ -275,7 +311,7 @@ def _add_related_match(
     if entry is None:
         return
     reason = f"{relation_name}:{source_match.entry.id}"
-    score = max(source_match.score - _relation_score_penalty(descriptor), 0.1)
+    score = max(source_match.score - _relation_score_penalty(descriptor) - extra_penalty, 0.1)
     current = related_matches.get(entry.id)
     if current is None:
         related_matches[entry.id] = MemoryMatch(entry=entry, score=score, reasons=(reason,))

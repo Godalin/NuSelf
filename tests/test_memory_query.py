@@ -300,3 +300,58 @@ def test_memory_query_respects_retrieval_rule_score_penalty(tmp_path: Path) -> N
     superseded_match = next(m for m in matches if m.entry.id == superseded.id)
     neighbor_match = next(m for m in matches if m.entry.id == neighbor.id)
     assert superseded_match.score > neighbor_match.score
+
+
+def test_memory_query_expands_transitive_relation_closure(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    root = repo.save(
+        MemoryEntry(
+            type="goal",
+            title="Build graph retrieval",
+            body="Wire graph traversal into memory retrieval.",
+            review_state="reviewed",
+        )
+    )
+    dependency = repo.save(
+        MemoryEntry(
+            type="goal",
+            title="Build index",
+            body="Create the projection.",
+            review_state="reviewed",
+        )
+    )
+    deep_dependency = repo.save(
+        MemoryEntry(
+            type="goal",
+            title="Define relations",
+            body="Register symbolic behavior.",
+            review_state="reviewed",
+        )
+    )
+    repo.save(
+        MemoryEntry(
+            type=root.type,
+            title=root.title,
+            body=root.body,
+            id=root.id,
+            review_state=root.review_state,
+            relations={"depends_on": [dependency.id]},
+        )
+    )
+    repo.save(
+        MemoryEntry(
+            type=dependency.type,
+            title=dependency.title,
+            body=dependency.body,
+            id=dependency.id,
+            review_state=dependency.review_state,
+            relations={"depends_on": [deep_dependency.id]},
+        )
+    )
+    service = MemoryQueryService(repo)
+
+    matches = service.search(MemoryQuery(text="graph retrieval", limit=6))
+
+    assert [match.entry.id for match in matches] == [root.id, dependency.id, deep_dependency.id]
+    assert matches[1].reasons == (f"depends_on:{root.id}",)
+    assert matches[2].reasons == (f"depends_on_closure:{root.id}",)
