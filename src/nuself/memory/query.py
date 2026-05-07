@@ -22,6 +22,8 @@ class MemoryQuery:
     text: str
     limit: int = DEFAULT_MEMORY_LIMIT
     review_states: tuple[ReviewState, ...] = ("draft", "reviewed")
+    memory_types: tuple[str, ...] = ()
+    tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,8 @@ class MemoryQueryService:
         for entry in self._repository.list():
             if entry.review_state not in query.review_states:
                 continue
+            if not _matches_query_filters(entry.type, entry.tags, query):
+                continue
             match = _score_entry(entry, query.text, tokens)
             if match is not None:
                 matches.append(match)
@@ -87,7 +91,9 @@ class MemoryQueryService:
         if self._profile_repository is None:
             return []
         matches: list[ProfileMatch] = []
-        for item in self._profile_repository.search(query.text):
+        for item in self._profile_repository.list():
+            if not _matches_query_filters(item.type, item.tags, query):
+                continue
             match = _score_profile_item(item, query.text)
             if match is not None:
                 matches.append(match)
@@ -106,9 +112,11 @@ class MemoryQueryService:
             entry = match.entry
             tags = f" tags={','.join(entry.tags)}" if entry.tags else ""
             reasons = ",".join(match.reasons)
+            relations = _relation_context(entry)
+            relation_text = f" relations={relations}" if relations else ""
             lines.append(
                 f"- {entry.title} "
-                f"[id={entry.id} type={entry.type} confidence={entry.confidence:.2f}{tags} match={reasons}]: "
+                f"[id={entry.id} type={entry.type} confidence={entry.confidence:.2f}{tags}{relation_text} match={reasons}]: "
                 f"{entry.body}"
             )
         if profile_matches:
@@ -165,6 +173,11 @@ def _score_entry(entry: MemoryEntry, raw_query: str, tokens: tuple[str, ...]) ->
         score += 4.0
         reasons.append("tag_phrase")
 
+    type_score = _type_affinity_score(entry.type, query, tokens)
+    if type_score > 0.0:
+        score += type_score
+        reasons.append("type_descriptor")
+
     for token in tokens:
         if token in title:
             score += 3.0
@@ -185,6 +198,53 @@ def _score_entry(entry: MemoryEntry, raw_query: str, tokens: tuple[str, ...]) ->
         score += min(entry.confidence, 1.0) * 0.25
         reasons.append("confidence")
     return MemoryMatch(entry=entry, score=score, reasons=tuple(reasons))
+
+
+def _matches_query_filters(memory_type: str, tags: list[str], query: MemoryQuery) -> bool:
+    if query.memory_types and memory_type not in query.memory_types:
+        return False
+    if query.tags:
+        normalized_tags = {tag.casefold() for tag in tags}
+        if not all(tag.casefold() in normalized_tags for tag in query.tags):
+            return False
+    return True
+
+
+TYPE_QUERY_HINTS: dict[str, tuple[str, ...]] = {
+    "preference": ("prefer", "preference", "like", "favorite", "choice", "rather"),
+    "style_trait": ("style", "tone", "voice", "respond", "answer", "write", "communication"),
+    "instruction": ("instruction", "rule", "should", "must", "always", "never", "respond", "behavior"),
+    "goal": ("goal", "plan", "next", "current", "focus", "todo", "blocker", "progress"),
+    "belief": ("belief", "believe", "think", "opinion", "view", "stance", "claim"),
+    "concept": ("concept", "meaning", "definition", "define", "idea", "explain"),
+    "episode": ("when", "happened", "discussed", "history", "previously", "earlier", "event"),
+    "open_question": ("question", "unknown", "unresolved", "open", "unclear"),
+    "profile_fact": ("profile", "about", "background", "fact", "identity"),
+    "source_note": ("source", "note", "document", "evidence", "reference"),
+}
+
+
+def _type_affinity_score(memory_type: str, query: str, tokens: tuple[str, ...]) -> float:
+    hints = TYPE_QUERY_HINTS.get(memory_type)
+    if not hints:
+        return 0.0
+    score = 0.0
+    for hint in hints:
+        hint_normalized = hint.casefold()
+        if " " in hint_normalized and hint_normalized in query:
+            score += 1.5
+        elif hint_normalized in tokens:
+            score += 1.0
+    return min(score, 3.0)
+
+
+def _relation_context(entry: MemoryEntry) -> str:
+    parts: list[str] = []
+    if entry.supersedes:
+        parts.append(f"supersedes:{','.join(entry.supersedes)}")
+    if entry.related_memory_ids:
+        parts.append(f"related:{','.join(entry.related_memory_ids)}")
+    return ";".join(parts)
 
 
 def _score_profile_item(item: ProfileItem, raw_query: str) -> ProfileMatch | None:
@@ -208,6 +268,11 @@ def _score_profile_item(item: ProfileItem, raw_query: str) -> ProfileMatch | Non
     if query != "" and any(query in source_ref for source_ref in source_refs):
         score += 2.0
         reasons.append("source_ref_phrase")
+
+    type_score = _type_affinity_score(item.type, query, _query_tokens(raw_query))
+    if type_score > 0.0:
+        score += type_score
+        reasons.append("type_descriptor")
 
     for token in _query_tokens(raw_query):
         if token in title:

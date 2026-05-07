@@ -313,6 +313,34 @@ def test_memory_search_tool_invocation_with_limit(tmp_path: Path) -> None:
     assert "matches found" not in result.lower() or result.count("belief") >= 2
 
 
+def test_memory_search_tool_accepts_type_and_tag_filters(tmp_path: Path) -> None:
+    from nuself.agent.tools import MemorySearchTool
+
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Direct style",
+            body="Prefer direct answers.",
+            tags=["style"],
+        )
+    )
+    repo.save(
+        MemoryEntry(
+            type="goal",
+            title="Runtime migration",
+            body="Prepare graph migration.",
+            tags=["runtime"],
+        )
+    )
+    tool = MemorySearchTool(query_service=MemoryQueryService(repo))
+
+    result = tool.invoke(query="current goal", types=["goal"], tags=["runtime"])
+
+    assert "Runtime migration" in result
+    assert "Direct style" not in result
+
+
 def test_memory_search_tool_with_invalid_inputs(tmp_path: Path) -> None:
     from nuself.agent.tools import MemorySearchTool
 
@@ -326,4 +354,3 @@ def test_memory_search_tool_with_invalid_inputs(tmp_path: Path) -> None:
     # Invalid limit
     result = tool.invoke(query="test", limit=0)
     assert "Error" in result
-

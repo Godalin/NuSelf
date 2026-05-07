@@ -31,12 +31,20 @@ class MemorySearchTool:
         "Returns formatted memory context with matches, scores, and match reasons."
     )
 
-    def invoke(self, query: str = "", limit: int = 8) -> str:
+    def invoke(
+        self,
+        query: str = "",
+        limit: int = 8,
+        types: list[str] | tuple[str, ...] | str | None = None,
+        tags: list[str] | tuple[str, ...] | str | None = None,
+    ) -> str:
         """Search memory and return formatted results.
 
         Args:
             query: Natural language search query (e.g., 'my work preferences', 'Python experience').
             limit: Maximum number of results to return (default 8).
+            types: Optional memory type or list of memory types to include.
+            tags: Optional tag or list of tags that results must include.
 
         Returns:
             Formatted memory context as string, or empty string if no matches found.
@@ -52,8 +60,15 @@ class MemorySearchTool:
             return "Error: query must be a non-empty string"
         if limit_int < 1:
             return "Error: limit must be a positive integer"
+        type_filters = _string_tuple_filter(types)
+        tag_filters = _string_tuple_filter(tags)
 
-        memory_query = MemoryQuery(text=query_str.strip(), limit=limit_int)
+        memory_query = MemoryQuery(
+            text=query_str.strip(),
+            limit=limit_int,
+            memory_types=type_filters,
+            tags=tag_filters,
+        )
         packed = self.query_service.pack(memory_query)
 
         if not packed.text:
@@ -69,3 +84,16 @@ def get_tool_description(tool: Tool) -> dict[str, Any]:
         "description": tool.description,
         "usage": f"Call with {{\"tool\": \"{tool.name}\", \"args\": {{...arguments...}}}}",
     }
+
+
+def _string_tuple_filter(value: list[str] | tuple[str, ...] | str | None) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        stripped = value.strip()
+        return (stripped,) if stripped else ()
+    result: list[str] = []
+    for item in value:
+        if item.strip():
+            result.append(item.strip())
+    return tuple(result)

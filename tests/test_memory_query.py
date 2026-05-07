@@ -149,3 +149,59 @@ def test_memory_query_includes_profile_items_in_default_chat_context(tmp_path: P
     assert len(packed.profile_matches) == 1
     assert "Profile items:" in packed.text
     assert "Direct style" in packed.text
+
+
+def test_memory_query_uses_type_descriptor_affinity(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    style = repo.save(
+        MemoryEntry(
+            type="style_trait",
+            title="Concise output",
+            body="Keep answers compact and direct.",
+            tags=["communication"],
+            review_state="reviewed",
+        )
+    )
+    repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Architecture boundary",
+            body="File-backed memory is authoritative.",
+            tags=["architecture"],
+            review_state="reviewed",
+        )
+    )
+    service = MemoryQueryService(repo)
+
+    matches = service.search(MemoryQuery(text="how should you respond"))
+
+    assert [match.entry.id for match in matches] == [style.id]
+    assert "type_descriptor" in matches[0].reasons
+
+
+def test_memory_query_filters_by_type_and_tag(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Clarity matters",
+            body="Prefer explicit assumptions.",
+            tags=["style"],
+            review_state="reviewed",
+        )
+    )
+    goal = repo.save(
+        MemoryEntry(
+            type="goal",
+            title="LangGraph preparation",
+            body="Prepare memory tools before graph migration.",
+            tags=["runtime"],
+            review_state="reviewed",
+        )
+    )
+    service = MemoryQueryService(repo)
+
+    matches = service.search(MemoryQuery(text="current goal", memory_types=("goal",), tags=("runtime",)))
+
+    assert [match.entry.id for match in matches] == [goal.id]
+    assert "type_descriptor" in matches[0].reasons

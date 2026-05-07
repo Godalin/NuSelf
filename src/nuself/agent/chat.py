@@ -357,7 +357,10 @@ class ChatAgent:
             '{"answer": "...", "tool": "search_memory", "tool_args": {"query": "search term"}, ...}',
             'This will search all memory and return additional context before generating your final answer.',
             'Tools available:',
-            '- search_memory(query: str, limit: int = 8): Search durable memory for relevant context.',
+            (
+                "- search_memory(query: str, limit: int = 8, types: list[str] = [], tags: list[str] = []): "
+                "Search durable memory for relevant context, optionally narrowed by memory type or tag."
+            ),
         ])
         return "\n".join(parts)
 
