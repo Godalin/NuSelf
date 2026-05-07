@@ -9,8 +9,8 @@ from nuself.cli import main
 from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.protocol import DaemonResponse
 from nuself.daemon.lifecycle import DaemonStatus
-from nuself.domain.memory import MemoryEntry
-from nuself.memory.repository import MemoryEntryRepository
+from nuself.domain.memory import MemoryCandidate, MemoryEntry
+from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 
 
 class CaptureResult(Protocol):
@@ -513,6 +513,91 @@ def test_memory_add_infers_type_without_manual_type(tmp_path: Path, capsys: Capt
     assert entry.title.startswith("I prefer terse CLI summaries")
     assert entry.title.endswith("...")
     assert entry.body == "I prefer terse CLI summaries with concrete next steps."
+
+
+def test_memory_candidate_review_flow_accepts_temporal_candidate(tmp_path: Path, capsys: CaptureFixture) -> None:
+    candidate = MemoryCandidateRepository(tmp_path).save(
+        MemoryCandidate(
+            type="belief",
+            title="Temporal memory",
+            body="Memory should preserve when a view was observed.",
+            observed_at="2026-05-07",
+            temporal_note="The user asked for visible thought evolution.",
+        )
+    )
+
+    list_result = main(["--project-root", str(tmp_path), "memory", "candidate", "list"])
+    list_output = capsys.readouterr().out
+    show_result = main(["--project-root", str(tmp_path), "memory", "candidate", "show", candidate.id])
+    show_output = capsys.readouterr().out
+    accept_result = main(["--project-root", str(tmp_path), "memory", "candidate", "accept", candidate.id])
+    accept_output = capsys.readouterr().out
+
+    entries = MemoryEntryRepository(tmp_path).list()
+
+    assert list_result == 0
+    assert show_result == 0
+    assert accept_result == 0
+    assert "Temporal memory" in list_output
+    assert "observed_at: 2026-05-07" in show_output
+    assert "Accepted memory candidate:" in accept_output
+    assert entries[0].observed_at == "2026-05-07"
+    assert entries[0].temporal_note == "The user asked for visible thought evolution."
+
+
+def test_memory_candidate_edit_merge_and_reject(tmp_path: Path, capsys: CaptureFixture) -> None:
+    entry = MemoryEntryRepository(tmp_path).save(
+        MemoryEntry(type="belief", title="Old timing idea", body="Memory has timestamps.")
+    )
+    candidate_repo = MemoryCandidateRepository(tmp_path)
+    merge_candidate = candidate_repo.save(
+        MemoryCandidate(
+            type="belief",
+            title="Timing candidate",
+            body="Memory timing should show how views change.",
+        )
+    )
+    reject_candidate = candidate_repo.save(
+        MemoryCandidate(type="episode", title="Reject me", body="Not useful.")
+    )
+
+    edit_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "candidate",
+            "edit",
+            merge_candidate.id,
+            "--title",
+            "Thought timeline",
+            "--observed-at",
+            "2026-05-07",
+            "--temporal-note",
+            "Edited during review.",
+        ]
+    )
+    edit_output = capsys.readouterr().out
+    merge_result = main(
+        ["--project-root", str(tmp_path), "memory", "candidate", "merge", merge_candidate.id, entry.id]
+    )
+    merge_output = capsys.readouterr().out
+    reject_result = main(
+        ["--project-root", str(tmp_path), "memory", "candidate", "reject", reject_candidate.id]
+    )
+    reject_output = capsys.readouterr().out
+
+    merged = MemoryEntryRepository(tmp_path).get(entry.id)
+
+    assert edit_result == 0
+    assert merge_result == 0
+    assert reject_result == 0
+    assert "Thought timeline" in edit_output
+    assert "Merged memory candidate:" in merge_output
+    assert "Rejected memory candidate:" in reject_output
+    assert merged.title == "Thought timeline"
+    assert merged.observed_at == "2026-05-07"
+    assert candidate_repo.get(reject_candidate.id).review_state == "rejected"
 
 
 class _TextInput:

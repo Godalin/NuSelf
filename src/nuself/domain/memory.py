@@ -21,6 +21,8 @@ MemoryEntryType: TypeAlias = Literal[
 
 ReviewState: TypeAlias = Literal["draft", "reviewed", "rejected"]
 PrivacyLevel: TypeAlias = Literal["private", "shareable"]
+MemoryCandidateAction: TypeAlias = Literal["create", "update", "merge", "delete"]
+MemoryCandidateReviewState: TypeAlias = Literal["pending", "accepted", "rejected"]
 
 
 def now_iso() -> str:
@@ -29,6 +31,10 @@ def now_iso() -> str:
 
 def new_memory_entry_id() -> str:
     return f"mem_{uuid4().hex}"
+
+
+def new_memory_candidate_id() -> str:
+    return f"cand_{uuid4().hex}"
 
 
 def empty_str_list() -> list[str]:
@@ -55,6 +61,12 @@ class MemoryEntry:
     created_at: str = field(default_factory=now_iso)
     updated_at: str = field(default_factory=now_iso)
     revisit_at: str | None = None
+    observed_at: str | None = None
+    valid_from: str | None = None
+    valid_until: str | None = None
+    temporal_note: str = ""
+    supersedes: list[str] = field(default_factory=empty_str_list)
+    related_memory_ids: list[str] = field(default_factory=empty_str_list)
 
     def with_updates(
         self,
@@ -64,6 +76,10 @@ class MemoryEntry:
         tags: list[str] | None = None,
         confidence: float | None = None,
         review_state: ReviewState | None = None,
+        observed_at: str | None = None,
+        valid_from: str | None = None,
+        valid_until: str | None = None,
+        temporal_note: str | None = None,
     ) -> "MemoryEntry":
         return MemoryEntry(
             type=self.type,
@@ -78,6 +94,12 @@ class MemoryEntry:
             created_at=self.created_at,
             updated_at=now_iso(),
             revisit_at=self.revisit_at,
+            observed_at=observed_at if observed_at is not None else self.observed_at,
+            valid_from=valid_from if valid_from is not None else self.valid_from,
+            valid_until=valid_until if valid_until is not None else self.valid_until,
+            temporal_note=temporal_note if temporal_note is not None else self.temporal_note,
+            supersedes=self.supersedes,
+            related_memory_ids=self.related_memory_ids,
         )
 
     def to_wire(self) -> dict[str, object]:
@@ -94,6 +116,12 @@ class MemoryEntry:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "revisit_at": self.revisit_at,
+            "observed_at": self.observed_at,
+            "valid_from": self.valid_from,
+            "valid_until": self.valid_until,
+            "temporal_note": self.temporal_note,
+            "supersedes": self.supersedes,
+            "related_memory_ids": self.related_memory_ids,
         }
 
     def to_memory_object(self) -> "MemoryObject":
@@ -107,6 +135,12 @@ class MemoryEntry:
                 "body": self.body,
                 "tags": self.tags,
                 "revisit_at": self.revisit_at,
+                "observed_at": self.observed_at,
+                "valid_from": self.valid_from,
+                "valid_until": self.valid_until,
+                "temporal_note": self.temporal_note,
+                "supersedes": self.supersedes,
+                "related_memory_ids": self.related_memory_ids,
             },
             metadata={"entry_schema": "MemoryEntry/v1"},
             confidence=self.confidence,
@@ -132,6 +166,12 @@ class MemoryEntry:
             created_at=_expect_str(data, "created_at"),
             updated_at=_expect_str(data, "updated_at"),
             revisit_at=_expect_optional_str(data, "revisit_at"),
+            observed_at=_optional_str(data, "observed_at"),
+            valid_from=_optional_str(data, "valid_from"),
+            valid_until=_optional_str(data, "valid_until"),
+            temporal_note=_optional_str(data, "temporal_note") or "",
+            supersedes=_optional_str_list(data, "supersedes"),
+            related_memory_ids=_optional_str_list(data, "related_memory_ids"),
         )
 
     @classmethod
@@ -150,6 +190,148 @@ class MemoryEntry:
             created_at=memory.created_at,
             updated_at=memory.updated_at,
             revisit_at=_expect_mapping_optional_str(payload, "revisit_at"),
+            observed_at=_expect_mapping_optional_str(payload, "observed_at"),
+            valid_from=_expect_mapping_optional_str(payload, "valid_from"),
+            valid_until=_expect_mapping_optional_str(payload, "valid_until"),
+            temporal_note=_optional_payload_str(payload, "temporal_note"),
+            supersedes=_optional_mapping_str_list(payload, "supersedes"),
+            related_memory_ids=_optional_mapping_str_list(payload, "related_memory_ids"),
+        )
+
+
+@dataclass(frozen=True)
+class MemoryCandidate:
+    """Proposed memory change awaiting review before durable persistence."""
+
+    type: MemoryEntryType
+    title: str
+    body: str
+    action: MemoryCandidateAction = "create"
+    tags: list[str] = field(default_factory=empty_str_list)
+    source_refs: list[str] = field(default_factory=empty_str_list)
+    confidence: float = 0.7
+    privacy: PrivacyLevel = "private"
+    review_state: MemoryCandidateReviewState = "pending"
+    reason: str = ""
+    id: str = field(default_factory=new_memory_candidate_id)
+    created_at: str = field(default_factory=now_iso)
+    updated_at: str = field(default_factory=now_iso)
+    reviewed_at: str | None = None
+    target_entry_id: str | None = None
+    observed_at: str | None = None
+    valid_from: str | None = None
+    valid_until: str | None = None
+    temporal_note: str = ""
+    supersedes: list[str] = field(default_factory=empty_str_list)
+    related_memory_ids: list[str] = field(default_factory=empty_str_list)
+
+    def with_updates(
+        self,
+        *,
+        title: str | None = None,
+        body: str | None = None,
+        tags: list[str] | None = None,
+        review_state: MemoryCandidateReviewState | None = None,
+        target_entry_id: str | None = None,
+        observed_at: str | None = None,
+        valid_from: str | None = None,
+        valid_until: str | None = None,
+        temporal_note: str | None = None,
+    ) -> "MemoryCandidate":
+        reviewed_at = now_iso() if review_state in {"accepted", "rejected"} else self.reviewed_at
+        return MemoryCandidate(
+            type=self.type,
+            title=title if title is not None else self.title,
+            body=body if body is not None else self.body,
+            action=self.action,
+            tags=tags if tags is not None else self.tags,
+            source_refs=self.source_refs,
+            confidence=self.confidence,
+            privacy=self.privacy,
+            review_state=review_state if review_state is not None else self.review_state,
+            reason=self.reason,
+            id=self.id,
+            created_at=self.created_at,
+            updated_at=now_iso(),
+            reviewed_at=reviewed_at,
+            target_entry_id=target_entry_id if target_entry_id is not None else self.target_entry_id,
+            observed_at=observed_at if observed_at is not None else self.observed_at,
+            valid_from=valid_from if valid_from is not None else self.valid_from,
+            valid_until=valid_until if valid_until is not None else self.valid_until,
+            temporal_note=temporal_note if temporal_note is not None else self.temporal_note,
+            supersedes=self.supersedes,
+            related_memory_ids=self.related_memory_ids,
+        )
+
+    def to_entry(self, *, review_state: ReviewState = "draft") -> MemoryEntry:
+        if self.action == "delete":
+            raise ValueError("delete candidates cannot be converted to memory entries")
+        return MemoryEntry(
+            type=self.type,
+            title=self.title,
+            body=self.body,
+            tags=self.tags,
+            source_refs=self.source_refs,
+            confidence=self.confidence,
+            privacy=self.privacy,
+            review_state=review_state,
+            observed_at=self.observed_at,
+            valid_from=self.valid_from,
+            valid_until=self.valid_until,
+            temporal_note=self.temporal_note,
+            supersedes=self.supersedes,
+            related_memory_ids=self.related_memory_ids,
+        )
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "action": self.action,
+            "type": self.type,
+            "title": self.title,
+            "body": self.body,
+            "tags": self.tags,
+            "source_refs": self.source_refs,
+            "confidence": self.confidence,
+            "privacy": self.privacy,
+            "review_state": self.review_state,
+            "reason": self.reason,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "reviewed_at": self.reviewed_at,
+            "target_entry_id": self.target_entry_id,
+            "observed_at": self.observed_at,
+            "valid_from": self.valid_from,
+            "valid_until": self.valid_until,
+            "temporal_note": self.temporal_note,
+            "supersedes": self.supersedes,
+            "related_memory_ids": self.related_memory_ids,
+        }
+
+    @classmethod
+    def from_wire(cls, data: dict[str, object]) -> "MemoryCandidate":
+        return cls(
+            id=_expect_str(data, "id"),
+            action=_expect_candidate_action(data, "action"),
+            type=_expect_memory_type(data, "type"),
+            title=_expect_str(data, "title"),
+            body=_expect_str(data, "body"),
+            tags=_expect_str_list(data, "tags"),
+            source_refs=_expect_str_list(data, "source_refs"),
+            confidence=_expect_float(data, "confidence"),
+            privacy=_expect_privacy(data, "privacy"),
+            review_state=_expect_candidate_review_state(data, "review_state"),
+            reason=_optional_str(data, "reason") or "",
+            created_at=_expect_str(data, "created_at"),
+            updated_at=_expect_str(data, "updated_at"),
+            reviewed_at=_optional_str(data, "reviewed_at"),
+            target_entry_id=_optional_str(data, "target_entry_id"),
+            observed_at=_optional_str(data, "observed_at"),
+            valid_from=_optional_str(data, "valid_from"),
+            valid_until=_optional_str(data, "valid_until"),
+            temporal_note=_optional_str(data, "temporal_note") or "",
+            supersedes=_optional_str_list(data, "supersedes"),
+            related_memory_ids=_optional_str_list(data, "related_memory_ids"),
         )
 
 
@@ -323,6 +505,15 @@ def _expect_optional_str(data: dict[str, object], field_name: str) -> str | None
     return value
 
 
+def _optional_str(data: dict[str, object], field_name: str) -> str | None:
+    value = data.get(field_name)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"field '{field_name}' must be a string or null")
+    return value
+
+
 def _expect_float(data: dict[str, object], field_name: str) -> float:
     value = data.get(field_name)
     if isinstance(value, int | float):
@@ -339,6 +530,20 @@ def _expect_dict(data: dict[str, object], field_name: str) -> dict[str, object]:
 
 def _expect_str_list(data: dict[str, object], field_name: str) -> list[str]:
     value = data.get(field_name)
+    if not isinstance(value, list):
+        raise ValueError(f"field '{field_name}' must be a list")
+    result: list[str] = []
+    for item in cast(list[object], value):
+        if not isinstance(item, str):
+            raise ValueError(f"field '{field_name}' must contain only strings")
+        result.append(item)
+    return result
+
+
+def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
+    value = data.get(field_name)
+    if value is None:
+        return []
     if not isinstance(value, list):
         raise ValueError(f"field '{field_name}' must be a list")
     result: list[str] = []
@@ -387,6 +592,20 @@ def _expect_review_state(data: dict[str, object], field_name: str) -> ReviewStat
     return cast(ReviewState, value)
 
 
+def _expect_candidate_action(data: dict[str, object], field_name: str) -> MemoryCandidateAction:
+    value = _expect_str(data, field_name)
+    if value not in {"create", "update", "merge", "delete"}:
+        raise ValueError(f"unsupported candidate action: {value}")
+    return cast(MemoryCandidateAction, value)
+
+
+def _expect_candidate_review_state(data: dict[str, object], field_name: str) -> MemoryCandidateReviewState:
+    value = _expect_str(data, field_name)
+    if value not in {"pending", "accepted", "rejected"}:
+        raise ValueError(f"unsupported candidate review state: {value}")
+    return cast(MemoryCandidateReviewState, value)
+
+
 def _expect_privacy(data: dict[str, object], field_name: str) -> PrivacyLevel:
     value = _expect_str(data, field_name)
     if value not in {"private", "shareable"}:
@@ -408,6 +627,14 @@ def _validate_entry_payload(payload: Mapping[str, object]) -> list[MemoryValidat
     revisit_at = payload.get("revisit_at")
     if revisit_at is not None and not isinstance(revisit_at, str):
         issues.append(MemoryValidationIssue("payload.revisit_at", "must be a string or null"))
+    for field_name in ["observed_at", "valid_from", "valid_until", "temporal_note"]:
+        value = payload.get(field_name)
+        if value is not None and not isinstance(value, str):
+            issues.append(MemoryValidationIssue(f"payload.{field_name}", "must be a string or null"))
+    for field_name in ["supersedes", "related_memory_ids"]:
+        value = payload.get(field_name, [])
+        if not isinstance(value, list) or any(not isinstance(item, str) for item in cast(list[object], value)):
+            issues.append(MemoryValidationIssue(f"payload.{field_name}", "must be a list of strings"))
     return issues
 
 
@@ -429,6 +656,20 @@ def _expect_mapping_optional_str(data: Mapping[str, object], field_name: str) ->
 
 def _expect_mapping_str_list(data: Mapping[str, object], field_name: str) -> list[str]:
     value = data.get(field_name)
+    if not isinstance(value, list):
+        raise ValueError(f"field '{field_name}' must be a list")
+    result: list[str] = []
+    for item in cast(list[object], value):
+        if not isinstance(item, str):
+            raise ValueError(f"field '{field_name}' must contain only strings")
+        result.append(item)
+    return result
+
+
+def _optional_mapping_str_list(data: Mapping[str, object], field_name: str) -> list[str]:
+    value = data.get(field_name)
+    if value is None:
+        return []
     if not isinstance(value, list):
         raise ValueError(f"field '{field_name}' must be a list")
     result: list[str] = []

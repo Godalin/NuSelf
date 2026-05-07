@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from nuself.domain.memory import MemoryCandidate, MemoryEntry
+from nuself.memory.repository import (
+    MemoryCandidateNotFound,
+    MemoryCandidateRepository,
+    MemoryEntryRepository,
+)
+
+
+def test_memory_candidate_repository_crud_and_accept_with_temporal_fields(tmp_path: Path) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = repo.save(
+        MemoryCandidate(
+            type="belief",
+            title="Memory has time",
+            body="The user wants memories to carry real-world time information.",
+            tags=["memory"],
+            source_refs=["thread:default:4-6"],
+            observed_at="2026-05-07",
+            valid_from="2026-05-07",
+            temporal_note="Raised while discussing realistic memory evolution.",
+        )
+    )
+
+    listed = repo.list()
+    entry = repo.accept(candidate.id)
+    accepted = repo.get(candidate.id)
+
+    assert listed == [candidate]
+    assert entry.title == "Memory has time"
+    assert entry.observed_at == "2026-05-07"
+    assert entry.valid_from == "2026-05-07"
+    assert entry.temporal_note == "Raised while discussing realistic memory evolution."
+    assert accepted.review_state == "accepted"
+    assert accepted.target_entry_id == entry.id
+    assert repo.list() == []
+    assert repo.list(include_reviewed=True)[0].id == candidate.id
+
+
+def test_memory_candidate_repository_rejects_candidate(tmp_path: Path) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = repo.save(
+        MemoryCandidate(
+            type="episode",
+            title="Low value note",
+            body="A proposed memory that should not be accepted.",
+        )
+    )
+
+    rejected = repo.reject(candidate.id)
+
+    assert rejected.review_state == "rejected"
+    assert repo.list() == []
+
+
+def test_memory_candidate_repository_merges_into_existing_entry(tmp_path: Path) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    existing = entry_repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Memory timing",
+            body="Memory should include timestamps.",
+            source_refs=["thread:default:0-2"],
+        )
+    )
+    candidate_repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    candidate = candidate_repo.save(
+        MemoryCandidate(
+            type="belief",
+            title="Memory timing model",
+            body="Memory should preserve real-world timing so changes in thought remain visible.",
+            source_refs=["thread:default:4-6"],
+            observed_at="2026-05-07",
+            related_memory_ids=[existing.id],
+        )
+    )
+
+    merged = candidate_repo.merge(candidate.id, existing.id)
+
+    assert merged.id == existing.id
+    assert merged.title == "Memory timing model"
+    assert merged.source_refs == ["thread:default:0-2", "thread:default:4-6"]
+    assert merged.observed_at == "2026-05-07"
+    assert merged.related_memory_ids == [existing.id]
+    assert candidate_repo.get(candidate.id).review_state == "accepted"
+
+
+def test_memory_candidate_repository_missing_candidate(tmp_path: Path) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+
+    try:
+        repo.get("missing")
+    except MemoryCandidateNotFound:
+        return
+    raise AssertionError("expected MemoryCandidateNotFound")

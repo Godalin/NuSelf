@@ -9,9 +9,9 @@ from typing import Literal, TypeAlias, cast
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.domain.memory import MemoryEntry, MemoryEntryType, MemoryValidationError, ReviewState, now_iso
+from nuself.domain.memory import MemoryCandidate, MemoryEntryType, now_iso
 from nuself.llm import ChatLLM, ChatMessage, default_llm
-from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
+from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 
 MemoryActionType: TypeAlias = Literal["create", "update", "ignore"]
 DecisionStatus: TypeAlias = Literal["ready", "deferred"]
@@ -79,6 +79,7 @@ class MemoryCurator:
         settings: MemoryCuratorSettings | None = None,
         thread_store: ThreadStore | None = None,
         repository: MemoryEntryRepository | None = None,
+        candidate_repository: MemoryCandidateRepository | None = None,
     ) -> None:
         paths = runtime_paths(project_root)
         self._paths = paths
@@ -86,6 +87,10 @@ class MemoryCurator:
         self._settings = settings or MemoryCuratorSettings()
         self._thread_store = thread_store or ThreadStore(paths.project_root)
         self._repository = repository or MemoryEntryRepository(paths.project_root)
+        self._candidate_repository = candidate_repository or MemoryCandidateRepository(
+            paths.project_root,
+            entry_repository=self._repository,
+        )
 
     def run_once(self, thread_id: str = "default") -> MemoryCuratorResult:
         state = self._thread_store.load(thread_id)
@@ -137,12 +142,12 @@ class MemoryCurator:
         ignored = 0
         for action in decision.actions:
             if action.action == "create":
-                if self._create_entry(action, source_ref):
+                if self._create_candidate(action, source_ref):
                     created += 1
                 else:
                     ignored += 1
             elif action.action == "update":
-                if self._update_entry(action, source_ref):
+                if self._update_candidate(action, source_ref):
                     updated += 1
                 else:
                     ignored += 1
@@ -153,7 +158,6 @@ class MemoryCurator:
             f"memory_curator thread={thread_id} source={source_ref} "
             f"processed={len(new_messages)} created={created} updated={updated} ignored={ignored}"
         )
-        self._repository.reindex()
         return MemoryCuratorResult(
             processed_messages=len(new_messages),
             created=created,
@@ -212,51 +216,49 @@ class MemoryCurator:
             lines.append(f"- id={entry.id} type={entry.type} title={entry.title}: {entry.body}")
         return "\n".join(lines)
 
-    def _create_entry(self, action: MemoryAction, source_ref: str) -> bool:
-        review_state: ReviewState = "reviewed" if action.type == "episode" else "draft"
-        entry = MemoryEntry(
+    def _create_candidate(self, action: MemoryAction, source_ref: str) -> bool:
+        candidate = MemoryCandidate(
+            action="create",
             type=action.type,
             title=action.title,
             body=action.body,
             source_refs=[source_ref],
             confidence=_clamp_confidence(action.confidence),
-            review_state=review_state,
+            reason=action.reason,
         )
-        try:
-            self._repository.save(entry)
-        except MemoryValidationError as exc:
-            self._append_log(f"rejected entry type={entry.type} title={entry.title!r} reason={str(exc)!r}")
-            return False
-        self._append_log(f"created entry={entry.id} type={entry.type} title={entry.title!r} reason={action.reason!r}")
+        self._candidate_repository.save(candidate)
+        self._append_log(
+            f"created candidate={candidate.id} type={candidate.type} title={candidate.title!r} reason={action.reason!r}"
+        )
         return True
 
-    def _update_entry(self, action: MemoryAction, source_ref: str) -> bool:
+    def _update_candidate(self, action: MemoryAction, source_ref: str) -> bool:
         if action.entry_id is None:
             return False
         try:
             existing = self._repository.get(action.entry_id)
         except MemoryEntryNotFound:
             return False
-        updated = MemoryEntry(
+        candidate = MemoryCandidate(
+            action="update",
             type=existing.type,
             title=action.title or existing.title,
             body=action.body or existing.body,
             tags=existing.tags,
-            source_refs=[*existing.source_refs, source_ref],
+            source_refs=[source_ref],
             confidence=_clamp_confidence(action.confidence),
             privacy=existing.privacy,
-            review_state="draft",
-            id=existing.id,
-            created_at=existing.created_at,
-            updated_at=now_iso(),
-            revisit_at=existing.revisit_at,
+            reason=action.reason,
+            target_entry_id=existing.id,
+            observed_at=existing.observed_at,
+            valid_from=existing.valid_from,
+            valid_until=existing.valid_until,
+            temporal_note=existing.temporal_note,
+            supersedes=existing.supersedes,
+            related_memory_ids=existing.related_memory_ids,
         )
-        try:
-            self._repository.save(updated)
-        except MemoryValidationError as exc:
-            self._append_log(f"rejected update entry={updated.id} title={updated.title!r} reason={str(exc)!r}")
-            return False
-        self._append_log(f"updated entry={updated.id} title={updated.title!r} reason={action.reason!r}")
+        self._candidate_repository.save(candidate)
+        self._append_log(f"updated candidate={candidate.id} target={existing.id} title={candidate.title!r}")
         return True
 
     def _load_cursor(self, thread_id: str) -> int:

@@ -5,7 +5,7 @@ from pathlib import Path
 from nuself.domain.memory import MemoryEntry
 from nuself.llm import ChatMessage
 from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
-from nuself.memory.repository import MemoryEntryRepository
+from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 
 
 class FakeOptimizerLLM:
@@ -54,16 +54,20 @@ def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) 
 
     result = optimizer.run_once()
     entries = repo.list()
-    updated = repo.get(keeper.id)
+    candidates = MemoryCandidateRepository(tmp_path).list()
 
     assert result.reviewed == 2
     assert result.updated == 1
     assert result.deleted == 1
-    assert len(entries) == 1
-    assert updated.body.startswith("NuSelf memory updates should be decided by an agent")
-    assert updated.tags == ["memory", "curation"]
-    assert updated.review_state == "draft"
-    assert updated.source_refs[0].startswith("memory_optimize:")
+    assert len(entries) == 2
+    assert len(candidates) == 2
+    assert candidates[0].action in {"update", "delete"}
+    assert {candidate.action for candidate in candidates} == {"update", "delete"}
+    update_candidate = next(candidate for candidate in candidates if candidate.action == "update")
+    assert update_candidate.body.startswith("NuSelf memory updates should be decided by an agent")
+    assert update_candidate.tags == ["memory", "curation"]
+    assert update_candidate.target_entry_id == keeper.id
+    assert update_candidate.source_refs[0].startswith("memory_optimize:")
     assert "memory_optimizer reviewed=2 updated=1 deleted=1 ignored=0" in result.log_path.read_text(encoding="utf-8")
 
 

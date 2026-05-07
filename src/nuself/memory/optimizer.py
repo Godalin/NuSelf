@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.domain.memory import MemoryEntry, MemoryEntryType, MemoryValidationError, now_iso
+from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, now_iso
 from nuself.llm import ChatLLM, ChatMessage, default_llm
-from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
+from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 
 MemoryOptimizeActionType: TypeAlias = Literal["update", "delete", "ignore"]
 OptimizeDecisionStatus: TypeAlias = Literal["ready", "deferred"]
@@ -74,12 +74,17 @@ class MemoryOptimizer:
         llm: ChatLLM | None = None,
         settings: MemoryOptimizerSettings | None = None,
         repository: MemoryEntryRepository | None = None,
+        candidate_repository: MemoryCandidateRepository | None = None,
     ) -> None:
         paths = runtime_paths(project_root)
         self._paths = paths
         self._llm = llm or default_llm(paths.project_root)
         self._settings = settings or MemoryOptimizerSettings()
         self._repository = repository or MemoryEntryRepository(paths.project_root)
+        self._candidate_repository = candidate_repository or MemoryCandidateRepository(
+            paths.project_root,
+            entry_repository=self._repository,
+        )
 
     def run_once(self) -> MemoryOptimizerResult:
         entries = self._repository.list()[: max(self._settings.memory_limit, 1)]
@@ -109,12 +114,12 @@ class MemoryOptimizer:
         ignored = 0
         for action in decision.actions:
             if action.action == "update":
-                if self._update_entry(action, source_ref):
+                if self._update_candidate(action, source_ref):
                     updated += 1
                 else:
                     ignored += 1
             elif action.action == "delete":
-                if self._delete_entry(action):
+                if self._delete_candidate(action, source_ref):
                     deleted += 1
                 else:
                     ignored += 1
@@ -123,7 +128,6 @@ class MemoryOptimizer:
         self._append_log(
             f"memory_optimizer reviewed={len(entries)} updated={updated} deleted={deleted} ignored={ignored}"
         )
-        self._repository.reindex()
         return MemoryOptimizerResult(
             reviewed=len(entries),
             updated=updated,
@@ -171,43 +175,62 @@ class MemoryOptimizer:
             return MemoryOptimizeDecision(status="ready", actions=tuple(actions))
         return MemoryOptimizeDecision(status="deferred", reason="optimizer agent returned no valid actions")
 
-    def _update_entry(self, action: MemoryOptimizeAction, source_ref: str) -> bool:
+    def _update_candidate(self, action: MemoryOptimizeAction, source_ref: str) -> bool:
         if action.entry_id is None or action.title == "" or action.body == "":
             return False
         try:
             existing = self._repository.get(action.entry_id)
         except MemoryEntryNotFound:
             return False
-        updated = MemoryEntry(
+        candidate = MemoryCandidate(
+            action="update",
             type=action.type or existing.type,
             title=action.title,
             body=action.body,
             tags=list(action.tags) if action.tags is not None else existing.tags,
-            source_refs=[*existing.source_refs, source_ref],
+            source_refs=[source_ref],
             confidence=_clamp_confidence(action.confidence if action.confidence is not None else existing.confidence),
             privacy=existing.privacy,
-            review_state="draft",
-            id=existing.id,
-            created_at=existing.created_at,
-            updated_at=now_iso(),
-            revisit_at=existing.revisit_at,
+            reason=action.reason,
+            target_entry_id=existing.id,
+            observed_at=existing.observed_at,
+            valid_from=existing.valid_from,
+            valid_until=existing.valid_until,
+            temporal_note=existing.temporal_note,
+            supersedes=existing.supersedes,
+            related_memory_ids=existing.related_memory_ids,
         )
-        try:
-            self._repository.save(updated)
-        except MemoryValidationError as exc:
-            self._append_log(f"rejected optimized entry={updated.id} title={updated.title!r} reason={str(exc)!r}")
-            return False
-        self._append_log(f"optimized entry={updated.id} title={updated.title!r} reason={action.reason!r}")
+        self._candidate_repository.save(candidate)
+        self._append_log(f"optimized candidate={candidate.id} target={existing.id} title={candidate.title!r}")
         return True
 
-    def _delete_entry(self, action: MemoryOptimizeAction) -> bool:
+    def _delete_candidate(self, action: MemoryOptimizeAction, source_ref: str) -> bool:
         if action.entry_id is None:
             return False
         try:
-            self._repository.delete(action.entry_id)
+            existing = self._repository.get(action.entry_id)
         except MemoryEntryNotFound:
             return False
-        self._append_log(f"deleted entry={action.entry_id} reason={action.reason!r}")
+        candidate = MemoryCandidate(
+            action="delete",
+            type=existing.type,
+            title=existing.title,
+            body=existing.body,
+            tags=existing.tags,
+            source_refs=[source_ref],
+            confidence=existing.confidence,
+            privacy=existing.privacy,
+            reason=action.reason,
+            target_entry_id=existing.id,
+            observed_at=existing.observed_at,
+            valid_from=existing.valid_from,
+            valid_until=existing.valid_until,
+            temporal_note=existing.temporal_note,
+            supersedes=existing.supersedes,
+            related_memory_ids=existing.related_memory_ids,
+        )
+        self._candidate_repository.save(candidate)
+        self._append_log(f"deleted candidate={candidate.id} target={existing.id} reason={action.reason!r}")
         return True
 
     def _memory_log_path(self) -> Path:

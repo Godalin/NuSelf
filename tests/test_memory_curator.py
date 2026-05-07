@@ -11,7 +11,7 @@ from nuself.domain.memory import (
 )
 from nuself.llm import ChatMessage
 from nuself.memory.curator import MemoryCurator
-from nuself.memory.repository import MemoryEntryRepository
+from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 
 
 class FakeCuratorLLM:
@@ -45,16 +45,16 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
 
     result = curator.run_once()
     second_result = curator.run_once()
-    entries = repo.list()
+    candidates = MemoryCandidateRepository(tmp_path).list()
 
     assert result.processed_messages == 2
     assert result.created == 1
     assert second_result.processed_messages == 0
-    assert len(entries) == 1
-    assert entries[0].type == "episode"
-    assert entries[0].review_state == "reviewed"
-    assert entries[0].source_refs == ["thread:default:0-2"]
-    assert "created=1" in result.log_path.read_text(encoding="utf-8")
+    assert len(candidates) == 1
+    assert candidates[0].type == "episode"
+    assert candidates[0].review_state == "pending"
+    assert candidates[0].source_refs == ["thread:default:0-2"]
+    assert "candidate=" in result.log_path.read_text(encoding="utf-8")
 
 
 def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None:
@@ -86,12 +86,14 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
     curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
 
     result = curator.run_once()
-    updated = repo.get(existing.id)
+    candidates = MemoryCandidateRepository(tmp_path).list()
 
     assert result.updated == 1
-    assert updated.body == "The user prefers concise memory previews."
-    assert updated.review_state == "draft"
-    assert updated.source_refs == ["thread:default:0-2"]
+    assert candidates[0].body == "The user prefers concise memory previews."
+    assert candidates[0].action == "update"
+    assert candidates[0].target_entry_id == existing.id
+    assert candidates[0].source_refs == ["thread:default:0-2"]
+    assert repo.get(existing.id).body == "The user likes memory previews."
 
 
 def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None:
@@ -165,12 +167,12 @@ def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> No
     curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
 
     result = curator.run_once()
-    entries = repo.list()
+    candidates = MemoryCandidateRepository(tmp_path).list()
 
     assert result.processed_messages == 1
     assert result.created == 1
-    assert entries[0].type == "belief"
-    assert entries[0].source_refs == ["thread:default:0-1"]
+    assert candidates[0].type == "belief"
+    assert candidates[0].source_refs == ["thread:default:0-1"]
 
 
 def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: Path) -> None:
@@ -203,12 +205,12 @@ def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: 
 
     result = curator.run_once()
     second_result = curator.run_once()
-    entries = repo.list()
+    candidates = MemoryCandidateRepository(tmp_path).list()
 
     assert result.processed_messages == 2
     assert result.created == 1
     assert second_result.processed_messages == 0
-    assert entries[0].source_refs == ["thread:default:4-6"]
+    assert candidates[0].source_refs == ["thread:default:4-6"]
 
 
 def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:
@@ -258,7 +260,7 @@ def test_memory_curator_accepts_fenced_json(tmp_path: Path) -> None:
     result = curator.run_once()
 
     assert result.created == 1
-    assert repo.list()[0].title == "Structured memory decisions"
+    assert MemoryCandidateRepository(tmp_path).list()[0].title == "Structured memory decisions"
 
 
 class RejectingEpisodeDescriptor:
@@ -273,7 +275,7 @@ class RejectingEpisodeDescriptor:
         return "rejected"
 
 
-def test_memory_curator_ignores_descriptor_rejected_create(tmp_path: Path) -> None:
+def test_memory_curator_defers_descriptor_validation_until_candidate_acceptance(tmp_path: Path) -> None:
     thread_store = ThreadStore(tmp_path)
     thread_store.save(
         ThreadState(
@@ -294,7 +296,7 @@ def test_memory_curator_ignores_descriptor_rejected_create(tmp_path: Path) -> No
 
     result = curator.run_once()
 
-    assert result.created == 0
-    assert result.ignored == 1
+    assert result.created == 1
+    assert result.ignored == 0
     assert repo.list() == []
-    assert "rejected entry" in result.log_path.read_text(encoding="utf-8")
+    assert MemoryCandidateRepository(tmp_path).list()[0].title == "Descriptor validation"

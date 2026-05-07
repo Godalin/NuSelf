@@ -15,11 +15,16 @@ except ImportError:  # pragma: no cover - platform fallback
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.agent.chat import ChatAgent
 from nuself.daemon import client, lifecycle
-from nuself.domain.memory import MemoryEntry, MemoryEntryType
+from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType
 from nuself.memory.curator import MemoryCurator
 from nuself.memory.intake import MemoryIntakeAgent
 from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
-from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
+from nuself.memory.repository import (
+    MemoryCandidateNotFound,
+    MemoryCandidateRepository,
+    MemoryEntryNotFound,
+    MemoryEntryRepository,
+)
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
@@ -96,6 +101,35 @@ def build_parser() -> argparse.ArgumentParser:
     optimize_parser = memory_subparsers.add_parser("optimize")
     optimize_parser.add_argument("--limit", type=int, default=50)
     _add_handler(optimize_parser, handle_memory_optimize)
+    candidate_parser = memory_subparsers.add_parser("candidate")
+    candidate_parser.set_defaults(handler=None, help_parser=candidate_parser)
+    candidate_subparsers = candidate_parser.add_subparsers(dest="candidate_command")
+    candidate_list_parser = candidate_subparsers.add_parser("list")
+    candidate_list_parser.add_argument("--all", action="store_true")
+    _add_handler(candidate_list_parser, handle_memory_candidate_list)
+    candidate_show_parser = candidate_subparsers.add_parser("show")
+    candidate_show_parser.add_argument("candidate_id")
+    _add_handler(candidate_show_parser, handle_memory_candidate_show)
+    candidate_accept_parser = candidate_subparsers.add_parser("accept")
+    candidate_accept_parser.add_argument("candidate_id")
+    _add_handler(candidate_accept_parser, handle_memory_candidate_accept)
+    candidate_reject_parser = candidate_subparsers.add_parser("reject")
+    candidate_reject_parser.add_argument("candidate_id")
+    _add_handler(candidate_reject_parser, handle_memory_candidate_reject)
+    candidate_edit_parser = candidate_subparsers.add_parser("edit")
+    candidate_edit_parser.add_argument("candidate_id")
+    candidate_edit_parser.add_argument("--title", default=None)
+    candidate_edit_parser.add_argument("--body", "--text", default=None)
+    candidate_edit_parser.add_argument("--tag", action="append", default=None)
+    candidate_edit_parser.add_argument("--observed-at", default=None)
+    candidate_edit_parser.add_argument("--valid-from", default=None)
+    candidate_edit_parser.add_argument("--valid-until", default=None)
+    candidate_edit_parser.add_argument("--temporal-note", default=None)
+    _add_handler(candidate_edit_parser, handle_memory_candidate_edit)
+    candidate_merge_parser = candidate_subparsers.add_parser("merge")
+    candidate_merge_parser.add_argument("candidate_id")
+    candidate_merge_parser.add_argument("entry_id")
+    _add_handler(candidate_merge_parser, handle_memory_candidate_merge)
     _add_handler(memory_subparsers.add_parser("reindex"), handle_memory_reindex)
 
     return parser
@@ -282,6 +316,91 @@ def handle_memory_optimize(args: argparse.Namespace) -> int:
     settings = MemoryOptimizerSettings(memory_limit=args.limit)
     result = MemoryOptimizer(args.project_root, settings=settings).run_once()
     print(f"Memory optimizer: {result.summary()} log={result.log_path}")
+    return 0
+
+
+def handle_memory_candidate_list(args: argparse.Namespace) -> int:
+    repo = MemoryCandidateRepository(args.project_root)
+    candidates = repo.list(include_reviewed=args.all)
+    if not candidates:
+        print("No memory candidates.")
+        return 0
+    for candidate in candidates:
+        print(_format_memory_candidate_summary(candidate))
+    return 0
+
+
+def handle_memory_candidate_show(args: argparse.Namespace) -> int:
+    repo = MemoryCandidateRepository(args.project_root)
+    try:
+        candidate = repo.get(args.candidate_id)
+    except MemoryCandidateNotFound:
+        print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
+        return 1
+    print(_format_memory_candidate_detail(candidate))
+    return 0
+
+
+def handle_memory_candidate_accept(args: argparse.Namespace) -> int:
+    repo = MemoryCandidateRepository(args.project_root)
+    try:
+        entry = repo.accept(args.candidate_id)
+    except MemoryCandidateNotFound:
+        print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(f"Accepted memory candidate: {args.candidate_id} -> {entry.id}")
+    return 0
+
+
+def handle_memory_candidate_reject(args: argparse.Namespace) -> int:
+    repo = MemoryCandidateRepository(args.project_root)
+    try:
+        repo.reject(args.candidate_id)
+    except MemoryCandidateNotFound:
+        print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
+        return 1
+    print(f"Rejected memory candidate: {args.candidate_id}")
+    return 0
+
+
+def handle_memory_candidate_edit(args: argparse.Namespace) -> int:
+    repo = MemoryCandidateRepository(args.project_root)
+    try:
+        candidate = repo.get(args.candidate_id)
+    except MemoryCandidateNotFound:
+        print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
+        return 1
+    updated = candidate.with_updates(
+        title=args.title,
+        body=args.body,
+        tags=list(args.tag) if args.tag is not None else None,
+        observed_at=args.observed_at,
+        valid_from=args.valid_from,
+        valid_until=args.valid_until,
+        temporal_note=args.temporal_note,
+    )
+    repo.save(updated)
+    print(_format_memory_candidate_summary(updated))
+    return 0
+
+
+def handle_memory_candidate_merge(args: argparse.Namespace) -> int:
+    repo = MemoryCandidateRepository(args.project_root)
+    try:
+        entry = repo.merge(args.candidate_id, args.entry_id)
+    except MemoryCandidateNotFound:
+        print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
+        return 1
+    except MemoryEntryNotFound:
+        print(f"Memory entry not found: {args.entry_id}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(f"Merged memory candidate: {args.candidate_id} -> {entry.id}")
     return 0
 
 
@@ -507,8 +626,48 @@ def _format_memory_detail(entry: MemoryEntry) -> str:
             f"review_state: {entry.review_state}",
             f"created_at: {entry.created_at}",
             f"updated_at: {entry.updated_at}",
+            f"observed_at: {entry.observed_at or '-'}",
+            f"valid_from: {entry.valid_from or '-'}",
+            f"valid_until: {entry.valid_until or '-'}",
+            f"temporal_note: {entry.temporal_note or '-'}",
             "",
             entry.body,
+        ]
+    )
+
+
+def _format_memory_candidate_summary(candidate: MemoryCandidate) -> str:
+    tags = ",".join(candidate.tags) if candidate.tags else "-"
+    observed = candidate.observed_at or "-"
+    return (
+        f"{candidate.id} [{candidate.review_state}] {candidate.action} {candidate.type} "
+        f"{candidate.title} tags={tags} observed_at={observed}"
+    )
+
+
+def _format_memory_candidate_detail(candidate: MemoryCandidate) -> str:
+    tags = ", ".join(candidate.tags) if candidate.tags else "-"
+    return "\n".join(
+        [
+            f"id: {candidate.id}",
+            f"action: {candidate.action}",
+            f"type: {candidate.type}",
+            f"title: {candidate.title}",
+            f"tags: {tags}",
+            f"confidence: {candidate.confidence}",
+            f"privacy: {candidate.privacy}",
+            f"review_state: {candidate.review_state}",
+            f"reason: {candidate.reason or '-'}",
+            f"target_entry_id: {candidate.target_entry_id or '-'}",
+            f"created_at: {candidate.created_at}",
+            f"updated_at: {candidate.updated_at}",
+            f"reviewed_at: {candidate.reviewed_at or '-'}",
+            f"observed_at: {candidate.observed_at or '-'}",
+            f"valid_from: {candidate.valid_from or '-'}",
+            f"valid_until: {candidate.valid_until or '-'}",
+            f"temporal_note: {candidate.temporal_note or '-'}",
+            "",
+            candidate.body,
         ]
     )
 
