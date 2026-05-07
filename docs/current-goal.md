@@ -60,6 +60,7 @@ Recently completed retrieval foundation slice:
 - `MemoryEntryRepository.transitive_closure(node_id, relation)` returns the full transitive closure for a given relation descriptor.
 - `depends_on` is now marked `transitive=True` in the built-in descriptor registry.
 - CLI adds `memory graph path <from> <to>` and `memory graph closure <node> --relation <name>`.
+- `MemoryQueryService` now expands direct matches through `transitive=True` relation closures during retrieval.
 - `memory reindex` now rebuilds `private/derived/relation_index.json` from authoritative memory links.
 - `memory relations` now inspects the derived relation index with relation/source/target filters.
 - `RelationDescriptorRegistry` now defines built-in `supersedes` and `related_to` relation behavior.
@@ -70,9 +71,9 @@ Recently completed retrieval foundation slice:
 ## Scope
 
 - Built-in relation descriptors and descriptor-backed relation index generation are ready.
-- Symbolic node/edge graph projection is ready as a rebuildable artifact.
-- Graph node/edge inspection commands are ready.
-- Next focus is optional: transitive-closure traversal for `transitive=True` descriptors, or path-finding commands between specific memory nodes.
+- Symbolic node/edge graph projection and traversal commands are ready.
+- Retrieval now uses transitive closure for `transitive=True` descriptors.
+- Next focus is optional: begin LangGraph runtime migration or add descriptor-aware graph retrieval heuristics beyond transitive closure.
 - Keep the graph layer derived and rebuildable from authoritative memory entries.
 - Keep relation inspection commands working while descriptor metadata grows.
 
@@ -103,5 +104,6 @@ Recently completed retrieval foundation slice:
 - CLI tests cover symbolic graph node/edge inspection and filtering.
 - Tests cover `retrieval_rule`-aware score penalties in memory query expansion.
 - Tests cover multi-hop `search_graph` with `--depth`.
+- Tests cover transitive-closure expansion in `MemoryQueryService`.
 - README TODOs track the descriptor registry as complete.
 - All chat agent and daemon tests pass.

@@ -78,6 +78,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add rebuildable relation index derived from existing memory links.
 - [x] Add `RelationDescriptor` registry for built-in relation behavior.
 - [x] Add rebuildable symbolic graph projection over memory entries and relation edges.
+- [x] Add transitive-closure retrieval expansion for transitive symbolic relations.
 - [ ] Add derived vector, hybrid, and graph indexes.
 - [x] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, and dependency.
 - [x] Make retrieval expansion respect per-relation `retrieval_rule` (e.g. include both current and superseded vs. direct neighbors only).
