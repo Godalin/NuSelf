@@ -80,8 +80,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add rebuildable symbolic graph projection over memory entries and relation edges.
 - [ ] Add derived vector, hybrid, and graph indexes.
 - [x] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, and dependency.
-- [ ] Make retrieval expansion respect per-relation `retrieval_rule` (e.g. include both current and superseded vs. direct neighbors only).
-- [ ] Add graph traversal commands (multi-hop search, path finding) using descriptor metadata.
+- [x] Make retrieval expansion respect per-relation `retrieval_rule` (e.g. include both current and superseded vs. direct neighbors only).
+- [x] Add graph traversal commands (multi-hop search) using descriptor metadata.
+- [ ] Add transitive-closure traversal for `transitive=True` relation descriptors.
+- [ ] Add path-finding commands between specific memory nodes.
 - [x] Add memory stats and richer query commands.
 
 ### Ingestion And Knowledge Store

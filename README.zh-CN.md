@@ -80,7 +80,10 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加覆盖 memory entries 和 relation edges 的可重建 symbolic graph projection。
 - [ ] 添加派生向量、hybrid 和 graph 索引。
 - [x] 添加开放 symbolic graph，并用 `RelationDescriptor` 描述支持、矛盾、细化和依赖关系。
-- [ ] 让检索扩展尊重每个关系的 `retrieval_rule`（例如同时包含当前和被取代的 vs. 仅直接邻居）。
+- [x] 让检索扩展尊重每个关系的 `retrieval_rule`（例如同时包含当前和被取代的 vs. 仅直接邻居）。
+- [x] 添加基于描述符元数据的图遍历命令（多跳搜索）。
+- [ ] 为 `transitive=True` 的关系描述符添加传递闭包遍历。
+- [ ] 添加特定记忆节点之间的路径查找命令。
 - [ ] 添加基于描述符元数据的图遍历命令（多跳搜索、路径查找）。
 - [x] 添加 memory stats 和更丰富的 query 命令。
 
