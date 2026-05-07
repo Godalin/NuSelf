@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import fcntl
 import json
 from pathlib import Path
-from typing import Any, Literal, TypeVar, cast
+from typing import Any, Literal, Protocol, TypeVar, cast
 
 from nuself.agent.tools import MemorySearchTool
 from nuself.config import config_int, runtime_paths
@@ -153,6 +153,22 @@ class ChatResult:
         return payload
 
 
+@dataclass(frozen=True)
+class ConversationRuntimeResult:
+    """Output from one conversation runtime turn."""
+
+    state: ThreadState
+    result: ChatResult
+
+
+class ConversationRuntime(Protocol):
+    """Runtime boundary for one conversation turn."""
+
+    def run_turn(self, state: ThreadState, message: str, thread_id: str) -> ConversationRuntimeResult:
+        """Run one user turn and return the persisted state plus user-facing result."""
+        ...
+
+
 class ThreadStore:
     """File-backed chat thread store under private/threads."""
 
@@ -234,7 +250,7 @@ class _ThreadLock:
 
 
 class ChatAgent:
-    """Temporary memory-aware chat agent with persisted context compression."""
+    """Memory-aware chat agent backed by a conversation runtime boundary."""
 
     def __init__(
         self,
@@ -244,11 +260,41 @@ class ChatAgent:
         settings: ChatAgentSettings | None = None,
         thread_store: ThreadStore | None = None,
         memory_query_service: MemoryQueryService | None = None,
+        runtime: ConversationRuntime | None = None,
     ) -> None:
-        self._project_root = project_root
+        self._thread_store = thread_store or ThreadStore(project_root)
+        self._runtime = runtime or ConversationGraphRuntime(
+            project_root,
+            llm=llm,
+            settings=settings,
+            memory_query_service=memory_query_service,
+        )
+
+    def respond(self, message: str, thread_id: str = "default") -> ChatResult:
+        def update(state: ThreadState) -> tuple[ThreadState, ChatResult]:
+            runtime_result = self._runtime.run_turn(state, message, thread_id)
+            return runtime_result.state, runtime_result.result
+
+        return self._thread_store.update(thread_id, update)
+
+
+class ConversationGraphRuntime:
+    """Graph-ready linear conversation runtime.
+
+    The node methods below keep the current behavior explicit while giving the
+    later LangGraph migration a narrow replacement boundary.
+    """
+
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        *,
+        llm: ChatLLM | None = None,
+        settings: ChatAgentSettings | None = None,
+        memory_query_service: MemoryQueryService | None = None,
+    ) -> None:
         self._llm = llm or default_llm(project_root)
         self._settings = settings or ChatAgentSettings.from_project(project_root)
-        self._thread_store = thread_store or ThreadStore(project_root)
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),
             SourceRepository(project_root),
@@ -258,56 +304,77 @@ class ChatAgent:
             "search_memory": MemorySearchTool(query_service=self._memory_query_service)
         }
 
-    def respond(self, message: str, thread_id: str = "default") -> ChatResult:
-        def update(state: ThreadState) -> tuple[ThreadState, ChatResult]:
-            base_messages = _drop_local_fallback_replies(state.messages)
-            messages = [*base_messages, ThreadMessage(role="user", content=message)]
-            prompt = self._build_prompt(
-                ThreadState(thread_id=thread_id, summary=state.summary, messages=messages),
-                message,
-            )
-            raw_reply = self._llm.complete(prompt)
-            response = _parse_chat_response(raw_reply)
-
-            # Handle tool invocation if requested
-            if response.tool and response.tool in self._tools:
-                tool_result = self._invoke_tool(response)
-                # Create a follow-up message with tool results
-                tool_message = ThreadMessage(
-                    role="assistant",
-                    content=f"[Tool call: {response.tool}]\n{tool_result}",
-                )
-                # Build new prompt with tool results
-                messages_with_tool = [*messages, tool_message]
-                follow_up_prompt = self._build_follow_up_prompt(
-                    ThreadState(thread_id=thread_id, summary=state.summary, messages=messages_with_tool),
-                    tool_result,
-                )
-                # Get final response from LLM
-                final_raw_reply = self._llm.complete(follow_up_prompt)
-                final_response = _apply_unsupported_claim_guard(_parse_chat_response(final_raw_reply))
-                final_messages = [*messages_with_tool, ThreadMessage(role="assistant", content=final_response.answer)]
-            else:
-                final_response = _apply_unsupported_claim_guard(response)
-                final_messages = [*messages, ThreadMessage(role="assistant", content=final_response.answer)]
-
-            updated = ThreadState(
-                thread_id=thread_id,
-                summary=state.summary,
-                messages=final_messages,
-                message_start_index=state.message_start_index,
-                next_message_index=state.next_message_index + len(final_messages) - len(base_messages),
-            )
-            compressed = self._compress_if_needed(updated)
-            return compressed, ChatResult(
+    def run_turn(self, state: ThreadState, message: str, thread_id: str) -> ConversationRuntimeResult:
+        base_messages = self._prepare_thread_messages(state)
+        messages = [*base_messages, ThreadMessage(role="user", content=message)]
+        response = self._complete_initial_response(state, messages, message, thread_id)
+        final_response, final_messages = self._resolve_tool_or_response(state, messages, response, thread_id)
+        updated = self._build_updated_state(state, final_messages, base_messages, thread_id)
+        return ConversationRuntimeResult(
+            state=self._compress_if_needed(updated),
+            result=ChatResult(
                 answer=final_response.answer,
                 thread_id=thread_id,
                 evidence_references=final_response.evidence_references,
                 confidence=final_response.confidence,
                 epistemic_status=final_response.epistemic_status,
-            )
+            ),
+        )
 
-        return self._thread_store.update(thread_id, update)
+    def _prepare_thread_messages(self, state: ThreadState) -> list[ThreadMessage]:
+        return _drop_local_fallback_replies(state.messages)
+
+    def _complete_initial_response(
+        self,
+        state: ThreadState,
+        messages: list[ThreadMessage],
+        user_message: str,
+        thread_id: str,
+    ) -> ParsedChatResponse:
+        prompt = self._build_prompt(
+            ThreadState(thread_id=thread_id, summary=state.summary, messages=messages),
+            user_message,
+        )
+        return _parse_chat_response(self._llm.complete(prompt))
+
+    def _resolve_tool_or_response(
+        self,
+        state: ThreadState,
+        messages: list[ThreadMessage],
+        response: ParsedChatResponse,
+        thread_id: str,
+    ) -> tuple[ParsedChatResponse, list[ThreadMessage]]:
+        if response.tool is None or response.tool not in self._tools:
+            final_response = _apply_unsupported_claim_guard(response)
+            return final_response, [*messages, ThreadMessage(role="assistant", content=final_response.answer)]
+
+        tool_result = self._invoke_tool(response)
+        tool_message = ThreadMessage(
+            role="assistant",
+            content=f"[Tool call: {response.tool}]\n{tool_result}",
+        )
+        messages_with_tool = [*messages, tool_message]
+        follow_up_prompt = self._build_follow_up_prompt(
+            ThreadState(thread_id=thread_id, summary=state.summary, messages=messages_with_tool),
+            tool_result,
+        )
+        final_response = _apply_unsupported_claim_guard(_parse_chat_response(self._llm.complete(follow_up_prompt)))
+        return final_response, [*messages_with_tool, ThreadMessage(role="assistant", content=final_response.answer)]
+
+    def _build_updated_state(
+        self,
+        state: ThreadState,
+        final_messages: list[ThreadMessage],
+        base_messages: list[ThreadMessage],
+        thread_id: str,
+    ) -> ThreadState:
+        return ThreadState(
+            thread_id=thread_id,
+            summary=state.summary,
+            messages=final_messages,
+            message_start_index=state.message_start_index,
+            next_message_index=state.next_message_index + len(final_messages) - len(base_messages),
+        )
 
     def _build_prompt(self, state: ThreadState, user_message: str) -> list[ChatMessage]:
         prompt: list[ChatMessage] = [ChatMessage(role="system", content=self._system_prompt(user_message, state.summary))]

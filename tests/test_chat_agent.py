@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.agent.chat import ChatAgent, ChatAgentSettings, ThreadMessage, ThreadState, ThreadStore
+from nuself.agent.chat import (
+    ChatAgent,
+    ChatAgentSettings,
+    ChatResult,
+    ConversationRuntimeResult,
+    ThreadMessage,
+    ThreadState,
+    ThreadStore,
+)
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
@@ -236,6 +244,49 @@ def test_thread_store_update_writes_under_transaction(tmp_path: Path) -> None:
 
     assert result == "done"
     assert state.messages == [ThreadMessage(role="user", content="locked write")]
+
+
+def test_chat_agent_delegates_turns_to_conversation_runtime(tmp_path: Path) -> None:
+    class FakeRuntime:
+        def __init__(self) -> None:
+            self.seen: list[tuple[ThreadState, str, str]] = []
+
+        def run_turn(self, state: ThreadState, message: str, thread_id: str) -> ConversationRuntimeResult:
+            self.seen.append((state, message, thread_id))
+            updated = ThreadState(
+                thread_id=thread_id,
+                summary=state.summary,
+                messages=[
+                    *state.messages,
+                    ThreadMessage(role="user", content=message),
+                    ThreadMessage(role="assistant", content="runtime reply"),
+                ],
+                next_message_index=state.next_message_index + 2,
+            )
+            return ConversationRuntimeResult(
+                state=updated,
+                result=ChatResult(
+                    answer="runtime reply",
+                    thread_id=thread_id,
+                    evidence_references=("mem_runtime",),
+                    confidence=0.7,
+                    epistemic_status="grounded",
+                ),
+            )
+
+    runtime = FakeRuntime()
+    agent = ChatAgent(tmp_path, runtime=runtime)
+
+    result = agent.respond("hello runtime", thread_id="graph")
+
+    assert result.reply == "runtime reply"
+    assert result.evidence_references == ("mem_runtime",)
+    assert runtime.seen[0][1:] == ("hello runtime", "graph")
+    state = ThreadStore(tmp_path).load("graph")
+    assert state.messages == [
+        ThreadMessage(role="user", content="hello runtime"),
+        ThreadMessage(role="assistant", content="runtime reply"),
+    ]
 
 
 def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
