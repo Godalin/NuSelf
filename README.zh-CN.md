@@ -94,8 +94,8 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加被忽略的 `.env` 配置和提交的 `examples/.env`。
 - [x] 未配置 API key 时保持确定性的 fallback 行为。
 - [ ] 用 LangGraph conversation graph 替换临时 runtime。
-- [ ] 添加结构化 response schema：answer text、evidence references、confidence、epistemic status。
-- [ ] 添加 personal claims 的 unsupported-claim guard。
+- [x] 添加结构化 response schema：answer text、evidence references、confidence、epistemic status。
+- [x] 添加 personal claims 的 unsupported-claim guard。
 - [ ] 为 conversation agent 添加 tool-based memory search。
 - [ ] 让 conversation retrieval 支持 descriptor-aware 和 relation-aware 检索。
 

@@ -94,8 +94,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add ignored `.env` configuration and committed `examples/.env`.
 - [x] Keep deterministic fallback behavior when no API key is configured.
 - [ ] Replace the temporary runtime with a LangGraph conversation graph.
-- [ ] Add structured response schema with answer text, evidence references, confidence, and epistemic status.
-- [ ] Add unsupported-claim guard for personal claims without evidence.
+- [x] Add structured response schema with answer text, evidence references, confidence, and epistemic status.
+- [x] Add unsupported-claim guard for personal claims without evidence.
 - [ ] Add tool-based memory search for the conversation agent.
 - [ ] Make conversation retrieval descriptor-aware and relation-aware.
 

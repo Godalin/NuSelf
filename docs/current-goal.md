@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Stabilize downstream prompt surfaces that consume derived profile context.
+Add tool-based memory search for the conversation agent.
 
 ## Status
 
@@ -45,10 +45,11 @@ Recently completed foundation slice:
 - `MemoryQueryService` now also packs derived profile items alongside durable memory entries and source chunks.
 - The default chat agent now includes relevant profile items in its memory context.
 - The memory intake, curator, and optimizer prompts now include relevant derived profile items.
+- Chat now returns structured response metadata and flags unsupported personal claims when evidence is missing.
 
 ## Scope
 
-- Decide whether any remaining prompt templates should surface derived profile context.
+- Add tool-based memory search to the conversation agent so it can call deterministic retrieval explicitly.
 
 ## Not Now
 
@@ -74,3 +75,4 @@ Recently completed foundation slice:
 - README TODOs and planning docs reflect the source-to-candidate and deletion slices before moving to broader profile synthesis.
 - README TODOs and planning docs reflect the profile-search slice before moving to broader profile-query integration.
 - README TODOs and planning docs reflect the profile-query/chat slice before moving to any further prompt-surface work.
+- README TODOs and planning docs reflect the structured response and unsupported-claim guard slice before moving to tool-based memory search.
