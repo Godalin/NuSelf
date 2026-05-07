@@ -351,6 +351,15 @@ Rebuild the derived memory index:
 uv run nuself memory reindex
 ```
 
+Inspect derived memory relations:
+
+```bash
+uv run nuself memory relations
+uv run nuself memory relations --relation supersedes
+uv run nuself memory relations --source-id <entry-id>
+uv run nuself memory relations --target-id <entry-id>
+```
+
 The derived memory and relation indexes are written to:
 
 ```text

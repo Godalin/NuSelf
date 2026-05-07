@@ -351,6 +351,15 @@ uv run nuself memory delete <entry-id>
 uv run nuself memory reindex
 ```
 
+查看派生 memory relations：
+
+```bash
+uv run nuself memory relations
+uv run nuself memory relations --relation supersedes
+uv run nuself memory relations --source-id <entry-id>
+uv run nuself memory relations --target-id <entry-id>
+```
+
 派生 memory 和 relation 索引会写入：
 
 ```text

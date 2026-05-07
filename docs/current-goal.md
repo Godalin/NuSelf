@@ -51,10 +51,11 @@ Recently completed foundation slice:
 - `MemoryQueryService` now applies descriptor-aware type affinity, exposes type/tag filters, and surfaces simple relation metadata in packed memory context.
 - `MemoryQueryService` now expands direct matches through existing `related_memory_ids` and `supersedes` links, including reverse `related_by` and `superseded_by` matches.
 - `memory reindex` now rebuilds `private/derived/relation_index.json` from authoritative memory links.
+- `memory relations` now inspects the derived relation index with relation/source/target filters.
 
 ## Scope
 
-- Tool-based memory search, descriptor-aware retrieval heuristics, first-pass relation expansion, and a rebuildable relation index are ready. Next focus is optional: prepare LangGraph integration or design the open symbolic graph layer.
+- Tool-based memory search, descriptor-aware retrieval heuristics, first-pass relation expansion, and inspectable relation indexes are ready. Next focus is optional: prepare LangGraph integration or design the open symbolic graph layer.
 
 ## Not Now
 
@@ -82,4 +83,5 @@ Recently completed foundation slice:
 - Descriptor-aware retrieval boosts and filters are covered by query/tool tests.
 - Relation expansion over existing memory links is covered by query tests.
 - Relation index rebuilding is covered by repository and CLI tests.
+- Relation index inspection and filtering are covered by CLI tests.
 - All chat agent and daemon tests pass.
