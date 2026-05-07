@@ -31,7 +31,7 @@ from nuself.memory.repository import (
     memory_stats,
 )
 from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
-from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository
+from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
@@ -120,6 +120,14 @@ def build_parser() -> argparse.ArgumentParser:
     profile_subparsers = profile_parser.add_subparsers(dest="profile_command")
     profile_list_parser = profile_subparsers.add_parser("list")
     _add_handler(profile_list_parser, handle_memory_profile_list)
+    profile_search_parser = profile_subparsers.add_parser("search")
+    profile_search_parser.add_argument("query", nargs="?", default="")
+    profile_search_parser.add_argument("--type", default=None)
+    profile_search_parser.add_argument("--tag", default=None)
+    profile_search_parser.add_argument("--observed-from", default=None)
+    profile_search_parser.add_argument("--observed-to", default=None)
+    profile_search_parser.add_argument("--valid-on", default=None)
+    _add_handler(profile_search_parser, handle_memory_profile_search)
     profile_show_parser = profile_subparsers.add_parser("show")
     profile_show_parser.add_argument("profile_id")
     _add_handler(profile_show_parser, handle_memory_profile_show)
@@ -562,6 +570,26 @@ def handle_memory_profile_list(args: argparse.Namespace) -> int:
     items = repo.list()
     if not items:
         print("No profile items.")
+        return 0
+    for item in items:
+        print(_format_profile_item_summary(item))
+    return 0
+
+
+def handle_memory_profile_search(args: argparse.Namespace) -> int:
+    repo = ProfileItemRepository(args.project_root)
+    items = repo.search(
+        args.query,
+        ProfileSearchFilters(
+            type=args.type,
+            tag=args.tag,
+            observed_from=args.observed_from,
+            observed_to=args.observed_to,
+            valid_on=args.valid_on,
+        ),
+    )
+    if not items:
+        print("No matching profile items.")
         return 0
     for item in items:
         print(_format_profile_item_summary(item))

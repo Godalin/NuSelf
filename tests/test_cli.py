@@ -10,6 +10,7 @@ from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.protocol import DaemonResponse
 from nuself.daemon.lifecycle import DaemonStatus
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
+from nuself.domain.profile import ProfileItem
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
 
@@ -904,6 +905,55 @@ def test_memory_profile_delete_removes_item_and_reindexes(tmp_path: Path, capsys
     assert "Deleted profile item:" in delete_output
     assert profile_list_result == 0
     assert "No profile items." in profile_list_output
+
+
+def test_memory_profile_search_filters_and_query(tmp_path: Path, capsys: CaptureFixture) -> None:
+    repo = ProfileItemRepository(tmp_path)
+    repo.save(
+        ProfileItem(
+            type="profile_fact",
+            title="Concise output",
+            body="Prefers concise command output.",
+            tags=["cli", "style"],
+            source_refs=["source:abc:0"],
+            observed_at="2026-05-07",
+            valid_from="2026-05-07",
+        )
+    )
+    repo.save(
+        ProfileItem(
+            type="profile_fact",
+            title="Long-form output",
+            body="Likes detailed summaries.",
+            tags=["docs"],
+            source_refs=["source:def:0"],
+            observed_at="2026-05-08",
+        )
+    )
+
+    search_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "profile",
+            "search",
+            "concise",
+            "--type",
+            "profile_fact",
+            "--tag",
+            "style",
+            "--observed-from",
+            "2026-05-01",
+            "--valid-on",
+            "2026-05-07",
+        ]
+    )
+    search_output = capsys.readouterr().out
+
+    assert search_result == 0
+    assert "Concise output" in search_output
+    assert "Long-form output" not in search_output
 
 
 class _TextInput:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from nuself.domain.memory import MemoryEvidence
 from nuself.domain.profile import ProfileItem
-from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository
+from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
 
 
 def test_profile_repository_crud_and_reindex(tmp_path: Path) -> None:
@@ -50,3 +50,35 @@ def test_profile_repository_missing_item(tmp_path: Path) -> None:
     except ProfileItemNotFound:
         return
     raise AssertionError("expected ProfileItemNotFound")
+
+
+def test_profile_repository_search_filters_and_text_match(tmp_path: Path) -> None:
+    repo = ProfileItemRepository(tmp_path)
+    repo.save(
+        ProfileItem(
+            type="profile_fact",
+            title="Concise output",
+            body="Prefers concise command output.",
+            tags=["cli", "style"],
+            source_refs=["source:abc:0"],
+            observed_at="2026-05-07",
+            valid_from="2026-05-07",
+        )
+    )
+    repo.save(
+        ProfileItem(
+            type="profile_fact",
+            title="Long-form output",
+            body="Likes detailed summaries.",
+            tags=["docs"],
+            source_refs=["source:def:0"],
+            observed_at="2026-05-08",
+        )
+    )
+
+    filtered = repo.search(
+        "concise",
+        ProfileSearchFilters(type="profile_fact", tag="style", observed_from="2026-05-01", valid_on="2026-05-07"),
+    )
+
+    assert [item.title for item in filtered] == ["Concise output"]

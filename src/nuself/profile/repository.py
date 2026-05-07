@@ -26,6 +26,17 @@ class ProfileStats:
     items_with_evidence: int = 0
 
 
+@dataclass(frozen=True)
+class ProfileSearchFilters:
+    """Deterministic filters for profile search."""
+
+    type: str | None = None
+    tag: str | None = None
+    observed_from: str | None = None
+    observed_to: str | None = None
+    valid_on: str | None = None
+
+
 class ProfileItemNotFound(KeyError):
     """Raised when a profile item does not exist."""
 
@@ -48,6 +59,10 @@ class ProfileItemRepository:
         self.ensure()
         items = [self._read_path(path) for path in sorted(self._items_dir.glob("*.json"))]
         return sorted(items, key=lambda item: item.updated_at, reverse=True)
+
+    def search(self, query: str, filters: ProfileSearchFilters | None = None) -> list[ProfileItem]:
+        normalized = query.casefold()
+        return [item for item in self.list() if _matches_text(item, normalized) and _matches_filters(item, filters)]
 
     def get(self, item_id: str) -> ProfileItem:
         path = self._path_for(item_id)
@@ -140,3 +155,33 @@ def _counts(values: Iterable[str]) -> dict[str, int]:
     for value in values:
         result[value] = result.get(value, 0) + 1
     return result
+
+
+def _matches_text(item: ProfileItem, normalized_query: str) -> bool:
+    if normalized_query == "":
+        return True
+    return (
+        normalized_query in item.title.casefold()
+        or normalized_query in item.body.casefold()
+        or any(normalized_query in tag.casefold() for tag in item.tags)
+        or any(normalized_query in source_ref.casefold() for source_ref in item.source_refs)
+    )
+
+
+def _matches_filters(item: ProfileItem, filters: ProfileSearchFilters | None) -> bool:
+    if filters is None:
+        return True
+    if filters.type is not None and item.type != filters.type:
+        return False
+    if filters.tag is not None and filters.tag not in item.tags:
+        return False
+    if filters.observed_from is not None and (item.observed_at is None or item.observed_at < filters.observed_from):
+        return False
+    if filters.observed_to is not None and (item.observed_at is None or item.observed_at > filters.observed_to):
+        return False
+    if filters.valid_on is not None:
+        if item.valid_from is not None and item.valid_from > filters.valid_on:
+            return False
+        if item.valid_until is not None and item.valid_until < filters.valid_on:
+            return False
+    return True
