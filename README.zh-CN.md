@@ -22,10 +22,10 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 
 ### 当前目标
 
-- [ ] 添加 memory stats 和更丰富的 query 命令。
-- [ ] 添加 `memory stats`，覆盖 type、review state、candidate state 和 temporal coverage。
-- [ ] 为 `memory search` 添加 type、tag、review state 和 temporal fields 过滤。
-- [ ] 保持 memory query 输出紧凑且确定性。
+- [ ] 添加 goal 和 concept memory 的内置 descriptors。
+- [ ] 添加 `goal` 和 `concept` memory types。
+- [ ] 保持 `memory add`、curator、optimizer 和 intake parser 路径同步。
+- [ ] 用测试覆盖 descriptor 和 CLI 行为。
 
 ### 项目基础
 
@@ -71,7 +71,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [ ] 添加 goal 和 concept memory 的内置 descriptors。
 - [ ] 添加派生向量、hybrid 和 graph 索引。
 - [ ] 添加开放 symbolic graph，并用 `RelationDescriptor` 描述支持、矛盾、细化、偏好、依赖和未来关系。
-- [ ] 添加 memory stats 和更丰富的 query 命令。
+- [x] 添加 memory stats 和更丰富的 query 命令。
 
 ### 导入与知识库
 

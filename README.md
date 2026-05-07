@@ -22,10 +22,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Current Goal
 
-- [ ] Add memory stats and richer query commands.
-- [ ] Add `memory stats` for type, review state, candidate state, and temporal coverage.
-- [ ] Add richer `memory search` filters for type, tag, review state, and temporal fields.
-- [ ] Keep memory query output compact and deterministic.
+- [ ] Add built-in goal and concept memory descriptors.
+- [ ] Add `goal` and `concept` memory types.
+- [ ] Keep `memory add`, curator, optimizer, and intake parser paths aligned.
+- [ ] Cover descriptor and CLI behavior with tests.
 
 ### Project Foundation
 
@@ -71,7 +71,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [ ] Add built-in descriptors for goal and concept memory.
 - [ ] Add derived vector, hybrid, and graph indexes.
 - [ ] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, preference, dependency, and future relations.
-- [ ] Add memory stats and richer query commands.
+- [x] Add memory stats and richer query commands.
 
 ### Ingestion And Knowledge Store
 

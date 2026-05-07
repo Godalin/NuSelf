@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Add memory stats and richer query commands.
+Add built-in goal and concept memory descriptors.
 
 ## Status
 
@@ -24,14 +24,16 @@ Recently completed foundation slice:
 - Curator and optimizer proposals now create inspectable candidates instead of directly mutating durable memory.
 - Memory entries and candidates now carry structured source-linked evidence records.
 - Memory and candidate detail commands now show evidence records.
+- `memory stats` now reports type, review, candidate, evidence, and temporal coverage.
+- `memory search` now supports deterministic filters for type, tag, review state, observed time, and valid time.
 
 ## Scope
 
-- Add `memory stats` for type, review state, candidate state, and temporal coverage.
-- Add richer `memory search` filters for type, tag, review state, and temporal fields.
-- Keep deterministic behavior without a live LLM.
-- Keep output compact enough for CLI scanning.
-- Keep repositories independently testable.
+- Add `goal` and `concept` memory types.
+- Add descriptor validation and summaries for `goal` and `concept`.
+- Keep existing `MemoryEntry` CLI workflows usable with the new types.
+- Update curator, optimizer, and intake type parsing to recognize the new types.
+- Cover descriptor and CLI behavior with tests.
 
 ## Not Now
 
@@ -45,9 +47,11 @@ Recently completed foundation slice:
 - Derived vector or graph indexes.
 - Automatic citation synthesis from imported source documents.
 - Local source ingestion.
+- Symbolic graph implementation.
 
 ## Completion Criteria
 
-- Stats command is covered by CLI tests.
-- Filtered search behavior is covered by repository and CLI tests.
-- README TODOs and planning docs reflect the completed query/stats slice before moving to the next goal.
+- `goal` and `concept` memory entries validate through the descriptor registry.
+- `memory add --type goal` and `memory add --type concept` work.
+- Curator/optimizer/intake parser paths accept the new types.
+- README TODOs and planning docs reflect the completed descriptor slice before moving to the next goal.
