@@ -7,8 +7,9 @@ from dataclasses import dataclass, field
 import fcntl
 import json
 from pathlib import Path
-from typing import Literal, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
 
+from nuself.agent.tools import MemorySearchTool
 from nuself.config import config_int, runtime_paths
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.query import MemoryQuery, MemoryQueryService
@@ -253,6 +254,9 @@ class ChatAgent:
             SourceRepository(project_root),
             ProfileItemRepository(project_root),
         )
+        self._tools: dict[str, MemorySearchTool] = {
+            "search_memory": MemorySearchTool(query_service=self._memory_query_service)
+        }
 
     def respond(self, message: str, thread_id: str = "default") -> ChatResult:
         def update(state: ThreadState) -> tuple[ThreadState, ChatResult]:
@@ -263,21 +267,44 @@ class ChatAgent:
                 message,
             )
             raw_reply = self._llm.complete(prompt)
-            response = _apply_unsupported_claim_guard(_parse_chat_response(raw_reply))
+            response = _parse_chat_response(raw_reply)
+
+            # Handle tool invocation if requested
+            if response.tool and response.tool in self._tools:
+                tool_result = self._invoke_tool(response)
+                # Create a follow-up message with tool results
+                tool_message = ThreadMessage(
+                    role="assistant",
+                    content=f"[Tool call: {response.tool}]\n{tool_result}",
+                )
+                # Build new prompt with tool results
+                messages_with_tool = [*messages, tool_message]
+                follow_up_prompt = self._build_follow_up_prompt(
+                    ThreadState(thread_id=thread_id, summary=state.summary, messages=messages_with_tool),
+                    tool_result,
+                )
+                # Get final response from LLM
+                final_raw_reply = self._llm.complete(follow_up_prompt)
+                final_response = _apply_unsupported_claim_guard(_parse_chat_response(final_raw_reply))
+                final_messages = [*messages_with_tool, ThreadMessage(role="assistant", content=final_response.answer)]
+            else:
+                final_response = _apply_unsupported_claim_guard(response)
+                final_messages = [*messages, ThreadMessage(role="assistant", content=final_response.answer)]
+
             updated = ThreadState(
                 thread_id=thread_id,
                 summary=state.summary,
-                messages=[*messages, ThreadMessage(role="assistant", content=response.answer)],
+                messages=final_messages,
                 message_start_index=state.message_start_index,
-                next_message_index=state.next_message_index + 2,
+                next_message_index=state.next_message_index + len(final_messages) - len(base_messages),
             )
             compressed = self._compress_if_needed(updated)
             return compressed, ChatResult(
-                answer=response.answer,
+                answer=final_response.answer,
                 thread_id=thread_id,
-                evidence_references=response.evidence_references,
-                confidence=response.confidence,
-                epistemic_status=response.epistemic_status,
+                evidence_references=final_response.evidence_references,
+                confidence=final_response.confidence,
+                epistemic_status=final_response.epistemic_status,
             )
 
         return self._thread_store.update(thread_id, update)
@@ -286,6 +313,25 @@ class ChatAgent:
         prompt: list[ChatMessage] = [ChatMessage(role="system", content=self._system_prompt(user_message, state.summary))]
         for message in state.messages[-self._settings.recent_messages :]:
             prompt.append(ChatMessage(role=message.role, content=message.content))
+        return prompt
+
+    def _build_follow_up_prompt(self, state: ThreadState, tool_result: str) -> list[ChatMessage]:
+        """Build a prompt for the follow-up after tool invocation."""
+        prompt: list[ChatMessage] = [
+            ChatMessage(
+                role="system",
+                content=(
+                    "You are NuSelf. The previous tool call returned the following results. "
+                    "Use these results to generate your final answer. "
+                    "Return a JSON object with answer, evidence_references, confidence, and epistemic_status."
+                ),
+            )
+        ]
+        # Include recent message history
+        for message in state.messages[-self._settings.recent_messages :]:
+            prompt.append(ChatMessage(role=message.role, content=message.content))
+        # Add tool result
+        prompt.append(ChatMessage(role="user", content=f"Tool result:\n{tool_result}"))
         return prompt
 
     def _system_prompt(self, user_message: str, summary: str) -> str:
@@ -304,6 +350,15 @@ class ChatAgent:
             parts.extend(["", "Relevant memory context:", packed_memory.text])
         if summary != "":
             parts.extend(["", "Compressed conversation so far:", summary])
+        parts.extend([
+            "",
+            "Available tools:",
+            'If you need more specific memory context, you can use the search_memory tool by including a "tool" field in your JSON:',
+            '{"answer": "...", "tool": "search_memory", "tool_args": {"query": "search term"}, ...}',
+            'This will search all memory and return additional context before generating your final answer.',
+            'Tools available:',
+            '- search_memory(query: str, limit: int = 8): Search durable memory for relevant context.',
+        ])
         return "\n".join(parts)
 
     def _compress_if_needed(self, state: ThreadState) -> ThreadState:
@@ -319,6 +374,22 @@ class ChatAgent:
             message_start_index=state.next_message_index - len(recent),
             next_message_index=state.next_message_index,
         )
+
+    def _invoke_tool(self, tool: ParsedChatResponse) -> str:
+        """Execute a tool call and return the result."""
+        if tool.tool is None or tool.tool not in self._tools:
+            return f"Error: unknown tool {tool.tool}"
+
+        tool_args_input = tool.tool_args if tool.tool_args is not None else {}
+
+        try:
+            tool_obj = self._tools[tool.tool]
+            # Tool invoke handles type conversion internally
+            return tool_obj.invoke(**tool_args_input)
+        except TypeError as e:
+            return f"Error invoking {tool.tool}: {e}"
+        except Exception as e:
+            return f"Error: {e}"
 
     def _summarize(self, previous_summary: str, messages: list[ThreadMessage]) -> str:
         transcript = "\n".join(f"{message.role}: {message.content}" for message in messages)
@@ -364,6 +435,8 @@ class ParsedChatResponse:
     evidence_references: tuple[str, ...] = ()
     confidence: float | None = None
     epistemic_status: str = "inferred"
+    tool: str | None = None
+    tool_args: dict[str, Any] | None = None
 
 
 def _parse_chat_response(raw: str) -> ParsedChatResponse:
@@ -380,12 +453,17 @@ def _parse_chat_response(raw: str) -> ParsedChatResponse:
                 return ParsedChatResponse(answer=raw)
             evidence_references = _string_tuple(data.get("evidence_references"))
             confidence = _optional_float(data.get("confidence"))
-            epistemic_status = _string_field(data.get("epistemic_status"), default="inferred")
+            epistemic_status = _string_field(data.get("epistemic_status"), default="inferred") or "inferred"
+            tool = _string_field(data.get("tool"))
+            tool_args_raw = data.get("tool_args")
+            tool_args = cast(dict[str, Any], tool_args_raw) if isinstance(tool_args_raw, dict) else None
             return ParsedChatResponse(
                 answer=answer,
                 evidence_references=evidence_references,
                 confidence=confidence,
                 epistemic_status=epistemic_status,
+                tool=tool,
+                tool_args=tool_args,
             )
     return ParsedChatResponse(answer=raw)
 
@@ -401,6 +479,8 @@ def _apply_unsupported_claim_guard(response: ParsedChatResponse) -> ParsedChatRe
         evidence_references=response.evidence_references,
         confidence=min(confidence, 0.25),
         epistemic_status="unsupported",
+        tool=response.tool,
+        tool_args=response.tool_args,
     )
 
 
@@ -440,7 +520,7 @@ def _optional_float(value: object) -> float | None:
     return None
 
 
-def _string_field(value: object, *, default: str) -> str:
+def _string_field(value: object, *, default: str | None = None) -> str | None:
     if isinstance(value, str) and value.strip() != "":
         return value
     return default

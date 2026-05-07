@@ -236,3 +236,94 @@ def test_thread_store_update_writes_under_transaction(tmp_path: Path) -> None:
 
     assert result == "done"
     assert state.messages == [ThreadMessage(role="user", content="locked write")]
+
+
+def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Clarity matters",
+            body="Prefer explicit assumptions.",
+            tags=["style"],
+        )
+    )
+
+    class ToolRequestLLM:
+        def __init__(self) -> None:
+            self.call_count = 0
+            self.calls: list[list[ChatMessage]] = []
+
+        def complete(self, messages: list[ChatMessage]) -> str:
+            self.calls.append(messages)
+            self.call_count += 1
+            if self.call_count == 1:
+                # First call: agent requests tool
+                return '{"answer":"Let me search for that.","tool":"search_memory","tool_args":{"query":"clarity"}}'
+            else:
+                # Second call: agent generates final answer with tool results
+                return '{"answer":"You value clarity and explicit assumptions.","evidence_references":["mem_123"]}'
+
+    llm = ToolRequestLLM()
+    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(repo))
+
+    result = agent.respond("tell me about clarity")
+
+    assert result.answer == "You value clarity and explicit assumptions."
+    assert result.evidence_references == ("mem_123",)
+    assert llm.call_count == 2
+    # First call: initial prompt with tool documentation
+    assert "Available tools:" in llm.calls[0][0].content
+    assert "search_memory" in llm.calls[0][0].content
+    # Second call: follow-up with tool result
+    assert len(llm.calls[1]) > 0
+
+
+def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) -> None:
+    llm = FakeLLM()
+    agent = ChatAgent(tmp_path, llm=llm)
+
+    agent.respond("test")
+
+    system_prompt = llm.calls[0][0].content
+    assert "Available tools:" in system_prompt
+    assert "search_memory" in system_prompt
+    assert "Search durable memory" in system_prompt
+
+
+def test_memory_search_tool_invocation_with_limit(tmp_path: Path) -> None:
+    from nuself.agent.tools import MemorySearchTool
+
+    repo = MemoryEntryRepository(tmp_path)
+    for i in range(5):
+        repo.save(
+            MemoryEntry(
+                type="belief",
+                title=f"Belief {i}",
+                body=f"Test belief {i}",
+                tags=["test"],
+            )
+        )
+
+    tool = MemorySearchTool(query_service=MemoryQueryService(repo))
+
+    result = tool.invoke(query="belief", limit=2)
+
+    assert "Belief" in result
+    assert "matches found" not in result.lower() or result.count("belief") >= 2
+
+
+def test_memory_search_tool_with_invalid_inputs(tmp_path: Path) -> None:
+    from nuself.agent.tools import MemorySearchTool
+
+    repo = MemoryEntryRepository(tmp_path)
+    tool = MemorySearchTool(query_service=MemoryQueryService(repo))
+
+    # Empty query
+    result = tool.invoke(query="", limit=8)
+    assert "Error" in result or "No matches" in result
+
+    # Invalid limit
+    result = tool.invoke(query="test", limit=0)
+    assert "Error" in result
+
