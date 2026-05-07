@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from nuself.domain.memory import (
@@ -35,6 +36,68 @@ def test_memory_repository_crud_and_reindex(tmp_path: Path) -> None:
 
     repo.delete(entry.id)
     assert repo.list() == []
+
+
+def test_memory_repository_reindex_writes_relation_index(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    old = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Closed categories",
+            body="Memory types are fixed.",
+            review_state="reviewed",
+        )
+    )
+    related = repo.save(
+        MemoryEntry(
+            type="concept",
+            title="Relation expansion",
+            body="Related memories can travel together during retrieval.",
+            review_state="reviewed",
+        )
+    )
+    current = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Open descriptors",
+            body="Memory types are descriptor-backed.",
+            review_state="reviewed",
+            supersedes=[old.id],
+            related_memory_ids=[related.id],
+        )
+    )
+
+    repo.reindex()
+    relation_path = tmp_path / "private" / "derived" / "relation_index.json"
+    raw: object = json.loads(relation_path.read_text(encoding="utf-8"))
+
+    assert isinstance(raw, list)
+    assert raw == [
+        {
+            "confidence": current.confidence,
+            "relation": "supersedes",
+            "source_id": current.id,
+            "source_title": "Open descriptors",
+            "source_type": "belief",
+            "source_updated_at": current.updated_at,
+            "target_exists": True,
+            "target_id": old.id,
+            "target_title": "Closed categories",
+            "target_type": "belief",
+        },
+        {
+            "confidence": current.confidence,
+            "relation": "related_to",
+            "source_id": current.id,
+            "source_title": "Open descriptors",
+            "source_type": "belief",
+            "source_updated_at": current.updated_at,
+            "target_exists": True,
+            "target_id": related.id,
+            "target_title": "Relation expansion",
+            "target_type": "concept",
+        },
+    ]
 
 
 def test_memory_repository_missing_entry(tmp_path: Path) -> None:

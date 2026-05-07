@@ -374,10 +374,13 @@ def handle_memory_stats(args: argparse.Namespace) -> int:
 
 
 def handle_memory_reindex(args: argparse.Namespace) -> int:
-    memory_index_path = MemoryEntryRepository(args.project_root).reindex()
+    memory_repo = MemoryEntryRepository(args.project_root)
+    memory_index_path = memory_repo.reindex()
+    relation_index_path = memory_repo.reindex_relations()
     source_index_path = SourceRepository(args.project_root).reindex()
     profile_index_path = ProfileItemRepository(args.project_root).reindex()
     print(f"Rebuilt memory index: {memory_index_path}")
+    print(f"Rebuilt relation index: {relation_index_path}")
     print(f"Rebuilt source index: {source_index_path}")
     print(f"Rebuilt profile index: {profile_index_path}")
     return 0

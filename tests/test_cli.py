@@ -791,9 +791,11 @@ def test_memory_source_search_and_reindex(tmp_path: Path, capsys: CaptureFixture
     assert "Searchable Source" in search_output
     assert "durable citation material" in search_output
     assert "Rebuilt memory index:" in reindex_output
+    assert "Rebuilt relation index:" in reindex_output
     assert "Rebuilt source index:" in reindex_output
     assert "Rebuilt profile index:" in reindex_output
     assert (tmp_path / "private" / "derived" / "memory_index.json").is_file()
+    assert (tmp_path / "private" / "derived" / "relation_index.json").is_file()
     assert (tmp_path / "private" / "derived" / "source_index.json").is_file()
     assert (tmp_path / "private" / "derived" / "profile_index.json").is_file()
 

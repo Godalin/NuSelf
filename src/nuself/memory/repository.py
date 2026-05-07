@@ -118,6 +118,7 @@ class MemoryEntryRepository:
         derived_dir = self._paths.private_root / "derived"
         derived_dir.mkdir(parents=True, exist_ok=True)
         index_path = derived_dir / "memory_index.json"
+        entries = self.list()
         index = [
             {
                 "id": entry.id,
@@ -126,10 +127,27 @@ class MemoryEntryRepository:
                 "tags": entry.tags,
                 "updated_at": entry.updated_at,
             }
-            for entry in self.list()
+            for entry in entries
         ]
         index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        self._write_relation_index(derived_dir, entries)
         return index_path
+
+    def reindex_relations(self) -> Path:
+        derived_dir = self._paths.private_root / "derived"
+        derived_dir.mkdir(parents=True, exist_ok=True)
+        return self._write_relation_index(derived_dir, self.list())
+
+    def _write_relation_index(self, derived_dir: Path, entries: list[MemoryEntry]) -> Path:
+        by_id = {entry.id: entry for entry in entries}
+        relation_path = derived_dir / "relation_index.json"
+        relations = [
+            relation
+            for entry in entries
+            for relation in _relation_index_records(entry, by_id)
+        ]
+        relation_path.write_text(json.dumps(relations, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return relation_path
 
     def _path_for(self, entry_id: str) -> Path:
         if "/" in entry_id or entry_id in {"", ".", ".."}:
@@ -337,6 +355,36 @@ def _matches_filters(entry: MemoryEntry, filters: MemorySearchFilters | None) ->
         if entry.valid_until is not None and entry.valid_until < filters.valid_on:
             return False
     return True
+
+
+def _relation_index_records(entry: MemoryEntry, by_id: dict[str, MemoryEntry]) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for target_id in entry.supersedes:
+        records.append(_relation_index_record(entry, target_id, "supersedes", by_id))
+    for target_id in entry.related_memory_ids:
+        records.append(_relation_index_record(entry, target_id, "related_to", by_id))
+    return records
+
+
+def _relation_index_record(
+    entry: MemoryEntry,
+    target_id: str,
+    relation: str,
+    by_id: dict[str, MemoryEntry],
+) -> dict[str, object]:
+    target = by_id.get(target_id)
+    return {
+        "source_id": entry.id,
+        "target_id": target_id,
+        "relation": relation,
+        "source_type": entry.type,
+        "target_type": target.type if target is not None else None,
+        "source_title": entry.title,
+        "target_title": target.title if target is not None else None,
+        "target_exists": target is not None,
+        "confidence": entry.confidence,
+        "source_updated_at": entry.updated_at,
+    }
 
 
 def _counts(values: Iterable[str]) -> dict[str, int]:
