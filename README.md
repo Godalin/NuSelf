@@ -82,8 +82,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, and dependency.
 - [x] Make retrieval expansion respect per-relation `retrieval_rule` (e.g. include both current and superseded vs. direct neighbors only).
 - [x] Add graph traversal commands (multi-hop search) using descriptor metadata.
-- [ ] Add transitive-closure traversal for `transitive=True` relation descriptors.
-- [ ] Add path-finding commands between specific memory nodes.
+- [x] Add transitive-closure traversal for `transitive=True` relation descriptors.
+- [x] Add path-finding commands between specific memory nodes.
+- [ ] Wire transitive-closure into `MemoryQueryService` automatic context expansion.
+- [ ] Replace the temporary runtime with a LangGraph conversation graph.
 - [x] Add memory stats and richer query commands.
 
 ### Ingestion And Knowledge Store

@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Descriptor-driven retrieval expansion and multi-hop graph search are now in place. The next slice should deepen graph traversal logic with transitive-closure support, or add path-finding commands between specific memory nodes.
+Graph traversal now supports shortest-path finding and transitive-closure expansion. The next slice should wire transitive-closure into the retrieval layer so `MemoryQueryService` automatically expands transitive relations during context packing, or begin the LangGraph runtime migration.
 
 ## Status
 
@@ -56,6 +56,10 @@ Recently completed retrieval foundation slice:
 - Built-in relation descriptors now cover `supersedes`, `related_to`, `supports`, `contradicts`, `refines`, and `depends_on`.
 - `memory graph search` now supports `--depth` for multi-hop traversal over the symbolic graph.
 - Symbolic graph traversal respects descriptor symmetry: symmetric relations are treated as bidirectional edges.
+- `MemoryEntryRepository.find_path(from_id, to_id)` returns the shortest path between two memory nodes.
+- `MemoryEntryRepository.transitive_closure(node_id, relation)` returns the full transitive closure for a given relation descriptor.
+- `depends_on` is now marked `transitive=True` in the built-in descriptor registry.
+- CLI adds `memory graph path <from> <to>` and `memory graph closure <node> --relation <name>`.
 - `memory reindex` now rebuilds `private/derived/relation_index.json` from authoritative memory links.
 - `memory relations` now inspects the derived relation index with relation/source/target filters.
 - `RelationDescriptorRegistry` now defines built-in `supersedes` and `related_to` relation behavior.
