@@ -27,7 +27,8 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 将 imported source chunks 转换为可 review 的 memory/profile candidates。
 - [x] 在 source-derived candidates 上保留 source evidence links。
 - [x] 明确 raw private sources 派生出的 memories 的删除行为。
-- [ ] 添加 profile item 的 search 和 query 命令。
+- [x] 添加 profile item 的 search 和 filter 命令。
+- [ ] 将 profile item 接入 query 层。
 
 ### 项目基础
 
@@ -382,8 +383,11 @@ uv run nuself memory source extract <source-id>
 
 ```bash
 uv run nuself memory profile list
+uv run nuself memory profile search "concise"
 uv run nuself memory profile show <profile-id>
 ```
+
+Profile search 支持 `--type`、`--tag`、`--observed-from`、`--observed-to` 和 `--valid-on` 这些确定性过滤条件。
 
 支持的 front matter 字段是 `title`、`date`、`tags`、`origin` 和 `privacy`。Source chunk references 使用 `source:<source-id>:<chunk-index>` 格式。
 

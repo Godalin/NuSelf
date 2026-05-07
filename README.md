@@ -27,7 +27,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Convert imported source chunks into reviewable memory/profile candidates.
 - [x] Preserve source evidence links on source-derived candidates.
 - [x] Clarify deletion behavior for memories derived from raw private sources.
-- [ ] Add profile item search and query commands.
+- [x] Add profile item search and filter commands.
+- [ ] Add profile item retrieval to the query layer.
 
 ### Project Foundation
 
@@ -382,8 +383,11 @@ The extraction step creates `profile_fact` candidates in the review queue with s
 
 ```bash
 uv run nuself memory profile list
+uv run nuself memory profile search "concise"
 uv run nuself memory profile show <profile-id>
 ```
+
+Profile search supports deterministic filters for `--type`, `--tag`, `--observed-from`, `--observed-to`, and `--valid-on`.
 
 Supported front matter fields are `title`, `date`, `tags`, `origin`, and `privacy`. Source chunk references use the form `source:<source-id>:<chunk-index>`.
 
