@@ -108,6 +108,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add minimal conversation runtime boundary for the LangGraph migration.
 - [x] Add typed conversation runtime state and node contracts.
 - [x] Replace the temporary runtime with a LangGraph conversation graph.
+- [x] Isolate the LangGraph driver boundary and preserve thread state on graph failures.
+- [ ] Add graph runtime diagnostics for node execution and failures.
 - [x] Add structured response schema with answer text, evidence references, confidence, and epistemic status.
 - [x] Add unsupported-claim guard for personal claims without evidence.
 - [x] Add tool-based memory search for the conversation agent.

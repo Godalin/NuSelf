@@ -108,6 +108,8 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加用于 LangGraph 迁移的最小 conversation runtime boundary。
 - [x] 添加 typed conversation runtime state 和 node contracts。
 - [x] 用 LangGraph conversation graph 替换临时 runtime。
+- [x] 隔离 LangGraph driver boundary，并在 graph failures 时保留 thread state。
+- [ ] 添加 graph runtime diagnostics，用于 node execution 和 failures。
 - [x] 添加结构化 response schema：answer text、evidence references、confidence、epistemic status。
 - [x] 添加 personal claims 的 unsupported-claim guard。
 - [x] 为 conversation agent 添加 tool-based memory search。
