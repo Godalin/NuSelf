@@ -105,6 +105,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add temporary memory-aware chat agent with OpenAI-compatible `/chat/completions`.
 - [x] Add ignored `.env` configuration and committed `examples/.env`.
 - [x] Keep deterministic fallback behavior when no API key is configured.
+- [x] Add minimal conversation runtime boundary for the LangGraph migration.
 - [ ] Replace the temporary runtime with a LangGraph conversation graph.
 - [x] Add structured response schema with answer text, evidence references, confidence, and epistemic status.
 - [x] Add unsupported-claim guard for personal claims without evidence.

@@ -4,22 +4,23 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Begin the LangGraph conversation runtime migration while preserving the current file-backed memory and retrieval boundaries.
+Continue the LangGraph conversation runtime migration while preserving the current file-backed memory and retrieval boundaries.
 
-The current memory foundation is ready enough for this slice: typed memory descriptors, descriptor-backed relations, symbolic graph traversal, and transitive retrieval expansion are implemented. The next useful step is to wrap the existing chat behavior in a small graph-oriented runtime boundary before adding more memory features.
+The current memory foundation is ready enough for this work: typed memory descriptors, descriptor-backed relations, symbolic graph traversal, and transitive retrieval expansion are implemented. The conversation turn now has a minimal runtime boundary. The next useful step is to make the runtime state and node contracts explicit enough to swap in a real LangGraph implementation later.
 
 ## Immediate Context
 
 - `MemoryQueryService` remains the stable retrieval boundary for memory entries, profile items, source chunks, and graph-derived expansion.
-- The temporary chat agent already supports structured responses, evidence metadata, unsupported-claim handling, and explicit memory search tool calls.
+- `ChatAgent` now owns thread persistence while `ConversationGraphRuntime` owns turn execution.
+- The runtime still supports structured responses, evidence metadata, unsupported-claim handling, context compression, and explicit memory search tool calls.
 - File-backed private memory remains authoritative; derived indexes and future runtime mirrors must stay rebuildable.
 
 ## Next Steps
 
-1. Define a minimal conversation orchestrator boundary around the current chat behavior.
-2. Add a LangGraph-ready graph skeleton without leaking LangGraph internals into the CLI or daemon protocol.
+1. Introduce an explicit typed runtime state object for one conversation turn.
+2. Split turn execution into clearer node result contracts for context packing, initial LLM response, tool resolution, final response, and compression.
 3. Preserve current response metadata, memory context packing, persistence, and deterministic fallback behavior.
-4. Add focused tests for the new runtime boundary before moving more tool execution into graph nodes.
+4. Add focused tests for the new state/node contracts before adding a LangGraph dependency.
 
 ## Not Now
 
@@ -32,7 +33,7 @@ The current memory foundation is ready enough for this slice: typed memory descr
 
 ## Completion Criteria
 
-- A minimal conversation graph runtime boundary exists.
+- Runtime state and node boundaries are explicit enough to map to LangGraph nodes.
 - Existing chat entrypoints keep their current user-visible behavior.
-- Tests cover response metadata, persistence, memory context use, and fallback behavior through the new boundary.
+- Tests cover response metadata, persistence, memory context use, tool calls, and fallback behavior through the runtime boundary.
 - README TODOs track completed progress, while this file stays limited to the active goal.
