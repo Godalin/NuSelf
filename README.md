@@ -79,7 +79,9 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add `RelationDescriptor` registry for built-in relation behavior.
 - [x] Add rebuildable symbolic graph projection over memory entries and relation edges.
 - [ ] Add derived vector, hybrid, and graph indexes.
-- [ ] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, preference, dependency, and future relations.
+- [x] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, and dependency.
+- [ ] Make retrieval expansion respect per-relation `retrieval_rule` (e.g. include both current and superseded vs. direct neighbors only).
+- [ ] Add graph traversal commands (multi-hop search, path finding) using descriptor metadata.
 - [x] Add memory stats and richer query commands.
 
 ### Ingestion And Knowledge Store
@@ -371,6 +373,8 @@ uv run nuself memory graph edges
 uv run nuself memory graph edges --relation related_to
 uv run nuself memory graph edges --source-id <entry-id>
 uv run nuself memory graph edges --target-id <entry-id>
+uv run nuself memory graph search "graph retrieval"
+uv run nuself memory graph search "graph retrieval" --type concept --limit 5
 ```
 
 The derived memory, relation, and symbolic graph artifacts are written to:

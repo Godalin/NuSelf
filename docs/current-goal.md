@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Build the open symbolic graph foundation: relation links are now inspectable, and the next slice should move relation behavior into `RelationDescriptor` definitions.
+Open symbolic graph behavior is now descriptor-driven. The next slice should make retrieval expansion respect `RelationDescriptor.retrieval_rule`, or add graph traversal commands that use descriptor metadata.
 
 ## Status
 
@@ -50,6 +50,9 @@ Recently completed retrieval foundation slice:
 - Tool calls are parsed from LLM responses and executed, with results returned for LLM processing.
 - `MemoryQueryService` now applies descriptor-aware type affinity, exposes type/tag filters, and surfaces simple relation metadata in packed memory context.
 - `MemoryQueryService` now expands direct matches through existing `related_memory_ids` and `supersedes` links, including reverse `related_by` and `superseded_by` matches.
+- `MemoryEntry`, `MemoryCandidate`, and `ProfileItem` now store relations in an open `relations: dict[str, list[str]]` instead of closed `supersedes`/`related_memory_ids` fields.
+- Relation index generation and retrieval expansion are now driven by `RelationDescriptor.source_field` rather than hard-coded field names.
+- Built-in relation descriptors now cover `supersedes`, `related_to`, `supports`, `contradicts`, `refines`, and `depends_on`.
 - `memory reindex` now rebuilds `private/derived/relation_index.json` from authoritative memory links.
 - `memory relations` now inspects the derived relation index with relation/source/target filters.
 - `RelationDescriptorRegistry` now defines built-in `supersedes` and `related_to` relation behavior.
@@ -62,7 +65,7 @@ Recently completed retrieval foundation slice:
 - Built-in relation descriptors and descriptor-backed relation index generation are ready.
 - Symbolic node/edge graph projection is ready as a rebuildable artifact.
 - Graph node/edge inspection commands are ready.
-- Next focus is optional: add graph search commands or extend built-in relation descriptors.
+- Next focus is optional: make retrieval expansion respect per-relation `retrieval_rule`, or add graph traversal/search commands that use descriptor metadata.
 - Keep the graph layer derived and rebuildable from authoritative memory entries.
 - Keep relation inspection commands working while descriptor metadata grows.
 
@@ -85,8 +88,9 @@ Recently completed retrieval foundation slice:
 ## Completion Criteria
 
 - `RelationDescriptor` and relation registry types exist in the memory domain layer.
-- Built-in descriptors cover `supersedes` and `related_to`.
+- Built-in descriptors cover `supersedes`, `related_to`, `supports`, `contradicts`, `refines`, and `depends_on`.
 - Relation index records include descriptor-derived metadata.
+- `relations` dict storage replaces closed `supersedes`/`related_memory_ids` fields.
 - Repository and CLI tests cover descriptor-backed relation index generation and inspection.
 - Repository and CLI tests cover symbolic graph rebuilding.
 - CLI tests cover symbolic graph node/edge inspection and filtering.
