@@ -73,6 +73,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加开放的 `MemoryObject + MemoryTypeDescriptor` registry，用于 typed memory 行为。
 - [x] 添加 preference、belief、episode 和 instruction memory 的内置 descriptors。
 - [x] 添加 goal 和 concept memory 的内置 descriptors。
+- [x] 为 memory query tools 添加 descriptor-aware retrieval heuristics 和 type/tag filters。
 - [ ] 添加派生向量、hybrid 和 graph 索引。
 - [ ] 添加开放 symbolic graph，并用 `RelationDescriptor` 描述支持、矛盾、细化、偏好、依赖和未来关系。
 - [x] 添加 memory stats 和更丰富的 query 命令。
@@ -97,7 +98,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加结构化 response schema：answer text、evidence references、confidence、epistemic status。
 - [x] 添加 personal claims 的 unsupported-claim guard。
 - [x] 为 conversation agent 添加 tool-based memory search。
-- [ ] 让 conversation retrieval 支持 descriptor-aware 和 relation-aware 检索。
+- [ ] 让 conversation retrieval 支持 relation-aware 检索。
 
 ### 轻量多智能体分身
 
@@ -228,7 +229,7 @@ uv run nuself daemon attach --message "continue"
 
 不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。以 `:` 开头的输入会被识别为交互指令。输入 `:memory` 或 `:mem` 可以预览当前记忆条目。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
 
-当前聊天使用一个临时 agent。它会检索 `private/memory/entries/` 中的记忆条目，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。当前记忆检索是确定性的词法检索，并带有排序原因；向量索引和图索引会作为后续派生检索层加入。
+当前聊天使用一个临时 agent。它会检索 `private/memory/entries/` 中的记忆条目，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。当前记忆检索是确定性的词法检索，带有 descriptor-aware 类型提示、type/tag filters 和排序原因；向量索引和图索引会作为后续派生检索层加入。
 
 `private/threads/default.json` 是当前 NuSelf mind 的共享 working memory。多个终端连接同一个 daemon 时会共享它。thread store 会用锁串行化写入，避免并发对话互相覆盖。
 
