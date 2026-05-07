@@ -111,7 +111,8 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 隔离 LangGraph driver boundary，并在 graph failures 时保留 thread state。
 - [x] 添加 graph runtime diagnostics，用于 node execution 和 failures。
 - [x] 将 conversation tool handling 拆成 graph-native routes。
-- [ ] 强化 graph-native tool extension boundary。
+- [x] 强化 graph-native tool extension boundary。
+- [ ] 收尾 LangGraph runtime migration slice。
 - [x] 添加结构化 response schema：answer text、evidence references、confidence、epistemic status。
 - [x] 添加 personal claims 的 unsupported-claim guard。
 - [x] 为 conversation agent 添加 tool-based memory search。

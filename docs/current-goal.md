@@ -4,9 +4,9 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Harden the graph-native tool extension boundary while preserving the current file-backed memory and retrieval boundaries.
+Close the LangGraph runtime migration slice while preserving the current file-backed memory and retrieval boundaries.
 
-The conversation graph now has explicit no-tool and tool-call routes for the existing `search_memory` tool path. The next useful step is to make the tool boundary easier to extend before adding persona subgraphs or richer agent routing.
+The conversation graph now has isolated driver failure handling, internal node traces, explicit no-tool/tool-call routes, and structured supported/unsupported tool request state. The next useful step is to review this migration slice for remaining runtime gaps before switching focus to persona subgraphs or another roadmap item.
 
 ## Immediate Context
 
@@ -14,15 +14,16 @@ The conversation graph now has explicit no-tool and tool-call routes for the exi
 - `ChatAgent` now owns thread persistence while `ConversationGraphRuntime` owns turn execution.
 - `ConversationGraphDriver` is the only module that imports LangGraph and wraps graph failures as `ConversationGraphRuntimeError`.
 - Runtime results carry internal node traces without changing CLI or daemon response payloads.
-- Tool calls now route through `detect_tool_request`, optional `execute_tool`, and `finalize_response`.
+- Tool calls route through `detect_tool_request`, optional `execute_tool`, and `finalize_response`.
+- Tool request state records name, args, support status, and diagnostics.
 - File-backed private memory remains authoritative; derived indexes and future runtime mirrors must stay rebuildable.
 
 ## Next Steps
 
-1. Make supported tool detection return structured tool-call state instead of a boolean only.
-2. Keep unsupported tool requests on the no-tool/final-response path with clear diagnostics.
-3. Preserve current response metadata, memory context packing, persistence, tool calls, diagnostics, and deterministic fallback behavior.
-4. Add focused tests for supported and unsupported tool-call requests.
+1. Review chat, daemon, and CLI paths for any remaining references to the old temporary runtime shape.
+2. Confirm tests cover metadata, persistence, context packing, tool routes, graph failures, and fallback behavior.
+3. Update TODOs if this runtime migration slice is complete.
+4. Pick the next focus only after the migration completion criteria are checked.
 
 ## Not Now
 
@@ -35,7 +36,7 @@ The conversation graph now has explicit no-tool and tool-call routes for the exi
 
 ## Completion Criteria
 
-- Supported and unsupported tool requests have explicit, tested graph behavior.
+- The runtime migration slice has no remaining old temporary-runtime behavior to remove.
 - Existing chat entrypoints keep their current user-visible behavior.
-- Tests cover the tool extension boundary without changing CLI or daemon payloads.
+- Tests cover graph runtime behavior across chat, daemon, CLI, tool, failure, and fallback paths.
 - README TODOs track completed progress, while this file stays limited to the active goal.

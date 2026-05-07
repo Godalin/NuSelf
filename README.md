@@ -111,7 +111,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Isolate the LangGraph driver boundary and preserve thread state on graph failures.
 - [x] Add graph runtime diagnostics for node execution and failures.
 - [x] Split conversation tool handling into graph-native routes.
-- [ ] Harden the graph-native tool extension boundary.
+- [x] Harden the graph-native tool extension boundary.
+- [ ] Close the LangGraph runtime migration slice.
 - [x] Add structured response schema with answer text, evidence references, confidence, and epistemic status.
 - [x] Add unsupported-claim guard for personal claims without evidence.
 - [x] Add tool-based memory search for the conversation agent.
