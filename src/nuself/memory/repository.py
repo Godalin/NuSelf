@@ -172,12 +172,18 @@ class MemoryEntryRepository:
         ]
         index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         self._write_relation_index(derived_dir, entries)
+        self._write_symbolic_graph(derived_dir, entries)
         return index_path
 
     def reindex_relations(self) -> Path:
         derived_dir = self._paths.private_root / "derived"
         derived_dir.mkdir(parents=True, exist_ok=True)
         return self._write_relation_index(derived_dir, self.list())
+
+    def reindex_symbolic_graph(self) -> Path:
+        derived_dir = self._paths.private_root / "derived"
+        derived_dir.mkdir(parents=True, exist_ok=True)
+        return self._write_symbolic_graph(derived_dir, self.list())
 
     def list_relations(self, filters: MemoryRelationFilters | None = None) -> list[MemoryRelationIndexRecord]:
         relation_path = self.relation_index_path
@@ -207,6 +213,23 @@ class MemoryEntryRepository:
         ]
         relation_path.write_text(json.dumps(relations, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return relation_path
+
+    def _write_symbolic_graph(self, derived_dir: Path, entries: list[MemoryEntry]) -> Path:
+        by_id = {entry.id: entry for entry in entries}
+        relations = [
+            relation
+            for entry in entries
+            for relation in _relation_index_records(entry, by_id, self._relation_registry)
+        ]
+        graph_path = derived_dir / "symbolic_graph.json"
+        graph = {
+            "schema": "NuSelfSymbolicGraph/v1",
+            "source": "private/memory/entries",
+            "nodes": [_symbolic_node_record(entry) for entry in entries],
+            "edges": [_symbolic_edge_record(relation) for relation in relations],
+        }
+        graph_path.write_text(json.dumps(graph, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return graph_path
 
     def _path_for(self, entry_id: str) -> Path:
         if "/" in entry_id or entry_id in {"", ".", ".."}:
@@ -455,6 +478,49 @@ def _relation_index_record(
         "target_exists": target is not None,
         "confidence": entry.confidence,
         "source_updated_at": entry.updated_at,
+    }
+
+
+def _symbolic_node_record(entry: MemoryEntry) -> dict[str, object]:
+    return {
+        "id": entry.id,
+        "kind": "Memory",
+        "type": entry.type,
+        "label": entry.title,
+        "payload": {
+            "body": entry.body,
+            "tags": entry.tags,
+            "review_state": entry.review_state,
+            "confidence": entry.confidence,
+            "privacy": entry.privacy,
+            "observed_at": entry.observed_at,
+            "valid_from": entry.valid_from,
+            "valid_until": entry.valid_until,
+        },
+        "source_refs": entry.source_refs,
+    }
+
+
+def _symbolic_edge_record(relation: dict[str, object]) -> dict[str, object]:
+    source_id = _expect_str(relation, "source_id")
+    target_id = _expect_str(relation, "target_id")
+    relation_name = _expect_str(relation, "relation")
+    return {
+        "id": f"{source_id}:{relation_name}:{target_id}",
+        "relation": relation_name,
+        "source": source_id,
+        "target": target_id,
+        "payload": {
+            "inverse_relation": _optional_str(relation, "inverse_relation"),
+            "symmetric": _optional_bool(relation, "symmetric"),
+            "transitive": _optional_bool(relation, "transitive"),
+            "temporal_policy": _optional_str(relation, "temporal_policy") or "inherits_source",
+            "confidence_policy": _optional_str(relation, "confidence_policy") or "inherits_source",
+            "retrieval_rule": _optional_str(relation, "retrieval_rule") or "include_direct_neighbors",
+            "target_exists": _optional_bool(relation, "target_exists"),
+        },
+        "confidence": _expect_float(relation, "confidence"),
+        "source_refs": [source_id, target_id],
     }
 
 

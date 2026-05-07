@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import cast
 
 from nuself.domain.memory import (
     MemoryEntry,
@@ -120,6 +121,60 @@ def test_memory_repository_reindex_writes_relation_index(tmp_path: Path) -> None
     assert related_records[0].relation == "related_to"
     assert related_records[0].symmetric is True
     assert related_records[0].inverse_relation == "related_to"
+
+
+def test_memory_repository_reindex_writes_symbolic_graph(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    target = repo.save(
+        MemoryEntry(
+            type="concept",
+            title="Graph projection",
+            body="A derived graph should remain rebuildable.",
+            tags=["graph"],
+            review_state="reviewed",
+        )
+    )
+    source = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Graph source",
+            body="Memory entries can become graph nodes.",
+            tags=["graph"],
+            review_state="reviewed",
+            related_memory_ids=[target.id],
+        )
+    )
+
+    repo.reindex()
+    graph_path = tmp_path / "private" / "derived" / "symbolic_graph.json"
+    raw: object = json.loads(graph_path.read_text(encoding="utf-8"))
+
+    assert isinstance(raw, dict)
+    assert raw["schema"] == "NuSelfSymbolicGraph/v1"
+    nodes = cast(list[object], raw["nodes"])
+    edges = cast(list[object], raw["edges"])
+    assert isinstance(nodes, list)
+    assert isinstance(edges, list)
+    assert {node["id"] for node in nodes if isinstance(node, dict)} == {source.id, target.id}
+    assert edges == [
+        {
+            "confidence": source.confidence,
+            "id": f"{source.id}:related_to:{target.id}",
+            "payload": {
+                "confidence_policy": "inherits_source",
+                "inverse_relation": "related_to",
+                "retrieval_rule": "include_direct_neighbors",
+                "symmetric": True,
+                "target_exists": True,
+                "temporal_policy": "independent",
+                "transitive": False,
+            },
+            "relation": "related_to",
+            "source": source.id,
+            "source_refs": [source.id, target.id],
+            "target": target.id,
+        }
+    ]
 
 
 def test_default_relation_descriptor_registry_exposes_built_ins() -> None:

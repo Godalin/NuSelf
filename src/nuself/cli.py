@@ -400,10 +400,12 @@ def handle_memory_reindex(args: argparse.Namespace) -> int:
     memory_repo = MemoryEntryRepository(args.project_root)
     memory_index_path = memory_repo.reindex()
     relation_index_path = memory_repo.reindex_relations()
+    graph_index_path = memory_repo.reindex_symbolic_graph()
     source_index_path = SourceRepository(args.project_root).reindex()
     profile_index_path = ProfileItemRepository(args.project_root).reindex()
     print(f"Rebuilt memory index: {memory_index_path}")
     print(f"Rebuilt relation index: {relation_index_path}")
+    print(f"Rebuilt symbolic graph: {graph_index_path}")
     print(f"Rebuilt source index: {source_index_path}")
     print(f"Rebuilt profile index: {profile_index_path}")
     return 0
