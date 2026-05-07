@@ -325,6 +325,28 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
     assert compressed.state.updated_thread_state == updated.state.updated_thread_state
 
 
+def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM(
+        '{"answer":"Graph driver reply.","evidence_references":["mem_graph"],'
+        '"confidence":0.9,"epistemic_status":"grounded"}'
+    )
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+
+    result = runtime.run_turn(ThreadState.empty("graph"), "graph runtime", "graph")
+
+    assert result.result.answer == "Graph driver reply."
+    assert result.result.evidence_references == ("mem_graph",)
+    assert result.result.confidence == 0.9
+    assert result.state.messages == [
+        ThreadMessage(role="user", content="graph runtime"),
+        ThreadMessage(role="assistant", content="Graph driver reply."),
+    ]
+
+
 def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     repo.save(
