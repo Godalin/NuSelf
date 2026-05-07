@@ -10,5 +10,6 @@ __pycache__/
 .mypy_cache/
 .pyright/
 .venv/
+.vscode/
 dist/
 build/
