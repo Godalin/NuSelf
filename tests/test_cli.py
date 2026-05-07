@@ -790,8 +790,45 @@ def test_memory_source_search_and_reindex(tmp_path: Path, capsys: CaptureFixture
     assert "durable citation material" in search_output
     assert "Rebuilt memory index:" in reindex_output
     assert "Rebuilt source index:" in reindex_output
+    assert "Rebuilt profile index:" in reindex_output
     assert (tmp_path / "private" / "derived" / "memory_index.json").is_file()
     assert (tmp_path / "private" / "derived" / "source_index.json").is_file()
+    assert (tmp_path / "private" / "derived" / "profile_index.json").is_file()
+
+
+def test_memory_source_extract_creates_reviewable_profile_candidate(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
+    source_path = tmp_path / "profile-source.md"
+    source_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Profile Source",
+                "tags: [mirror]",
+                "---",
+                "The user prefers concise, doc-aligned answers.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    capsys.readouterr()
+
+    list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
+    list_output = capsys.readouterr().out
+    source_id = list_output.split(" ", 1)[0]
+
+    extract_result = main(["--project-root", str(tmp_path), "memory", "source", "extract", source_id])
+    extract_output = capsys.readouterr().out
+    candidate_list_result = main(["--project-root", str(tmp_path), "memory", "candidate", "list"])
+    candidate_list_output = capsys.readouterr().out
+
+    assert list_result == 0
+    assert extract_result == 0
+    assert candidate_list_result == 0
+    assert "Extracted source candidates:" in extract_output
+    assert "profile_fact" in candidate_list_output
 
 
 class _TextInput:

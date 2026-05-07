@@ -17,6 +17,7 @@ from nuself.agent.chat import ChatAgent
 from nuself.daemon import client, lifecycle
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, PrivacyLevel
 from nuself.domain.source import SourceChunk, SourceDocument
+from nuself.domain.profile import ProfileItem
 from nuself.memory.curator import MemoryCurator
 from nuself.memory.intake import MemoryIntakeAgent
 from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
@@ -30,6 +31,7 @@ from nuself.memory.repository import (
     memory_stats,
 )
 from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
+from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
@@ -113,6 +115,15 @@ def build_parser() -> argparse.ArgumentParser:
     optimize_parser = memory_subparsers.add_parser("optimize")
     optimize_parser.add_argument("--limit", type=int, default=50)
     _add_handler(optimize_parser, handle_memory_optimize)
+    profile_parser = memory_subparsers.add_parser("profile")
+    profile_parser.set_defaults(handler=None, help_parser=profile_parser)
+    profile_subparsers = profile_parser.add_subparsers(dest="profile_command")
+    profile_list_parser = profile_subparsers.add_parser("list")
+    _add_handler(profile_list_parser, handle_memory_profile_list)
+    profile_show_parser = profile_subparsers.add_parser("show")
+    profile_show_parser.add_argument("profile_id")
+    _add_handler(profile_show_parser, handle_memory_profile_show)
+    _add_handler(profile_subparsers.add_parser("reindex"), handle_memory_profile_reindex)
     candidate_parser = memory_subparsers.add_parser("candidate")
     candidate_parser.set_defaults(handler=None, help_parser=candidate_parser)
     candidate_subparsers = candidate_parser.add_subparsers(dest="candidate_command")
@@ -161,6 +172,9 @@ def build_parser() -> argparse.ArgumentParser:
     source_search_parser.add_argument("query")
     source_search_parser.add_argument("--limit", type=int, default=8)
     _add_handler(source_search_parser, handle_memory_source_search)
+    source_extract_parser = source_subparsers.add_parser("extract")
+    source_extract_parser.add_argument("source_id")
+    _add_handler(source_extract_parser, handle_memory_source_extract)
     _add_handler(memory_subparsers.add_parser("reindex"), handle_memory_reindex)
 
     return parser
@@ -348,8 +362,10 @@ def handle_memory_stats(args: argparse.Namespace) -> int:
 def handle_memory_reindex(args: argparse.Namespace) -> int:
     memory_index_path = MemoryEntryRepository(args.project_root).reindex()
     source_index_path = SourceRepository(args.project_root).reindex()
+    profile_index_path = ProfileItemRepository(args.project_root).reindex()
     print(f"Rebuilt memory index: {memory_index_path}")
     print(f"Rebuilt source index: {source_index_path}")
+    print(f"Rebuilt profile index: {profile_index_path}")
     return 0
 
 
@@ -501,6 +517,51 @@ def handle_memory_source_search(args: argparse.Namespace) -> int:
         return 0
     for match in matches:
         print(_format_source_chunk_match(match))
+    return 0
+
+
+def handle_memory_source_extract(args: argparse.Namespace) -> int:
+    source_repo = SourceRepository(args.project_root)
+    candidate_repo = MemoryCandidateRepository(args.project_root)
+    try:
+        candidates = source_repo.extract_candidates(args.source_id)
+    except SourceDocumentNotFound:
+        print(f"Source document not found: {args.source_id}", file=sys.stderr)
+        return 1
+    if not candidates:
+        print("No source chunks to extract.")
+        return 0
+    for candidate in candidates:
+        candidate_repo.save(candidate)
+    print(f"Extracted source candidates: source={args.source_id} candidates={len(candidates)}")
+    return 0
+
+
+def handle_memory_profile_list(args: argparse.Namespace) -> int:
+    repo = ProfileItemRepository(args.project_root)
+    items = repo.list()
+    if not items:
+        print("No profile items.")
+        return 0
+    for item in items:
+        print(_format_profile_item_summary(item))
+    return 0
+
+
+def handle_memory_profile_show(args: argparse.Namespace) -> int:
+    repo = ProfileItemRepository(args.project_root)
+    try:
+        item = repo.get(args.profile_id)
+    except ProfileItemNotFound:
+        print(f"Profile item not found: {args.profile_id}", file=sys.stderr)
+        return 1
+    print(_format_profile_item_detail(item))
+    return 0
+
+
+def handle_memory_profile_reindex(args: argparse.Namespace) -> int:
+    profile_index_path = ProfileItemRepository(args.project_root).reindex()
+    print(f"Rebuilt profile index: {profile_index_path}")
     return 0
 
 
@@ -744,6 +805,36 @@ def _format_memory_candidate_summary(candidate: MemoryCandidate) -> str:
     return (
         f"{candidate.id} [{candidate.review_state}] {candidate.action} {candidate.type} "
         f"{candidate.title} tags={tags} observed_at={observed}"
+    )
+
+
+def _format_profile_item_summary(item: ProfileItem) -> str:
+    tags = ",".join(item.tags) if item.tags else "-"
+    observed = item.observed_at or "-"
+    return f"{item.id} [{item.type}] {item.title} tags={tags} observed_at={observed}"
+
+
+def _format_profile_item_detail(item: ProfileItem) -> str:
+    tags = ", ".join(item.tags) if item.tags else "-"
+    return "\n".join(
+        [
+            f"id: {item.id}",
+            f"type: {item.type}",
+            f"title: {item.title}",
+            f"tags: {tags}",
+            f"confidence: {item.confidence}",
+            f"privacy: {item.privacy}",
+            f"created_at: {item.created_at}",
+            f"updated_at: {item.updated_at}",
+            f"observed_at: {item.observed_at or '-'}",
+            f"valid_from: {item.valid_from or '-'}",
+            f"valid_until: {item.valid_until or '-'}",
+            f"temporal_note: {item.temporal_note or '-'}",
+            "evidence:",
+            *_format_evidence_lines(item.evidence),
+            "",
+            item.body,
+        ]
     )
 
 

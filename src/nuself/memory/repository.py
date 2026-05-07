@@ -17,6 +17,8 @@ from nuself.domain.memory import (
     default_memory_type_registry,
     now_iso,
 )
+from nuself.domain.profile import ProfileItem
+from nuself.profile.repository import ProfileItemRepository
 
 
 def empty_str_counts() -> dict[str, int]:
@@ -152,10 +154,12 @@ class MemoryCandidateRepository:
         project_root: Path | None = None,
         *,
         entry_repository: MemoryEntryRepository | None = None,
+        profile_repository: ProfileItemRepository | None = None,
     ) -> None:
         self._paths = runtime_paths(project_root)
         self._candidates_dir = self._paths.private_root / "memory" / "candidates"
         self._entry_repository = entry_repository or MemoryEntryRepository(project_root)
+        self._profile_repository = profile_repository or ProfileItemRepository(project_root)
 
     @property
     def candidates_dir(self) -> Path:
@@ -186,24 +190,21 @@ class MemoryCandidateRepository:
         )
         return candidate
 
-    def accept(self, candidate_id: str) -> MemoryEntry:
+    def accept(self, candidate_id: str) -> MemoryEntry | ProfileItem:
         candidate = self.get(candidate_id)
         if candidate.review_state != "pending":
             raise ValueError(f"candidate is already {candidate.review_state}: {candidate_id}")
         if candidate.action == "delete":
             if candidate.target_entry_id is None:
                 raise ValueError(f"delete candidate requires target_entry_id: {candidate_id}")
-            entry = self._entry_repository.get(candidate.target_entry_id)
-            self._entry_repository.delete(candidate.target_entry_id)
-            self._entry_repository.reindex()
+            entry = self._delete_target(candidate)
             self.save(candidate.with_updates(review_state="accepted", target_entry_id=entry.id))
             return entry
         if candidate.action in {"update", "merge"}:
             if candidate.target_entry_id is None:
                 raise ValueError(f"{candidate.action} candidate requires target_entry_id: {candidate_id}")
             return self.merge(candidate_id, candidate.target_entry_id)
-        entry = self._entry_repository.save(candidate.to_entry())
-        self._entry_repository.reindex()
+        entry = self._save_target(candidate)
         self.save(candidate.with_updates(review_state="accepted", target_entry_id=entry.id))
         return entry
 
@@ -213,10 +214,28 @@ class MemoryCandidateRepository:
         self.save(rejected)
         return rejected
 
-    def merge(self, candidate_id: str, entry_id: str) -> MemoryEntry:
+    def merge(self, candidate_id: str, entry_id: str) -> MemoryEntry | ProfileItem:
         candidate = self.get(candidate_id)
         if candidate.review_state != "pending":
             raise ValueError(f"candidate is already {candidate.review_state}: {candidate_id}")
+        merged = self._merge_target(candidate, entry_id)
+        self.save(candidate.with_updates(review_state="accepted", target_entry_id=entry_id))
+        return merged
+
+    def _save_target(self, candidate: MemoryCandidate) -> MemoryEntry | ProfileItem:
+        if candidate.type == "profile_fact":
+            item = self._profile_repository.accept(candidate)
+            self._profile_repository.reindex()
+            return item
+        entry = self._entry_repository.save(candidate.to_entry())
+        self._entry_repository.reindex()
+        return entry
+
+    def _merge_target(self, candidate: MemoryCandidate, entry_id: str) -> MemoryEntry | ProfileItem:
+        if candidate.type == "profile_fact":
+            merged = self._profile_repository.merge(candidate, entry_id)
+            self._profile_repository.reindex()
+            return merged
         existing = self._entry_repository.get(entry_id)
         merged = MemoryEntry(
             type=existing.type,
@@ -241,8 +260,18 @@ class MemoryCandidateRepository:
         )
         self._entry_repository.save(merged)
         self._entry_repository.reindex()
-        self.save(candidate.with_updates(review_state="accepted", target_entry_id=entry_id))
         return merged
+
+    def _delete_target(self, candidate: MemoryCandidate) -> MemoryEntry | ProfileItem:
+        if candidate.type == "profile_fact":
+            item = self._profile_repository.get(candidate.target_entry_id or "")
+            self._profile_repository.delete(item.id)
+            self._profile_repository.reindex()
+            return item
+        entry = self._entry_repository.get(candidate.target_entry_id or "")
+        self._entry_repository.delete(candidate.target_entry_id or "")
+        self._entry_repository.reindex()
+        return entry
 
     def _path_for(self, candidate_id: str) -> Path:
         if "/" in candidate_id or candidate_id in {"", ".", ".."}:

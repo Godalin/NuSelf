@@ -8,6 +8,7 @@ from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
 )
+from nuself.profile.repository import ProfileItemRepository
 
 
 def test_memory_candidate_repository_crud_and_accept_with_temporal_fields(tmp_path: Path) -> None:
@@ -98,6 +99,28 @@ def test_memory_candidate_repository_merges_into_existing_entry(tmp_path: Path) 
     assert merged.observed_at == "2026-05-07"
     assert merged.related_memory_ids == [existing.id]
     assert candidate_repo.get(candidate.id).review_state == "accepted"
+
+
+def test_memory_candidate_repository_accepts_profile_fact_into_profile_repository(tmp_path: Path) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = repo.save(
+        MemoryCandidate(
+            type="profile_fact",
+            title="Prefers concise output",
+            body="The user wants crisp, doc-aligned answers.",
+            source_refs=["source:profile:0"],
+            evidence=[MemoryEvidence(source_type="source", source_ref="source:profile:0", summary="Imported")],
+        )
+    )
+
+    accepted = repo.accept(candidate.id)
+    profile_repo = ProfileItemRepository(tmp_path)
+    profile_item = profile_repo.list()[0]
+
+    assert profile_item.title == "Prefers concise output"
+    assert accepted.id == profile_item.id
+    assert repo.get(candidate.id).review_state == "accepted"
+    assert repo.get(candidate.id).target_entry_id == profile_item.id
 
 
 def test_memory_candidate_repository_missing_candidate(tmp_path: Path) -> None:

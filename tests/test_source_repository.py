@@ -149,3 +149,31 @@ def test_source_repository_reindex_writes_source_index(tmp_path: Path) -> None:
     assert index[0]["title"] == "Indexed Source"
     assert index[0]["document_privacy"] == "shareable"
     assert index[0]["source_ref"] == f"source:{index[0]['source_id']}:0"
+
+
+def test_source_repository_extracts_profile_candidates(tmp_path: Path) -> None:
+    source_path = tmp_path / "profile.md"
+    source_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Profile Source",
+                "tags: [mirror]",
+                "date: 2026-05-07",
+                "---",
+                "A source paragraph about durable preferences.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    repo = SourceRepository(tmp_path)
+    repo.ingest_path(source_path)
+    document = repo.list_documents()[0]
+
+    candidates = repo.extract_candidates(document.id)
+
+    assert len(candidates) == 1
+    assert candidates[0].type == "profile_fact"
+    assert candidates[0].source_refs == [f"source:{document.id}:0"]
+    assert candidates[0].evidence[0].source_type == "source"
+    assert candidates[0].evidence[0].source_ref == candidates[0].source_refs[0]

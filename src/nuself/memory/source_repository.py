@@ -7,9 +7,10 @@ import json
 from pathlib import Path
 import re
 from typing import cast
+from uuid import NAMESPACE_URL, uuid5
 
 from nuself.config import runtime_paths
-from nuself.domain.memory import PrivacyLevel, now_iso
+from nuself.domain.memory import MemoryCandidate, MemoryEvidence, PrivacyLevel, now_iso
 from nuself.domain.source import SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path
 
 SUPPORTED_SOURCE_SUFFIXES = {".md", ".markdown", ".txt"}
@@ -143,6 +144,11 @@ class SourceRepository:
         index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return index_path
 
+    def extract_candidates(self, source_id: str) -> list[MemoryCandidate]:
+        document = self.get_document(source_id)
+        chunks = self.list_chunks(source_id)
+        return [self._candidate_for_chunk(document, chunk) for chunk in chunks]
+
     def _document_path(self, source_id: str) -> Path:
         return self._documents_dir / f"{source_id}.json"
 
@@ -160,6 +166,35 @@ class SourceRepository:
         if not isinstance(raw, dict):
             raise ValueError(f"source chunk file must contain an object: {path}")
         return SourceChunk.from_wire(cast(dict[str, object], raw))
+
+    def _candidate_for_chunk(self, document: SourceDocument, chunk: SourceChunk) -> MemoryCandidate:
+        source_ref = chunk.source_ref
+        title = f"{document.title} [{chunk.index + 1}]"
+        summary = f"Imported from {document.title} chunk {chunk.index + 1}"
+        return MemoryCandidate(
+            id=f"cand_{uuid5(NAMESPACE_URL, source_ref).hex}",
+            action="create",
+            type="profile_fact",
+            title=title,
+            body=chunk.text,
+            tags=[*document.tags],
+            source_refs=[source_ref],
+            confidence=0.75,
+            privacy=document.privacy,
+            reason=summary,
+            observed_at=document.source_date,
+            valid_from=document.source_date,
+            evidence=[
+                MemoryEvidence(
+                    source_type="source",
+                    source_ref=source_ref,
+                    summary=summary,
+                    quote=_compact_text(chunk.text, 240),
+                    observed_at=document.source_date,
+                )
+            ],
+            temporal_note="Derived from imported source chunk",
+        )
 
 
 def load_source_file(path: Path, *, tags: list[str] | None = None, privacy: PrivacyLevel = "private") -> tuple[SourceDocument, list[SourceChunk]]:
@@ -380,3 +415,10 @@ def _query_tokens(text: str) -> tuple[str, ...]:
 def _append_once(items: list[str], item: str) -> None:
     if item not in items:
         items.append(item)
+
+
+def _compact_text(text: str, limit: int) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: max(limit - 3, 0)].rstrip() + "..."
