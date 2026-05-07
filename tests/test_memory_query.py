@@ -5,6 +5,7 @@ from pathlib import Path
 from nuself.domain.memory import MemoryEntry
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
+from nuself.memory.source_repository import SourceRepository
 
 
 def test_memory_query_ranks_relevant_entries_with_reasons(tmp_path: Path) -> None:
@@ -52,8 +53,38 @@ def test_memory_query_packs_context_with_metadata(tmp_path: Path) -> None:
 
     assert len(packed.matches) == 1
     assert entry.id in packed.text
+    assert "Memory entries:" in packed.text
     assert "type=style_trait" in packed.text
     assert "match=" in packed.text
+
+
+def test_memory_query_packs_source_chunks_with_references(tmp_path: Path) -> None:
+    source_path = tmp_path / "source.md"
+    source_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Source Context",
+                "tags: [retrieval]",
+                "---",
+                "Source chunks provide durable evidence.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    entry_repo = MemoryEntryRepository(tmp_path)
+    source_repo = SourceRepository(tmp_path)
+    source_repo.ingest_path(source_path)
+    service = MemoryQueryService(entry_repo, source_repo)
+
+    packed = service.pack(MemoryQuery(text="durable evidence"))
+
+    assert packed.matches == ()
+    assert len(packed.source_matches) == 1
+    assert "Source chunks:" in packed.text
+    assert "Source Context" in packed.text
+    assert "ref=source:" in packed.text
+    assert "Source chunks provide durable evidence." in packed.text
 
 
 def test_memory_query_returns_empty_context_for_irrelevant_query(tmp_path: Path) -> None:

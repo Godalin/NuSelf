@@ -7,6 +7,7 @@ import re
 
 from nuself.domain.memory import MemoryEntry, ReviewState
 from nuself.memory.repository import MemoryEntryRepository
+from nuself.memory.source_repository import SourceChunkMatch, SourceRepository
 
 DEFAULT_MEMORY_LIMIT = 8
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
@@ -36,13 +37,15 @@ class PackedMemoryContext:
 
     text: str
     matches: tuple[MemoryMatch, ...]
+    source_matches: tuple[SourceChunkMatch, ...] = ()
 
 
 class MemoryQueryService:
     """Query durable memory entries and pack relevant context for prompts."""
 
-    def __init__(self, repository: MemoryEntryRepository) -> None:
+    def __init__(self, repository: MemoryEntryRepository, source_repository: SourceRepository | None = None) -> None:
         self._repository = repository
+        self._source_repository = source_repository
 
     def search(self, query: MemoryQuery) -> list[MemoryMatch]:
         tokens = _query_tokens(query.text)
@@ -57,11 +60,19 @@ class MemoryQueryService:
                 matches.append(match)
         return sorted(matches, key=lambda match: (-match.score, match.entry.updated_at, match.entry.id))[: query.limit]
 
+    def search_sources(self, query: MemoryQuery) -> list[SourceChunkMatch]:
+        if self._source_repository is None:
+            return []
+        return self._source_repository.search(query.text, limit=query.limit)
+
     def pack(self, query: MemoryQuery) -> PackedMemoryContext:
         matches = tuple(self.search(query))
-        if not matches:
-            return PackedMemoryContext(text="", matches=())
+        source_matches = tuple(self.search_sources(query))
+        if not matches and not source_matches:
+            return PackedMemoryContext(text="", matches=(), source_matches=())
         lines: list[str] = []
+        if matches:
+            lines.append("Memory entries:")
         for match in matches:
             entry = match.entry
             tags = f" tags={','.join(entry.tags)}" if entry.tags else ""
@@ -71,7 +82,21 @@ class MemoryQueryService:
                 f"[id={entry.id} type={entry.type} confidence={entry.confidence:.2f}{tags} match={reasons}]: "
                 f"{entry.body}"
             )
-        return PackedMemoryContext(text="\n".join(lines), matches=matches)
+        if source_matches:
+            if lines:
+                lines.append("")
+            lines.append("Source chunks:")
+        for match in source_matches:
+            chunk = match.chunk
+            document = match.document
+            tags = f" tags={','.join(document.tags)}" if document.tags else ""
+            reasons = ",".join(match.reasons)
+            lines.append(
+                f"- {document.title} "
+                f"[ref={chunk.source_ref} source_id={document.id} kind={document.kind}{tags} match={reasons}]: "
+                f"{chunk.text}"
+            )
+        return PackedMemoryContext(text="\n".join(lines), matches=matches, source_matches=source_matches)
 
 
 def _score_entry(entry: MemoryEntry, raw_query: str, tokens: tuple[str, ...]) -> MemoryMatch | None:

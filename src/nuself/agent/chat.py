@@ -13,6 +13,7 @@ from nuself.config import config_int, runtime_paths
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
+from nuself.memory.source_repository import SourceRepository
 
 ThreadRole = Literal["user", "assistant"]
 UpdateResult = TypeVar("UpdateResult")
@@ -227,7 +228,10 @@ class ChatAgent:
         self._llm = llm or default_llm(project_root)
         self._settings = settings or ChatAgentSettings.from_project(project_root)
         self._thread_store = thread_store or ThreadStore(project_root)
-        self._memory_query_service = memory_query_service or MemoryQueryService(MemoryEntryRepository(project_root))
+        self._memory_query_service = memory_query_service or MemoryQueryService(
+            MemoryEntryRepository(project_root),
+            SourceRepository(project_root),
+        )
 
     def respond(self, message: str, thread_id: str = "default") -> ChatResult:
         def update(state: ThreadState) -> tuple[ThreadState, ChatResult]:
@@ -259,12 +263,12 @@ class ChatAgent:
     def _system_prompt(self, user_message: str, summary: str) -> str:
         parts = [
             "You are NuSelf, a private AI mirror for one person.",
-            "Use the user's memory entries as durable context. Do not invent memories.",
+            "Use the user's memory entries and source chunks as durable context. Do not invent memories.",
             "Answer directly, keep uncertainty explicit, and surface useful questions when appropriate.",
         ]
         packed_memory = self._memory_query_service.pack(MemoryQuery(text=user_message))
         if packed_memory.text != "":
-            parts.extend(["", "Relevant memory entries:", packed_memory.text])
+            parts.extend(["", "Relevant memory context:", packed_memory.text])
         if summary != "":
             parts.extend(["", "Compressed conversation so far:", summary])
         return "\n".join(parts)

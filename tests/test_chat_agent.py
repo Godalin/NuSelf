@@ -7,6 +7,7 @@ from nuself.domain.memory import MemoryEntry
 from nuself.llm import ChatMessage
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
+from nuself.memory.source_repository import SourceRepository
 
 
 class FakeLLM:
@@ -57,8 +58,35 @@ def test_chat_agent_omits_irrelevant_memory_entries(tmp_path: Path) -> None:
     agent.respond("weather forecast")
 
     system_prompt = llm.calls[0][0].content
-    assert "Relevant memory entries:" not in system_prompt
+    assert "Relevant memory context:" not in system_prompt
     assert "Clarity matters" not in system_prompt
+
+
+def test_chat_agent_includes_source_chunks_by_default(tmp_path: Path) -> None:
+    source_path = tmp_path / "source.md"
+    source_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Source Evidence",
+                "tags: [evidence]",
+                "---",
+                "Source chunks can support durable answers.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    SourceRepository(tmp_path).ingest_path(source_path)
+    llm = FakeLLM()
+    agent = ChatAgent(tmp_path, llm=llm)
+
+    agent.respond("durable source evidence")
+
+    system_prompt = llm.calls[0][0].content
+    assert "Relevant memory context:" in system_prompt
+    assert "Source chunks:" in system_prompt
+    assert "Source Evidence" in system_prompt
+    assert "ref=source:" in system_prompt
 
 
 def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:

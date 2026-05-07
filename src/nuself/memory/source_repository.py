@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
+import re
 from typing import cast
 
 from nuself.config import runtime_paths
@@ -13,6 +14,8 @@ from nuself.domain.source import SourceChunk, SourceDocument, SourceKind, chunk_
 
 SUPPORTED_SOURCE_SUFFIXES = {".md", ".markdown", ".txt"}
 DEFAULT_CHUNK_TARGET_CHARS = 1200
+DEFAULT_SOURCE_SEARCH_LIMIT = 8
+WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
 
 
 @dataclass(frozen=True)
@@ -26,12 +29,22 @@ class SourceIngestResult:
         return f"documents={self.documents} chunks={self.chunks}"
 
 
+@dataclass(frozen=True)
+class SourceChunkMatch:
+    """A ranked source chunk with document metadata and match reasons."""
+
+    chunk: SourceChunk
+    document: SourceDocument
+    score: float
+    reasons: tuple[str, ...]
+
+
 class SourceRepository:
     """Stores imported source documents and chunks under private/sources."""
 
     def __init__(self, project_root: Path | None = None) -> None:
-        paths = runtime_paths(project_root)
-        self._sources_dir = paths.private_root / "sources"
+        self._paths = runtime_paths(project_root)
+        self._sources_dir = self._paths.private_root / "sources"
         self._documents_dir = self._sources_dir / "documents"
         self._chunks_dir = self._sources_dir / "chunks"
 
@@ -83,6 +96,52 @@ class SourceRepository:
         pattern = f"{source_id}_chunk_*.json" if source_id is not None else "*.json"
         chunks = [self._read_chunk(path) for path in sorted(self._chunks_dir.glob(pattern))]
         return sorted(chunks, key=lambda chunk: (chunk.source_id, chunk.index))
+
+    def search(self, query: str, *, limit: int = DEFAULT_SOURCE_SEARCH_LIMIT) -> list[SourceChunkMatch]:
+        tokens = _query_tokens(query)
+        if not tokens:
+            return []
+        documents = {document.id: document for document in self.list_documents()}
+        matches: list[SourceChunkMatch] = []
+        for chunk in self.list_chunks():
+            document = documents.get(chunk.source_id)
+            if document is None:
+                continue
+            match = _score_chunk(chunk, document, query, tokens)
+            if match is not None:
+                matches.append(match)
+        normalized_limit = max(limit, 1)
+        return sorted(matches, key=lambda match: (-match.score, match.chunk.source_ref))[:normalized_limit]
+
+    def reindex(self) -> Path:
+        derived_dir = self._paths.private_root / "derived"
+        derived_dir.mkdir(parents=True, exist_ok=True)
+        documents = {document.id: document for document in self.list_documents()}
+        index: list[dict[str, object]] = []
+        for chunk in self.list_chunks():
+            document = documents.get(chunk.source_id)
+            if document is None:
+                continue
+            index.append(
+                {
+                    "id": chunk.id,
+                    "source_id": chunk.source_id,
+                    "source_ref": chunk.source_ref,
+                    "index": chunk.index,
+                    "title": chunk.title,
+                    "path": chunk.path,
+                    "document_kind": document.kind,
+                    "document_origin": document.origin,
+                    "document_privacy": document.privacy,
+                    "document_tags": document.tags,
+                    "document_source_date": document.source_date,
+                    "text": chunk.text,
+                    "created_at": chunk.created_at,
+                }
+            )
+        index_path = derived_dir / "source_index.json"
+        index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return index_path
 
     def _document_path(self, source_id: str) -> Path:
         return self._documents_dir / f"{source_id}.json"
@@ -258,3 +317,66 @@ def _dedupe_strings(values: list[str]) -> list[str]:
         seen.add(value)
         result.append(value)
     return result
+
+
+def _score_chunk(
+    chunk: SourceChunk,
+    document: SourceDocument,
+    raw_query: str,
+    tokens: tuple[str, ...],
+) -> SourceChunkMatch | None:
+    query = raw_query.casefold().strip()
+    title = chunk.title.casefold()
+    text = chunk.text.casefold()
+    path = chunk.path.casefold()
+    tags = tuple(tag.casefold() for tag in document.tags)
+    origin = document.origin.casefold()
+    score = 0.0
+    reasons: list[str] = []
+
+    if query != "" and query in title:
+        score += 5.0
+        reasons.append("title_phrase")
+    if query != "" and query in text:
+        score += 3.0
+        reasons.append("text_phrase")
+    if query != "" and any(query in tag for tag in tags):
+        score += 4.0
+        reasons.append("tag_phrase")
+
+    for token in tokens:
+        if token in title:
+            score += 3.0
+            _append_once(reasons, "title")
+        if token in text:
+            score += 1.0
+            _append_once(reasons, "text")
+        if any(token in tag for tag in tags):
+            score += 2.5
+            _append_once(reasons, "tag")
+        if token in path:
+            score += 0.5
+            _append_once(reasons, "path")
+        if token in origin:
+            score += 0.5
+            _append_once(reasons, "origin")
+
+    if score <= 0.0:
+        return None
+    return SourceChunkMatch(chunk=chunk, document=document, score=score, reasons=tuple(reasons))
+
+
+def _query_tokens(text: str) -> tuple[str, ...]:
+    tokens: list[str] = []
+    for match in WORD_RE.finditer(text.casefold()):
+        token = match.group(0)
+        if len(token) < 2:
+            continue
+        if token not in tokens:
+            tokens.append(token)
+    return tuple(tokens)
+
+
+def _append_once(items: list[str], item: str) -> None:
+    if item not in items:
+        items.append(item)

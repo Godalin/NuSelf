@@ -29,7 +29,7 @@ from nuself.memory.repository import (
     MemorySearchFilters,
     memory_stats,
 )
-from nuself.memory.source_repository import SourceDocumentNotFound, SourceRepository
+from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
@@ -157,6 +157,10 @@ def build_parser() -> argparse.ArgumentParser:
     source_chunks_parser = source_subparsers.add_parser("chunks")
     source_chunks_parser.add_argument("source_id", nargs="?")
     _add_handler(source_chunks_parser, handle_memory_source_chunks)
+    source_search_parser = source_subparsers.add_parser("search")
+    source_search_parser.add_argument("query")
+    source_search_parser.add_argument("--limit", type=int, default=8)
+    _add_handler(source_search_parser, handle_memory_source_search)
     _add_handler(memory_subparsers.add_parser("reindex"), handle_memory_reindex)
 
     return parser
@@ -342,9 +346,10 @@ def handle_memory_stats(args: argparse.Namespace) -> int:
 
 
 def handle_memory_reindex(args: argparse.Namespace) -> int:
-    repo = MemoryEntryRepository(args.project_root)
-    index_path = repo.reindex()
-    print(f"Rebuilt memory index: {index_path}")
+    memory_index_path = MemoryEntryRepository(args.project_root).reindex()
+    source_index_path = SourceRepository(args.project_root).reindex()
+    print(f"Rebuilt memory index: {memory_index_path}")
+    print(f"Rebuilt source index: {source_index_path}")
     return 0
 
 
@@ -486,6 +491,16 @@ def handle_memory_source_chunks(args: argparse.Namespace) -> int:
         return 0
     for chunk in chunks:
         print(_format_source_chunk_summary(chunk))
+    return 0
+
+
+def handle_memory_source_search(args: argparse.Namespace) -> int:
+    matches = SourceRepository(args.project_root).search(args.query, limit=args.limit)
+    if not matches:
+        print("No matching source chunks.")
+        return 0
+    for match in matches:
+        print(_format_source_chunk_match(match))
     return 0
 
 
@@ -802,6 +817,18 @@ def _format_source_document_detail(document: SourceDocument, chunk_count: int) -
 def _format_source_chunk_summary(chunk: SourceChunk) -> str:
     preview = _compact_text(chunk.text, 96)
     return f"{chunk.source_ref} {chunk.title} chars={len(chunk.text)} {preview}"
+
+
+def _format_source_chunk_match(match: SourceChunkMatch) -> str:
+    chunk = match.chunk
+    document = match.document
+    preview = _compact_text(chunk.text, 96)
+    reasons = ",".join(match.reasons)
+    tags = ",".join(document.tags) if document.tags else "-"
+    return (
+        f"{chunk.source_ref} {document.title} score={match.score:.2f} match={reasons} "
+        f"tags={tags} path={document.path} {preview}"
+    )
 
 
 def _privacy_arg(value: object) -> PrivacyLevel:

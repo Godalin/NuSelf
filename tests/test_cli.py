@@ -759,6 +759,41 @@ def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: Captu
     assert "A durable source paragraph." in chunks_output
 
 
+def test_memory_source_search_and_reindex(tmp_path: Path, capsys: CaptureFixture) -> None:
+    source_path = tmp_path / "searchable.md"
+    source_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Searchable Source",
+                "tags: [retrieval]",
+                "---",
+                "This paragraph contains durable citation material.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    capsys.readouterr()
+
+    search_result = main(
+        ["--project-root", str(tmp_path), "memory", "source", "search", "durable citation", "--limit", "3"]
+    )
+    search_output = capsys.readouterr().out
+    reindex_result = main(["--project-root", str(tmp_path), "memory", "reindex"])
+    reindex_output = capsys.readouterr().out
+
+    assert search_result == 0
+    assert reindex_result == 0
+    assert "source:" in search_output
+    assert "Searchable Source" in search_output
+    assert "durable citation material" in search_output
+    assert "Rebuilt memory index:" in reindex_output
+    assert "Rebuilt source index:" in reindex_output
+    assert (tmp_path / "private" / "derived" / "memory_index.json").is_file()
+    assert (tmp_path / "private" / "derived" / "source_index.json").is_file()
+
+
 class _TextInput:
     def __init__(self, text: str) -> None:
         self._lines = text.splitlines(keepends=True)

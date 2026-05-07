@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import cast
 
 from nuself.domain.source import SourceChunk, SourceDocument
 from nuself.memory.source_repository import SourceRepository, load_source_file
@@ -89,3 +91,61 @@ def test_source_repository_ingests_file_and_replaces_chunks(tmp_path: Path) -> N
     assert second_result.chunks == 1
     assert len(repo.list_chunks(document.id)) == 1
     assert repo.list_chunks(document.id)[0].text == "Local note title\n\nUpdated body."
+
+
+def test_source_repository_search_returns_ranked_chunks_with_metadata(tmp_path: Path) -> None:
+    first_path = tmp_path / "memory.md"
+    first_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Memory Architecture",
+                "tags: [memory]",
+                "origin: notes",
+                "---",
+                "Source chunks should keep stable references.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    second_path = tmp_path / "other.txt"
+    second_path.write_text("Cooking note\n\nUnrelated text.", encoding="utf-8")
+    repo = SourceRepository(tmp_path)
+    repo.ingest_path(tmp_path)
+
+    matches = repo.search("stable memory references")
+
+    assert len(matches) == 1
+    assert matches[0].document.title == "Memory Architecture"
+    assert matches[0].chunk.source_ref == f"source:{matches[0].document.id}:0"
+    assert "text" in matches[0].reasons
+    assert "tag" in matches[0].reasons
+
+
+def test_source_repository_reindex_writes_source_index(tmp_path: Path) -> None:
+    source_path = tmp_path / "note.md"
+    source_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Indexed Source",
+                "tags: [index]",
+                "privacy: shareable",
+                "---",
+                "Indexed source body.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    repo = SourceRepository(tmp_path)
+    repo.ingest_path(source_path)
+
+    index_path = repo.reindex()
+    raw = json.loads(index_path.read_text(encoding="utf-8"))
+    index = cast(list[dict[str, object]], raw)
+
+    assert index_path == tmp_path / "private" / "derived" / "source_index.json"
+    assert len(index) == 1
+    assert index[0]["title"] == "Indexed Source"
+    assert index[0]["document_privacy"] == "shareable"
+    assert index[0]["source_ref"] == f"source:{index[0]['source_id']}:0"
