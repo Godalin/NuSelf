@@ -96,7 +96,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [ ] Replace the temporary runtime with a LangGraph conversation graph.
 - [x] Add structured response schema with answer text, evidence references, confidence, and epistemic status.
 - [x] Add unsupported-claim guard for personal claims without evidence.
-- [ ] Add tool-based memory search for the conversation agent.
+- [x] Add tool-based memory search for the conversation agent.
 - [ ] Make conversation retrieval descriptor-aware and relation-aware.
 
 ### Lightweight Multi-Agent Selves

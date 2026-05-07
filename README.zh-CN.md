@@ -96,7 +96,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [ ] 用 LangGraph conversation graph 替换临时 runtime。
 - [x] 添加结构化 response schema：answer text、evidence references、confidence、epistemic status。
 - [x] 添加 personal claims 的 unsupported-claim guard。
-- [ ] 为 conversation agent 添加 tool-based memory search。
+- [x] 为 conversation agent 添加 tool-based memory search。
 - [ ] 让 conversation retrieval 支持 descriptor-aware 和 relation-aware 检索。
 
 ### 轻量多智能体分身

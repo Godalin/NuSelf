@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Add tool-based memory search for the conversation agent.
+Prepare for LangGraph integration: tool-based memory search is now available for the conversation agent to call explicitly.
 
 ## Status
 
@@ -46,13 +46,16 @@ Recently completed foundation slice:
 - The default chat agent now includes relevant profile items in its memory context.
 - The memory intake, curator, and optimizer prompts now include relevant derived profile items.
 - Chat now returns structured response metadata and flags unsupported personal claims when evidence is missing.
+- The chat agent now exposes `search_memory` tool that can be invoked to explicitly search memory entries, profiles, and sources.
+- Tool calls are parsed from LLM responses and executed, with results returned for LLM processing.
 
 ## Scope
 
-- Add tool-based memory search to the conversation agent so it can call deterministic retrieval explicitly.
+- Tool-based memory search is ready. Next focus is optional: prepare LangGraph integration or implement descriptor-aware retrieval heuristics.
 
 ## Not Now
 
+- Full LangGraph integration (requires refactoring chat agent architecture).
 - Symbolic graph implementation.
 - Plugin loading.
 - Full decay and reflection rule execution.
@@ -62,17 +65,15 @@ Recently completed foundation slice:
 - Full automatic conflict resolution.
 - Derived vector or graph indexes.
 - Automatic citation synthesis from imported source documents.
-- Symbolic graph implementation.
 - Derived vector or graph indexes over ingested sources.
 - Fully automatic background processing of imported source chunks.
 - Persona/profile prompt synthesis from profile items.
 
 ## Completion Criteria
 
-- Profile item models and repository serialize round-trip.
-- Source-derived candidates include structured source evidence records.
-- CLI commands expose the candidate extraction/review path without committing durable memory directly.
-- README TODOs and planning docs reflect the source-to-candidate and deletion slices before moving to broader profile synthesis.
-- README TODOs and planning docs reflect the profile-search slice before moving to broader profile-query integration.
-- README TODOs and planning docs reflect the profile-query/chat slice before moving to any further prompt-surface work.
-- README TODOs and planning docs reflect the structured response and unsupported-claim guard slice before moving to tool-based memory search.
+- Tool protocol defined and `MemorySearchTool` implements search_memory.
+- ChatAgent integrates tool descriptions in system prompt.
+- ChatAgent parses tool calls from LLM responses and executes them.
+- Tool results are fed back to LLM for follow-up processing.
+- Tests cover tool invocation, error handling, and result formatting.
+- All chat agent and daemon tests pass.
