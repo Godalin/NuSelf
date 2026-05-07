@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from nuself.agent.chat import (
     ChatAgent,
     ChatAgentSettings,
@@ -13,6 +15,7 @@ from nuself.agent.chat import (
     ThreadState,
     ThreadStore,
 )
+from nuself.agent.graph_driver import ConversationGraphRuntimeError
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
@@ -41,6 +44,11 @@ class StructuredFakeLLM:
     def complete(self, messages: list[ChatMessage]) -> str:
         self.calls.append(messages)
         return self.response
+
+
+class FailingLLM:
+    def complete(self, messages: list[ChatMessage]) -> str:
+        raise RuntimeError("llm unavailable")
 
 
 def test_chat_agent_includes_memory_entries(tmp_path: Path) -> None:
@@ -345,6 +353,30 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
         ThreadMessage(role="user", content="graph runtime"),
         ThreadMessage(role="assistant", content="Graph driver reply."),
     ]
+
+
+def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Path) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[ThreadMessage(role="user", content="existing message")],
+            next_message_index=1,
+        )
+    )
+    agent = ChatAgent(
+        tmp_path,
+        llm=FailingLLM(),
+        thread_store=thread_store,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+
+    with pytest.raises(ConversationGraphRuntimeError, match="conversation graph failed"):
+        agent.respond("new message")
+
+    state = thread_store.load("default")
+    assert state.messages == [ThreadMessage(role="user", content="existing message")]
+    assert state.next_message_index == 1
 
 
 def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:

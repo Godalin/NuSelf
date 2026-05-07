@@ -7,9 +7,8 @@ from dataclasses import dataclass, field, replace
 import fcntl
 import json
 from pathlib import Path
-from typing import Any, Literal, Protocol, TypedDict, TypeVar, cast
+from typing import Any, Literal, Protocol, TypeVar, cast
 
-from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
 from nuself.agent.tools import MemorySearchTool
 from nuself.config import config_int, runtime_paths
 from nuself.llm import ChatLLM, ChatMessage, default_llm
@@ -197,12 +196,6 @@ class ConversationNodeResult:
     state: ConversationTurnState
 
 
-class ConversationGraphState(TypedDict):
-    """LangGraph state wrapper for one conversation turn."""
-
-    turn_state: ConversationTurnState
-
-
 class ConversationRuntime(Protocol):
     """Runtime boundary for one conversation turn."""
 
@@ -345,6 +338,8 @@ class ConversationGraphRuntime:
         self._tools: dict[str, MemorySearchTool] = {
             "search_memory": MemorySearchTool(query_service=self._memory_query_service)
         }
+        from nuself.agent.graph_driver import ConversationGraphDriver
+
         self._graph_driver = ConversationGraphDriver(self)
 
     def run_turn(self, state: ThreadState, message: str, thread_id: str) -> ConversationRuntimeResult:
@@ -556,48 +551,6 @@ class ConversationGraphRuntime:
         except RuntimeError:
             summary = _local_summary(previous_summary, transcript, self._settings.summary_target_chars)
         return summary[: self._settings.summary_target_chars]
-
-
-class ConversationGraphDriver:
-    """LangGraph driver that wires the conversation runtime nodes."""
-
-    def __init__(self, runtime: ConversationGraphRuntime) -> None:
-        self._runtime = runtime
-        graph: Any = StateGraph(ConversationGraphState)
-        graph.add_node("prepare_context", self._prepare_context)
-        graph.add_node("initial_response", self._initial_response)
-        graph.add_node("tool_resolution", self._tool_resolution)
-        graph.add_node("state_update", self._state_update)
-        graph.add_node("compression", self._compression)
-        graph.add_edge(START, "prepare_context")
-        graph.add_edge("prepare_context", "initial_response")
-        graph.add_edge("initial_response", "tool_resolution")
-        graph.add_edge("tool_resolution", "state_update")
-        graph.add_edge("state_update", "compression")
-        graph.add_edge("compression", END)
-        self._graph = graph.compile()
-
-    def run(self, state: ConversationTurnState) -> ConversationTurnState:
-        output: object = self._graph.invoke({"turn_state": state})
-        if not isinstance(output, dict):
-            raise RuntimeError("conversation graph returned invalid state")
-        graph_state = cast(ConversationGraphState, output)
-        return graph_state["turn_state"]
-
-    def _prepare_context(self, state: ConversationGraphState) -> ConversationGraphState:
-        return {"turn_state": self._runtime.prepare_context_node(state["turn_state"]).state}
-
-    def _initial_response(self, state: ConversationGraphState) -> ConversationGraphState:
-        return {"turn_state": self._runtime.initial_response_node(state["turn_state"]).state}
-
-    def _tool_resolution(self, state: ConversationGraphState) -> ConversationGraphState:
-        return {"turn_state": self._runtime.tool_resolution_node(state["turn_state"]).state}
-
-    def _state_update(self, state: ConversationGraphState) -> ConversationGraphState:
-        return {"turn_state": self._runtime.state_update_node(state["turn_state"]).state}
-
-    def _compression(self, state: ConversationGraphState) -> ConversationGraphState:
-        return {"turn_state": self._runtime.compression_node(state["turn_state"]).state}
 
 
 def _local_summary(previous_summary: str, transcript: str, target_chars: int) -> str:
