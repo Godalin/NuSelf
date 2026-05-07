@@ -77,6 +77,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add first-pass relation-aware retrieval expansion from existing memory links.
 - [x] Add rebuildable relation index derived from existing memory links.
 - [x] Add `RelationDescriptor` registry for built-in relation behavior.
+- [x] Add rebuildable symbolic graph projection over memory entries and relation edges.
 - [ ] Add derived vector, hybrid, and graph indexes.
 - [ ] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, preference, dependency, and future relations.
 - [x] Add memory stats and richer query commands.
@@ -361,11 +362,12 @@ uv run nuself memory relations --source-id <entry-id>
 uv run nuself memory relations --target-id <entry-id>
 ```
 
-The derived memory and relation indexes are written to:
+The derived memory, relation, and symbolic graph artifacts are written to:
 
 ```text
 private/derived/memory_index.json
 private/derived/relation_index.json
+private/derived/symbolic_graph.json
 ```
 
 ## Source Documents

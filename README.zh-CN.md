@@ -77,6 +77,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 基于现有 memory links 添加第一版 relation-aware retrieval expansion。
 - [x] 添加从现有 memory links 派生、可重建的 relation index。
 - [x] 添加用于内置关系行为的 `RelationDescriptor` registry。
+- [x] 添加覆盖 memory entries 和 relation edges 的可重建 symbolic graph projection。
 - [ ] 添加派生向量、hybrid 和 graph 索引。
 - [ ] 添加开放 symbolic graph，并用 `RelationDescriptor` 描述支持、矛盾、细化、偏好、依赖和未来关系。
 - [x] 添加 memory stats 和更丰富的 query 命令。
@@ -361,11 +362,12 @@ uv run nuself memory relations --source-id <entry-id>
 uv run nuself memory relations --target-id <entry-id>
 ```
 
-派生 memory 和 relation 索引会写入：
+派生 memory、relation 和 symbolic graph artifacts 会写入：
 
 ```text
 private/derived/memory_index.json
 private/derived/relation_index.json
+private/derived/symbolic_graph.json
 ```
 
 ## Source Documents
