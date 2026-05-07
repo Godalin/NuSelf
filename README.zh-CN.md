@@ -26,7 +26,8 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加用于 derived profile state 的 profile item repository。
 - [x] 将 imported source chunks 转换为可 review 的 memory/profile candidates。
 - [x] 在 source-derived candidates 上保留 source evidence links。
-- [ ] 明确 raw private sources 派生出的 memories 的删除行为。
+- [x] 明确 raw private sources 派生出的 memories 的删除行为。
+- [ ] 添加 profile item 的 search 和 query 命令。
 
 ### 项目基础
 
@@ -387,6 +388,18 @@ uv run nuself memory profile show <profile-id>
 支持的 front matter 字段是 `title`、`date`、`tags`、`origin` 和 `privacy`。Source chunk references 使用 `source:<source-id>:<chunk-index>` 格式。
 
 `memory reindex` 会从权威 memory、source 和 profile records 重建 `private/derived/memory_index.json`、`private/derived/source_index.json` 与 `private/derived/profile_index.json`。
+
+删除一个导入的 source 以及它派生出的 review artifacts：
+
+```bash
+uv run nuself memory source delete <source-id>
+```
+
+直接删除一个 derived profile item：
+
+```bash
+uv run nuself memory profile delete <profile-id>
+```
 
 ## 记忆条目类型
 

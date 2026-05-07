@@ -26,7 +26,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add a profile item repository for derived profile state.
 - [x] Convert imported source chunks into reviewable memory/profile candidates.
 - [x] Preserve source evidence links on source-derived candidates.
-- [ ] Clarify deletion behavior for memories derived from raw private sources.
+- [x] Clarify deletion behavior for memories derived from raw private sources.
+- [ ] Add profile item search and query commands.
 
 ### Project Foundation
 
@@ -387,6 +388,18 @@ uv run nuself memory profile show <profile-id>
 Supported front matter fields are `title`, `date`, `tags`, `origin`, and `privacy`. Source chunk references use the form `source:<source-id>:<chunk-index>`.
 
 `memory reindex` rebuilds `private/derived/memory_index.json`, `private/derived/source_index.json`, and `private/derived/profile_index.json` from authoritative memory, source, and profile records.
+
+Delete an imported source and its derived review artifacts:
+
+```bash
+uv run nuself memory source delete <source-id>
+```
+
+Delete a derived profile item directly:
+
+```bash
+uv run nuself memory profile delete <profile-id>
+```
 
 ## Memory Entry Types
 

@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Convert imported source chunks into reviewable memory/profile candidates.
+Add profile item search and query commands.
 
 ## Status
 
@@ -28,6 +28,8 @@ Recently completed foundation slice:
 - `memory search` now supports deterministic filters for type, tag, review state, observed time, and valid time.
 - Profile items now live in a file-backed repository and are inspectable as derived profile state.
 - Imported source chunks now expand into reviewable `profile_fact` candidates with source-linked evidence.
+- Raw private source deletion now cascades to derived candidates and profile items.
+- `memory source delete` and `memory profile delete` now make derived cleanup explicit.
 - Built-in `goal` and `concept` memory types now validate through the descriptor registry.
 - `memory add`, curator, optimizer, and intake parser paths now recognize `goal` and `concept`.
 - Source document and chunk models now serialize round-trip.
@@ -42,7 +44,7 @@ Recently completed foundation slice:
 
 ## Scope
 
-- Clarify deletion behavior for memories derived from raw private sources.
+- Add search and filter commands for derived profile items.
 
 ## Not Now
 
@@ -65,4 +67,4 @@ Recently completed foundation slice:
 - Profile item models and repository serialize round-trip.
 - Source-derived candidates include structured source evidence records.
 - CLI commands expose the candidate extraction/review path without committing durable memory directly.
-- README TODOs and planning docs reflect the source-to-candidate slice before moving to broader profile synthesis.
+- README TODOs and planning docs reflect the source-to-candidate and deletion slices before moving to broader profile synthesis.
