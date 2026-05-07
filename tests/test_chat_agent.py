@@ -23,6 +23,16 @@ class FakeLLM:
         return "agent reply"
 
 
+class StructuredFakeLLM:
+    def __init__(self, response: str) -> None:
+        self.response = response
+        self.calls: list[list[ChatMessage]] = []
+
+    def complete(self, messages: list[ChatMessage]) -> str:
+        self.calls.append(messages)
+        return self.response
+
+
 def test_chat_agent_includes_memory_entries(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     repo.save(
@@ -111,6 +121,40 @@ def test_chat_agent_includes_profile_items_by_default(tmp_path: Path) -> None:
     assert "Profile items:" in system_prompt
     assert "Direct style" in system_prompt
     assert "source:profile:0" in system_prompt
+
+
+def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM(
+        '{"answer":"Use the profile context.","evidence_references":["mem_123","source:note:0"],'
+        '"confidence":0.92,"epistemic_status":"grounded"}'
+    )
+    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
+
+    result = agent.respond("profile context")
+
+    assert result.answer == "Use the profile context."
+    assert result.reply == "Use the profile context."
+    assert result.evidence_references == ("mem_123", "source:note:0")
+    assert result.confidence == 0.92
+    assert result.epistemic_status == "grounded"
+    assert llm.calls[0][0].content.startswith("You are NuSelf")
+    thread_path = tmp_path / "private" / "threads" / "default.json"
+    text = thread_path.read_text(encoding="utf-8")
+    assert "Use the profile context." in text
+
+
+def test_chat_agent_flags_unsupported_personal_claims_without_evidence(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM(
+        '{"answer":"You prefer concise output.","evidence_references":[],"confidence":0.81,"epistemic_status":"grounded"}'
+    )
+    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
+
+    result = agent.respond("what do I prefer?")
+
+    assert result.epistemic_status == "unsupported"
+    assert result.confidence == 0.25
+    assert result.evidence_references == ()
+    assert result.reply == "You prefer concise output."
 
 
 def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:

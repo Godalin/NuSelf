@@ -104,9 +104,14 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
         except RuntimeError as exc:
             return DaemonResponse.fail(request.request_id, str(exc))
         payload: dict[str, JsonValue] = {
+            "answer": result.answer,
             "reply": result.reply,
             "thread_id": result.thread_id,
+            "evidence_references": list(result.evidence_references),
+            "epistemic_status": result.epistemic_status,
         }
+        if result.confidence is not None:
+            payload["confidence"] = result.confidence
         if memory_update is not None and memory_update.changed:
             payload["memory_update"] = memory_update.summary()
         return DaemonResponse.ok(request, payload)

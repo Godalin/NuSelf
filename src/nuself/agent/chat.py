@@ -129,8 +129,27 @@ class ThreadState:
 class ChatResult:
     """Result returned by one chat turn."""
 
-    reply: str
+    answer: str
     thread_id: str
+    evidence_references: tuple[str, ...] = ()
+    confidence: float | None = None
+    epistemic_status: str = "inferred"
+
+    @property
+    def reply(self) -> str:
+        return self.answer
+
+    def to_payload(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "answer": self.answer,
+            "reply": self.answer,
+            "thread_id": self.thread_id,
+            "evidence_references": list(self.evidence_references),
+            "epistemic_status": self.epistemic_status,
+        }
+        if self.confidence is not None:
+            payload["confidence"] = self.confidence
+        return payload
 
 
 class ThreadStore:
@@ -243,16 +262,23 @@ class ChatAgent:
                 ThreadState(thread_id=thread_id, summary=state.summary, messages=messages),
                 message,
             )
-            reply = self._llm.complete(prompt)
+            raw_reply = self._llm.complete(prompt)
+            response = _apply_unsupported_claim_guard(_parse_chat_response(raw_reply))
             updated = ThreadState(
                 thread_id=thread_id,
                 summary=state.summary,
-                messages=[*messages, ThreadMessage(role="assistant", content=reply)],
+                messages=[*messages, ThreadMessage(role="assistant", content=response.answer)],
                 message_start_index=state.message_start_index,
                 next_message_index=state.next_message_index + 2,
             )
             compressed = self._compress_if_needed(updated)
-            return compressed, ChatResult(reply=reply, thread_id=thread_id)
+            return compressed, ChatResult(
+                answer=response.answer,
+                thread_id=thread_id,
+                evidence_references=response.evidence_references,
+                confidence=response.confidence,
+                epistemic_status=response.epistemic_status,
+            )
 
         return self._thread_store.update(thread_id, update)
 
@@ -266,6 +292,11 @@ class ChatAgent:
         parts = [
             "You are NuSelf, a private AI mirror for one person.",
             "Use the user's memory entries and source chunks as durable context. Do not invent memories.",
+            "Return a JSON object with answer, evidence_references, confidence, and epistemic_status.",
+            "answer must be the user-facing text. evidence_references must cite relevant memory ids or source refs when available.",
+            "If you make a claim about the user's preferences, history, or other personal facts without evidence, set epistemic_status to unsupported.",
+            "confidence should be a number between 0 and 1 when you can estimate it; otherwise omit it.",
+            "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
             "Answer directly, keep uncertainty explicit, and surface useful questions when appropriate.",
         ]
         packed_memory = self._memory_query_service.pack(MemoryQuery(text=user_message))
@@ -325,3 +356,91 @@ def _drop_local_fallback_replies(messages: list[ThreadMessage]) -> list[ThreadMe
 
 def _is_local_fallback_reply(message: ThreadMessage) -> bool:
     return message.role == "assistant" and message.content.startswith("LLM API is not configured yet.")
+
+
+@dataclass(frozen=True)
+class ParsedChatResponse:
+    answer: str
+    evidence_references: tuple[str, ...] = ()
+    confidence: float | None = None
+    epistemic_status: str = "inferred"
+
+
+def _parse_chat_response(raw: str) -> ParsedChatResponse:
+    stripped = raw.strip()
+    if stripped.startswith("{"):
+        try:
+            parsed: object = json.loads(stripped)
+        except json.JSONDecodeError:
+            return ParsedChatResponse(answer=raw)
+        if isinstance(parsed, dict):
+            data = cast(dict[str, object], parsed)
+            answer = data.get("answer")
+            if not isinstance(answer, str) or answer.strip() == "":
+                return ParsedChatResponse(answer=raw)
+            evidence_references = _string_tuple(data.get("evidence_references"))
+            confidence = _optional_float(data.get("confidence"))
+            epistemic_status = _string_field(data.get("epistemic_status"), default="inferred")
+            return ParsedChatResponse(
+                answer=answer,
+                evidence_references=evidence_references,
+                confidence=confidence,
+                epistemic_status=epistemic_status,
+            )
+    return ParsedChatResponse(answer=raw)
+
+
+def _apply_unsupported_claim_guard(response: ParsedChatResponse) -> ParsedChatResponse:
+    if response.evidence_references:
+        return response
+    if not _looks_like_personal_claim(response.answer):
+        return response
+    confidence = response.confidence if response.confidence is not None else 0.25
+    return ParsedChatResponse(
+        answer=response.answer,
+        evidence_references=response.evidence_references,
+        confidence=min(confidence, 0.25),
+        epistemic_status="unsupported",
+    )
+
+
+def _looks_like_personal_claim(answer: str) -> bool:
+    normalized = answer.casefold()
+    claim_markers = (
+        "you ",
+        "your ",
+        "remember",
+        "prefer",
+        "like",
+        "believe",
+        "think",
+        "previously",
+        "earlier",
+        "always",
+        "never",
+        "history",
+        "memory",
+    )
+    return any(marker in normalized for marker in claim_markers)
+
+
+def _string_tuple(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    result: list[str] = []
+    for item in cast(list[object], value):
+        if isinstance(item, str) and item.strip() != "":
+            result.append(item.strip())
+    return tuple(result)
+
+
+def _optional_float(value: object) -> float | None:
+    if isinstance(value, int | float):
+        return float(value)
+    return None
+
+
+def _string_field(value: object, *, default: str) -> str:
+    if isinstance(value, str) and value.strip() != "":
+        return value
+    return default
