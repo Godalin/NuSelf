@@ -14,7 +14,10 @@ from nuself.domain.memory import (
     MemoryEntry,
     MemoryObject,
     MemoryTypeRegistry,
+    RelationDescriptor,
+    RelationDescriptorRegistry,
     default_memory_type_registry,
+    default_relation_descriptor_registry,
     now_iso,
 )
 from nuself.domain.profile import ProfileItem
@@ -58,6 +61,12 @@ class MemoryRelationIndexRecord:
     source_id: str
     target_id: str
     relation: str
+    inverse_relation: str | None
+    symmetric: bool
+    transitive: bool
+    temporal_policy: str
+    confidence_policy: str
+    retrieval_rule: str
     source_type: str
     target_type: str | None
     source_title: str
@@ -87,10 +96,17 @@ class MemoryCandidateNotFound(KeyError):
 class MemoryEntryRepository:
     """Stores one JSON file per memory entry under private/memory/entries."""
 
-    def __init__(self, project_root: Path | None = None, *, registry: MemoryTypeRegistry | None = None) -> None:
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        *,
+        registry: MemoryTypeRegistry | None = None,
+        relation_registry: RelationDescriptorRegistry | None = None,
+    ) -> None:
         self._paths = runtime_paths(project_root)
         self._entries_dir = self._paths.private_root / "memory" / "entries"
         self._registry = registry or default_memory_type_registry()
+        self._relation_registry = relation_registry or default_relation_descriptor_registry()
 
     @property
     def entries_dir(self) -> Path:
@@ -187,7 +203,7 @@ class MemoryEntryRepository:
         relations = [
             relation
             for entry in entries
-            for relation in _relation_index_records(entry, by_id)
+            for relation in _relation_index_records(entry, by_id, self._relation_registry)
         ]
         relation_path.write_text(json.dumps(relations, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return relation_path
@@ -400,26 +416,38 @@ def _matches_filters(entry: MemoryEntry, filters: MemorySearchFilters | None) ->
     return True
 
 
-def _relation_index_records(entry: MemoryEntry, by_id: dict[str, MemoryEntry]) -> list[dict[str, object]]:
+def _relation_index_records(
+    entry: MemoryEntry,
+    by_id: dict[str, MemoryEntry],
+    registry: RelationDescriptorRegistry,
+) -> list[dict[str, object]]:
     records: list[dict[str, object]] = []
+    supersedes = registry.require("supersedes")
+    related_to = registry.require("related_to")
     for target_id in entry.supersedes:
-        records.append(_relation_index_record(entry, target_id, "supersedes", by_id))
+        records.append(_relation_index_record(entry, target_id, supersedes, by_id))
     for target_id in entry.related_memory_ids:
-        records.append(_relation_index_record(entry, target_id, "related_to", by_id))
+        records.append(_relation_index_record(entry, target_id, related_to, by_id))
     return records
 
 
 def _relation_index_record(
     entry: MemoryEntry,
     target_id: str,
-    relation: str,
+    descriptor: RelationDescriptor,
     by_id: dict[str, MemoryEntry],
 ) -> dict[str, object]:
     target = by_id.get(target_id)
     return {
         "source_id": entry.id,
         "target_id": target_id,
-        "relation": relation,
+        "relation": descriptor.name,
+        "inverse_relation": descriptor.inverse,
+        "symmetric": descriptor.symmetric,
+        "transitive": descriptor.transitive,
+        "temporal_policy": descriptor.temporal_policy,
+        "confidence_policy": descriptor.confidence_policy,
+        "retrieval_rule": descriptor.retrieval_rule,
         "source_type": entry.type,
         "target_type": target.type if target is not None else None,
         "source_title": entry.title,
@@ -435,6 +463,12 @@ def _relation_record_from_wire(data: dict[str, object]) -> MemoryRelationIndexRe
         source_id=_expect_str(data, "source_id"),
         target_id=_expect_str(data, "target_id"),
         relation=_expect_str(data, "relation"),
+        inverse_relation=_optional_str(data, "inverse_relation"),
+        symmetric=_optional_bool(data, "symmetric"),
+        transitive=_optional_bool(data, "transitive"),
+        temporal_policy=_optional_str(data, "temporal_policy") or "inherits_source",
+        confidence_policy=_optional_str(data, "confidence_policy") or "inherits_source",
+        retrieval_rule=_optional_str(data, "retrieval_rule") or "include_direct_neighbors",
         source_type=_expect_str(data, "source_type"),
         target_type=_optional_str(data, "target_type"),
         source_title=_expect_str(data, "source_title"),
@@ -480,6 +514,15 @@ def _expect_bool(data: dict[str, object], field_name: str) -> bool:
     value = data.get(field_name)
     if not isinstance(value, bool):
         raise ValueError(f"field '{field_name}' must be a boolean")
+    return value
+
+
+def _optional_bool(data: dict[str, object], field_name: str) -> bool:
+    value = data.get(field_name)
+    if value is None:
+        return False
+    if not isinstance(value, bool):
+        raise ValueError(f"field '{field_name}' must be a boolean or null")
     return value
 
 

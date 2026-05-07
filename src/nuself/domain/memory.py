@@ -504,6 +504,46 @@ class MemoryTypeRegistry:
 
 
 @dataclass(frozen=True)
+class RelationDescriptor:
+    """Behavior metadata for one open symbolic relation."""
+
+    name: str
+    description: str
+    domain: tuple[str, ...] = ()
+    range: tuple[str, ...] = ()
+    symmetric: bool = False
+    transitive: bool = False
+    inverse: str | None = None
+    temporal_policy: str = "inherits_source"
+    confidence_policy: str = "inherits_source"
+    retrieval_rule: str = "include_direct_neighbors"
+
+
+class RelationDescriptorRegistry:
+    """Registry for symbolic relation behavior."""
+
+    def __init__(self, descriptors: list[RelationDescriptor] | None = None) -> None:
+        self._descriptors: dict[str, RelationDescriptor] = {}
+        for descriptor in descriptors or []:
+            self.register(descriptor)
+
+    def register(self, descriptor: RelationDescriptor) -> None:
+        self._descriptors[descriptor.name] = descriptor
+
+    def get(self, name: str) -> RelationDescriptor | None:
+        return self._descriptors.get(name)
+
+    def require(self, name: str) -> RelationDescriptor:
+        descriptor = self.get(name)
+        if descriptor is None:
+            raise KeyError(f"unknown relation descriptor: {name}")
+        return descriptor
+
+    def names(self) -> tuple[str, ...]:
+        return tuple(sorted(self._descriptors))
+
+
+@dataclass(frozen=True)
 class EntryPayloadDescriptor:
     """Descriptor for memory objects backed by a title/body entry payload."""
 
@@ -538,6 +578,48 @@ def default_memory_type_registry() -> MemoryTypeRegistry:
             EntryPayloadDescriptor("episode", "a concise event summary"),
             EntryPayloadDescriptor("open_question", "an unresolved question"),
             EntryPayloadDescriptor("instruction", "a behavior rule"),
+        ]
+    )
+
+
+def default_relation_descriptor_registry() -> RelationDescriptorRegistry:
+    """Return built-in descriptors for current memory-link relations."""
+
+    memory_node_types = (
+        "source_note",
+        "profile_fact",
+        "belief",
+        "preference",
+        "goal",
+        "concept",
+        "style_trait",
+        "episode",
+        "open_question",
+        "instruction",
+    )
+    return RelationDescriptorRegistry(
+        [
+            RelationDescriptor(
+                name="supersedes",
+                description="The source memory replaces or revises the target memory.",
+                domain=memory_node_types,
+                range=memory_node_types,
+                inverse="superseded_by",
+                temporal_policy="source_validity_refines_target",
+                confidence_policy="inherits_source",
+                retrieval_rule="include_both_current_and_superseded",
+            ),
+            RelationDescriptor(
+                name="related_to",
+                description="The source memory is intentionally linked to the target memory.",
+                domain=memory_node_types,
+                range=memory_node_types,
+                symmetric=True,
+                inverse="related_to",
+                temporal_policy="independent",
+                confidence_policy="inherits_source",
+                retrieval_rule="include_direct_neighbors",
+            ),
         ]
     )
 

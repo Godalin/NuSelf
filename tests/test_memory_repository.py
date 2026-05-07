@@ -8,6 +8,7 @@ from nuself.domain.memory import (
     MemoryObject,
     MemoryValidationError,
     default_memory_type_registry,
+    default_relation_descriptor_registry,
 )
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository, MemoryRelationFilters
 from nuself.memory.repository import MemorySearchFilters, memory_stats
@@ -74,28 +75,40 @@ def test_memory_repository_reindex_writes_relation_index(tmp_path: Path) -> None
     assert isinstance(raw, list)
     assert raw == [
         {
+            "confidence_policy": "inherits_source",
             "confidence": current.confidence,
+            "inverse_relation": "superseded_by",
             "relation": "supersedes",
+            "retrieval_rule": "include_both_current_and_superseded",
             "source_id": current.id,
             "source_title": "Open descriptors",
             "source_type": "belief",
             "source_updated_at": current.updated_at,
+            "symmetric": False,
             "target_exists": True,
             "target_id": old.id,
             "target_title": "Closed categories",
             "target_type": "belief",
+            "temporal_policy": "source_validity_refines_target",
+            "transitive": False,
         },
         {
+            "confidence_policy": "inherits_source",
             "confidence": current.confidence,
+            "inverse_relation": "related_to",
             "relation": "related_to",
+            "retrieval_rule": "include_direct_neighbors",
             "source_id": current.id,
             "source_title": "Open descriptors",
             "source_type": "belief",
             "source_updated_at": current.updated_at,
+            "symmetric": True,
             "target_exists": True,
             "target_id": related.id,
             "target_title": "Relation expansion",
             "target_type": "concept",
+            "temporal_policy": "independent",
+            "transitive": False,
         },
     ]
 
@@ -105,6 +118,20 @@ def test_memory_repository_reindex_writes_relation_index(tmp_path: Path) -> None
     assert related_records[0].source_id == current.id
     assert related_records[0].target_id == related.id
     assert related_records[0].relation == "related_to"
+    assert related_records[0].symmetric is True
+    assert related_records[0].inverse_relation == "related_to"
+
+
+def test_default_relation_descriptor_registry_exposes_built_ins() -> None:
+    registry = default_relation_descriptor_registry()
+    supersedes = registry.require("supersedes")
+    related_to = registry.require("related_to")
+
+    assert registry.names() == ("related_to", "supersedes")
+    assert supersedes.inverse == "superseded_by"
+    assert supersedes.retrieval_rule == "include_both_current_and_superseded"
+    assert related_to.symmetric is True
+    assert related_to.inverse == "related_to"
 
 
 def test_memory_repository_missing_entry(tmp_path: Path) -> None:
