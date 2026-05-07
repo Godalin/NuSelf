@@ -15,7 +15,8 @@ except ImportError:  # pragma: no cover - platform fallback
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.agent.chat import ChatAgent
 from nuself.daemon import client, lifecycle
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence
+from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, PrivacyLevel
+from nuself.domain.source import SourceChunk, SourceDocument
 from nuself.memory.curator import MemoryCurator
 from nuself.memory.intake import MemoryIntakeAgent
 from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
@@ -28,6 +29,7 @@ from nuself.memory.repository import (
     MemorySearchFilters,
     memory_stats,
 )
+from nuself.memory.source_repository import SourceDocumentNotFound, SourceRepository
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
@@ -140,6 +142,21 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_merge_parser.add_argument("candidate_id")
     candidate_merge_parser.add_argument("entry_id")
     _add_handler(candidate_merge_parser, handle_memory_candidate_merge)
+    source_parser = memory_subparsers.add_parser("source")
+    source_parser.set_defaults(handler=None, help_parser=source_parser)
+    source_subparsers = source_parser.add_subparsers(dest="source_command")
+    source_ingest_parser = source_subparsers.add_parser("ingest")
+    source_ingest_parser.add_argument("path", type=Path)
+    source_ingest_parser.add_argument("--tag", action="append", default=[])
+    source_ingest_parser.add_argument("--privacy", choices=["private", "shareable"], default="private")
+    _add_handler(source_ingest_parser, handle_memory_source_ingest)
+    _add_handler(source_subparsers.add_parser("list"), handle_memory_source_list)
+    source_show_parser = source_subparsers.add_parser("show")
+    source_show_parser.add_argument("source_id")
+    _add_handler(source_show_parser, handle_memory_source_show)
+    source_chunks_parser = source_subparsers.add_parser("chunks")
+    source_chunks_parser.add_argument("source_id", nargs="?")
+    _add_handler(source_chunks_parser, handle_memory_source_chunks)
     _add_handler(memory_subparsers.add_parser("reindex"), handle_memory_reindex)
 
     return parser
@@ -429,6 +446,49 @@ def handle_memory_candidate_merge(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_memory_source_ingest(args: argparse.Namespace) -> int:
+    repo = SourceRepository(args.project_root)
+    try:
+        result = repo.ingest_path(args.path, tags=list(args.tag), privacy=_privacy_arg(args.privacy))
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(f"Source ingest: {result.summary()}")
+    return 0
+
+
+def handle_memory_source_list(args: argparse.Namespace) -> int:
+    repo = SourceRepository(args.project_root)
+    documents = repo.list_documents()
+    if not documents:
+        print("No source documents.")
+        return 0
+    for document in documents:
+        print(_format_source_document_summary(document))
+    return 0
+
+
+def handle_memory_source_show(args: argparse.Namespace) -> int:
+    repo = SourceRepository(args.project_root)
+    try:
+        document = repo.get_document(args.source_id)
+    except SourceDocumentNotFound:
+        print(f"Source document not found: {args.source_id}", file=sys.stderr)
+        return 1
+    print(_format_source_document_detail(document, len(repo.list_chunks(document.id))))
+    return 0
+
+
+def handle_memory_source_chunks(args: argparse.Namespace) -> int:
+    chunks = SourceRepository(args.project_root).list_chunks(args.source_id)
+    if not chunks:
+        print("No source chunks.")
+        return 0
+    for chunk in chunks:
+        print(_format_source_chunk_summary(chunk))
+    return 0
+
+
 def _send_chat(message: str, project_root: Path | None) -> int:
     try:
         response = client.request(
@@ -713,6 +773,41 @@ def _format_memory_stats(stats: MemoryStats) -> str:
         f"candidates_by_review_state: {_format_counts(stats.candidates_by_review_state)}",
     ]
     return "\n".join(lines)
+
+
+def _format_source_document_summary(document: SourceDocument) -> str:
+    tags = ",".join(document.tags) if document.tags else "-"
+    return f"{document.id} [{document.kind}] {document.title} tags={tags} privacy={document.privacy}"
+
+
+def _format_source_document_detail(document: SourceDocument, chunk_count: int) -> str:
+    tags = ", ".join(document.tags) if document.tags else "-"
+    return "\n".join(
+        [
+            f"id: {document.id}",
+            f"title: {document.title}",
+            f"path: {document.path}",
+            f"kind: {document.kind}",
+            f"origin: {document.origin}",
+            f"privacy: {document.privacy}",
+            f"tags: {tags}",
+            f"source_date: {document.source_date or '-'}",
+            f"created_at: {document.created_at}",
+            f"updated_at: {document.updated_at}",
+            f"chunks: {chunk_count}",
+        ]
+    )
+
+
+def _format_source_chunk_summary(chunk: SourceChunk) -> str:
+    preview = _compact_text(chunk.text, 96)
+    return f"{chunk.source_ref} {chunk.title} chars={len(chunk.text)} {preview}"
+
+
+def _privacy_arg(value: object) -> PrivacyLevel:
+    if value == "shareable":
+        return "shareable"
+    return "private"
 
 
 def _format_counts(counts: dict[str, int]) -> str:

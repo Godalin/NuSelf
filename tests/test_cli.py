@@ -703,6 +703,62 @@ def test_memory_stats_and_filtered_search(tmp_path: Path, capsys: CaptureFixture
     assert "Unrelated episode" not in search_output
 
 
+def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: CaptureFixture) -> None:
+    source_path = tmp_path / "essay.md"
+    source_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Source Essay",
+                "date: 2026-05-07",
+                "tags: [mirror]",
+                "origin: notebook",
+                "---",
+                "# Heading",
+                "",
+                "A durable source paragraph.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    ingest_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "source",
+            "ingest",
+            str(source_path),
+            "--tag",
+            "imported",
+            "--privacy",
+            "shareable",
+        ]
+    )
+    ingest_output = capsys.readouterr().out
+    list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
+    list_output = capsys.readouterr().out
+    source_id = list_output.split(" ", 1)[0]
+    show_result = main(["--project-root", str(tmp_path), "memory", "source", "show", source_id])
+    show_output = capsys.readouterr().out
+    chunks_result = main(["--project-root", str(tmp_path), "memory", "source", "chunks", source_id])
+    chunks_output = capsys.readouterr().out
+
+    assert ingest_result == 0
+    assert list_result == 0
+    assert show_result == 0
+    assert chunks_result == 0
+    assert "Source ingest: documents=1 chunks=1" in ingest_output
+    assert "Source Essay" in list_output
+    assert "tags=mirror,imported" in list_output
+    assert "privacy=shareable" in list_output
+    assert "origin: notebook" in show_output
+    assert "source_date: 2026-05-07" in show_output
+    assert f"source:{source_id}:0" in chunks_output
+    assert "A durable source paragraph." in chunks_output
+
+
 class _TextInput:
     def __init__(self, text: str) -> None:
         self._lines = text.splitlines(keepends=True)
