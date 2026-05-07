@@ -65,7 +65,7 @@ class MemoryIntakeAgent:
                 content=(
                     "You are the NuSelf Memory Intake Agent. Classify a user-supplied memory note into a "
                     "durable memory entry. Return only JSON. Allowed types are source_note, profile_fact, "
-                    "belief, preference, style_trait, episode, open_question, instruction. Write a concise "
+                    "belief, preference, goal, concept, style_trait, episode, open_question, instruction. Write a concise "
                     "title and 0-4 short tags. Do not copy raw chat transcript markers into the title."
                 ),
             ),
@@ -108,6 +108,10 @@ def _infer_locally(body: str) -> MemoryIntakeResult:
     memory_type: MemoryEntryType = "episode"
     if "prefer" in normalized or "like" in normalized or "rather" in normalized:
         memory_type = "preference"
+    elif "goal" in normalized or "want to" in normalized or "plan to" in normalized:
+        memory_type = "goal"
+    elif "concept" in normalized or "means" in normalized or "definition" in normalized:
+        memory_type = "concept"
     elif "remember to" in normalized or "always" in normalized or "never" in normalized or "should" in normalized:
         memory_type = "instruction"
     elif "believe" in normalized or "think" in normalized or "is true" in normalized:
@@ -145,6 +149,8 @@ def _memory_type(value: object) -> MemoryEntryType:
         "profile_fact",
         "belief",
         "preference",
+        "goal",
+        "concept",
         "style_trait",
         "episode",
         "open_question",

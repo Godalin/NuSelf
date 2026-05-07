@@ -515,6 +515,46 @@ def test_memory_add_infers_type_without_manual_type(tmp_path: Path, capsys: Capt
     assert entry.body == "I prefer terse CLI summaries with concrete next steps."
 
 
+def test_memory_add_supports_goal_and_concept_types(tmp_path: Path, capsys: CaptureFixture) -> None:
+    goal_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "add",
+            "--type",
+            "goal",
+            "--title",
+            "Finish memory system",
+            "--body",
+            "Complete the typed memory workflow.",
+        ]
+    )
+    capsys.readouterr()
+    concept_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "add",
+            "--type",
+            "concept",
+            "--title",
+            "Temporal memory",
+            "--body",
+            "Memory that preserves real-world time.",
+        ]
+    )
+    capsys.readouterr()
+
+    entries = MemoryEntryRepository(tmp_path).list()
+    types = {entry.type for entry in entries}
+
+    assert goal_result == 0
+    assert concept_result == 0
+    assert types == {"goal", "concept"}
+
+
 def test_memory_candidate_review_flow_accepts_temporal_candidate(tmp_path: Path, capsys: CaptureFixture) -> None:
     candidate = MemoryCandidateRepository(tmp_path).save(
         MemoryCandidate(

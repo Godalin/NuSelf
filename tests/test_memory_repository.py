@@ -87,6 +87,34 @@ def test_default_registry_validates_and_summarizes_built_in_memory_object() -> N
     assert registry.summarize(memory) == "Validation first: Run focused tests before widening validation."
 
 
+def test_default_registry_validates_goal_and_concept_memory_objects() -> None:
+    registry = default_memory_type_registry()
+    goal = MemoryObject(
+        type="goal",
+        payload={
+            "title": "Finish memory system",
+            "body": "Complete the candidate, evidence, stats, and descriptor slices.",
+            "tags": ["memory"],
+            "revisit_at": None,
+        },
+    )
+    concept = MemoryObject(
+        type="concept",
+        payload={
+            "title": "Temporal memory",
+            "body": "Memory that preserves when a thought was observed and how it changes over time.",
+            "tags": ["memory"],
+            "revisit_at": None,
+        },
+    )
+
+    registry.validate(goal)
+    registry.validate(concept)
+
+    assert registry.summarize(goal).startswith("Finish memory system:")
+    assert registry.summarize(concept).startswith("Temporal memory:")
+
+
 def test_repository_rejects_invalid_descriptor_payload(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     invalid = MemoryEntry(type="belief", title="", body="Missing title.")

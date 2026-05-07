@@ -181,8 +181,8 @@ class MemoryCurator:
                     "should create, update, or ignore long-term memory. Return only JSON with an actions array. "
                     "Be conservative. Ignore trivial greetings, name pings, acknowledgements, and idle small talk. "
                     "Prefer updating or refining an existing memory when the meaning is already represented. "
-                    "Create only when the discussion contains a durable preference, decision, open question, "
-                    "important episode, or instruction. Never copy raw chat transcripts into memory bodies; "
+                    "Create only when the discussion contains a durable preference, goal, concept, decision, "
+                    "open question, important episode, or instruction. Never copy raw chat transcripts into memory bodies; "
                     "write compressed summaries with evidence-aware wording. Allowed actions are create, update, ignore."
                 ),
             ),
@@ -388,6 +388,8 @@ def _memory_type(value: object) -> MemoryEntryType:
         "profile_fact",
         "belief",
         "preference",
+        "goal",
+        "concept",
         "style_trait",
         "episode",
         "open_question",

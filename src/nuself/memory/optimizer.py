@@ -143,8 +143,8 @@ class MemoryOptimizer:
                 content=(
                     "You are the NuSelf Memory Optimizer Agent. Clean up existing long-term memory entries. "
                     "Return only JSON with an actions array. Allowed actions are update, delete, ignore. "
-                    "Be conservative: preserve unique user preferences, decisions, instructions, beliefs, "
-                    "open questions, and important episodes. Prefer merging duplicate or overlapping entries by "
+                    "Be conservative: preserve unique user preferences, goals, concepts, decisions, instructions, "
+                    "beliefs, open questions, and important episodes. Prefer merging duplicate or overlapping entries by "
                     "updating the strongest entry and deleting only entries whose content is fully represented "
                     "elsewhere. Rewrite messy entries into clear compressed summaries. Never create new entries "
                     "in this task and never copy raw chat transcripts into memory bodies."
@@ -311,6 +311,8 @@ def _optional_memory_type(value: object) -> MemoryEntryType | None:
         "profile_fact",
         "belief",
         "preference",
+        "goal",
+        "concept",
         "style_trait",
         "episode",
         "open_question",
