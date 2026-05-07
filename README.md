@@ -74,6 +74,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add built-in descriptors for preference, belief, episode, and instruction memory.
 - [x] Add built-in descriptors for goal and concept memory.
 - [x] Add descriptor-aware retrieval heuristics and type/tag filters to memory query tools.
+- [x] Add first-pass relation-aware retrieval expansion from existing memory links.
 - [ ] Add derived vector, hybrid, and graph indexes.
 - [ ] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, preference, dependency, and future relations.
 - [x] Add memory stats and richer query commands.
@@ -98,7 +99,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add structured response schema with answer text, evidence references, confidence, and epistemic status.
 - [x] Add unsupported-claim guard for personal claims without evidence.
 - [x] Add tool-based memory search for the conversation agent.
-- [ ] Make conversation retrieval relation-aware.
+- [x] Make conversation retrieval relation-aware for existing memory links.
 
 ### Lightweight Multi-Agent Selves
 
@@ -229,7 +230,7 @@ uv run nuself daemon attach --message "continue"
 
 Without `--message`, `chat` and `attach` enter interactive mode. When terminal support is available, line editing and arrow-key history are backed by `private/runtime/interactive_history`. Input starting with `:` is treated as an interactive command. Type `:memory` or `:mem` to preview current memory entries. Type `:q`, `:quit`, `:exit`, or send EOF to leave; unknown commands print interactive help and keep the session open.
 
-Current chat uses a temporary agent that searches memory entries from `private/memory/entries/`, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The memory search is currently deterministic lexical retrieval with descriptor-aware type hints, type/tag filters, and ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
+Current chat uses a temporary agent that searches memory entries from `private/memory/entries/`, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The memory search is currently deterministic lexical retrieval with descriptor-aware type hints, type/tag filters, relation expansion over existing memory links, and ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
 
 `private/threads/default.json` is shared working memory for the current NuSelf mind. Multiple terminal attachments to the same daemon share it. The thread store serializes writes with a lock so concurrent turns do not overwrite each other.
 

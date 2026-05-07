@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Prepare for LangGraph integration: tool-based memory search is now available, and deterministic retrieval now has descriptor-aware type hints.
+Prepare for LangGraph integration: tool-based memory search is now available, and deterministic retrieval now has descriptor-aware type hints plus first-pass relation expansion.
 
 ## Status
 
@@ -49,10 +49,11 @@ Recently completed foundation slice:
 - The chat agent now exposes `search_memory` tool that can be invoked to explicitly search memory entries, profiles, and sources.
 - Tool calls are parsed from LLM responses and executed, with results returned for LLM processing.
 - `MemoryQueryService` now applies descriptor-aware type affinity, exposes type/tag filters, and surfaces simple relation metadata in packed memory context.
+- `MemoryQueryService` now expands direct matches through existing `related_memory_ids` and `supersedes` links, including reverse `related_by` and `superseded_by` matches.
 
 ## Scope
 
-- Tool-based memory search and descriptor-aware retrieval heuristics are ready. Next focus is optional: prepare LangGraph integration or implement the first relation-aware retrieval layer.
+- Tool-based memory search, descriptor-aware retrieval heuristics, and first-pass relation expansion are ready. Next focus is optional: prepare LangGraph integration or design the derived symbolic graph/index layer.
 
 ## Not Now
 
@@ -78,4 +79,5 @@ Recently completed foundation slice:
 - Tool results are fed back to LLM for follow-up processing.
 - Tests cover tool invocation, error handling, and result formatting.
 - Descriptor-aware retrieval boosts and filters are covered by query/tool tests.
+- Relation expansion over existing memory links is covered by query tests.
 - All chat agent and daemon tests pass.
