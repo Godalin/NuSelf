@@ -44,6 +44,7 @@ Recently completed foundation slice:
 - The default chat agent now includes relevant source chunks in its memory context.
 - `MemoryQueryService` now also packs derived profile items alongside durable memory entries and source chunks.
 - The default chat agent now includes relevant profile items in its memory context.
+- The memory intake, curator, and optimizer prompts now include relevant derived profile items.
 
 ## Scope
 

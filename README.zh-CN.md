@@ -29,6 +29,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 明确 raw private sources 派生出的 memories 的删除行为。
 - [x] 添加 profile item 的 search 和 filter 命令。
 - [x] 将 profile item 接入 query 层。
+- [x] 将 derived profile context 接入 intake、curator 和 optimizer prompts。
 
 ### 项目基础
 

@@ -29,6 +29,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Clarify deletion behavior for memories derived from raw private sources.
 - [x] Add profile item search and filter commands.
 - [x] Add profile item retrieval to the query layer.
+- [x] Add derived profile context to intake, curator, and optimizer prompts.
 
 ### Project Foundation
 
