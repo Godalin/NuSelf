@@ -176,6 +176,13 @@ def test_memory_repository_reindex_writes_symbolic_graph(tmp_path: Path) -> None
         }
     ]
 
+    belief_nodes = repo.list_graph_nodes()
+    related_edges = repo.list_graph_edges()
+
+    assert {node.id for node in belief_nodes} == {source.id, target.id}
+    assert related_edges[0].id == f"{source.id}:related_to:{target.id}"
+    assert related_edges[0].relation == "related_to"
+
 
 def test_default_relation_descriptor_registry_exposes_built_ins() -> None:
     registry = default_relation_descriptor_registry()

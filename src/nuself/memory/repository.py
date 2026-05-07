@@ -85,6 +85,43 @@ class MemoryRelationFilters:
     target_id: str | None = None
 
 
+@dataclass(frozen=True)
+class SymbolicGraphNode:
+    """One derived symbolic graph node."""
+
+    id: str
+    kind: str
+    type: str
+    label: str
+
+
+@dataclass(frozen=True)
+class SymbolicGraphEdge:
+    """One derived symbolic graph edge."""
+
+    id: str
+    relation: str
+    source: str
+    target: str
+    confidence: float
+
+
+@dataclass(frozen=True)
+class SymbolicGraphNodeFilters:
+    """Deterministic filters for graph nodes."""
+
+    type: str | None = None
+
+
+@dataclass(frozen=True)
+class SymbolicGraphEdgeFilters:
+    """Deterministic filters for graph edges."""
+
+    relation: str | None = None
+    source_id: str | None = None
+    target_id: str | None = None
+
+
 class MemoryEntryNotFound(KeyError):
     """Raised when a memory entry does not exist."""
 
@@ -202,6 +239,35 @@ class MemoryEntryRepository:
     @property
     def relation_index_path(self) -> Path:
         return self._paths.private_root / "derived" / "relation_index.json"
+
+    def list_graph_nodes(self, filters: SymbolicGraphNodeFilters | None = None) -> list[SymbolicGraphNode]:
+        graph = self._read_symbolic_graph()
+        nodes = [
+            _symbolic_node_from_wire(item)
+            for item in _expect_object_list(graph, "nodes")
+        ]
+        return [node for node in nodes if _matches_graph_node_filters(node, filters)]
+
+    def list_graph_edges(self, filters: SymbolicGraphEdgeFilters | None = None) -> list[SymbolicGraphEdge]:
+        graph = self._read_symbolic_graph()
+        edges = [
+            _symbolic_edge_from_wire(item)
+            for item in _expect_object_list(graph, "edges")
+        ]
+        return [edge for edge in edges if _matches_graph_edge_filters(edge, filters)]
+
+    @property
+    def symbolic_graph_path(self) -> Path:
+        return self._paths.private_root / "derived" / "symbolic_graph.json"
+
+    def _read_symbolic_graph(self) -> dict[str, object]:
+        graph_path = self.symbolic_graph_path
+        if not graph_path.exists():
+            self.reindex_symbolic_graph()
+        raw: object = json.loads(graph_path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError(f"symbolic graph must contain an object: {graph_path}")
+        return cast(dict[str, object], raw)
 
     def _write_relation_index(self, derived_dir: Path, entries: list[MemoryEntry]) -> Path:
         by_id = {entry.id: entry for entry in entries}
@@ -543,6 +609,63 @@ def _relation_record_from_wire(data: dict[str, object]) -> MemoryRelationIndexRe
         confidence=_expect_float(data, "confidence"),
         source_updated_at=_expect_str(data, "source_updated_at"),
     )
+
+
+def _symbolic_node_from_wire(data: dict[str, object]) -> SymbolicGraphNode:
+    return SymbolicGraphNode(
+        id=_expect_str(data, "id"),
+        kind=_expect_str(data, "kind"),
+        type=_expect_str(data, "type"),
+        label=_expect_str(data, "label"),
+    )
+
+
+def _symbolic_edge_from_wire(data: dict[str, object]) -> SymbolicGraphEdge:
+    return SymbolicGraphEdge(
+        id=_expect_str(data, "id"),
+        relation=_expect_str(data, "relation"),
+        source=_expect_str(data, "source"),
+        target=_expect_str(data, "target"),
+        confidence=_expect_float(data, "confidence"),
+    )
+
+
+def _matches_graph_node_filters(
+    node: SymbolicGraphNode,
+    filters: SymbolicGraphNodeFilters | None,
+) -> bool:
+    if filters is None:
+        return True
+    if filters.type is not None and node.type != filters.type:
+        return False
+    return True
+
+
+def _matches_graph_edge_filters(
+    edge: SymbolicGraphEdge,
+    filters: SymbolicGraphEdgeFilters | None,
+) -> bool:
+    if filters is None:
+        return True
+    if filters.relation is not None and edge.relation != filters.relation:
+        return False
+    if filters.source_id is not None and edge.source != filters.source_id:
+        return False
+    if filters.target_id is not None and edge.target != filters.target_id:
+        return False
+    return True
+
+
+def _expect_object_list(data: dict[str, object], field_name: str) -> list[dict[str, object]]:
+    value = data.get(field_name)
+    if not isinstance(value, list):
+        raise ValueError(f"field '{field_name}' must be a list")
+    result: list[dict[str, object]] = []
+    for item in cast(list[object], value):
+        if not isinstance(item, dict):
+            raise ValueError(f"field '{field_name}' must contain only objects")
+        result.append(cast(dict[str, object], item))
+    return result
 
 
 def _matches_relation_filters(

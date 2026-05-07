@@ -30,6 +30,10 @@ from nuself.memory.repository import (
     MemoryRelationIndexRecord,
     MemoryStats,
     MemorySearchFilters,
+    SymbolicGraphEdge,
+    SymbolicGraphEdgeFilters,
+    SymbolicGraphNode,
+    SymbolicGraphNodeFilters,
     memory_stats,
 )
 from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
@@ -118,6 +122,17 @@ def build_parser() -> argparse.ArgumentParser:
     relations_parser.add_argument("--source-id", default=None)
     relations_parser.add_argument("--target-id", default=None)
     _add_handler(relations_parser, handle_memory_relations)
+    graph_parser = memory_subparsers.add_parser("graph")
+    graph_parser.set_defaults(handler=None, help_parser=graph_parser)
+    graph_subparsers = graph_parser.add_subparsers(dest="graph_command")
+    graph_nodes_parser = graph_subparsers.add_parser("nodes")
+    graph_nodes_parser.add_argument("--type", default=None)
+    _add_handler(graph_nodes_parser, handle_memory_graph_nodes)
+    graph_edges_parser = graph_subparsers.add_parser("edges")
+    graph_edges_parser.add_argument("--relation", choices=["supersedes", "related_to"], default=None)
+    graph_edges_parser.add_argument("--source-id", default=None)
+    graph_edges_parser.add_argument("--target-id", default=None)
+    _add_handler(graph_edges_parser, handle_memory_graph_edges)
     _add_handler(memory_subparsers.add_parser("update"), handle_memory_update)
     optimize_parser = memory_subparsers.add_parser("optimize")
     optimize_parser.add_argument("--limit", type=int, default=50)
@@ -393,6 +408,34 @@ def handle_memory_relations(args: argparse.Namespace) -> int:
         return 0
     for record in records:
         print(_format_memory_relation(record))
+    return 0
+
+
+def handle_memory_graph_nodes(args: argparse.Namespace) -> int:
+    nodes = MemoryEntryRepository(args.project_root).list_graph_nodes(
+        SymbolicGraphNodeFilters(type=args.type)
+    )
+    if not nodes:
+        print("No symbolic graph nodes.")
+        return 0
+    for node in nodes:
+        print(_format_symbolic_graph_node(node))
+    return 0
+
+
+def handle_memory_graph_edges(args: argparse.Namespace) -> int:
+    edges = MemoryEntryRepository(args.project_root).list_graph_edges(
+        SymbolicGraphEdgeFilters(
+            relation=args.relation,
+            source_id=args.source_id,
+            target_id=args.target_id,
+        )
+    )
+    if not edges:
+        print("No symbolic graph edges.")
+        return 0
+    for edge in edges:
+        print(_format_symbolic_graph_edge(edge))
     return 0
 
 
@@ -978,6 +1021,14 @@ def _format_memory_relation(record: MemoryRelationIndexRecord) -> str:
         f"target={target_type}:{target_title} "
         f"target_exists={record.target_exists} confidence={record.confidence:.2f}]"
     )
+
+
+def _format_symbolic_graph_node(node: SymbolicGraphNode) -> str:
+    return f"{node.id} [{node.kind}:{node.type}] {node.label}"
+
+
+def _format_symbolic_graph_edge(edge: SymbolicGraphEdge) -> str:
+    return f"{edge.id} {edge.source} --{edge.relation}-> {edge.target} confidence={edge.confidence:.2f}"
 
 
 def _format_source_document_summary(document: SourceDocument) -> str:

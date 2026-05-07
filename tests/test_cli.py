@@ -743,6 +743,44 @@ def test_memory_relations_lists_and_filters_derived_index(tmp_path: Path, capsys
     assert "Old model" not in filter_output
 
 
+def test_memory_graph_lists_nodes_and_edges(tmp_path: Path, capsys: CaptureFixture) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    target = repo.save(MemoryEntry(type="concept", title="Graph node", body="A graph target."))
+    source = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Graph edge",
+            body="A graph source.",
+            related_memory_ids=[target.id],
+        )
+    )
+
+    nodes_result = main(["--project-root", str(tmp_path), "memory", "graph", "nodes", "--type", "concept"])
+    nodes_output = capsys.readouterr().out
+    edges_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "graph",
+            "edges",
+            "--relation",
+            "related_to",
+            "--source-id",
+            source.id,
+        ]
+    )
+    edges_output = capsys.readouterr().out
+
+    assert nodes_result == 0
+    assert edges_result == 0
+    assert target.id in nodes_output
+    assert "Graph node" in nodes_output
+    assert source.id not in nodes_output
+    assert f"{source.id}:related_to:{target.id}" in edges_output
+    assert f"{source.id} --related_to-> {target.id}" in edges_output
+
+
 def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: CaptureFixture) -> None:
     source_path = tmp_path / "essay.md"
     source_path.write_text(
