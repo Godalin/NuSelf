@@ -362,6 +362,17 @@ uv run nuself memory relations --source-id <entry-id>
 uv run nuself memory relations --target-id <entry-id>
 ```
 
+查看派生 symbolic graph：
+
+```bash
+uv run nuself memory graph nodes
+uv run nuself memory graph nodes --type belief
+uv run nuself memory graph edges
+uv run nuself memory graph edges --relation related_to
+uv run nuself memory graph edges --source-id <entry-id>
+uv run nuself memory graph edges --target-id <entry-id>
+```
+
 派生 memory、relation 和 symbolic graph artifacts 会写入：
 
 ```text

@@ -55,12 +55,14 @@ Recently completed retrieval foundation slice:
 - `RelationDescriptorRegistry` now defines built-in `supersedes` and `related_to` relation behavior.
 - Relation index records now include descriptor-derived metadata such as inverse relation, symmetry, temporal policy, confidence policy, and retrieval rule.
 - `memory reindex` now rebuilds `private/derived/symbolic_graph.json` with memory nodes and descriptor-backed relation edges.
+- `memory graph nodes` and `memory graph edges` now inspect the derived symbolic graph with deterministic filters.
 
 ## Scope
 
 - Built-in relation descriptors and descriptor-backed relation index generation are ready.
 - Symbolic node/edge graph projection is ready as a rebuildable artifact.
-- Next focus is optional: add graph inspection/search commands or extend built-in relation descriptors.
+- Graph node/edge inspection commands are ready.
+- Next focus is optional: add graph search commands or extend built-in relation descriptors.
 - Keep the graph layer derived and rebuildable from authoritative memory entries.
 - Keep relation inspection commands working while descriptor metadata grows.
 
@@ -87,5 +89,6 @@ Recently completed retrieval foundation slice:
 - Relation index records include descriptor-derived metadata.
 - Repository and CLI tests cover descriptor-backed relation index generation and inspection.
 - Repository and CLI tests cover symbolic graph rebuilding.
+- CLI tests cover symbolic graph node/edge inspection and filtering.
 - README TODOs track the descriptor registry as complete.
 - All chat agent and daemon tests pass.

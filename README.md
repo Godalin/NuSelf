@@ -362,6 +362,17 @@ uv run nuself memory relations --source-id <entry-id>
 uv run nuself memory relations --target-id <entry-id>
 ```
 
+Inspect the derived symbolic graph:
+
+```bash
+uv run nuself memory graph nodes
+uv run nuself memory graph nodes --type belief
+uv run nuself memory graph edges
+uv run nuself memory graph edges --relation related_to
+uv run nuself memory graph edges --source-id <entry-id>
+uv run nuself memory graph edges --target-id <entry-id>
+```
+
 The derived memory, relation, and symbolic graph artifacts are written to:
 
 ```text
