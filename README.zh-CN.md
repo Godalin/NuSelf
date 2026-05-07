@@ -10,6 +10,7 @@ NuSelf 是一个本地 AI 镜像项目。它的目标是逐步成长为一个带
 - 可选的本地后台守护进程，通过 Unix socket 通信。
 - 一个临时的带记忆聊天 agent，可以用 one-shot 模式运行，也可以通过守护进程运行。
 - 基于文件的记忆条目，可列出、查看、新增、编辑、删除、搜索和重建索引。
+- 在 ignored `private/sources/` 下支持 Markdown 和纯文本 source ingestion。
 - 持久化聊天线程，并能压缩较早的对话上下文。
 
 LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规划内容，还没有实现。
@@ -22,10 +23,10 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 
 ### 当前目标
 
-- [ ] 添加 Markdown 和纯文本本地 source ingestion。
-- [ ] 在 ignored `private/sources/` 下添加 source document records。
-- [ ] 保留 source metadata 和稳定 source references。
-- [ ] 添加 chunking 和 CLI ingest 命令。
+- [ ] 将 ingested source chunks 接入确定性的 query 和 reindex 工作流。
+- [ ] 添加面向 imported document chunks 的 source search。
+- [ ] 让 `memory reindex` 从权威 source records 重建 source-derived artifacts。
+- [ ] 为未来回答引用保留 source references。
 
 ### 项目基础
 
@@ -75,10 +76,11 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 
 ### 导入与知识库
 
-- [ ] 添加 Markdown 和纯文本本地 source ingestion。
-- [ ] 添加 source metadata 解析：title、path、date、tags、origin、privacy。
-- [ ] 添加保留 source references 的 chunking。
-- [ ] 添加 source documents、chunks、profile items 和 candidates 的 repositories。
+- [x] 添加 Markdown 和纯文本本地 source ingestion。
+- [x] 添加 source metadata 解析：title、path、date、tags、origin、privacy。
+- [x] 添加保留 source references 的 chunking。
+- [x] 添加 source documents 和 chunks 的 repositories。
+- [ ] 添加 profile items 的 repositories。
 - [ ] 让 `memory reindex` 从权威来源重建所有派生 artifacts。
 
 ### Agent Runtime
@@ -347,6 +349,27 @@ uv run nuself memory reindex
 private/derived/memory_index.json
 ```
 
+## Source Documents
+
+将 Markdown 或纯文本 source material 导入 ignored 本地存储：
+
+```bash
+uv run nuself memory source ingest private/sources/my-note.md --tag notes
+uv run nuself memory source ingest private/sources/ --tag archive
+```
+
+导入后的 document metadata 存储在 `private/sources/documents/`，稳定 chunks 存储在 `private/sources/chunks/`。
+
+查看已导入 sources：
+
+```bash
+uv run nuself memory source list
+uv run nuself memory source show <source-id>
+uv run nuself memory source chunks <source-id>
+```
+
+支持的 front matter 字段是 `title`、`date`、`tags`、`origin` 和 `privacy`。Source chunk references 使用 `source:<source-id>:<chunk-index>` 格式。
+
 ## 记忆条目类型
 
 支持的条目类型：
@@ -354,6 +377,9 @@ private/derived/memory_index.json
 - `source_note`
 - `profile_fact`
 - `belief`
+- `preference`
+- `goal`
+- `concept`
 - `style_trait`
 - `episode`
 - `open_question`

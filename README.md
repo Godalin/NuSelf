@@ -10,6 +10,7 @@ The current implementation is an early CLI-first skeleton:
 - Optional local background daemon over a Unix socket.
 - A temporary memory-aware chat agent that can run one-shot or through the daemon.
 - File-backed memory entries that can be listed, viewed, added, edited, deleted, searched, and re-indexed.
+- File-backed source ingestion for Markdown and plain text under ignored `private/sources/`.
 - Persisted chat threads with compressed conversation context.
 
 LangGraph/LangChain integration, proactive reflection, email, and macOS notifications are planned but not implemented yet.
@@ -22,10 +23,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Current Goal
 
-- [ ] Add local source ingestion for Markdown and plain text.
-- [ ] Add source document records under ignored `private/sources/`.
-- [ ] Preserve source metadata and stable source references.
-- [ ] Add chunking and a CLI ingest command.
+- [ ] Connect ingested source chunks to deterministic query and reindex workflows.
+- [ ] Add source search over imported document chunks.
+- [ ] Make `memory reindex` rebuild source-derived artifacts from authoritative source records.
+- [ ] Keep source references available for future answer citations.
 
 ### Project Foundation
 
@@ -75,10 +76,11 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Ingestion And Knowledge Store
 
-- [ ] Add local source ingestion for Markdown and plain text.
-- [ ] Add source metadata parsing for title, path, date, tags, origin, and privacy.
-- [ ] Add chunking that preserves source references.
-- [ ] Add repositories for source documents, chunks, profile items, and candidates.
+- [x] Add local source ingestion for Markdown and plain text.
+- [x] Add source metadata parsing for title, path, date, tags, origin, and privacy.
+- [x] Add chunking that preserves source references.
+- [x] Add repositories for source documents and chunks.
+- [ ] Add repositories for profile items.
 - [ ] Make `memory reindex` rebuild all derived artifacts from authoritative sources.
 
 ### Agent Runtime
@@ -347,6 +349,27 @@ The derived index is written to:
 private/derived/memory_index.json
 ```
 
+## Source Documents
+
+Import Markdown or plain-text source material into ignored local storage:
+
+```bash
+uv run nuself memory source ingest private/sources/my-note.md --tag notes
+uv run nuself memory source ingest private/sources/ --tag archive
+```
+
+Imported document metadata is stored under `private/sources/documents/`, and stable chunks are stored under `private/sources/chunks/`.
+
+Inspect imported sources:
+
+```bash
+uv run nuself memory source list
+uv run nuself memory source show <source-id>
+uv run nuself memory source chunks <source-id>
+```
+
+Supported front matter fields are `title`, `date`, `tags`, `origin`, and `privacy`. Source chunk references use the form `source:<source-id>:<chunk-index>`.
+
 ## Memory Entry Types
 
 Supported entry types:
@@ -354,6 +377,9 @@ Supported entry types:
 - `source_note`
 - `profile_fact`
 - `belief`
+- `preference`
+- `goal`
+- `concept`
 - `style_trait`
 - `episode`
 - `open_question`

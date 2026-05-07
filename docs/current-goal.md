@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Add local source ingestion for Markdown and plain text.
+Connect ingested source chunks to deterministic query and reindex workflows.
 
 ## Status
 
@@ -28,14 +28,18 @@ Recently completed foundation slice:
 - `memory search` now supports deterministic filters for type, tag, review state, observed time, and valid time.
 - Built-in `goal` and `concept` memory types now validate through the descriptor registry.
 - `memory add`, curator, optimizer, and intake parser paths now recognize `goal` and `concept`.
+- Source document and chunk models now serialize round-trip.
+- Markdown and plain text files can be ingested into ignored `private/sources/`.
+- Source front matter now preserves title, date, tags, origin, and privacy.
+- Ingested chunks now keep stable `source:<source-id>:<chunk-index>` references.
+- `memory source ingest`, `list`, `show`, and `chunks` expose local source ingestion from the CLI.
 
 ## Scope
 
-- Add file-backed source document records under ignored `private/sources/`.
-- Add Markdown and plain text loaders.
-- Preserve source metadata: title, path, date, tags, origin, and privacy.
-- Add chunking that keeps stable source references.
-- Add a CLI command to ingest a local file or directory into the development store.
+- Add deterministic source search over imported document chunks.
+- Extend derived reindexing so source-derived artifacts rebuild from authoritative source records.
+- Keep source chunk references available for future answer citations.
+- Preserve the current file-backed source document and chunk records as authoritative source storage.
 
 ## Not Now
 
@@ -50,10 +54,10 @@ Recently completed foundation slice:
 - Automatic citation synthesis from imported source documents.
 - Symbolic graph implementation.
 - Derived vector or graph indexes over ingested sources.
+- Automatic memory candidate extraction from imported source chunks.
 
 ## Completion Criteria
 
-- Source document and chunk models serialize round-trip.
-- Markdown and plain text ingestion are covered by tests.
-- Ingested chunks preserve source references.
-- README TODOs and planning docs reflect the completed ingestion slice before moving to the next goal.
+- Source search returns matching chunks with source references and document metadata.
+- `memory reindex` includes source-derived artifacts without mutating source identity.
+- README TODOs and planning docs reflect the next source-query slice before moving to broader indexing work.
