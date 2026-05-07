@@ -6,8 +6,10 @@ from dataclasses import dataclass
 import re
 
 from nuself.domain.memory import MemoryEntry, ReviewState
+from nuself.domain.profile import ProfileItem
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceChunkMatch, SourceRepository
+from nuself.profile.repository import ProfileItemRepository
 
 DEFAULT_MEMORY_LIMIT = 8
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
@@ -37,15 +39,31 @@ class PackedMemoryContext:
 
     text: str
     matches: tuple[MemoryMatch, ...]
+    profile_matches: tuple["ProfileMatch", ...] = ()
     source_matches: tuple[SourceChunkMatch, ...] = ()
+
+
+@dataclass(frozen=True)
+class ProfileMatch:
+    """A ranked derived profile item with explainable match reasons."""
+
+    item: ProfileItem
+    score: float
+    reasons: tuple[str, ...]
 
 
 class MemoryQueryService:
     """Query durable memory entries and pack relevant context for prompts."""
 
-    def __init__(self, repository: MemoryEntryRepository, source_repository: SourceRepository | None = None) -> None:
+    def __init__(
+        self,
+        repository: MemoryEntryRepository,
+        source_repository: SourceRepository | None = None,
+        profile_repository: ProfileItemRepository | None = None,
+    ) -> None:
         self._repository = repository
         self._source_repository = source_repository
+        self._profile_repository = profile_repository
 
     def search(self, query: MemoryQuery) -> list[MemoryMatch]:
         tokens = _query_tokens(query.text)
@@ -65,11 +83,22 @@ class MemoryQueryService:
             return []
         return self._source_repository.search(query.text, limit=query.limit)
 
+    def search_profiles(self, query: MemoryQuery) -> list[ProfileMatch]:
+        if self._profile_repository is None:
+            return []
+        matches: list[ProfileMatch] = []
+        for item in self._profile_repository.search(query.text):
+            match = _score_profile_item(item, query.text)
+            if match is not None:
+                matches.append(match)
+        return sorted(matches, key=lambda match: (-match.score, match.item.updated_at, match.item.id))[: query.limit]
+
     def pack(self, query: MemoryQuery) -> PackedMemoryContext:
         matches = tuple(self.search(query))
+        profile_matches = tuple(self.search_profiles(query))
         source_matches = tuple(self.search_sources(query))
-        if not matches and not source_matches:
-            return PackedMemoryContext(text="", matches=(), source_matches=())
+        if not matches and not profile_matches and not source_matches:
+            return PackedMemoryContext(text="", matches=(), profile_matches=(), source_matches=())
         lines: list[str] = []
         if matches:
             lines.append("Memory entries:")
@@ -81,6 +110,20 @@ class MemoryQueryService:
                 f"- {entry.title} "
                 f"[id={entry.id} type={entry.type} confidence={entry.confidence:.2f}{tags} match={reasons}]: "
                 f"{entry.body}"
+            )
+        if profile_matches:
+            if lines:
+                lines.append("")
+            lines.append("Profile items:")
+        for match in profile_matches:
+            item = match.item
+            tags = f" tags={','.join(item.tags)}" if item.tags else ""
+            sources = f" sources={','.join(item.source_refs)}" if item.source_refs else ""
+            reasons = ",".join(match.reasons)
+            lines.append(
+                f"- {item.title} "
+                f"[id={item.id} type={item.type} confidence={item.confidence:.2f}{tags}{sources} match={reasons}]: "
+                f"{item.body}"
             )
         if source_matches:
             if lines:
@@ -96,7 +139,12 @@ class MemoryQueryService:
                 f"[ref={chunk.source_ref} source_id={document.id} kind={document.kind}{tags} match={reasons}]: "
                 f"{chunk.text}"
             )
-        return PackedMemoryContext(text="\n".join(lines), matches=matches, source_matches=source_matches)
+        return PackedMemoryContext(
+            text="\n".join(lines),
+            matches=matches,
+            profile_matches=profile_matches,
+            source_matches=source_matches,
+        )
 
 
 def _score_entry(entry: MemoryEntry, raw_query: str, tokens: tuple[str, ...]) -> MemoryMatch | None:
@@ -137,6 +185,51 @@ def _score_entry(entry: MemoryEntry, raw_query: str, tokens: tuple[str, ...]) ->
         score += min(entry.confidence, 1.0) * 0.25
         reasons.append("confidence")
     return MemoryMatch(entry=entry, score=score, reasons=tuple(reasons))
+
+
+def _score_profile_item(item: ProfileItem, raw_query: str) -> ProfileMatch | None:
+    title = item.title.casefold()
+    body = item.body.casefold()
+    tags = tuple(tag.casefold() for tag in item.tags)
+    source_refs = tuple(source_ref.casefold() for source_ref in item.source_refs)
+    query = raw_query.casefold().strip()
+    score = 0.0
+    reasons: list[str] = []
+
+    if query != "" and query in title:
+        score += 5.0
+        reasons.append("title_phrase")
+    if query != "" and query in body:
+        score += 3.0
+        reasons.append("body_phrase")
+    if query != "" and any(query in tag for tag in tags):
+        score += 4.0
+        reasons.append("tag_phrase")
+    if query != "" and any(query in source_ref for source_ref in source_refs):
+        score += 2.0
+        reasons.append("source_ref_phrase")
+
+    for token in _query_tokens(raw_query):
+        if token in title:
+            score += 3.0
+            _append_once(reasons, "title")
+        if any(token in tag for tag in tags):
+            score += 2.5
+            _append_once(reasons, "tag")
+        if token in body:
+            score += 1.0
+            _append_once(reasons, "body")
+        if any(token in source_ref for source_ref in source_refs):
+            score += 0.5
+            _append_once(reasons, "source_ref")
+
+    if score <= 0.0:
+        return None
+    confidence = item.confidence
+    if confidence > 0:
+        score += min(confidence, 1.0) * 0.25
+        reasons.append("confidence")
+    return ProfileMatch(item=item, score=score, reasons=tuple(reasons))
 
 
 def _query_tokens(text: str) -> tuple[str, ...]:

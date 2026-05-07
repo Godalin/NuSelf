@@ -14,6 +14,7 @@ from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
+from nuself.profile.repository import ProfileItemRepository
 
 ThreadRole = Literal["user", "assistant"]
 UpdateResult = TypeVar("UpdateResult")
@@ -231,6 +232,7 @@ class ChatAgent:
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),
             SourceRepository(project_root),
+            ProfileItemRepository(project_root),
         )
 
     def respond(self, message: str, thread_id: str = "default") -> ChatResult:

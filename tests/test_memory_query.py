@@ -3,9 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from nuself.domain.memory import MemoryEntry
+from nuself.domain.profile import ProfileItem
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
+from nuself.profile.repository import ProfileItemRepository
 
 
 def test_memory_query_ranks_relevant_entries_with_reasons(tmp_path: Path) -> None:
@@ -87,6 +89,30 @@ def test_memory_query_packs_source_chunks_with_references(tmp_path: Path) -> Non
     assert "Source chunks provide durable evidence." in packed.text
 
 
+def test_memory_query_packs_profile_items_with_references(tmp_path: Path) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    profile_repo = ProfileItemRepository(tmp_path)
+    profile_repo.save(
+        ProfileItem(
+            type="profile_fact",
+            title="Concise output",
+            body="Prefers concise command output.",
+            tags=["cli", "style"],
+            source_refs=["source:profile:0"],
+            observed_at="2026-05-07",
+        )
+    )
+    service = MemoryQueryService(entry_repo, profile_repository=profile_repo)
+
+    packed = service.pack(MemoryQuery(text="concise command"))
+
+    assert len(packed.profile_matches) == 1
+    assert packed.matches == ()
+    assert "Profile items:" in packed.text
+    assert "Concise output" in packed.text
+    assert "source:profile:0" in packed.text
+
+
 def test_memory_query_returns_empty_context_for_irrelevant_query(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     repo.save(
@@ -103,3 +129,23 @@ def test_memory_query_returns_empty_context_for_irrelevant_query(tmp_path: Path)
 
     assert packed.text == ""
     assert packed.matches == ()
+
+
+def test_memory_query_includes_profile_items_in_default_chat_context(tmp_path: Path) -> None:
+    profile_repo = ProfileItemRepository(tmp_path)
+    profile_repo.save(
+        ProfileItem(
+            type="profile_fact",
+            title="Direct style",
+            body="Prefer direct answers.",
+            tags=["style"],
+            source_refs=["source:profile:0"],
+        )
+    )
+    service = MemoryQueryService(MemoryEntryRepository(tmp_path), profile_repository=profile_repo)
+
+    packed = service.pack(MemoryQuery(text="direct answers"))
+
+    assert len(packed.profile_matches) == 1
+    assert "Profile items:" in packed.text
+    assert "Direct style" in packed.text

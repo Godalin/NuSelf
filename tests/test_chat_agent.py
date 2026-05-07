@@ -4,10 +4,12 @@ from pathlib import Path
 
 from nuself.agent.chat import ChatAgent, ChatAgentSettings, ThreadMessage, ThreadState, ThreadStore
 from nuself.domain.memory import MemoryEntry
+from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
+from nuself.profile.repository import ProfileItemRepository
 
 
 class FakeLLM:
@@ -89,6 +91,28 @@ def test_chat_agent_includes_source_chunks_by_default(tmp_path: Path) -> None:
     assert "ref=source:" in system_prompt
 
 
+def test_chat_agent_includes_profile_items_by_default(tmp_path: Path) -> None:
+    profile_repo = ProfileItemRepository(tmp_path)
+    profile_repo.save(
+        ProfileItem(
+            type="profile_fact",
+            title="Direct style",
+            body="Prefer direct answers.",
+            tags=["style"],
+            source_refs=["source:profile:0"],
+        )
+    )
+    llm = FakeLLM()
+    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path), profile_repository=profile_repo))
+
+    agent.respond("direct answers")
+
+    system_prompt = llm.calls[0][0].content
+    assert "Profile items:" in system_prompt
+    assert "Direct style" in system_prompt
+    assert "source:profile:0" in system_prompt
+
+
 def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:
     llm = FakeLLM()
     settings = ChatAgentSettings(recent_messages=2, summary_trigger_messages=4, summary_target_chars=200)
@@ -117,7 +141,8 @@ def test_chat_agent_uses_local_summary_without_api_key(tmp_path: Path) -> None:
     text = thread_path.read_text(encoding="utf-8")
 
     assert "OPENAI_API_KEY is not configured" not in text
-    assert '"content": "one"' in text
+    assert '"content": "three"' in text
+    assert '"summary":' in text
 
 
 def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
