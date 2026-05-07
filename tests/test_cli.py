@@ -831,6 +831,40 @@ def test_memory_source_extract_creates_reviewable_profile_candidate(
     assert "profile_fact" in candidate_list_output
 
 
+def test_memory_source_delete_cascades_profile_items(tmp_path: Path, capsys: CaptureFixture) -> None:
+    source_path = tmp_path / "profile-source.md"
+    source_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Profile Source",
+                "tags: [mirror]",
+                "---",
+                "The user prefers concise, doc-aligned answers.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    capsys.readouterr()
+    list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
+    list_output = capsys.readouterr().out
+    source_id = list_output.split(" ", 1)[0]
+    main(["--project-root", str(tmp_path), "memory", "source", "extract", source_id])
+    capsys.readouterr()
+
+    delete_result = main(["--project-root", str(tmp_path), "memory", "source", "delete", source_id])
+    delete_output = capsys.readouterr().out
+    profile_list_result = main(["--project-root", str(tmp_path), "memory", "profile", "list"])
+    profile_list_output = capsys.readouterr().out
+
+    assert list_result == 0
+    assert delete_result == 0
+    assert "Deleted source document:" in delete_output
+    assert profile_list_result == 0
+    assert "No profile items." in profile_list_output
+
+
 class _TextInput:
     def __init__(self, text: str) -> None:
         self._lines = text.splitlines(keepends=True)

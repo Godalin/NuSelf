@@ -77,6 +77,14 @@ class SourceRepository:
             raise SourceDocumentNotFound(source_id)
         return self._read_document(path)
 
+    def delete_document(self, source_id: str) -> None:
+        document = self.get_document(source_id)
+        source_prefix = f"source:{document.id}:"
+        self._delete_derived_candidates(source_prefix)
+        self._delete_derived_profile_items(source_prefix)
+        self._delete_document_file(document.id)
+        self._delete_chunks(source_id)
+
     def replace_chunks(self, source_id: str, chunks: list[SourceChunk]) -> None:
         self.ensure()
         for path in self._chunks_dir.glob(f"{source_id}_chunk_*.json"):
@@ -166,6 +174,31 @@ class SourceRepository:
         if not isinstance(raw, dict):
             raise ValueError(f"source chunk file must contain an object: {path}")
         return SourceChunk.from_wire(cast(dict[str, object], raw))
+
+    def _delete_document_file(self, source_id: str) -> None:
+        path = self._document_path(source_id)
+        if path.exists():
+            path.unlink()
+
+    def _delete_chunks(self, source_id: str) -> None:
+        for path in self._chunks_dir.glob(f"{source_id}_chunk_*.json"):
+            path.unlink()
+
+    def _delete_derived_candidates(self, source_prefix: str) -> None:
+        from nuself.memory.repository import MemoryCandidateRepository
+
+        candidate_repo = MemoryCandidateRepository(self._paths.project_root)
+        for candidate in candidate_repo.list(include_reviewed=True):
+            if _has_source_prefix(candidate.source_refs, source_prefix):
+                candidate_repo.delete(candidate.id)
+
+    def _delete_derived_profile_items(self, source_prefix: str) -> None:
+        from nuself.profile.repository import ProfileItemRepository
+
+        profile_repo = ProfileItemRepository(self._paths.project_root)
+        for item in profile_repo.list():
+            if _has_source_prefix(item.source_refs, source_prefix):
+                profile_repo.delete(item.id)
 
     def _candidate_for_chunk(self, document: SourceDocument, chunk: SourceChunk) -> MemoryCandidate:
         source_ref = chunk.source_ref
@@ -422,3 +455,7 @@ def _compact_text(text: str, limit: int) -> str:
     if len(compact) <= limit:
         return compact
     return compact[: max(limit - 3, 0)].rstrip() + "..."
+
+
+def _has_source_prefix(source_refs: list[str], source_prefix: str) -> bool:
+    return any(source_ref.startswith(source_prefix) for source_ref in source_refs)

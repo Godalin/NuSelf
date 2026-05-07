@@ -165,6 +165,9 @@ def build_parser() -> argparse.ArgumentParser:
     source_show_parser = source_subparsers.add_parser("show")
     source_show_parser.add_argument("source_id")
     _add_handler(source_show_parser, handle_memory_source_show)
+    source_delete_parser = source_subparsers.add_parser("delete")
+    source_delete_parser.add_argument("source_id")
+    _add_handler(source_delete_parser, handle_memory_source_delete)
     source_chunks_parser = source_subparsers.add_parser("chunks")
     source_chunks_parser.add_argument("source_id", nargs="?")
     _add_handler(source_chunks_parser, handle_memory_source_chunks)
@@ -497,6 +500,20 @@ def handle_memory_source_show(args: argparse.Namespace) -> int:
         print(f"Source document not found: {args.source_id}", file=sys.stderr)
         return 1
     print(_format_source_document_detail(document, len(repo.list_chunks(document.id))))
+    return 0
+
+
+def handle_memory_source_delete(args: argparse.Namespace) -> int:
+    source_repo = SourceRepository(args.project_root)
+    profile_repo = ProfileItemRepository(args.project_root)
+    try:
+        source_repo.delete_document(args.source_id)
+    except SourceDocumentNotFound:
+        print(f"Source document not found: {args.source_id}", file=sys.stderr)
+        return 1
+    source_repo.reindex()
+    profile_repo.reindex()
+    print(f"Deleted source document: {args.source_id}")
     return 0
 
 

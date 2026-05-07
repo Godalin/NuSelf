@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import cast
 
+from nuself.memory.repository import MemoryCandidateRepository
+from nuself.profile.repository import ProfileItemRepository
 from nuself.domain.source import SourceChunk, SourceDocument
 from nuself.memory.source_repository import SourceRepository, load_source_file
 
@@ -177,3 +179,37 @@ def test_source_repository_extracts_profile_candidates(tmp_path: Path) -> None:
     assert candidates[0].source_refs == [f"source:{document.id}:0"]
     assert candidates[0].evidence[0].source_type == "source"
     assert candidates[0].evidence[0].source_ref == candidates[0].source_refs[0]
+
+
+def test_source_repository_delete_cascades_derived_candidates_and_profile_items(tmp_path: Path) -> None:
+    source_path = tmp_path / "profile.md"
+    source_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Profile Source",
+                "tags: [mirror]",
+                "date: 2026-05-07",
+                "---",
+                "A source paragraph about durable preferences.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    source_repo = SourceRepository(tmp_path)
+    source_repo.ingest_path(source_path)
+    document = source_repo.list_documents()[0]
+    candidate_repo = MemoryCandidateRepository(tmp_path)
+    candidate = source_repo.extract_candidates(document.id)[0]
+    candidate_repo.save(candidate)
+    candidate_repo.accept(candidate.id)
+
+    assert candidate_repo.list(include_reviewed=True)
+    assert ProfileItemRepository(tmp_path).list()
+
+    source_repo.delete_document(document.id)
+
+    assert source_repo.list_documents() == []
+    assert source_repo.list_chunks(document.id) == []
+    assert candidate_repo.list(include_reviewed=True) == []
+    assert ProfileItemRepository(tmp_path).list() == []

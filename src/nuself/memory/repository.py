@@ -190,6 +190,12 @@ class MemoryCandidateRepository:
         )
         return candidate
 
+    def delete(self, candidate_id: str) -> None:
+        path = self._path_for(candidate_id)
+        if not path.exists():
+            raise MemoryCandidateNotFound(candidate_id)
+        path.unlink()
+
     def accept(self, candidate_id: str) -> MemoryEntry | ProfileItem:
         candidate = self.get(candidate_id)
         if candidate.review_state != "pending":
