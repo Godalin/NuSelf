@@ -9,8 +9,8 @@ NuSelf 是一个本地 AI 镜像项目。它的目标是逐步成长为一个带
 - 本地 `nuself` 命令。
 - 可选的本地后台守护进程，通过 Unix socket 通信。
 - 一个临时的带记忆聊天 agent，可以用 one-shot 模式运行，也可以通过守护进程运行。
-- 基于文件的记忆条目，可列出、查看、新增、编辑、删除、搜索和重建索引。
-- 在 ignored `private/sources/` 下支持 Markdown 和纯文本 source ingestion。
+- 基于文件的记忆条目和 profile items，可列出、查看、新增、编辑、删除、搜索和重建索引。
+- 在 ignored `private/sources/` 下支持 Markdown 和纯文本 source ingestion，并可从导入的 chunks 提取可审阅候选项。
 - 持久化聊天线程，并能压缩较早的对话上下文。
 
 LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规划内容，还没有实现。
@@ -23,9 +23,9 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 
 ### 当前目标
 
-- [ ] 添加用于 derived profile state 的 profile item repository。
-- [ ] 将 imported source chunks 转换为可 review 的 memory/profile candidates。
-- [ ] 在 source-derived candidates 上保留 source evidence links。
+- [x] 添加用于 derived profile state 的 profile item repository。
+- [x] 将 imported source chunks 转换为可 review 的 memory/profile candidates。
+- [x] 在 source-derived candidates 上保留 source evidence links。
 - [ ] 明确 raw private sources 派生出的 memories 的删除行为。
 
 ### 项目基础
@@ -371,9 +371,22 @@ uv run nuself memory source chunks <source-id>
 uv run nuself memory source search "durable citation"
 ```
 
+从已导入的 source 中提取可审阅的 profile candidates：
+
+```bash
+uv run nuself memory source extract <source-id>
+```
+
+这一步会把 `profile_fact` 候选项放入 review queue，并保留结构化 source evidence。已接受的 profile candidates 会存放在 `private/profile/items/`，可以用下面的命令查看：
+
+```bash
+uv run nuself memory profile list
+uv run nuself memory profile show <profile-id>
+```
+
 支持的 front matter 字段是 `title`、`date`、`tags`、`origin` 和 `privacy`。Source chunk references 使用 `source:<source-id>:<chunk-index>` 格式。
 
-`memory reindex` 会从权威 memory 和 source records 重建 `private/derived/memory_index.json` 与 `private/derived/source_index.json`。
+`memory reindex` 会从权威 memory、source 和 profile records 重建 `private/derived/memory_index.json`、`private/derived/source_index.json` 与 `private/derived/profile_index.json`。
 
 ## 记忆条目类型
 

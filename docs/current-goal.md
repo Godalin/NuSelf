@@ -26,6 +26,8 @@ Recently completed foundation slice:
 - Memory and candidate detail commands now show evidence records.
 - `memory stats` now reports type, review, candidate, evidence, and temporal coverage.
 - `memory search` now supports deterministic filters for type, tag, review state, observed time, and valid time.
+- Profile items now live in a file-backed repository and are inspectable as derived profile state.
+- Imported source chunks now expand into reviewable `profile_fact` candidates with source-linked evidence.
 - Built-in `goal` and `concept` memory types now validate through the descriptor registry.
 - `memory add`, curator, optimizer, and intake parser paths now recognize `goal` and `concept`.
 - Source document and chunk models now serialize round-trip.
@@ -40,9 +42,6 @@ Recently completed foundation slice:
 
 ## Scope
 
-- Add a file-backed profile item repository for derived profile state.
-- Add source-to-candidate extraction that creates reviewable memory/profile candidates from imported chunks.
-- Preserve source evidence links on source-derived candidates.
 - Clarify deletion behavior for memories derived from raw private sources.
 
 ## Not Now

@@ -9,8 +9,8 @@ The current implementation is an early CLI-first skeleton:
 - Local `nuself` command.
 - Optional local background daemon over a Unix socket.
 - A temporary memory-aware chat agent that can run one-shot or through the daemon.
-- File-backed memory entries that can be listed, viewed, added, edited, deleted, searched, and re-indexed.
-- File-backed source ingestion for Markdown and plain text under ignored `private/sources/`.
+- File-backed memory entries and profile items that can be listed, viewed, added, edited, deleted, searched, and re-indexed.
+- File-backed source ingestion for Markdown and plain text under ignored `private/sources/`, plus reviewable candidates extracted from imported chunks.
 - Persisted chat threads with compressed conversation context.
 
 LangGraph/LangChain integration, proactive reflection, email, and macOS notifications are planned but not implemented yet.
@@ -23,9 +23,9 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Current Goal
 
-- [ ] Add a profile item repository for derived profile state.
-- [ ] Convert imported source chunks into reviewable memory/profile candidates.
-- [ ] Preserve source evidence links on source-derived candidates.
+- [x] Add a profile item repository for derived profile state.
+- [x] Convert imported source chunks into reviewable memory/profile candidates.
+- [x] Preserve source evidence links on source-derived candidates.
 - [ ] Clarify deletion behavior for memories derived from raw private sources.
 
 ### Project Foundation
@@ -371,9 +371,22 @@ uv run nuself memory source chunks <source-id>
 uv run nuself memory source search "durable citation"
 ```
 
+Extract reviewable profile candidates from an imported source:
+
+```bash
+uv run nuself memory source extract <source-id>
+```
+
+The extraction step creates `profile_fact` candidates in the review queue with structured source evidence. Accepted profile candidates are stored under `private/profile/items/`, and you can inspect them with:
+
+```bash
+uv run nuself memory profile list
+uv run nuself memory profile show <profile-id>
+```
+
 Supported front matter fields are `title`, `date`, `tags`, `origin`, and `privacy`. Source chunk references use the form `source:<source-id>:<chunk-index>`.
 
-`memory reindex` rebuilds both `private/derived/memory_index.json` and `private/derived/source_index.json` from authoritative memory and source records.
+`memory reindex` rebuilds `private/derived/memory_index.json`, `private/derived/source_index.json`, and `private/derived/profile_index.json` from authoritative memory, source, and profile records.
 
 ## Memory Entry Types
 
