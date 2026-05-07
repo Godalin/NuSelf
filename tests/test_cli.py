@@ -705,6 +705,44 @@ def test_memory_stats_and_filtered_search(tmp_path: Path, capsys: CaptureFixture
     assert "Unrelated episode" not in search_output
 
 
+def test_memory_relations_lists_and_filters_derived_index(tmp_path: Path, capsys: CaptureFixture) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    old = repo.save(MemoryEntry(type="belief", title="Old model", body="Closed categories."))
+    related = repo.save(MemoryEntry(type="concept", title="Graph retrieval", body="Relations expand recall."))
+    current = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="New model",
+            body="Open descriptors.",
+            supersedes=[old.id],
+            related_memory_ids=[related.id],
+        )
+    )
+
+    list_result = main(["--project-root", str(tmp_path), "memory", "relations"])
+    list_output = capsys.readouterr().out
+    filter_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "relations",
+            "--relation",
+            "related_to",
+            "--source-id",
+            current.id,
+        ]
+    )
+    filter_output = capsys.readouterr().out
+
+    assert list_result == 0
+    assert filter_result == 0
+    assert f"{current.id} --supersedes-> {old.id}" in list_output
+    assert f"{current.id} --related_to-> {related.id}" in list_output
+    assert "Graph retrieval" in filter_output
+    assert "Old model" not in filter_output
+
+
 def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: CaptureFixture) -> None:
     source_path = tmp_path / "essay.md"
     source_path.write_text(

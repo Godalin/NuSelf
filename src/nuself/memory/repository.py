@@ -51,6 +51,31 @@ class MemoryStats:
     pending_candidates: int = 0
 
 
+@dataclass(frozen=True)
+class MemoryRelationIndexRecord:
+    """One derived relation between durable memory entries."""
+
+    source_id: str
+    target_id: str
+    relation: str
+    source_type: str
+    target_type: str | None
+    source_title: str
+    target_title: str | None
+    target_exists: bool
+    confidence: float
+    source_updated_at: str
+
+
+@dataclass(frozen=True)
+class MemoryRelationFilters:
+    """Deterministic filters for the derived relation index."""
+
+    relation: str | None = None
+    source_id: str | None = None
+    target_id: str | None = None
+
+
 class MemoryEntryNotFound(KeyError):
     """Raised when a memory entry does not exist."""
 
@@ -137,6 +162,24 @@ class MemoryEntryRepository:
         derived_dir = self._paths.private_root / "derived"
         derived_dir.mkdir(parents=True, exist_ok=True)
         return self._write_relation_index(derived_dir, self.list())
+
+    def list_relations(self, filters: MemoryRelationFilters | None = None) -> list[MemoryRelationIndexRecord]:
+        relation_path = self.relation_index_path
+        if not relation_path.exists():
+            self.reindex_relations()
+        raw: object = json.loads(relation_path.read_text(encoding="utf-8"))
+        if not isinstance(raw, list):
+            raise ValueError(f"relation index must contain a list: {relation_path}")
+        records = [
+            _relation_record_from_wire(cast(dict[str, object], item))
+            for item in cast(list[object], raw)
+            if isinstance(item, dict)
+        ]
+        return [record for record in records if _matches_relation_filters(record, filters)]
+
+    @property
+    def relation_index_path(self) -> Path:
+        return self._paths.private_root / "derived" / "relation_index.json"
 
     def _write_relation_index(self, derived_dir: Path, entries: list[MemoryEntry]) -> Path:
         by_id = {entry.id: entry for entry in entries}
@@ -385,6 +428,66 @@ def _relation_index_record(
         "confidence": entry.confidence,
         "source_updated_at": entry.updated_at,
     }
+
+
+def _relation_record_from_wire(data: dict[str, object]) -> MemoryRelationIndexRecord:
+    return MemoryRelationIndexRecord(
+        source_id=_expect_str(data, "source_id"),
+        target_id=_expect_str(data, "target_id"),
+        relation=_expect_str(data, "relation"),
+        source_type=_expect_str(data, "source_type"),
+        target_type=_optional_str(data, "target_type"),
+        source_title=_expect_str(data, "source_title"),
+        target_title=_optional_str(data, "target_title"),
+        target_exists=_expect_bool(data, "target_exists"),
+        confidence=_expect_float(data, "confidence"),
+        source_updated_at=_expect_str(data, "source_updated_at"),
+    )
+
+
+def _matches_relation_filters(
+    record: MemoryRelationIndexRecord,
+    filters: MemoryRelationFilters | None,
+) -> bool:
+    if filters is None:
+        return True
+    if filters.relation is not None and record.relation != filters.relation:
+        return False
+    if filters.source_id is not None and record.source_id != filters.source_id:
+        return False
+    if filters.target_id is not None and record.target_id != filters.target_id:
+        return False
+    return True
+
+
+def _expect_str(data: dict[str, object], field_name: str) -> str:
+    value = data.get(field_name)
+    if not isinstance(value, str):
+        raise ValueError(f"field '{field_name}' must be a string")
+    return value
+
+
+def _optional_str(data: dict[str, object], field_name: str) -> str | None:
+    value = data.get(field_name)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"field '{field_name}' must be a string or null")
+    return value
+
+
+def _expect_bool(data: dict[str, object], field_name: str) -> bool:
+    value = data.get(field_name)
+    if not isinstance(value, bool):
+        raise ValueError(f"field '{field_name}' must be a boolean")
+    return value
+
+
+def _expect_float(data: dict[str, object], field_name: str) -> float:
+    value = data.get(field_name)
+    if isinstance(value, int | float):
+        return float(value)
+    raise ValueError(f"field '{field_name}' must be a number")
 
 
 def _counts(values: Iterable[str]) -> dict[str, int]:

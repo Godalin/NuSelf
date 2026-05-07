@@ -9,7 +9,7 @@ from nuself.domain.memory import (
     MemoryValidationError,
     default_memory_type_registry,
 )
-from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository
+from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository, MemoryRelationFilters
 from nuself.memory.repository import MemorySearchFilters, memory_stats
 
 
@@ -98,6 +98,13 @@ def test_memory_repository_reindex_writes_relation_index(tmp_path: Path) -> None
             "target_type": "concept",
         },
     ]
+
+    related_records = repo.list_relations(MemoryRelationFilters(relation="related_to"))
+
+    assert len(related_records) == 1
+    assert related_records[0].source_id == current.id
+    assert related_records[0].target_id == related.id
+    assert related_records[0].relation == "related_to"
 
 
 def test_memory_repository_missing_entry(tmp_path: Path) -> None:

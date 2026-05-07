@@ -26,6 +26,8 @@ from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryNotFound,
     MemoryEntryRepository,
+    MemoryRelationFilters,
+    MemoryRelationIndexRecord,
     MemoryStats,
     MemorySearchFilters,
     memory_stats,
@@ -111,6 +113,11 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("--valid-on", default=None)
     _add_handler(search_parser, handle_memory_search)
     _add_handler(memory_subparsers.add_parser("stats"), handle_memory_stats)
+    relations_parser = memory_subparsers.add_parser("relations")
+    relations_parser.add_argument("--relation", choices=["supersedes", "related_to"], default=None)
+    relations_parser.add_argument("--source-id", default=None)
+    relations_parser.add_argument("--target-id", default=None)
+    _add_handler(relations_parser, handle_memory_relations)
     _add_handler(memory_subparsers.add_parser("update"), handle_memory_update)
     optimize_parser = memory_subparsers.add_parser("optimize")
     optimize_parser.add_argument("--limit", type=int, default=50)
@@ -370,6 +377,22 @@ def handle_memory_search(args: argparse.Namespace) -> int:
 
 def handle_memory_stats(args: argparse.Namespace) -> int:
     print(_format_memory_stats(memory_stats(args.project_root)))
+    return 0
+
+
+def handle_memory_relations(args: argparse.Namespace) -> int:
+    records = MemoryEntryRepository(args.project_root).list_relations(
+        MemoryRelationFilters(
+            relation=args.relation,
+            source_id=args.source_id,
+            target_id=args.target_id,
+        )
+    )
+    if not records:
+        print("No memory relations.")
+        return 0
+    for record in records:
+        print(_format_memory_relation(record))
     return 0
 
 
@@ -942,6 +965,17 @@ def _format_memory_stats(stats: MemoryStats) -> str:
         f"candidates_by_review_state: {_format_counts(stats.candidates_by_review_state)}",
     ]
     return "\n".join(lines)
+
+
+def _format_memory_relation(record: MemoryRelationIndexRecord) -> str:
+    target_title = record.target_title or "(missing target)"
+    target_type = record.target_type or "missing"
+    return (
+        f"{record.source_id} --{record.relation}-> {record.target_id} "
+        f"[source={record.source_type}:{record.source_title} "
+        f"target={target_type}:{target_title} "
+        f"target_exists={record.target_exists} confidence={record.confidence:.2f}]"
+    )
 
 
 def _format_source_document_summary(document: SourceDocument) -> str:
