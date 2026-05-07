@@ -54,6 +54,9 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
     assert candidates[0].type == "episode"
     assert candidates[0].review_state == "pending"
     assert candidates[0].source_refs == ["thread:default:0-2"]
+    assert candidates[0].evidence[0].source_type == "thread"
+    assert candidates[0].evidence[0].source_ref == "thread:default:0-2"
+    assert candidates[0].evidence[0].summary == "important memory model decision"
     assert "candidate=" in result.log_path.read_text(encoding="utf-8")
 
 

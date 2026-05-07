@@ -9,7 +9,7 @@ from typing import Literal, TypeAlias, cast
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.domain.memory import MemoryCandidate, MemoryEntryType, now_iso
+from nuself.domain.memory import MemoryCandidate, MemoryEntryType, MemoryEvidence, now_iso
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 
@@ -223,6 +223,14 @@ class MemoryCurator:
             title=action.title,
             body=action.body,
             source_refs=[source_ref],
+            evidence=[
+                MemoryEvidence(
+                    source_type="thread",
+                    source_ref=source_ref,
+                    summary=action.reason,
+                    observed_at=_source_observed_at(source_ref),
+                )
+            ],
             confidence=_clamp_confidence(action.confidence),
             reason=action.reason,
         )
@@ -246,6 +254,14 @@ class MemoryCurator:
             body=action.body or existing.body,
             tags=existing.tags,
             source_refs=[source_ref],
+            evidence=[
+                MemoryEvidence(
+                    source_type="thread",
+                    source_ref=source_ref,
+                    summary=action.reason,
+                    observed_at=_source_observed_at(source_ref),
+                )
+            ],
             confidence=_clamp_confidence(action.confidence),
             privacy=existing.privacy,
             reason=action.reason,
@@ -298,6 +314,10 @@ class MemoryCurator:
 
 def _render_transcript(messages: list[ThreadMessage]) -> str:
     return "\n".join(f"{message.role}: {message.content}" for message in messages)
+
+
+def _source_observed_at(source_ref: str) -> str | None:
+    return now_iso() if source_ref.startswith("thread:") else None
 
 
 def _has_memory_worthy_signal(messages: list[ThreadMessage], min_quality_chars: int) -> bool:

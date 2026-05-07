@@ -9,7 +9,7 @@ from nuself.cli import main
 from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.protocol import DaemonResponse
 from nuself.daemon.lifecycle import DaemonStatus
-from nuself.domain.memory import MemoryCandidate, MemoryEntry
+from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 
 
@@ -521,6 +521,14 @@ def test_memory_candidate_review_flow_accepts_temporal_candidate(tmp_path: Path,
             type="belief",
             title="Temporal memory",
             body="Memory should preserve when a view was observed.",
+            evidence=[
+                MemoryEvidence(
+                    source_type="thread",
+                    source_ref="thread:default:4-6",
+                    summary="Discussed thought evolution.",
+                    observed_at="2026-05-07",
+                )
+            ],
             observed_at="2026-05-07",
             temporal_note="The user asked for visible thought evolution.",
         )
@@ -540,8 +548,10 @@ def test_memory_candidate_review_flow_accepts_temporal_candidate(tmp_path: Path,
     assert accept_result == 0
     assert "Temporal memory" in list_output
     assert "observed_at: 2026-05-07" in show_output
+    assert "thread thread:default:4-6 observed_at=2026-05-07 summary=Discussed thought evolution." in show_output
     assert "Accepted memory candidate:" in accept_output
     assert entries[0].observed_at == "2026-05-07"
+    assert entries[0].evidence[0].source_ref == "thread:default:4-6"
     assert entries[0].temporal_note == "The user asked for visible thought evolution."
 
 

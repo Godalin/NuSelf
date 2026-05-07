@@ -23,6 +23,7 @@ ReviewState: TypeAlias = Literal["draft", "reviewed", "rejected"]
 PrivacyLevel: TypeAlias = Literal["private", "shareable"]
 MemoryCandidateAction: TypeAlias = Literal["create", "update", "merge", "delete"]
 MemoryCandidateReviewState: TypeAlias = Literal["pending", "accepted", "rejected"]
+MemoryEvidenceSourceType: TypeAlias = Literal["thread", "manual", "source", "optimizer"]
 
 
 def now_iso() -> str:
@@ -43,6 +44,43 @@ def empty_str_list() -> list[str]:
 
 def empty_object_dict() -> dict[str, object]:
     return {}
+
+
+def empty_evidence_list() -> list["MemoryEvidence"]:
+    return []
+
+
+@dataclass(frozen=True)
+class MemoryEvidence:
+    """Structured source evidence attached to a memory object."""
+
+    source_type: MemoryEvidenceSourceType
+    source_ref: str
+    summary: str = ""
+    observed_at: str | None = None
+    quote: str = ""
+    created_at: str = field(default_factory=now_iso)
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            "source_type": self.source_type,
+            "source_ref": self.source_ref,
+            "summary": self.summary,
+            "observed_at": self.observed_at,
+            "quote": self.quote,
+            "created_at": self.created_at,
+        }
+
+    @classmethod
+    def from_wire(cls, data: dict[str, object]) -> "MemoryEvidence":
+        return cls(
+            source_type=_expect_evidence_source_type(data, "source_type"),
+            source_ref=_expect_str(data, "source_ref"),
+            summary=_optional_str(data, "summary") or "",
+            observed_at=_optional_str(data, "observed_at"),
+            quote=_optional_str(data, "quote") or "",
+            created_at=_expect_str(data, "created_at"),
+        )
 
 
 @dataclass(frozen=True)
@@ -67,6 +105,7 @@ class MemoryEntry:
     temporal_note: str = ""
     supersedes: list[str] = field(default_factory=empty_str_list)
     related_memory_ids: list[str] = field(default_factory=empty_str_list)
+    evidence: list[MemoryEvidence] = field(default_factory=empty_evidence_list)
 
     def with_updates(
         self,
@@ -100,6 +139,7 @@ class MemoryEntry:
             temporal_note=temporal_note if temporal_note is not None else self.temporal_note,
             supersedes=self.supersedes,
             related_memory_ids=self.related_memory_ids,
+            evidence=self.evidence,
         )
 
     def to_wire(self) -> dict[str, object]:
@@ -122,6 +162,7 @@ class MemoryEntry:
             "temporal_note": self.temporal_note,
             "supersedes": self.supersedes,
             "related_memory_ids": self.related_memory_ids,
+            "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
 
     def to_memory_object(self) -> "MemoryObject":
@@ -141,6 +182,7 @@ class MemoryEntry:
                 "temporal_note": self.temporal_note,
                 "supersedes": self.supersedes,
                 "related_memory_ids": self.related_memory_ids,
+                "evidence": [evidence.to_wire() for evidence in self.evidence],
             },
             metadata={"entry_schema": "MemoryEntry/v1"},
             confidence=self.confidence,
@@ -172,6 +214,7 @@ class MemoryEntry:
             temporal_note=_optional_str(data, "temporal_note") or "",
             supersedes=_optional_str_list(data, "supersedes"),
             related_memory_ids=_optional_str_list(data, "related_memory_ids"),
+            evidence=_optional_evidence_list(data, "evidence"),
         )
 
     @classmethod
@@ -196,6 +239,7 @@ class MemoryEntry:
             temporal_note=_optional_payload_str(payload, "temporal_note"),
             supersedes=_optional_mapping_str_list(payload, "supersedes"),
             related_memory_ids=_optional_mapping_str_list(payload, "related_memory_ids"),
+            evidence=_optional_mapping_evidence_list(payload, "evidence"),
         )
 
 
@@ -224,6 +268,7 @@ class MemoryCandidate:
     temporal_note: str = ""
     supersedes: list[str] = field(default_factory=empty_str_list)
     related_memory_ids: list[str] = field(default_factory=empty_str_list)
+    evidence: list[MemoryEvidence] = field(default_factory=empty_evidence_list)
 
     def with_updates(
         self,
@@ -261,6 +306,7 @@ class MemoryCandidate:
             temporal_note=temporal_note if temporal_note is not None else self.temporal_note,
             supersedes=self.supersedes,
             related_memory_ids=self.related_memory_ids,
+            evidence=self.evidence,
         )
 
     def to_entry(self, *, review_state: ReviewState = "draft") -> MemoryEntry:
@@ -281,6 +327,7 @@ class MemoryCandidate:
             temporal_note=self.temporal_note,
             supersedes=self.supersedes,
             related_memory_ids=self.related_memory_ids,
+            evidence=self.evidence,
         )
 
     def to_wire(self) -> dict[str, object]:
@@ -306,6 +353,7 @@ class MemoryCandidate:
             "temporal_note": self.temporal_note,
             "supersedes": self.supersedes,
             "related_memory_ids": self.related_memory_ids,
+            "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
 
     @classmethod
@@ -332,6 +380,7 @@ class MemoryCandidate:
             temporal_note=_optional_str(data, "temporal_note") or "",
             supersedes=_optional_str_list(data, "supersedes"),
             related_memory_ids=_optional_str_list(data, "related_memory_ids"),
+            evidence=_optional_evidence_list(data, "evidence"),
         )
 
 
@@ -606,6 +655,13 @@ def _expect_candidate_review_state(data: dict[str, object], field_name: str) -> 
     return cast(MemoryCandidateReviewState, value)
 
 
+def _expect_evidence_source_type(data: dict[str, object], field_name: str) -> MemoryEvidenceSourceType:
+    value = _expect_str(data, field_name)
+    if value not in {"thread", "manual", "source", "optimizer"}:
+        raise ValueError(f"unsupported evidence source type: {value}")
+    return cast(MemoryEvidenceSourceType, value)
+
+
 def _expect_privacy(data: dict[str, object], field_name: str) -> PrivacyLevel:
     value = _expect_str(data, field_name)
     if value not in {"private", "shareable"}:
@@ -635,6 +691,9 @@ def _validate_entry_payload(payload: Mapping[str, object]) -> list[MemoryValidat
         value = payload.get(field_name, [])
         if not isinstance(value, list) or any(not isinstance(item, str) for item in cast(list[object], value)):
             issues.append(MemoryValidationIssue(f"payload.{field_name}", "must be a list of strings"))
+    evidence = payload.get("evidence", [])
+    if not isinstance(evidence, list):
+        issues.append(MemoryValidationIssue("payload.evidence", "must be a list"))
     return issues
 
 
@@ -677,6 +736,34 @@ def _optional_mapping_str_list(data: Mapping[str, object], field_name: str) -> l
         if not isinstance(item, str):
             raise ValueError(f"field '{field_name}' must contain only strings")
         result.append(item)
+    return result
+
+
+def _optional_evidence_list(data: dict[str, object], field_name: str) -> list[MemoryEvidence]:
+    value = data.get(field_name)
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"field '{field_name}' must be a list")
+    result: list[MemoryEvidence] = []
+    for item in cast(list[object], value):
+        if not isinstance(item, dict):
+            raise ValueError(f"field '{field_name}' must contain only objects")
+        result.append(MemoryEvidence.from_wire(cast(dict[str, object], item)))
+    return result
+
+
+def _optional_mapping_evidence_list(data: Mapping[str, object], field_name: str) -> list[MemoryEvidence]:
+    value = data.get(field_name)
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"field '{field_name}' must be a list")
+    result: list[MemoryEvidence] = []
+    for item in cast(list[object], value):
+        if not isinstance(item, dict):
+            raise ValueError(f"field '{field_name}' must contain only objects")
+        result.append(MemoryEvidence.from_wire(cast(dict[str, object], item)))
     return result
 
 

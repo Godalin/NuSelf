@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.domain.memory import MemoryCandidate, MemoryEntry
+from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
     MemoryCandidateRepository,
@@ -19,6 +19,14 @@ def test_memory_candidate_repository_crud_and_accept_with_temporal_fields(tmp_pa
             body="The user wants memories to carry real-world time information.",
             tags=["memory"],
             source_refs=["thread:default:4-6"],
+            evidence=[
+                MemoryEvidence(
+                    source_type="thread",
+                    source_ref="thread:default:4-6",
+                    summary="User asked for realistic temporal memory.",
+                    observed_at="2026-05-07",
+                )
+            ],
             observed_at="2026-05-07",
             valid_from="2026-05-07",
             temporal_note="Raised while discussing realistic memory evolution.",
@@ -34,6 +42,8 @@ def test_memory_candidate_repository_crud_and_accept_with_temporal_fields(tmp_pa
     assert entry.observed_at == "2026-05-07"
     assert entry.valid_from == "2026-05-07"
     assert entry.temporal_note == "Raised while discussing realistic memory evolution."
+    assert entry.evidence[0].source_ref == "thread:default:4-6"
+    assert entry.evidence[0].summary == "User asked for realistic temporal memory."
     assert accepted.review_state == "accepted"
     assert accepted.target_entry_id == entry.id
     assert repo.list() == []
@@ -73,6 +83,7 @@ def test_memory_candidate_repository_merges_into_existing_entry(tmp_path: Path) 
             title="Memory timing model",
             body="Memory should preserve real-world timing so changes in thought remain visible.",
             source_refs=["thread:default:4-6"],
+            evidence=[MemoryEvidence(source_type="thread", source_ref="thread:default:4-6", summary="Follow-up")],
             observed_at="2026-05-07",
             related_memory_ids=[existing.id],
         )
@@ -83,6 +94,7 @@ def test_memory_candidate_repository_merges_into_existing_entry(tmp_path: Path) 
     assert merged.id == existing.id
     assert merged.title == "Memory timing model"
     assert merged.source_refs == ["thread:default:0-2", "thread:default:4-6"]
+    assert merged.evidence[0].summary == "Follow-up"
     assert merged.observed_at == "2026-05-07"
     assert merged.related_memory_ids == [existing.id]
     assert candidate_repo.get(candidate.id).review_state == "accepted"

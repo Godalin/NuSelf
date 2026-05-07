@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, now_iso
+from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, now_iso
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 
@@ -189,6 +189,7 @@ class MemoryOptimizer:
             body=action.body,
             tags=list(action.tags) if action.tags is not None else existing.tags,
             source_refs=[source_ref],
+            evidence=[MemoryEvidence(source_type="optimizer", source_ref=source_ref, summary=action.reason)],
             confidence=_clamp_confidence(action.confidence if action.confidence is not None else existing.confidence),
             privacy=existing.privacy,
             reason=action.reason,
@@ -218,6 +219,7 @@ class MemoryOptimizer:
             body=existing.body,
             tags=existing.tags,
             source_refs=[source_ref],
+            evidence=[MemoryEvidence(source_type="optimizer", source_ref=source_ref, summary=action.reason)],
             confidence=existing.confidence,
             privacy=existing.privacy,
             reason=action.reason,

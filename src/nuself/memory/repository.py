@@ -207,6 +207,7 @@ class MemoryCandidateRepository:
             temporal_note=candidate.temporal_note or existing.temporal_note,
             supersedes=[*existing.supersedes, *candidate.supersedes],
             related_memory_ids=[*existing.related_memory_ids, *candidate.related_memory_ids],
+            evidence=[*existing.evidence, *candidate.evidence],
         )
         self._entry_repository.save(merged)
         self._entry_repository.reindex()

@@ -15,7 +15,7 @@ except ImportError:  # pragma: no cover - platform fallback
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.agent.chat import ChatAgent
 from nuself.daemon import client, lifecycle
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType
+from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence
 from nuself.memory.curator import MemoryCurator
 from nuself.memory.intake import MemoryIntakeAgent
 from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
@@ -630,6 +630,8 @@ def _format_memory_detail(entry: MemoryEntry) -> str:
             f"valid_from: {entry.valid_from or '-'}",
             f"valid_until: {entry.valid_until or '-'}",
             f"temporal_note: {entry.temporal_note or '-'}",
+            "evidence:",
+            *_format_evidence_lines(entry.evidence),
             "",
             entry.body,
         ]
@@ -666,10 +668,23 @@ def _format_memory_candidate_detail(candidate: MemoryCandidate) -> str:
             f"valid_from: {candidate.valid_from or '-'}",
             f"valid_until: {candidate.valid_until or '-'}",
             f"temporal_note: {candidate.temporal_note or '-'}",
+            "evidence:",
+            *_format_evidence_lines(candidate.evidence),
             "",
             candidate.body,
         ]
     )
+
+
+def _format_evidence_lines(evidence_items: list[MemoryEvidence]) -> list[str]:
+    if not evidence_items:
+        return ["  -"]
+    lines: list[str] = []
+    for evidence in evidence_items:
+        observed = evidence.observed_at or "-"
+        summary = f" summary={evidence.summary}" if evidence.summary else ""
+        lines.append(f"  - {evidence.source_type} {evidence.source_ref} observed_at={observed}{summary}")
+    return lines or ["  -"]
 
 
 def _format_memory_preview(project_root: Path | None, limit: int = DEFAULT_MEMORY_PREVIEW_LIMIT) -> str:
