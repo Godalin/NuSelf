@@ -23,10 +23,10 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 
 ### 当前目标
 
-- [ ] 将 ingested source chunks 接入确定性的 query 和 reindex 工作流。
-- [ ] 添加面向 imported document chunks 的 source search。
-- [ ] 让 `memory reindex` 从权威 source records 重建 source-derived artifacts。
-- [ ] 为未来回答引用保留 source references。
+- [ ] 添加用于 derived profile state 的 profile item repository。
+- [ ] 将 imported source chunks 转换为可 review 的 memory/profile candidates。
+- [ ] 在 source-derived candidates 上保留 source evidence links。
+- [ ] 明确 raw private sources 派生出的 memories 的删除行为。
 
 ### 项目基础
 
@@ -80,6 +80,8 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加 source metadata 解析：title、path、date、tags、origin、privacy。
 - [x] 添加保留 source references 的 chunking。
 - [x] 添加 source documents 和 chunks 的 repositories。
+- [x] 添加面向 imported document chunks 的确定性 source search。
+- [x] 让 `memory reindex` 重建 source-derived chunk artifacts。
 - [ ] 添加 profile items 的 repositories。
 - [ ] 让 `memory reindex` 从权威来源重建所有派生 artifacts。
 
@@ -366,9 +368,12 @@ uv run nuself memory source ingest private/sources/ --tag archive
 uv run nuself memory source list
 uv run nuself memory source show <source-id>
 uv run nuself memory source chunks <source-id>
+uv run nuself memory source search "durable citation"
 ```
 
 支持的 front matter 字段是 `title`、`date`、`tags`、`origin` 和 `privacy`。Source chunk references 使用 `source:<source-id>:<chunk-index>` 格式。
+
+`memory reindex` 会从权威 memory 和 source records 重建 `private/derived/memory_index.json` 与 `private/derived/source_index.json`。
 
 ## 记忆条目类型
 

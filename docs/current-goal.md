@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Connect ingested source chunks to deterministic query and reindex workflows.
+Convert imported source chunks into reviewable memory/profile candidates.
 
 ## Status
 
@@ -33,13 +33,17 @@ Recently completed foundation slice:
 - Source front matter now preserves title, date, tags, origin, and privacy.
 - Ingested chunks now keep stable `source:<source-id>:<chunk-index>` references.
 - `memory source ingest`, `list`, `show`, and `chunks` expose local source ingestion from the CLI.
+- `memory source search` now returns matching chunks with source refs and document metadata.
+- `memory reindex` now rebuilds `private/derived/source_index.json` from authoritative source records.
+- `MemoryQueryService` now packs matching source chunks alongside durable memory entries.
+- The default chat agent now includes relevant source chunks in its memory context.
 
 ## Scope
 
-- Add deterministic source search over imported document chunks.
-- Extend derived reindexing so source-derived artifacts rebuild from authoritative source records.
-- Keep source chunk references available for future answer citations.
-- Preserve the current file-backed source document and chunk records as authoritative source storage.
+- Add a file-backed profile item repository for derived profile state.
+- Add source-to-candidate extraction that creates reviewable memory/profile candidates from imported chunks.
+- Preserve source evidence links on source-derived candidates.
+- Clarify deletion behavior for memories derived from raw private sources.
 
 ## Not Now
 
@@ -54,10 +58,12 @@ Recently completed foundation slice:
 - Automatic citation synthesis from imported source documents.
 - Symbolic graph implementation.
 - Derived vector or graph indexes over ingested sources.
-- Automatic memory candidate extraction from imported source chunks.
+- Fully automatic background processing of imported source chunks.
+- Persona/profile prompt synthesis from profile items.
 
 ## Completion Criteria
 
-- Source search returns matching chunks with source references and document metadata.
-- `memory reindex` includes source-derived artifacts without mutating source identity.
-- README TODOs and planning docs reflect the next source-query slice before moving to broader indexing work.
+- Profile item models and repository serialize round-trip.
+- Source-derived candidates include structured source evidence records.
+- CLI commands expose the candidate extraction/review path without committing durable memory directly.
+- README TODOs and planning docs reflect the source-to-candidate slice before moving to broader profile synthesis.

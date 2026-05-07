@@ -23,10 +23,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Current Goal
 
-- [ ] Connect ingested source chunks to deterministic query and reindex workflows.
-- [ ] Add source search over imported document chunks.
-- [ ] Make `memory reindex` rebuild source-derived artifacts from authoritative source records.
-- [ ] Keep source references available for future answer citations.
+- [ ] Add a profile item repository for derived profile state.
+- [ ] Convert imported source chunks into reviewable memory/profile candidates.
+- [ ] Preserve source evidence links on source-derived candidates.
+- [ ] Clarify deletion behavior for memories derived from raw private sources.
 
 ### Project Foundation
 
@@ -80,6 +80,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add source metadata parsing for title, path, date, tags, origin, and privacy.
 - [x] Add chunking that preserves source references.
 - [x] Add repositories for source documents and chunks.
+- [x] Add deterministic source search over imported document chunks.
+- [x] Make `memory reindex` rebuild source-derived chunk artifacts.
 - [ ] Add repositories for profile items.
 - [ ] Make `memory reindex` rebuild all derived artifacts from authoritative sources.
 
@@ -366,9 +368,12 @@ Inspect imported sources:
 uv run nuself memory source list
 uv run nuself memory source show <source-id>
 uv run nuself memory source chunks <source-id>
+uv run nuself memory source search "durable citation"
 ```
 
 Supported front matter fields are `title`, `date`, `tags`, `origin`, and `privacy`. Source chunk references use the form `source:<source-id>:<chunk-index>`.
+
+`memory reindex` rebuilds both `private/derived/memory_index.json` and `private/derived/source_index.json` from authoritative memory and source records.
 
 ## Memory Entry Types
 
