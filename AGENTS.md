@@ -23,6 +23,8 @@ This project is an AI-Mirror of most ideas of one person, for those who want to 
 - Commit feature implementation and current-task/progress updates separately. The first commit should contain the functional code and tests; the second commit should contain `docs/current-goal.md`, README TODO progress, and development-guidance updates.
 - Before starting non-trivial implementation work, check [docs/current-goal.md](docs/current-goal.md). If the requested task conflicts with the current goal, mention the conflict before proceeding.
 - When the user changes the current focus, update [docs/current-goal.md](docs/current-goal.md) and README TODOs in the same change.
+- Keep [docs/current-goal.md](docs/current-goal.md) concise. It should describe the active focus, immediate context, next few steps, out-of-scope work, and completion criteria; do not use it as a changelog or completed-work archive.
+- Move completed feature history and progress checkmarks into the README TODOs instead of accumulating them in [docs/current-goal.md](docs/current-goal.md).
 - Keep implementation constraints and small behavior polish in scoped `AGENTS.md` files near the code rather than overloading the user README.
 
 ## Project Design

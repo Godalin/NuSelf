@@ -85,9 +85,8 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加基于描述符元数据的图遍历命令（多跳搜索）。
 - [x] 为 `transitive=True` 的关系描述符添加传递闭包遍历。
 - [x] 添加特定记忆节点之间的路径查找命令。
-- [ ] 将传递闭包接入 `MemoryQueryService` 的自动上下文扩展。
+- [x] 将传递闭包接入 `MemoryQueryService` 的自动上下文扩展。
 - [ ] 将临时运行时替换为 LangGraph 对话图。
-- [ ] 添加基于描述符元数据的图遍历命令（多跳搜索、路径查找）。
 - [x] 添加 memory stats 和更丰富的 query 命令。
 
 ### 导入与知识库

@@ -85,7 +85,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add graph traversal commands (multi-hop search) using descriptor metadata.
 - [x] Add transitive-closure traversal for `transitive=True` relation descriptors.
 - [x] Add path-finding commands between specific memory nodes.
-- [ ] Wire transitive-closure into `MemoryQueryService` automatic context expansion.
+- [x] Wire transitive-closure into `MemoryQueryService` automatic context expansion.
 - [ ] Replace the temporary runtime with a LangGraph conversation graph.
 - [x] Add memory stats and richer query commands.
 
