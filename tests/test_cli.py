@@ -11,6 +11,7 @@ from nuself.daemon.protocol import DaemonResponse
 from nuself.daemon.lifecycle import DaemonStatus
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
+from nuself.profile.repository import ProfileItemRepository
 
 
 class CaptureResult(Protocol):
@@ -861,6 +862,46 @@ def test_memory_source_delete_cascades_profile_items(tmp_path: Path, capsys: Cap
     assert list_result == 0
     assert delete_result == 0
     assert "Deleted source document:" in delete_output
+    assert profile_list_result == 0
+    assert "No profile items." in profile_list_output
+
+
+def test_memory_profile_delete_removes_item_and_reindexes(tmp_path: Path, capsys: CaptureFixture) -> None:
+    source_path = tmp_path / "profile-source.md"
+    source_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "title: Profile Source",
+                "tags: [mirror]",
+                "---",
+                "The user prefers concise, doc-aligned answers.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    capsys.readouterr()
+    list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
+    list_output = capsys.readouterr().out
+    source_id = list_output.split(" ", 1)[0]
+    main(["--project-root", str(tmp_path), "memory", "source", "extract", source_id])
+    capsys.readouterr()
+    candidate_repo = MemoryCandidateRepository(tmp_path)
+    candidate_id = candidate_repo.list()[0].id
+    main(["--project-root", str(tmp_path), "memory", "candidate", "accept", candidate_id])
+    capsys.readouterr()
+    profile_repo = ProfileItemRepository(tmp_path)
+    profile_id = profile_repo.list()[0].id
+
+    delete_result = main(["--project-root", str(tmp_path), "memory", "profile", "delete", profile_id])
+    delete_output = capsys.readouterr().out
+    profile_list_result = main(["--project-root", str(tmp_path), "memory", "profile", "list"])
+    profile_list_output = capsys.readouterr().out
+
+    assert list_result == 0
+    assert delete_result == 0
+    assert "Deleted profile item:" in delete_output
     assert profile_list_result == 0
     assert "No profile items." in profile_list_output
 

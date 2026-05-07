@@ -123,6 +123,9 @@ def build_parser() -> argparse.ArgumentParser:
     profile_show_parser = profile_subparsers.add_parser("show")
     profile_show_parser.add_argument("profile_id")
     _add_handler(profile_show_parser, handle_memory_profile_show)
+    profile_delete_parser = profile_subparsers.add_parser("delete")
+    profile_delete_parser.add_argument("profile_id")
+    _add_handler(profile_delete_parser, handle_memory_profile_delete)
     _add_handler(profile_subparsers.add_parser("reindex"), handle_memory_profile_reindex)
     candidate_parser = memory_subparsers.add_parser("candidate")
     candidate_parser.set_defaults(handler=None, help_parser=candidate_parser)
@@ -573,6 +576,18 @@ def handle_memory_profile_show(args: argparse.Namespace) -> int:
         print(f"Profile item not found: {args.profile_id}", file=sys.stderr)
         return 1
     print(_format_profile_item_detail(item))
+    return 0
+
+
+def handle_memory_profile_delete(args: argparse.Namespace) -> int:
+    repo = ProfileItemRepository(args.project_root)
+    try:
+        repo.delete(args.profile_id)
+    except ProfileItemNotFound:
+        print(f"Profile item not found: {args.profile_id}", file=sys.stderr)
+        return 1
+    repo.reindex()
+    print(f"Deleted profile item: {args.profile_id}")
     return 0
 
 
