@@ -75,6 +75,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add built-in descriptors for goal and concept memory.
 - [x] Add descriptor-aware retrieval heuristics and type/tag filters to memory query tools.
 - [x] Add first-pass relation-aware retrieval expansion from existing memory links.
+- [x] Add rebuildable relation index derived from existing memory links.
 - [ ] Add derived vector, hybrid, and graph indexes.
 - [ ] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, preference, dependency, and future relations.
 - [x] Add memory stats and richer query commands.
@@ -350,10 +351,11 @@ Rebuild the derived memory index:
 uv run nuself memory reindex
 ```
 
-The derived index is written to:
+The derived memory and relation indexes are written to:
 
 ```text
 private/derived/memory_index.json
+private/derived/relation_index.json
 ```
 
 ## Source Documents
@@ -394,7 +396,7 @@ Profile search supports deterministic filters for `--type`, `--tag`, `--observed
 
 Supported front matter fields are `title`, `date`, `tags`, `origin`, and `privacy`. Source chunk references use the form `source:<source-id>:<chunk-index>`.
 
-`memory reindex` rebuilds `private/derived/memory_index.json`, `private/derived/source_index.json`, and `private/derived/profile_index.json` from authoritative memory, source, and profile records.
+`memory reindex` rebuilds `private/derived/memory_index.json`, `private/derived/relation_index.json`, `private/derived/source_index.json`, and `private/derived/profile_index.json` from authoritative memory, source, and profile records.
 
 Delete an imported source and its derived review artifacts:
 

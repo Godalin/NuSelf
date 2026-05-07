@@ -75,6 +75,7 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加 goal 和 concept memory 的内置 descriptors。
 - [x] 为 memory query tools 添加 descriptor-aware retrieval heuristics 和 type/tag filters。
 - [x] 基于现有 memory links 添加第一版 relation-aware retrieval expansion。
+- [x] 添加从现有 memory links 派生、可重建的 relation index。
 - [ ] 添加派生向量、hybrid 和 graph 索引。
 - [ ] 添加开放 symbolic graph，并用 `RelationDescriptor` 描述支持、矛盾、细化、偏好、依赖和未来关系。
 - [x] 添加 memory stats 和更丰富的 query 命令。
@@ -350,10 +351,11 @@ uv run nuself memory delete <entry-id>
 uv run nuself memory reindex
 ```
 
-派生索引会写入：
+派生 memory 和 relation 索引会写入：
 
 ```text
 private/derived/memory_index.json
+private/derived/relation_index.json
 ```
 
 ## Source Documents
@@ -394,7 +396,7 @@ Profile search 支持 `--type`、`--tag`、`--observed-from`、`--observed-to` �
 
 支持的 front matter 字段是 `title`、`date`、`tags`、`origin` 和 `privacy`。Source chunk references 使用 `source:<source-id>:<chunk-index>` 格式。
 
-`memory reindex` 会从权威 memory、source 和 profile records 重建 `private/derived/memory_index.json`、`private/derived/source_index.json` 与 `private/derived/profile_index.json`。
+`memory reindex` 会从权威 memory、source 和 profile records 重建 `private/derived/memory_index.json`、`private/derived/relation_index.json`、`private/derived/source_index.json` 与 `private/derived/profile_index.json`。
 
 删除一个导入的 source 以及它派生出的 review artifacts：
 

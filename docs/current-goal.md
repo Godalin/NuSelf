@@ -50,10 +50,11 @@ Recently completed foundation slice:
 - Tool calls are parsed from LLM responses and executed, with results returned for LLM processing.
 - `MemoryQueryService` now applies descriptor-aware type affinity, exposes type/tag filters, and surfaces simple relation metadata in packed memory context.
 - `MemoryQueryService` now expands direct matches through existing `related_memory_ids` and `supersedes` links, including reverse `related_by` and `superseded_by` matches.
+- `memory reindex` now rebuilds `private/derived/relation_index.json` from authoritative memory links.
 
 ## Scope
 
-- Tool-based memory search, descriptor-aware retrieval heuristics, and first-pass relation expansion are ready. Next focus is optional: prepare LangGraph integration or design the derived symbolic graph/index layer.
+- Tool-based memory search, descriptor-aware retrieval heuristics, first-pass relation expansion, and a rebuildable relation index are ready. Next focus is optional: prepare LangGraph integration or design the open symbolic graph layer.
 
 ## Not Now
 
@@ -80,4 +81,5 @@ Recently completed foundation slice:
 - Tests cover tool invocation, error handling, and result formatting.
 - Descriptor-aware retrieval boosts and filters are covered by query/tool tests.
 - Relation expansion over existing memory links is covered by query tests.
+- Relation index rebuilding is covered by repository and CLI tests.
 - All chat agent and daemon tests pass.
