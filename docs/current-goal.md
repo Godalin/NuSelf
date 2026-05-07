@@ -6,7 +6,7 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 Close the LangGraph runtime migration slice while preserving the current file-backed memory and retrieval boundaries.
 
-The conversation graph now has isolated driver failure handling, internal node traces, explicit no-tool/tool-call routes, and structured supported/unsupported tool request state. The next useful step is to review this migration slice for remaining runtime gaps before switching focus to persona subgraphs or another roadmap item.
+The conversation graph now has isolated driver failure handling, internal node traces, explicit no-tool/tool-call routes, and structured supported/unsupported tool request state. Treat this as a documentation-backed stabilization pass: finish the migration review, confirm the boundaries in tests, then update the roadmap documents so the next focus is explicit rather than implied.
 
 ## Immediate Context
 
@@ -18,12 +18,9 @@ The conversation graph now has isolated driver failure handling, internal node t
 - Tool request state records name, args, support status, and diagnostics.
 - File-backed private memory remains authoritative; derived indexes and future runtime mirrors must stay rebuildable.
 
-## Next Steps
+## Next Steps (combined)
 
-1. Review chat, daemon, and CLI paths for any remaining references to the old temporary runtime shape.
-2. Confirm tests cover metadata, persistence, context packing, tool routes, graph failures, and fallback behavior.
-3. Update TODOs if this runtime migration slice is complete.
-4. Pick the next focus only after the migration completion criteria are checked.
+Audit and validate the LangGraph migration end-to-end: (a) audit chat, daemon, and CLI paths for leftover references to the old temporary runtime; (b) confirm tests cover metadata, persistence, context packing, tool routes, graph failures, and fallback behavior; (c) if no gaps remain, mark the migration slice complete and sync README TODOs and this file's wording; (d) only after these validations pick the next roadmap slice (for example persona subgraphs). Treat these as a single validation-and-decision step rather than disconnected sub-steps.
 
 ## Not Now
 
@@ -39,4 +36,5 @@ The conversation graph now has isolated driver failure handling, internal node t
 - The runtime migration slice has no remaining old temporary-runtime behavior to remove.
 - Existing chat entrypoints keep their current user-visible behavior.
 - Tests cover graph runtime behavior across chat, daemon, CLI, tool, failure, and fallback paths.
+- The current goal documents the active slice, the immediate validation steps, and the next roadmap decision.
 - README TODOs track completed progress, while this file stays limited to the active goal.

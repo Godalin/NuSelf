@@ -30,6 +30,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add profile item search and filter commands.
 - [x] Add profile item retrieval to the query layer.
 - [x] Add derived profile context to intake, curator, and optimizer prompts.
+ - [x] Add derived profile context to intake, curator, and optimizer prompts.
 
 ### Project Foundation
 
