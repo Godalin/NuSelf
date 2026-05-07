@@ -22,10 +22,10 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 
 ### 当前目标
 
-- [ ] 为 memory 添加 source-linked evidence records。
-- [ ] 保留 thread ranges、source type、observed time 和短 evidence summaries。
-- [ ] 迁移期间保持 legacy `source_refs` 可用。
-- [ ] 在 memory 和 candidate detail 命令中显示 evidence details。
+- [ ] 添加 memory stats 和更丰富的 query 命令。
+- [ ] 添加 `memory stats`，覆盖 type、review state、candidate state 和 temporal coverage。
+- [ ] 为 `memory search` 添加 type、tag、review state 和 temporal fields 过滤。
+- [ ] 保持 memory query 输出紧凑且确定性。
 
 ### 项目基础
 
@@ -65,13 +65,13 @@ LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规�
 - [x] 添加 memory candidate review queue：list、show、accept、edit、merge、reject。
 - [x] 为 entries 和 candidates 添加现实世界时间字段。
 - [x] 让 curator 和 optimizer 的 proposals 进入 memory candidate review queue。
+- [x] 为 memory entries 添加 source-linked evidence records。
 - [x] 添加开放的 `MemoryObject + MemoryTypeDescriptor` registry，用于 typed memory 行为。
 - [x] 添加 preference、belief、episode 和 instruction memory 的内置 descriptors。
 - [ ] 添加 goal 和 concept memory 的内置 descriptors。
 - [ ] 添加派生向量、hybrid 和 graph 索引。
 - [ ] 添加开放 symbolic graph，并用 `RelationDescriptor` 描述支持、矛盾、细化、偏好、依赖和未来关系。
 - [ ] 添加 memory stats 和更丰富的 query 命令。
-- [ ] 为 memory entries 添加 source-linked evidence records。
 
 ### 导入与知识库
 

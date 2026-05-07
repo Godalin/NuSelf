@@ -4,7 +4,7 @@ This file is the short-term progress guide for NuSelf. It narrows the next imple
 
 ## Focus
 
-Add source-linked evidence records for memory.
+Add memory stats and richer query commands.
 
 ## Status
 
@@ -22,14 +22,16 @@ Recently completed foundation slice:
 - Memory candidates are now file-backed, inspectable, reviewable, and carry real-world temporal fields.
 - Candidate `accept`, `edit`, `merge`, and `reject` commands now exist and accepted memories pass through descriptor validation.
 - Curator and optimizer proposals now create inspectable candidates instead of directly mutating durable memory.
+- Memory entries and candidates now carry structured source-linked evidence records.
+- Memory and candidate detail commands now show evidence records.
 
 ## Scope
 
-- Add structured evidence records for memory entries and candidates.
-- Preserve thread ranges, source type, observed time, and short evidence summaries.
-- Keep legacy `source_refs` usable during migration.
-- Show evidence details in memory and candidate detail commands.
-- Keep evidence file-backed and inspectable.
+- Add `memory stats` for type, review state, candidate state, and temporal coverage.
+- Add richer `memory search` filters for type, tag, review state, and temporal fields.
+- Keep deterministic behavior without a live LLM.
+- Keep output compact enough for CLI scanning.
+- Keep repositories independently testable.
 
 ## Not Now
 
@@ -42,10 +44,10 @@ Recently completed foundation slice:
 - Full automatic conflict resolution.
 - Derived vector or graph indexes.
 - Automatic citation synthesis from imported source documents.
+- Local source ingestion.
 
 ## Completion Criteria
 
-- Evidence record models and serialization are covered by tests.
-- Candidate accept/merge preserves structured evidence on durable entries.
-- CLI detail views show evidence records.
-- README TODOs and planning docs reflect the completed evidence slice before moving to the next goal.
+- Stats command is covered by CLI tests.
+- Filtered search behavior is covered by repository and CLI tests.
+- README TODOs and planning docs reflect the completed query/stats slice before moving to the next goal.

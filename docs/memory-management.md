@@ -90,11 +90,14 @@ MemoryObject:
   temporal_note
   supersedes
   related_memory_ids
+  evidence
 ```
 
 The `type` is an open string key, not a sealed enum. The `payload` is validated by the registered type descriptor. Current `MemoryEntry` records are a simple first implementation of this idea; they should evolve toward a typed envelope with type-specific payloads.
 
 Temporal fields are first-class because NuSelf should preserve how a person's thinking changes. `created_at` and `updated_at` describe when NuSelf recorded the object; `observed_at`, `valid_from`, and `valid_until` describe real-world time. `temporal_note`, `supersedes`, and `related_memory_ids` keep later review and graph layers from flattening changing beliefs into one timeless fact.
+
+Evidence records are structured source links attached to entries and candidates. They preserve source type, source reference, observed time, short summary, and optional quote while legacy `source_refs` remains available during migration.
 
 ### MemoryTypeDescriptor
 
@@ -506,6 +509,7 @@ Phase 1: File-backed authoritative memory.
 - Keep `private/memory/entries/*.json` as source of truth.
 - Add `private/memory/candidates/*.json` with review state and real-world temporal metadata.
 - Route curator and optimizer proposals into the candidate queue before durable persistence.
+- Attach structured evidence records to candidates and accepted entries while preserving legacy `source_refs`.
 - Add `private/memory/episodes/*.json`.
 - Keep `private/derived/` rebuildable.
 

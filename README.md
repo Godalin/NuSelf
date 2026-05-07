@@ -22,10 +22,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Current Goal
 
-- [ ] Add source-linked evidence records for memory.
-- [ ] Preserve thread ranges, source type, observed time, and short evidence summaries.
-- [ ] Keep legacy `source_refs` usable during migration.
-- [ ] Show evidence details in memory and candidate detail commands.
+- [ ] Add memory stats and richer query commands.
+- [ ] Add `memory stats` for type, review state, candidate state, and temporal coverage.
+- [ ] Add richer `memory search` filters for type, tag, review state, and temporal fields.
+- [ ] Keep memory query output compact and deterministic.
 
 ### Project Foundation
 
@@ -65,13 +65,13 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add memory candidate review queue: list, show, accept, edit, merge, reject.
 - [x] Add real-world temporal fields to entries and candidates.
 - [x] Route curator and optimizer proposals through the memory candidate review queue.
+- [x] Add source-linked evidence records for memory entries.
 - [x] Add open `MemoryObject + MemoryTypeDescriptor` registry for typed memory behavior.
 - [x] Add built-in descriptors for preference, belief, episode, and instruction memory.
 - [ ] Add built-in descriptors for goal and concept memory.
 - [ ] Add derived vector, hybrid, and graph indexes.
 - [ ] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, preference, dependency, and future relations.
 - [ ] Add memory stats and richer query commands.
-- [ ] Add source-linked evidence records for memory entries.
 
 ### Ingestion And Knowledge Store
 
