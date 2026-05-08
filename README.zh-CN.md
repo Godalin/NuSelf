@@ -54,7 +54,7 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 添加只读 REPL 记忆 inspect 命令，用于查看 entries、candidates、profile items 和 sources。
 - [x] 添加适合终端阅读的记忆列表和详情渲染器。
 - [x] 添加结构化本地日志文件和通用 `nuself logs` 查看器。
-- [ ] 添加命名 thread 创建、分支、重命名和归档。
+- [x] 添加命名 thread 创建、分支、重命名和归档。
 - [ ] 添加可以打开已有 thread 或创建新 thread 的 deep link。
 
 ### 记忆系统

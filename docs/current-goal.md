@@ -4,26 +4,25 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Add named thread creation, branching, renaming, and archival to the conversation runtime.
+Add deep links that open an existing thread or create a new one.
 
-The conversation runtime already persists threads under `private/threads/` with compression, locking, and a typed `ThreadState`. The CLI supports `nuself chat` and `nuself attach` against a default thread. The next step is to let users create named threads, rename existing ones, branch from a thread at a specific point, and archive old threads without deleting them. These operations must stay behind the existing `ThreadStore` boundary, preserve the current `ChatAgent.respond` interface, and keep the daemon protocol unchanged.
+Thread management now works through the CLI (`nuself thread list/create/rename/branch/archive`) and the REPL (`:threads`, `:thread`, `:rename`, `:branch`, `:archive`). The next step is to let external tools or automation open a specific thread directly without typing REPL commands. A deep link is a compact string or command-line invocation that resolves to a thread ID and optionally a seed message, so NuSelf can start a conversation at a known context.
 
 ## Immediate Context
 
-- `ThreadStore` owns file-backed persistence under `private/threads/` with advisory locking.
-- `ThreadState` tracks `thread_id`, `summary`, `messages`, `message_start_index`, and `next_message_index`.
-- `ChatAgent.respond` takes an optional `thread_id` parameter defaulting to `"default"`.
-- The daemon protocol and CLI already pass thread identifiers through the stack.
-- Thread files use `.json` extension; thread locks use `.lock`.
-- Compression drops old messages and updates `message_start_index`.
+- `ThreadStore` supports `list`, `rename`, `branch`, and `archive`.
+- The daemon protocol `chat` request accepts an optional `thread_id` field.
+- The REPL already prints the current thread ID in the session header.
+- `nuself chat` and `nuself attach` both enter the interactive loop.
+- Thread files live under `private/threads/`; archived threads live under `private/threads/archived/`.
 
 ## Next Steps
 
-1. Add `ThreadStore.list()`, `ThreadStore.rename()`, `ThreadStore.branch()`, and `ThreadStore.archive()` methods.
-2. Add corresponding CLI commands (`nuself thread list`, `nuself thread rename`, `nuself thread branch`, `nuself thread archive`) or REPL commands (`:threads`, `:rename`, `:branch`, `:archive`).
-3. Keep branching semantics explicit: copy messages and summary up to a chosen index, assign a new thread ID, and start a new file.
-4. Archival should move the thread file to an `archived/` subdirectory or add an `archived` flag in metadata.
-5. Ensure the default thread behavior remains unchanged when no thread management commands are used.
+1. Design a compact deep link format (e.g., `nuself://<thread-id>?message=<seed>` or a CLI shorthand like `nuself open <thread-id> [--message <seed>]`).
+2. Add a CLI `nuself open <thread-id>` command that attaches to the daemon and enters the REPL focused on that thread.
+3. If the thread does not exist, create it automatically (opt-in or explicit).
+4. Optionally support a seed message so the link can start a turn immediately.
+5. Keep the default `nuself` entrypoint behavior unchanged.
 6. Update tests and documentation together with the implementation.
 
 ## Not Now
@@ -38,11 +37,8 @@ The conversation runtime already persists threads under `private/threads/` with 
 
 ## Completion Criteria
 
-- Users can list existing threads.
-- Users can create a new named thread.
-- Users can rename an existing thread.
-- Users can branch a thread from a specific message index.
-- Users can archive a thread without losing data.
-- Default `nuself chat` behavior is unchanged.
+- A CLI command can open a specific thread by ID in the REPL.
+- Opening a non-existent thread can create it or report an error, deterministically.
+- The default `nuself` entrypoint behavior is unchanged.
 - All operations are type-checked and tested.
 - README TODOs track completed progress, while this file stays limited to the active goal.
