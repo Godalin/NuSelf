@@ -14,7 +14,7 @@ The persona-runtime slice is paused at the minimal skeleton stage. Before contin
 - Existing daemon logging writes daemon stdout/stderr to `private/logs/daemon.log`.
 - Memory curator and optimizer append action lines to `private/logs/memory.log`.
 - `nuself daemon logs` currently prints the whole daemon log.
-- Interactive chat should show compact colorful activity events for background work.
+- Interactive chat should stay REPL-shaped and show compact colorful activity events in chronological order.
 - Future persona discussion should fit the same activity feed as concise summaries, not final-answer text.
 - The detailed review plan lives in [docs/tui-log-plan.md](tui-log-plan.md).
 
@@ -35,7 +35,7 @@ The persona-runtime slice is paused at the minimal skeleton stage. Before contin
 - Proactive reflection or notification work.
 - Web or GUI interface work.
 - Private memory schema migration.
-- Rich dependency-heavy terminal UI.
+- Dashboard-style or dependency-heavy terminal UI.
 
 ## Completion Criteria
 

@@ -1,10 +1,10 @@
 # TUI And Logging Plan
 
-This plan defines a short interaction polish slice before returning to the persona-runtime work. The goal is not to build a large UI framework. It is to make everyday NuSelf use easier to inspect, safer to operate, and less noisy.
+This plan defines a short interaction polish slice before returning to the persona-runtime work. The goal is not to build a terminal dashboard or complex layout. NuSelf should stay REPL-shaped: the user types, NuSelf answers, and compact activity lines appear in order when background work happens.
 
 ## Goals
 
-- Make interactive chat feel like a persistent local companion rather than a raw readline loop.
+- Make interactive chat feel like a persistent local companion while keeping the REPL flow simple.
 - Make daemon, chat, memory, and future notification activity observable from one consistent log surface.
 - Show compact, colorful background activity while the user is in interactive chat.
 - Keep private data under ignored `private/` paths.
@@ -15,6 +15,7 @@ This plan defines a short interaction polish slice before returning to the perso
 
 - Full web UI.
 - Cross-platform desktop app.
+- Dashboard-style terminal panes or complex layouts.
 - Rich multi-pane knowledge browser.
 - Streaming token protocol overhaul.
 - Remote log aggregation.
@@ -29,16 +30,16 @@ This plan defines a short interaction polish slice before returning to the perso
 - `nuself daemon logs` prints the whole daemon log file.
 - There is no unified log model, log filtering, tailing, structured event metadata, or TUI state surface.
 
-## TUI Direction
+## REPL Interaction Direction
 
-Keep the first TUI as a terminal-native shell around existing commands. It should improve visibility without changing core chat semantics.
+Keep the first interaction layer as a terminal-native REPL around existing commands. It should improve visibility without changing core chat semantics or introducing a complex layout model.
 
 ### First Slice
 
-- Add a dedicated interactive session renderer module under `src/nuself/tui/`.
-- Keep standard-library rendering first: clear sections, stable prompts, status lines, and command output blocks.
+- Add a dedicated interactive session renderer module under `src/nuself/tui/`, but keep it line-oriented.
+- Keep standard-library rendering first: stable prompts, compact separators, status summaries, and command output blocks.
 - Preserve readline history when available.
-- Add a compact session header with daemon status, thread ID, and memory update state.
+- Print a compact session header at startup with daemon status and thread ID.
 - Print compact inline activity events during interactive chat so the user can see what the background system is doing without opening a separate log command.
 - Add interactive commands:
   - `:help` shows commands.
@@ -50,13 +51,13 @@ Keep the first TUI as a terminal-native shell around existing commands. It shoul
 
 ### Later Slice
 
-- Consider a richer optional TUI dependency only after the standard-library shell exposes the right state model.
+- Consider a richer optional TUI dependency only if the simple REPL proves insufficient.
 - If adopted, prefer an optional dependency group instead of making normal CLI startup require it.
-- Add navigable panes only when thread commands, outbox review, and richer memory review exist.
+- Avoid navigable panes unless there is a concrete workflow that cannot be served by ordered REPL output.
 
 ## Interactive Activity Feed
 
-The interactive session should display selected log events as a compact activity feed. It should be useful enough for daily work, but restrained enough that it does not drown out the conversation.
+The interactive session should display selected log events as compact lines in the normal REPL output stream. It should be useful enough for daily work, but restrained enough that it does not drown out the conversation.
 
 Example shape:
 
@@ -71,6 +72,7 @@ Rendering rules:
 
 - Use ANSI colors only when stdout is a TTY and color is not disabled.
 - Keep each activity line to one terminal line when practical.
+- Preserve chronological order. Do not rearrange events into panels.
 - Use stable component tags such as `[daemon]`, `[chat]`, `[memory]`, `[agent]`, `[selves]`, and `[outbox]`.
 - Use colors semantically: muted daemon lifecycle, blue chat/runtime, green memory writes, yellow warnings, red errors, purple persona/self discussion.
 - Hide verbose metadata by default; expose detail through `:logs`, `nuself logs --json`, or a later debug mode.
@@ -173,7 +175,7 @@ Optional persona fields:
 3. Add `chat.log` entries around conversation runtime completion and failures without storing message bodies.
 4. Add `nuself logs` with component filtering, tail count, and plain rendering.
 5. Add compact color rendering for structured log records.
-6. Refactor interactive loop rendering into a `tui` module without changing chat behavior.
+6. Refactor interactive loop rendering into a line-oriented `tui` module without changing chat behavior.
 7. Print selected background activity events during interactive chat after each turn.
 8. Add `:status` and `:logs` commands to interactive mode.
 9. Reserve persona activity event fields for the later multi-persona routing work.

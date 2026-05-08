@@ -48,7 +48,7 @@ LangGraph 现在已经支撑 conversation runtime。persona subgraphs、主动�
 - [x] 添加 `chat`、`attach` 和 daemon-backed attach 流程。
 - [x] 让根命令 `nuself` 成为便捷的 daemon-backed chat 入口。
 - [x] 添加交互模式，支持 `:q`、`:memory`、指令帮助和 readline 历史。
-- [ ] 添加小型终端交互层，用于显示状态、紧凑活动事件、日志和更清晰的聊天会话。
+- [ ] 添加 REPL 形态的终端交互层，用于显示状态、紧凑活动事件、日志和更清晰的聊天会话。
 - [ ] 添加结构化本地日志文件和通用 `nuself logs` 查看器。
 - [ ] 添加命名 thread 创建、分支、重命名和归档。
 - [ ] 添加可以打开已有 thread 或创建新 thread 的 deep link。
