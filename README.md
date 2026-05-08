@@ -113,7 +113,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add graph runtime diagnostics for node execution and failures.
 - [x] Split conversation tool handling into graph-native routes.
 - [x] Harden the graph-native tool extension boundary.
-- [ ] Close the LangGraph runtime migration slice.
+- [x] Close the LangGraph runtime migration slice.
 - [x] Add structured response schema with answer text, evidence references, confidence, and epistemic status.
 - [x] Add unsupported-claim guard for personal claims without evidence.
 - [x] Add tool-based memory search for the conversation agent.
@@ -122,6 +122,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 ### Lightweight Multi-Agent Selves
 
 - [ ] Add LangGraph persona subgraph.
+- [ ] Add minimal internal persona skeleton without changing chat payloads.
 - [ ] Add bounded personas: analyst, skeptic, builder, historian, care, and synthesizer.
 - [ ] Route only relevant personas per request.
 - [ ] Make synthesizer the only user-facing voice.

@@ -113,7 +113,7 @@ LangGraph 现在已经支撑 conversation runtime。persona subgraphs、主动�
 - [x] 添加 graph runtime diagnostics，用于 node execution 和 failures。
 - [x] 将 conversation tool handling 拆成 graph-native routes。
 - [x] 强化 graph-native tool extension boundary。
-- [ ] 收尾 LangGraph runtime migration slice。
+- [x] 收尾 LangGraph runtime migration slice。
 - [x] 添加结构化 response schema：answer text、evidence references、confidence、epistemic status。
 - [x] 添加 personal claims 的 unsupported-claim guard。
 - [x] 为 conversation agent 添加 tool-based memory search。
@@ -122,6 +122,7 @@ LangGraph 现在已经支撑 conversation runtime。persona subgraphs、主动�
 ### 轻量多智能体分身
 
 - [ ] 添加 LangGraph persona subgraph。
+- [ ] 添加最小内部 persona skeleton，且不改变 chat payloads。
 - [ ] 添加有界 personas：analyst、skeptic、builder、historian、care、synthesizer。
 - [ ] 按请求只路由相关 personas。
 - [ ] 让 synthesizer 成为唯一面向用户的声音。

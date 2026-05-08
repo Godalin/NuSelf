@@ -4,27 +4,30 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Close the LangGraph runtime migration slice while preserving the current file-backed memory and retrieval boundaries.
+Begin a minimal persona subgraph skeleton while preserving the current LangGraph conversation runtime and file-backed memory boundaries.
 
-The conversation graph now has isolated driver failure handling, internal node traces, explicit no-tool/tool-call routes, and structured supported/unsupported tool request state. Treat this as a documentation-backed stabilization pass: finish the migration review, confirm the boundaries in tests, then update the roadmap documents so the next focus is explicit rather than implied.
+The LangGraph runtime migration slice is complete: the conversation graph has isolated driver failure handling, internal node traces, explicit no-tool/tool-call routes, structured supported/unsupported tool request state, and cleaned user-facing docs. The next useful step is a narrow persona subgraph skeleton that proves persona routing can exist without changing memory storage, CLI payloads, or daemon protocol.
 
 ## Immediate Context
 
 - `MemoryQueryService` remains the stable retrieval boundary for memory entries, profile items, source chunks, and graph-derived expansion.
-- `ChatAgent` now owns thread persistence while `ConversationGraphRuntime` owns turn execution.
+- `ChatAgent` owns thread persistence while `ConversationGraphRuntime` owns turn execution.
 - `ConversationGraphDriver` is the only module that imports LangGraph and wraps graph failures as `ConversationGraphRuntimeError`.
 - Runtime results carry internal node traces without changing CLI or daemon response payloads.
 - Tool calls route through `detect_tool_request`, optional `execute_tool`, and `finalize_response`.
 - Tool request state records name, args, support status, and diagnostics.
 - File-backed private memory remains authoritative; derived indexes and future runtime mirrors must stay rebuildable.
 
-## Next Steps (combined)
+## Next Steps
 
-Audit and validate the LangGraph migration end-to-end: (a) audit chat, daemon, and CLI paths for leftover references to the old temporary runtime; (b) confirm tests cover metadata, persistence, context packing, tool routes, graph failures, and fallback behavior; (c) if no gaps remain, mark the migration slice complete and sync README TODOs and this file's wording; (d) only after these validations pick the next roadmap slice (for example persona subgraphs). Treat these as a single validation-and-decision step rather than disconnected sub-steps.
+1. Define minimal persona node/state types for a single bounded persona, without changing user-facing responses.
+2. Add a graph subgraph or driver boundary that can run the persona node internally.
+3. Preserve current response metadata, memory context packing, persistence, tool calls, diagnostics, fallback behavior, CLI payloads, and daemon payloads.
+4. Add focused tests proving the persona skeleton is internal and does not alter existing chat behavior.
 
 ## Not Now
 
-- Full persona subgraphs.
+- Full multi-persona orchestration.
 - Vector, hybrid, or hosted graph indexes.
 - Plugin loading.
 - Proactive reflection or notification work.
@@ -33,8 +36,7 @@ Audit and validate the LangGraph migration end-to-end: (a) audit chat, daemon, a
 
 ## Completion Criteria
 
-- The runtime migration slice has no remaining old temporary-runtime behavior to remove.
+- A minimal persona node or subgraph boundary exists and is tested.
 - Existing chat entrypoints keep their current user-visible behavior.
-- Tests cover graph runtime behavior across chat, daemon, CLI, tool, failure, and fallback paths.
-- The current goal documents the active slice, the immediate validation steps, and the next roadmap decision.
+- Persona internals do not leak into CLI or daemon payloads.
 - README TODOs track completed progress, while this file stays limited to the active goal.
