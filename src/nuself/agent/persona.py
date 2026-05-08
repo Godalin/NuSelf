@@ -75,6 +75,9 @@ class MinimalPersonaNode:
         if persona.id == "skeptic_self":
             note = f"{persona.id} challenged assumptions in: {persona_input.user_message}"
             return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
+        if persona.id == "builder_self":
+            note = f"{persona.id} proposed concrete steps for: {persona_input.user_message}"
+            return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
         note = f"{persona.id} considered: {persona_input.user_message}"
         return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
 
@@ -130,6 +133,23 @@ class PersonaActivationPolicy:
         "坏处",
         "隐患",
     )
+    _builder_markers = (
+        "plan",
+        "roadmap",
+        "implement",
+        "implementation",
+        "build",
+        "steps",
+        "milestone",
+        "execution",
+        "计划",
+        "路线图",
+        "实现",
+        "步骤",
+        "里程碑",
+        "执行",
+        "怎么做",
+    )
 
     def decide(self, persona_input: PersonaInput) -> PersonaActivation:
         text = persona_input.user_message.strip()
@@ -141,6 +161,8 @@ class PersonaActivationPolicy:
             )
         if any(marker in normalized for marker in self._skeptic_markers):
             return PersonaActivation(trigger="skeptic_heuristic", selected_personas=(SKEPTIC_PERSONA,))
+        if any(marker in normalized for marker in self._builder_markers):
+            return PersonaActivation(trigger="builder_heuristic", selected_personas=(BUILDER_PERSONA,))
         if any(marker in normalized for marker in self._depth_markers):
             return PersonaActivation(trigger="depth_heuristic", selected_personas=(ANALYST_PERSONA,))
         if len(text) >= 180 and ("?" in text or "？" in text):
@@ -188,4 +210,9 @@ ANALYST_PERSONA = PersonaDefinition(
 SKEPTIC_PERSONA = PersonaDefinition(
     id="skeptic_self",
     description="Challenges assumptions, risks, and missing counter-evidence.",
+)
+
+BUILDER_PERSONA = PersonaDefinition(
+    id="builder_self",
+    description="Turns intent into practical steps, milestones, and execution order.",
 )

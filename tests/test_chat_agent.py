@@ -408,6 +408,39 @@ def test_conversation_runtime_runs_persona_skeleton_when_activated(tmp_path: Pat
     )
 
 
+def test_conversation_runtime_routes_builder_persona_for_planning_prompt(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM('{"answer":"Builder reply.","evidence_references":[],"confidence":0.4}')
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+
+    turn_state = ConversationTurnState.start(
+        ThreadState.empty("builder"),
+        "Please propose an implementation roadmap with concrete steps.",
+        "builder",
+    )
+    prepared = runtime.prepare_context_node(turn_state)
+    activated = runtime.persona_activation_node(prepared.state)
+
+    assert activated.state.persona_activation is not None
+    assert activated.state.persona_activation.trigger == "builder_heuristic"
+    assert activated.state.persona_turn_state is not None
+
+    run_personas = runtime.run_personas_node(activated.state)
+    assert run_personas.state.persona_turn_state is not None
+    assert run_personas.state.persona_turn_state.contributions == (
+        PersonaContribution(
+            persona_id="builder_self",
+            notes=(
+                "builder_self proposed concrete steps for: Please propose an implementation roadmap with concrete steps.",
+            ),
+            confidence=0.0,
+        ),
+    )
+
+
 def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path: Path) -> None:
     llm = StructuredFakeLLM(
         '{"answer":"Graph driver reply.","evidence_references":["mem_graph"],'

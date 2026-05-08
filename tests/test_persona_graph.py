@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from nuself.agent.persona import (
     ANALYST_PERSONA,
+    BUILDER_PERSONA,
     SKEPTIC_PERSONA,
     PersonaContribution,
     PersonaDefinition,
@@ -77,3 +78,31 @@ def test_persona_activation_policy_selects_skeptic_for_risk_prompt() -> None:
     assert activation.activated is True
     assert activation.trigger == "skeptic_heuristic"
     assert activation.selected_personas == (SKEPTIC_PERSONA,)
+
+
+def test_persona_activation_policy_selects_builder_for_planning_prompt() -> None:
+    policy = PersonaActivationPolicy()
+
+    activation = policy.decide(PersonaInput(user_message="Can you propose an implementation roadmap with steps?"))
+
+    assert activation.activated is True
+    assert activation.trigger == "builder_heuristic"
+    assert activation.selected_personas == (BUILDER_PERSONA,)
+
+
+def test_persona_graph_runs_builder_persona_notes() -> None:
+    driver = PersonaGraphDriver()
+    state = PersonaTurnState(
+        input=PersonaInput(user_message="Please plan concrete execution steps."),
+        selected_personas=(BUILDER_PERSONA,),
+    )
+
+    result = driver.run(state)
+
+    assert result.contributions == (
+        PersonaContribution(
+            persona_id="builder_self",
+            notes=("builder_self proposed concrete steps for: Please plan concrete execution steps.",),
+            confidence=0.0,
+        ),
+    )
