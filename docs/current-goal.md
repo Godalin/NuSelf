@@ -6,7 +6,7 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 Incrementally grow bounded internal personas while keeping persona internals out of user-facing payloads.
 
-The conversation runtime now runs bounded persona work behind an activation gate and emits compact `[selves]` activity summaries through structured persona logs in interactive chat. We now have deterministic routing for `analyst_self`, `skeptic_self`, and `builder_self`. The next useful step is to introduce one more bounded persona (`historian_self` or `care_self`) and clear precedence rules when multiple heuristics match, while keeping `ChatResult.to_payload`, CLI payloads, daemon payloads, and durable memory schema unchanged.
+The conversation runtime now runs bounded persona work behind an activation gate and emits compact `[selves]` activity summaries through structured persona logs in interactive chat. We now have deterministic routing for `analyst_self`, `skeptic_self`, `builder_self`, and `historian_self`, plus deterministic mixed-intent precedence for risk + planning + depth prompts. The next useful step is to add one more bounded persona (`care_self`) and tune explicit multi-perspective routing to include all relevant active personas while keeping `ChatResult.to_payload`, CLI payloads, daemon payloads, and durable memory schema unchanged.
 
 ## Immediate Context
 
@@ -15,13 +15,14 @@ The conversation runtime now runs bounded persona work behind an activation gate
 - `ConversationGraphDriver` is the only conversation module that imports LangGraph and wraps graph failures.
 - `PersonaGraphDriver` can run internal personas and return structured contributions.
 - Interactive chat now renders persona activity through the existing activity log channel (`persona` component rendered as `[selves]`).
-- Deterministic persona routing currently supports `analyst_self`, `skeptic_self`, and `builder_self`.
+- Deterministic persona routing currently supports `analyst_self`, `skeptic_self`, `builder_self`, and `historian_self`.
+- Mixed-intent precedence is deterministic: `skeptic_self` (risk) → `builder_self` (planning) → `analyst_self` (depth).
 - Persona work must not run on every trivial turn by default.
 - Persona internals must not leak into `ChatResult.to_payload`, CLI payloads, daemon payloads, or durable memory schema.
 
 ## Next Steps
 
-Add one bounded persona (`historian_self` or `care_self`) and deterministic precedence rules for mixed-intent prompts (risk + planning + depth). Keep trivial turns silent, keep synthesizer behavior unchanged (assistant reply stays single-voice), and preserve current response metadata, memory packing, persistence, tool calls, diagnostics, and fallback behavior as-is.
+Add one bounded persona (`care_self`) and tune explicit multi-perspective routing to include all active relevant personas. Keep trivial turns silent, keep synthesizer behavior unchanged (assistant reply stays single-voice), and preserve current response metadata, memory packing, persistence, tool calls, diagnostics, and fallback behavior as-is.
 
 ## Not Now
 
