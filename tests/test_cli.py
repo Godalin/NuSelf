@@ -132,6 +132,43 @@ def test_interactive_memory_command_shows_preview(
     assert "State assumptions explicitly." in captured.out
 
 
+def test_interactive_status_command_shows_daemon_status(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput(":status\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "daemon stopped" in captured.out
+
+
+def test_interactive_logs_command_shows_recent_activity(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    write_log_event("chat", "turn_completed", "chat turn completed", project_root=tmp_path)
+    monkeypatch.setattr("sys.stdin", _TextInput(":logs\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[chat] chat turn completed" in captured.out
+
+
+def test_interactive_turn_prints_activity_events(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[chat] one-shot chat turn completed" in captured.out
+
+
 def test_interactive_history_skips_consecutive_duplicates(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:

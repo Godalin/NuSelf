@@ -46,7 +46,7 @@ from nuself.memory.repository import (
 from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
 from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
 from nuself.logs import LOG_COMPONENTS, LogComponent, read_log_events, write_log_event
-from nuself.tui.render import render_log_event, render_log_event_json
+from nuself.tui.render import render_log_event, render_log_event_json, render_session_header
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
@@ -856,6 +856,7 @@ def _interactive_loop(send_message: Callable[[str], int], project_root: Path | N
     history_path = _load_interactive_history(project_root)
     print(_brand_banner())
     print("νSelf interactive mode. Type :q, :quit, or :exit to leave.")
+    print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id="default"))
     try:
         while True:
             try:
@@ -873,7 +874,9 @@ def _interactive_loop(send_message: Callable[[str], int], project_root: Path | N
                     return 0
                 continue
             print()
+            event_offset = len(read_log_events(project_root=project_root))
             result = send_message(message)
+            _print_interactive_activity(project_root, event_offset)
             print()
             if result != 0:
                 return result
@@ -1017,6 +1020,21 @@ def _brand_banner() -> str:
 def _handle_interactive_command(command: str, project_root: Path | None) -> str | None:
     if command in {":q", ":quit", ":exit"}:
         return "exit"
+    if command == ":help":
+        print()
+        print(_interactive_help())
+        print()
+        return None
+    if command == ":status":
+        print()
+        print(_format_status(lifecycle.status(project_root)))
+        print()
+        return None
+    if command == ":logs":
+        print()
+        _print_recent_logs(project_root, limit=8)
+        print()
+        return None
     if command in {":memory", ":mem"}:
         print()
         print(_format_memory_preview(project_root))
@@ -1038,6 +1056,9 @@ def _interactive_help(command: str | None = None) -> str:
             "  :q      exit",
             "  :quit   exit",
             "  :exit   exit",
+            "  :help   show this help",
+            "  :status show daemon and thread status",
+            "  :logs   show recent activity logs",
             "  :memory preview memory entries",
             "  :mem    preview memory entries",
         ]
@@ -1057,6 +1078,26 @@ def _log_component_arg(value: object) -> LogComponent | None:
 
 def _optional_payload_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
+
+
+def _interactive_daemon_status(project_root: Path | None) -> str:
+    status = lifecycle.status(project_root)
+    return "running" if status.running else "one-shot"
+
+
+def _print_recent_logs(project_root: Path | None, *, limit: int) -> None:
+    events = read_log_events(project_root=project_root, tail=limit)
+    if not events:
+        print("No recent activity logs.")
+        return
+    for event in events:
+        print(render_log_event(event))
+
+
+def _print_interactive_activity(project_root: Path | None, event_offset: int) -> None:
+    events = read_log_events(project_root=project_root)
+    for event in events[event_offset:]:
+        print(render_log_event(event))
 
 
 def _format_status(status: lifecycle.DaemonStatus) -> str:

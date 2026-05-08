@@ -58,6 +58,12 @@ def render_log_event_json(event: LogEvent) -> str:
     return json.dumps(event.to_record(), sort_keys=True, ensure_ascii=True)
 
 
+def render_session_header(*, daemon_status: str, thread_id: str) -> str:
+    """Render a compact REPL session header."""
+
+    return f"session thread={thread_id} daemon={daemon_status}"
+
+
 def _should_color() -> bool:
     return sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
 
