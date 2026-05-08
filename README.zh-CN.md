@@ -122,7 +122,8 @@ LangGraph 现在已经支撑 conversation runtime。persona subgraphs、主动�
 ### 轻量多智能体分身
 
 - [ ] 添加 LangGraph persona subgraph。
-- [ ] 添加最小内部 persona skeleton，且不改变 chat payloads。
+- [x] 添加最小内部 persona skeleton，且不改变 chat payloads。
+- [ ] 将最小 persona skeleton 内部接入 conversation runtime。
 - [ ] 添加有界 personas：analyst、skeptic、builder、historian、care、synthesizer。
 - [ ] 按请求只路由相关 personas。
 - [ ] 让 synthesizer 成为唯一面向用户的声音。

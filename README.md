@@ -122,7 +122,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 ### Lightweight Multi-Agent Selves
 
 - [ ] Add LangGraph persona subgraph.
-- [ ] Add minimal internal persona skeleton without changing chat payloads.
+- [x] Add minimal internal persona skeleton without changing chat payloads.
+- [ ] Wire the minimal persona skeleton into the conversation runtime internally.
 - [ ] Add bounded personas: analyst, skeptic, builder, historian, care, and synthesizer.
 - [ ] Route only relevant personas per request.
 - [ ] Make synthesizer the only user-facing voice.
