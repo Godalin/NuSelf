@@ -538,12 +538,16 @@ class ConversationGraphRuntime:
         )
 
     def initial_response_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        prompt = self._build_prompt(state)
+        if state.persona_turn_state is not None and state.persona_turn_state.synthesis is not None:
+            response = self._synthesize_response(state)
+        else:
+            prompt = self._build_prompt(state)
+            response = _parse_chat_response(self._llm.complete(prompt))
         return ConversationNodeResult(
             node="initial_response",
             state=replace(
                 state,
-                initial_response=_parse_chat_response(self._llm.complete(prompt)),
+                initial_response=response,
                 node_trace=(*state.node_trace, "initial_response"),
             ),
         )
@@ -656,6 +660,36 @@ class ConversationGraphRuntime:
         for message in state.active_messages[-self._settings.recent_messages :]:
             prompt.append(ChatMessage(role=message.role, content=message.content))
         return prompt
+
+    def _synthesize_response(self, state: ConversationTurnState) -> ParsedChatResponse:
+        """Generate the user-facing response from persona contributions."""
+        synthesis = _require_synthesis(state.persona_turn_state)
+        parts: list[str] = [
+            "You are the synthesizer self of NuSelf. Fuse the following internal persona perspectives into a single, coherent user-facing response.",
+            "Return a JSON object with answer, evidence_references, confidence, and epistemic_status.",
+            "answer must be the user-facing text. evidence_references must cite relevant memory ids or source refs when available.",
+            "If you make a claim about the user's preferences, history, or other personal facts without evidence, set epistemic_status to unsupported.",
+            "confidence should be a number between 0 and 1 when you can estimate it; otherwise omit it.",
+            "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
+        ]
+        if state.memory_context != "":
+            parts.extend(["", "Relevant memory context:", state.memory_context])
+        if state.persisted_state.summary != "":
+            parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
+        parts.extend(["", "Persona contributions:"])
+        for contrib in state.persona_turn_state.contributions if state.persona_turn_state is not None else ():
+            note = contrib.notes[0] if contrib.notes else ""
+            parts.append(f"- {contrib.persona_id}: {note}")
+        parts.extend([
+            "",
+            "Internal perspective fusion:",
+            f"Summary: {synthesis.summary}",
+            f"Perspectives involved: {', '.join(synthesis.source_personas)}",
+        ])
+        prompt: list[ChatMessage] = [ChatMessage(role="system", content="\n".join(parts))]
+        for message in state.active_messages[-self._settings.recent_messages :]:
+            prompt.append(ChatMessage(role=message.role, content=message.content))
+        return _parse_chat_response(self._llm.complete(prompt))
 
     def _build_follow_up_prompt(self, state: ThreadState, tool_result: str) -> list[ChatMessage]:
         """Build a prompt for the follow-up after tool invocation."""
@@ -805,6 +839,13 @@ def _require_persona_turn_state(state: PersonaTurnState | None) -> PersonaTurnSt
     if state is None:
         raise RuntimeError("conversation runtime persona turn state is missing")
     return state
+
+
+def _require_synthesis(state: PersonaTurnState | None) -> PersonaSynthesis:
+    if state is None or state.synthesis is None:
+        raise RuntimeError("conversation runtime synthesis is missing")
+    return state.synthesis
+
 
 def _require_tool_result(tool_result: str | None) -> str:
     if tool_result is None:

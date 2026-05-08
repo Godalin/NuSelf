@@ -210,3 +210,70 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
     
     # And synthesis is also present
     assert "Internal perspective fusion:" in system_prompt
+
+
+def test_activated_turn_uses_synthesizer_for_initial_response(tmp_path: Path) -> None:
+    """Verify that activated turns use synthesizer prompt instead of main system prompt."""
+    llm = StructuredFakeLLM('{"answer":"Synthesized reply.","evidence_references":[],"confidence":0.8,"epistemic_status":"grounded"}')
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+
+    turn_state = ConversationTurnState.start(
+        ThreadState.empty("synth-test"),
+        "What are the risks and implementation steps for this decision?",
+        "synth-test",
+    )
+    
+    prepared = runtime.prepare_context_node(turn_state)
+    activated = runtime.persona_activation_node(prepared.state)
+    run_personas = runtime.run_personas_node(activated.state)
+    
+    # initial_response_node should use synthesizer prompt
+    initial = runtime.initial_response_node(run_personas.state)
+    
+    assert initial.state.initial_response is not None
+    assert initial.state.initial_response.answer == "Synthesized reply."
+    assert initial.state.initial_response.epistemic_status == "grounded"
+    assert initial.state.initial_response.confidence == 0.8
+    
+    # Verify synthesizer prompt was used (system prompt should mention "synthesizer self")
+    assert len(llm.calls) >= 1
+    synthesizer_call = llm.calls[-1]
+    system_prompt = synthesizer_call[0].content
+    assert "synthesizer self" in system_prompt
+    assert "Persona contributions:" in system_prompt
+
+
+def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
+    """Verify that non-activated turns still use the main LLM system prompt."""
+    llm = StructuredFakeLLM('{"answer":"Normal reply.","evidence_references":[],"confidence":0.5}')
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+
+    turn_state = ConversationTurnState.start(
+        ThreadState.empty("normal-test"),
+        "Hello there.",
+        "normal-test",
+    )
+    
+    prepared = runtime.prepare_context_node(turn_state)
+    activated = runtime.persona_activation_node(prepared.state)
+    
+    assert activated.state.persona_turn_state is None
+    
+    initial = runtime.initial_response_node(activated.state)
+    
+    assert initial.state.initial_response is not None
+    assert initial.state.initial_response.answer == "Normal reply."
+    
+    # Verify main prompt was used
+    assert len(llm.calls) >= 1
+    system_prompt = llm.calls[0][0].content
+    assert "You are NuSelf" in system_prompt
+    assert "synthesizer self" not in system_prompt

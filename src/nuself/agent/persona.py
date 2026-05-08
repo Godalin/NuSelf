@@ -42,6 +42,9 @@ class PersonaSynthesis:
     summary: str
     source_personas: tuple[str, ...] = ()
     confidence: float | None = None
+    answer: str | None = None
+    evidence_references: tuple[str, ...] = ()
+    epistemic_status: str | None = None
 
 
 @dataclass(frozen=True)
