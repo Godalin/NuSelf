@@ -3,6 +3,7 @@ from __future__ import annotations
 from nuself.agent.persona import (
     ANALYST_PERSONA,
     BUILDER_PERSONA,
+    HISTORIAN_PERSONA,
     SKEPTIC_PERSONA,
     PersonaContribution,
     PersonaDefinition,
@@ -103,6 +104,46 @@ def test_persona_graph_runs_builder_persona_notes() -> None:
         PersonaContribution(
             persona_id="builder_self",
             notes=("builder_self proposed concrete steps for: Please plan concrete execution steps.",),
+            confidence=0.0,
+        ),
+    )
+
+
+def test_persona_activation_policy_selects_historian_for_retrospective_prompt() -> None:
+    policy = PersonaActivationPolicy()
+
+    activation = policy.decide(PersonaInput(user_message="Can we review the timeline and what happened earlier?"))
+
+    assert activation.activated is True
+    assert activation.trigger == "historian_heuristic"
+    assert activation.selected_personas == (HISTORIAN_PERSONA,)
+
+
+def test_persona_activation_policy_applies_mixed_intent_precedence() -> None:
+    policy = PersonaActivationPolicy()
+
+    activation = policy.decide(
+        PersonaInput(user_message="What are the risks, and can you give an implementation roadmap for this decision?")
+    )
+
+    assert activation.activated is True
+    assert activation.trigger == "mixed_intent_heuristic"
+    assert activation.selected_personas == (SKEPTIC_PERSONA, BUILDER_PERSONA, ANALYST_PERSONA)
+
+
+def test_persona_graph_runs_historian_persona_notes() -> None:
+    driver = PersonaGraphDriver()
+    state = PersonaTurnState(
+        input=PersonaInput(user_message="Let's review what happened earlier before deciding."),
+        selected_personas=(HISTORIAN_PERSONA,),
+    )
+
+    result = driver.run(state)
+
+    assert result.contributions == (
+        PersonaContribution(
+            persona_id="historian_self",
+            notes=("historian_self connected prior context to: Let's review what happened earlier before deciding.",),
             confidence=0.0,
         ),
     )

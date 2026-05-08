@@ -78,6 +78,9 @@ class MinimalPersonaNode:
         if persona.id == "builder_self":
             note = f"{persona.id} proposed concrete steps for: {persona_input.user_message}"
             return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
+        if persona.id == "historian_self":
+            note = f"{persona.id} connected prior context to: {persona_input.user_message}"
+            return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
         note = f"{persona.id} considered: {persona_input.user_message}"
         return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
 
@@ -150,23 +153,54 @@ class PersonaActivationPolicy:
         "执行",
         "怎么做",
     )
+    _historian_markers = (
+        "history",
+        "historical",
+        "timeline",
+        "earlier",
+        "previously",
+        "before",
+        "past",
+        "回顾",
+        "之前",
+        "过去",
+        "时间线",
+        "复盘",
+    )
 
     def decide(self, persona_input: PersonaInput) -> PersonaActivation:
         text = persona_input.user_message.strip()
         normalized = text.lower()
+        has_skeptic = any(marker in normalized for marker in self._skeptic_markers)
+        has_builder = any(marker in normalized for marker in self._builder_markers)
+        has_depth = any(marker in normalized for marker in self._depth_markers) or (
+            len(text) >= 180 and ("?" in text or "？" in text)
+        )
+
         if any(marker in normalized for marker in self._explicit_markers):
             return PersonaActivation(
                 trigger="explicit_request",
                 selected_personas=(ANALYST_PERSONA, SKEPTIC_PERSONA),
             )
-        if any(marker in normalized for marker in self._skeptic_markers):
+
+        mixed_selected: list[PersonaDefinition] = []
+        if has_skeptic:
+            mixed_selected.append(SKEPTIC_PERSONA)
+        if has_builder:
+            mixed_selected.append(BUILDER_PERSONA)
+        if has_depth:
+            mixed_selected.append(ANALYST_PERSONA)
+        if len(mixed_selected) >= 2:
+            return PersonaActivation(trigger="mixed_intent_heuristic", selected_personas=tuple(mixed_selected))
+
+        if has_skeptic:
             return PersonaActivation(trigger="skeptic_heuristic", selected_personas=(SKEPTIC_PERSONA,))
-        if any(marker in normalized for marker in self._builder_markers):
+        if has_builder:
             return PersonaActivation(trigger="builder_heuristic", selected_personas=(BUILDER_PERSONA,))
-        if any(marker in normalized for marker in self._depth_markers):
+        if has_depth:
             return PersonaActivation(trigger="depth_heuristic", selected_personas=(ANALYST_PERSONA,))
-        if len(text) >= 180 and ("?" in text or "？" in text):
-            return PersonaActivation(trigger="depth_heuristic", selected_personas=(ANALYST_PERSONA,))
+        if any(marker in normalized for marker in self._historian_markers):
+            return PersonaActivation(trigger="historian_heuristic", selected_personas=(HISTORIAN_PERSONA,))
         return PersonaActivation(trigger="not_needed")
 
 
@@ -215,4 +249,9 @@ SKEPTIC_PERSONA = PersonaDefinition(
 BUILDER_PERSONA = PersonaDefinition(
     id="builder_self",
     description="Turns intent into practical steps, milestones, and execution order.",
+)
+
+HISTORIAN_PERSONA = PersonaDefinition(
+    id="historian_self",
+    description="Connects prior context and timelines to current decisions.",
 )

@@ -441,6 +441,82 @@ def test_conversation_runtime_routes_builder_persona_for_planning_prompt(tmp_pat
     )
 
 
+def test_conversation_runtime_routes_historian_persona_for_timeline_prompt(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM('{"answer":"Historian reply.","evidence_references":[],"confidence":0.4}')
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+
+    turn_state = ConversationTurnState.start(
+        ThreadState.empty("historian"),
+        "Can we review the timeline and what happened earlier?",
+        "historian",
+    )
+    prepared = runtime.prepare_context_node(turn_state)
+    activated = runtime.persona_activation_node(prepared.state)
+
+    assert activated.state.persona_activation is not None
+    assert activated.state.persona_activation.trigger == "historian_heuristic"
+
+    run_personas = runtime.run_personas_node(activated.state)
+    assert run_personas.state.persona_turn_state is not None
+    assert run_personas.state.persona_turn_state.contributions == (
+        PersonaContribution(
+            persona_id="historian_self",
+            notes=("historian_self connected prior context to: Can we review the timeline and what happened earlier?",),
+            confidence=0.0,
+        ),
+    )
+
+
+def test_conversation_runtime_uses_mixed_intent_persona_precedence(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM('{"answer":"Mixed intent reply.","evidence_references":[],"confidence":0.4}')
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+
+    turn_state = ConversationTurnState.start(
+        ThreadState.empty("mixed"),
+        "What are the risks, and can you give an implementation roadmap for this decision?",
+        "mixed",
+    )
+    prepared = runtime.prepare_context_node(turn_state)
+    activated = runtime.persona_activation_node(prepared.state)
+
+    assert activated.state.persona_activation is not None
+    assert activated.state.persona_activation.trigger == "mixed_intent_heuristic"
+
+    run_personas = runtime.run_personas_node(activated.state)
+    assert run_personas.state.persona_turn_state is not None
+    assert run_personas.state.persona_turn_state.contributions == (
+        PersonaContribution(
+            persona_id="skeptic_self",
+            notes=(
+                "skeptic_self challenged assumptions in: What are the risks, and can you give an implementation roadmap for this decision?",
+            ),
+            confidence=0.0,
+        ),
+        PersonaContribution(
+            persona_id="builder_self",
+            notes=(
+                "builder_self proposed concrete steps for: What are the risks, and can you give an implementation roadmap for this decision?",
+            ),
+            confidence=0.0,
+        ),
+        PersonaContribution(
+            persona_id="analyst_self",
+            notes=(
+                "analyst_self considered: What are the risks, and can you give an implementation roadmap for this decision?",
+            ),
+            confidence=0.0,
+        ),
+    )
+
+
 def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path: Path) -> None:
     llm = StructuredFakeLLM(
         '{"answer":"Graph driver reply.","evidence_references":["mem_graph"],'
