@@ -466,7 +466,7 @@ class MemoryEntryRepository:
         if not isinstance(raw, dict):
             raise ValueError(f"memory entry file must contain an object: {path}")
         data = cast(dict[str, object], raw)
-        if "payload" in data:
+        if "metadata" in data:
             return MemoryEntry.from_memory_object(MemoryObject.from_wire(data))
         return MemoryEntry.from_wire(data)
 

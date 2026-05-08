@@ -17,6 +17,7 @@ from nuself.agent.persona import (
     PersonaInput,
     PersonaSynthesis,
     PersonaTurnState,
+    load_persona_definitions,
 )
 from nuself.config import config_int, runtime_paths
 from nuself.llm import ChatLLM, ChatMessage, default_llm
@@ -441,7 +442,8 @@ class ConversationGraphRuntime:
         self._llm = llm or default_llm(project_root)
         self._settings = settings or ChatAgentSettings.from_project(project_root)
         self._project_root = project_root
-        self._persona_activation_policy = PersonaActivationPolicy()
+        persona_definitions = load_persona_definitions(project_root)
+        self._persona_activation_policy = PersonaActivationPolicy(persona_definitions)
         self._persona_driver = PersonaGraphDriver()
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),

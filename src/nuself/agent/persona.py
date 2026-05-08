@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any, Protocol, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
@@ -169,7 +170,6 @@ class PersonaActivationPolicy:
         "failure mode",
         "counterexample",
         "counter-example",
-        "risky",
         "风险",
         "漏洞",
         "反例",
@@ -226,6 +226,13 @@ class PersonaActivationPolicy:
         "共情",
     )
 
+    def __init__(self, personas: tuple[PersonaDefinition, ...] | None = None) -> None:
+        self._personas = personas if personas is not None else BUILTIN_PERSONAS
+        self._persona_by_id = {p.id: p for p in self._personas}
+
+    def _maybe(self, persona_id: str) -> PersonaDefinition | None:
+        return self._persona_by_id.get(persona_id)
+
     def decide(self, persona_input: PersonaInput) -> PersonaActivation:
         text = persona_input.user_message.strip()
         normalized = text.lower()
@@ -238,38 +245,48 @@ class PersonaActivationPolicy:
         has_care = any(marker in normalized for marker in self._care_markers)
 
         selected_by_relevance: list[PersonaDefinition] = []
-        if has_skeptic:
-            selected_by_relevance.append(SKEPTIC_PERSONA)
-        if has_builder:
-            selected_by_relevance.append(BUILDER_PERSONA)
-        if has_depth:
-            selected_by_relevance.append(ANALYST_PERSONA)
-        if has_historian:
-            selected_by_relevance.append(HISTORIAN_PERSONA)
-        if has_care:
-            selected_by_relevance.append(CARE_PERSONA)
+        skeptic = self._maybe("skeptic_self")
+        builder = self._maybe("builder_self")
+        analyst = self._maybe("analyst_self")
+        historian = self._maybe("historian_self")
+        care = self._maybe("care_self")
+
+        if has_skeptic and skeptic is not None:
+            selected_by_relevance.append(skeptic)
+        if has_builder and builder is not None:
+            selected_by_relevance.append(builder)
+        if has_depth and analyst is not None:
+            selected_by_relevance.append(analyst)
+        if has_historian and historian is not None:
+            selected_by_relevance.append(historian)
+        if has_care and care is not None:
+            selected_by_relevance.append(care)
 
         if any(marker in normalized for marker in self._explicit_markers):
             if selected_by_relevance:
                 return PersonaActivation(trigger="explicit_relevant_personas", selected_personas=tuple(selected_by_relevance))
-            return PersonaActivation(
-                trigger="explicit_request",
-                selected_personas=(ANALYST_PERSONA, SKEPTIC_PERSONA),
-            )
+            fallback: list[PersonaDefinition] = []
+            if analyst is not None:
+                fallback.append(analyst)
+            if skeptic is not None:
+                fallback.append(skeptic)
+            if fallback:
+                return PersonaActivation(trigger="explicit_request", selected_personas=tuple(fallback))
+            return PersonaActivation(trigger="not_needed")
 
         if len(selected_by_relevance) >= 2:
             return PersonaActivation(trigger="mixed_intent_heuristic", selected_personas=tuple(selected_by_relevance))
 
-        if has_skeptic:
-            return PersonaActivation(trigger="skeptic_heuristic", selected_personas=(SKEPTIC_PERSONA,))
-        if has_builder:
-            return PersonaActivation(trigger="builder_heuristic", selected_personas=(BUILDER_PERSONA,))
-        if has_depth:
-            return PersonaActivation(trigger="depth_heuristic", selected_personas=(ANALYST_PERSONA,))
-        if has_historian:
-            return PersonaActivation(trigger="historian_heuristic", selected_personas=(HISTORIAN_PERSONA,))
-        if has_care:
-            return PersonaActivation(trigger="care_heuristic", selected_personas=(CARE_PERSONA,))
+        if has_skeptic and skeptic is not None:
+            return PersonaActivation(trigger="skeptic_heuristic", selected_personas=(skeptic,))
+        if has_builder and builder is not None:
+            return PersonaActivation(trigger="builder_heuristic", selected_personas=(builder,))
+        if has_depth and analyst is not None:
+            return PersonaActivation(trigger="depth_heuristic", selected_personas=(analyst,))
+        if has_historian and historian is not None:
+            return PersonaActivation(trigger="historian_heuristic", selected_personas=(historian,))
+        if has_care and care is not None:
+            return PersonaActivation(trigger="care_heuristic", selected_personas=(care,))
         return PersonaActivation(trigger="not_needed")
 
 
@@ -353,3 +370,37 @@ SYNTHESIZER_PERSONA = PersonaDefinition(
     id="synthesizer_self",
     description="Fuses persona contributions into compact internal synthesis.",
 )
+
+BUILTIN_PERSONAS = (
+    ANALYST_PERSONA,
+    SKEPTIC_PERSONA,
+    BUILDER_PERSONA,
+    HISTORIAN_PERSONA,
+    CARE_PERSONA,
+)
+
+
+def load_persona_definitions(project_root: Path | None = None) -> tuple[PersonaDefinition, ...]:
+    """Load persona definitions from durable memory entries.
+
+    Falls back to built-in personas when no durable instructions exist.
+    """
+    from nuself.memory.repository import MemoryEntryRepository, MemorySearchFilters
+
+    try:
+        repo = MemoryEntryRepository(project_root)
+        entries = repo.search("", filters=MemorySearchFilters(type="persona_instruction"))
+    except RuntimeError:
+        return BUILTIN_PERSONAS
+
+    definitions: list[PersonaDefinition] = []
+    for entry in entries:
+        memory = entry.to_memory_object()
+        persona_id = memory.payload.get("persona_id")
+        description = memory.payload.get("description")
+        if isinstance(persona_id, str) and isinstance(description, str):
+            definitions.append(PersonaDefinition(id=persona_id, description=description))
+
+    if not definitions:
+        return BUILTIN_PERSONAS
+    return tuple(definitions)

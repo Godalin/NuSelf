@@ -19,6 +19,7 @@ MemoryEntryType: TypeAlias = Literal[
     "episode",
     "open_question",
     "instruction",
+    "persona_instruction",
 ]
 
 ReviewState: TypeAlias = Literal["draft", "reviewed", "rejected"]
@@ -139,6 +140,7 @@ class MemoryEntry:
     temporal_note: str = ""
     relations: dict[str, list[str]] = field(default_factory=empty_relations_dict)
     evidence: list[MemoryEvidence] = field(default_factory=empty_evidence_list)
+    payload: dict[str, object] = field(default_factory=empty_object_dict)
 
     def with_updates(
         self,
@@ -172,10 +174,11 @@ class MemoryEntry:
             temporal_note=temporal_note if temporal_note is not None else self.temporal_note,
             relations=self.relations,
             evidence=self.evidence,
+            payload=self.payload,
         )
 
     def to_wire(self) -> dict[str, object]:
-        return {
+        wire: dict[str, object] = {
             "id": self.id,
             "type": self.type,
             "title": self.title,
@@ -197,27 +200,32 @@ class MemoryEntry:
             "related_memory_ids": self.relations.get("related_to", []),
             "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
+        if self.payload:
+            wire["payload"] = self.payload
+        return wire
 
     def to_memory_object(self) -> "MemoryObject":
         """Return the open typed-memory envelope for this legacy entry."""
 
+        payload: dict[str, object] = {
+            "title": self.title,
+            "body": self.body,
+            "tags": self.tags,
+            "revisit_at": self.revisit_at,
+            "observed_at": self.observed_at,
+            "valid_from": self.valid_from,
+            "valid_until": self.valid_until,
+            "temporal_note": self.temporal_note,
+            "relations": self.relations,
+            "supersedes": self.relations.get("supersedes", []),
+            "related_memory_ids": self.relations.get("related_to", []),
+            "evidence": [evidence.to_wire() for evidence in self.evidence],
+        }
+        payload.update(self.payload)
         return MemoryObject(
             id=self.id,
             type=self.type,
-            payload={
-                "title": self.title,
-                "body": self.body,
-                "tags": self.tags,
-                "revisit_at": self.revisit_at,
-                "observed_at": self.observed_at,
-                "valid_from": self.valid_from,
-                "valid_until": self.valid_until,
-                "temporal_note": self.temporal_note,
-                "relations": self.relations,
-                "supersedes": self.relations.get("supersedes", []),
-                "related_memory_ids": self.relations.get("related_to", []),
-                "evidence": [evidence.to_wire() for evidence in self.evidence],
-            },
+            payload=payload,
             metadata={"entry_schema": "MemoryEntry/v1"},
             confidence=self.confidence,
             source_refs=self.source_refs,
@@ -248,6 +256,7 @@ class MemoryEntry:
             temporal_note=_optional_str(data, "temporal_note") or "",
             relations=_migrate_legacy_relations(data),
             evidence=_optional_evidence_list(data, "evidence"),
+            payload=_optional_dict(data, "payload"),
         )
 
     @classmethod
@@ -261,6 +270,12 @@ class MemoryEntry:
                 relations["supersedes"] = supersedes
             if related:
                 relations["related_to"] = related
+        known_fields = {
+            "title", "body", "tags", "revisit_at", "observed_at",
+            "valid_from", "valid_until", "temporal_note", "relations",
+            "supersedes", "related_memory_ids", "evidence",
+        }
+        extra_payload = {k: v for k, v in payload.items() if k not in known_fields}
         return cls(
             id=memory.id,
             type=_memory_object_type_as_entry_type(memory.type),
@@ -280,6 +295,7 @@ class MemoryEntry:
             temporal_note=_optional_payload_str(payload, "temporal_note"),
             relations=relations,
             evidence=_optional_mapping_evidence_list(payload, "evidence"),
+            payload=extra_payload,
         )
 
 
@@ -602,6 +618,41 @@ class EntryPayloadDescriptor:
         return f"{title}: {body}"
 
 
+@dataclass(frozen=True)
+class PersonaInstructionDescriptor:
+    """Descriptor for persona instruction memory objects."""
+
+    @property
+    def type(self) -> str:
+        return "persona_instruction"
+
+    def validate(self, memory: MemoryObject) -> list[MemoryValidationIssue]:
+        issues: list[MemoryValidationIssue] = []
+        payload = memory.payload
+        persona_id = payload.get("persona_id")
+        if not isinstance(persona_id, str) or persona_id.strip() == "":
+            issues.append(MemoryValidationIssue("payload.persona_id", "must be a non-empty string"))
+        description = payload.get("description")
+        if not isinstance(description, str) or description.strip() == "":
+            issues.append(MemoryValidationIssue("payload.description", "must be a non-empty string"))
+        routing_markers = payload.get("routing_markers")
+        if routing_markers is not None:
+            if not isinstance(routing_markers, list) or any(not isinstance(item, str) for item in cast(list[object], routing_markers)):
+                issues.append(MemoryValidationIssue("payload.routing_markers", "must be a list of strings"))
+        behavioral_notes = payload.get("behavioral_notes")
+        if behavioral_notes is not None and not isinstance(behavioral_notes, str):
+            issues.append(MemoryValidationIssue("payload.behavioral_notes", "must be a string"))
+        confidence = memory.confidence
+        if confidence < 0.0 or confidence > 1.0:
+            issues.append(MemoryValidationIssue("confidence", "must be between 0 and 1"))
+        return issues
+
+    def summarize(self, memory: MemoryObject) -> str:
+        persona_id = memory.payload.get("persona_id", "")
+        description = memory.payload.get("description", "")
+        return f"{persona_id}: {description}"
+
+
 def default_memory_type_registry() -> MemoryTypeRegistry:
     """Return built-in descriptors for the current typed-memory foundation."""
 
@@ -617,6 +668,7 @@ def default_memory_type_registry() -> MemoryTypeRegistry:
             EntryPayloadDescriptor("episode", "a concise event summary"),
             EntryPayloadDescriptor("open_question", "an unresolved question"),
             EntryPayloadDescriptor("instruction", "a behavior rule"),
+            PersonaInstructionDescriptor(),
         ]
     )
 
@@ -735,6 +787,15 @@ def _optional_str(data: dict[str, object], field_name: str) -> str | None:
     return value
 
 
+def _optional_dict(data: dict[str, object], field_name: str) -> dict[str, object]:
+    value = data.get(field_name)
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"field '{field_name}' must be an object or null")
+    return cast(dict[str, object], value)
+
+
 def _expect_float(data: dict[str, object], field_name: str) -> float:
     value = data.get(field_name)
     if isinstance(value, int | float):
@@ -788,6 +849,7 @@ def _expect_memory_type(data: dict[str, object], field_name: str) -> MemoryEntry
         "episode",
         "open_question",
         "instruction",
+        "persona_instruction",
     }:
         raise ValueError(f"unsupported memory entry type: {value}")
     return cast(MemoryEntryType, value)
@@ -805,6 +867,7 @@ def _memory_object_type_as_entry_type(value: str) -> MemoryEntryType:
         "episode",
         "open_question",
         "instruction",
+        "persona_instruction",
     }:
         raise ValueError(f"unsupported memory entry type: {value}")
     return cast(MemoryEntryType, value)
