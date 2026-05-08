@@ -21,6 +21,7 @@ from nuself.agent.graph_driver import ConversationGraphRuntimeError
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
+from nuself.logs import read_log_events
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
@@ -388,6 +389,10 @@ def test_conversation_runtime_runs_persona_skeleton_when_activated(tmp_path: Pat
         ),
     )
     assert run_personas.state.persona_turn_state.node_trace == ("run_personas",)
+
+    persona_events = [event for event in read_log_events(project_root=tmp_path, component="persona") if event.event == "persona_summary"]
+    assert len(persona_events) >= 1
+    assert "analyst_self considered: Should I split this project?" in persona_events[-1].message
 
     graph_turn = runtime.run_turn(ThreadState.empty("persona-graph"), "Should I split this project?", "persona-graph")
     assert graph_turn.result.answer == "Persona reply."

@@ -72,6 +72,9 @@ class MinimalPersonaNode:
     """Deterministic placeholder persona node used before LLM-backed personas."""
 
     def __call__(self, persona: PersonaDefinition, persona_input: PersonaInput) -> PersonaContribution:
+        if persona.id == "skeptic_self":
+            note = f"{persona.id} challenged assumptions in: {persona_input.user_message}"
+            return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
         note = f"{persona.id} considered: {persona_input.user_message}"
         return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
 
@@ -110,12 +113,34 @@ class PersonaActivationPolicy:
         "怎么办",
         "要不要",
     )
+    _skeptic_markers = (
+        "risk",
+        "risks",
+        "risky",
+        "blind spot",
+        "blind spots",
+        "failure mode",
+        "counterexample",
+        "counter-example",
+        "risky",
+        "风险",
+        "漏洞",
+        "反例",
+        "质疑",
+        "坏处",
+        "隐患",
+    )
 
     def decide(self, persona_input: PersonaInput) -> PersonaActivation:
         text = persona_input.user_message.strip()
         normalized = text.lower()
         if any(marker in normalized for marker in self._explicit_markers):
-            return PersonaActivation(trigger="explicit_request", selected_personas=(ANALYST_PERSONA,))
+            return PersonaActivation(
+                trigger="explicit_request",
+                selected_personas=(ANALYST_PERSONA, SKEPTIC_PERSONA),
+            )
+        if any(marker in normalized for marker in self._skeptic_markers):
+            return PersonaActivation(trigger="skeptic_heuristic", selected_personas=(SKEPTIC_PERSONA,))
         if any(marker in normalized for marker in self._depth_markers):
             return PersonaActivation(trigger="depth_heuristic", selected_personas=(ANALYST_PERSONA,))
         if len(text) >= 180 and ("?" in text or "？" in text):
@@ -158,4 +183,9 @@ class PersonaGraphDriver:
 ANALYST_PERSONA = PersonaDefinition(
     id="analyst_self",
     description="Decomposes a question into concepts, assumptions, and implications.",
+)
+
+SKEPTIC_PERSONA = PersonaDefinition(
+    id="skeptic_self",
+    description="Challenges assumptions, risks, and missing counter-evidence.",
 )

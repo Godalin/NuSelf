@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from nuself.agent.persona import (
     ANALYST_PERSONA,
+    SKEPTIC_PERSONA,
     PersonaContribution,
     PersonaDefinition,
+    PersonaActivationPolicy,
     PersonaGraphDriver,
     PersonaInput,
     PersonaTurnState,
@@ -55,3 +57,23 @@ def test_persona_graph_accepts_custom_persona_node() -> None:
             confidence=0.6,
         ),
     )
+
+
+def test_persona_activation_policy_selects_analyst_and_skeptic_for_explicit_multi_view_request() -> None:
+    policy = PersonaActivationPolicy()
+
+    activation = policy.decide(PersonaInput(user_message="Please give me multiple perspectives on this plan."))
+
+    assert activation.activated is True
+    assert activation.trigger == "explicit_request"
+    assert activation.selected_personas == (ANALYST_PERSONA, SKEPTIC_PERSONA)
+
+
+def test_persona_activation_policy_selects_skeptic_for_risk_prompt() -> None:
+    policy = PersonaActivationPolicy()
+
+    activation = policy.decide(PersonaInput(user_message="What are the biggest risks and blind spots here?"))
+
+    assert activation.activated is True
+    assert activation.trigger == "skeptic_heuristic"
+    assert activation.selected_personas == (SKEPTIC_PERSONA,)

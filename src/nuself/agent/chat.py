@@ -17,8 +17,9 @@ from nuself.agent.persona import (
     PersonaInput,
     PersonaTurnState,
 )
-from nuself.config import config_int, runtime_paths, ensure_runtime_dirs
+from nuself.config import config_int, runtime_paths
 from nuself.llm import ChatLLM, ChatMessage, default_llm
+from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
@@ -426,18 +427,19 @@ class ConversationGraphRuntime:
     def run_personas_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         persona_turn_state = _require_persona_turn_state(state.persona_turn_state)
         updated_persona_turn_state = self._persona_driver.run(persona_turn_state)
-        # Render a compact persona summary for REPL/logs (private runtime only).
+        activation = state.persona_activation
+        trigger = activation.trigger if activation is not None else "activated"
         try:
-            summary = _compact_persona_summary(updated_persona_turn_state)
-            paths = runtime_paths(self._project_root)
-            ensure_runtime_dirs(paths)
-            hist = paths.runtime_dir / "interactive_history"
-            with hist.open("a", encoding="utf-8") as fh:
-                fh.write("\n[PERSONA_SUMMARY] ")
-                fh.write(summary)
-                fh.write("\n")
+            write_log_event(
+                "persona",
+                "persona_summary",
+                _compact_persona_summary(updated_persona_turn_state),
+                project_root=self._project_root,
+                thread_id=state.thread_id,
+                status=trigger,
+                metadata={"persona_count": len(updated_persona_turn_state.contributions)},
+            )
         except Exception:
-            # Do not let logging failures break the conversation runtime.
             pass
         return ConversationNodeResult(
             node="run_personas",
