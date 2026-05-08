@@ -134,7 +134,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add bounded personas: analyst, skeptic, builder, historian, care, and synthesizer.
 - [x] Route only relevant personas per request.
 - [ ] Make synthesizer the only user-facing voice.
-- [ ] Store persona instructions and corrections as procedural memory.
+- [x] Store persona instructions and corrections as procedural memory.
 
 ### Proactive Reflection And Notifications
 

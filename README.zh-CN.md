@@ -134,7 +134,7 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 添加有界 personas：analyst、skeptic、builder、historian、care、synthesizer。
 - [x] 按请求只路由相关 personas。
 - [ ] 让 synthesizer 成为唯一面向用户的声音。
-- [ ] 将 persona instructions 和 corrections 保存为 procedural memory。
+- [x] 将 persona instructions 和 corrections 保存为 procedural memory。
 
 ### 主动反思与通知
 

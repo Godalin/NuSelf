@@ -4,27 +4,27 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Store persona instructions and corrections as procedural memory.
+Add golden conversation fixtures and a local evaluation command.
 
-The bounded persona skeleton now runs behind an activation gate and feeds synthesis into the response prompt. Persona definitions (`analyst_self`, `skeptic_self`, `builder_self`, `historian_self`, `care_self`, and `synthesizer_self`) are currently hard-coded in `nuself.agent.persona`. The next step is to let these definitions live as durable memory entries under the existing `MemoryEntry` system, so they can be inspected, edited, and versioned like any other memory object, while still being loaded efficiently at runtime.
+The conversation runtime now produces structured responses with evidence references, confidence, and epistemic status. The persona skeleton is gated, routed, and backed by durable memory instructions. The next step is to prevent regressions in fidelity and uncertainty behavior by adding reproducible evaluation fixtures and a CLI command that can run them without external services.
 
 ## Immediate Context
 
-- `PersonaDefinition` is a small dataclass with `id` and `description`.
-- `PersonaActivationPolicy` uses hard-coded markers and persona references.
-- `MinimalPersonaNode` and `MinimalSynthesizerNode` use hard-coded logic per persona.
-- `MemoryEntryRepository` already supports open typed memory via `MemoryObject + MemoryTypeDescriptor`.
-- The `instruction` memory type descriptor exists and can store structured procedural knowledge.
-- `PersonaGraphDriver` compiles a LangGraph graph at init time using the current persona nodes.
+- `ChatResult` carries `answer`, `evidence_references`, `confidence`, and `epistemic_status`.
+- `ConversationGraphRuntime` produces `ParsedChatResponse` via `_parse_chat_response`.
+- `_apply_unsupported_claim_guard` flags personal claims without evidence.
+- `MemoryQueryService.pack` returns ranked evidence with source metadata.
+- The CLI already has a deep command tree (`daemon`, `chat`, `memory`, `thread`, `logs`).
+- Tests use `FakeLLM` and `StructuredFakeLLM` to capture prompts and return stubbed JSON.
 
 ## Next Steps
 
-1. Design a `MemoryObject` payload schema for persona instructions (id, description, routing markers, and optional behavioral notes).
-2. Register a `PersonaInstructionDescriptor` that validates the payload and exposes a compact summary.
-3. On `PersonaGraphDriver` or `PersonaActivationPolicy` initialization, load persona definitions from memory entries of type `instruction` with a `persona` tag, falling back to hard-coded defaults when no durable definitions exist.
-4. Let the REPL or CLI print a compact indicator when durable persona instructions are being used instead of defaults.
-5. Ensure loading is lazy and cached so chat latency is not affected.
-6. Add tests proving that custom persona instructions override defaults and that invalid entries are rejected by the descriptor.
+1. Design a compact golden fixture format (e.g., YAML or JSON) that records a user message, expected answer patterns, required evidence references, expected epistemic status, and banned claim patterns.
+2. Add a `nuself eval` CLI command that loads fixtures, runs them through `ChatAgent` with a fake or recorded LLM, and prints pass/fail per fixture.
+3. Add scoring helpers for citation coverage, unsupported personal claims, uncertainty behavior, and style fidelity.
+4. Keep fixtures under `tests/fixtures/conversations/` or `examples/fixtures/`.
+5. Ensure the eval command can run offline with fake providers.
+6. Update tests and documentation together with the implementation.
 
 ## Not Now
 
@@ -38,9 +38,9 @@ The bounded persona skeleton now runs behind an activation gate and feeds synthe
 
 ## Completion Criteria
 
-- Persona definitions can be stored as durable `instruction` memory entries.
-- Runtime loads persona definitions from memory when available, falling back to hard-coded defaults.
-- Invalid persona instruction payloads are rejected by the descriptor.
-- Default chat behavior is unchanged when no custom persona instructions exist.
+- At least one golden conversation fixture exists and is exercised in CI.
+- A CLI eval command can run fixtures and report scores.
+- Scoring covers citation coverage, unsupported personal claims, and uncertainty behavior.
+- Eval runs offline with fake providers.
 - All operations are type-checked and tested.
 - README TODOs track completed progress, while this file stays limited to the active goal.
