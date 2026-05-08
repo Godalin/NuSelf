@@ -36,6 +36,7 @@ def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
     assert response.payload["confidence"] == 0.8
     assert response.payload["epistemic_status"] == "grounded"
     assert response.payload["thread_id"] == "default"
+    assert "node_trace" not in response.payload
     assert (tmp_path / "private" / "threads" / "default.json").is_file()
 
 

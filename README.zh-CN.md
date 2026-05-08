@@ -4,16 +4,16 @@
 
 NuSelf 是一个本地 AI 镜像项目。它的目标是逐步成长为一个带有私人记忆、可恢复会话、轻量思想分身、主动反思和受控通知能力的个人智能体。
 
-当前实现仍是早期的 CLI 优先骨架：
+当前实现仍是早期的 CLI 优先系统：
 
 - 本地 `nuself` 命令。
 - 可选的本地后台守护进程，通过 Unix socket 通信。
-- 一个临时的带记忆聊天 agent，可以用 one-shot 模式运行，也可以通过守护进程运行。
+- 一个基于 LangGraph 的带记忆聊天 agent，可以用 one-shot 模式运行，也可以通过守护进程运行。
 - 基于文件的记忆条目和 profile items，可列出、查看、新增、编辑、删除、搜索和重建索引。
 - 在 ignored `private/sources/` 下支持 Markdown 和纯文本 source ingestion，并可从导入的 chunks 提取可审阅候选项。
 - 持久化聊天线程，并能压缩较早的对话上下文。
 
-LangGraph/LangChain 集成、主动反思、邮件和 macOS 通知目前是规划内容，还没有实现。
+LangGraph 现在已经支撑 conversation runtime。persona subgraphs、主动反思、邮件和 macOS 通知仍是后续规划。
 
 ## 项目 TODOs
 
@@ -248,7 +248,7 @@ uv run nuself daemon attach --message "continue"
 
 不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。以 `:` 开头的输入会被识别为交互指令。输入 `:memory` 或 `:mem` 可以预览当前记忆条目。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
 
-当前聊天使用一个临时 agent。它会检索 `private/memory/entries/` 中的记忆条目，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。当前记忆检索是确定性的词法检索，带有 descriptor-aware 类型提示、type/tag filters、基于现有 memory links 的 relation expansion 和排序原因；向量索引和图索引会作为后续派生检索层加入。
+当前聊天使用一个基于 LangGraph 的 conversation runtime。它会检索 memory entries、derived profile items 和 imported source chunks，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。当前记忆检索是确定性的词法检索，带有 descriptor-aware 类型提示、type/tag filters、基于现有 memory links 的 relation expansion 和排序原因；向量索引和图索引会作为后续派生检索层加入。
 
 `private/threads/default.json` 是当前 NuSelf mind 的共享 working memory。多个终端连接同一个 daemon 时会共享它。thread store 会用锁串行化写入，避免并发对话互相覆盖。
 
@@ -263,7 +263,7 @@ NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS=300
 
 memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出时运行。它会用 agent 判断新的 working-memory 对话应该新增、修改还是忽略长期记忆。无意义闲聊会被忽略，已有相似记忆会优先更新而不是重复创建，原始对话流水账会被拒绝写入。另有一个 memory optimizer 可以手动、低频运行，用来整合已经存在的杂乱条目。更新事件会写入 `private/logs/memory.log`。
 
-真实的 mirror graph 后续会替换这部分临时 runtime。
+当前 conversation graph 有意保持较小：它保留 CLI 和 daemon protocol 边界，同时为后续 persona subgraphs 和更丰富的 agent routing 留出空间。
 
 ## 守护进程
 

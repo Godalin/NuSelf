@@ -4,16 +4,16 @@
 
 NuSelf is a local AI mirror project. It is intended to grow into a personal agent with private memory, resumable conversations, lightweight thought-personas, proactive reflection, and controlled notifications.
 
-The current implementation is an early CLI-first skeleton:
+The current implementation is an early CLI-first system:
 
 - Local `nuself` command.
 - Optional local background daemon over a Unix socket.
-- A temporary memory-aware chat agent that can run one-shot or through the daemon.
+- A LangGraph-backed memory-aware chat agent that can run one-shot or through the daemon.
 - File-backed memory entries and profile items that can be listed, viewed, added, edited, deleted, searched, and re-indexed.
 - File-backed source ingestion for Markdown and plain text under ignored `private/sources/`, plus reviewable candidates extracted from imported chunks.
 - Persisted chat threads with compressed conversation context.
 
-LangGraph/LangChain integration, proactive reflection, email, and macOS notifications are planned but not implemented yet.
+LangGraph now backs the conversation runtime. Persona subgraphs, proactive reflection, email, and macOS notifications are still planned.
 
 ## Project TODOs
 
@@ -248,7 +248,7 @@ uv run nuself daemon attach --message "continue"
 
 Without `--message`, `chat` and `attach` enter interactive mode. When terminal support is available, line editing and arrow-key history are backed by `private/runtime/interactive_history`. Input starting with `:` is treated as an interactive command. Type `:memory` or `:mem` to preview current memory entries. Type `:q`, `:quit`, `:exit`, or send EOF to leave; unknown commands print interactive help and keep the session open.
 
-Current chat uses a temporary agent that searches memory entries from `private/memory/entries/`, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The memory search is currently deterministic lexical retrieval with descriptor-aware type hints, type/tag filters, relation expansion over existing memory links, and ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
+Current chat uses a LangGraph-backed conversation runtime that searches memory entries, derived profile items, and imported source chunks, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The memory search is deterministic lexical retrieval with descriptor-aware type hints, type/tag filters, relation expansion over existing memory links, and ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
 
 `private/threads/default.json` is shared working memory for the current NuSelf mind. Multiple terminal attachments to the same daemon share it. The thread store serializes writes with a lock so concurrent turns do not overwrite each other.
 
@@ -263,7 +263,7 @@ NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS=300
 
 The memory curator runs in the background in the daemon and also runs when interactive chat exits. It uses an agent to decide whether new working-memory turns should create, update, or ignore long-term memory. Trivial chat is ignored, similar existing memories should be updated instead of duplicated, and raw chat transcripts are rejected. A separate memory optimizer can be run manually, less frequently, to consolidate messy existing entries. Update events are written to `private/logs/memory.log`.
 
-The real mirror graph will replace this temporary runtime later.
+The current conversation graph is intentionally small: it preserves the CLI and daemon protocol boundary while keeping room for later persona subgraphs and richer agent routing.
 
 ## Daemon
 

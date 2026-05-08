@@ -1,4 +1,4 @@
-"""Memory-aware temporary chat agent."""
+"""Memory-aware LangGraph-backed chat agent."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ UpdateResult = TypeVar("UpdateResult")
 
 @dataclass(frozen=True)
 class ChatAgentSettings:
-    """Context window settings for the temporary chat agent."""
+    """Context window settings for the chat agent."""
 
     recent_messages: int
     summary_trigger_messages: int
