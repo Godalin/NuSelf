@@ -23,6 +23,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Current Goal
 
+- [ ] Review the TUI and logging polish plan.
 - [x] Add a profile item repository for derived profile state.
 - [x] Convert imported source chunks into reviewable memory/profile candidates.
 - [x] Preserve source evidence links on source-derived candidates.
@@ -30,7 +31,6 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add profile item search and filter commands.
 - [x] Add profile item retrieval to the query layer.
 - [x] Add derived profile context to intake, curator, and optimizer prompts.
- - [x] Add derived profile context to intake, curator, and optimizer prompts.
 
 ### Project Foundation
 
@@ -48,6 +48,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add `chat`, `attach`, and daemon-backed attach flows.
 - [x] Make root `nuself` a convenient daemon-backed chat entrypoint.
 - [x] Add interactive mode with `:q`, `:memory`, command help, and readline history.
+- [x] Add a REPL-shaped terminal interaction layer for status, compact activity events, logs, and clearer chat sessions.
+- [x] Add read-only REPL memory inspection commands for entries, candidates, profile items, and sources.
+- [x] Add readable terminal renderers for memory list and detail views.
+- [x] Add structured local log files and a general `nuself logs` viewer.
 - [ ] Add named thread creation, branching, renaming, and archival.
 - [ ] Add deep links that open an existing thread or create a new one.
 
@@ -248,7 +252,7 @@ uv run nuself daemon attach
 uv run nuself daemon attach --message "continue"
 ```
 
-Without `--message`, `chat` and `attach` enter interactive mode. When terminal support is available, line editing and arrow-key history are backed by `private/runtime/interactive_history`. Input starting with `:` is treated as an interactive command. Type `:memory` or `:mem` to preview current memory entries. Type `:q`, `:quit`, `:exit`, or send EOF to leave; unknown commands print interactive help and keep the session open.
+Without `--message`, `chat` and `attach` enter interactive mode. When terminal support is available, line editing and arrow-key history are backed by `private/runtime/interactive_history`. Input starting with `:` is treated as an interactive command. Type `:status` for daemon/thread status, `:logs` for recent activity events, and `:memory` or `:mem` to preview current memory entries. Read-only memory inspection shortcuts include `:mem search <query>`, `:mem show <entry-id>`, `:mem candidates`, `:mem candidate <candidate-id>`, `:mem profile <query>`, `:mem sources`, and `:mem source <source-id>`. Type `:q`, `:quit`, `:exit`, or send EOF to leave; unknown commands print interactive help and keep the session open.
 
 Current chat uses a LangGraph-backed conversation runtime that searches memory entries, derived profile items, and imported source chunks, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The memory search is deterministic lexical retrieval with descriptor-aware type hints, type/tag filters, relation expansion over existing memory links, and ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
 
@@ -263,7 +267,7 @@ NUSELF_CONTEXT_SUMMARY_TARGET_CHARS=2400
 NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS=300
 ```
 
-The memory curator runs in the background in the daemon and also runs when interactive chat exits. It uses an agent to decide whether new working-memory turns should create, update, or ignore long-term memory. Trivial chat is ignored, similar existing memories should be updated instead of duplicated, and raw chat transcripts are rejected. A separate memory optimizer can be run manually, less frequently, to consolidate messy existing entries. Update events are written to `private/logs/memory.log`.
+The memory curator runs in the background in the daemon and also runs when interactive chat exits. It uses an agent to decide whether new working-memory turns should create, update, or ignore long-term memory. Trivial chat is ignored, similar existing memories should be updated instead of duplicated, and raw chat transcripts are rejected. A separate memory optimizer can be run manually, less frequently, to consolidate messy existing entries. Update events are written to `private/logs/memory.log`, and interactive chat prints compact activity lines for new chat, daemon, and memory events.
 
 The current conversation graph is intentionally small: it preserves the CLI and daemon protocol boundary while keeping room for later persona subgraphs and richer agent routing.
 
@@ -278,6 +282,14 @@ uv run nuself daemon list
 uv run nuself daemon logs
 uv run nuself daemon attach --message "continue"
 uv run nuself daemon stop
+```
+
+Structured local logs can also be inspected with:
+
+```bash
+uv run nuself logs
+uv run nuself logs --component chat --tail 20
+uv run nuself logs --component memory --json
 ```
 
 Without a subcommand, `daemon` shows daemon subcommand help.

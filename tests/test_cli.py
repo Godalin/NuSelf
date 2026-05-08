@@ -13,6 +13,7 @@ from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.domain.profile import ProfileItem
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
+from nuself.logs import read_log_events, write_log_event
 
 
 class CaptureResult(Protocol):
@@ -129,6 +130,121 @@ def test_interactive_memory_command_shows_preview(
     assert "Memory preview (1/1):" in captured.out
     assert "Clarity" in captured.out
     assert "State assumptions explicitly." in captured.out
+
+
+def test_interactive_memory_search_uses_readable_rows(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    MemoryEntryRepository(tmp_path).save(
+        MemoryEntry(
+            type="belief",
+            title="Readable memory",
+            body="Terminal memory output should be easy to scan.",
+            tags=["display"],
+            review_state="reviewed",
+        )
+    )
+    monkeypatch.setattr("sys.stdin", _TextInput(":mem search terminal\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[mem] reviewed belief" in captured.out
+    assert "Readable memory" in captured.out
+    assert "#display" in captured.out
+    assert "Terminal memory output should be easy to scan." not in captured.out
+
+
+def test_interactive_memory_show_uses_readable_detail(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    entry = MemoryEntryRepository(tmp_path).save(
+        MemoryEntry(
+            type="belief",
+            title="Readable detail",
+            body="Detail views can show the full memory body.",
+            tags=["display"],
+            evidence=[MemoryEvidence(source_type="thread", source_ref="thread:default:1-2", summary="chat")],
+        )
+    )
+    monkeypatch.setattr("sys.stdin", _TextInput(f":mem show {entry.id}\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[mem] Readable detail" in captured.out
+    assert f"id={entry.id}" in captured.out
+    assert "evidence:" in captured.out
+    assert "Detail views can show the full memory body." in captured.out
+
+
+def test_interactive_memory_candidates_profile_and_sources(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    MemoryCandidateRepository(tmp_path).save(
+        MemoryCandidate(type="belief", title="Candidate display", body="Candidate body.", reason="inspect")
+    )
+    ProfileItemRepository(tmp_path).save(
+        ProfileItem(type="profile_fact", title="Profile display", body="Prefers readable output.")
+    )
+    source_path = tmp_path / "source.md"
+    source_path.write_text("# Source Display\n\nA readable source paragraph.", encoding="utf-8")
+    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    capsys.readouterr()
+    monkeypatch.setattr(
+        "sys.stdin",
+        _TextInput(":mem candidates\n:mem profile readable\n:mem sources\n:q\n"),
+    )
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[cand] pending" in captured.out
+    assert "Candidate display" in captured.out
+    assert "[profile] profile_fact" in captured.out
+    assert "Profile display" in captured.out
+    assert "[src]" in captured.out
+    assert "Source Display" in captured.out
+
+
+def test_interactive_status_command_shows_daemon_status(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput(":status\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "daemon stopped" in captured.out
+
+
+def test_interactive_logs_command_shows_recent_activity(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    write_log_event("chat", "turn_completed", "chat turn completed", project_root=tmp_path)
+    monkeypatch.setattr("sys.stdin", _TextInput(":logs\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[chat] chat turn completed" in captured.out
+
+
+def test_interactive_turn_prints_activity_events(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[chat] one-shot chat turn completed" in captured.out
 
 
 def test_interactive_history_skips_consecutive_duplicates(
@@ -373,6 +489,50 @@ def test_daemon_list_reports_local_daemon(tmp_path: Path, capsys: CaptureFixture
     assert result == 0
     assert "name status pid socket" in captured.out
     assert "local stopped -" in captured.out
+
+
+def test_logs_command_renders_structured_events(tmp_path: Path, capsys: CaptureFixture) -> None:
+    write_log_event(
+        "chat",
+        "turn_completed",
+        "chat turn completed",
+        project_root=tmp_path,
+        thread_id="default",
+        status="ok",
+        metadata={"message_body": "must not be written by callers"},
+    )
+    write_log_event("memory", "curator_changed", "memory curator changed durable memory", project_root=tmp_path)
+
+    result = main(["--project-root", str(tmp_path), "logs", "--component", "chat", "--tail", "5", "--no-color"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[chat] chat turn completed" in captured.out
+    assert "thread=default" in captured.out
+    assert "[memory]" not in captured.out
+
+
+def test_logs_command_can_render_json(tmp_path: Path, capsys: CaptureFixture) -> None:
+    write_log_event("daemon", "started", "daemon started", project_root=tmp_path)
+
+    result = main(["--project-root", str(tmp_path), "logs", "--component", "daemon", "--json"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert '"component": "daemon"' in captured.out
+    assert '"event": "started"' in captured.out
+
+
+def test_read_log_events_tolerates_legacy_daemon_lines(tmp_path: Path) -> None:
+    log_path = tmp_path / "private" / "logs" / "daemon.log"
+    log_path.parent.mkdir(parents=True)
+    log_path.write_text("plain daemon output\n", encoding="utf-8")
+
+    events = read_log_events(project_root=tmp_path, component="daemon")
+
+    assert len(events) == 1
+    assert events[0].event == "legacy"
+    assert events[0].message == "plain daemon output"
 
 
 def test_daemon_attach_requires_running_daemon(tmp_path: Path, capsys: CaptureFixture) -> None:

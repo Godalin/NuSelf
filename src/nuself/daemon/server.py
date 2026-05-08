@@ -7,11 +7,13 @@ from pathlib import Path
 import os
 import socketserver
 import threading
+import time
 from typing import override
 
 from nuself.agent.chat import ChatAgent
 from nuself.config import config_int, ensure_runtime_dirs, runtime_paths
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
+from nuself.logs import write_log_event
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
@@ -97,12 +99,34 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
     if request.type == "chat":
         message = request.payload.get("message")
         if not isinstance(message, str):
+            write_log_event(
+                "daemon",
+                "request_failed",
+                "chat request rejected",
+                project_root=state.project_root,
+                level="warning",
+                request_id=request.request_id,
+                status="error",
+                error="chat request requires string payload field 'message'",
+            )
             return DaemonResponse.fail(request.request_id, "chat request requires string payload field 'message'")
+        started_at = time.monotonic()
         try:
             result = state.chat_agent.respond(message)
             memory_update = _run_memory_curator_once(state.memory_curator)
         except RuntimeError as exc:
+            write_log_event(
+                "chat",
+                "turn_failed",
+                "daemon chat turn failed",
+                project_root=state.project_root,
+                level="error",
+                request_id=request.request_id,
+                status="error",
+                error=str(exc),
+            )
             return DaemonResponse.fail(request.request_id, str(exc))
+        duration_ms = int((time.monotonic() - started_at) * 1000)
         payload: dict[str, JsonValue] = {
             "answer": result.answer,
             "reply": result.reply,
@@ -114,8 +138,29 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
             payload["confidence"] = result.confidence
         if memory_update is not None and memory_update.changed:
             payload["memory_update"] = memory_update.summary()
+        write_log_event(
+            "chat",
+            "turn_completed",
+            "daemon chat turn completed",
+            project_root=state.project_root,
+            request_id=request.request_id,
+            thread_id=result.thread_id,
+            duration_ms=duration_ms,
+            status="ok",
+            metadata={
+                "evidence_references": len(result.evidence_references),
+                "memory_changed": memory_update.changed if memory_update is not None else False,
+            },
+        )
         return DaemonResponse.ok(request, payload)
     if request.type == "shutdown":
+        write_log_event(
+            "daemon",
+            "shutdown_requested",
+            "daemon shutdown requested",
+            project_root=state.project_root,
+            request_id=request.request_id,
+        )
         state.shutdown_requested.set()
         return DaemonResponse.ok(request, {"message": "shutdown requested"})
     return DaemonResponse.fail(request.request_id, f"unsupported request type: {request.type}")
@@ -139,12 +184,14 @@ def run_daemon(project_root: Path | None = None) -> int:
 
     state = DaemonState(paths.project_root)
     try:
+        write_log_event("daemon", "started", "daemon started", project_root=paths.project_root)
         state.start_background_memory_curator()
         with NuSelfUnixServer(str(paths.socket_path), RequestHandler, state) as server:
             server.timeout = 0.2
             while not state.shutdown_requested.is_set():
                 server.handle_request()
     finally:
+        write_log_event("daemon", "stopped", "daemon stopped", project_root=paths.project_root)
         state.stop_background_memory_curator()
         if paths.socket_path.exists():
             paths.socket_path.unlink()

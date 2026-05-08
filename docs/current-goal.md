@@ -4,27 +4,27 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Wire the minimal persona skeleton into the conversation runtime internally while preserving the current user-facing behavior and file-backed memory boundaries.
+Finish the TUI and logging polish branch, then merge back to `main` and return to persona-runtime work.
 
-The minimal persona graph skeleton exists as an internal LangGraph-backed boundary with structured persona contributions and trace output. The next useful step is to call it from the conversation runtime in a strictly internal way, proving persona work can run without changing the final chat answer, CLI payloads, daemon protocol, or durable memory schema.
+The TUI/logging slice now has structured local logs, a general `nuself logs` viewer, REPL activity lines, `:status` / `:logs`, read-only `:mem ...` inspect commands, and readable memory renderers. The remaining work is validation, progress commit, merge back to `main`, and restoring the persona activation/routing focus.
 
 ## Immediate Context
 
-- `MemoryQueryService` remains the stable retrieval boundary for memory entries, profile items, source chunks, and graph-derived expansion.
-- `ChatAgent` owns thread persistence while `ConversationGraphRuntime` owns turn execution.
-- `ConversationGraphDriver` is the only module that imports LangGraph and wraps graph failures as `ConversationGraphRuntimeError`.
-- Runtime results carry internal node traces without changing CLI or daemon response payloads.
-- Tool calls route through `detect_tool_request`, optional `execute_tool`, and `finalize_response`.
-- Tool request state records name, args, support status, and diagnostics.
-- `PersonaGraphDriver` can run a single internal `analyst_self` persona and return structured contributions.
-- File-backed private memory remains authoritative; derived indexes and future runtime mirrors must stay rebuildable.
+- Interactive chat is still readline-backed and REPL-shaped.
+- Structured local logs are written under `private/logs/`.
+- `nuself logs` and `nuself daemon logs` render structured log tails.
+- Interactive chat prints compact activity events after turns.
+- Interactive chat supports `:status`, `:logs`, and read-only `:mem ...` inspect commands.
+- Memory inspect output has compact rows and grouped detail blocks.
+- Future persona discussion should fit the same activity feed as concise summaries, not final-answer text.
+- The detailed review plan lives in [docs/tui-log-plan.md](tui-log-plan.md).
 
 ## Next Steps
 
-1. Add an internal persona step to the conversation runtime state or graph.
-2. Keep persona contributions internal; do not include them in `ChatResult.to_payload`, CLI output, or daemon payloads.
-3. Preserve current response metadata, memory context packing, persistence, tool calls, diagnostics, and fallback behavior.
-4. Add focused tests proving persona execution does not alter existing chat behavior.
+1. Run focused and full validation.
+2. Commit README/current-goal progress updates.
+3. Merge `tui-log-plan` back to `main`.
+4. Restore `docs/current-goal.md` to the persona activation/routing focus.
 
 ## Not Now
 
@@ -34,10 +34,12 @@ The minimal persona graph skeleton exists as an internal LangGraph-backed bounda
 - Proactive reflection or notification work.
 - Web or GUI interface work.
 - Private memory schema migration.
+- Dashboard-style or dependency-heavy terminal UI.
 
 ## Completion Criteria
 
-- The conversation runtime can execute the minimal persona skeleton internally.
-- Existing chat entrypoints keep their current user-visible behavior.
-- Persona internals do not leak into CLI or daemon payloads.
-- README TODOs track completed progress, while this file stays limited to the active goal.
+- Focused CLI/daemon tests pass.
+- Full project tests pass.
+- `uvx pyright` passes.
+- README TODOs track completed REPL/log/memory inspect progress.
+- Merge back to `main` is complete.
