@@ -30,7 +30,8 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 为已激活 turns 在 REPL 中展示紧凑 persona activity summaries。
 - [x] 为 `analyst_self`、`skeptic_self` 和 `builder_self` 添加确定性路由。
 - [x] 再增加一个有界 persona（`historian_self`），并补上混合意图优先级规则。
-- [ ] 增加 `care_self`，并优化显式多视角路由策略。
+- [x] 增加 `care_self`，并优化显式多视角路由策略。
+- [ ] 增加内部 `synthesizer_self`，用于融合 persona contributions。
 
 ### 项目基础
 

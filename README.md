@@ -30,7 +30,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Surface compact persona activity summaries in the REPL for activated turns.
 - [x] Add deterministic routing for `analyst_self`, `skeptic_self`, and `builder_self`.
 - [x] Add one more bounded persona (`historian_self`) and mixed-intent precedence rules.
-- [ ] Add `care_self` and tune explicit multi-perspective routing.
+- [x] Add `care_self` and tune explicit multi-perspective routing.
+- [ ] Add internal `synthesizer_self` for persona contribution fusion.
 
 ### Project Foundation
 
