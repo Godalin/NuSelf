@@ -23,14 +23,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Current Goal
 
-- [ ] Review the TUI and logging polish plan.
-- [x] Add a profile item repository for derived profile state.
-- [x] Convert imported source chunks into reviewable memory/profile candidates.
-- [x] Preserve source evidence links on source-derived candidates.
-- [x] Clarify deletion behavior for memories derived from raw private sources.
-- [x] Add profile item search and filter commands.
-- [x] Add profile item retrieval to the query layer.
-- [x] Add derived profile context to intake, curator, and optimizer prompts.
+- [x] Complete REPL-shaped TUI, structured logging, and memory inspect polish.
+- [ ] Add a persona activation gate for explicit requests and high-depth discussion cues.
+- [ ] Wire the minimal persona skeleton into the conversation runtime internally.
+- [ ] Keep persona contributions internal while preserving chat, CLI, and daemon payloads.
 
 ### Project Foundation
 
@@ -128,6 +124,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [ ] Add LangGraph persona subgraph.
 - [x] Add minimal internal persona skeleton without changing chat payloads.
 - [ ] Wire the minimal persona skeleton into the conversation runtime internally.
+- [ ] Add persona activation gate for explicit requests and high-depth discussion cues.
 - [ ] Add bounded personas: analyst, skeptic, builder, historian, care, and synthesizer.
 - [ ] Route only relevant personas per request.
 - [ ] Make synthesizer the only user-facing voice.
