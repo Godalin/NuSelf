@@ -40,6 +40,18 @@ def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
     assert (tmp_path / "private" / "threads" / "default.json").is_file()
 
 
+def test_daemon_chat_uses_explicit_thread_id(tmp_path: Path) -> None:
+    state = DaemonState(tmp_path)
+    state.chat_agent = ChatAgent(tmp_path, llm=StructuredFakeLLM())
+    request = DaemonRequest(type="chat", payload={"message": "hello", "thread_id": "custom"}, request_id="chat2")
+
+    response = handle_request(request, state)
+
+    assert response.status == "ok"
+    assert response.payload["thread_id"] == "custom"
+    assert (tmp_path / "private" / "threads" / "custom.json").is_file()
+
+
 class FakeChangedCurator:
     def run_once(self) -> MemoryCuratorResult:
         return MemoryCuratorResult(

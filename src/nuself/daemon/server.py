@@ -110,9 +110,11 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
                 error="chat request requires string payload field 'message'",
             )
             return DaemonResponse.fail(request.request_id, "chat request requires string payload field 'message'")
+        thread_id_raw = request.payload.get("thread_id")
+        thread_id = thread_id_raw if isinstance(thread_id_raw, str) else "default"
         started_at = time.monotonic()
         try:
-            result = state.chat_agent.respond(message)
+            result = state.chat_agent.respond(message, thread_id=thread_id)
             memory_update = _run_memory_curator_once(state.memory_curator)
         except RuntimeError as exc:
             write_log_event(
@@ -122,6 +124,7 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
                 project_root=state.project_root,
                 level="error",
                 request_id=request.request_id,
+                thread_id=thread_id,
                 status="error",
                 error=str(exc),
             )

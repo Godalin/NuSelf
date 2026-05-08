@@ -1216,3 +1216,118 @@ def main_memory_preview(project_root: Path) -> str:
     from nuself.memory.repository import MemoryEntryRepository
 
     return "\n".join(entry.title for entry in MemoryEntryRepository(project_root).list())
+
+
+
+def test_thread_list_shows_thread_ids(tmp_path: Path, capsys: CaptureFixture) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("alpha"))
+    ThreadStore(tmp_path).save(ThreadState.empty("beta"))
+
+    result = main(["--project-root", str(tmp_path), "thread", "list"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "alpha" in captured.out
+    assert "beta" in captured.out
+
+
+def test_thread_create_makes_new_thread(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "thread", "create", "new-thread"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Created thread: new-thread" in captured.out
+    assert "new-thread.json" in [p.name for p in (tmp_path / "private" / "threads").glob("*.json")]
+
+
+def test_thread_create_fails_when_thread_exists(tmp_path: Path, capsys: CaptureFixture) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("existing"))
+
+    result = main(["--project-root", str(tmp_path), "thread", "create", "existing"])
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "already exists" in captured.err
+
+
+def test_thread_rename_moves_thread(tmp_path: Path, capsys: CaptureFixture) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("old"))
+
+    result = main(["--project-root", str(tmp_path), "thread", "rename", "old", "new"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Renamed thread: old -> new" in captured.out
+    assert ThreadStore(tmp_path).list() == ["new"]
+
+
+def test_thread_rename_fails_when_target_exists(tmp_path: Path, capsys: CaptureFixture) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("a"))
+    ThreadStore(tmp_path).save(ThreadState.empty("b"))
+
+    result = main(["--project-root", str(tmp_path), "thread", "rename", "a", "b"])
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "already exists" in captured.err
+
+
+def test_thread_branch_copies_messages(tmp_path: Path, capsys: CaptureFixture) -> None:
+    store = ThreadStore(tmp_path)
+    store.save(
+        ThreadState(
+            thread_id="source",
+            summary="summary",
+            messages=[
+                ThreadMessage(role="user", content="a"),
+                ThreadMessage(role="assistant", content="b"),
+            ],
+            message_start_index=0,
+            next_message_index=2,
+        )
+    )
+
+    result = main(["--project-root", str(tmp_path), "thread", "branch", "source", "fork"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Branched thread: source -> fork" in captured.out
+    fork = store.load("fork")
+    assert len(fork.messages) == 2
+    assert fork.thread_id == "fork"
+
+
+def test_thread_branch_at_index(tmp_path: Path, capsys: CaptureFixture) -> None:
+    store = ThreadStore(tmp_path)
+    store.save(
+        ThreadState(
+            thread_id="source",
+            messages=[
+                ThreadMessage(role="user", content="a"),
+                ThreadMessage(role="assistant", content="b"),
+                ThreadMessage(role="user", content="c"),
+            ],
+            message_start_index=5,
+            next_message_index=8,
+        )
+    )
+
+    result = main(["--project-root", str(tmp_path), "thread", "branch", "source", "fork", "--index", "2"])
+
+    assert result == 0
+    fork = store.load("fork")
+    assert len(fork.messages) == 2
+    assert fork.next_message_index == 7
+
+
+def test_thread_archive_moves_to_subdir(tmp_path: Path, capsys: CaptureFixture) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("old"))
+
+    result = main(["--project-root", str(tmp_path), "thread", "archive", "old"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Archived thread: old" in captured.out
+    assert ThreadStore(tmp_path).list() == []
+    archived = tmp_path / "private" / "threads" / "archived" / "old.json"
+    assert archived.exists()

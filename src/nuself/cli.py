@@ -13,7 +13,7 @@ except ImportError:  # pragma: no cover - platform fallback
     readline = None  # type: ignore[assignment]
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.agent.chat import ChatAgent
+from nuself.agent.chat import ChatAgent, ThreadState, ThreadStore
 from nuself.daemon import client, lifecycle
 from nuself.domain.memory import (
     MemoryCandidate,
@@ -249,6 +249,26 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(source_extract_parser, handle_memory_source_extract)
     _add_handler(memory_subparsers.add_parser("reindex"), handle_memory_reindex)
 
+    thread_parser = subparsers.add_parser("thread")
+    thread_parser.set_defaults(handler=None, help_parser=thread_parser)
+    thread_subparsers = thread_parser.add_subparsers(dest="thread_command")
+    _add_handler(thread_subparsers.add_parser("list"), handle_thread_list)
+    thread_create_parser = thread_subparsers.add_parser("create")
+    thread_create_parser.add_argument("thread_id")
+    _add_handler(thread_create_parser, handle_thread_create)
+    thread_rename_parser = thread_subparsers.add_parser("rename")
+    thread_rename_parser.add_argument("old_thread_id")
+    thread_rename_parser.add_argument("new_thread_id")
+    _add_handler(thread_rename_parser, handle_thread_rename)
+    thread_branch_parser = thread_subparsers.add_parser("branch")
+    thread_branch_parser.add_argument("source_thread_id")
+    thread_branch_parser.add_argument("new_thread_id")
+    thread_branch_parser.add_argument("--index", type=int, default=None)
+    _add_handler(thread_branch_parser, handle_thread_branch)
+    thread_archive_parser = thread_subparsers.add_parser("archive")
+    thread_archive_parser.add_argument("thread_id")
+    _add_handler(thread_archive_parser, handle_thread_archive)
+
     return parser
 
 
@@ -320,7 +340,7 @@ def handle_default_entrypoint(args: argparse.Namespace) -> int:
         print(f"Created daemon: {_format_status(result)}")
     if args.message is not None:
         return _send_chat(args.message, args.project_root)
-    return _interactive_loop(lambda message: _send_chat(message, args.project_root), args.project_root)
+    return _interactive_loop(lambda message, thread_id: _send_chat(message, args.project_root, thread_id), args.project_root)
 
 
 def handle_logs(args: argparse.Namespace) -> int:
@@ -345,13 +365,13 @@ def handle_chat(args: argparse.Namespace) -> int:
     if lifecycle.status(args.project_root).running:
         if args.message is not None:
             return _send_chat(args.message, args.project_root)
-        return _interactive_loop(lambda message: _send_chat(message, args.project_root), args.project_root)
+        return _interactive_loop(lambda message, thread_id: _send_chat(message, args.project_root, thread_id), args.project_root)
     if args.require_daemon:
         print("NuSelf daemon is not running.", file=sys.stderr)
         return 1
     if args.message is not None:
         return _send_one_shot_chat(args.message, args.project_root)
-    return _interactive_loop(lambda message: _send_one_shot_chat(message, args.project_root), args.project_root)
+    return _interactive_loop(lambda message, thread_id: _send_one_shot_chat(message, args.project_root, thread_id), args.project_root)
 
 
 def handle_attach(args: argparse.Namespace) -> int:
@@ -360,7 +380,7 @@ def handle_attach(args: argparse.Namespace) -> int:
         return 1
     if args.message is not None:
         return _send_chat(args.message, args.project_root)
-    return _interactive_loop(lambda message: _send_chat(message, args.project_root), args.project_root)
+    return _interactive_loop(lambda message, thread_id: _send_chat(message, args.project_root, thread_id), args.project_root)
 
 
 def handle_memory_list(args: argparse.Namespace) -> int:
@@ -575,6 +595,60 @@ def handle_memory_reindex(args: argparse.Namespace) -> int:
     print(f"Rebuilt source index: {source_index_path}")
     print(f"Rebuilt profile index: {profile_index_path}")
     return 0
+
+
+def handle_thread_list(args: argparse.Namespace) -> int:
+    store = ThreadStore(args.project_root)
+    ids = store.list()
+    if not ids:
+        print("No active threads.")
+        return 0
+    for tid in ids:
+        print(tid)
+    return 0
+
+
+def handle_thread_create(args: argparse.Namespace) -> int:
+    store = ThreadStore(args.project_root)
+    if args.thread_id in store.list():
+        print(f"Thread already exists: {args.thread_id}", file=sys.stderr)
+        return 1
+    store.save(ThreadState.empty(args.thread_id))
+    print(f"Created thread: {args.thread_id}")
+    return 0
+
+
+def handle_thread_rename(args: argparse.Namespace) -> int:
+    store = ThreadStore(args.project_root)
+    try:
+        store.rename(args.old_thread_id, args.new_thread_id)
+        print(f"Renamed thread: {args.old_thread_id} -> {args.new_thread_id}")
+        return 0
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+
+def handle_thread_branch(args: argparse.Namespace) -> int:
+    store = ThreadStore(args.project_root)
+    try:
+        store.branch(args.source_thread_id, args.new_thread_id, args.index)
+        print(f"Branched thread: {args.source_thread_id} -> {args.new_thread_id}")
+        return 0
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+
+def handle_thread_archive(args: argparse.Namespace) -> int:
+    store = ThreadStore(args.project_root)
+    try:
+        store.archive(args.thread_id)
+        print(f"Archived thread: {args.thread_id}")
+        return 0
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
 
 def handle_memory_update(args: argparse.Namespace) -> int:
@@ -819,11 +893,11 @@ def handle_memory_profile_reindex(args: argparse.Namespace) -> int:
     return 0
 
 
-def _send_chat(message: str, project_root: Path | None) -> int:
+def _send_chat(message: str, project_root: Path | None, thread_id: str = "default") -> int:
     try:
         response = client.request(
             "chat",
-            {"message": message},
+            {"message": message, "thread_id": thread_id},
             project_root=project_root,
             timeout=CHAT_REQUEST_TIMEOUT_SECONDS,
         )
@@ -861,11 +935,17 @@ def _send_chat(message: str, project_root: Path | None) -> int:
     return 1
 
 
-def _interactive_loop(send_message: Callable[[str], int], project_root: Path | None) -> int:
+def _interactive_loop(
+    send_message: Callable[[str, str], int],
+    project_root: Path | None,
+    *,
+    initial_thread_id: str = "default",
+) -> int:
     history_path = _load_interactive_history(project_root)
+    current_thread_id = initial_thread_id
     print(_brand_banner())
     print("νSelf interactive mode. Type :q, :quit, or :exit to leave.")
-    print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id="default"))
+    print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
     try:
         while True:
             try:
@@ -878,13 +958,17 @@ def _interactive_loop(send_message: Callable[[str], int], project_root: Path | N
                 continue
             _remember_interactive_input(message)
             if message.startswith(":"):
-                command_result = _handle_interactive_command(message, project_root)
+                command_result, current_thread_id = _handle_interactive_command(
+                    message, project_root, current_thread_id
+                )
                 if command_result == "exit":
                     return 0
+                if command_result == "redraw_header":
+                    print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
                 continue
             print()
             event_offset = len(read_log_events(project_root=project_root))
-            result = send_message(message)
+            result = send_message(message, current_thread_id)
             _print_interactive_activity(project_root, event_offset)
             print()
             if result != 0:
@@ -958,15 +1042,15 @@ def _dedupe_interactive_history() -> None:
         readline.add_history(item)
 
 
-def _send_one_shot_chat(message: str, project_root: Path | None) -> int:
+def _send_one_shot_chat(message: str, project_root: Path | None, thread_id: str = "default") -> int:
     try:
-        print(_one_shot_reply(message, project_root))
+        print(_one_shot_reply(message, project_root, thread_id))
         write_log_event(
             "chat",
             "one_shot_chat_completed",
             "one-shot chat turn completed",
             project_root=project_root,
-            thread_id="default",
+            thread_id=thread_id,
             status="ok",
         )
         _run_memory_curator(project_root)
@@ -978,7 +1062,7 @@ def _send_one_shot_chat(message: str, project_root: Path | None) -> int:
             "one-shot chat turn failed",
             project_root=project_root,
             level="error",
-            thread_id="default",
+            thread_id=thread_id,
             status="error",
             error=str(exc),
         )
@@ -1026,38 +1110,99 @@ def _brand_banner() -> str:
     )
 
 
-def _handle_interactive_command(command: str, project_root: Path | None) -> str | None:
+def _handle_interactive_command(command: str, project_root: Path | None, current_thread_id: str) -> tuple[str, str]:
     if command in {":q", ":quit", ":exit"}:
-        return "exit"
+        return ("exit", current_thread_id)
     if command == ":help":
         print()
         print(_interactive_help())
         print()
-        return None
+        return ("", current_thread_id)
     if command == ":status":
         print()
         print(_format_status(lifecycle.status(project_root)))
         print()
-        return None
+        return ("", current_thread_id)
     if command == ":logs":
         print()
         _print_recent_logs(project_root, limit=8)
         print()
-        return None
+        return ("", current_thread_id)
     if command in {":memory", ":mem"}:
         print()
         print(_format_memory_preview(project_root))
         print()
-        return None
+        return ("", current_thread_id)
     if command.startswith(":mem "):
         print()
         print(_handle_interactive_memory_command(command[5:].strip(), project_root))
         print()
-        return None
+        return ("", current_thread_id)
+    if command == ":threads":
+        print()
+        print(_handle_interactive_threads_command(project_root))
+        print()
+        return ("", current_thread_id)
+    if command.startswith(":thread "):
+        print()
+        new_id = command[8:].strip()
+        if new_id == "":
+            print(_interactive_help(":thread"))
+        else:
+            store = ThreadStore(project_root)
+            if new_id not in store.list():
+                store.save(ThreadState.empty(new_id))
+            print(f"Switched to thread: {new_id}")
+        print()
+        return ("redraw_header", new_id if new_id != "" else current_thread_id)
+    if command.startswith(":rename "):
+        print()
+        new_id = command[8:].strip()
+        if new_id == "":
+            print(_interactive_help(":rename"))
+        else:
+            try:
+                ThreadStore(project_root).rename(current_thread_id, new_id)
+                print(f"Renamed thread to: {new_id}")
+            except ValueError as exc:
+                print(f"Error: {exc}")
+        print()
+        return ("redraw_header", new_id if new_id != "" else current_thread_id)
+    if command.startswith(":branch "):
+        print()
+        parts = command[8:].strip().split()
+        new_id = parts[0] if parts else ""
+        index: int | None = None
+        if len(parts) >= 2:
+            try:
+                index = int(parts[1])
+            except ValueError:
+                print(f"Invalid index: {parts[1]}")
+                print()
+                return ("", current_thread_id)
+        if new_id == "":
+            print(_interactive_help(":branch"))
+        else:
+            try:
+                ThreadStore(project_root).branch(current_thread_id, new_id, index)
+                print(f"Branched to thread: {new_id}")
+            except ValueError as exc:
+                print(f"Error: {exc}")
+        print()
+        return ("redraw_header", new_id if new_id != "" else current_thread_id)
+    if command == ":archive":
+        print()
+        try:
+            ThreadStore(project_root).archive(current_thread_id)
+            print(f"Archived thread: {current_thread_id}")
+        except ValueError as exc:
+            print(f"Error: {exc}")
+        print()
+        return ("redraw_header", "default")
     print()
     print(_interactive_help(command))
     print()
-    return None
+    return ("", current_thread_id)
 
 
 def _interactive_help(command: str | None = None) -> str:
@@ -1082,13 +1227,18 @@ def _interactive_help(command: str | None = None) -> str:
             "  :mem profile <query>      search profile items",
             "  :mem sources              list imported sources",
             "  :mem source <source-id>   show one source",
+            "  :threads                  list active threads",
+            "  :thread <id>              switch to or create a thread",
+            "  :rename <new-id>          rename the current thread",
+            "  :branch <new-id> [index]  branch current thread at index",
+            "  :archive                  archive the current thread",
         ]
     )
     return "\n".join(lines)
 
 
-def _one_shot_reply(message: str, project_root: Path | None) -> str:
-    return ChatAgent(project_root).respond(message, thread_id="default").reply
+def _one_shot_reply(message: str, project_root: Path | None, thread_id: str = "default") -> str:
+    return ChatAgent(project_root).respond(message, thread_id=thread_id).reply
 
 
 def _log_component_arg(value: object) -> LogComponent | None:
@@ -1192,6 +1342,14 @@ def _interactive_memory_help(command: str | None = None) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _handle_interactive_threads_command(project_root: Path | None) -> str:
+    store = ThreadStore(project_root)
+    ids = store.list()
+    if not ids:
+        return "No active threads."
+    return "Active threads:\n" + "\n".join(f"  {tid}" for tid in ids)
 
 
 def _format_status(status: lifecycle.DaemonStatus) -> str:
