@@ -1331,3 +1331,53 @@ def test_thread_archive_moves_to_subdir(tmp_path: Path, capsys: CaptureFixture) 
     assert ThreadStore(tmp_path).list() == []
     archived = tmp_path / "private" / "threads" / "archived" / "old.json"
     assert archived.exists()
+
+
+
+def test_open_existing_thread_shows_thread_in_header(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("focus"))
+    monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
+
+    result = main(["--project-root", str(tmp_path), "open", "focus"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "thread=focus" in captured.out
+
+
+def test_open_missing_thread_fails(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "open", "missing"])
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "Thread not found: missing" in captured.err
+
+
+def test_open_create_makes_thread_and_enters_repl(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
+
+    result = main(["--project-root", str(tmp_path), "open", "new-thread", "--create"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Created thread: new-thread" in captured.out
+    assert "thread=new-thread" in captured.out
+    assert "new-thread.json" in [p.name for p in (tmp_path / "private" / "threads").glob("*.json")]
+
+
+def test_open_with_message_sends_then_enters_repl(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("focus"))
+    monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
+
+    result = main(["--project-root", str(tmp_path), "open", "focus", "--message", "hello"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "LLM API is not configured yet" in captured.out
+    assert "thread=focus" in captured.out

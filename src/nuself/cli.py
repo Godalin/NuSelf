@@ -100,6 +100,12 @@ def build_parser() -> argparse.ArgumentParser:
     attach_parser.add_argument("--message", "-m", default=None)
     _add_handler(attach_parser, handle_attach)
 
+    open_parser = subparsers.add_parser("open")
+    open_parser.add_argument("thread_id")
+    open_parser.add_argument("--message", "-m", default=None)
+    open_parser.add_argument("--create", action="store_true")
+    _add_handler(open_parser, handle_open)
+
     logs_parser = subparsers.add_parser("logs")
     _add_log_arguments(logs_parser)
 
@@ -381,6 +387,37 @@ def handle_attach(args: argparse.Namespace) -> int:
     if args.message is not None:
         return _send_chat(args.message, args.project_root)
     return _interactive_loop(lambda message, thread_id: _send_chat(message, args.project_root, thread_id), args.project_root)
+
+
+def handle_open(args: argparse.Namespace) -> int:
+    store = ThreadStore(args.project_root)
+    thread_id = args.thread_id
+    if thread_id not in store.list():
+        if args.create:
+            store.save(ThreadState.empty(thread_id))
+            print(f"Created thread: {thread_id}")
+        else:
+            print(f"Thread not found: {thread_id}", file=sys.stderr)
+            return 1
+    if lifecycle.status(args.project_root).running:
+        if args.message is not None:
+            result = _send_chat(args.message, args.project_root, thread_id)
+            if result != 0:
+                return result
+        return _interactive_loop(
+            lambda message, tid: _send_chat(message, args.project_root, tid),
+            args.project_root,
+            initial_thread_id=thread_id,
+        )
+    if args.message is not None:
+        result = _send_one_shot_chat(args.message, args.project_root, thread_id)
+        if result != 0:
+            return result
+    return _interactive_loop(
+        lambda message, tid: _send_one_shot_chat(message, args.project_root, tid),
+        args.project_root,
+        initial_thread_id=thread_id,
+    )
 
 
 def handle_memory_list(args: argparse.Namespace) -> int:
