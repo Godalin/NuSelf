@@ -132,6 +132,84 @@ def test_interactive_memory_command_shows_preview(
     assert "State assumptions explicitly." in captured.out
 
 
+def test_interactive_memory_search_uses_readable_rows(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    MemoryEntryRepository(tmp_path).save(
+        MemoryEntry(
+            type="belief",
+            title="Readable memory",
+            body="Terminal memory output should be easy to scan.",
+            tags=["display"],
+            review_state="reviewed",
+        )
+    )
+    monkeypatch.setattr("sys.stdin", _TextInput(":mem search terminal\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[mem] reviewed belief" in captured.out
+    assert "Readable memory" in captured.out
+    assert "#display" in captured.out
+    assert "Terminal memory output should be easy to scan." not in captured.out
+
+
+def test_interactive_memory_show_uses_readable_detail(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    entry = MemoryEntryRepository(tmp_path).save(
+        MemoryEntry(
+            type="belief",
+            title="Readable detail",
+            body="Detail views can show the full memory body.",
+            tags=["display"],
+            evidence=[MemoryEvidence(source_type="thread", source_ref="thread:default:1-2", summary="chat")],
+        )
+    )
+    monkeypatch.setattr("sys.stdin", _TextInput(f":mem show {entry.id}\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[mem] Readable detail" in captured.out
+    assert f"id={entry.id}" in captured.out
+    assert "evidence:" in captured.out
+    assert "Detail views can show the full memory body." in captured.out
+
+
+def test_interactive_memory_candidates_profile_and_sources(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    MemoryCandidateRepository(tmp_path).save(
+        MemoryCandidate(type="belief", title="Candidate display", body="Candidate body.", reason="inspect")
+    )
+    ProfileItemRepository(tmp_path).save(
+        ProfileItem(type="profile_fact", title="Profile display", body="Prefers readable output.")
+    )
+    source_path = tmp_path / "source.md"
+    source_path.write_text("# Source Display\n\nA readable source paragraph.", encoding="utf-8")
+    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    capsys.readouterr()
+    monkeypatch.setattr(
+        "sys.stdin",
+        _TextInput(":mem candidates\n:mem profile readable\n:mem sources\n:q\n"),
+    )
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[cand] pending" in captured.out
+    assert "Candidate display" in captured.out
+    assert "[profile] profile_fact" in captured.out
+    assert "Profile display" in captured.out
+    assert "[src]" in captured.out
+    assert "Source Display" in captured.out
+
+
 def test_interactive_status_command_shows_daemon_status(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:

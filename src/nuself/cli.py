@@ -46,6 +46,15 @@ from nuself.memory.repository import (
 from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
 from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
 from nuself.logs import LOG_COMPONENTS, LogComponent, read_log_events, write_log_event
+from nuself.tui.memory import (
+    render_candidate_detail,
+    render_candidate_row,
+    render_memory_entry_detail,
+    render_memory_entry_row,
+    render_profile_row,
+    render_source_detail,
+    render_source_row,
+)
 from nuself.tui.render import render_log_event, render_log_event_json, render_session_header
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
@@ -1040,6 +1049,11 @@ def _handle_interactive_command(command: str, project_root: Path | None) -> str 
         print(_format_memory_preview(project_root))
         print()
         return None
+    if command.startswith(":mem "):
+        print()
+        print(_handle_interactive_memory_command(command[5:].strip(), project_root))
+        print()
+        return None
     print()
     print(_interactive_help(command))
     print()
@@ -1061,6 +1075,13 @@ def _interactive_help(command: str | None = None) -> str:
             "  :logs   show recent activity logs",
             "  :memory preview memory entries",
             "  :mem    preview memory entries",
+            "  :mem search <query>       search memory entries",
+            "  :mem show <entry-id>      show one memory entry",
+            "  :mem candidates           list pending candidates",
+            "  :mem candidate <id>       show one candidate",
+            "  :mem profile <query>      search profile items",
+            "  :mem sources              list imported sources",
+            "  :mem source <source-id>   show one source",
         ]
     )
     return "\n".join(lines)
@@ -1098,6 +1119,79 @@ def _print_interactive_activity(project_root: Path | None, event_offset: int) ->
     events = read_log_events(project_root=project_root)
     for event in events[event_offset:]:
         print(render_log_event(event))
+
+
+def _handle_interactive_memory_command(command: str, project_root: Path | None) -> str:
+    if command == "why":
+        return "No memory-context trace is available for the last answer yet."
+    if command.startswith("search "):
+        query = command.removeprefix("search ").strip()
+        entries = MemoryEntryRepository(project_root).search(query)
+        if not entries:
+            return "No matching memory entries."
+        return "\n".join(render_memory_entry_row(entry) for entry in entries)
+    if command.startswith("show "):
+        entry_id = command.removeprefix("show ").strip()
+        try:
+            entry = MemoryEntryRepository(project_root).get(entry_id)
+        except MemoryEntryNotFound:
+            return f"Memory entry not found: {entry_id}"
+        return render_memory_entry_detail(entry)
+    if command == "candidates":
+        candidates = MemoryCandidateRepository(project_root).list()
+        if not candidates:
+            return "No memory candidates."
+        return "\n".join(render_candidate_row(candidate) for candidate in candidates)
+    if command.startswith("candidate "):
+        candidate_id = command.removeprefix("candidate ").strip()
+        try:
+            candidate = MemoryCandidateRepository(project_root).get(candidate_id)
+        except MemoryCandidateNotFound:
+            return f"Memory candidate not found: {candidate_id}"
+        return render_candidate_detail(candidate)
+    if command.startswith("profile "):
+        query = command.removeprefix("profile ").strip()
+        items = ProfileItemRepository(project_root).search(query)
+        if not items:
+            return "No matching profile items."
+        return "\n".join(render_profile_row(item) for item in items)
+    if command == "sources":
+        repo = SourceRepository(project_root)
+        documents = repo.list_documents()
+        if not documents:
+            return "No source documents."
+        return "\n".join(
+            render_source_row(document, chunk_count=len(repo.list_chunks(document.id))) for document in documents
+        )
+    if command.startswith("source "):
+        source_id = command.removeprefix("source ").strip()
+        repo = SourceRepository(project_root)
+        try:
+            document = repo.get_document(source_id)
+        except SourceDocumentNotFound:
+            return f"Source document not found: {source_id}"
+        return render_source_detail(document, chunk_count=len(repo.list_chunks(document.id)))
+    return _interactive_memory_help(command)
+
+
+def _interactive_memory_help(command: str | None = None) -> str:
+    lines: list[str] = []
+    if command is not None:
+        lines.append(f"Unknown memory command: :mem {command}")
+    lines.extend(
+        [
+            "Memory commands:",
+            "  :mem search <query>",
+            "  :mem show <entry-id>",
+            "  :mem candidates",
+            "  :mem candidate <candidate-id>",
+            "  :mem profile <query>",
+            "  :mem sources",
+            "  :mem source <source-id>",
+            "  :mem why",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _format_status(status: lifecycle.DaemonStatus) -> str:
