@@ -55,7 +55,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add readable terminal renderers for memory list and detail views.
 - [x] Add structured local log files and a general `nuself logs` viewer.
 - [x] Add named thread creation, branching, renaming, and archival.
-- [ ] Add deep links that open an existing thread or create a new one.
+- [x] Add deep links that open an existing thread or create a new one.
 
 ### Memory System
 

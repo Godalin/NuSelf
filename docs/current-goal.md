@@ -4,26 +4,27 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Add deep links that open an existing thread or create a new one.
+Store persona instructions and corrections as procedural memory.
 
-Thread management now works through the CLI (`nuself thread list/create/rename/branch/archive`) and the REPL (`:threads`, `:thread`, `:rename`, `:branch`, `:archive`). The next step is to let external tools or automation open a specific thread directly without typing REPL commands. A deep link is a compact string or command-line invocation that resolves to a thread ID and optionally a seed message, so NuSelf can start a conversation at a known context.
+The bounded persona skeleton now runs behind an activation gate and feeds synthesis into the response prompt. Persona definitions (`analyst_self`, `skeptic_self`, `builder_self`, `historian_self`, `care_self`, and `synthesizer_self`) are currently hard-coded in `nuself.agent.persona`. The next step is to let these definitions live as durable memory entries under the existing `MemoryEntry` system, so they can be inspected, edited, and versioned like any other memory object, while still being loaded efficiently at runtime.
 
 ## Immediate Context
 
-- `ThreadStore` supports `list`, `rename`, `branch`, and `archive`.
-- The daemon protocol `chat` request accepts an optional `thread_id` field.
-- The REPL already prints the current thread ID in the session header.
-- `nuself chat` and `nuself attach` both enter the interactive loop.
-- Thread files live under `private/threads/`; archived threads live under `private/threads/archived/`.
+- `PersonaDefinition` is a small dataclass with `id` and `description`.
+- `PersonaActivationPolicy` uses hard-coded markers and persona references.
+- `MinimalPersonaNode` and `MinimalSynthesizerNode` use hard-coded logic per persona.
+- `MemoryEntryRepository` already supports open typed memory via `MemoryObject + MemoryTypeDescriptor`.
+- The `instruction` memory type descriptor exists and can store structured procedural knowledge.
+- `PersonaGraphDriver` compiles a LangGraph graph at init time using the current persona nodes.
 
 ## Next Steps
 
-1. Design a compact deep link format (e.g., `nuself://<thread-id>?message=<seed>` or a CLI shorthand like `nuself open <thread-id> [--message <seed>]`).
-2. Add a CLI `nuself open <thread-id>` command that attaches to the daemon and enters the REPL focused on that thread.
-3. If the thread does not exist, create it automatically (opt-in or explicit).
-4. Optionally support a seed message so the link can start a turn immediately.
-5. Keep the default `nuself` entrypoint behavior unchanged.
-6. Update tests and documentation together with the implementation.
+1. Design a `MemoryObject` payload schema for persona instructions (id, description, routing markers, and optional behavioral notes).
+2. Register a `PersonaInstructionDescriptor` that validates the payload and exposes a compact summary.
+3. On `PersonaGraphDriver` or `PersonaActivationPolicy` initialization, load persona definitions from memory entries of type `instruction` with a `persona` tag, falling back to hard-coded defaults when no durable definitions exist.
+4. Let the REPL or CLI print a compact indicator when durable persona instructions are being used instead of defaults.
+5. Ensure loading is lazy and cached so chat latency is not affected.
+6. Add tests proving that custom persona instructions override defaults and that invalid entries are rejected by the descriptor.
 
 ## Not Now
 
@@ -37,8 +38,9 @@ Thread management now works through the CLI (`nuself thread list/create/rename/b
 
 ## Completion Criteria
 
-- A CLI command can open a specific thread by ID in the REPL.
-- Opening a non-existent thread can create it or report an error, deterministically.
-- The default `nuself` entrypoint behavior is unchanged.
+- Persona definitions can be stored as durable `instruction` memory entries.
+- Runtime loads persona definitions from memory when available, falling back to hard-coded defaults.
+- Invalid persona instruction payloads are rejected by the descriptor.
+- Default chat behavior is unchanged when no custom persona instructions exist.
 - All operations are type-checked and tested.
 - README TODOs track completed progress, while this file stays limited to the active goal.
