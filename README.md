@@ -133,7 +133,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add persona activation gate for explicit requests and high-depth discussion cues.
 - [x] Add bounded personas: analyst, skeptic, builder, historian, care, and synthesizer.
 - [x] Route only relevant personas per request.
-- [ ] Make synthesizer the only user-facing voice.
+- [x] Make synthesizer the only user-facing voice.
 - [x] Store persona instructions and corrections as procedural memory.
 
 ### Proactive Reflection And Notifications
