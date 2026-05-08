@@ -4,26 +4,27 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Incrementally grow bounded internal personas while keeping persona internals out of user-facing payloads.
+Add named thread creation, branching, renaming, and archival to the conversation runtime.
 
-The conversation runtime now runs bounded persona work behind an activation gate and emits compact `[selves]` activity summaries through structured persona logs in interactive chat. Deterministic routing covers `analyst_self`, `skeptic_self`, `builder_self`, `historian_self`, and `care_self`; explicit multi-perspective prompts route all relevant active personas. A bounded internal `synthesizer_self` now fuses persona contributions into a compact internal synthesis object. The next useful step is to consume that synthesis in response planning while keeping `ChatResult.to_payload`, CLI payloads, daemon payloads, and durable memory schema unchanged.
+The conversation runtime already persists threads under `private/threads/` with compression, locking, and a typed `ThreadState`. The CLI supports `nuself chat` and `nuself attach` against a default thread. The next step is to let users create named threads, rename existing ones, branch from a thread at a specific point, and archive old threads without deleting them. These operations must stay behind the existing `ThreadStore` boundary, preserve the current `ChatAgent.respond` interface, and keep the daemon protocol unchanged.
 
 ## Immediate Context
 
-- `MemoryQueryService` remains the stable retrieval boundary for memory entries, profile items, source chunks, and graph-derived expansion.
-- `ChatAgent` owns thread persistence while `ConversationGraphRuntime` owns turn execution.
-- `ConversationGraphDriver` is the only conversation module that imports LangGraph and wraps graph failures.
-- `PersonaGraphDriver` runs internal personas and a synthesizer step that produces `PersonaTurnState.synthesis`.
-- Interactive chat now renders persona activity through the existing activity log channel (`persona` component rendered as `[selves]`).
-- Deterministic persona routing currently supports `analyst_self`, `skeptic_self`, `builder_self`, `historian_self`, and `care_self`.
-- Mixed-intent precedence is deterministic: `skeptic_self` (risk) → `builder_self` (planning) → `analyst_self` (depth).
-- Explicit multi-perspective routing now selects all relevant active personas from deterministic markers.
-- Persona work must not run on every trivial turn by default.
-- Persona internals must not leak into `ChatResult.to_payload`, CLI payloads, daemon payloads, or durable memory schema.
+- `ThreadStore` owns file-backed persistence under `private/threads/` with advisory locking.
+- `ThreadState` tracks `thread_id`, `summary`, `messages`, `message_start_index`, and `next_message_index`.
+- `ChatAgent.respond` takes an optional `thread_id` parameter defaulting to `"default"`.
+- The daemon protocol and CLI already pass thread identifiers through the stack.
+- Thread files use `.json` extension; thread locks use `.lock`.
+- Compression drops old messages and updates `message_start_index`.
 
 ## Next Steps
 
-Thread synthesized persona insight into internal response planning (e.g., prompt-side guidance) without exposing persona internals in external payloads. Keep trivial turns silent, keep external assistant reply behavior unchanged (single voice), and preserve current response metadata, memory packing, persistence, tool calls, diagnostics, and fallback behavior as-is.
+1. Add `ThreadStore.list()`, `ThreadStore.rename()`, `ThreadStore.branch()`, and `ThreadStore.archive()` methods.
+2. Add corresponding CLI commands (`nuself thread list`, `nuself thread rename`, `nuself thread branch`, `nuself thread archive`) or REPL commands (`:threads`, `:rename`, `:branch`, `:archive`).
+3. Keep branching semantics explicit: copy messages and summary up to a chosen index, assign a new thread ID, and start a new file.
+4. Archival should move the thread file to an `archived/` subdirectory or add an `archived` flag in metadata.
+5. Ensure the default thread behavior remains unchanged when no thread management commands are used.
+6. Update tests and documentation together with the implementation.
 
 ## Not Now
 
@@ -37,8 +38,11 @@ Thread synthesized persona insight into internal response planning (e.g., prompt
 
 ## Completion Criteria
 
-- Activated turns can route to at least five bounded request personas, produce an internal synthesizer fusion, and surface compact persona activity summaries without changing user-facing payloads.
-- Trivial chat turns still skip persona work by default.
-- Existing chat entrypoints keep current user-visible behavior.
-- Persona internals do not leak into CLI or daemon payloads.
+- Users can list existing threads.
+- Users can create a new named thread.
+- Users can rename an existing thread.
+- Users can branch a thread from a specific message index.
+- Users can archive a thread without losing data.
+- Default `nuself chat` behavior is unchanged.
+- All operations are type-checked and tested.
 - README TODOs track completed progress, while this file stays limited to the active goal.

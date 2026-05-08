@@ -32,7 +32,7 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 再增加一个有界 persona（`historian_self`），并补上混合意图优先级规则。
 - [x] 增加 `care_self`，并优化显式多视角路由策略。
 - [x] 增加内部 `synthesizer_self`，用于融合 persona contributions。
-- [ ] 在内部响应规划中使用融合后的 persona insight。
+- [x] 在内部响应规划中使用融合后的 persona insight。
 
 ### 项目基础
 
@@ -127,12 +127,12 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 
 ### 轻量多智能体分身
 
-- [ ] 添加 LangGraph persona subgraph。
+- [x] 添加 LangGraph persona subgraph。
 - [x] 添加最小内部 persona skeleton，且不改变 chat payloads。
 - [x] 将最小 persona skeleton 内部接入 conversation runtime。
 - [x] 添加 persona activation gate，用于显式请求和高深度讨论线索。
-- [ ] 添加有界 personas：analyst、skeptic、builder、historian、care、synthesizer。
-- [ ] 按请求只路由相关 personas。
+- [x] 添加有界 personas：analyst、skeptic、builder、historian、care、synthesizer。
+- [x] 按请求只路由相关 personas。
 - [ ] 让 synthesizer 成为唯一面向用户的声音。
 - [ ] 将 persona instructions 和 corrections 保存为 procedural memory。
 

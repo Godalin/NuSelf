@@ -32,7 +32,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add one more bounded persona (`historian_self`) and mixed-intent precedence rules.
 - [x] Add `care_self` and tune explicit multi-perspective routing.
 - [x] Add internal `synthesizer_self` for persona contribution fusion.
-- [ ] Use synthesized persona insight in internal response planning.
+- [x] Use synthesized persona insight in internal response planning.
 
 ### Project Foundation
 
@@ -127,12 +127,12 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Lightweight Multi-Agent Selves
 
-- [ ] Add LangGraph persona subgraph.
+- [x] Add LangGraph persona subgraph.
 - [x] Add minimal internal persona skeleton without changing chat payloads.
 - [x] Wire the minimal persona skeleton into the conversation runtime internally.
 - [x] Add persona activation gate for explicit requests and high-depth discussion cues.
-- [ ] Add bounded personas: analyst, skeptic, builder, historian, care, and synthesizer.
-- [ ] Route only relevant personas per request.
+- [x] Add bounded personas: analyst, skeptic, builder, historian, care, and synthesizer.
+- [x] Route only relevant personas per request.
 - [ ] Make synthesizer the only user-facing voice.
 - [ ] Store persona instructions and corrections as procedural memory.
 
