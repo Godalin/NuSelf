@@ -28,6 +28,8 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 将最小 persona skeleton 内部接入 conversation runtime。
 - [x] 保持 persona contributions 为内部信息，同时保留 chat、CLI 和 daemon payloads 不变。
 - [x] 为已激活 turns 在 REPL 中展示紧凑 persona activity summaries。
+- [x] 为 `analyst_self`、`skeptic_self` 和 `builder_self` 添加确定性路由。
+- [ ] 再增加一个有界 persona，并补上混合意图优先级规则。
 
 ### 项目基础
 
