@@ -50,6 +50,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add interactive mode with `:q`, `:memory`, command help, and readline history.
 - [ ] Add a REPL-shaped terminal interaction layer for status, compact activity events, logs, and clearer chat sessions.
 - [ ] Add read-only REPL memory inspection commands for entries, candidates, profile items, and sources.
+- [ ] Add readable terminal renderers for memory list and detail views.
 - [ ] Add structured local log files and a general `nuself logs` viewer.
 - [ ] Add named thread creation, branching, renaming, and archival.
 - [ ] Add deep links that open an existing thread or create a new one.

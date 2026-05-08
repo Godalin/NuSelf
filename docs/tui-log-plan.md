@@ -8,6 +8,7 @@ This plan defines a short interaction polish slice before returning to the perso
 - Make daemon, chat, memory, and future notification activity observable from one consistent log surface.
 - Show compact, colorful background activity while the user is in interactive chat.
 - Make private memory easier to inspect from the same REPL without forcing the user to leave the conversation.
+- Make memory content pleasant to read in the terminal through clear typography, grouping, and compact metadata.
 - Keep private data under ignored `private/` paths.
 - Preserve the current daemon protocol unless a specific logging or TUI feature needs a typed response change.
 - Keep implementation small enough to finish before returning to persona activation and routing.
@@ -32,6 +33,7 @@ This plan defines a short interaction polish slice before returning to the perso
 - `nuself daemon logs` prints the whole daemon log file.
 - `:memory` already previews current memory entries inside interactive chat.
 - Existing `nuself memory ...` commands cover entries, candidates, relations, graph traversal, sources, source chunks, profile items, stats, and reindexing.
+- Current memory detail output is plain field-by-field text; it is complete, but not optimized for quick visual inspection.
 - There is no unified log model, log filtering, tailing, structured event metadata, or REPL inspect surface beyond `:memory`.
 
 ## Planning Sources
@@ -159,6 +161,100 @@ Implementation constraints:
 - `:mem source chunks <source-id>`: inspect chunks without leaving the REPL.
 - Optional interactive candidate review can be added only after read-only inspect commands feel stable.
 
+## Memory Rendering Style
+
+Memory output should be line-oriented and readable, not raw dumps. The same renderer should serve interactive `:mem ...` output and eventually improve normal `nuself memory ...` output where that does not break script-friendly expectations.
+
+### Rendering Goals
+
+- Make the title, type, review state, confidence, tags, and evidence easy to scan.
+- Separate metadata from body text.
+- Keep list/search results compact.
+- Make explicit `show` output comfortable for reading longer memory bodies.
+- Use color to guide the eye, with a clean no-color fallback.
+
+### Visual Grammar
+
+Use stable prefixes and semantic color:
+
+- `[mem]`: memory entries.
+- `[cand]`: memory candidates.
+- `[profile]`: profile items.
+- `[src]`: source documents or chunks.
+- `[rel]`: relations and graph edges.
+- Green: reviewed/accepted or durable records.
+- Yellow: draft, pending, warning, or inferred records.
+- Red: rejected, missing target, or errors.
+- Blue/cyan: source and evidence references.
+- Muted gray: timestamps, ids, and secondary metadata.
+
+### Compact List Format
+
+Lists should fit one object per row:
+
+```text
+[mem] reviewed belief mem_123  Clarity matters most  #style #reasoning  conf=0.80
+[cand] pending update cand_456 -> mem_123  Clarify preference  reason="duplicate preference"
+[profile] profile_fact prof_789  Prefers direct implementation notes  evidence=source:abc:0
+[src] source_abc  notes/design.md  chunks=12  #notes private
+```
+
+List views should truncate long titles/bodies to the terminal width when known, or to a conservative fixed width otherwise. They should never wrap into confusing multi-line blocks unless the user requested detail.
+
+### Detail Format
+
+Explicit `show` commands should use a small structured block:
+
+```text
+[mem] Clarity matters most
+id: mem_123  type: belief  state: reviewed  confidence: 0.80
+tags: style, reasoning
+time: observed=2026-05-07 valid=-
+evidence:
+  - source:thread:default:4-6  conversation turn summary
+
+State assumptions explicitly and prefer source-aware reasoning.
+```
+
+Rules:
+
+- Put the title first.
+- Keep id/type/state/confidence on one compact metadata line when possible.
+- Group tags, temporal fields, evidence, relations, and body into separate sections.
+- Show empty optional fields as omitted rather than printing many `-` placeholders.
+- Wrap body text to terminal width when possible.
+- Highlight evidence references but do not expand raw source chunks unless explicitly requested.
+
+### Candidate Rendering
+
+Candidate detail should emphasize review decision context:
+
+- Action: create, update, delete, or merge.
+- Target entry if present.
+- Reason.
+- Evidence.
+- Proposed body.
+- Review state and timestamps.
+
+This makes it easier to inspect why the curator proposed something before deciding later through normal CLI review commands.
+
+### Relation And Graph Rendering
+
+Relations should read as edges:
+
+```text
+[rel] mem_new --supersedes-> mem_old  conf=0.90  target=Old model
+[rel] mem_a --supports-> mem_b  conf=0.70  evidence=source:abc:2
+```
+
+Graph search output should split into compact `Nodes:` and `Edges:` sections, preserving the current command shape but making it easier to scan.
+
+### Source And Profile Rendering
+
+Source output should separate document metadata from chunk previews. Profile output should prioritize the fact body, validity window, and source references.
+
+The first implementation can add these renderers for interactive `:mem ...` commands only. Normal CLI memory commands can move to the same renderer in a later cleanup if tests and script-friendliness remain clear.
+
 ## Logging Direction
 
 Logging should become structured at the write boundary while still being readable with plain text tools.
@@ -238,9 +334,10 @@ Optional persona fields:
 6. Refactor interactive loop rendering into a line-oriented `tui` module without changing chat behavior.
 7. Print selected background activity events during interactive chat after each turn.
 8. Add `:status` and `:logs` commands to interactive mode.
-9. Add read-only `:mem ...` inspection commands that reuse existing memory repositories and formatters.
-10. Reserve persona activity event fields for the later multi-persona routing work.
-11. Update README and Chinese README command docs after the user-facing CLI surface lands.
+9. Add memory renderers for compact list rows and readable detail blocks.
+10. Add read-only `:mem ...` inspection commands that reuse existing memory repositories and renderers.
+11. Reserve persona activity event fields for the later multi-persona routing work.
+12. Update README and Chinese README command docs after the user-facing CLI surface lands.
 
 ## Validation
 
@@ -252,6 +349,7 @@ Optional persona fields:
 - Interactive command tests for `:mem search`, `:mem show`, `:mem candidates`, `:mem profile`, and `:mem sources`.
 - Interactive tests proving activity output does not include raw private message bodies.
 - Inspect-output tests proving list/search views stay compact while explicit show views can include object bodies.
+- Snapshot-style tests for memory entry, candidate, relation, source, and profile rendering in color and no-color modes.
 - `uvx pyright`
 - Full `uv run pytest` before merging back to `main`.
 
@@ -264,7 +362,8 @@ Optional persona fields:
 5. `feat(tui): extract interactive session renderer`
 6. `feat(tui): show interactive activity events`
 7. `feat(tui): add status and log commands`
-8. `feat(tui): add memory inspect commands`
-9. `docs(cli): update TUI and logging progress`
+8. `feat(tui): render readable memory output`
+9. `feat(tui): add memory inspect commands`
+10. `docs(cli): update TUI and logging progress`
 
 After these are implemented and reviewed, merge this branch back to `main` and resume the persona activation/routing focus.
