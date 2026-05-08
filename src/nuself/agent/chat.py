@@ -15,6 +15,7 @@ from nuself.agent.persona import (
     PersonaActivationPolicy,
     PersonaGraphDriver,
     PersonaInput,
+    PersonaSynthesis,
     PersonaTurnState,
 )
 from nuself.config import config_int, runtime_paths
@@ -565,7 +566,10 @@ class ConversationGraphRuntime:
         )
 
     def _build_prompt(self, state: ConversationTurnState) -> list[ChatMessage]:
-        prompt: list[ChatMessage] = [ChatMessage(role="system", content=self._system_prompt(state))]
+        synthesis = None
+        if state.persona_turn_state is not None:
+            synthesis = state.persona_turn_state.synthesis
+        prompt: list[ChatMessage] = [ChatMessage(role="system", content=self._system_prompt(state, synthesis))]
         for message in state.active_messages[-self._settings.recent_messages :]:
             prompt.append(ChatMessage(role=message.role, content=message.content))
         return prompt
@@ -589,7 +593,7 @@ class ConversationGraphRuntime:
         prompt.append(ChatMessage(role="user", content=f"Tool result:\n{tool_result}"))
         return prompt
 
-    def _system_prompt(self, state: ConversationTurnState) -> str:
+    def _system_prompt(self, state: ConversationTurnState, synthesis: "PersonaSynthesis | None" = None) -> str:
         parts = [
             "You are NuSelf, a private AI mirror for one person.",
             "Use the user's memory entries and source chunks as durable context. Do not invent memories.",
@@ -604,6 +608,8 @@ class ConversationGraphRuntime:
             parts.extend(["", "Relevant memory context:", state.memory_context])
         if state.persisted_state.summary != "":
             parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
+        if synthesis is not None:
+            parts.extend(["", "Internal perspective fusion:", f"Summary: {synthesis.summary}", f"Perspectives involved: {', '.join(synthesis.source_personas)}"])
         parts.extend([
             "",
             "Available tools:",
