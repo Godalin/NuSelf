@@ -45,6 +45,8 @@ from nuself.memory.repository import (
 )
 from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
 from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
+from nuself.logs import LOG_COMPONENTS, LogComponent, read_log_events, write_log_event
+from nuself.tui.render import render_log_event, render_log_event_json
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
@@ -75,7 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(daemon_subparsers.add_parser("stop"), handle_daemon_stop)
     _add_handler(daemon_subparsers.add_parser("status"), handle_daemon_status)
     _add_handler(daemon_subparsers.add_parser("list"), handle_daemon_list)
-    _add_handler(daemon_subparsers.add_parser("logs"), handle_daemon_logs)
+    _add_log_arguments(daemon_subparsers.add_parser("logs"))
     daemon_attach_parser = daemon_subparsers.add_parser("attach")
     daemon_attach_parser.add_argument("--message", "-m", default=None)
     _add_handler(daemon_attach_parser, handle_attach)
@@ -88,6 +90,9 @@ def build_parser() -> argparse.ArgumentParser:
     attach_parser = subparsers.add_parser("attach")
     attach_parser.add_argument("--message", "-m", default=None)
     _add_handler(attach_parser, handle_attach)
+
+    logs_parser = subparsers.add_parser("logs")
+    _add_log_arguments(logs_parser)
 
     memory_parser = subparsers.add_parser("memory")
     memory_parser.set_defaults(handler=None, help_parser=memory_parser)
@@ -242,14 +247,41 @@ def _add_handler(parser: argparse.ArgumentParser, handler: object) -> None:
     parser.set_defaults(handler=handler)
 
 
+def _add_log_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--component", choices=list(LOG_COMPONENTS), default=None)
+    parser.add_argument("--tail", type=int, default=50)
+    parser.add_argument("--follow", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--no-color", action="store_true")
+    _add_handler(parser, handle_logs)
+
+
 def handle_daemon_start(args: argparse.Namespace) -> int:
+    write_log_event("daemon", "start_requested", "daemon start requested", project_root=args.project_root)
     result = lifecycle.start(args.project_root)
+    write_log_event(
+        "daemon",
+        "start_completed",
+        f"daemon start {'completed' if result.running else 'failed'}",
+        project_root=args.project_root,
+        status="running" if result.running else "stopped",
+        metadata={"pid": result.pid, "socket": str(result.socket_path)},
+    )
     print(_format_status(result))
     return 0 if result.running else 1
 
 
 def handle_daemon_stop(args: argparse.Namespace) -> int:
+    write_log_event("daemon", "stop_requested", "daemon stop requested", project_root=args.project_root)
     result = lifecycle.stop(args.project_root)
+    write_log_event(
+        "daemon",
+        "stop_completed",
+        f"daemon stop {'completed' if not result.running else 'failed'}",
+        project_root=args.project_root,
+        status="stopped" if not result.running else "running",
+        metadata={"pid": result.pid, "socket": str(result.socket_path)},
+    )
     print(_format_status(result))
     return 0 if not result.running else 1
 
@@ -282,12 +314,21 @@ def handle_default_entrypoint(args: argparse.Namespace) -> int:
     return _interactive_loop(lambda message: _send_chat(message, args.project_root), args.project_root)
 
 
-def handle_daemon_logs(args: argparse.Namespace) -> int:
-    paths = runtime_paths(args.project_root)
-    try:
-        print(paths.daemon_log_path.read_text(encoding="utf-8"), end="")
-    except FileNotFoundError:
-        print(f"No daemon log found at {paths.daemon_log_path}")
+def handle_logs(args: argparse.Namespace) -> int:
+    component = _log_component_arg(args.component)
+    tail = max(args.tail, 1)
+    events = read_log_events(project_root=args.project_root, component=component, tail=tail)
+    if not events:
+        target = component or "any component"
+        print(f"No logs found for {target}.")
+        return 0
+    for event in events:
+        if args.json:
+            print(render_log_event_json(event))
+        else:
+            print(render_log_event(event, color=False if args.no_color else None))
+    if args.follow:
+        print("Log follow is not streaming yet; showing current tail only.", file=sys.stderr)
     return 0
 
 
@@ -781,6 +822,15 @@ def _send_chat(message: str, project_root: Path | None) -> int:
         print(f"daemon request failed: {exc}", file=sys.stderr)
         return 1
     if response.status == "error":
+        write_log_event(
+            "chat",
+            "daemon_chat_failed",
+            "daemon chat request failed",
+            project_root=project_root,
+            level="error",
+            status="error",
+            error=response.error or "daemon returned an error",
+        )
         print(response.error or "daemon returned an error", file=sys.stderr)
         return 1
     reply = response.payload.get("reply")
@@ -789,6 +839,14 @@ def _send_chat(message: str, project_root: Path | None) -> int:
         memory_update = response.payload.get("memory_update")
         if isinstance(memory_update, str) and memory_update != "":
             print(f"[memory] {memory_update}")
+        write_log_event(
+            "chat",
+            "daemon_chat_completed",
+            "daemon chat request completed",
+            project_root=project_root,
+            thread_id=_optional_payload_str(response.payload.get("thread_id")),
+            status="ok",
+        )
         return 0
     print("daemon response did not include a reply", file=sys.stderr)
     return 1
@@ -891,9 +949,27 @@ def _dedupe_interactive_history() -> None:
 def _send_one_shot_chat(message: str, project_root: Path | None) -> int:
     try:
         print(_one_shot_reply(message, project_root))
+        write_log_event(
+            "chat",
+            "one_shot_chat_completed",
+            "one-shot chat turn completed",
+            project_root=project_root,
+            thread_id="default",
+            status="ok",
+        )
         _run_memory_curator(project_root)
         return 0
     except RuntimeError as exc:
+        write_log_event(
+            "chat",
+            "one_shot_chat_failed",
+            "one-shot chat turn failed",
+            project_root=project_root,
+            level="error",
+            thread_id="default",
+            status="error",
+            error=str(exc),
+        )
         print(str(exc), file=sys.stderr)
         return 1
 
@@ -902,9 +978,26 @@ def _run_memory_curator(project_root: Path | None) -> None:
     try:
         result = MemoryCurator(project_root).run_once()
     except RuntimeError as exc:
+        write_log_event(
+            "memory",
+            "curator_failed",
+            "memory curator failed",
+            project_root=project_root,
+            level="error",
+            status="error",
+            error=str(exc),
+        )
         print(f"[memory] curator failed: {exc}", file=sys.stderr)
         return
     if result.changed:
+        write_log_event(
+            "memory",
+            "curator_changed",
+            "memory curator changed durable memory",
+            project_root=project_root,
+            status="changed",
+            metadata={"summary": result.summary()},
+        )
         print(f"[memory] {result.summary()}")
 
 
@@ -954,6 +1047,16 @@ def _interactive_help(command: str | None = None) -> str:
 
 def _one_shot_reply(message: str, project_root: Path | None) -> str:
     return ChatAgent(project_root).respond(message, thread_id="default").reply
+
+
+def _log_component_arg(value: object) -> LogComponent | None:
+    if value in LOG_COMPONENTS:
+        return value
+    return None
+
+
+def _optional_payload_str(value: object) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 def _format_status(status: lifecycle.DaemonStatus) -> str:

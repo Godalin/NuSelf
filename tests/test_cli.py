@@ -13,6 +13,7 @@ from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.domain.profile import ProfileItem
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
+from nuself.logs import read_log_events, write_log_event
 
 
 class CaptureResult(Protocol):
@@ -373,6 +374,50 @@ def test_daemon_list_reports_local_daemon(tmp_path: Path, capsys: CaptureFixture
     assert result == 0
     assert "name status pid socket" in captured.out
     assert "local stopped -" in captured.out
+
+
+def test_logs_command_renders_structured_events(tmp_path: Path, capsys: CaptureFixture) -> None:
+    write_log_event(
+        "chat",
+        "turn_completed",
+        "chat turn completed",
+        project_root=tmp_path,
+        thread_id="default",
+        status="ok",
+        metadata={"message_body": "must not be written by callers"},
+    )
+    write_log_event("memory", "curator_changed", "memory curator changed durable memory", project_root=tmp_path)
+
+    result = main(["--project-root", str(tmp_path), "logs", "--component", "chat", "--tail", "5", "--no-color"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[chat] chat turn completed" in captured.out
+    assert "thread=default" in captured.out
+    assert "[memory]" not in captured.out
+
+
+def test_logs_command_can_render_json(tmp_path: Path, capsys: CaptureFixture) -> None:
+    write_log_event("daemon", "started", "daemon started", project_root=tmp_path)
+
+    result = main(["--project-root", str(tmp_path), "logs", "--component", "daemon", "--json"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert '"component": "daemon"' in captured.out
+    assert '"event": "started"' in captured.out
+
+
+def test_read_log_events_tolerates_legacy_daemon_lines(tmp_path: Path) -> None:
+    log_path = tmp_path / "private" / "logs" / "daemon.log"
+    log_path.parent.mkdir(parents=True)
+    log_path.write_text("plain daemon output\n", encoding="utf-8")
+
+    events = read_log_events(project_root=tmp_path, component="daemon")
+
+    assert len(events) == 1
+    assert events[0].event == "legacy"
+    assert events[0].message == "plain daemon output"
 
 
 def test_daemon_attach_requires_running_daemon(tmp_path: Path, capsys: CaptureFixture) -> None:
