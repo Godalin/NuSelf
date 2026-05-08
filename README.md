@@ -31,7 +31,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add deterministic routing for `analyst_self`, `skeptic_self`, and `builder_self`.
 - [x] Add one more bounded persona (`historian_self`) and mixed-intent precedence rules.
 - [x] Add `care_self` and tune explicit multi-perspective routing.
-- [ ] Add internal `synthesizer_self` for persona contribution fusion.
+- [x] Add internal `synthesizer_self` for persona contribution fusion.
+- [ ] Use synthesized persona insight in internal response planning.
 
 ### Project Foundation
 
