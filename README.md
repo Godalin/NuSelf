@@ -49,6 +49,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Make root `nuself` a convenient daemon-backed chat entrypoint.
 - [x] Add interactive mode with `:q`, `:memory`, command help, and readline history.
 - [ ] Add a REPL-shaped terminal interaction layer for status, compact activity events, logs, and clearer chat sessions.
+- [ ] Add read-only REPL memory inspection commands for entries, candidates, profile items, and sources.
 - [ ] Add structured local log files and a general `nuself logs` viewer.
 - [ ] Add named thread creation, branching, renaming, and archival.
 - [ ] Add deep links that open an existing thread or create a new one.

@@ -15,6 +15,7 @@ The persona-runtime slice is paused at the minimal skeleton stage. Before contin
 - Memory curator and optimizer append action lines to `private/logs/memory.log`.
 - `nuself daemon logs` currently prints the whole daemon log.
 - Interactive chat should stay REPL-shaped and show compact colorful activity events in chronological order.
+- Interactive chat should also expose better read-only memory inspection without replacing `nuself memory ...` maintenance commands.
 - Future persona discussion should fit the same activity feed as concise summaries, not final-answer text.
 - The detailed review plan lives in [docs/tui-log-plan.md](tui-log-plan.md).
 
@@ -24,8 +25,9 @@ The persona-runtime slice is paused at the minimal skeleton stage. Before contin
 2. After approval, implement structured local logs without recording raw private chat or memory bodies.
 3. Add a general `nuself logs` surface and keep daemon logs readable.
 4. Render selected log events inside interactive chat as compact colored activity lines.
-5. Extract interactive rendering into a small TUI module and add focused `:status` / `:logs` commands.
-6. Merge back to `main`, then resume persona activation and routing.
+5. Add read-only `:mem ...` inspection commands for entries, candidates, profile items, sources, and later answer context.
+6. Extract interactive rendering into a small TUI module and add focused `:status` / `:logs` commands.
+7. Merge back to `main`, then resume persona activation and routing.
 
 ## Not Now
 
@@ -43,4 +45,5 @@ The persona-runtime slice is paused at the minimal skeleton stage. Before contin
 - No functional code changes land before plan approval.
 - The plan preserves private data boundaries under ignored `private/`.
 - The plan includes an interactive background activity feed and future persona discussion summaries.
+- The plan includes a read-only REPL memory inspection surface.
 - README TODOs track the temporary focus while completed work stays out of this file.

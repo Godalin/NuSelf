@@ -7,6 +7,7 @@ This plan defines a short interaction polish slice before returning to the perso
 - Make interactive chat feel like a persistent local companion while keeping the REPL flow simple.
 - Make daemon, chat, memory, and future notification activity observable from one consistent log surface.
 - Show compact, colorful background activity while the user is in interactive chat.
+- Make private memory easier to inspect from the same REPL without forcing the user to leave the conversation.
 - Keep private data under ignored `private/` paths.
 - Preserve the current daemon protocol unless a specific logging or TUI feature needs a typed response change.
 - Keep implementation small enough to finish before returning to persona activation and routing.
@@ -20,6 +21,7 @@ This plan defines a short interaction polish slice before returning to the perso
 - Streaming token protocol overhaul.
 - Remote log aggregation.
 - Public telemetry.
+- Replacing existing `nuself memory ...` maintenance commands.
 
 ## Current Baseline
 
@@ -28,7 +30,21 @@ This plan defines a short interaction polish slice before returning to the perso
 - The daemon writes stdout and stderr to `private/logs/daemon.log`.
 - Memory curator and optimizer append action lines to `private/logs/memory.log`.
 - `nuself daemon logs` prints the whole daemon log file.
-- There is no unified log model, log filtering, tailing, structured event metadata, or TUI state surface.
+- `:memory` already previews current memory entries inside interactive chat.
+- Existing `nuself memory ...` commands cover entries, candidates, relations, graph traversal, sources, source chunks, profile items, stats, and reindexing.
+- There is no unified log model, log filtering, tailing, structured event metadata, or REPL inspect surface beyond `:memory`.
+
+## Planning Sources
+
+This plan is grounded in the current checkout rather than a new UI concept:
+
+- `README.md` documents memory entry commands: `memory list`, `preview`, `show`, `edit`, `search`, `update`, `optimize`, `delete`, and `reindex`.
+- `README.md` documents inspect commands for derived relations and symbolic graph: `memory relations`, `memory graph nodes`, `memory graph edges`, `memory graph search`, closure traversal, and path finding.
+- `README.md` documents source inspection: `memory source list`, `show`, `chunks`, `search`, `extract`, and `delete`.
+- `README.md` documents profile inspection: `memory profile list`, `search`, `show`, and `delete`.
+- `docs/memory-management.md` explicitly names future interactive memory commands: `:mem`, `:mem last`, and `:mem why`.
+- `src/nuself/cli.py` already exposes the command handlers and formatters that the REPL inspect layer should reuse.
+- `tests/test_cli.py` already covers interactive `:memory`, memory stats/search, relations, graph nodes/edges/search, source inspection, profile inspection, and candidate review flows.
 
 ## REPL Interaction Direction
 
@@ -46,6 +62,7 @@ Keep the first interaction layer as a terminal-native REPL around existing comma
   - `:status` shows daemon/socket/thread status.
   - `:logs` shows recent relevant log lines.
   - `:memory` keeps the existing memory preview behavior.
+  - `:mem ...` adds compact memory inspection shortcuts.
   - `:clear` redraws the session view.
 - Keep non-interactive `--message` output plain and script-friendly.
 
@@ -98,6 +115,49 @@ First persona activity events should be summaries, not full hidden chain-of-thou
 - Synthesizer decision: answer, ask clarification, create memory candidate, or skip.
 
 The user can ask to show more discussion detail later, but the default interactive output should stay compact and avoid exposing unrestricted model reasoning.
+
+## Memory Inspect Surface
+
+The REPL should make the existing memory system easier to inspect without replacing maintenance commands. Use compact shortcuts for common reading tasks, and keep write/review operations explicit through `nuself memory ...` unless a later workflow clearly needs interactive review.
+
+### First Slice
+
+Add these interactive commands:
+
+- `:mem` or `:memory`: preview recent memory entries.
+- `:mem search <query>`: search memory entries with compact match output.
+- `:mem show <entry-id>`: show one memory entry.
+- `:mem candidates`: list pending memory candidates.
+- `:mem candidate <candidate-id>`: show one candidate.
+- `:mem profile <query>`: search profile items.
+- `:mem sources`: list imported sources.
+- `:mem source <source-id>`: show source metadata and chunk count.
+- `:mem why`: explain the memory context used for the most recent answer when the runtime exposes that trace.
+
+Keep output line-oriented:
+
+```text
+[mem] reviewed belief mem_123 Clarity matters most tags=style confidence=0.80
+[mem] candidate cand_456 update -> mem_123 reason="duplicate preference"
+[src] source_abc notes/my-note.md chunks=12 tags=notes
+```
+
+Implementation constraints:
+
+- Reuse existing repository/query services and existing formatter logic where possible.
+- Prefer IDs, titles, tags, confidence, review state, relation summaries, and evidence references over full bodies in list views.
+- `show` commands may print full bodies because the user explicitly requested a specific object.
+- Do not expose raw imported chunks unless the user explicitly asks for source chunks or source search detail.
+- Keep write actions such as accept, reject, merge, edit, delete, and reindex on the normal CLI for now.
+
+### Later Slice
+
+- `:mem last`: show entries, profile items, source chunks, and graph relations packed into the last response context.
+- `:mem graph <query>`: compact graph search from the REPL.
+- `:mem relations <entry-id>`: show direct relation neighborhood around one memory object.
+- `:mem path <from-id> <to-id>`: show path-finding output when IDs are known.
+- `:mem source chunks <source-id>`: inspect chunks without leaving the REPL.
+- Optional interactive candidate review can be added only after read-only inspect commands feel stable.
 
 ## Logging Direction
 
@@ -178,8 +238,9 @@ Optional persona fields:
 6. Refactor interactive loop rendering into a line-oriented `tui` module without changing chat behavior.
 7. Print selected background activity events during interactive chat after each turn.
 8. Add `:status` and `:logs` commands to interactive mode.
-9. Reserve persona activity event fields for the later multi-persona routing work.
-10. Update README and Chinese README command docs after the user-facing CLI surface lands.
+9. Add read-only `:mem ...` inspection commands that reuse existing memory repositories and formatters.
+10. Reserve persona activity event fields for the later multi-persona routing work.
+11. Update README and Chinese README command docs after the user-facing CLI surface lands.
 
 ## Validation
 
@@ -188,7 +249,9 @@ Optional persona fields:
 - CLI tests for `nuself logs --tail`, missing log files, and component filtering.
 - Rendering tests for compact colored and no-color log output.
 - Interactive command tests for `:status`, `:logs`, and existing `:memory`.
+- Interactive command tests for `:mem search`, `:mem show`, `:mem candidates`, `:mem profile`, and `:mem sources`.
 - Interactive tests proving activity output does not include raw private message bodies.
+- Inspect-output tests proving list/search views stay compact while explicit show views can include object bodies.
 - `uvx pyright`
 - Full `uv run pytest` before merging back to `main`.
 
@@ -201,6 +264,7 @@ Optional persona fields:
 5. `feat(tui): extract interactive session renderer`
 6. `feat(tui): show interactive activity events`
 7. `feat(tui): add status and log commands`
-8. `docs(cli): update TUI and logging progress`
+8. `feat(tui): add memory inspect commands`
+9. `docs(cli): update TUI and logging progress`
 
 After these are implemented and reviewed, merge this branch back to `main` and resume the persona activation/routing focus.
