@@ -4,31 +4,31 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Add golden conversation fixtures and a local evaluation command.
+Make the synthesizer the only user-facing voice.
 
-The conversation runtime now produces structured responses with evidence references, confidence, and epistemic status. The persona skeleton is gated, routed, and backed by durable memory instructions. The next step is to prevent regressions in fidelity and uncertainty behavior by adding reproducible evaluation fixtures and a CLI command that can run them without external services.
+The bounded persona skeleton now runs behind an activation gate, feeds synthesis into the response prompt, and stores persona instructions as durable memory. The current architecture injects the synthesizer's compact fusion into the main LLM's system prompt, and the main LLM still generates the final answer. The next step is to let the synthesizer directly produce the user-facing response, so the assistant voice is consistently the fused persona perspective rather than a separate main LLM acting on synthesis guidance.
 
 ## Immediate Context
 
+- `PersonaGraphDriver` runs personas and a synthesizer step that produces `PersonaTurnState.synthesis`.
+- `ConversationGraphRuntime.initial_response_node` calls `_build_prompt` and then `_llm.complete(prompt)`.
+- The synthesis is injected into the system prompt as "Internal perspective fusion".
 - `ChatResult` carries `answer`, `evidence_references`, `confidence`, and `epistemic_status`.
-- `ConversationGraphRuntime` produces `ParsedChatResponse` via `_parse_chat_response`.
-- `_apply_unsupported_claim_guard` flags personal claims without evidence.
-- `MemoryQueryService.pack` returns ranked evidence with source metadata.
-- The CLI already has a deep command tree (`daemon`, `chat`, `memory`, `thread`, `logs`).
-- Tests use `FakeLLM` and `StructuredFakeLLM` to capture prompts and return stubbed JSON.
+- `MinimalSynthesizerNode` currently fuses persona notes into a single summary string.
+- `PersonaActivationPolicy` and persona definitions can now be loaded from durable memory.
 
 ## Next Steps
 
-1. Design a compact golden fixture format (e.g., YAML or JSON) that records a user message, expected answer patterns, required evidence references, expected epistemic status, and banned claim patterns.
-2. Add a `nuself eval` CLI command that loads fixtures, runs them through `ChatAgent` with a fake or recorded LLM, and prints pass/fail per fixture.
-3. Add scoring helpers for citation coverage, unsupported personal claims, uncertainty behavior, and style fidelity.
-4. Keep fixtures under `tests/fixtures/conversations/` or `examples/fixtures/`.
-5. Ensure the eval command can run offline with fake providers.
+1. Extend `MinimalSynthesizerNode` (or add a new `SynthesizerResponseNode`) to produce a full `ParsedChatResponse` (answer, evidence_references, confidence, epistemic_status) instead of just a summary string.
+2. When personas are activated, skip the main LLM initial_response node and use the synthesizer output directly as the final response.
+3. When personas are not activated, keep the current single-LLM behavior unchanged.
+4. Ensure the synthesizer output passes through the same unsupported-claim guard and tool-call detection as current LLM responses.
+5. Update `PersonaSynthesis` to carry the structured response fields.
 6. Update tests and documentation together with the implementation.
 
 ## Not Now
 
-- Full multi-persona orchestration.
+- Full multi-persona orchestration beyond the current bounded skeleton.
 - Vector, hybrid, or hosted graph indexes.
 - Plugin loading.
 - Proactive reflection or notification work.
@@ -38,9 +38,10 @@ The conversation runtime now produces structured responses with evidence referen
 
 ## Completion Criteria
 
-- At least one golden conversation fixture exists and is exercised in CI.
-- A CLI eval command can run fixtures and report scores.
-- Scoring covers citation coverage, unsupported personal claims, and uncertainty behavior.
-- Eval runs offline with fake providers.
+- Activated turns use the synthesizer output as the user-facing response.
+- Non-activated turns keep current single-LLM behavior.
+- The synthesizer response schema matches `ParsedChatResponse` (answer, evidence_references, confidence, epistemic_status).
+- Unsupported-claim guard and tool-call detection still apply.
+- Persona internals do not leak into CLI or daemon payloads.
 - All operations are type-checked and tested.
 - README TODOs track completed progress, while this file stays limited to the active goal.

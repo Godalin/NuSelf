@@ -149,9 +149,9 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 
 ### 评估与质量
 
-- [ ] 添加 golden conversation fixtures。
-- [ ] 添加本地 evaluation command。
-- [ ] 评分 citation coverage、unsupported personal claims、uncertainty behavior 和 style fidelity。
+- [x] 添加 golden conversation fixtures。
+- [x] 添加本地 evaluation command。
+- [x] 评分 citation coverage、unsupported personal claims、uncertainty behavior 和 style fidelity。
 - [ ] 添加 proactive-notification evaluation cases。
 
 ## 环境要求
