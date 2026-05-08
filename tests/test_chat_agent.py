@@ -388,11 +388,13 @@ def test_conversation_runtime_runs_persona_skeleton_when_activated(tmp_path: Pat
             confidence=0.0,
         ),
     )
-    assert run_personas.state.persona_turn_state.node_trace == ("run_personas",)
+    assert run_personas.state.persona_turn_state.synthesis is not None
+    assert run_personas.state.persona_turn_state.node_trace == ("run_personas", "run_synthesizer")
 
     persona_events = [event for event in read_log_events(project_root=tmp_path, component="persona") if event.event == "persona_summary"]
     assert len(persona_events) >= 1
     assert "analyst_self considered: Should I split this project?" in persona_events[-1].message
+    assert persona_events[-1].metadata == {"persona_count": 1, "has_synthesis": True}
 
     graph_turn = runtime.run_turn(ThreadState.empty("persona-graph"), "Should I split this project?", "persona-graph")
     assert graph_turn.result.answer == "Persona reply."

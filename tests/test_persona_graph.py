@@ -11,6 +11,7 @@ from nuself.agent.persona import (
     PersonaActivationPolicy,
     PersonaGraphDriver,
     PersonaInput,
+    PersonaSynthesis,
     PersonaTurnState,
 )
 
@@ -24,13 +25,18 @@ def test_persona_graph_runs_minimal_internal_persona() -> None:
 
     result = driver.run(state)
 
-    assert result.node_trace == ("run_personas",)
+    assert result.node_trace == ("run_personas", "run_synthesizer")
     assert result.contributions == (
         PersonaContribution(
             persona_id="analyst_self",
             notes=("analyst_self considered: Should I split this project?",),
             confidence=0.0,
         ),
+    )
+    assert result.synthesis == PersonaSynthesis(
+        summary="analyst_self considered: Should I split this project?",
+        source_personas=("analyst_self",),
+        confidence=0.0,
     )
 
 
@@ -59,6 +65,11 @@ def test_persona_graph_accepts_custom_persona_node() -> None:
             questions=("What is the next constraint?",),
             confidence=0.6,
         ),
+    )
+    assert result.synthesis == PersonaSynthesis(
+        summary="memory=Keep it narrow.",
+        source_personas=("analyst_self",),
+        confidence=0.0,
     )
 
 

@@ -35,6 +35,15 @@ class PersonaContribution:
 
 
 @dataclass(frozen=True)
+class PersonaSynthesis:
+    """Compact internal synthesis over persona contributions."""
+
+    summary: str
+    source_personas: tuple[str, ...] = ()
+    confidence: float | None = None
+
+
+@dataclass(frozen=True)
 class PersonaActivation:
     """Decision about whether persona work should run for a turn."""
 
@@ -53,6 +62,7 @@ class PersonaTurnState:
     input: PersonaInput
     selected_personas: tuple[PersonaDefinition, ...]
     contributions: tuple[PersonaContribution, ...] = ()
+    synthesis: PersonaSynthesis | None = None
     node_trace: tuple[str, ...] = ()
 
 
@@ -66,6 +76,12 @@ class PersonaNode(Protocol):
     """Callable shape for one persona node."""
 
     def __call__(self, persona: PersonaDefinition, persona_input: PersonaInput) -> PersonaContribution: ...
+
+
+class PersonaSynthesizerNode(Protocol):
+    """Callable shape for synthesis from persona contributions."""
+
+    def __call__(self, turn_state: PersonaTurnState) -> PersonaSynthesis | None: ...
 
 
 class MinimalPersonaNode:
@@ -86,6 +102,28 @@ class MinimalPersonaNode:
             return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
         note = f"{persona.id} considered: {persona_input.user_message}"
         return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
+
+
+class MinimalSynthesizerNode:
+    """Deterministic synthesis over persona contributions."""
+
+    def __call__(self, turn_state: PersonaTurnState) -> PersonaSynthesis | None:
+        if not turn_state.contributions:
+            return None
+        persona_ids = tuple(contrib.persona_id for contrib in turn_state.contributions)
+        top_notes: list[str] = []
+        for contrib in turn_state.contributions:
+            if contrib.notes:
+                top_notes.append(contrib.notes[0])
+        if not top_notes:
+            summary = "; ".join(persona_ids)
+        else:
+            summary = " | ".join(top_notes)
+        return PersonaSynthesis(
+            summary=summary,
+            source_personas=persona_ids,
+            confidence=0.0,
+        )
 
 
 class PersonaActivationPolicy:
@@ -238,12 +276,20 @@ class PersonaActivationPolicy:
 class PersonaGraphDriver:
     """Minimal LangGraph-backed persona subgraph."""
 
-    def __init__(self, *, persona_node: PersonaNode | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        persona_node: PersonaNode | None = None,
+        synthesizer_node: PersonaSynthesizerNode | None = None,
+    ) -> None:
         self._persona_node = persona_node or MinimalPersonaNode()
+        self._synthesizer_node = synthesizer_node or MinimalSynthesizerNode()
         graph: Any = StateGraph(PersonaGraphState)
         graph.add_node("run_personas", self._run_personas)
+        graph.add_node("run_synthesizer", self._run_synthesizer)
         graph.add_edge(START, "run_personas")
-        graph.add_edge("run_personas", END)
+        graph.add_edge("run_personas", "run_synthesizer")
+        graph.add_edge("run_synthesizer", END)
         self._graph = graph.compile()
 
     def run(self, state: PersonaTurnState) -> PersonaTurnState:
@@ -263,6 +309,17 @@ class PersonaGraphDriver:
                 turn_state,
                 contributions=contributions,
                 node_trace=(*turn_state.node_trace, "run_personas"),
+            )
+        }
+
+    def _run_synthesizer(self, state: PersonaGraphState) -> PersonaGraphState:
+        turn_state = state["turn_state"]
+        synthesis = self._synthesizer_node(turn_state)
+        return {
+            "turn_state": replace(
+                turn_state,
+                synthesis=synthesis,
+                node_trace=(*turn_state.node_trace, "run_synthesizer"),
             )
         }
 
@@ -290,4 +347,9 @@ HISTORIAN_PERSONA = PersonaDefinition(
 CARE_PERSONA = PersonaDefinition(
     id="care_self",
     description="Highlights emotional impact, support, and sustainable pacing.",
+)
+
+SYNTHESIZER_PERSONA = PersonaDefinition(
+    id="synthesizer_self",
+    description="Fuses persona contributions into compact internal synthesis.",
 )

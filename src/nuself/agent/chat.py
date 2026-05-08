@@ -437,7 +437,10 @@ class ConversationGraphRuntime:
                 project_root=self._project_root,
                 thread_id=state.thread_id,
                 status=trigger,
-                metadata={"persona_count": len(updated_persona_turn_state.contributions)},
+                metadata={
+                    "persona_count": len(updated_persona_turn_state.contributions),
+                    "has_synthesis": updated_persona_turn_state.synthesis is not None,
+                },
             )
         except Exception:
             pass
@@ -681,6 +684,10 @@ def _compact_persona_summary(turn_state: "PersonaTurnState") -> str:
         note = contrib.notes[0] if contrib.notes else ""
         snippet = note if len(note) <= 140 else (note[:137] + "...")
         parts.append(f"{contrib.persona_id}: {snippet}")
+    if turn_state.synthesis is not None:
+        summary = turn_state.synthesis.summary
+        synthesis_snippet = summary if len(summary) <= 140 else (summary[:137] + "...")
+        parts.append(f"synthesizer_self: {synthesis_snippet}")
     if not parts:
         return "(no persona contributions)"
     return " | ".join(parts)
