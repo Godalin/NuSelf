@@ -517,6 +517,89 @@ def test_conversation_runtime_uses_mixed_intent_persona_precedence(tmp_path: Pat
     )
 
 
+def test_conversation_runtime_routes_care_persona_for_emotional_prompt(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM('{"answer":"Care reply.","evidence_references":[],"confidence":0.4}')
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+
+    turn_state = ConversationTurnState.start(
+        ThreadState.empty("care"),
+        "I'm feeling stressed and anxious about this situation.",
+        "care",
+    )
+    prepared = runtime.prepare_context_node(turn_state)
+    activated = runtime.persona_activation_node(prepared.state)
+
+    assert activated.state.persona_activation is not None
+    assert activated.state.persona_activation.trigger == "care_heuristic"
+
+    run_personas = runtime.run_personas_node(activated.state)
+    assert run_personas.state.persona_turn_state is not None
+    assert run_personas.state.persona_turn_state.contributions == (
+        PersonaContribution(
+            persona_id="care_self",
+            notes=("care_self highlighted emotional and human impact in: I'm feeling stressed and anxious about this situation.",),
+            confidence=0.0,
+        ),
+    )
+
+
+def test_conversation_runtime_explicit_multi_view_routes_all_relevant_personas(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM('{"answer":"All perspectives reply.","evidence_references":[],"confidence":0.4}')
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+
+    turn_state = ConversationTurnState.start(
+        ThreadState.empty("explicit-multi"),
+        "Please provide multiple perspectives: what are the risks, implementation roadmap, timeline context, and emotional impact?",
+        "explicit-multi",
+    )
+    prepared = runtime.prepare_context_node(turn_state)
+    activated = runtime.persona_activation_node(prepared.state)
+
+    assert activated.state.persona_activation is not None
+    assert activated.state.persona_activation.trigger == "explicit_relevant_personas"
+
+    run_personas = runtime.run_personas_node(activated.state)
+    assert run_personas.state.persona_turn_state is not None
+    assert run_personas.state.persona_turn_state.contributions == (
+        PersonaContribution(
+            persona_id="skeptic_self",
+            notes=(
+                "skeptic_self challenged assumptions in: Please provide multiple perspectives: what are the risks, implementation roadmap, timeline context, and emotional impact?",
+            ),
+            confidence=0.0,
+        ),
+        PersonaContribution(
+            persona_id="builder_self",
+            notes=(
+                "builder_self proposed concrete steps for: Please provide multiple perspectives: what are the risks, implementation roadmap, timeline context, and emotional impact?",
+            ),
+            confidence=0.0,
+        ),
+        PersonaContribution(
+            persona_id="historian_self",
+            notes=(
+                "historian_self connected prior context to: Please provide multiple perspectives: what are the risks, implementation roadmap, timeline context, and emotional impact?",
+            ),
+            confidence=0.0,
+        ),
+        PersonaContribution(
+            persona_id="care_self",
+            notes=(
+                "care_self highlighted emotional and human impact in: Please provide multiple perspectives: what are the risks, implementation roadmap, timeline context, and emotional impact?",
+            ),
+            confidence=0.0,
+        ),
+    )
+
+
 def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path: Path) -> None:
     llm = StructuredFakeLLM(
         '{"answer":"Graph driver reply.","evidence_references":["mem_graph"],'

@@ -3,6 +3,7 @@ from __future__ import annotations
 from nuself.agent.persona import (
     ANALYST_PERSONA,
     BUILDER_PERSONA,
+    CARE_PERSONA,
     HISTORIAN_PERSONA,
     SKEPTIC_PERSONA,
     PersonaContribution,
@@ -67,8 +68,8 @@ def test_persona_activation_policy_selects_analyst_and_skeptic_for_explicit_mult
     activation = policy.decide(PersonaInput(user_message="Please give me multiple perspectives on this plan."))
 
     assert activation.activated is True
-    assert activation.trigger == "explicit_request"
-    assert activation.selected_personas == (ANALYST_PERSONA, SKEPTIC_PERSONA)
+    assert activation.trigger == "explicit_relevant_personas"
+    assert activation.selected_personas == (BUILDER_PERSONA,)
 
 
 def test_persona_activation_policy_selects_skeptic_for_risk_prompt() -> None:
@@ -144,6 +145,56 @@ def test_persona_graph_runs_historian_persona_notes() -> None:
         PersonaContribution(
             persona_id="historian_self",
             notes=("historian_self connected prior context to: Let's review what happened earlier before deciding.",),
+            confidence=0.0,
+        ),
+    )
+
+
+def test_persona_activation_policy_selects_care_for_emotional_prompt() -> None:
+    policy = PersonaActivationPolicy()
+
+    activation = policy.decide(PersonaInput(user_message="I'm feeling stressed and anxious about this situation."))
+
+    assert activation.activated is True
+    assert activation.trigger == "care_heuristic"
+    assert activation.selected_personas == (CARE_PERSONA,)
+
+
+def test_persona_activation_policy_explicit_multi_view_includes_all_relevant_personas() -> None:
+    policy = PersonaActivationPolicy()
+
+    activation = policy.decide(
+        PersonaInput(
+            user_message=(
+                "Please provide multiple perspectives: what are the risks, implementation roadmap, "
+                "timeline context, and emotional impact?"
+            )
+        )
+    )
+
+    assert activation.activated is True
+    assert activation.trigger == "explicit_relevant_personas"
+    assert activation.selected_personas == (
+        SKEPTIC_PERSONA,
+        BUILDER_PERSONA,
+        HISTORIAN_PERSONA,
+        CARE_PERSONA,
+    )
+
+
+def test_persona_graph_runs_care_persona_notes() -> None:
+    driver = PersonaGraphDriver()
+    state = PersonaTurnState(
+        input=PersonaInput(user_message="I'm stressed and need support with this plan."),
+        selected_personas=(CARE_PERSONA,),
+    )
+
+    result = driver.run(state)
+
+    assert result.contributions == (
+        PersonaContribution(
+            persona_id="care_self",
+            notes=("care_self highlighted emotional and human impact in: I'm stressed and need support with this plan.",),
             confidence=0.0,
         ),
     )

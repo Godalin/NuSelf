@@ -81,6 +81,9 @@ class MinimalPersonaNode:
         if persona.id == "historian_self":
             note = f"{persona.id} connected prior context to: {persona_input.user_message}"
             return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
+        if persona.id == "care_self":
+            note = f"{persona.id} highlighted emotional and human impact in: {persona_input.user_message}"
+            return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
         note = f"{persona.id} considered: {persona_input.user_message}"
         return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
 
@@ -167,6 +170,23 @@ class PersonaActivationPolicy:
         "时间线",
         "复盘",
     )
+    _care_markers = (
+        "feel",
+        "feeling",
+        "emotion",
+        "emotional",
+        "stress",
+        "burnout",
+        "support",
+        "care",
+        "担心",
+        "焦虑",
+        "情绪",
+        "压力",
+        "照顾",
+        "支持",
+        "共情",
+    )
 
     def decide(self, persona_input: PersonaInput) -> PersonaActivation:
         text = persona_input.user_message.strip()
@@ -176,22 +196,31 @@ class PersonaActivationPolicy:
         has_depth = any(marker in normalized for marker in self._depth_markers) or (
             len(text) >= 180 and ("?" in text or "？" in text)
         )
+        has_historian = any(marker in normalized for marker in self._historian_markers)
+        has_care = any(marker in normalized for marker in self._care_markers)
+
+        selected_by_relevance: list[PersonaDefinition] = []
+        if has_skeptic:
+            selected_by_relevance.append(SKEPTIC_PERSONA)
+        if has_builder:
+            selected_by_relevance.append(BUILDER_PERSONA)
+        if has_depth:
+            selected_by_relevance.append(ANALYST_PERSONA)
+        if has_historian:
+            selected_by_relevance.append(HISTORIAN_PERSONA)
+        if has_care:
+            selected_by_relevance.append(CARE_PERSONA)
 
         if any(marker in normalized for marker in self._explicit_markers):
+            if selected_by_relevance:
+                return PersonaActivation(trigger="explicit_relevant_personas", selected_personas=tuple(selected_by_relevance))
             return PersonaActivation(
                 trigger="explicit_request",
                 selected_personas=(ANALYST_PERSONA, SKEPTIC_PERSONA),
             )
 
-        mixed_selected: list[PersonaDefinition] = []
-        if has_skeptic:
-            mixed_selected.append(SKEPTIC_PERSONA)
-        if has_builder:
-            mixed_selected.append(BUILDER_PERSONA)
-        if has_depth:
-            mixed_selected.append(ANALYST_PERSONA)
-        if len(mixed_selected) >= 2:
-            return PersonaActivation(trigger="mixed_intent_heuristic", selected_personas=tuple(mixed_selected))
+        if len(selected_by_relevance) >= 2:
+            return PersonaActivation(trigger="mixed_intent_heuristic", selected_personas=tuple(selected_by_relevance))
 
         if has_skeptic:
             return PersonaActivation(trigger="skeptic_heuristic", selected_personas=(SKEPTIC_PERSONA,))
@@ -199,8 +228,10 @@ class PersonaActivationPolicy:
             return PersonaActivation(trigger="builder_heuristic", selected_personas=(BUILDER_PERSONA,))
         if has_depth:
             return PersonaActivation(trigger="depth_heuristic", selected_personas=(ANALYST_PERSONA,))
-        if any(marker in normalized for marker in self._historian_markers):
+        if has_historian:
             return PersonaActivation(trigger="historian_heuristic", selected_personas=(HISTORIAN_PERSONA,))
+        if has_care:
+            return PersonaActivation(trigger="care_heuristic", selected_personas=(CARE_PERSONA,))
         return PersonaActivation(trigger="not_needed")
 
 
@@ -254,4 +285,9 @@ BUILDER_PERSONA = PersonaDefinition(
 HISTORIAN_PERSONA = PersonaDefinition(
     id="historian_self",
     description="Connects prior context and timelines to current decisions.",
+)
+
+CARE_PERSONA = PersonaDefinition(
+    id="care_self",
+    description="Highlights emotional impact, support, and sustainable pacing.",
 )
