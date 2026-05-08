@@ -4,32 +4,27 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Temporarily plan TUI and logging polish before returning to the persona-runtime work.
+Finish the TUI and logging polish branch, then merge back to `main` and return to persona-runtime work.
 
-The persona-runtime slice is paused at the minimal skeleton stage. Before continuing, define a focused TUI and logging plan for review on the `tui-log-plan` branch. Implementation should wait until the plan is approved.
+The TUI/logging slice now has structured local logs, a general `nuself logs` viewer, REPL activity lines, `:status` / `:logs`, read-only `:mem ...` inspect commands, and readable memory renderers. The remaining work is validation, progress commit, merge back to `main`, and restoring the persona activation/routing focus.
 
 ## Immediate Context
 
-- Existing interactive chat is a readline-backed loop with `:q`, `:memory`, and help.
-- Existing daemon logging writes daemon stdout/stderr to `private/logs/daemon.log`.
-- Memory curator and optimizer append action lines to `private/logs/memory.log`.
-- `nuself daemon logs` currently prints the whole daemon log.
-- Interactive chat should stay REPL-shaped and show compact colorful activity events in chronological order.
-- Interactive chat should also expose better read-only memory inspection without replacing `nuself memory ...` maintenance commands.
-- Memory inspect output should be visually pleasant: compact rows for lists and grouped readable blocks for details.
+- Interactive chat is still readline-backed and REPL-shaped.
+- Structured local logs are written under `private/logs/`.
+- `nuself logs` and `nuself daemon logs` render structured log tails.
+- Interactive chat prints compact activity events after turns.
+- Interactive chat supports `:status`, `:logs`, and read-only `:mem ...` inspect commands.
+- Memory inspect output has compact rows and grouped detail blocks.
 - Future persona discussion should fit the same activity feed as concise summaries, not final-answer text.
 - The detailed review plan lives in [docs/tui-log-plan.md](tui-log-plan.md).
 
 ## Next Steps
 
-1. Review the TUI and logging plan.
-2. After approval, implement structured local logs without recording raw private chat or memory bodies.
-3. Add a general `nuself logs` surface and keep daemon logs readable.
-4. Render selected log events inside interactive chat as compact colored activity lines.
-5. Add readable memory renderers for entries, candidates, profile items, sources, and relations.
-6. Add read-only `:mem ...` inspection commands for entries, candidates, profile items, sources, and later answer context.
-7. Extract interactive rendering into a small TUI module and add focused `:status` / `:logs` commands.
-8. Merge back to `main`, then resume persona activation and routing.
+1. Run focused and full validation.
+2. Commit README/current-goal progress updates.
+3. Merge `tui-log-plan` back to `main`.
+4. Restore `docs/current-goal.md` to the persona activation/routing focus.
 
 ## Not Now
 
@@ -43,10 +38,8 @@ The persona-runtime slice is paused at the minimal skeleton stage. Before contin
 
 ## Completion Criteria
 
-- TUI and logging plan is explicit enough to review.
-- No functional code changes land before plan approval.
-- The plan preserves private data boundaries under ignored `private/`.
-- The plan includes an interactive background activity feed and future persona discussion summaries.
-- The plan includes a read-only REPL memory inspection surface.
-- The plan includes readable memory rendering rules for compact and detail views.
-- README TODOs track the temporary focus while completed work stays out of this file.
+- Focused CLI/daemon tests pass.
+- Full project tests pass.
+- `uvx pyright` passes.
+- README TODOs track completed REPL/log/memory inspect progress.
+- Merge back to `main` is complete.

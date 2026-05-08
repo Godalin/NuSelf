@@ -48,10 +48,10 @@ LangGraph 现在已经支撑 conversation runtime。persona subgraphs、主动�
 - [x] 添加 `chat`、`attach` 和 daemon-backed attach 流程。
 - [x] 让根命令 `nuself` 成为便捷的 daemon-backed chat 入口。
 - [x] 添加交互模式，支持 `:q`、`:memory`、指令帮助和 readline 历史。
-- [ ] 添加 REPL 形态的终端交互层，用于显示状态、紧凑活动事件、日志和更清晰的聊天会话。
-- [ ] 添加只读 REPL 记忆 inspect 命令，用于查看 entries、candidates、profile items 和 sources。
-- [ ] 添加适合终端阅读的记忆列表和详情渲染器。
-- [ ] 添加结构化本地日志文件和通用 `nuself logs` 查看器。
+- [x] 添加 REPL 形态的终端交互层，用于显示状态、紧凑活动事件、日志和更清晰的聊天会话。
+- [x] 添加只读 REPL 记忆 inspect 命令，用于查看 entries、candidates、profile items 和 sources。
+- [x] 添加适合终端阅读的记忆列表和详情渲染器。
+- [x] 添加结构化本地日志文件和通用 `nuself logs` 查看器。
 - [ ] 添加命名 thread 创建、分支、重命名和归档。
 - [ ] 添加可以打开已有 thread 或创建新 thread 的 deep link。
 
@@ -252,7 +252,7 @@ uv run nuself daemon attach
 uv run nuself daemon attach --message "continue"
 ```
 
-不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。以 `:` 开头的输入会被识别为交互指令。输入 `:memory` 或 `:mem` 可以预览当前记忆条目。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
+不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。以 `:` 开头的输入会被识别为交互指令。输入 `:status` 可以查看 daemon/thread 状态，输入 `:logs` 可以查看最近 activity events，输入 `:memory` 或 `:mem` 可以预览当前记忆条目。只读记忆 inspect 快捷命令包括 `:mem search <query>`、`:mem show <entry-id>`、`:mem candidates`、`:mem candidate <candidate-id>`、`:mem profile <query>`、`:mem sources` 和 `:mem source <source-id>`。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
 
 当前聊天使用一个基于 LangGraph 的 conversation runtime。它会检索 memory entries、derived profile items 和 imported source chunks，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。当前记忆检索是确定性的词法检索，带有 descriptor-aware 类型提示、type/tag filters、基于现有 memory links 的 relation expansion 和排序原因；向量索引和图索引会作为后续派生检索层加入。
 
@@ -267,7 +267,7 @@ NUSELF_CONTEXT_SUMMARY_TARGET_CHARS=2400
 NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS=300
 ```
 
-memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出时运行。它会用 agent 判断新的 working-memory 对话应该新增、修改还是忽略长期记忆。无意义闲聊会被忽略，已有相似记忆会优先更新而不是重复创建，原始对话流水账会被拒绝写入。另有一个 memory optimizer 可以手动、低频运行，用来整合已经存在的杂乱条目。更新事件会写入 `private/logs/memory.log`。
+memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出时运行。它会用 agent 判断新的 working-memory 对话应该新增、修改还是忽略长期记忆。无意义闲聊会被忽略，已有相似记忆会优先更新而不是重复创建，原始对话流水账会被拒绝写入。另有一个 memory optimizer 可以手动、低频运行，用来整合已经存在的杂乱条目。更新事件会写入 `private/logs/memory.log`，交互式聊天也会用紧凑 activity lines 显示新的 chat、daemon 和 memory 事件。
 
 当前 conversation graph 有意保持较小：它保留 CLI 和 daemon protocol 边界，同时为后续 persona subgraphs 和更丰富的 agent routing 留出空间。
 
@@ -282,6 +282,14 @@ uv run nuself daemon list
 uv run nuself daemon logs
 uv run nuself daemon attach --message "continue"
 uv run nuself daemon stop
+```
+
+也可以用通用日志查看器检查结构化本地日志：
+
+```bash
+uv run nuself logs
+uv run nuself logs --component chat --tail 20
+uv run nuself logs --component memory --json
 ```
 
 不带子命令时，`daemon` 会显示守护进程子命令帮助。
