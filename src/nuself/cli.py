@@ -109,6 +109,10 @@ def build_parser() -> argparse.ArgumentParser:
     logs_parser = subparsers.add_parser("logs")
     _add_log_arguments(logs_parser)
 
+    eval_parser = subparsers.add_parser("eval")
+    eval_parser.add_argument("--fixtures", type=Path, default=None)
+    _add_handler(eval_parser, handle_eval)
+
     memory_parser = subparsers.add_parser("memory")
     memory_parser.set_defaults(handler=None, help_parser=memory_parser)
     memory_subparsers = memory_parser.add_subparsers(dest="memory_command")
@@ -686,6 +690,31 @@ def handle_thread_archive(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+
+
+def handle_eval(args: argparse.Namespace) -> int:
+    from nuself.eval import run_eval, load_fixtures
+
+    fixtures_dir = args.fixtures or (Path(__file__).parent.parent / "tests" / "fixtures" / "conversations")
+    if not fixtures_dir.exists():
+        print(f"Fixtures directory not found: {fixtures_dir}", file=sys.stderr)
+        return 1
+    fixtures = load_fixtures(fixtures_dir)
+    if not fixtures:
+        print(f"No fixtures found in: {fixtures_dir}")
+        return 0
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        results = run_eval(Path(tmp), fixtures_dir)
+    passed = sum(1 for r in results if r.passed)
+    total = len(results)
+    for result in results:
+        status = "PASS" if result.passed else "FAIL"
+        print(f"{status} {result.fixture_name} (score={result.score:.2f})")
+        for failure in result.failures:
+            print(f"  - {failure}")
+    print(f"\n{passed}/{total} passed")
+    return 0 if passed == total else 1
 
 
 def handle_memory_update(args: argparse.Namespace) -> int:

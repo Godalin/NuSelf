@@ -1,0 +1,21 @@
+{
+  "name": "cites-memory-when-available",
+  "thread_id": "eval-test",
+  "user_message": "What do I believe about remote work?",
+  "memory_entries": [
+    {
+      "type": "belief",
+      "title": "Remote work preference",
+      "body": "I prefer remote work for deep focus tasks.",
+      "tags": ["work"]
+    }
+  ],
+  "llm_response": "{\"answer\":\"You prefer remote work for deep focus tasks.\",\"evidence_references\":[\"mem_123\"],\"confidence\":0.9,\"epistemic_status\":\"grounded\"}",
+  "expectations": {
+    "answer_contains": ["remote work", "deep focus"],
+    "evidence_references_count_min": 1,
+    "epistemic_status": "grounded",
+    "confidence_min": 0.5,
+    "banned_patterns": ["you always", "you never"]
+  }
+}
