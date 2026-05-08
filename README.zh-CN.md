@@ -13,7 +13,7 @@ NuSelf 是一个本地 AI 镜像项目。它的目标是逐步成长为一个带
 - 在 ignored `private/sources/` 下支持 Markdown 和纯文本 source ingestion，并可从导入的 chunks 提取可审阅候选项。
 - 持久化聊天线程，并能压缩较早的对话上下文。
 
-LangGraph 现在已经支撑 conversation runtime。persona subgraphs、主动反思、邮件和 macOS 通知仍是后续规划。
+LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制的内部 persona skeleton 已经可以在显式或高深度 turns 上运行。persona subgraphs、主动反思、邮件和 macOS 通知仍是后续规划。
 
 ## 项目 TODOs
 
@@ -24,9 +24,10 @@ LangGraph 现在已经支撑 conversation runtime。persona subgraphs、主动�
 ### 当前目标
 
 - [x] 完成 REPL 形态 TUI、结构化日志和记忆 inspect 优化。
-- [ ] 添加 persona activation gate，用于显式请求和高深度讨论线索。
-- [ ] 将最小 persona skeleton 内部接入 conversation runtime。
-- [ ] 保持 persona contributions 为内部信息，同时保留 chat、CLI 和 daemon payloads 不变。
+- [x] 添加 persona activation gate，用于显式请求和高深度讨论线索。
+- [x] 将最小 persona skeleton 内部接入 conversation runtime。
+- [x] 保持 persona contributions 为内部信息，同时保留 chat、CLI 和 daemon payloads 不变。
+- [ ] 为已激活 turns 在 REPL 中展示紧凑 persona activity summaries。
 
 ### 项目基础
 

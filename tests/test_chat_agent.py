@@ -16,6 +16,7 @@ from nuself.agent.chat import (
     ThreadState,
     ThreadStore,
 )
+from nuself.agent.persona import PersonaContribution
 from nuself.agent.graph_driver import ConversationGraphRuntimeError
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
@@ -338,6 +339,70 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
     assert compressed.state.updated_thread_state == updated.state.updated_thread_state
 
 
+def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM('{"answer":"Trivial reply.","evidence_references":[],"confidence":0.4}')
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+
+    result = runtime.run_turn(ThreadState.empty("trivial"), "hello", "trivial")
+
+    assert result.result.answer == "Trivial reply."
+    assert result.node_trace == (
+        "prepare_context",
+        "persona_activation",
+        "initial_response",
+        "detect_tool_request",
+        "finalize_response",
+        "state_update",
+        "compression",
+    )
+
+
+def test_conversation_runtime_runs_persona_skeleton_when_activated(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM('{"answer":"Persona reply.","evidence_references":[],"confidence":0.4}')
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+
+    turn_state = ConversationTurnState.start(ThreadState.empty("persona"), "Should I split this project?", "persona")
+    prepared = runtime.prepare_context_node(turn_state)
+    activated = runtime.persona_activation_node(prepared.state)
+
+    assert activated.state.persona_activation is not None
+    assert activated.state.persona_activation.activated is True
+    assert activated.state.persona_turn_state is not None
+
+    run_personas = runtime.run_personas_node(activated.state)
+    assert run_personas.node == "run_personas"
+    assert run_personas.state.persona_turn_state is not None
+    assert run_personas.state.persona_turn_state.contributions == (
+        PersonaContribution(
+            persona_id="analyst_self",
+            notes=("analyst_self considered: Should I split this project?",),
+            confidence=0.0,
+        ),
+    )
+    assert run_personas.state.persona_turn_state.node_trace == ("run_personas",)
+
+    graph_turn = runtime.run_turn(ThreadState.empty("persona-graph"), "Should I split this project?", "persona-graph")
+    assert graph_turn.result.answer == "Persona reply."
+    assert graph_turn.node_trace == (
+        "prepare_context",
+        "persona_activation",
+        "run_personas",
+        "initial_response",
+        "detect_tool_request",
+        "finalize_response",
+        "state_update",
+        "compression",
+    )
+
+
 def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path: Path) -> None:
     llm = StructuredFakeLLM(
         '{"answer":"Graph driver reply.","evidence_references":["mem_graph"],'
@@ -356,6 +421,7 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
     assert result.result.confidence == 0.9
     assert result.node_trace == (
         "prepare_context",
+        "persona_activation",
         "initial_response",
         "detect_tool_request",
         "finalize_response",
@@ -398,6 +464,7 @@ def test_conversation_graph_runtime_routes_tool_calls_through_tool_node(tmp_path
     assert result.result.evidence_references == ("mem_tool",)
     assert result.node_trace == (
         "prepare_context",
+        "persona_activation",
         "initial_response",
         "detect_tool_request",
         "execute_tool",
@@ -425,6 +492,7 @@ def test_conversation_graph_runtime_keeps_unsupported_tools_on_no_tool_route(tmp
     assert result.result.answer == "I cannot run that tool."
     assert result.node_trace == (
         "prepare_context",
+        "persona_activation",
         "initial_response",
         "detect_tool_request",
         "finalize_response",
@@ -471,7 +539,7 @@ def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Pat
         agent.respond("new message")
 
     assert exc_info.value.node == "initial_response"
-    assert exc_info.value.node_trace == ("prepare_context", "initial_response")
+    assert exc_info.value.node_trace == ("prepare_context", "persona_activation", "initial_response")
     state = thread_store.load("default")
     assert state.messages == [ThreadMessage(role="user", content="existing message")]
     assert state.next_message_index == 1

@@ -10,7 +10,14 @@ from pathlib import Path
 from typing import Any, Literal, Protocol, TypeVar, cast
 
 from nuself.agent.tools import MemorySearchTool
-from nuself.config import config_int, runtime_paths
+from nuself.agent.persona import (
+    PersonaActivation,
+    PersonaActivationPolicy,
+    PersonaGraphDriver,
+    PersonaInput,
+    PersonaTurnState,
+)
+from nuself.config import config_int, runtime_paths, ensure_runtime_dirs
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
@@ -20,6 +27,8 @@ from nuself.profile.repository import ProfileItemRepository
 ThreadRole = Literal["user", "assistant"]
 ConversationNodeName = Literal[
     "prepare_context",
+    "persona_activation",
+    "run_personas",
     "initial_response",
     "detect_tool_request",
     "execute_tool",
@@ -188,8 +197,11 @@ class ConversationTurnState:
     thread_id: str
     persisted_state: ThreadState
     user_message: str
+    memory_context: str = ""
     base_messages: tuple[ThreadMessage, ...] = ()
     active_messages: tuple[ThreadMessage, ...] = ()
+    persona_activation: PersonaActivation | None = None
+    persona_turn_state: PersonaTurnState | None = None
     initial_response: ParsedChatResponse | None = None
     tool_call: ConversationToolCall | None = None
     tool_result: str | None = None
@@ -345,6 +357,9 @@ class ConversationGraphRuntime:
     ) -> None:
         self._llm = llm or default_llm(project_root)
         self._settings = settings or ChatAgentSettings.from_project(project_root)
+        self._project_root = project_root
+        self._persona_activation_policy = PersonaActivationPolicy()
+        self._persona_driver = PersonaGraphDriver()
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),
             SourceRepository(project_root),
@@ -376,25 +391,65 @@ class ConversationGraphRuntime:
     def prepare_context_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         base_messages = tuple(_drop_local_fallback_replies(state.persisted_state.messages))
         active_messages = (*base_messages, ThreadMessage(role="user", content=state.user_message))
+        packed_memory = self._memory_query_service.pack(MemoryQuery(text=state.user_message))
         return ConversationNodeResult(
             node="prepare_context",
             state=replace(
                 state,
                 base_messages=base_messages,
                 active_messages=active_messages,
+                memory_context=packed_memory.text,
                 node_trace=(*state.node_trace, "prepare_context"),
             ),
         )
 
-    def initial_response_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        prompt = self._build_prompt(
-            ThreadState(
-                thread_id=state.thread_id,
-                summary=state.persisted_state.summary,
-                messages=list(state.active_messages),
-            ),
-            state.user_message,
+    def persona_activation_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        activation = self._persona_activation_policy.decide(
+            PersonaInput(user_message=state.user_message, memory_context=state.memory_context)
         )
+        persona_turn_state = None
+        if activation.activated:
+            persona_turn_state = PersonaTurnState(
+                input=PersonaInput(user_message=state.user_message, memory_context=state.memory_context),
+                selected_personas=activation.selected_personas,
+            )
+        return ConversationNodeResult(
+            node="persona_activation",
+            state=replace(
+                state,
+                persona_activation=activation,
+                persona_turn_state=persona_turn_state,
+                node_trace=(*state.node_trace, "persona_activation"),
+            ),
+        )
+
+    def run_personas_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        persona_turn_state = _require_persona_turn_state(state.persona_turn_state)
+        updated_persona_turn_state = self._persona_driver.run(persona_turn_state)
+        # Render a compact persona summary for REPL/logs (private runtime only).
+        try:
+            summary = _compact_persona_summary(updated_persona_turn_state)
+            paths = runtime_paths(self._project_root)
+            ensure_runtime_dirs(paths)
+            hist = paths.runtime_dir / "interactive_history"
+            with hist.open("a", encoding="utf-8") as fh:
+                fh.write("\n[PERSONA_SUMMARY] ")
+                fh.write(summary)
+                fh.write("\n")
+        except Exception:
+            # Do not let logging failures break the conversation runtime.
+            pass
+        return ConversationNodeResult(
+            node="run_personas",
+            state=replace(
+                state,
+                persona_turn_state=updated_persona_turn_state,
+                node_trace=(*state.node_trace, "run_personas"),
+            ),
+        )
+
+    def initial_response_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        prompt = self._build_prompt(state)
         return ConversationNodeResult(
             node="initial_response",
             state=replace(
@@ -504,9 +559,9 @@ class ConversationGraphRuntime:
             ),
         )
 
-    def _build_prompt(self, state: ThreadState, user_message: str) -> list[ChatMessage]:
-        prompt: list[ChatMessage] = [ChatMessage(role="system", content=self._system_prompt(user_message, state.summary))]
-        for message in state.messages[-self._settings.recent_messages :]:
+    def _build_prompt(self, state: ConversationTurnState) -> list[ChatMessage]:
+        prompt: list[ChatMessage] = [ChatMessage(role="system", content=self._system_prompt(state))]
+        for message in state.active_messages[-self._settings.recent_messages :]:
             prompt.append(ChatMessage(role=message.role, content=message.content))
         return prompt
 
@@ -529,7 +584,7 @@ class ConversationGraphRuntime:
         prompt.append(ChatMessage(role="user", content=f"Tool result:\n{tool_result}"))
         return prompt
 
-    def _system_prompt(self, user_message: str, summary: str) -> str:
+    def _system_prompt(self, state: ConversationTurnState) -> str:
         parts = [
             "You are NuSelf, a private AI mirror for one person.",
             "Use the user's memory entries and source chunks as durable context. Do not invent memories.",
@@ -540,11 +595,10 @@ class ConversationGraphRuntime:
             "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
             "Answer directly, keep uncertainty explicit, and surface useful questions when appropriate.",
         ]
-        packed_memory = self._memory_query_service.pack(MemoryQuery(text=user_message))
-        if packed_memory.text != "":
-            parts.extend(["", "Relevant memory context:", packed_memory.text])
-        if summary != "":
-            parts.extend(["", "Compressed conversation so far:", summary])
+        if state.memory_context != "":
+            parts.extend(["", "Relevant memory context:", state.memory_context])
+        if state.persisted_state.summary != "":
+            parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
         parts.extend([
             "",
             "Available tools:",
@@ -619,6 +673,17 @@ def _local_summary(previous_summary: str, transcript: str, target_chars: int) ->
     return combined[-target_chars:]
 
 
+def _compact_persona_summary(turn_state: "PersonaTurnState") -> str:
+    parts: list[str] = []
+    for contrib in turn_state.contributions:
+        note = contrib.notes[0] if contrib.notes else ""
+        snippet = note if len(note) <= 140 else (note[:137] + "...")
+        parts.append(f"{contrib.persona_id}: {snippet}")
+    if not parts:
+        return "(no persona contributions)"
+    return " | ".join(parts)
+
+
 def _drop_local_fallback_replies(messages: list[ThreadMessage]) -> list[ThreadMessage]:
     return [message for message in messages if not _is_local_fallback_reply(message)]
 
@@ -638,6 +703,10 @@ def _require_thread_state(state: ThreadState | None) -> ThreadState:
         raise RuntimeError("conversation runtime thread state is missing")
     return state
 
+def _require_persona_turn_state(state: PersonaTurnState | None) -> PersonaTurnState:
+    if state is None:
+        raise RuntimeError("conversation runtime persona turn state is missing")
+    return state
 
 def _require_tool_result(tool_result: str | None) -> str:
     if tool_result is None:

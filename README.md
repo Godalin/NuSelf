@@ -13,7 +13,7 @@ The current implementation is an early CLI-first system:
 - File-backed source ingestion for Markdown and plain text under ignored `private/sources/`, plus reviewable candidates extracted from imported chunks.
 - Persisted chat threads with compressed conversation context.
 
-LangGraph now backs the conversation runtime. Persona subgraphs, proactive reflection, email, and macOS notifications are still planned.
+LangGraph now backs the conversation runtime, and a gated internal persona skeleton can run on explicit or deep turns. Full persona subgraphs, proactive reflection, email, and macOS notifications are still planned.
 
 ## Project TODOs
 
@@ -24,9 +24,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 ### Current Goal
 
 - [x] Complete REPL-shaped TUI, structured logging, and memory inspect polish.
-- [ ] Add a persona activation gate for explicit requests and high-depth discussion cues.
-- [ ] Wire the minimal persona skeleton into the conversation runtime internally.
-- [ ] Keep persona contributions internal while preserving chat, CLI, and daemon payloads.
+- [x] Add a persona activation gate for explicit requests and high-depth discussion cues.
+- [x] Wire the minimal persona skeleton into the conversation runtime internally.
+- [x] Keep persona contributions internal while preserving chat, CLI, and daemon payloads.
+- [ ] Surface compact persona activity summaries in the REPL for activated turns.
 
 ### Project Foundation
 

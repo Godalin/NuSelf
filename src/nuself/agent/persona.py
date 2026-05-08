@@ -35,6 +35,18 @@ class PersonaContribution:
 
 
 @dataclass(frozen=True)
+class PersonaActivation:
+    """Decision about whether persona work should run for a turn."""
+
+    trigger: str
+    selected_personas: tuple[PersonaDefinition, ...] = ()
+
+    @property
+    def activated(self) -> bool:
+        return bool(self.selected_personas)
+
+
+@dataclass(frozen=True)
 class PersonaTurnState:
     """State passed through the minimal persona graph."""
 
@@ -62,6 +74,53 @@ class MinimalPersonaNode:
     def __call__(self, persona: PersonaDefinition, persona_input: PersonaInput) -> PersonaContribution:
         note = f"{persona.id} considered: {persona_input.user_message}"
         return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
+
+
+class PersonaActivationPolicy:
+    """Small deterministic gate for the minimal persona slice."""
+
+    _explicit_markers = (
+        "multiple perspectives",
+        "different perspectives",
+        "several perspectives",
+        "personas",
+        "persona",
+        "selves",
+        "debate",
+        "discuss this",
+        "多人格",
+        "多角度",
+        "几个角度",
+        "不同视角",
+        "讨论一下",
+    )
+    _depth_markers = (
+        "tradeoff",
+        "trade-off",
+        "decision",
+        "long-term",
+        "architecture",
+        "strategy",
+        "should i",
+        "取舍",
+        "决策",
+        "长期",
+        "规划",
+        "架构",
+        "怎么办",
+        "要不要",
+    )
+
+    def decide(self, persona_input: PersonaInput) -> PersonaActivation:
+        text = persona_input.user_message.strip()
+        normalized = text.lower()
+        if any(marker in normalized for marker in self._explicit_markers):
+            return PersonaActivation(trigger="explicit_request", selected_personas=(ANALYST_PERSONA,))
+        if any(marker in normalized for marker in self._depth_markers):
+            return PersonaActivation(trigger="depth_heuristic", selected_personas=(ANALYST_PERSONA,))
+        if len(text) >= 180 and ("?" in text or "？" in text):
+            return PersonaActivation(trigger="depth_heuristic", selected_personas=(ANALYST_PERSONA,))
+        return PersonaActivation(trigger="not_needed")
 
 
 class PersonaGraphDriver:
