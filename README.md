@@ -23,6 +23,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Current Goal
 
+- [ ] Review the TUI and logging polish plan.
 - [x] Add a profile item repository for derived profile state.
 - [x] Convert imported source chunks into reviewable memory/profile candidates.
 - [x] Preserve source evidence links on source-derived candidates.
@@ -30,7 +31,6 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add profile item search and filter commands.
 - [x] Add profile item retrieval to the query layer.
 - [x] Add derived profile context to intake, curator, and optimizer prompts.
- - [x] Add derived profile context to intake, curator, and optimizer prompts.
 
 ### Project Foundation
 
@@ -48,6 +48,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add `chat`, `attach`, and daemon-backed attach flows.
 - [x] Make root `nuself` a convenient daemon-backed chat entrypoint.
 - [x] Add interactive mode with `:q`, `:memory`, command help, and readline history.
+- [ ] Add a small terminal interaction layer for status, logs, and clearer chat sessions.
+- [ ] Add structured local log files and a general `nuself logs` viewer.
 - [ ] Add named thread creation, branching, renaming, and archival.
 - [ ] Add deep links that open an existing thread or create a new one.
 

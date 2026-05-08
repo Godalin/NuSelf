@@ -23,6 +23,7 @@ LangGraph 现在已经支撑 conversation runtime。persona subgraphs、主动�
 
 ### 当前目标
 
+- [ ] 审核 TUI 和日志优化计划。
 - [x] 添加用于 derived profile state 的 profile item repository。
 - [x] 将 imported source chunks 转换为可 review 的 memory/profile candidates。
 - [x] 在 source-derived candidates 上保留 source evidence links。
@@ -30,7 +31,6 @@ LangGraph 现在已经支撑 conversation runtime。persona subgraphs、主动�
 - [x] 添加 profile item 的 search 和 filter 命令。
 - [x] 将 profile item 接入 query 层。
 - [x] 将 derived profile context 接入 intake、curator 和 optimizer prompts。
- - [x] 将 derived profile context 接入 intake、curator 和 optimizer prompts。
 
 ### 项目基础
 
@@ -48,6 +48,8 @@ LangGraph 现在已经支撑 conversation runtime。persona subgraphs、主动�
 - [x] 添加 `chat`、`attach` 和 daemon-backed attach 流程。
 - [x] 让根命令 `nuself` 成为便捷的 daemon-backed chat 入口。
 - [x] 添加交互模式，支持 `:q`、`:memory`、指令帮助和 readline 历史。
+- [ ] 添加小型终端交互层，用于显示状态、日志和更清晰的聊天会话。
+- [ ] 添加结构化本地日志文件和通用 `nuself logs` 查看器。
 - [ ] 添加命名 thread 创建、分支、重命名和归档。
 - [ ] 添加可以打开已有 thread 或创建新 thread 的 deep link。
 
