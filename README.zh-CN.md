@@ -27,7 +27,7 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 添加 persona activation gate，用于显式请求和高深度讨论线索。
 - [x] 将最小 persona skeleton 内部接入 conversation runtime。
 - [x] 保持 persona contributions 为内部信息，同时保留 chat、CLI 和 daemon payloads 不变。
-- [ ] 为已激活 turns 在 REPL 中展示紧凑 persona activity summaries。
+- [x] 为已激活 turns 在 REPL 中展示紧凑 persona activity summaries。
 
 ### 项目基础
 
@@ -124,8 +124,8 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 
 - [ ] 添加 LangGraph persona subgraph。
 - [x] 添加最小内部 persona skeleton，且不改变 chat payloads。
-- [ ] 将最小 persona skeleton 内部接入 conversation runtime。
-- [ ] 添加 persona activation gate，用于显式请求和高深度讨论线索。
+- [x] 将最小 persona skeleton 内部接入 conversation runtime。
+- [x] 添加 persona activation gate，用于显式请求和高深度讨论线索。
 - [ ] 添加有界 personas：analyst、skeptic、builder、historian、care、synthesizer。
 - [ ] 按请求只路由相关 personas。
 - [ ] 让 synthesizer 成为唯一面向用户的声音。

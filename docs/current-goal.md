@@ -4,23 +4,23 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Surface compact persona activity summaries in the REPL while keeping persona internals out of user-facing payloads.
+Expand the minimal persona layer beyond a single analyst role while keeping persona internals out of user-facing payloads.
 
-The minimal persona graph skeleton now runs behind an activation gate inside the conversation runtime on explicit requests or discussion-depth cues. The next useful step is to render that internal persona activity as compact `[selves]` summaries in the REPL or logs, while keeping `ChatResult.to_payload`, CLI payloads, daemon payloads, and durable memory schema unchanged.
+The conversation runtime now runs the persona skeleton behind an activation gate and emits compact `[selves]` activity summaries through structured persona logs in interactive chat. The next useful step is to add at least one additional bounded persona and simple relevance routing, while keeping `ChatResult.to_payload`, CLI payloads, daemon payloads, and durable memory schema unchanged.
 
 ## Immediate Context
 
 - `MemoryQueryService` remains the stable retrieval boundary for memory entries, profile items, source chunks, and graph-derived expansion.
 - `ChatAgent` owns thread persistence while `ConversationGraphRuntime` owns turn execution.
 - `ConversationGraphDriver` is the only conversation module that imports LangGraph and wraps graph failures.
-- `PersonaGraphDriver` can run a single internal `analyst_self` persona and return structured contributions.
-- Interactive chat already has compact activity events, so persona activity summaries can fit the same REPL channel without changing answer payloads.
+- `PersonaGraphDriver` can run internal personas and return structured contributions.
+- Interactive chat now renders persona activity through the existing activity log channel (`persona` component rendered as `[selves]`).
 - Persona work must not run on every trivial turn by default.
 - Persona internals must not leak into `ChatResult.to_payload`, CLI payloads, daemon payloads, or durable memory schema.
 
 ## Next Steps
 
-Render compact persona activity summaries for activated turns in the REPL/log path, keep trivial turns silent, and preserve the current response metadata, memory packing, persistence, tool calls, diagnostics, and fallback behavior as-is.
+Add a bounded `skeptic_self` persona and route between `analyst_self` / `skeptic_self` using deterministic cues from user intent. Keep trivial turns silent, keep synthesizer behavior unchanged (assistant reply stays single-voice), and preserve current response metadata, memory packing, persistence, tool calls, diagnostics, and fallback behavior as-is.
 
 ## Not Now
 
@@ -34,7 +34,7 @@ Render compact persona activity summaries for activated turns in the REPL/log pa
 
 ## Completion Criteria
 
-- Activated turns can surface compact persona activity summaries without changing user-facing payloads.
+- Activated turns can route to at least two bounded personas (`analyst_self` and `skeptic_self`) and surface compact persona activity summaries without changing user-facing payloads.
 - Trivial chat turns still skip persona work by default.
 - Existing chat entrypoints keep current user-visible behavior.
 - Persona internals do not leak into CLI or daemon payloads.

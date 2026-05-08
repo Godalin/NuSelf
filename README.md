@@ -27,7 +27,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add a persona activation gate for explicit requests and high-depth discussion cues.
 - [x] Wire the minimal persona skeleton into the conversation runtime internally.
 - [x] Keep persona contributions internal while preserving chat, CLI, and daemon payloads.
-- [ ] Surface compact persona activity summaries in the REPL for activated turns.
+- [x] Surface compact persona activity summaries in the REPL for activated turns.
 
 ### Project Foundation
 
@@ -124,8 +124,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 - [ ] Add LangGraph persona subgraph.
 - [x] Add minimal internal persona skeleton without changing chat payloads.
-- [ ] Wire the minimal persona skeleton into the conversation runtime internally.
-- [ ] Add persona activation gate for explicit requests and high-depth discussion cues.
+- [x] Wire the minimal persona skeleton into the conversation runtime internally.
+- [x] Add persona activation gate for explicit requests and high-depth discussion cues.
 - [ ] Add bounded personas: analyst, skeptic, builder, historian, care, and synthesizer.
 - [ ] Route only relevant personas per request.
 - [ ] Make synthesizer the only user-facing voice.
