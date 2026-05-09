@@ -1163,11 +1163,13 @@ _INTERACTIVE_COMMANDS = [
     ":q",
     ":quit",
     ":exit",
+    ":whoami",
     ":help",
     ":status",
     ":logs",
     ":memory",
     ":mem",
+    ":notify",
     ":threads",
     ":thread",
     ":rename",
@@ -1354,6 +1356,21 @@ def _handle_interactive_command(command: str, project_root: Path | None, current
         print(_handle_interactive_whoami_command(project_root))
         print()
         return ("", current_thread_id)
+    if command == ":notify":
+        print()
+        print(_handle_interactive_notify_command(project_root))
+        print()
+        return ("", current_thread_id)
+    if command.startswith(":notify "):
+        print()
+        parts = command[8:].strip().split(maxsplit=1)
+        if len(parts) < 2:
+            print(_interactive_help(":notify"))
+        else:
+            subcmd, entry_id = parts[0], parts[1]
+            print(_handle_interactive_notify_subcommand(project_root, subcmd, entry_id))
+        print()
+        return ("", current_thread_id)
     if command == ":help":
         print()
         print(_interactive_help())
@@ -1453,11 +1470,12 @@ def _interactive_help(command: str | None = None) -> str:
     lines.extend(
         [
             "Interactive commands:",
-            "  :q       exit",
-            "  :quit    exit",
-            "  :exit    exit",
-            "  :whoami  show core profile",
-            "  :help    show this help",
+            "  :q         exit",
+            "  :quit      exit",
+            "  :exit      exit",
+            "  :whoami    show core profile",
+            "  :notify    list pending notifications",
+            "  :help      show this help",
             "  :status show daemon and thread status",
             "  :logs   show recent activity logs",
             "  :memory preview memory entries",
@@ -1597,6 +1615,39 @@ def _handle_interactive_whoami_command(project_root: Path | None) -> str:
     if len(items) > 6:
         lines.append(f"  ... and {len(items) - 6} more")
     return "\n".join(lines)
+
+
+def _handle_interactive_notify_command(project_root: Path | None) -> str:
+    from nuself.notification import NotificationOutbox
+
+    entries = NotificationOutbox(project_root).list(status="pending")
+    if not entries:
+        return "No pending notifications."
+    lines = ["Pending notifications:"]
+    for entry in entries:
+        lines.append(f"  {entry.id}  {entry.title}")
+    return "\n".join(lines)
+
+
+def _handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
+    from nuself.notification import NotificationOutbox, LogOnlyNotificationAdapter, OutboxEntryNotFound
+
+    outbox = NotificationOutbox(project_root)
+    try:
+        entry = outbox.get(entry_id)
+    except OutboxEntryNotFound:
+        return f"Outbox entry not found: {entry_id}"
+    if subcmd == "send":
+        adapter = LogOnlyNotificationAdapter(project_root)
+        if adapter.send(entry):
+            outbox.mark_sent(entry_id)
+            return f"Sent: {entry_id}"
+        outbox.mark_failed(entry_id)
+        return f"Failed to send: {entry_id}"
+    if subcmd == "dismiss":
+        outbox.dismiss(entry_id)
+        return f"Dismissed: {entry_id}"
+    return f"Unknown :notify subcommand: {subcmd}"
 
 
 def _handle_interactive_threads_command(project_root: Path | None) -> str:

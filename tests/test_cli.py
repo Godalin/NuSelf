@@ -1515,3 +1515,62 @@ def test_interactive_whoami_shows_profile_items(
     assert result == 0
     assert "Core profile:" in captured.out
     assert "concise answers" in captured.out
+
+
+def test_interactive_notify_lists_pending(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="n-001",
+            title="Test Note",
+            body="hello",
+            status="pending",
+            idempotency_key="k1",
+        )
+    )
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":notify\n:q\n"))
+    monkeypatch.setattr(
+        "nuself.cli.lifecycle.status",
+        lambda project_root: DaemonStatus(
+            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
+        ),
+    )
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Pending notifications:" in captured.out
+    assert "Test Note" in captured.out
+
+
+def test_interactive_notify_send_and_dismiss(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="n-002",
+            title="Dismiss Me",
+            body="bye",
+            status="pending",
+            idempotency_key="k2",
+        )
+    )
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":notify dismiss n-002\n:q\n"))
+    monkeypatch.setattr(
+        "nuself.cli.lifecycle.status",
+        lambda project_root: DaemonStatus(
+            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
+        ),
+    )
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Dismissed: n-002" in captured.out
