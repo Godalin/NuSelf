@@ -1381,3 +1381,70 @@ def test_open_with_message_sends_then_enters_repl(
     assert result == 0
     assert "LLM API is not configured yet" in captured.out
     assert "thread=focus" in captured.out
+
+
+def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    entry = outbox.add(
+        OutboxEntry(
+            id="test-001",
+            title="Test Notification",
+            body="This is a test.",
+            status="pending",
+            idempotency_key="test-001-key",
+        )
+    )
+
+    list_result = main(["--project-root", str(tmp_path), "notify", "list"])
+    list_output = capsys.readouterr().out
+
+    show_result = main(["--project-root", str(tmp_path), "notify", "show", entry.id])
+    show_output = capsys.readouterr().out
+
+    send_result = main(["--project-root", str(tmp_path), "notify", "send", entry.id])
+    send_output = capsys.readouterr().out
+
+    dismiss_result = main(["--project-root", str(tmp_path), "notify", "dismiss", entry.id])
+    dismiss_output = capsys.readouterr().out
+
+    assert list_result == 0
+    assert show_result == 0
+    assert send_result == 0
+    assert dismiss_result == 0
+    assert entry.id in list_output
+    assert "Test Notification" in list_output
+    assert "pending" in list_output
+    assert entry.id in show_output
+    assert "Test Notification" in show_output
+    assert f"Sent: {entry.id}" in send_output
+    assert f"Dismissed: {entry.id}" in dismiss_output
+
+
+def test_notify_show_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "notify", "show", "missing-id"])
+    output = capsys.readouterr().err
+    assert result == 1
+    assert "not found" in output
+
+
+def test_notify_send_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "notify", "send", "missing-id"])
+    output = capsys.readouterr().err
+    assert result == 1
+    assert "not found" in output
+
+
+def test_notify_dismiss_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "notify", "dismiss", "missing-id"])
+    output = capsys.readouterr().err
+    assert result == 1
+    assert "not found" in output
+
+
+def test_notify_list_empty(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "notify", "list"])
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "No outbox entries." in output
