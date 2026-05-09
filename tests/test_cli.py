@@ -2023,6 +2023,13 @@ def test_memory_profile_show_missing_item(tmp_path: Path, capsys: CaptureFixture
     assert "Profile item not found: missing-id" in captured.err
 
 
+def test_memory_relations_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "relations"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "No memory relations." in captured.out
+
+
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
