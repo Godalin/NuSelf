@@ -141,8 +141,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [ ] Add low-frequency daemon reflection scheduler with cooldowns and quiet hours.
 - [ ] Generate idea candidates from recent threads, memory, and sources.
 - [ ] Add relevance gate with novelty, confidence, urgency, cooldown, and interruption cost.
-- [ ] Add notification outbox with idempotency keys and delivery state.
-- [ ] Add log-only notification adapter.
+- [x] Add notification outbox with idempotency keys and delivery state.
+- [x] Add log-only notification adapter.
 - [ ] Add macOS notification adapter.
 - [ ] Add email adapter using ignored private configuration.
 - [ ] Link notifications to a new or existing conversation.
