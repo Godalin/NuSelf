@@ -1359,6 +1359,27 @@ def test_thread_delete_fails_when_missing(tmp_path: Path, capsys: CaptureFixture
     assert "Error: thread not found: missing" in captured.err
 
 
+def test_thread_unarchive_restores_thread(tmp_path: Path, capsys: CaptureFixture) -> None:
+    store = ThreadStore(tmp_path)
+    store.save(ThreadState.empty("old"))
+    store.archive("old")
+
+    result = main(["--project-root", str(tmp_path), "thread", "unarchive", "old"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Unarchived thread: old" in captured.out
+    assert store.list() == ["old"]
+    assert not (tmp_path / "private" / "threads" / "archived" / "old.json").exists()
+
+
+def test_thread_unarchive_fails_when_missing(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "thread", "unarchive", "missing"])
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "Error: archived thread not found: missing" in captured.err
+
 
 def test_open_existing_thread_shows_thread_in_header(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture

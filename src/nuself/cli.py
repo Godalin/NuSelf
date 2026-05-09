@@ -317,6 +317,9 @@ def build_parser() -> argparse.ArgumentParser:
     thread_delete_parser = thread_subparsers.add_parser("delete")
     thread_delete_parser.add_argument("thread_id")
     _add_handler(thread_delete_parser, handle_thread_delete)
+    thread_unarchive_parser = thread_subparsers.add_parser("unarchive")
+    thread_unarchive_parser.add_argument("thread_id")
+    _add_handler(thread_unarchive_parser, handle_thread_unarchive)
 
     return parser
 
@@ -867,6 +870,17 @@ def handle_thread_delete(args: argparse.Namespace) -> int:
     try:
         store.delete(args.thread_id)
         print(f"Deleted thread: {args.thread_id}")
+        return 0
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+
+def handle_thread_unarchive(args: argparse.Namespace) -> int:
+    store = ThreadStore(args.project_root)
+    try:
+        store.unarchive(args.thread_id)
+        print(f"Unarchived thread: {args.thread_id}")
         return 0
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)

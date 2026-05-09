@@ -373,6 +373,17 @@ class ThreadStore:
         if old_lock.exists():
             old_lock.unlink()
 
+    def unarchive(self, thread_id: str) -> None:
+        """Move a thread file from the archived subdirectory back to active."""
+        archived_dir = self._threads_dir / "archived"
+        source_path = archived_dir / f"{thread_id}.json"
+        if not source_path.exists():
+            raise ValueError(f"archived thread not found: {thread_id}")
+        target_path = self._path_for(thread_id)
+        if target_path.exists():
+            raise ValueError(f"thread already exists: {thread_id}")
+        source_path.rename(target_path)
+
     def delete(self, thread_id: str) -> None:
         """Permanently delete a thread file and its lock."""
         path = self._path_for(thread_id)
