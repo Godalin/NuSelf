@@ -325,6 +325,28 @@ uv run nuself open --deep-link "nuself://thread/reflections"
 
 macOS adapter 通过 `osascript` 将 pending 条目投递为系统通知。email adapter 从 `private/email.toml` 读取 SMTP 凭证并通过 SMTP 发送。两者都支持 dry-run 模式用于测试。
 
+## Threads
+
+列出、查看和管理对话 threads：
+
+```bash
+uv run nuself thread list
+uv run nuself thread show <thread-id>
+uv run nuself thread create <thread-id>
+uv run nuself thread rename <old-id> <new-id>
+uv run nuself thread branch <source-id> <new-id> [--index <n>]
+uv run nuself thread archive <thread-id>
+```
+
+以交互模式打开 thread：
+
+```bash
+uv run nuself open <thread-id>
+uv run nuself open <thread-id> --message "hello"
+```
+
+在 REPL 中，使用 `:thread <id>` 切换 thread，`:history` 查看近期消息，`:archive` 归档当前 thread。
+
 ## 记忆条目
 
 新记忆的主要来源是聊天。每轮聊天后，NuSelf 会运行 Memory Curator Agent；如果长期记忆被创建或更新，会打印 `[memory] ...` 摘要。

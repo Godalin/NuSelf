@@ -285,6 +285,7 @@ uv run nuself daemon list
 uv run nuself daemon logs
 uv run nuself daemon attach --message "continue"
 uv run nuself daemon stop
+uv run nuself daemon restart
 ```
 
 Structured local logs can also be inspected with:
@@ -324,6 +325,28 @@ uv run nuself open --deep-link "nuself://thread/reflections"
 ```
 
 The macOS adapter delivers pending entries as system notifications via `osascript`. The email adapter reads SMTP credentials from `private/email.toml` and sends via SMTP. Both support dry-run mode for testing.
+
+## Threads
+
+List, inspect, and manage conversation threads:
+
+```bash
+uv run nuself thread list
+uv run nuself thread show <thread-id>
+uv run nuself thread create <thread-id>
+uv run nuself thread rename <old-id> <new-id>
+uv run nuself thread branch <source-id> <new-id> [--index <n>]
+uv run nuself thread archive <thread-id>
+```
+
+Open a thread in interactive mode:
+
+```bash
+uv run nuself open <thread-id>
+uv run nuself open <thread-id> --message "hello"
+```
+
+In the REPL, switch threads with `:thread <id>`, view recent messages with `:history`, and archive the current thread with `:archive`.
 
 ## Memory Entries
 
