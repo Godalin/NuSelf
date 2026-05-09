@@ -1444,6 +1444,8 @@ class _InteractiveCompleter:
         stripped = line.lstrip()
         if stripped.startswith(":thread ") and text and not text.startswith(":"):
             return self._thread_candidates(text)
+        if stripped.startswith(":unarchive ") and text and not text.startswith(":"):
+            return self._archived_thread_candidates(text)
         if text.startswith(":"):
             return [cmd for cmd in _INTERACTIVE_COMMANDS if cmd.startswith(text)]
         return []
@@ -1451,6 +1453,13 @@ class _InteractiveCompleter:
     def _thread_candidates(self, text: str) -> list[str]:
         try:
             threads = ThreadStore(self._project_root).list()
+        except Exception:
+            return []
+        return [t for t in threads if t.startswith(text)]
+
+    def _archived_thread_candidates(self, text: str) -> list[str]:
+        try:
+            threads = ThreadStore(self._project_root).list_archived()
         except Exception:
             return []
         return [t for t in threads if t.startswith(text)]

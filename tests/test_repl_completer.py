@@ -95,3 +95,15 @@ def test_completer_multiple_command_matches(tmp_path: Path, fake_readline: FakeR
             results.append(result)
         assert ":memory" in results
         assert ":mem" in results
+
+
+def test_completer_suggests_archived_thread_ids(tmp_path: Path, fake_readline: FakeReadline) -> None:
+    store = ThreadStore(tmp_path)
+    store.save(ThreadState.empty("alpha"))
+    store.save(ThreadState.empty("beta"))
+    store.archive("alpha")
+    completer = _InteractiveCompleter(tmp_path)
+    with patch("nuself.cli.readline", fake_readline):
+        fake_readline._line_buffer = ":unarchive a"
+        assert completer("a", 0) == "alpha"
+        assert completer("a", 1) is None
