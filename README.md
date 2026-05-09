@@ -415,6 +415,12 @@ Search entries:
 uv run nuself memory search "clarity"
 ```
 
+Export all memory entries to JSON:
+
+```bash
+uv run nuself memory export -o backup/memory.json
+```
+
 Run the memory curator immediately:
 
 ```bash
