@@ -1,10 +1,11 @@
+# pyright: reportPrivateUsage=false
 from __future__ import annotations
 
 from pathlib import Path
 
 from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
-from nuself.memory.intake import MemoryIntakeAgent
+from nuself.memory.intake import MemoryIntakeAgent, _extract_json_object, _local_title
 from nuself.profile.repository import ProfileItemRepository
 
 
@@ -18,6 +19,57 @@ def test_memory_intake_locally_infers_concept() -> None:
     result = MemoryIntakeAgent().infer(body="Temporal memory means preserving when a thought changed.")
 
     assert result.type == "concept"
+
+
+def test_memory_intake_empty_body_raises() -> None:
+    agent = MemoryIntakeAgent()
+    try:
+        agent.infer(body="")
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "must not be empty" in str(exc)
+
+
+def test_memory_intake_falls_back_on_invalid_llm_response() -> None:
+    class BrokenLLM:
+        def complete(self, messages: list[ChatMessage]) -> str:
+            return "not valid json"
+
+    agent = MemoryIntakeAgent(llm=BrokenLLM())
+    result = agent.infer(body="I prefer dark mode.")
+
+    assert result.type == "preference"
+    assert result.confidence == 0.55
+
+
+def test_memory_intake_local_inference_preference() -> None:
+    result = MemoryIntakeAgent().infer(body="I like quiet mornings.")
+
+    assert result.type == "preference"
+
+
+def test_memory_intake_local_inference_belief() -> None:
+    result = MemoryIntakeAgent().infer(body="I believe testing is essential.")
+
+    assert result.type == "belief"
+
+
+def test_memory_intake_local_inference_open_question() -> None:
+    result = MemoryIntakeAgent().infer(body="What is the best way to organize memory?")
+
+    assert result.type == "open_question"
+
+
+def test_local_title_truncates_long_body() -> None:
+    long_body = "A" * 100
+    title = _local_title(long_body)
+    assert title.endswith("...")
+    assert len(title) == 48
+
+
+def test_extract_json_object_strips_markdown_fences() -> None:
+    raw = '```json\n{"type":"belief","title":"Test"}\n```'
+    assert _extract_json_object(raw) == '{"type":"belief","title":"Test"}'
 
 
 class FakeIntakeLLM:
