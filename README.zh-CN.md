@@ -306,6 +306,25 @@ private/logs/
 
 第一版协议是 JSON lines，通过 Unix domain socket 通信，socket 路径是 `private/runtime/nuself.sock`。
 
+## 通知
+
+守护进程在后台运行 reflection scheduler。当条件满足时（间隔、cooldown、quiet hours），它会将 reflection intent 写入通知 outbox：
+
+```bash
+uv run nuself notify list
+uv run nuself notify show <entry-id>
+uv run nuself notify send <entry-id>
+uv run nuself notify dismiss <entry-id>
+```
+
+Reflection intent 包含指向 `reflections` thread 的 deep link。直接打开通知：
+
+```bash
+uv run nuself open --deep-link "nuself://thread/reflections"
+```
+
+macOS adapter 通过 `osascript` 将 pending 条目投递为系统通知。email adapter 从 `private/email.toml` 读取 SMTP 凭证并通过 SMTP 发送。两者都支持 dry-run 模式用于测试。
+
 ## 记忆条目
 
 新记忆的主要来源是聊天。每轮聊天后，NuSelf 会运行 Memory Curator Agent；如果长期记忆被创建或更新，会打印 `[memory] ...` 摘要。

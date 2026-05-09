@@ -1104,6 +1104,7 @@ def _interactive_loop(
     initial_thread_id: str = "default",
 ) -> int:
     history_path = _load_interactive_history(project_root)
+    _setup_interactive_completer(project_root)
     current_thread_id = initial_thread_id
     print(_brand_banner())
     print("νSelf interactive mode. Type :q, :quit, or :exit to leave.")
@@ -1133,12 +1134,69 @@ def _interactive_loop(
             result = send_message(message, current_thread_id)
             _print_interactive_activity(project_root, event_offset)
             print()
+            print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
             if result != 0:
                 return result
     finally:
         if history_path is not None:
             _write_interactive_history(history_path)
         _run_memory_curator(project_root)
+
+
+_INTERACTIVE_COMMANDS = [
+    ":q",
+    ":quit",
+    ":exit",
+    ":help",
+    ":status",
+    ":logs",
+    ":memory",
+    ":mem",
+    ":threads",
+    ":thread",
+    ":rename",
+    ":branch",
+    ":archive",
+]
+
+
+def _setup_interactive_completer(project_root: Path | None) -> None:
+    if readline is None:
+        return
+    readline.parse_and_bind("tab: complete")
+    readline.set_completer(_InteractiveCompleter(project_root))
+    # Keep colon as part of the word so :command completions work
+    delims = readline.get_completer_delims().replace(":", "")
+    readline.set_completer_delims(delims)
+
+
+class _InteractiveCompleter:
+    def __init__(self, project_root: Path | None) -> None:
+        self._project_root = project_root
+
+    def __call__(self, text: str, state: int) -> str | None:
+        if readline is None:
+            return None
+        line = readline.get_line_buffer()
+        candidates = self._candidates(line, text)
+        if state < len(candidates):
+            return candidates[state]
+        return None
+
+    def _candidates(self, line: str, text: str) -> list[str]:
+        stripped = line.lstrip()
+        if stripped.startswith(":thread ") and text and not text.startswith(":"):
+            return self._thread_candidates(text)
+        if text.startswith(":"):
+            return [cmd for cmd in _INTERACTIVE_COMMANDS if cmd.startswith(text)]
+        return []
+
+    def _thread_candidates(self, text: str) -> list[str]:
+        try:
+            threads = ThreadStore(self._project_root).list()
+        except Exception:
+            return []
+        return [t for t in threads if t.startswith(text)]
 
 
 def _load_interactive_history(project_root: Path | None) -> Path | None:

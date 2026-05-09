@@ -306,6 +306,25 @@ private/logs/
 
 The first protocol is JSON lines over a Unix domain socket at `private/runtime/nuself.sock`.
 
+## Notifications
+
+The daemon runs a reflection scheduler in the background. When conditions pass (interval, cooldown, quiet hours), it writes a reflection intent to the notification outbox:
+
+```bash
+uv run nuself notify list
+uv run nuself notify show <entry-id>
+uv run nuself notify send <entry-id>
+uv run nuself notify dismiss <entry-id>
+```
+
+Reflection intents include a deep link to the `reflections` thread. Open a notification directly:
+
+```bash
+uv run nuself open --deep-link "nuself://thread/reflections"
+```
+
+The macOS adapter delivers pending entries as system notifications via `osascript`. The email adapter reads SMTP credentials from `private/email.toml` and sends via SMTP. Both support dry-run mode for testing.
+
 ## Memory Entries
 
 Chat is the primary source of new memory. After chat turns, NuSelf runs the Memory Curator Agent and prints a `[memory] ...` summary when durable memory changes are created or updated.
