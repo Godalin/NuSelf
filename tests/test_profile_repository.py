@@ -82,3 +82,47 @@ def test_profile_repository_search_filters_and_text_match(tmp_path: Path) -> Non
     )
 
     assert [item.title for item in filtered] == ["Concise output"]
+
+
+def test_profile_repository_delete_missing_raises(tmp_path: Path) -> None:
+    repo = ProfileItemRepository(tmp_path)
+    try:
+        repo.delete("missing-id")
+    except ProfileItemNotFound:
+        return
+    raise AssertionError("expected ProfileItemNotFound")
+
+
+def test_profile_repository_reindex_on_empty_repo(tmp_path: Path) -> None:
+    repo = ProfileItemRepository(tmp_path)
+    index_path = repo.reindex()
+    assert index_path.is_file()
+
+
+def test_profile_repository_search_no_matches_returns_empty(tmp_path: Path) -> None:
+    repo = ProfileItemRepository(tmp_path)
+    repo.save(ProfileItem(type="profile_fact", title="Style", body="Concise."))
+
+    results = repo.search("xyz")
+    assert results == []
+
+
+def test_profile_item_with_updates_preserves_unmodified_fields(tmp_path: Path) -> None:
+    repo = ProfileItemRepository(tmp_path)
+    original = ProfileItem(
+        type="profile_fact",
+        title="Original",
+        body="Original body.",
+        tags=["a", "b"],
+        confidence=0.9,
+    )
+    repo.save(original)
+
+    updated = original.with_updates(title="Updated")
+    repo.save(updated)
+
+    loaded = repo.get(original.id)
+    assert loaded.title == "Updated"
+    assert loaded.body == "Original body."
+    assert loaded.tags == ["a", "b"]
+    assert loaded.confidence == 0.9
