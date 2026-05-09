@@ -350,6 +350,7 @@ uv run nuself thread create <thread-id>
 uv run nuself thread rename <old-id> <new-id>
 uv run nuself thread branch <source-id> <new-id> [--index <n>]
 uv run nuself thread archive <thread-id>
+uv run nuself thread delete <thread-id>
 ```
 
 以交互模式打开 thread：

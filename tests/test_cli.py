@@ -1333,6 +1333,26 @@ def test_thread_archive_moves_to_subdir(tmp_path: Path, capsys: CaptureFixture) 
     assert archived.exists()
 
 
+def test_thread_delete_removes_thread(tmp_path: Path, capsys: CaptureFixture) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("gone"))
+
+    result = main(["--project-root", str(tmp_path), "thread", "delete", "gone"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Deleted thread: gone" in captured.out
+    assert ThreadStore(tmp_path).list() == []
+    assert not (tmp_path / "private" / "threads" / "gone.json").exists()
+
+
+def test_thread_delete_fails_when_missing(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "thread", "delete", "missing"])
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "Error: thread not found: missing" in captured.err
+
+
 
 def test_open_existing_thread_shows_thread_in_header(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture

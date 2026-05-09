@@ -373,6 +373,16 @@ class ThreadStore:
         if old_lock.exists():
             old_lock.unlink()
 
+    def delete(self, thread_id: str) -> None:
+        """Permanently delete a thread file and its lock."""
+        path = self._path_for(thread_id)
+        if not path.exists():
+            raise ValueError(f"thread not found: {thread_id}")
+        path.unlink()
+        lock = self._lock_path_for(thread_id)
+        if lock.exists():
+            lock.unlink()
+
 
 class _ThreadLock:
     """Advisory file lock for one working-memory stream."""
