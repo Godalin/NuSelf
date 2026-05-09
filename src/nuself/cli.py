@@ -100,6 +100,9 @@ def build_parser() -> argparse.ArgumentParser:
     attach_parser.add_argument("--message", "-m", default=None)
     _add_handler(attach_parser, handle_attach)
 
+    status_parser = subparsers.add_parser("status")
+    _add_handler(status_parser, handle_status)
+
     open_parser = subparsers.add_parser("open")
     open_parser.add_argument("thread_id", nargs="?", default=None)
     open_parser.add_argument("--message", "-m", default=None)
@@ -367,6 +370,18 @@ def handle_default_entrypoint(args: argparse.Namespace) -> int:
         return _send_chat(args.message, args.project_root)
     print("Tip: type :help for commands, :q to quit, or start chatting.")
     return _interactive_loop(lambda message, thread_id: _send_chat(message, args.project_root, thread_id), args.project_root)
+
+
+def handle_status(args: argparse.Namespace) -> int:
+    daemon = lifecycle.status(args.project_root)
+    threads = ThreadStore(args.project_root).list()
+    from nuself.notification import NotificationOutbox
+
+    pending = len(NotificationOutbox(args.project_root).list(status="pending"))
+    print(f"daemon: {'running' if daemon.running else 'stopped'} pid={daemon.pid or '-'}")
+    print(f"threads: {len(threads)}")
+    print(f"pending notifications: {pending}")
+    return 0
 
 
 def handle_logs(args: argparse.Namespace) -> int:
@@ -1334,6 +1349,11 @@ def _brand_banner() -> str:
 def _handle_interactive_command(command: str, project_root: Path | None, current_thread_id: str) -> tuple[str, str]:
     if command in {":q", ":quit", ":exit"}:
         return ("exit", current_thread_id)
+    if command == ":whoami":
+        print()
+        print(_handle_interactive_whoami_command(project_root))
+        print()
+        return ("", current_thread_id)
     if command == ":help":
         print()
         print(_interactive_help())
@@ -1433,10 +1453,11 @@ def _interactive_help(command: str | None = None) -> str:
     lines.extend(
         [
             "Interactive commands:",
-            "  :q      exit",
-            "  :quit   exit",
-            "  :exit   exit",
-            "  :help   show this help",
+            "  :q       exit",
+            "  :quit    exit",
+            "  :exit    exit",
+            "  :whoami  show core profile",
+            "  :help    show this help",
             "  :status show daemon and thread status",
             "  :logs   show recent activity logs",
             "  :memory preview memory entries",
@@ -1562,6 +1583,19 @@ def _interactive_memory_help(command: str | None = None) -> str:
             "  :mem why",
         ]
     )
+    return "\n".join(lines)
+
+
+def _handle_interactive_whoami_command(project_root: Path | None) -> str:
+    repo = ProfileItemRepository(project_root)
+    items = repo.list()
+    if not items:
+        return "No profile items yet."
+    lines = ["Core profile:"]
+    for item in items[:6]:
+        lines.append(f"  {item.id}: {item.body[:80]}")
+    if len(items) > 6:
+        lines.append(f"  ... and {len(items) - 6} more")
     return "\n".join(lines)
 
 

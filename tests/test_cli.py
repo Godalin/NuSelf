@@ -1485,3 +1485,33 @@ def test_open_with_invalid_deep_link(tmp_path: Path, capsys: CaptureFixture) -> 
     captured = capsys.readouterr()
     assert result == 1
     assert "Invalid deep link" in captured.err
+
+
+def test_status_command_shows_daemon_threads_and_notifications(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "status"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "daemon:" in captured.out
+    assert "threads:" in captured.out
+    assert "pending notifications:" in captured.out
+
+
+def test_interactive_whoami_shows_profile_items(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    from nuself.profile.repository import ProfileItemRepository
+    from nuself.domain.profile import ProfileItem
+
+    repo = ProfileItemRepository(tmp_path)
+    repo.save(ProfileItem(type="preference", title="Style", body="I prefer concise answers."))
+    repo.save(ProfileItem(type="fact", title="Work", body="I work in software."))
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":whoami\n:q\n"))
+    monkeypatch.setattr("nuself.cli.lifecycle.status", lambda project_root: DaemonStatus(
+        running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
+    ))
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Core profile:" in captured.out
+    assert "concise answers" in captured.out

@@ -4,23 +4,23 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Polish the REPL with a lightweight status bar and update README with real usage examples.
+Milestone 13: First Usable Interface — REPL polish and basic profile integration.
 
-Milestone 11 (Notification Adapters) is complete. The REPL now has tab completion for commands and thread IDs. The next step is to add a status bar or header refresh after every turn, and update the README with concrete usage examples for notifications and deep links.
+The REPL now has tab completion, a session header after every turn, `:whoami` for profile preview, and a compact `nuself status` command. The default entrypoint message is more informative. README usage examples for notifications and deep links are in place.
 
 ## Immediate Context
 
-- `_InteractiveCompleter` provides tab completion for `:commands` and thread IDs after `:thread `.
-- `render_session_header` already shows daemon status and current thread.
-- The CLI has `nuself notify`, `nuself open --deep-link`, and daemon background reflection.
+- `_InteractiveCompleter` provides tab completion for `:commands` and thread IDs.
+- `render_session_header` prints after every non-command turn.
+- `:whoami` shows up to 6 core profile items.
+- `nuself status` shows daemon state, thread count, and pending notifications.
+- Default entrypoint shows "Tip: type :help for commands, :q to quit, or start chatting."
 
 ## Next Steps
 
-1. Add a lightweight status bar that prints after every non-command turn.
-2. Polish the `nuself` default entrypoint message to be more informative.
-3. Update README with real usage examples for notifications and deep links.
-4. Update README.zh-CN in parallel.
-5. Update README TODOs together with the implementation.
+1. Add REPL command autocomplete hints (show available completions on partial match).
+2. Consider adding a `:notify` REPL command to list pending notifications inline.
+3. Update README TODOs together with the implementation.
 
 ## Not Now
 
@@ -34,7 +34,7 @@ Milestone 11 (Notification Adapters) is complete. The REPL now has tab completio
 
 ## Completion Criteria
 
-- REPL prints a status line after every turn (daemon status, thread, last action).
-- README contains usage examples for notifications and deep links.
+- REPL autocomplete hints display on partial command match.
+- `:notify` lists pending outbox entries inline.
 - All operations are type-checked and tested.
 - README TODOs track completed progress, while this file stays limited to the active goal.
