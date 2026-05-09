@@ -813,6 +813,8 @@ def handle_thread_show(args: argparse.Namespace) -> int:
         print(f"Thread not found: {args.thread_id}", file=sys.stderr)
         return 1
     print(f"Thread: {args.thread_id}")
+    if state.summary:
+        print(f"Summary: {state.summary}")
     print(f"Messages: {len(state.messages)}")
     for msg in state.messages:
         prefix = ">" if msg.role == "user" else "<"
