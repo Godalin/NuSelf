@@ -4,22 +4,21 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Milestone 13: First Usable Interface — REPL polish and basic profile integration.
+Milestone 13 is complete. Next: generate idea candidates from recent threads, memory, and sources.
 
-The REPL now has tab completion, a session header after every turn, `:whoami` for profile preview, and a compact `nuself status` command. The default entrypoint message is more informative. README usage examples for notifications and deep links are in place.
+The evaluation harness now includes proactive-notification fixtures for reflection scheduler triggers, deep link parsing, and outbox delivery lifecycle. All Milestone 11 and 13 deliverables are done.
 
 ## Immediate Context
 
-- `_InteractiveCompleter` provides tab completion for `:commands` and thread IDs.
-- `render_session_header` prints after every non-command turn.
-- `:whoami` shows up to 6 core profile items.
-- `nuself status` shows daemon state, thread count, and pending notifications.
-- Default entrypoint shows "Tip: type :help for commands, :q to quit, or start chatting."
+- `ReflectionScheduler` writes generic reflection intents to the outbox.
+- `NotificationOutbox` supports idempotency, status transitions, and CLI/REPL commands.
+- `DeepLink` connects notifications to threads.
+- The evaluation harness has 3 notification fixture files under `tests/fixtures/notifications/`.
 
 ## Next Steps
 
-1. Add REPL command autocomplete hints (show available completions on partial match).
-2. Consider adding a `:notify` REPL command to list pending notifications inline.
+1. Implement `IdeaCandidateGenerator` that reads recent thread turns and surfaces questions or observations.
+2. Wire candidate generation into `ReflectionScheduler` so reflection intents carry meaningful content.
 3. Update README TODOs together with the implementation.
 
 ## Not Now
@@ -27,14 +26,14 @@ The REPL now has tab completion, a session header after every turn, `:whoami` fo
 - Full multi-persona orchestration beyond the current bounded skeleton.
 - Vector, hybrid, or hosted graph indexes.
 - Plugin loading.
-- Idea candidate generation or relevance gate.
+- Relevance gate with full novelty/confidence/urgency scoring.
 - Web or GUI interface work.
 - Private memory schema migration.
 - Dashboard-style or dependency-heavy terminal UI.
 
 ## Completion Criteria
 
-- REPL autocomplete hints display on partial command match.
-- `:notify` lists pending outbox entries inline.
+- Reflection scheduler generates context-aware reflection content instead of a generic message.
+- Candidate generation is tested with fixture-based scenarios.
 - All operations are type-checked and tested.
 - README TODOs track completed progress, while this file stays limited to the active goal.

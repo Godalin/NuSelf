@@ -152,7 +152,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add golden conversation fixtures.
 - [x] Add local evaluation command.
 - [x] Score citation coverage, unsupported personal claims, uncertainty behavior, and style fidelity.
-- [ ] Add proactive-notification evaluation cases.
+- [x] Add proactive-notification evaluation cases.
 
 ## Requirements
 
