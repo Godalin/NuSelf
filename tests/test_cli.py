@@ -2001,6 +2001,13 @@ def test_memory_source_search_empty_shows_message(tmp_path: Path, capsys: Captur
     assert "No matching source chunks." in captured.out
 
 
+def test_memory_source_extract_missing_document(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "source", "extract", "missing-id"])
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Source document not found: missing-id" in captured.err
+
+
 def test_memory_stats_shows_empty_state(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "stats"])
     captured = capsys.readouterr()
