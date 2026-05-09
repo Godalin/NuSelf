@@ -2051,6 +2051,24 @@ def test_memory_graph_search_empty_shows_message(tmp_path: Path, capsys: Capture
     assert "No symbolic graph matches." in captured.out
 
 
+def test_memory_graph_path_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "graph", "path", "a", "b"]
+    )
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "No path found." in captured.out
+
+
+def test_memory_graph_closure_missing_relation(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "graph", "closure", "a"]
+    )
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "--relation is required" in captured.out
+
+
 def test_memory_candidate_list_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "candidate", "list"])
     captured = capsys.readouterr()
