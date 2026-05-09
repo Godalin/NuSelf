@@ -1981,6 +1981,48 @@ def test_memory_stats_shows_empty_state(tmp_path: Path, capsys: CaptureFixture) 
     assert "entries_total: 0" in captured.out
 
 
+def test_memory_profile_list_shows_items(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.profile.repository import ProfileItemRepository
+    from nuself.domain.profile import ProfileItem
+
+    repo = ProfileItemRepository(tmp_path)
+    repo.save(ProfileItem(type="preference", title="Style", body="Concise."))
+
+    result = main(["--project-root", str(tmp_path), "memory", "profile", "list"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Style" in captured.out
+
+
+def test_memory_profile_list_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "profile", "list"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "No profile items." in captured.out
+
+
+def test_memory_profile_show_displays_item(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.profile.repository import ProfileItemRepository
+    from nuself.domain.profile import ProfileItem
+
+    repo = ProfileItemRepository(tmp_path)
+    item = ProfileItem(type="preference", title="Style", body="Concise.")
+    repo.save(item)
+
+    result = main(["--project-root", str(tmp_path), "memory", "profile", "show", item.id])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Style" in captured.out
+    assert "Concise." in captured.out
+
+
+def test_memory_profile_show_missing_item(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "profile", "show", "missing-id"])
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Profile item not found: missing-id" in captured.err
+
+
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
