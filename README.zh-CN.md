@@ -143,7 +143,7 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [ ] 添加 relevance gate：novelty、confidence、urgency、cooldown、interruption cost。
 - [x] 添加 notification outbox，包含 idempotency keys 和 delivery state。
 - [x] 添加 log-only notification adapter。
-- [ ] 添加 macOS notification adapter。
+- [x] 添加 macOS notification adapter。
 - [ ] 添加使用 ignored private configuration 的 email adapter。
 - [ ] 将通知链接到新的或已有的 conversation。
 

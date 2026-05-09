@@ -143,7 +143,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [ ] Add relevance gate with novelty, confidence, urgency, cooldown, and interruption cost.
 - [x] Add notification outbox with idempotency keys and delivery state.
 - [x] Add log-only notification adapter.
-- [ ] Add macOS notification adapter.
+- [x] Add macOS notification adapter.
 - [ ] Add email adapter using ignored private configuration.
 - [ ] Link notifications to a new or existing conversation.
 

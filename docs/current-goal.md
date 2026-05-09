@@ -4,23 +4,25 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Add outbox CLI commands and a macOS notification adapter.
+Add an email notification adapter using ignored private configuration.
 
-The reflection scheduler is now wired into the daemon lifecycle. It checks interval, cooldown, and quiet hours before writing a reflection intent into the notification outbox. The next step is to surface that outbox to users: list entries, show details, send (retry), and dismiss from the CLI. After that, add a macOS notification adapter so reflection intents actually appear as system notifications.
+The outbox CLI commands (`nuself notify list/show/send/dismiss`) and the macOS notification adapter are now in place. The next step is to add an email adapter that reads SMTP credentials from an ignored private configuration file and delivers pending outbox entries via email.
 
 ## Immediate Context
 
-- `NotificationOutbox` lives under `private/outbox/` with `add/list/get/mark_sent/mark_failed/dismiss`.
+- `NotificationOutbox` lives under `private/outbox/` with full CRUD and status lifecycle.
 - `LogOnlyNotificationAdapter` writes to the structured log.
-- `ReflectionScheduler` runs in a background thread inside `DaemonState`.
-- The CLI has a single `nuself` entrypoint with subcommands for thread management, eval, and chat.
+- `MacOSNotificationAdapter` delivers via `osascript` with dry-run support.
+- The CLI `nuself notify send <id>` uses `LogOnlyNotificationAdapter` by default.
+- Private configuration lives in `private/` (ignored by Git).
 
 ## Next Steps
 
-1. Add `nuself outbox` subcommands: `list`, `show <id>`, `send <id>`, `dismiss <id>`.
-2. Add a macOS notification adapter using `pync` or `osascript`.
-3. Add outbox tests for CLI integration and macOS adapter dry-run mode.
-4. Update README TODOs together with the implementation.
+1. Define email configuration schema (SMTP host, port, user, password, from/to addresses).
+2. Load credentials from an ignored private config file (e.g., `private/email.toml`).
+3. Implement `EmailNotificationAdapter` with SMTP delivery and dry-run support.
+4. Add adapter tests with a fake SMTP server or mock.
+5. Update README TODOs together with the implementation.
 
 ## Not Now
 
@@ -28,14 +30,14 @@ The reflection scheduler is now wired into the daemon lifecycle. It checks inter
 - Vector, hybrid, or hosted graph indexes.
 - Plugin loading.
 - Idea candidate generation or relevance gate (scheduler first).
-- Email adapter (macOS first).
 - Web or GUI interface work.
 - Private memory schema migration.
 - Dashboard-style or dependency-heavy terminal UI.
 
 ## Completion Criteria
 
-- CLI can list, show, send, and dismiss outbox entries.
-- macOS adapter delivers pending entries as system notifications.
+- Email adapter reads SMTP config from ignored private file.
+- Email adapter delivers pending outbox entries via SMTP.
+- Dry-run mode supported for testing without real email delivery.
 - All operations are type-checked and tested.
 - README TODOs track completed progress, while this file stays limited to the active goal.
