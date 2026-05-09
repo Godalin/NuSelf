@@ -19,9 +19,10 @@ Milestone 10–13 are functionally complete. Recent follow-up work added thread 
 
 ## Next Steps
 
-1. Review whether any CLI subcommands or REPL commands still have gaps.
-2. Consider whether the `source` workflow deserves a top-level CLI command.
-3. Update README TODOs together with any follow-up work.
+1. ~~Review whether any CLI subcommands or REPL commands still have gaps.~~ Done: filled test coverage for memory list/show/add/edit/delete/search, source list/show/delete/chunks/search/extract, profile list/show/search/delete/reindex, candidate list/show/accept/reject/edit/merge, graph nodes/edges/search/path/closure, stats, reindex, daemon list/logs.
+2. ~~Fix pre-existing pyright strict-mode errors.~~ Done: 0 errors across src/ and tests/.
+3. Consider whether the `source` workflow deserves a top-level CLI command.
+4. Update README TODOs together with any follow-up work.
 
 ## Not Now
 
