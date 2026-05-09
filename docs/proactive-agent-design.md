@@ -1,0 +1,231 @@
+# Proactive Agent Design — Milestone 10
+
+## Context
+
+This design turns the existing skeleton (`reflection.py`, `notification/`, daemon background threads) into a real proactive agent that can surface worthwhile ideas without becoming noisy.
+
+## Current Baseline vs. Gap
+
+| Component | Current State | Gap to Milestone 10 |
+|-----------|--------------|---------------------|
+| `ReflectionScheduler` | Fixed interval + cooldown + quiet hours. Background thread in daemon polls every 60s. | Needs randomized low-frequency jitter, event-based triggers (e.g. new high-importance memory), and a cleaner separation between "generate" and "deliver". |
+| `IdeaCandidateGenerator` | Reads the latest user message from the most recent thread. No LLM, no memory scan, no source scan. | Needs to scan recent threads, private memory, and new sources; use LLM to generate structured candidates with types, confidence, and evidence. |
+| `RelevanceGate` | Only checks string equality against the previous reflection body. | Needs multi-dimensional scoring: novelty, confidence, urgency, cooldown, interruption cost. |
+| `NotificationOutbox` | File-backed with idempotency, statuses, and CRUD. | Good enough. Need to ensure daemon writes intents here without calling adapters directly from graph/agent nodes. |
+| `DeepLink` | Opens existing thread via `nuself://thread/<id>`. | Needs to support creating a new thread from a candidate (`nuself://new-thread?...`). |
+| `Adapters` | `LogOnlyNotificationAdapter`, `MacOSNotificationAdapter`, `EmailNotificationAdapter` stubs exist. | Need a delivery loop in the daemon that reads pending outbox entries and dispatches through configured adapters. |
+| `Daemon` | `ReflectionScheduler.reflect()` directly calls `adapter.send()`. | Needs decoupling: scheduler writes to outbox; a separate delivery thread handles adapters. |
+
+## Design Decisions
+
+### 1. Keep Outbox as the Single Source of Truth
+
+All proactive agent nodes write `NotificationIntent` (outbox entries) to the file-backed outbox. No agent node ever calls an adapter directly. The daemon runs a `NotificationDeliveryLoop` that polls pending entries and dispatches them.
+
+### 2. Structured Idea Candidates
+
+Replace the plain `str` body with a typed `IdeaCandidate` dataclass. The generator returns a list of candidates; the scheduler picks the highest-scoring one (or batches related ones).
+
+### 3. Relevance Gate as Scorer, Not Boolean Filter
+
+The gate returns a `RelevanceScore` with per-dimension floats and a final `passes` boolean. This lets us tune thresholds with config and log why candidates were dropped.
+
+### 4. Randomized Low-Frequency Reflection
+
+The scheduler adds a jitter factor (±20% of interval) and a daily cap (max reflections per day). This prevents predictable timing and limits noise.
+
+### 5. Event Triggers via Lightweight Hooks
+
+Instead of a full event bus, expose a `ReflectionTrigger` interface. The memory curator and source ingestion can call `trigger_event(type, payload)` when they produce high-signal changes. The scheduler checks both time-based and event-based conditions.
+
+### 6. Deep Link Creates New Threads
+
+Add `nuself://new-thread?title=...&seed=...&candidate_id=...`. The REPL / CLI deep-link handler resolves this by creating a thread with the candidate title and seed message, then opening it.
+
+## Data Models
+
+### IdeaCandidate
+
+```python
+@dataclass(frozen=True)
+class IdeaCandidate:
+    id: str
+    title: str
+    body: str
+    candidate_type: Literal[
+        "contradiction",
+        "connection",
+        "question",
+        "action",
+        "profile_update",
+        "share_bundle",
+    ]
+    confidence: float        # 0.0–1.0
+    novelty: float           # 0.0–1.0
+    urgency: float           # 0.0–1.0
+    interruption_cost: float # 0.0–1.0, higher = more disruptive
+    evidence_refs: tuple[str, ...]
+    suggested_thread_id: str | None  # None → create new thread
+    source_summary: str
+    created_at: str = field(default_factory=now_iso)
+```
+
+### RelevanceScore
+
+```python
+@dataclass(frozen=True)
+class RelevanceScore:
+    passes: bool
+    novelty: float
+    confidence: float
+    urgency: float
+    interruption_cost: float
+    cooldown_ok: bool
+    composite: float         # weighted sum for ranking
+    reasons: tuple[str, ...]
+```
+
+### ReflectionEvent
+
+```python
+@dataclass(frozen=True)
+class ReflectionEvent:
+    event_type: Literal["new_memory", "new_source", "thread_milestone", "manual"]
+    payload: dict[str, object]
+    created_at: str = field(default_factory=now_iso)
+```
+
+### NotificationIntent (extends OutboxEntry)
+
+Reuse existing `OutboxEntry`. Add optional `candidate_id` and `priority` fields to metadata for richer delivery policy.
+
+## Module Interface Design
+
+### Enhanced ReflectionScheduler
+
+```python
+class ReflectionScheduler:
+    def __init__(self, project_root: Path | None = None) -> None: ...
+    
+    def should_reflect(self, now: datetime | None = None) -> bool: ...
+    def reflect(self, now: datetime | None = None) -> bool: ...
+    def trigger_event(self, event: ReflectionEvent) -> None: ...
+    
+    # internal
+    def _time_trigger_ready(self, now: datetime) -> bool: ...
+    def _event_trigger_ready(self) -> bool: ...
+    def _daily_cap_not_reached(self, now: datetime) -> bool: ...
+```
+
+### Enhanced IdeaCandidateGenerator
+
+```python
+class IdeaCandidateGenerator:
+    def __init__(self, project_root: Path | None = None, *, llm: ChatLLM | None = None) -> None: ...
+    
+    def generate(self, max_candidates: int = 3) -> list[IdeaCandidate]: ...
+    
+    # internal scanning
+    def _recent_thread_context(self) -> str: ...
+    def _recent_memory_context(self) -> str: ...
+    def _new_source_context(self) -> str: ...
+```
+
+### Enhanced RelevanceGate
+
+```python
+class RelevanceGate:
+    def __init__(self, project_root: Path | None = None) -> None: ...
+    
+    def score(self, candidate: IdeaCandidate) -> RelevanceScore: ...
+    def passes(self, candidate: IdeaCandidate) -> bool: ...
+```
+
+### NotificationDeliveryLoop
+
+```python
+class NotificationDeliveryLoop:
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        adapters: list[NotificationAdapter] | None = None,
+    ) -> None: ...
+    
+    def run_once(self) -> int: ...  # returns count delivered
+```
+
+### Enhanced DeepLink
+
+```python
+@dataclass(frozen=True)
+class DeepLink:
+    action: Literal["open_thread", "new_thread"]
+    thread_id: str | None
+    title: str | None
+    message: str | None
+    candidate_id: str | None
+    
+    @classmethod
+    def parse(cls, url: str) -> "DeepLink": ...
+    def to_url(self) -> str: ...
+    
+    @classmethod
+    def for_new_thread(cls, title: str, seed_message: str, candidate_id: str) -> "DeepLink": ...
+```
+
+## Daemon Integration
+
+```python
+class DaemonState:
+    # existing threads ...
+    
+    def start_background_notification_delivery(self) -> None: ...
+    def stop_background_notification_delivery(self) -> None: ...
+    
+    def _run_background_notification_delivery(self) -> None:
+        while not self.shutdown_requested.wait(delivery_interval):
+            try:
+                self.notification_delivery_loop.run_once()
+            except RuntimeError:
+                continue
+```
+
+The `ReflectionScheduler.reflect()` method should:
+1. Generate candidates
+2. Score each through `RelevanceGate`
+3. Pick the best passing candidate
+4. Write a `NotificationIntent` to the outbox
+5. **Not** call any adapter directly
+
+## Implementation Steps
+
+We implement in small, testable slices:
+
+1. **Add `IdeaCandidate` and `RelevanceScore` models** with wire serialization tests.
+2. **Enhance `IdeaCandidateGenerator`** to use LLM over thread/memory/source context. Add fixture-based tests.
+3. **Enhance `RelevanceGate`** with multi-dimensional scoring. Add threshold and composite score tests.
+4. **Enhance `ReflectionScheduler`** with jitter, daily cap, and event triggers. Add fake-time tests.
+5. **Add `NotificationDeliveryLoop`** that polls outbox and dispatches through adapters. Add fake-adapter tests.
+6. **Decouple daemon**: make `reflect()` write to outbox only; start delivery thread. Add integration tests.
+7. **Enhance `DeepLink`** with `new_thread` action. Add parse/round-trip tests.
+8. **Wire deep links into CLI/REPL** so `nuself attach --deep-link ...` can resolve new-thread intents.
+
+## Test Strategy
+
+- **Scheduler**: fake `datetime` fixtures; prove jitter, daily cap, quiet hours, cooldown, and event triggers.
+- **Generator**: fixture memory/threads/sources; prove candidates have expected types and evidence refs.
+- **Gate**: fixture candidates; prove low-value, duplicate, urgent, and cooldown cases.
+- **Delivery loop**: fake adapters; prove graph nodes never send directly, outbox records attempts/failures/success.
+- **Deep links**: fixture URLs; prove resolution creates or opens threads correctly.
+
+## Completion Criteria
+
+- [ ] `IdeaCandidate` and `RelevanceScore` are typed, serializable, and tested.
+- [ ] `IdeaCandidateGenerator` scans threads, memory, and sources; produces structured candidates.
+- [ ] `RelevanceGate` scores across novelty, confidence, urgency, interruption cost, and cooldown.
+- [ ] `ReflectionScheduler` supports randomized intervals, daily caps, quiet hours, cooldowns, and event triggers.
+- [ ] `NotificationDeliveryLoop` polls pending outbox entries and dispatches through configured adapters.
+- [ ] Daemon `reflect()` writes to outbox only; adapters are called only from the delivery loop.
+- [ ] `DeepLink` supports both `open_thread` and `new_thread` actions.
+- [ ] All new code passes `uv run pytest` and `uvx pyright`.
+- [ ] `README.md` and `README.zh-CN.md` TODOs updated for proactive agent features.

@@ -4,25 +4,38 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Milestone 10–13 are functionally complete. Recent follow-up work added thread lifecycle commands (delete, unarchive, archived) and fixed all pre-existing pyright strict-mode errors in tests.
+Importance and unknown-type quarantine are wired across the memory pipeline.
 
 ## Immediate Context
 
-- `ReflectionScheduler`: interval, cooldown, quiet hours, daemon background thread.
-- `IdeaCandidateGenerator`: reads latest user message from threads for context-aware prompts.
-- `RelevanceGate`: drops duplicate or empty candidates.
-- Notification adapters: log-only, macOS (osascript), email (SMTP).
-- Deep links: `nuself://thread/<id>` with CLI resolution.
-- Evaluation harness: chat fixtures + notification fixtures.
-- Thread lifecycle: CLI `delete`/`unarchive`/`archived`, REPL `:archive`/`:unarchive`/`:archived`/`:delete`.
-- All tests pass under pyright strict mode (0 errors).
+- `MemoryEntry`, `MemoryObject`, `MemoryCandidate`, and `ProfileItem` all carry `importance: float` with full serialization.
+- `MemoryTypeDescriptor.importance()` and `MemoryTypeRegistry.importance()` delegate with per-type defaults.
+- `EntryPayloadDescriptor.default_importance` gives profile_fact 0.9, open_question 0.3, etc.
+- `MemoryQueryService` scores by importance and supports `min_importance` filter.
+- `MemorySearchFilters` supports `min_importance` for repository-level filtering.
+- CLI `memory add/edit` and `memory candidate edit` accept `--importance`; `memory search` accepts `--min-importance`; `memory list`, `memory profile list`, and `memory candidate list` accept `--sort-by`; `memory list` and `memory candidate list` accept `--review-state`.
+- `MemoryIntakeAgent` infers importance from user text, with per-type default importance for local fallback.
+- `memory stats` reports `avg_importance` and `max_importance`.
+- `memory show/list` and candidate summary/detail render importance in output.
+- `ReviewState` now includes `quarantined`; unknown-type draft entries are auto-quarantined on save.
+- `MemoryEntryRepository.unquarantine()` restores quarantined entries to draft.
+- CLI `memory unquarantine <id>` allows manual recovery of quarantined entries.
+- `memory search --review-state quarantined` can list quarantined entries.
 
 ## Next Steps
 
-1. ~~Review whether any CLI subcommands or REPL commands still have gaps.~~ Done: filled test coverage for memory list/show/add/edit/delete/search, source list/show/delete/chunks/search/extract, profile list/show/search/delete/reindex, candidate list/show/accept/reject/edit/merge, graph nodes/edges/search/path/closure, stats, reindex, daemon list/logs.
-2. ~~Fix pre-existing pyright strict-mode errors.~~ Done: 0 errors across src/ and tests/.
-3. Consider whether the `source` workflow deserves a top-level CLI command.
-4. Update README TODOs together with any follow-up work.
+1. ~~Add `importance` field to `MemoryEntry`, `MemoryObject`, and `MemoryCandidate`.~~ Done.
+2. ~~Add `importance` hook to `MemoryTypeDescriptor` and `MemoryTypeRegistry`.~~ Done.
+3. ~~Wire importance into `MemoryQueryService` scoring.~~ Done.
+4. ~~Add `--importance` to CLI `memory add`, `memory edit`, and `memory candidate edit`.~~ Done.
+5. ~~Add round-trip and scoring tests for importance.~~ Done.
+6. ~~Add per-type default importance values via `EntryPayloadDescriptor.default_importance`.~~ Done.
+7. ~~Add `--min-importance` to `memory search`.~~ Done.
+8. ~~Add importance stats to `memory stats`.~~ Done.
+9. ~~Surface importance in `memory show/list` and candidate output.~~ Done.
+10. ~~Add unknown-type quarantine with auto-quarantine on save.~~ Done.
+11. ~~Add `memory unquarantine` CLI command.~~ Done.
+12. ~~Update `README.md` and `README.zh-CN.md` TODOs for importance and quarantine.~~ Done.
 
 ## Not Now
 
@@ -35,6 +48,15 @@ Milestone 10–13 are functionally complete. Recent follow-up work added thread 
 
 ## Completion Criteria
 
-- All Milestone 10–13 deliverables are implemented and tested.
-- README TODOs reflect current progress.
+- `MemoryEntry`, `MemoryObject`, `MemoryCandidate`, and `ProfileItem` serialize and deserialize `importance`.
+- `MemoryTypeDescriptor` exposes `importance(memory) -> float` with per-type defaults.
+- `MemoryQueryService` scores by importance and supports `min_importance` filtering.
+- `MemorySearchFilters` and `MemoryStats` include importance fields.
+- CLI `memory add/edit` and `memory candidate edit` accept `--importance`; `memory search` accepts `--min-importance`.
+- `memory stats` reports `avg_importance`, `max_importance`, and `avg_importance_by_type`.
+- `memory show/list` and candidate output render importance.
+- Unknown-type draft entries are auto-quarantined on save; non-draft unknown types raise.
+- `MemoryEntryRepository.unquarantine()` restores quarantined entries to draft.
+- CLI `memory unquarantine` command works and `memory search --review-state quarantined` lists quarantined entries.
+- Tests cover round-trip, registry delegation, scoring, filtering, stats, candidate behavior, and quarantine.
 - All operations are type-checked and tested.

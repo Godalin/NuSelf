@@ -86,6 +86,10 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 添加用于内置关系行为的 `RelationDescriptor` registry。
 - [x] 添加覆盖 memory entries 和 relation edges 的可重建 symbolic graph projection。
 - [x] 为 transitive symbolic relations 添加 transitive-closure retrieval expansion。
+- [x] 扩展 `MemoryTypeDescriptor`，添加 merge、conflicts、decay、retrieve、reflect 和 description hooks。
+- [x] 将 descriptor merge 接入 `MemoryOptimizer`，将 conflict detection 接入 `MemoryCurator`。
+- [x] 添加 `memory types` CLI 命令和动态 `--type` choices。
+- [x] 在可选接口后添加 LangMem 原型适配器。
 - [ ] 添加派生向量、hybrid 和 graph 索引。
 - [x] 添加开放 symbolic graph，并用 `RelationDescriptor` 描述支持、矛盾、细化和依赖关系。
 - [x] 让检索扩展尊重每个关系的 `retrieval_rule`（例如同时包含当前和被取代的 vs. 仅直接邻居）。
@@ -95,6 +99,17 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 将传递闭包接入 `MemoryQueryService` 的自动上下文扩展。
 - [x] 将临时运行时替换为 LangGraph 对话图。
 - [x] 添加 memory stats 和更丰富的 query 命令。
+- [x] 为记忆条目、候选、对象和档案项添加 `importance` 标量，并在检索评分中引入描述符感知的重要性权重。
+- [x] 为 `memory add`、`memory edit` 和 `memory candidate edit` CLI 命令添加 `--importance` 参数。
+- [x] 为 `memory list`、`memory profile list` 和 `memory candidate list` CLI 命令添加 `--sort-by` 排序选项。
+- [x] 为 `memory list` 和 `memory candidate list` CLI 命令添加 `--review-state` 过滤选项。
+- [x] 让 `MemoryIntakeAgent` 根据文本推断重要性，并带有每种类型的默认值。
+- [x] 为不同记忆类型添加默认重要性值（例如 profile_fact 为 0.9，open_question 为 0.3）。
+- [x] 为 `memory search` 添加 `--min-importance` 过滤参数。
+- [x] 为 `memory stats` 添加重要性统计（`avg_importance`、`max_importance`、`avg_importance_by_type`）。
+- [x] 在 `memory show`、`memory list` 和候选输出中显示重要性。
+- [x] 为未知类型的 draft 条目添加 `quarantined` 审核状态。
+- [x] 添加 `memory unquarantine` CLI 命令以恢复被隔离的条目。
 
 ### 导入与知识库
 
@@ -444,6 +459,12 @@ uv run nuself memory optimize --limit 100
 uv run nuself memory delete <entry-id>
 ```
 
+列出已注册的记忆类型：
+
+```bash
+uv run nuself memory types
+```
+
 重建派生记忆索引：
 
 ```bash
@@ -485,8 +506,8 @@ private/derived/symbolic_graph.json
 将 Markdown 或纯文本 source material 导入 ignored 本地存储：
 
 ```bash
-uv run nuself memory source ingest private/sources/my-note.md --tag notes
-uv run nuself memory source ingest private/sources/ --tag archive
+uv run nuself source ingest private/sources/my-note.md --tag notes
+uv run nuself source ingest private/sources/ --tag archive
 ```
 
 导入后的 document metadata 存储在 `private/sources/documents/`，稳定 chunks 存储在 `private/sources/chunks/`。
@@ -494,16 +515,16 @@ uv run nuself memory source ingest private/sources/ --tag archive
 查看已导入 sources：
 
 ```bash
-uv run nuself memory source list
-uv run nuself memory source show <source-id>
-uv run nuself memory source chunks <source-id>
-uv run nuself memory source search "durable citation"
+uv run nuself source list
+uv run nuself source show <source-id>
+uv run nuself source chunks <source-id>
+uv run nuself source search "durable citation"
 ```
 
 从已导入的 source 中提取可审阅的 profile candidates：
 
 ```bash
-uv run nuself memory source extract <source-id>
+uv run nuself source extract <source-id>
 ```
 
 这一步会把 `profile_fact` 候选项放入 review queue，并保留结构化 source evidence。已接受的 profile candidates 会存放在 `private/profile/items/`，可以用下面的命令查看：
@@ -523,7 +544,7 @@ Profile search 支持 `--type`、`--tag`、`--observed-from`、`--observed-to` �
 删除一个导入的 source 以及它派生出的 review artifacts：
 
 ```bash
-uv run nuself memory source delete <source-id>
+uv run nuself source delete <source-id>
 ```
 
 直接删除一个 derived profile item：

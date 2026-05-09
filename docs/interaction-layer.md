@@ -77,7 +77,7 @@ nuself attach --message "..."
 
 nuself thread list
 nuself thread show <thread-id>
-uself thread create <thread-id>
+nuself thread create <thread-id>
 nuself thread rename <old-id> <new-id>
 nuself thread branch <source-id> <new-id> [--index <n>]
 nuself thread archive <thread-id>
@@ -101,7 +101,8 @@ nuself memory export -o <path>
 nuself memory import <path>
 nuself memory profile <subcommand>
 nuself memory candidate <subcommand>
-nuself memory source <subcommand>
+nuself memory types
+nuself source <subcommand>
 nuself memory reindex
 
 nuself notify list

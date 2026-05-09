@@ -639,7 +639,7 @@ The chat agent should eventually show memory citations on demand:
 - Use fake model tests for schema and control flow.
 - Keep all LangMem outputs as candidates, not committed entries.
 
-### Slice 6: Open Typed Memory Registry 🔄
+### Slice 6: Open Typed Memory Registry ✅
 
 - Add `MemoryObject` and descriptor domain models.
 - Add descriptor registry with validation, summary, merge, decay, conflict, and retrieval hooks.
@@ -647,19 +647,19 @@ The chat agent should eventually show memory citations on demand:
 - Update curator and optimizer prompts to request descriptor-compatible payloads.
 - Add tests for unknown types, validation failures, merge behavior, and conflict surfacing.
 
-### Slice 7: Derived Indexes 🔄
+### Slice 7: Derived Indexes ✅
 
 - Add lexical index and metadata stats under `private/derived/`.
-- Add embedding index only after query service behavior is stable.
+- Add embedding index only after query service behavior is stable. (Deferred to later milestone.)
 - Make `memory reindex` rebuild all derived artifacts.
 
-### Slice 8: Symbolic Temporal Memory 🔄
+### Slice 8: Symbolic Temporal Memory ✅
 
 - Add symbolic node and relation models.
 - Add relation descriptor registry.
-- Add entity/relation extraction from memory objects and source evidence.
+- Add entity/relation extraction from memory objects and source evidence. (Basic graph projection from memory links is implemented; full automatic extraction is deferred.)
 - Add validity, supersession, support, and contradiction handling.
-- Evaluate Graphiti integration against local file-backed needs.
+- Evaluate Graphiti integration against local file-backed needs. (Deferred to later milestone.)
 
 ## Immediate Design Decision
 

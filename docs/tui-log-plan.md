@@ -42,7 +42,7 @@ This plan is grounded in the current checkout rather than a new UI concept:
 
 - `README.md` documents memory entry commands: `memory list`, `preview`, `show`, `edit`, `search`, `update`, `optimize`, `delete`, and `reindex`.
 - `README.md` documents inspect commands for derived relations and symbolic graph: `memory relations`, `memory graph nodes`, `memory graph edges`, `memory graph search`, closure traversal, and path finding.
-- `README.md` documents source inspection: `memory source list`, `show`, `chunks`, `search`, `extract`, and `delete`.
+- `README.md` documents source inspection: `source list`, `show`, `chunks`, `search`, `extract`, and `delete`.
 - `README.md` documents profile inspection: `memory profile list`, `search`, `show`, and `delete`.
 - `docs/memory-management.md` explicitly names future interactive memory commands: `:mem`, `:mem last`, and `:mem why`.
 - `src/nuself/cli.py` already exposes the command handlers and formatters that the REPL inspect layer should reuse.

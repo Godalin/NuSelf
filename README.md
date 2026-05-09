@@ -86,6 +86,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add `RelationDescriptor` registry for built-in relation behavior.
 - [x] Add rebuildable symbolic graph projection over memory entries and relation edges.
 - [x] Add transitive-closure retrieval expansion for transitive symbolic relations.
+- [x] Extend `MemoryTypeDescriptor` with merge, conflicts, decay, retrieve, reflect, and description hooks.
+- [x] Wire descriptor merge into `MemoryOptimizer` and conflict detection into `MemoryCurator`.
+- [x] Add `memory types` CLI command and dynamic `--type` choices.
+- [x] Add LangMem prototype adapter behind an optional interface.
 - [ ] Add derived vector, hybrid, and graph indexes.
 - [x] Add open symbolic graph with `RelationDescriptor` rules for support, contradiction, refinement, and dependency.
 - [x] Make retrieval expansion respect per-relation `retrieval_rule` (e.g. include both current and superseded vs. direct neighbors only).
@@ -95,6 +99,17 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Wire transitive-closure into `MemoryQueryService` automatic context expansion.
 - [x] Replace the temporary runtime with a LangGraph conversation graph.
 - [x] Add memory stats and richer query commands.
+- [x] Add `importance` scalar to memory entries, candidates, objects, and profile items with descriptor-aware retrieval scoring.
+- [x] Add `--importance` flag to `memory add`, `memory edit`, and `memory candidate edit` CLI commands.
+- [x] Add `--sort-by` option to `memory list`, `memory profile list`, and `memory candidate list` CLI commands.
+- [x] Add `--review-state` option to `memory list` and `memory candidate list` CLI commands.
+- [x] Make `MemoryIntakeAgent` infer importance from text with per-type defaults.
+- [x] Add per-type default importance values (e.g. profile facts 0.9, open questions 0.3).
+- [x] Add `--min-importance` filter to `memory search`.
+- [x] Add importance stats (`avg_importance`, `max_importance`, `avg_importance_by_type`) to `memory stats`.
+- [x] Surface importance in `memory show`, `memory list`, and candidate output.
+- [x] Add `quarantined` review state for unknown-type draft entries.
+- [x] Add `memory unquarantine` CLI command to recover quarantined entries.
 
 ### Ingestion And Knowledge Store
 
@@ -444,6 +459,12 @@ Delete an entry:
 uv run nuself memory delete <entry-id>
 ```
 
+List registered memory types:
+
+```bash
+uv run nuself memory types
+```
+
 Rebuild the derived memory index:
 
 ```bash
@@ -485,8 +506,8 @@ private/derived/symbolic_graph.json
 Import Markdown or plain-text source material into ignored local storage:
 
 ```bash
-uv run nuself memory source ingest private/sources/my-note.md --tag notes
-uv run nuself memory source ingest private/sources/ --tag archive
+uv run nuself source ingest private/sources/my-note.md --tag notes
+uv run nuself source ingest private/sources/ --tag archive
 ```
 
 Imported document metadata is stored under `private/sources/documents/`, and stable chunks are stored under `private/sources/chunks/`.
@@ -494,16 +515,16 @@ Imported document metadata is stored under `private/sources/documents/`, and sta
 Inspect imported sources:
 
 ```bash
-uv run nuself memory source list
-uv run nuself memory source show <source-id>
-uv run nuself memory source chunks <source-id>
-uv run nuself memory source search "durable citation"
+uv run nuself source list
+uv run nuself source show <source-id>
+uv run nuself source chunks <source-id>
+uv run nuself source search "durable citation"
 ```
 
 Extract reviewable profile candidates from an imported source:
 
 ```bash
-uv run nuself memory source extract <source-id>
+uv run nuself source extract <source-id>
 ```
 
 The extraction step creates `profile_fact` candidates in the review queue with structured source evidence. Accepted profile candidates are stored under `private/profile/items/`, and you can inspect them with:
@@ -523,7 +544,7 @@ Supported front matter fields are `title`, `date`, `tags`, `origin`, and `privac
 Delete an imported source and its derived review artifacts:
 
 ```bash
-uv run nuself memory source delete <source-id>
+uv run nuself source delete <source-id>
 ```
 
 Delete a derived profile item directly:
