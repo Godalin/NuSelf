@@ -1755,3 +1755,26 @@ def test_health_command_reports_issues_without_api_key(
     assert result == 1
     assert "Health issues:" in captured.out
     assert "OPENAI_API_KEY not configured" in captured.out
+
+
+def test_interactive_search_finds_memory(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work requires long blocks."))
+    repo.reindex()
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":search deep work\n:q\n"))
+    monkeypatch.setattr(
+        "nuself.cli.lifecycle.status",
+        lambda project_root: DaemonStatus(
+            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
+        ),
+    )
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Focus" in captured.out

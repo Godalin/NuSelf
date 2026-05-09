@@ -1281,6 +1281,7 @@ _INTERACTIVE_COMMANDS = [
     ":exit",
     ":history",
     ":sources",
+    ":search",
     ":whoami",
     ":help",
     ":status",
@@ -1524,6 +1525,15 @@ def _handle_interactive_command(command: str, project_root: Path | None, current
         print(_handle_interactive_memory_command(command[5:].strip(), project_root))
         print()
         return ("", current_thread_id)
+    if command.startswith(":search "):
+        print()
+        query = command[8:].strip()
+        if query == "":
+            print(_interactive_help(":search"))
+        else:
+            print(_handle_interactive_memory_search(query, project_root))
+        print()
+        return ("", current_thread_id)
     if command == ":threads":
         print()
         print(_handle_interactive_threads_command(project_root))
@@ -1617,6 +1627,7 @@ def _interactive_help(command: str | None = None) -> str:
             "  :logs   show recent activity logs",
             "  :memory preview memory entries",
             "  :mem    preview memory entries",
+            "  :search <query>           quick memory search",
             "  :mem search <query>       search memory entries",
             "  :mem show <entry-id>      show one memory entry",
             "  :mem candidates           list pending candidates",
@@ -1668,15 +1679,19 @@ def _print_interactive_activity(project_root: Path | None, event_offset: int) ->
         print(render_log_event(event))
 
 
+def _handle_interactive_memory_search(query: str, project_root: Path | None) -> str:
+    entries = MemoryEntryRepository(project_root).search(query)
+    if not entries:
+        return "No matching memory entries."
+    return "\n".join(render_memory_entry_row(entry) for entry in entries)
+
+
 def _handle_interactive_memory_command(command: str, project_root: Path | None) -> str:
     if command == "why":
         return "No memory-context trace is available for the last answer yet."
     if command.startswith("search "):
         query = command.removeprefix("search ").strip()
-        entries = MemoryEntryRepository(project_root).search(query)
-        if not entries:
-            return "No matching memory entries."
-        return "\n".join(render_memory_entry_row(entry) for entry in entries)
+        return _handle_interactive_memory_search(query, project_root)
     if command.startswith("show "):
         entry_id = command.removeprefix("show ").strip()
         try:
