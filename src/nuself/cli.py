@@ -107,6 +107,9 @@ def build_parser() -> argparse.ArgumentParser:
     health_parser = subparsers.add_parser("health")
     _add_handler(health_parser, handle_health)
 
+    config_parser = subparsers.add_parser("config")
+    _add_handler(config_parser, handle_config)
+
     open_parser = subparsers.add_parser("open")
     open_parser.add_argument("thread_id", nargs="?", default=None)
     open_parser.add_argument("--message", "-m", default=None)
@@ -444,6 +447,36 @@ def handle_health(args: argparse.Namespace) -> int:
             print(f"  - {issue}")
         return 1
     print("All checks passed.")
+    return 0
+
+
+def handle_config(args: argparse.Namespace) -> int:
+    import os
+
+    paths = runtime_paths(args.project_root)
+    print(f"project_root: {paths.project_root}")
+    print(f"private_root: {paths.private_root}")
+    print(f"socket_path: {paths.socket_path}")
+
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        env_path = paths.project_root / ".env"
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                if line.startswith("OPENAI_API_KEY="):
+                    api_key = line.split("=", 1)[1].strip().strip('"')
+                    break
+    print(f"api_key: {'set' if api_key else 'not set'}")
+
+    model = os.environ.get("OPENAI_MODEL", "")
+    if not model:
+        env_path = paths.project_root / ".env"
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                if line.startswith("OPENAI_MODEL="):
+                    model = line.split("=", 1)[1].strip().strip('"')
+                    break
+    print(f"model: {model or 'default'}")
     return 0
 
 

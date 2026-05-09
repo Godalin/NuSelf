@@ -1778,3 +1778,12 @@ def test_interactive_search_finds_memory(
     captured = capsys.readouterr()
     assert result == 0
     assert "Focus" in captured.out
+
+
+def test_config_command_shows_paths(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "config"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "project_root:" in captured.out
+    assert "private_root:" in captured.out
+    assert "api_key: not set" in captured.out
