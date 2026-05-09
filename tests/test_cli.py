@@ -2098,6 +2098,38 @@ def test_memory_candidate_show_missing(tmp_path: Path, capsys: CaptureFixture) -
     assert "Memory candidate not found: missing-id" in captured.err
 
 
+def test_memory_candidate_accept_creates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryCandidateRepository
+    from nuself.domain.memory import MemoryCandidate
+
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = MemoryCandidate(action="create", type="belief", title="Focus", body="Deep work.")
+    repo.save(candidate)
+
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "candidate", "accept", candidate.id]
+    )
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Accepted memory candidate:" in captured.out
+
+
+def test_memory_candidate_reject_pending(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryCandidateRepository
+    from nuself.domain.memory import MemoryCandidate
+
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = MemoryCandidate(action="create", type="belief", title="Focus", body="Deep work.")
+    repo.save(candidate)
+
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "candidate", "reject", candidate.id]
+    )
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Rejected memory candidate:" in captured.out
+
+
 def test_memory_add_creates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
 
