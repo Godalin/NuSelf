@@ -1,9 +1,10 @@
+# pyright: reportPrivateUsage=false
 """Tests for REPL tab completion."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -55,7 +56,7 @@ def test_completer_suggests_commands(tmp_path: Path, fake_readline: FakeReadline
     completer = _InteractiveCompleter(tmp_path)
     with patch("nuself.cli.readline", fake_readline):
         fake_readline._line_buffer = ":th"
-        results = []
+        results: list[str | None] = []
         for state in range(10):
             result = completer(":th", state)
             if result is None:
@@ -86,7 +87,7 @@ def test_completer_multiple_command_matches(tmp_path: Path, fake_readline: FakeR
     completer = _InteractiveCompleter(tmp_path)
     with patch("nuself.cli.readline", fake_readline):
         fake_readline._line_buffer = ":mem"
-        results = []
+        results: list[str | None] = []
         for state in range(10):
             result = completer(":mem", state)
             if result is None:

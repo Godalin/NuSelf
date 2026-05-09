@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -31,10 +31,10 @@ def test_reflection_scheduler_fixture() -> None:
     assert isinstance(settings_raw, dict)
     settings_data = cast(dict[str, object], settings_raw)
     settings = ReflectionSettings(
-        interval_seconds=int(settings_data.get("interval_seconds", 3600)),
-        cooldown_seconds=int(settings_data.get("cooldown_seconds", 300)),
-        quiet_start_hour=int(settings_data.get("quiet_start_hour", 22)),
-        quiet_end_hour=int(settings_data.get("quiet_end_hour", 7)),
+        interval_seconds=int(cast(Any, settings_data.get("interval_seconds", 3600))),
+        cooldown_seconds=int(cast(Any, settings_data.get("cooldown_seconds", 300))),
+        quiet_start_hour=int(cast(Any, settings_data.get("quiet_start_hour", 22))),
+        quiet_end_hour=int(cast(Any, settings_data.get("quiet_end_hour", 7))),
     )
 
     scenarios_raw = data.get("scenarios")
@@ -50,14 +50,14 @@ def test_reflection_scheduler_fixture() -> None:
         expected = bool(scenario.get("expected_should_reflect"))
 
         scheduler = ReflectionScheduler.__new__(ReflectionScheduler)
-        scheduler._settings = settings
-        scheduler._last_reflection_path = Path("/dev/null")
+        scheduler._settings = settings  # pyright: ignore[reportPrivateUsage]
+        scheduler._last_reflection_path = Path("/dev/null")  # pyright: ignore[reportPrivateUsage]
         if last is not None:
-            scheduler._write_last_reflection = lambda now: None  # type: ignore[method-assign]
+            scheduler._write_last_reflection = lambda now: None  # type: ignore[method-assign]  # pyright: ignore[reportUnknownLambdaType]
             # Monkey-patch _read_last_reflection for this test
-            scheduler._read_last_reflection = lambda: last  # type: ignore[method-assign]
+            scheduler._read_last_reflection = lambda: last  # type: ignore[method-assign]  # pyright: ignore[reportUnknownLambdaType]
         else:
-            scheduler._read_last_reflection = lambda: None  # type: ignore[method-assign]
+            scheduler._read_last_reflection = lambda: None  # type: ignore[method-assign]  # pyright: ignore[reportUnknownLambdaType]
 
         actual = scheduler.should_reflect(now)
         assert actual == expected, f"scenario {name}: expected {expected}, got {actual}"
@@ -99,7 +99,7 @@ def test_outbox_delivery_fixture(tmp_path: Path) -> None:
         outbox_dir = tmp_path / "outbox" / name
         outbox_dir.mkdir(parents=True, exist_ok=True)
         outbox = NotificationOutbox.__new__(NotificationOutbox)
-        outbox._outbox_dir = outbox_dir
+        outbox._outbox_dir = outbox_dir  # pyright: ignore[reportPrivateUsage]
 
         actions_raw = scenario.get("actions")
         assert isinstance(actions_raw, list)

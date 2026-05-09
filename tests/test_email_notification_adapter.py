@@ -48,8 +48,15 @@ def test_send_with_config(tmp_path: Path, entry: OutboxEntry) -> None:
 
     with patch("nuself.notification.email.smtplib.SMTP") as mock_smtp_cls:
         mock_server = MagicMock()
-        mock_server.__enter__ = lambda self: self
-        mock_server.__exit__ = lambda self, *args: None
+
+        def _enter(_self: object) -> object:
+            return _self
+
+        def _exit(_self: object, *_args: object) -> None:
+            return None
+
+        mock_server.__enter__ = _enter
+        mock_server.__exit__ = _exit
         mock_smtp_cls.return_value = mock_server
         assert adapter.send(entry) is True
         mock_smtp_cls.assert_called_once_with("smtp.example.com", 587, timeout=30)
@@ -84,7 +91,7 @@ def test_send_without_auth(tmp_path: Path, entry: OutboxEntry) -> None:
         mock_server.login.assert_not_called()
 
 
-def test_load_config_ignores_invalid_port_type(tmp_path: Path) -> None:
+def test_load_config_ignores_invalid_port_type(tmp_path: Path, entry: OutboxEntry) -> None:
     config_path = tmp_path / "private" / "email.toml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(
@@ -93,4 +100,4 @@ def test_load_config_ignores_invalid_port_type(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     adapter = EmailNotificationAdapter(tmp_path, dry_run=False)
-    assert adapter._config is None
+    assert adapter.send(entry) is False

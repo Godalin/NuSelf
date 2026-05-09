@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 from nuself import cli
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
@@ -10,6 +10,12 @@ from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.protocol import DaemonResponse
 from nuself.daemon.lifecycle import DaemonStatus
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
+
+
+def _mock_status(project_root: Path) -> DaemonStatus:
+    return DaemonStatus(
+        running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
+    )
 from nuself.domain.profile import ProfileItem
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
@@ -1527,9 +1533,7 @@ def test_interactive_whoami_shows_profile_items(
     repo.save(ProfileItem(type="fact", title="Work", body="I work in software."))
 
     monkeypatch.setattr("sys.stdin", _TextInput(":whoami\n:q\n"))
-    monkeypatch.setattr("nuself.cli.lifecycle.status", lambda project_root: DaemonStatus(
-        running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
-    ))
+    monkeypatch.setattr("nuself.cli.lifecycle.status", _mock_status)
     result = main(["--project-root", str(tmp_path), "attach"])
     captured = capsys.readouterr()
     assert result == 0
@@ -1556,9 +1560,7 @@ def test_interactive_notify_lists_pending(
     monkeypatch.setattr("sys.stdin", _TextInput(":notify\n:q\n"))
     monkeypatch.setattr(
         "nuself.cli.lifecycle.status",
-        lambda project_root: DaemonStatus(
-            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
-        ),
+        _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
     captured = capsys.readouterr()
@@ -1586,9 +1588,7 @@ def test_interactive_notify_send_and_dismiss(
     monkeypatch.setattr("sys.stdin", _TextInput(":notify dismiss n-002\n:q\n"))
     monkeypatch.setattr(
         "nuself.cli.lifecycle.status",
-        lambda project_root: DaemonStatus(
-            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
-        ),
+        _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
     captured = capsys.readouterr()
@@ -1602,9 +1602,7 @@ def test_interactive_unknown_command_shows_hints(
     monkeypatch.setattr("sys.stdin", _TextInput(":th\n:q\n"))
     monkeypatch.setattr(
         "nuself.cli.lifecycle.status",
-        lambda project_root: DaemonStatus(
-            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
-        ),
+        _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
     captured = capsys.readouterr()
@@ -1620,9 +1618,7 @@ def test_interactive_unknown_command_no_hints_for_unrelated(
     monkeypatch.setattr("sys.stdin", _TextInput(":xyz\n:q\n"))
     monkeypatch.setattr(
         "nuself.cli.lifecycle.status",
-        lambda project_root: DaemonStatus(
-            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
-        ),
+        _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
     captured = capsys.readouterr()
@@ -1663,9 +1659,7 @@ def test_interactive_history_shows_recent_messages(
     monkeypatch.setattr("sys.stdin", _TextInput(":history\n:q\n"))
     monkeypatch.setattr(
         "nuself.cli.lifecycle.status",
-        lambda project_root: DaemonStatus(
-            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
-        ),
+        _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
     captured = capsys.readouterr()
@@ -1742,9 +1736,7 @@ def test_interactive_sources_lists_documents(
     monkeypatch.setattr("sys.stdin", _TextInput(":sources\n:q\n"))
     monkeypatch.setattr(
         "nuself.cli.lifecycle.status",
-        lambda project_root: DaemonStatus(
-            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
-        ),
+        _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
     captured = capsys.readouterr()
@@ -1790,9 +1782,7 @@ def test_interactive_search_finds_memory(
     monkeypatch.setattr("sys.stdin", _TextInput(":search deep work\n:q\n"))
     monkeypatch.setattr(
         "nuself.cli.lifecycle.status",
-        lambda project_root: DaemonStatus(
-            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
-        ),
+        _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
     captured = capsys.readouterr()
@@ -1824,10 +1814,9 @@ def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> No
     assert output.exists()
     import json
 
-    data = json.loads(output.read_text(encoding="utf-8"))
-    assert isinstance(data, list)
+    data = cast(list[object], json.loads(output.read_text(encoding="utf-8")))
     assert len(data) == 1
-    assert data[0]["title"] == "Focus"
+    assert cast(dict[str, object], data[0])["title"] == "Focus"
 
 
 def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> None:

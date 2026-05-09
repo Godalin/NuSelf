@@ -23,10 +23,10 @@ class MacOSNotificationAdapter:
         self._project_root = paths.project_root
         self._dry_run = dry_run
         self._write_log = write_log_event
-        self._has_osascript = shutil.which("osascript") is not None
+        self.has_osascript = shutil.which("osascript") is not None
 
     def send(self, entry: OutboxEntry) -> bool:
-        if self._dry_run or not self._has_osascript:
+        if self._dry_run or not self.has_osascript:
             self._write_log(
                 "outbox",
                 "macos_dry_run" if self._dry_run else "macos_unavailable",
@@ -39,7 +39,7 @@ class MacOSNotificationAdapter:
             )
             return True
 
-        script = f'display notification {self._escape(entry.body)} with title {self._escape(entry.title)}'
+        script = f'display notification {self.escape(entry.body)} with title {self.escape(entry.title)}'
         result = subprocess.run(
             ["osascript", "-e", script],
             capture_output=True,
@@ -58,5 +58,5 @@ class MacOSNotificationAdapter:
         return True
 
     @staticmethod
-    def _escape(text: str) -> str:
+    def escape(text: str) -> str:
         return '"' + text.replace('\\', '\\\\').replace('"', '\\"') + '"'

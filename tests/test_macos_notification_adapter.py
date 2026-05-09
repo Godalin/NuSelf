@@ -33,13 +33,13 @@ def test_dry_run_returns_true_and_logs(adapter: MacOSNotificationAdapter, entry:
 
 def test_unavailable_osascript_returns_true_and_logs(tmp_path: Path, entry: OutboxEntry) -> None:
     adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
-    adapter._has_osascript = False
+    adapter.has_osascript = False
     assert adapter.send(entry) is True
 
 
 def test_send_runs_osascript(tmp_path: Path, entry: OutboxEntry) -> None:
     adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
-    adapter._has_osascript = True
+    adapter.has_osascript = True
 
     with patch("nuself.notification.macos.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -53,7 +53,7 @@ def test_send_runs_osascript(tmp_path: Path, entry: OutboxEntry) -> None:
 
 def test_send_osascript_failure_returns_false(tmp_path: Path, entry: OutboxEntry) -> None:
     adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
-    adapter._has_osascript = True
+    adapter.has_osascript = True
 
     with patch("nuself.notification.macos.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=1, stderr="execution error")
@@ -61,8 +61,8 @@ def test_send_osascript_failure_returns_false(tmp_path: Path, entry: OutboxEntry
 
 
 def test_escape_quotes() -> None:
-    assert MacOSNotificationAdapter._escape('say "hello"') == '"say \\"hello\\""'
+    assert MacOSNotificationAdapter.escape('say "hello"') == '"say \\"hello\\""'
 
 
 def test_escape_backslash() -> None:
-    assert MacOSNotificationAdapter._escape("path\\to\\file") == '"path\\\\to\\\\file"'
+    assert MacOSNotificationAdapter.escape("path\\to\\file") == '"path\\\\to\\\\file"'

@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """Tests for ReflectionScheduler."""
 
 from __future__ import annotations
