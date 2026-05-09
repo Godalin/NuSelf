@@ -137,7 +137,7 @@ Responsibilities:
 - Start, stop, inspect, and attach to the local daemon.
 - Connect CLI chat commands to an existing daemon when available.
 - Start a one-shot local runtime for immediate chat when no daemon is running.
-- Manage thread creation, resumption, renaming, and archival.
+- Manage thread creation, resumption, renaming, archival, unarchival, and deletion.
 - Expose memory entries as inspectable, editable, deletable records.
 - Keep local runtime files, sockets, pids, logs, and private settings under ignored `private/`.
 
