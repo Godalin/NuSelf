@@ -1974,6 +1974,19 @@ def test_memory_source_show_missing_document(tmp_path: Path, capsys: CaptureFixt
     assert "Source document not found: missing-id" in captured.err
 
 
+def test_memory_source_delete_removes_document(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.source_repository import SourceRepository
+    from nuself.domain.source import SourceDocument
+
+    repo = SourceRepository(tmp_path)
+    doc = SourceDocument(id="src-003", path="/tmp/test.txt", title="Test Source", kind="text")
+    repo.save_document(doc)
+
+    result = main(["--project-root", str(tmp_path), "memory", "source", "delete", doc.id])
+    assert result == 0
+    assert len(repo.list_documents()) == 0
+
+
 def test_memory_stats_shows_empty_state(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "stats"])
     captured = capsys.readouterr()
