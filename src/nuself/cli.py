@@ -320,6 +320,7 @@ def build_parser() -> argparse.ArgumentParser:
     thread_unarchive_parser = thread_subparsers.add_parser("unarchive")
     thread_unarchive_parser.add_argument("thread_id")
     _add_handler(thread_unarchive_parser, handle_thread_unarchive)
+    _add_handler(thread_subparsers.add_parser("archived"), handle_thread_archived)
 
     return parser
 
@@ -885,6 +886,17 @@ def handle_thread_unarchive(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+
+
+def handle_thread_archived(args: argparse.Namespace) -> int:
+    store = ThreadStore(args.project_root)
+    ids = store.list_archived()
+    if not ids:
+        print("No archived threads.")
+        return 0
+    for thread_id in ids:
+        print(thread_id)
+    return 0
 
 
 def handle_eval(args: argparse.Namespace) -> int:

@@ -1381,6 +1381,28 @@ def test_thread_unarchive_fails_when_missing(tmp_path: Path, capsys: CaptureFixt
     assert "Error: archived thread not found: missing" in captured.err
 
 
+def test_thread_archived_lists_archived_threads(tmp_path: Path, capsys: CaptureFixture) -> None:
+    store = ThreadStore(tmp_path)
+    store.save(ThreadState.empty("alpha"))
+    store.save(ThreadState.empty("beta"))
+    store.archive("alpha")
+
+    result = main(["--project-root", str(tmp_path), "thread", "archived"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "alpha" in captured.out
+    assert "beta" not in captured.out
+
+
+def test_thread_archived_shows_none_when_empty(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "thread", "archived"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "No archived threads." in captured.out
+
+
 def test_open_existing_thread_shows_thread_in_header(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:

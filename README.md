@@ -351,6 +351,7 @@ uv run nuself thread rename <old-id> <new-id>
 uv run nuself thread branch <source-id> <new-id> [--index <n>]
 uv run nuself thread archive <thread-id>
 uv run nuself thread unarchive <thread-id>
+uv run nuself thread archived
 uv run nuself thread delete <thread-id>
 ```
 

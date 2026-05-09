@@ -301,6 +301,16 @@ class ThreadStore:
             ids.append(path.stem)
         return ids
 
+    def list_archived(self) -> list[str]:
+        """List archived thread IDs."""
+        archived_dir = self._threads_dir / "archived"
+        if not archived_dir.exists():
+            return []
+        ids: list[str] = []
+        for path in sorted(archived_dir.glob("*.json")):
+            ids.append(path.stem)
+        return ids
+
     def rename(self, old_thread_id: str, new_thread_id: str) -> None:
         """Rename a thread file and its lock atomically."""
         if old_thread_id == new_thread_id:
