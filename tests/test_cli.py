@@ -2085,6 +2085,13 @@ def test_memory_profile_delete_removes_item(tmp_path: Path, capsys: CaptureFixtu
     assert len(repo.list()) == 0
 
 
+def test_memory_profile_reindex_rebuilds_index(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "profile", "reindex"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Rebuilt profile index:" in captured.out
+
+
 def test_memory_relations_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "relations"])
     captured = capsys.readouterr()
