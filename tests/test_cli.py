@@ -1745,3 +1745,13 @@ def test_notify_clear_removes_dismissed(tmp_path: Path, capsys: CaptureFixture) 
     assert result == 0
     assert "Cleared 1 dismissed" in captured.out
     assert len(outbox.list(status="dismissed")) == 0
+
+
+def test_health_command_reports_issues_without_api_key(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
+    result = main(["--project-root", str(tmp_path), "health"])
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Health issues:" in captured.out
+    assert "OPENAI_API_KEY not configured" in captured.out

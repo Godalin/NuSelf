@@ -104,6 +104,9 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser = subparsers.add_parser("status")
     _add_handler(status_parser, handle_status)
 
+    health_parser = subparsers.add_parser("health")
+    _add_handler(health_parser, handle_health)
+
     open_parser = subparsers.add_parser("open")
     open_parser.add_argument("thread_id", nargs="?", default=None)
     open_parser.add_argument("--message", "-m", default=None)
@@ -407,6 +410,40 @@ def handle_status(args: argparse.Namespace) -> int:
     print(f"daemon: {'running' if daemon.running else 'stopped'} pid={daemon.pid or '-'}")
     print(f"threads: {len(threads)}")
     print(f"pending notifications: {pending}")
+    return 0
+
+
+def handle_health(args: argparse.Namespace) -> int:
+    import os
+
+    issues: list[str] = []
+    paths = runtime_paths(args.project_root)
+
+    if not paths.private_root.exists():
+        issues.append(f"private root missing: {paths.private_root}")
+    if not (paths.project_root / ".env").exists():
+        issues.append(".env file missing")
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        env_path = paths.project_root / ".env"
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                if line.startswith("OPENAI_API_KEY="):
+                    api_key = line.split("=", 1)[1].strip().strip('"')
+                    break
+    if not api_key:
+        issues.append("OPENAI_API_KEY not configured")
+
+    daemon = lifecycle.status(args.project_root)
+    if not daemon.running:
+        issues.append("daemon is not running")
+
+    if issues:
+        print("Health issues:")
+        for issue in issues:
+            print(f"  - {issue}")
+        return 1
+    print("All checks passed.")
     return 0
 
 
