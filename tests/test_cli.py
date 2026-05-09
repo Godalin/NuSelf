@@ -2044,6 +2044,13 @@ def test_memory_graph_edges_empty_shows_message(tmp_path: Path, capsys: CaptureF
     assert "No symbolic graph edges." in captured.out
 
 
+def test_memory_candidate_list_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "candidate", "list"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "No memory candidates." in captured.out
+
+
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
