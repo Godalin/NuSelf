@@ -145,7 +145,7 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 添加 log-only notification adapter。
 - [x] 添加 macOS notification adapter。
 - [x] 添加使用 ignored private configuration 的 email adapter。
-- [ ] 将通知链接到新的或已有的 conversation。
+- [x] 将通知链接到新的或已有的 conversation。
 
 ### 评估与质量
 

@@ -145,7 +145,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add log-only notification adapter.
 - [x] Add macOS notification adapter.
 - [x] Add email adapter using ignored private configuration.
-- [ ] Link notifications to a new or existing conversation.
+- [x] Link notifications to a new or existing conversation.
 
 ### Evaluation And Quality
 
