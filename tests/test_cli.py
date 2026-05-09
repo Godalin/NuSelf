@@ -1808,3 +1808,30 @@ def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> No
     assert isinstance(data, list)
     assert len(data) == 1
     assert data[0]["title"] == "Focus"
+
+
+def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> None:
+    import json
+
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    # Export first
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work."))
+    export_path = tmp_path / "export.json"
+    entries = repo.list()
+    data = [entry.to_wire() for entry in entries]
+    export_path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    # Clear and import
+    for entry in MemoryEntryRepository(tmp_path).list():
+        repo.delete(entry.id)
+    repo.reindex()
+    assert len(MemoryEntryRepository(tmp_path).list()) == 0
+
+    result = main(["--project-root", str(tmp_path), "memory", "import", str(export_path)])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Imported 1 memory entries" in captured.out
+    assert len(MemoryEntryRepository(tmp_path).list()) == 1

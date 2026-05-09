@@ -213,6 +213,9 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser = memory_subparsers.add_parser("export")
     export_parser.add_argument("--output", "-o", type=Path, required=True)
     _add_handler(export_parser, handle_memory_export)
+    import_parser = memory_subparsers.add_parser("import")
+    import_parser.add_argument("path", type=Path)
+    _add_handler(import_parser, handle_memory_import)
     profile_parser = memory_subparsers.add_parser("profile")
     profile_parser.set_defaults(handler=None, help_parser=profile_parser)
     profile_subparsers = profile_parser.add_subparsers(dest="profile_command")
@@ -1003,6 +1006,32 @@ def handle_memory_export(args: argparse.Namespace) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"Exported {len(data)} memory entries to {args.output}")
+    return 0
+
+
+def handle_memory_import(args: argparse.Namespace) -> int:
+    import json
+
+    if not args.path.exists():
+        print(f"Import file not found: {args.path}", file=sys.stderr)
+        return 1
+    raw: object = json.loads(args.path.read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        print("Import file must contain a JSON array of memory entries.", file=sys.stderr)
+        return 1
+    repo = MemoryEntryRepository(args.project_root)
+    from typing import cast
+
+    data = cast(list[object], raw)
+    imported = 0
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        entry = MemoryEntry.from_wire(cast(dict[str, object], item))
+        repo.save(entry)
+        imported += 1
+    repo.reindex()
+    print(f"Imported {imported} memory entries from {args.path}")
     return 0
 
 
