@@ -1627,3 +1627,29 @@ def test_eval_command_runs_conversation_fixtures(tmp_path: Path, capsys: Capture
         or "No conversation fixtures" in captured.out
         or "Fixtures directory not found" in captured.err
     )
+
+
+def test_interactive_history_shows_recent_messages(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
+
+    store = ThreadStore(tmp_path)
+    state = ThreadState.empty("default")
+    state.messages.append(ThreadMessage(role="user", content="Hello there"))
+    state.messages.append(ThreadMessage(role="assistant", content="Hi! How can I help?"))
+    store.save(state)
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":history\n:q\n"))
+    monkeypatch.setattr(
+        "nuself.cli.lifecycle.status",
+        lambda project_root: DaemonStatus(
+            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
+        ),
+    )
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Recent messages in 'default':" in captured.out
+    assert "> Hello there" in captured.out
+    assert "< Hi! How can I help?" in captured.out

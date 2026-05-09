@@ -1192,6 +1192,7 @@ _INTERACTIVE_COMMANDS = [
     ":q",
     ":quit",
     ":exit",
+    ":history",
     ":whoami",
     ":help",
     ":status",
@@ -1380,6 +1381,11 @@ def _brand_banner() -> str:
 def _handle_interactive_command(command: str, project_root: Path | None, current_thread_id: str) -> tuple[str, str]:
     if command in {":q", ":quit", ":exit"}:
         return ("exit", current_thread_id)
+    if command == ":history":
+        print()
+        print(_handle_interactive_history_command(project_root, current_thread_id))
+        print()
+        return ("", current_thread_id)
     if command == ":whoami":
         print()
         print(_handle_interactive_whoami_command(project_root))
@@ -1509,6 +1515,7 @@ def _interactive_help(command: str | None = None) -> str:
             "  :q         exit",
             "  :quit      exit",
             "  :exit      exit",
+            "  :history   show recent thread messages",
             "  :whoami    show core profile",
             "  :notify    list pending notifications",
             "  :help      show this help",
@@ -1637,6 +1644,25 @@ def _interactive_memory_help(command: str | None = None) -> str:
             "  :mem why",
         ]
     )
+    return "\n".join(lines)
+
+
+def _handle_interactive_history_command(project_root: Path | None, thread_id: str) -> str:
+    from nuself.agent.chat import ThreadStore
+
+    try:
+        state = ThreadStore(project_root).load(thread_id)
+    except Exception:
+        return "No thread state available."
+    if not state.messages:
+        return "No messages in this thread."
+    lines = [f"Recent messages in '{thread_id}':"]
+    for msg in state.messages[-10:]:
+        prefix = ">" if msg.role == "user" else "<"
+        content = msg.content[:120]
+        if len(msg.content) > 120:
+            content += "..."
+        lines.append(f"  {prefix} {content}")
     return "\n".join(lines)
 
 
