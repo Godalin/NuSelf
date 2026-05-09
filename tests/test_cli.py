@@ -2030,6 +2030,20 @@ def test_memory_relations_empty_shows_message(tmp_path: Path, capsys: CaptureFix
     assert "No memory relations." in captured.out
 
 
+def test_memory_graph_nodes_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "graph", "nodes"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "No symbolic graph nodes." in captured.out
+
+
+def test_memory_graph_edges_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "graph", "edges"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "No symbolic graph edges." in captured.out
+
+
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
