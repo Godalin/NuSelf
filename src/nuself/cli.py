@@ -1411,6 +1411,9 @@ _INTERACTIVE_COMMANDS = [
     ":rename",
     ":branch",
     ":archive",
+    ":unarchive",
+    ":archived",
+    ":delete",
 ]
 
 
@@ -1712,6 +1715,39 @@ def _handle_interactive_command(command: str, project_root: Path | None, current
             print(f"Error: {exc}")
         print()
         return ("redraw_header", "default")
+    if command.startswith(":unarchive "):
+        print()
+        thread_id = command[11:].strip()
+        if thread_id == "":
+            print(_interactive_help(":unarchive"))
+        else:
+            try:
+                ThreadStore(project_root).unarchive(thread_id)
+                print(f"Unarchived thread: {thread_id}")
+            except ValueError as exc:
+                print(f"Error: {exc}")
+        print()
+        return ("", current_thread_id)
+    if command == ":archived":
+        print()
+        store = ThreadStore(project_root)
+        ids = store.list_archived()
+        if not ids:
+            print("No archived threads.")
+        else:
+            for thread_id in ids:
+                print(thread_id)
+        print()
+        return ("", current_thread_id)
+    if command == ":delete":
+        print()
+        try:
+            ThreadStore(project_root).delete(current_thread_id)
+            print(f"Deleted thread: {current_thread_id}")
+        except ValueError as exc:
+            print(f"Error: {exc}")
+        print()
+        return ("redraw_header", "default")
     print()
     print(_interactive_help(command))
     print()
@@ -1757,6 +1793,9 @@ def _interactive_help(command: str | None = None) -> str:
             "  :rename <new-id>          rename the current thread",
             "  :branch <new-id> [index]  branch current thread at index",
             "  :archive                  archive the current thread",
+            "  :unarchive <id>           restore an archived thread",
+            "  :archived                 list archived threads",
+            "  :delete                   delete the current thread",
         ]
     )
     return "\n".join(lines)

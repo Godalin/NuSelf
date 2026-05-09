@@ -1712,6 +1712,31 @@ def test_interactive_history_shows_recent_messages(
     assert "< Hi! How can I help?" in captured.out
 
 
+def test_interactive_archive_unarchive_delete_and_archived(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    from nuself.agent.chat import ThreadState, ThreadStore
+
+    store = ThreadStore(tmp_path)
+    store.save(ThreadState.empty("alpha"))
+    store.save(ThreadState.empty("beta"))
+
+    monkeypatch.setattr(
+        "sys.stdin",
+        _TextInput(":archive\n:archived\n:unarchive alpha\n:archived\n:thread beta\n:delete\n:q\n"),
+    )
+    monkeypatch.setattr("nuself.cli.lifecycle.status", _mock_status)
+    result = main(["--project-root", str(tmp_path), "open", "alpha"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Archived thread: alpha" in captured.out
+    assert "alpha" in captured.out  # listed in :archived
+    assert "Unarchived thread: alpha" in captured.out
+    assert "No archived threads." in captured.out  # after unarchive
+    assert "Deleted thread: beta" in captured.out
+
+
 def test_thread_show_displays_messages(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
 
