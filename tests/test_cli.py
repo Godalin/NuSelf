@@ -2087,6 +2087,35 @@ def test_memory_delete_removes_entry(tmp_path: Path, capsys: CaptureFixture) -> 
     assert len(repo.list()) == 0
 
 
+def test_memory_edit_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    entry = MemoryEntry(type="belief", title="Focus", body="Deep work.")
+    repo.save(entry)
+
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "edit",
+            entry.id,
+            "--title",
+            "Concentration",
+            "--body",
+            "Focus deeply.",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Concentration" in captured.out
+    updated = repo.get(entry.id)
+    assert updated.title == "Concentration"
+    assert updated.body == "Focus deeply."
+
+
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
