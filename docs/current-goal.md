@@ -4,7 +4,7 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Milestone 10–13 are functionally complete. The system now has proactive reflection with scheduling, candidate generation, relevance gating, multi-channel notifications, deep links, and evaluation fixtures.
+Milestone 10–13 are functionally complete. Recent follow-up work added thread lifecycle commands (delete, unarchive, archived) and fixed all pre-existing pyright strict-mode errors in tests.
 
 ## Immediate Context
 
@@ -14,11 +14,13 @@ Milestone 10–13 are functionally complete. The system now has proactive reflec
 - Notification adapters: log-only, macOS (osascript), email (SMTP).
 - Deep links: `nuself://thread/<id>` with CLI resolution.
 - Evaluation harness: chat fixtures + notification fixtures.
+- Thread lifecycle: CLI `delete`/`unarchive`/`archived`, REPL `:archive`/`:unarchive`/`:archived`/`:delete`.
+- All tests pass under pyright strict mode (0 errors).
 
 ## Next Steps
 
-1. Review recent commits for any missed documentation or test gaps.
-2. Consider whether any remaining README TODOs should be re-prioritized.
+1. Review whether any CLI subcommands or REPL commands still have gaps.
+2. Consider whether the `source` workflow deserves a top-level CLI command.
 3. Update README TODOs together with any follow-up work.
 
 ## Not Now
