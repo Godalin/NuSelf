@@ -132,6 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
     notify_dismiss_parser = notify_subparsers.add_parser("dismiss")
     notify_dismiss_parser.add_argument("entry_id")
     _add_handler(notify_dismiss_parser, handle_notify_dismiss)
+    _add_handler(notify_subparsers.add_parser("clear"), handle_notify_clear)
 
     memory_parser = subparsers.add_parser("memory")
     memory_parser.set_defaults(handler=None, help_parser=memory_parser)
@@ -897,6 +898,14 @@ def handle_notify_dismiss(args: argparse.Namespace) -> int:
     except OutboxEntryNotFound:
         print(f"Outbox entry not found: {args.entry_id}", file=sys.stderr)
         return 1
+
+
+def handle_notify_clear(args: argparse.Namespace) -> int:
+    from nuself.notification import NotificationOutbox
+
+    count = NotificationOutbox(args.project_root).clear("dismissed")
+    print(f"Cleared {count} dismissed notification(s).")
+    return 0
 
 
 def handle_memory_update(args: argparse.Namespace) -> int:

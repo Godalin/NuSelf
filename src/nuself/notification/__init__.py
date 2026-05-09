@@ -173,6 +173,16 @@ class NotificationOutbox:
         self._write_path(updated)
         return updated
 
+    def clear(self, status: OutboxStatus) -> int:
+        """Remove all entries with the given status. Return count removed."""
+        removed = 0
+        for entry in self.list(status=status):
+            path = self._path_for(entry.id)
+            if path.exists():
+                path.unlink()
+                removed += 1
+        return removed
+
     def _idempotency_key_exists(self, key: str) -> bool:
         return self._find_by_idempotency_key(key) is not None
 

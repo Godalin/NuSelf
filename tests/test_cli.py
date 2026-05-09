@@ -1731,3 +1731,17 @@ def test_interactive_sources_lists_documents(
     assert result == 0
     assert "Imported sources:" in captured.out
     assert "Notes" in captured.out
+
+
+def test_notify_clear_removes_dismissed(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(OutboxEntry(id="c-001", title="A", body="a", status="pending", idempotency_key="k1"))
+    outbox.dismiss("c-001")
+
+    result = main(["--project-root", str(tmp_path), "notify", "clear"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Cleared 1 dismissed" in captured.out
+    assert len(outbox.list(status="dismissed")) == 0
