@@ -2227,6 +2227,28 @@ def test_memory_candidate_edit_updates_fields(tmp_path: Path, capsys: CaptureFix
     assert updated.body == "Focus deeply."
 
 
+def test_memory_candidate_merge_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
+    from nuself.domain.memory import MemoryCandidate, MemoryEntry
+
+    entry_repo = MemoryEntryRepository(tmp_path)
+    entry = MemoryEntry(type="belief", title="Focus", body="Deep work.")
+    entry_repo.save(entry)
+
+    cand_repo = MemoryCandidateRepository(tmp_path)
+    candidate = MemoryCandidate(
+        action="update", type="belief", title="Focus", body="Focus deeply.", target_entry_id=entry.id
+    )
+    cand_repo.save(candidate)
+
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "candidate", "merge", candidate.id, entry.id]
+    )
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Merged memory candidate:" in captured.out
+
+
 def test_memory_add_creates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
 
