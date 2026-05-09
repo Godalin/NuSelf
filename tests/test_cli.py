@@ -2076,6 +2076,28 @@ def test_memory_candidate_list_empty_shows_message(tmp_path: Path, capsys: Captu
     assert "No memory candidates." in captured.out
 
 
+def test_memory_candidate_show_displays_candidate(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryCandidateRepository
+    from nuself.domain.memory import MemoryCandidate
+
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = MemoryCandidate(action="create", type="belief", title="Focus", body="Deep work.")
+    repo.save(candidate)
+
+    result = main(["--project-root", str(tmp_path), "memory", "candidate", "show", candidate.id])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Focus" in captured.out
+    assert "Deep work." in captured.out
+
+
+def test_memory_candidate_show_missing(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "candidate", "show", "missing-id"])
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Memory candidate not found: missing-id" in captured.err
+
+
 def test_memory_add_creates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
 
