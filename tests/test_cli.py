@@ -2023,6 +2023,34 @@ def test_memory_profile_show_missing_item(tmp_path: Path, capsys: CaptureFixture
     assert "Profile item not found: missing-id" in captured.err
 
 
+def test_memory_profile_search_finds_match(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.profile.repository import ProfileItemRepository
+    from nuself.domain.profile import ProfileItem
+
+    repo = ProfileItemRepository(tmp_path)
+    repo.save(ProfileItem(type="preference", title="Style", body="Concise."))
+    repo.save(ProfileItem(type="fact", title="Work", body="Software."))
+
+    result = main(["--project-root", str(tmp_path), "memory", "profile", "search", "concise"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Style" in captured.out
+    assert "Work" not in captured.out
+
+
+def test_memory_profile_delete_removes_item(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.profile.repository import ProfileItemRepository
+    from nuself.domain.profile import ProfileItem
+
+    repo = ProfileItemRepository(tmp_path)
+    item = ProfileItem(type="preference", title="Style", body="Concise.")
+    repo.save(item)
+
+    result = main(["--project-root", str(tmp_path), "memory", "profile", "delete", item.id])
+    assert result == 0
+    assert len(repo.list()) == 0
+
+
 def test_memory_relations_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "relations"])
     captured = capsys.readouterr()
