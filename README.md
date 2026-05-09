@@ -110,6 +110,14 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Surface importance in `memory show`, `memory list`, and candidate output.
 - [x] Add `quarantined` review state for unknown-type draft entries.
 - [x] Add `memory unquarantine` CLI command to recover quarantined entries.
+- [x] Add structured `IdeaCandidate` and `RelevanceScore` models for proactive agent.
+- [x] Enhance `IdeaCandidateGenerator` to scan threads, memory, and sources.
+- [x] Add multi-dimensional `RelevanceGate` with novelty, confidence, urgency, interruption cost, and cooldown.
+- [x] Add randomized low-frequency reflection with jitter, daily caps, and event triggers.
+- [x] Add competitive persona discussion with randomized jury, scoring, blocking vetoes, and synthesizer arbitration.
+- [x] Add `NotificationDeliveryLoop` that decouples outbox writing from adapter dispatch.
+- [x] Enhance `DeepLink` with `new_thread` action for proactive candidate routing.
+- [x] Wire proactive agent pipeline into daemon with separate reflection and delivery threads.
 
 ### Ingestion And Knowledge Store
 

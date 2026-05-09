@@ -110,6 +110,14 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 在 `memory show`、`memory list` 和候选输出中显示重要性。
 - [x] 为未知类型的 draft 条目添加 `quarantined` 审核状态。
 - [x] 添加 `memory unquarantine` CLI 命令以恢复被隔离的条目。
+- [x] 添加结构化 `IdeaCandidate` 和 `RelevanceScore` 模型用于主动代理。
+- [x] 增强 `IdeaCandidateGenerator` 扫描 threads、memory 和 sources。
+- [x] 添加多维 `RelevanceGate`，包含 novelty、confidence、urgency、interruption cost 和 cooldown。
+- [x] 添加随机化低频 reflection，包含抖动、每日上限和事件触发。
+- [x] 添加竞争式多人格讨论，包含随机评审团、评分、blocking veto 和 synthesizer 仲裁。
+- [x] 添加 `NotificationDeliveryLoop`，解耦 outbox 写入与 adapter 分发。
+- [x] 增强 `DeepLink` 的 `new_thread` 动作，用于主动候选路由。
+- [x] 将主动代理管道接入 daemon，使用独立的 reflection 和 delivery 线程。
 
 ### 导入与知识库
 
