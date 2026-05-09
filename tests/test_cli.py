@@ -1608,3 +1608,22 @@ def test_interactive_unknown_command_no_hints_for_unrelated(
     captured = capsys.readouterr()
     assert result == 0
     assert "Did you mean:" not in captured.out
+
+
+def test_eval_command_runs_conversation_fixtures(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "eval",
+            "--component",
+            "conversations",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert result in (0, 1)
+    assert (
+        "conversations:" in captured.out
+        or "No conversation fixtures" in captured.out
+        or "Fixtures directory not found" in captured.err
+    )

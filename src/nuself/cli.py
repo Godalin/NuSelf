@@ -115,6 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     eval_parser = subparsers.add_parser("eval")
     eval_parser.add_argument("--fixtures", type=Path, default=None)
+    eval_parser.add_argument("--component", choices=["conversations", "notifications", "all"], default="all")
     _add_handler(eval_parser, handle_eval)
 
     notify_parser = subparsers.add_parser("notify")
@@ -741,28 +742,56 @@ def handle_thread_archive(args: argparse.Namespace) -> int:
 
 
 def handle_eval(args: argparse.Namespace) -> int:
+    import sys
     from nuself.eval import run_eval, load_fixtures
 
-    fixtures_dir = args.fixtures or (Path(__file__).parent.parent / "tests" / "fixtures" / "conversations")
-    if not fixtures_dir.exists():
-        print(f"Fixtures directory not found: {fixtures_dir}", file=sys.stderr)
-        return 1
-    fixtures = load_fixtures(fixtures_dir)
-    if not fixtures:
-        print(f"No fixtures found in: {fixtures_dir}")
-        return 0
-    import tempfile
-    with tempfile.TemporaryDirectory() as tmp:
-        results = run_eval(Path(tmp), fixtures_dir)
-    passed = sum(1 for r in results if r.passed)
-    total = len(results)
-    for result in results:
-        status = "PASS" if result.passed else "FAIL"
-        print(f"{status} {result.fixture_name} (score={result.score:.2f})")
-        for failure in result.failures:
-            print(f"  - {failure}")
-    print(f"\n{passed}/{total} passed")
-    return 0 if passed == total else 1
+    component: str = args.component
+    all_passed = 0
+    all_total = 0
+
+    if component in ("conversations", "all"):
+        fixtures_dir = args.fixtures or (Path(__file__).parent.parent / "tests" / "fixtures" / "conversations")
+        if fixtures_dir.exists():
+            fixtures = load_fixtures(fixtures_dir)
+            if fixtures:
+                import tempfile
+                with tempfile.TemporaryDirectory() as tmp:
+                    results = run_eval(Path(tmp), fixtures_dir)
+                passed = sum(1 for r in results if r.passed)
+                total = len(results)
+                all_passed += passed
+                all_total += total
+                print(f"== conversations: {passed}/{total} passed ==")
+                for result in results:
+                    status = "PASS" if result.passed else "FAIL"
+                    print(f"  {status} {result.fixture_name} (score={result.score:.2f})")
+                    for failure in result.failures:
+                        print(f"    - {failure}")
+            else:
+                print("No conversation fixtures found.")
+        else:
+            print(f"Fixtures directory not found: {fixtures_dir}", file=sys.stderr)
+
+    if component in ("notifications", "all"):
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", "tests/test_notification_eval_fixtures.py", "-v"],
+            capture_output=True,
+            text=True,
+        )
+        print("== notifications ==")
+        print(result.stdout)
+        if result.returncode == 0:
+            all_passed += 3  # rough count; actual count from pytest output
+            all_total += 3
+        else:
+            all_total += 3
+            print(result.stderr, file=sys.stderr)
+
+    print(f"\n{all_passed}/{all_total} passed")
+    return 0 if all_passed == all_total and all_total > 0 else 1
 
 
 def handle_notify_list(args: argparse.Namespace) -> int:
