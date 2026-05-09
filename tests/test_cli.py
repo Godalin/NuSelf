@@ -1940,3 +1940,55 @@ def test_top_level_subcommand_help(argv: list[str]) -> None:
     with pytest.raises(SystemExit) as exc_info:
         parser.parse_args(argv)
     assert exc_info.value.code == 0
+
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["daemon", "start", "--help"],
+        ["daemon", "stop", "--help"],
+        ["daemon", "restart", "--help"],
+        ["daemon", "status", "--help"],
+        ["daemon", "list", "--help"],
+        ["daemon", "logs", "--help"],
+        ["daemon", "attach", "--help"],
+        ["notify", "list", "--help"],
+        ["notify", "show", "--help"],
+        ["notify", "send", "--help"],
+        ["notify", "dismiss", "--help"],
+        ["notify", "clear", "--help"],
+        ["memory", "list", "--help"],
+        ["memory", "preview", "--help"],
+        ["memory", "show", "--help"],
+        ["memory", "add", "--help"],
+        ["memory", "edit", "--help"],
+        ["memory", "delete", "--help"],
+        ["memory", "search", "--help"],
+        ["memory", "stats", "--help"],
+        ["memory", "relations", "--help"],
+        ["memory", "graph", "--help"],
+        ["memory", "update", "--help"],
+        ["memory", "optimize", "--help"],
+        ["memory", "export", "--help"],
+        ["memory", "import", "--help"],
+        ["memory", "profile", "--help"],
+        ["memory", "candidate", "--help"],
+        ["memory", "source", "--help"],
+        ["memory", "reindex", "--help"],
+        ["thread", "list", "--help"],
+        ["thread", "show", "--help"],
+        ["thread", "create", "--help"],
+        ["thread", "rename", "--help"],
+        ["thread", "branch", "--help"],
+        ["thread", "archive", "--help"],
+        ["thread", "delete", "--help"],
+        ["thread", "unarchive", "--help"],
+        ["thread", "archived", "--help"],
+    ],
+)
+def test_nested_subcommand_help(argv: list[str]) -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(argv)
+    assert exc_info.value.code == 0
