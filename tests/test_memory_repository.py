@@ -287,6 +287,67 @@ def test_memory_entry_has_memory_object_migration_shape() -> None:
     assert restored == entry
 
 
+def test_memory_entry_importance_roundtrip(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    entry = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Importance test",
+            body="This entry has custom importance.",
+            importance=0.9,
+        )
+    )
+    loaded = repo.get(entry.id)
+    assert loaded.importance == 0.9
+
+    wire = entry.to_wire()
+    assert wire["importance"] == 0.9
+    restored = MemoryEntry.from_wire(wire)
+    assert restored.importance == 0.9
+
+
+def test_registry_importance_delegates_and_fallbacks() -> None:
+    registry = default_memory_type_registry()
+    memory = MemoryObject(
+        type="belief",
+        payload={"title": "Test", "body": "Body", "tags": []},
+        importance=0.75,
+    )
+    assert registry.importance(memory) == 0.75
+
+    unknown = MemoryObject(
+        type="unknown_type",
+        payload={"title": "Test", "body": "Body", "tags": []},
+        importance=0.33,
+        review_state="draft",
+    )
+    assert registry.importance(unknown) == 0.33
+
+
+def test_registry_importance_uses_type_default_when_unset() -> None:
+    registry = default_memory_type_registry()
+    # MemoryObject default importance is 1.0; descriptor should substitute type default.
+    profile_fact = MemoryObject(
+        type="profile_fact",
+        payload={"title": "Test", "body": "Body", "tags": []},
+    )
+    assert registry.importance(profile_fact) == 0.9
+
+    open_question = MemoryObject(
+        type="open_question",
+        payload={"title": "Test", "body": "Body", "tags": []},
+    )
+    assert registry.importance(open_question) == 0.3
+
+    # Explicit importance overrides the default.
+    explicit = MemoryObject(
+        type="profile_fact",
+        payload={"title": "Test", "body": "Body", "tags": []},
+        importance=0.5,
+    )
+    assert registry.importance(explicit) == 0.5
+
+
 def test_default_registry_validates_and_summarizes_built_in_memory_object() -> None:
     registry = default_memory_type_registry()
     memory = MemoryObject(
@@ -347,11 +408,26 @@ def test_repository_rejects_invalid_descriptor_payload(tmp_path: Path) -> None:
     raise AssertionError("expected MemoryValidationError")
 
 
-def test_repository_accepts_unknown_draft_entry_type_as_migration_escape_hatch(tmp_path: Path) -> None:
+def test_repository_quarantines_unknown_draft_type(tmp_path: Path) -> None:
+    from nuself.domain.memory import MemoryEntryType
     repo = MemoryEntryRepository(tmp_path)
-    entry = repo.save(MemoryEntry(type="style_trait", title="Concise style", body="Keep summaries compact."))
+    entry = repo.save(MemoryEntry(type=cast(MemoryEntryType, "truly_unknown_type"), title="Concise style", body="Keep summaries compact."))
 
     assert repo.get(entry.id).title == "Concise style"
+    assert repo.get(entry.id).review_state == "quarantined"
+
+
+def test_repository_rejects_unknown_non_draft_type(tmp_path: Path) -> None:
+    from nuself.domain.memory import MemoryEntryType
+    repo = MemoryEntryRepository(tmp_path)
+    invalid = MemoryEntry(type=cast(MemoryEntryType, "truly_unknown_type"), title="Concise style", body="Keep summaries compact.", review_state="reviewed")
+
+    try:
+        repo.save(invalid)
+    except MemoryValidationError as exc:
+        assert exc.memory_type == "truly_unknown_type"
+        return
+    raise AssertionError("expected MemoryValidationError")
 
 
 def test_memory_repository_search_filters_and_stats(tmp_path: Path) -> None:
@@ -386,3 +462,148 @@ def test_memory_repository_search_filters_and_stats(tmp_path: Path) -> None:
     assert stats.entries_by_type == {"belief": 1, "episode": 1}
     assert stats.entries_by_review_state["reviewed"] == 1
     assert stats.entries_with_observed_at == 1
+
+
+def test_registry_merge_prefers_incoming_payload_and_preserves_metadata() -> None:
+    registry = default_memory_type_registry()
+    existing = MemoryObject(
+        type="belief",
+        payload={"title": "Old", "body": "Old body.", "tags": ["a", "b"]},
+        confidence=0.5,
+        source_refs=["ref1"],
+        review_state="draft",
+        created_at="2026-01-01T00:00:00+00:00",
+        updated_at="2026-01-01T00:00:00+00:00",
+    )
+    incoming = MemoryObject(
+        type="belief",
+        payload={"title": "New", "body": "New body.", "tags": ["b", "c"]},
+        confidence=0.9,
+        source_refs=["ref2"],
+        review_state="reviewed",
+        created_at="2026-02-01T00:00:00+00:00",
+        updated_at="2026-02-01T00:00:00+00:00",
+    )
+
+    merged = registry.merge(existing, incoming)
+
+    assert merged.id == existing.id
+    assert merged.type == "belief"
+    assert merged.payload["title"] == "New"
+    assert merged.payload["body"] == "New body."
+    assert merged.payload["tags"] == ["a", "b", "c"]
+    assert merged.confidence == 0.9
+    assert merged.source_refs == ["ref1", "ref2"]
+    assert merged.review_state == "reviewed"
+    assert merged.created_at == existing.created_at
+    assert merged.updated_at == incoming.updated_at
+
+
+def test_registry_conflicts_detects_matching_titles() -> None:
+    registry = default_memory_type_registry()
+    a = MemoryObject(type="belief", payload={"title": "Same Title", "body": "A"})
+    b = MemoryObject(type="belief", payload={"title": "Same Title", "body": "B"})
+    c = MemoryObject(type="belief", payload={"title": "Different", "body": "C"})
+
+    assert registry.conflicts(a, b) is True
+    assert registry.conflicts(a, c) is False
+
+
+def test_registry_conflicts_same_id_always_true() -> None:
+    registry = default_memory_type_registry()
+    obj = MemoryObject(type="belief", payload={"title": "X", "body": "Y"}, id="same-id")
+
+    assert registry.conflicts(obj, obj) is True
+
+
+def test_registry_decay_returns_memory_unchanged() -> None:
+    registry = default_memory_type_registry()
+    memory = MemoryObject(type="belief", payload={"title": "T", "body": "B"})
+
+    result = registry.decay(memory, "2026-05-08T00:00:00+00:00")
+
+    assert result is memory
+
+
+def test_registry_retrieve_defaults_to_true() -> None:
+    registry = default_memory_type_registry()
+
+    assert registry.retrieve("belief", "any query", 10) is True
+
+
+def test_registry_reflect_defaults_to_empty() -> None:
+    registry = default_memory_type_registry()
+    memory = MemoryObject(type="belief", payload={"title": "T", "body": "B"})
+
+    assert registry.reflect(memory, "some context") == []
+
+
+def test_persona_descriptor_conflicts_by_persona_id() -> None:
+    registry = default_memory_type_registry()
+    a = MemoryObject(
+        type="persona_instruction",
+        payload={"persona_id": "analyst", "description": "A"},
+    )
+    b = MemoryObject(
+        type="persona_instruction",
+        payload={"persona_id": "analyst", "description": "B"},
+    )
+    c = MemoryObject(
+        type="persona_instruction",
+        payload={"persona_id": "builder", "description": "C"},
+    )
+
+    assert registry.conflicts(a, b) is True
+    assert registry.conflicts(a, c) is False
+
+
+def test_unknown_type_uses_default_merge_and_conflicts() -> None:
+    registry = default_memory_type_registry()
+    existing = MemoryObject(
+        type="unknown_type",
+        payload={"key": "old"},
+        id="mem-1",
+        created_at="2026-01-01T00:00:00+00:00",
+    )
+    incoming = MemoryObject(
+        type="unknown_type",
+        payload={"key": "new"},
+        created_at="2026-02-01T00:00:00+00:00",
+    )
+
+    merged = registry.merge(existing, incoming)
+    assert merged.payload["key"] == "new"
+    assert merged.id == "mem-1"
+
+    a = MemoryObject(type="unknown_type", payload={}, id="x")
+    b = MemoryObject(type="unknown_type", payload={}, id="y")
+    assert registry.conflicts(a, b) is False
+    assert registry.conflicts(a, a) is True
+
+    assert registry.decay(existing, "now") is existing
+    assert registry.retrieve("unknown_type", "q", 5) is True
+    assert registry.reflect(existing, "ctx") == []
+
+
+def test_registry_describe_returns_description_for_known_types() -> None:
+    registry = default_memory_type_registry()
+    assert registry.describe("belief") == "a claim or stance"
+    assert registry.describe("persona_instruction") == "persona instruction memory"
+
+
+def test_registry_describe_returns_unknown_for_missing_types() -> None:
+    registry = default_memory_type_registry()
+    assert registry.describe("nonexistent") == "unknown type"
+
+
+def test_registry_example_returns_example_object() -> None:
+    registry = default_memory_type_registry()
+    example = registry.example("belief")
+    assert example is not None
+    assert example.type == "belief"
+    assert example.payload["title"] == "Example belief"
+
+
+def test_registry_example_returns_none_for_unknown_type() -> None:
+    registry = default_memory_type_registry()
+    assert registry.example("unknown") is None

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, now_iso
+from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry, now_iso
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
@@ -77,6 +77,7 @@ class MemoryOptimizer:
         repository: MemoryEntryRepository | None = None,
         candidate_repository: MemoryCandidateRepository | None = None,
         profile_repository: ProfileItemRepository | None = None,
+        registry: MemoryTypeRegistry | None = None,
     ) -> None:
         paths = runtime_paths(project_root)
         self._paths = paths
@@ -88,6 +89,7 @@ class MemoryOptimizer:
             paths.project_root,
             entry_repository=self._repository,
         )
+        self._registry = registry or default_memory_type_registry()
 
     def run_once(self) -> MemoryOptimizerResult:
         entries = self._repository.list()[: max(self._settings.memory_limit, 1)]
@@ -196,12 +198,25 @@ class MemoryOptimizer:
             existing = self._repository.get(action.entry_id)
         except MemoryEntryNotFound:
             return False
+        incoming = MemoryObject(
+            type=action.type or existing.type,
+            payload={
+                "title": action.title,
+                "body": action.body,
+                "tags": list(action.tags) if action.tags is not None else existing.tags,
+            },
+            confidence=_clamp_confidence(action.confidence if action.confidence is not None else existing.confidence),
+        )
+        merged = self._registry.merge(existing.to_memory_object(), incoming)
+        merged_title = cast(str, merged.payload.get("title", action.title))
+        merged_body = cast(str, merged.payload.get("body", action.body))
+        merged_tags = cast(list[str], merged.payload.get("tags", list(action.tags) if action.tags is not None else existing.tags))
         candidate = MemoryCandidate(
             action="update",
             type=action.type or existing.type,
-            title=action.title,
-            body=action.body,
-            tags=list(action.tags) if action.tags is not None else existing.tags,
+            title=merged_title,
+            body=merged_body,
+            tags=merged_tags,
             source_refs=[source_ref],
             evidence=[MemoryEvidence(source_type="optimizer", source_ref=source_ref, summary=action.reason)],
             confidence=_clamp_confidence(action.confidence if action.confidence is not None else existing.confidence),

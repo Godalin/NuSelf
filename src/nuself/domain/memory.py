@@ -22,7 +22,7 @@ MemoryEntryType: TypeAlias = Literal[
     "persona_instruction",
 ]
 
-ReviewState: TypeAlias = Literal["draft", "reviewed", "rejected"]
+ReviewState: TypeAlias = Literal["draft", "reviewed", "rejected", "quarantined"]
 PrivacyLevel: TypeAlias = Literal["private", "shareable"]
 MemoryCandidateAction: TypeAlias = Literal["create", "update", "merge", "delete"]
 MemoryCandidateReviewState: TypeAlias = Literal["pending", "accepted", "rejected"]
@@ -128,6 +128,7 @@ class MemoryEntry:
     tags: list[str] = field(default_factory=empty_str_list)
     source_refs: list[str] = field(default_factory=empty_str_list)
     confidence: float = 1.0
+    importance: float = 0.5
     privacy: PrivacyLevel = "private"
     review_state: ReviewState = "draft"
     id: str = field(default_factory=new_memory_entry_id)
@@ -149,6 +150,7 @@ class MemoryEntry:
         body: str | None = None,
         tags: list[str] | None = None,
         confidence: float | None = None,
+        importance: float | None = None,
         review_state: ReviewState | None = None,
         observed_at: str | None = None,
         valid_from: str | None = None,
@@ -162,6 +164,7 @@ class MemoryEntry:
             tags=tags if tags is not None else self.tags,
             source_refs=self.source_refs,
             confidence=confidence if confidence is not None else self.confidence,
+            importance=importance if importance is not None else self.importance,
             privacy=self.privacy,
             review_state=review_state if review_state is not None else self.review_state,
             id=self.id,
@@ -186,6 +189,7 @@ class MemoryEntry:
             "tags": self.tags,
             "source_refs": self.source_refs,
             "confidence": self.confidence,
+            "importance": self.importance,
             "privacy": self.privacy,
             "review_state": self.review_state,
             "created_at": self.created_at,
@@ -228,6 +232,7 @@ class MemoryEntry:
             payload=payload,
             metadata={"entry_schema": "MemoryEntry/v1"},
             confidence=self.confidence,
+            importance=self.importance,
             source_refs=self.source_refs,
             review_state=self.review_state,
             privacy=self.privacy,
@@ -245,6 +250,7 @@ class MemoryEntry:
             tags=_expect_str_list(data, "tags"),
             source_refs=_expect_str_list(data, "source_refs"),
             confidence=_expect_float(data, "confidence"),
+            importance=_optional_float(data, "importance") or 0.5,
             privacy=_expect_privacy(data, "privacy"),
             review_state=_expect_review_state(data, "review_state"),
             created_at=_expect_str(data, "created_at"),
@@ -284,6 +290,7 @@ class MemoryEntry:
             tags=_expect_mapping_str_list(payload, "tags"),
             source_refs=memory.source_refs,
             confidence=memory.confidence,
+            importance=memory.importance,
             privacy=memory.privacy,
             review_state=memory.review_state,
             created_at=memory.created_at,
@@ -310,6 +317,7 @@ class MemoryCandidate:
     tags: list[str] = field(default_factory=empty_str_list)
     source_refs: list[str] = field(default_factory=empty_str_list)
     confidence: float = 0.7
+    importance: float = 0.5
     privacy: PrivacyLevel = "private"
     review_state: MemoryCandidateReviewState = "pending"
     reason: str = ""
@@ -331,6 +339,7 @@ class MemoryCandidate:
         title: str | None = None,
         body: str | None = None,
         tags: list[str] | None = None,
+        importance: float | None = None,
         review_state: MemoryCandidateReviewState | None = None,
         target_entry_id: str | None = None,
         observed_at: str | None = None,
@@ -347,6 +356,7 @@ class MemoryCandidate:
             tags=tags if tags is not None else self.tags,
             source_refs=self.source_refs,
             confidence=self.confidence,
+            importance=importance if importance is not None else self.importance,
             privacy=self.privacy,
             review_state=review_state if review_state is not None else self.review_state,
             reason=self.reason,
@@ -373,6 +383,7 @@ class MemoryCandidate:
             tags=self.tags,
             source_refs=self.source_refs,
             confidence=self.confidence,
+            importance=self.importance,
             privacy=self.privacy,
             review_state=review_state,
             observed_at=self.observed_at,
@@ -381,6 +392,36 @@ class MemoryCandidate:
             temporal_note=self.temporal_note,
             relations=self.relations,
             evidence=self.evidence,
+        )
+
+    def to_memory_object(self) -> MemoryObject:
+        """Return the open typed-memory envelope for this candidate."""
+        payload: dict[str, object] = {
+            "title": self.title,
+            "body": self.body,
+            "tags": self.tags,
+            "revisit_at": None,
+            "observed_at": self.observed_at,
+            "valid_from": self.valid_from,
+            "valid_until": self.valid_until,
+            "temporal_note": self.temporal_note,
+            "relations": self.relations,
+            "supersedes": self.relations.get("supersedes", []),
+            "related_memory_ids": self.relations.get("related_to", []),
+            "evidence": [evidence.to_wire() for evidence in self.evidence],
+        }
+        return MemoryObject(
+            id=self.id,
+            type=self.type,
+            payload=payload,
+            metadata={"candidate_schema": "MemoryCandidate/v1"},
+            confidence=self.confidence,
+            importance=self.importance,
+            source_refs=self.source_refs,
+            review_state=cast(ReviewState, self.review_state),
+            privacy=self.privacy,
+            created_at=self.created_at,
+            updated_at=self.updated_at,
         )
 
     def to_wire(self) -> dict[str, object]:
@@ -393,6 +434,7 @@ class MemoryCandidate:
             "tags": self.tags,
             "source_refs": self.source_refs,
             "confidence": self.confidence,
+            "importance": self.importance,
             "privacy": self.privacy,
             "review_state": self.review_state,
             "reason": self.reason,
@@ -421,6 +463,7 @@ class MemoryCandidate:
             tags=_expect_str_list(data, "tags"),
             source_refs=_expect_str_list(data, "source_refs"),
             confidence=_expect_float(data, "confidence"),
+            importance=_optional_float(data, "importance") or 0.5,
             privacy=_expect_privacy(data, "privacy"),
             review_state=_expect_candidate_review_state(data, "review_state"),
             reason=_optional_str(data, "reason") or "",
@@ -449,6 +492,7 @@ class MemoryObject:
     payload: dict[str, object]
     metadata: dict[str, object] = field(default_factory=empty_object_dict)
     confidence: float = 1.0
+    importance: float = 1.0
     source_refs: list[str] = field(default_factory=empty_str_list)
     review_state: ReviewState = "draft"
     privacy: PrivacyLevel = "private"
@@ -463,6 +507,7 @@ class MemoryObject:
             "payload": self.payload,
             "metadata": self.metadata,
             "confidence": self.confidence,
+            "importance": self.importance,
             "source_refs": self.source_refs,
             "review_state": self.review_state,
             "privacy": self.privacy,
@@ -478,6 +523,7 @@ class MemoryObject:
             payload=_expect_dict(data, "payload"),
             metadata=_expect_dict(data, "metadata"),
             confidence=_expect_float(data, "confidence"),
+            importance=_optional_float(data, "importance") or 1.0,
             source_refs=_expect_str_list(data, "source_refs"),
             review_state=_expect_review_state(data, "review_state"),
             privacy=_expect_privacy(data, "privacy"),
@@ -511,10 +557,42 @@ class MemoryTypeDescriptor(Protocol):
     def type(self) -> str:
         raise NotImplementedError
 
+    @property
+    def description(self) -> str:
+        raise NotImplementedError
+
     def validate(self, memory: MemoryObject) -> list[MemoryValidationIssue]:
         raise NotImplementedError
 
     def summarize(self, memory: MemoryObject) -> str:
+        raise NotImplementedError
+
+    def merge(self, existing: MemoryObject, incoming: MemoryObject) -> MemoryObject:
+        """Return a merged memory object. By default, prefer incoming for title/body."""
+        raise NotImplementedError
+
+    def conflicts(self, a: MemoryObject, b: MemoryObject) -> bool:
+        """Return True if two memories of this type conflict."""
+        raise NotImplementedError
+
+    def decay(self, memory: MemoryObject, now: str) -> MemoryObject | None:
+        """Return updated memory after decay, or None if it should be removed."""
+        raise NotImplementedError
+
+    def retrieve(self, query: str, budget: int) -> bool:
+        """Return True if this memory type is relevant to the query."""
+        raise NotImplementedError
+
+    def reflect(self, memory: MemoryObject, context: str) -> list[MemoryObject]:
+        """Generate related memory candidates from reflection context."""
+        raise NotImplementedError
+
+    def example(self) -> MemoryObject:
+        """Return a representative example of this memory type."""
+        raise NotImplementedError
+
+    def importance(self, memory: MemoryObject) -> float:
+        """Return the importance score for this memory (0.0–1.0)."""
         raise NotImplementedError
 
 
@@ -552,6 +630,105 @@ class MemoryTypeRegistry:
             body = _optional_payload_str(memory.payload, "body")
             return title or body or f"{memory.type}:{memory.id}"
         return descriptor.summarize(memory)
+
+    def names(self) -> tuple[str, ...]:
+        return tuple(sorted(self._descriptors))
+
+    def describe(self, memory_type: str) -> str:
+        descriptor = self.get(memory_type)
+        if descriptor is None:
+            return "unknown type"
+        return descriptor.description
+
+    def merge(self, existing: MemoryObject, incoming: MemoryObject) -> MemoryObject:
+        descriptor = self.get(existing.type)
+        if descriptor is None:
+            return _default_merge(existing, incoming)
+        return descriptor.merge(existing, incoming)
+
+    def conflicts(self, a: MemoryObject, b: MemoryObject) -> bool:
+        descriptor = self.get(a.type)
+        if descriptor is None:
+            return _default_conflicts(a, b)
+        return descriptor.conflicts(a, b)
+
+    def decay(self, memory: MemoryObject, now: str) -> MemoryObject | None:
+        descriptor = self.get(memory.type)
+        if descriptor is None:
+            return _default_decay(memory, now)
+        return descriptor.decay(memory, now)
+
+    def retrieve(self, memory_type: str, query: str, budget: int) -> bool:
+        descriptor = self.get(memory_type)
+        if descriptor is None:
+            return _default_retrieve(query, budget)
+        return descriptor.retrieve(query, budget)
+
+    def reflect(self, memory: MemoryObject, context: str) -> list[MemoryObject]:
+        descriptor = self.get(memory.type)
+        if descriptor is None:
+            return _default_reflect(memory, context)
+        return descriptor.reflect(memory, context)
+
+    def example(self, memory_type: str) -> MemoryObject | None:
+        descriptor = self.get(memory_type)
+        if descriptor is None:
+            return None
+        return descriptor.example()
+
+    def importance(self, memory: MemoryObject) -> float:
+        descriptor = self.get(memory.type)
+        if descriptor is None:
+            return _default_importance(memory)
+        return descriptor.importance(memory)
+
+    def __iter__(self):
+        return iter(self._descriptors.values())
+
+
+def _default_merge(existing: MemoryObject, incoming: MemoryObject) -> MemoryObject:
+    """Default merge: preserve existing id/created_at, prefer incoming payload."""
+    merged_payload = dict(existing.payload)
+    merged_payload.update(incoming.payload)
+    merged_metadata = dict(existing.metadata)
+    merged_metadata.update(incoming.metadata)
+    return MemoryObject(
+        id=existing.id,
+        type=existing.type,
+        payload=merged_payload,
+        metadata=merged_metadata,
+        confidence=incoming.confidence,
+        source_refs=list(dict.fromkeys(existing.source_refs + incoming.source_refs)),
+        review_state=incoming.review_state,
+        privacy=incoming.privacy,
+        created_at=existing.created_at,
+        updated_at=incoming.updated_at,
+    )
+
+
+def _default_conflicts(a: MemoryObject, b: MemoryObject) -> bool:
+    """Default conflict: same id means same object, otherwise no conflict."""
+    return a.id == b.id
+
+
+def _default_decay(memory: MemoryObject, now: str) -> MemoryObject | None:
+    """Default decay: no decay."""
+    return memory
+
+
+def _default_retrieve(query: str, budget: int) -> bool:
+    """Default retrieval: always relevant."""
+    return True
+
+
+def _default_reflect(memory: MemoryObject, context: str) -> list[MemoryObject]:
+    """Default reflection: no candidates."""
+    return []
+
+
+def _default_importance(memory: MemoryObject) -> float:
+    """Default importance: use the stored importance or fall back to 0.5."""
+    return memory.importance
 
 
 @dataclass(frozen=True)
@@ -603,7 +780,8 @@ class EntryPayloadDescriptor:
     """Descriptor for memory objects backed by a title/body entry payload."""
 
     type: str
-    required_body_hint: str
+    description: str
+    default_importance: float = 0.5
 
     def validate(self, memory: MemoryObject) -> list[MemoryValidationIssue]:
         issues = _validate_entry_payload(memory.payload)
@@ -617,14 +795,69 @@ class EntryPayloadDescriptor:
         body = _expect_mapping_str(memory.payload, "body")
         return f"{title}: {body}"
 
+    def merge(self, existing: MemoryObject, incoming: MemoryObject) -> MemoryObject:
+        existing_tags = cast(list[str], existing.payload.get("tags", []))
+        incoming_tags = cast(list[str], incoming.payload.get("tags", []))
+        merged_tags = list(dict.fromkeys(existing_tags + incoming_tags))
+        merged_payload = dict(existing.payload)
+        merged_payload.update(incoming.payload)
+        merged_payload["tags"] = merged_tags
+        merged_metadata = dict(existing.metadata)
+        merged_metadata.update(incoming.metadata)
+        return MemoryObject(
+            id=existing.id,
+            type=existing.type,
+            payload=merged_payload,
+            metadata=merged_metadata,
+            confidence=incoming.confidence,
+            source_refs=list(dict.fromkeys(existing.source_refs + incoming.source_refs)),
+            review_state=incoming.review_state,
+            privacy=incoming.privacy,
+            created_at=existing.created_at,
+            updated_at=incoming.updated_at,
+        )
+
+    def conflicts(self, a: MemoryObject, b: MemoryObject) -> bool:
+        a_title = _optional_payload_str(a.payload, "title")
+        b_title = _optional_payload_str(b.payload, "title")
+        if a_title and b_title and a_title.strip().lower() == b_title.strip().lower():
+            return True
+        return a.id == b.id
+
+    def decay(self, memory: MemoryObject, now: str) -> MemoryObject | None:
+        return memory
+
+    def retrieve(self, query: str, budget: int) -> bool:
+        return True
+
+    def reflect(self, memory: MemoryObject, context: str) -> list[MemoryObject]:
+        return []
+
+    def example(self) -> MemoryObject:
+        return MemoryObject(
+            type=self.type,
+            payload={"title": f"Example {self.type}", "body": self.description, "tags": []},
+        )
+
+    def importance(self, memory: MemoryObject) -> float:
+        if memory.importance == 1.0:
+            return self.default_importance
+        return memory.importance
+
 
 @dataclass(frozen=True)
 class PersonaInstructionDescriptor:
     """Descriptor for persona instruction memory objects."""
 
+    default_importance: float = 0.9
+
     @property
     def type(self) -> str:
         return "persona_instruction"
+
+    @property
+    def description(self) -> str:
+        return "persona instruction memory"
 
     def validate(self, memory: MemoryObject) -> list[MemoryValidationIssue]:
         issues: list[MemoryValidationIssue] = []
@@ -652,22 +885,67 @@ class PersonaInstructionDescriptor:
         description = memory.payload.get("description", "")
         return f"{persona_id}: {description}"
 
+    def merge(self, existing: MemoryObject, incoming: MemoryObject) -> MemoryObject:
+        merged_payload = dict(existing.payload)
+        merged_payload.update(incoming.payload)
+        merged_metadata = dict(existing.metadata)
+        merged_metadata.update(incoming.metadata)
+        return MemoryObject(
+            id=existing.id,
+            type=existing.type,
+            payload=merged_payload,
+            metadata=merged_metadata,
+            confidence=incoming.confidence,
+            source_refs=list(dict.fromkeys(existing.source_refs + incoming.source_refs)),
+            review_state=incoming.review_state,
+            privacy=incoming.privacy,
+            created_at=existing.created_at,
+            updated_at=incoming.updated_at,
+        )
+
+    def conflicts(self, a: MemoryObject, b: MemoryObject) -> bool:
+        a_id = _optional_payload_str(a.payload, "persona_id")
+        b_id = _optional_payload_str(b.payload, "persona_id")
+        if a_id and b_id and a_id.strip().lower() == b_id.strip().lower():
+            return True
+        return a.id == b.id
+
+    def decay(self, memory: MemoryObject, now: str) -> MemoryObject | None:
+        return memory
+
+    def retrieve(self, query: str, budget: int) -> bool:
+        return True
+
+    def reflect(self, memory: MemoryObject, context: str) -> list[MemoryObject]:
+        return []
+
+    def example(self) -> MemoryObject:
+        return MemoryObject(
+            type=self.type,
+            payload={"persona_id": "analyst", "description": "Decomposes concepts and assumptions."},
+        )
+
+    def importance(self, memory: MemoryObject) -> float:
+        if memory.importance == 1.0:
+            return self.default_importance
+        return memory.importance
+
 
 def default_memory_type_registry() -> MemoryTypeRegistry:
     """Return built-in descriptors for the current typed-memory foundation."""
 
     return MemoryTypeRegistry(
         [
-            EntryPayloadDescriptor("source_note", "a source-backed note"),
-            EntryPayloadDescriptor("profile_fact", "a profile fact"),
-            EntryPayloadDescriptor("belief", "a claim or stance"),
-            EntryPayloadDescriptor("preference", "a durable preference"),
-            EntryPayloadDescriptor("goal", "a desired future state"),
-            EntryPayloadDescriptor("concept", "a concept definition or explanation"),
-            EntryPayloadDescriptor("style_trait", "a user style trait"),
-            EntryPayloadDescriptor("episode", "a concise event summary"),
-            EntryPayloadDescriptor("open_question", "an unresolved question"),
-            EntryPayloadDescriptor("instruction", "a behavior rule"),
+            EntryPayloadDescriptor("source_note", "a source-backed note", default_importance=0.4),
+            EntryPayloadDescriptor("profile_fact", "a profile fact", default_importance=0.9),
+            EntryPayloadDescriptor("belief", "a claim or stance", default_importance=0.7),
+            EntryPayloadDescriptor("preference", "a durable preference", default_importance=0.6),
+            EntryPayloadDescriptor("goal", "a desired future state", default_importance=0.8),
+            EntryPayloadDescriptor("concept", "a concept definition or explanation", default_importance=0.5),
+            EntryPayloadDescriptor("style_trait", "a user style trait", default_importance=0.5),
+            EntryPayloadDescriptor("episode", "a concise event summary", default_importance=0.4),
+            EntryPayloadDescriptor("open_question", "an unresolved question", default_importance=0.3),
+            EntryPayloadDescriptor("instruction", "a behavior rule", default_importance=0.6),
             PersonaInstructionDescriptor(),
         ]
     )
@@ -787,6 +1065,15 @@ def _optional_str(data: dict[str, object], field_name: str) -> str | None:
     return value
 
 
+def _optional_float(data: dict[str, object], field_name: str) -> float | None:
+    value = data.get(field_name)
+    if value is None:
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    raise ValueError(f"field '{field_name}' must be a number or null")
+
+
 def _optional_dict(data: dict[str, object], field_name: str) -> dict[str, object]:
     value = data.get(field_name)
     if value is None:
@@ -838,20 +1125,6 @@ def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
 
 def _expect_memory_type(data: dict[str, object], field_name: str) -> MemoryEntryType:
     value = _expect_str(data, field_name)
-    if value not in {
-        "source_note",
-        "profile_fact",
-        "belief",
-        "preference",
-        "goal",
-        "concept",
-        "style_trait",
-        "episode",
-        "open_question",
-        "instruction",
-        "persona_instruction",
-    }:
-        raise ValueError(f"unsupported memory entry type: {value}")
     return cast(MemoryEntryType, value)
 
 
@@ -875,7 +1148,7 @@ def _memory_object_type_as_entry_type(value: str) -> MemoryEntryType:
 
 def _expect_review_state(data: dict[str, object], field_name: str) -> ReviewState:
     value = _expect_str(data, field_name)
-    if value not in {"draft", "reviewed", "rejected"}:
+    if value not in {"draft", "reviewed", "rejected", "quarantined"}:
         raise ValueError(f"unsupported review state: {value}")
     return cast(ReviewState, value)
 

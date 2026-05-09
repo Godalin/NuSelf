@@ -355,3 +355,133 @@ def test_memory_query_expands_transitive_relation_closure(tmp_path: Path) -> Non
     assert [match.entry.id for match in matches] == [root.id, dependency.id, deep_dependency.id]
     assert matches[1].reasons == (f"depends_on:{root.id}",)
     assert matches[2].reasons == (f"depends_on_closure:{root.id}",)
+
+
+def test_memory_query_uses_registry_retrieve_to_filter_types(tmp_path: Path) -> None:
+    from nuself.domain.memory import (
+        MemoryObject,
+        MemoryTypeRegistry,
+        MemoryValidationIssue,
+    )
+
+    class HidingBeliefDescriptor:
+        @property
+        def type(self) -> str:
+            return "belief"
+
+        @property
+        def description(self) -> str:
+            return "hides on 'hide' query"
+
+        def validate(self, memory: MemoryObject) -> list[MemoryValidationIssue]:
+            return []
+
+        def summarize(self, memory: MemoryObject) -> str:
+            return "belief"
+
+        def merge(self, existing: MemoryObject, incoming: MemoryObject) -> MemoryObject:
+            return incoming
+
+        def conflicts(self, a: MemoryObject, b: MemoryObject) -> bool:
+            return False
+
+        def importance(self, memory: MemoryObject) -> float:
+            return memory.importance
+
+        def decay(self, memory: MemoryObject, now: str) -> MemoryObject | None:
+            return memory
+
+        def retrieve(self, query: str, budget: int) -> bool:
+            return "hide" not in query.casefold()
+
+        def reflect(self, memory: MemoryObject, context: str) -> list[MemoryObject]:
+            return []
+
+        def example(self) -> MemoryObject:
+            return MemoryObject(type=self.type, payload={"title": "Example", "body": "B"})
+
+    repo = MemoryEntryRepository(tmp_path)
+    belief = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Hidden belief",
+            body="This visible belief should be hidden when query contains hide.",
+            review_state="reviewed",
+        )
+    )
+    preference = repo.save(
+        MemoryEntry(
+            type="preference",
+            title="Visible preference",
+            body="This preference is a belief that should always be visible.",
+            review_state="reviewed",
+        )
+    )
+    registry = MemoryTypeRegistry([HidingBeliefDescriptor()])
+    service = MemoryQueryService(repo, registry=registry)
+
+    normal_matches = service.search(MemoryQuery(text="visible", limit=6))
+    hidden_matches = service.search(MemoryQuery(text="hide belief", limit=6))
+
+    assert any(match.entry.id == belief.id for match in normal_matches)
+    assert not any(match.entry.id == belief.id for match in hidden_matches)
+    assert any(match.entry.id == preference.id for match in hidden_matches)
+
+
+def test_query_uses_importance_in_scoring(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    low = repo.save(
+        MemoryEntry(
+            type="episode",
+            title="Low importance note",
+            body="This has low importance.",
+            importance=0.1,
+            review_state="reviewed",
+        )
+    )
+    high = repo.save(
+        MemoryEntry(
+            type="episode",
+            title="High importance note",
+            body="This has high importance.",
+            importance=0.9,
+            review_state="reviewed",
+        )
+    )
+    service = MemoryQueryService(repo)
+    matches = service.search(MemoryQuery(text="note", limit=6))
+    high_match = next(m for m in matches if m.entry.id == high.id)
+    low_match = next(m for m in matches if m.entry.id == low.id)
+    assert high_match.score > low_match.score
+    assert "importance" in high_match.reasons
+    assert "importance" in low_match.reasons
+
+
+def test_query_filters_by_min_importance(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    low = repo.save(
+        MemoryEntry(
+            type="episode",
+            title="Low importance note",
+            body="This has low importance.",
+            importance=0.1,
+            review_state="reviewed",
+        )
+    )
+    high = repo.save(
+        MemoryEntry(
+            type="episode",
+            title="High importance note",
+            body="This has high importance.",
+            importance=0.9,
+            review_state="reviewed",
+        )
+    )
+    service = MemoryQueryService(repo)
+    all_matches = service.search(MemoryQuery(text="note", limit=6))
+    assert len(all_matches) == 2
+
+    filtered = service.search(MemoryQuery(text="note", limit=6, min_importance=0.5))
+    assert len(filtered) == 1
+    assert filtered[0].entry.id == high.id
+    assert not any(match.entry.id == low.id for match in filtered)

@@ -84,6 +84,7 @@ def render_candidate_row(candidate: MemoryCandidate, *, color: bool | None = Non
                 target,
                 candidate.title,
                 _format_tags(candidate.tags),
+                f"imp={candidate.importance}",
             ]
         )
     )
@@ -100,6 +101,7 @@ def render_candidate_detail(candidate: MemoryCandidate, *, color: bool | None = 
                 f"type={candidate.type}",
                 f"state={candidate.review_state}",
                 f"confidence={candidate.confidence:.2f}",
+                f"importance={candidate.importance}",
             ],
             theme=theme,
         ),
@@ -124,6 +126,7 @@ def render_profile_row(item: ProfileItem, *, color: bool | None = None) -> str:
                 item.title,
                 _format_tags(item.tags),
                 f"conf={item.confidence:.2f}",
+                f"imp={item.importance}",
             ]
         )
     )
@@ -138,6 +141,7 @@ def render_profile_detail(item: ProfileItem, *, color: bool | None = None) -> st
                 f"id={item.id}",
                 f"type={item.type}",
                 f"confidence={item.confidence:.2f}",
+                f"importance={item.importance}",
                 f"privacy={item.privacy}",
             ],
             theme=theme,

@@ -126,3 +126,39 @@ def test_profile_item_with_updates_preserves_unmodified_fields(tmp_path: Path) -
     assert loaded.body == "Original body."
     assert loaded.tags == ["a", "b"]
     assert loaded.confidence == 0.9
+
+
+def test_profile_item_importance_roundtrip(tmp_path: Path) -> None:
+    repo = ProfileItemRepository(tmp_path)
+    item = repo.save(
+        ProfileItem(
+            type="profile_fact",
+            title="Importance test",
+            body="This item has custom importance.",
+            importance=0.85,
+        )
+    )
+    loaded = repo.get(item.id)
+    assert loaded.importance == 0.85
+
+    wire = item.to_wire()
+    assert wire["importance"] == 0.85
+    restored = ProfileItem.from_wire(wire)
+    assert restored.importance == 0.85
+
+
+def test_profile_item_with_updates_importance(tmp_path: Path) -> None:
+    repo = ProfileItemRepository(tmp_path)
+    original = ProfileItem(
+        type="profile_fact",
+        title="Original",
+        body="Body",
+        importance=0.6,
+    )
+    repo.save(original)
+
+    updated = original.with_updates(importance=0.95)
+    repo.save(updated)
+
+    loaded = repo.get(original.id)
+    assert loaded.importance == 0.95

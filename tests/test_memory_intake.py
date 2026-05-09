@@ -43,21 +43,34 @@ def test_memory_intake_falls_back_on_invalid_llm_response() -> None:
 
 
 def test_memory_intake_local_inference_preference() -> None:
-    result = MemoryIntakeAgent().infer(body="I like quiet mornings.")
+    from nuself.llm import LocalFallbackLLM
+    result = MemoryIntakeAgent(llm=LocalFallbackLLM()).infer(body="I like quiet mornings.")
 
     assert result.type == "preference"
 
 
 def test_memory_intake_local_inference_belief() -> None:
-    result = MemoryIntakeAgent().infer(body="I believe testing is essential.")
+    from nuself.llm import LocalFallbackLLM
+    result = MemoryIntakeAgent(llm=LocalFallbackLLM()).infer(body="I believe testing is essential.")
 
     assert result.type == "belief"
 
 
 def test_memory_intake_local_inference_open_question() -> None:
-    result = MemoryIntakeAgent().infer(body="What is the best way to organize memory?")
+    from nuself.llm import LocalFallbackLLM
+    result = MemoryIntakeAgent(llm=LocalFallbackLLM()).infer(body="What is the best way to organize memory?")
 
     assert result.type == "open_question"
+
+
+def test_memory_intake_local_inference_importance_by_type() -> None:
+    from nuself.llm import LocalFallbackLLM
+    agent = MemoryIntakeAgent(llm=LocalFallbackLLM())
+
+    assert agent.infer(body="I like quiet mornings.").importance == 0.6  # preference
+    assert agent.infer(body="I believe testing is essential.").importance == 0.7  # belief
+    assert agent.infer(body="My goal is to finish planning.").importance == 0.8  # goal
+    assert agent.infer(body="What is the best way to organize memory?").importance == 0.3  # open_question
 
 
 def test_local_title_truncates_long_body() -> None:

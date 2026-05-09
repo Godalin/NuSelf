@@ -9,7 +9,7 @@ from typing import Literal, TypeAlias, cast
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.domain.memory import MemoryCandidate, MemoryEntryType, MemoryEvidence, now_iso
+from nuself.domain.memory import MemoryCandidate, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry, now_iso
 from nuself.profile.repository import ProfileItemRepository
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
@@ -82,6 +82,7 @@ class MemoryCurator:
         repository: MemoryEntryRepository | None = None,
         candidate_repository: MemoryCandidateRepository | None = None,
         profile_repository: ProfileItemRepository | None = None,
+        registry: MemoryTypeRegistry | None = None,
     ) -> None:
         paths = runtime_paths(project_root)
         self._paths = paths
@@ -94,6 +95,7 @@ class MemoryCurator:
             paths.project_root,
             entry_repository=self._repository,
         )
+        self._registry = registry or default_memory_type_registry()
 
     def run_once(self, thread_id: str = "default") -> MemoryCuratorResult:
         state = self._thread_store.load(thread_id)
@@ -145,8 +147,11 @@ class MemoryCurator:
         ignored = 0
         for action in decision.actions:
             if action.action == "create":
-                if self._create_candidate(action, source_ref):
+                outcome = self._create_candidate(action, source_ref)
+                if outcome == "create":
                     created += 1
+                elif outcome == "update":
+                    updated += 1
                 else:
                     ignored += 1
             elif action.action == "update":
@@ -229,7 +234,45 @@ class MemoryCurator:
             lines.append(f"- id={item.id} type={item.type} title={item.title}{tags}{sources}: {item.body}")
         return "\n".join(lines)
 
-    def _create_candidate(self, action: MemoryAction, source_ref: str) -> bool:
+    def _create_candidate(self, action: MemoryAction, source_ref: str) -> MemoryActionType:
+        incoming = MemoryObject(
+            type=action.type,
+            payload={"title": action.title, "body": action.body},
+            confidence=action.confidence,
+        )
+        for existing in self._repository.list()[: self._settings.existing_memory_limit]:
+            if self._registry.conflicts(existing.to_memory_object(), incoming):
+                merged = self._registry.merge(existing.to_memory_object(), incoming)
+                candidate = MemoryCandidate(
+                    action="update",
+                    type=existing.type,
+                    title=cast(str, merged.payload.get("title", action.title)),
+                    body=cast(str, merged.payload.get("body", action.body)),
+                    tags=cast(list[str], merged.payload.get("tags", existing.tags)),
+                    source_refs=[source_ref],
+                    evidence=[
+                        MemoryEvidence(
+                            source_type="thread",
+                            source_ref=source_ref,
+                            summary=action.reason,
+                            observed_at=_source_observed_at(source_ref),
+                        )
+                    ],
+                    confidence=_clamp_confidence(action.confidence),
+                    privacy=existing.privacy,
+                    reason=action.reason,
+                    target_entry_id=existing.id,
+                    observed_at=existing.observed_at,
+                    valid_from=existing.valid_from,
+                    valid_until=existing.valid_until,
+                    temporal_note=existing.temporal_note,
+                    relations=existing.relations,
+                )
+                self._candidate_repository.save(candidate)
+                self._append_log(
+                    f"merged candidate={candidate.id} target={existing.id} title={candidate.title!r} reason={action.reason!r}"
+                )
+                return "update"
         candidate = MemoryCandidate(
             action="create",
             type=action.type,
@@ -251,7 +294,7 @@ class MemoryCurator:
         self._append_log(
             f"created candidate={candidate.id} type={candidate.type} title={candidate.title!r} reason={action.reason!r}"
         )
-        return True
+        return "create"
 
     def _update_candidate(self, action: MemoryAction, source_ref: str) -> bool:
         if action.entry_id is None:

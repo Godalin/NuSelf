@@ -309,11 +309,36 @@ class RejectingEpisodeDescriptor:
     def type(self) -> str:
         return "episode"
 
+    @property
+    def description(self) -> str:
+        return "rejects everything"
+
     def validate(self, memory: MemoryObject) -> list[MemoryValidationIssue]:
         return [MemoryValidationIssue("payload.body", "rejected by test descriptor")]
 
     def summarize(self, memory: MemoryObject) -> str:
         return "rejected"
+
+    def merge(self, existing: MemoryObject, incoming: MemoryObject) -> MemoryObject:
+        return incoming
+
+    def conflicts(self, a: MemoryObject, b: MemoryObject) -> bool:
+        return False
+
+    def importance(self, memory: MemoryObject) -> float:
+        return memory.importance
+
+    def decay(self, memory: MemoryObject, now: str) -> MemoryObject | None:
+        return memory
+
+    def retrieve(self, query: str, budget: int) -> bool:
+        return True
+
+    def reflect(self, memory: MemoryObject, context: str) -> list[MemoryObject]:
+        return []
+
+    def example(self) -> MemoryObject:
+        return MemoryObject(type=self.type, payload={"title": "Example episode", "body": "An event happened."})
 
 
 def test_memory_curator_defers_descriptor_validation_until_candidate_acceptance(tmp_path: Path) -> None:
@@ -341,3 +366,47 @@ def test_memory_curator_defers_descriptor_validation_until_candidate_acceptance(
     assert result.ignored == 0
     assert repo.list() == []
     assert MemoryCandidateRepository(tmp_path).list()[0].title == "Descriptor validation"
+
+
+def test_memory_curator_merges_duplicate_into_existing_entry(tmp_path: Path) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content="I like shared working memory because it allows multiple terminals to stay in sync without losing context.",
+                ),
+                ThreadMessage(
+                    role="assistant",
+                    content="Shared working memory is useful for continuity. When one terminal disconnects, another can pick up the same conversation thread without gaps.",
+                ),
+            ],
+        )
+    )
+    repo = MemoryEntryRepository(tmp_path)
+    existing = repo.save(
+        MemoryEntry(
+            type="episode",
+            title="Shared working memory",
+            body="The user likes shared working memory.",
+            review_state="reviewed",
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"create","type":"episode","title":"Shared working memory",'
+        '"body":"The user really likes shared working memory.",'
+        '"confidence":0.8,"reason":"duplicate detection test"}]}'
+    )
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+
+    result = curator.run_once()
+    candidates = MemoryCandidateRepository(tmp_path).list()
+
+    assert result.updated == 1
+    assert result.created == 0
+    assert len(candidates) == 1
+    assert candidates[0].action == "update"
+    assert candidates[0].target_entry_id == existing.id
+    assert candidates[0].body == "The user really likes shared working memory."

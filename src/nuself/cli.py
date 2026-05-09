@@ -18,9 +18,9 @@ from nuself.daemon import client, lifecycle
 from nuself.domain.memory import (
     MemoryCandidate,
     MemoryEntry,
-    MemoryEntryType,
     MemoryEvidence,
     PrivacyLevel,
+    default_memory_type_registry,
     default_relation_descriptor_registry,
 )
 from nuself.domain.source import SourceChunk, SourceDocument
@@ -145,7 +145,10 @@ def build_parser() -> argparse.ArgumentParser:
     memory_parser = subparsers.add_parser("memory")
     memory_parser.set_defaults(handler=None, help_parser=memory_parser)
     memory_subparsers = memory_parser.add_subparsers(dest="memory_command")
-    _add_handler(memory_subparsers.add_parser("list"), handle_memory_list)
+    list_parser = memory_subparsers.add_parser("list")
+    list_parser.add_argument("--sort-by", choices=["updated_at", "importance", "type"], default="updated_at")
+    list_parser.add_argument("--review-state", choices=["draft", "reviewed", "rejected", "quarantined"], default=None)
+    _add_handler(list_parser, handle_memory_list)
     preview_parser = memory_subparsers.add_parser("preview")
     preview_parser.add_argument("--limit", type=int, default=DEFAULT_MEMORY_PREVIEW_LIMIT)
     _add_handler(preview_parser, handle_memory_preview)
@@ -157,12 +160,14 @@ def build_parser() -> argparse.ArgumentParser:
     add_parser.add_argument("--title", default=None)
     add_parser.add_argument("--body", "--text", required=True)
     add_parser.add_argument("--tag", action="append", default=[])
+    add_parser.add_argument("--importance", type=float, default=None)
     _add_handler(add_parser, handle_memory_add)
     edit_parser = memory_subparsers.add_parser("edit")
     edit_parser.add_argument("entry_id")
     edit_parser.add_argument("--title", default=None)
     edit_parser.add_argument("--body", "--text", default=None)
     edit_parser.add_argument("--tag", action="append", default=None)
+    edit_parser.add_argument("--importance", type=float, default=None)
     _add_handler(edit_parser, handle_memory_edit)
     delete_parser = memory_subparsers.add_parser("delete")
     delete_parser.add_argument("entry_id")
@@ -171,10 +176,12 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("query", nargs="?", default="")
     search_parser.add_argument("--type", choices=_memory_type_choices(), default=None)
     search_parser.add_argument("--tag", default=None)
-    search_parser.add_argument("--review-state", choices=["draft", "reviewed", "rejected"], default=None)
+    search_parser.add_argument("--review-state", choices=["draft", "reviewed", "rejected", "quarantined"], default=None)
     search_parser.add_argument("--observed-from", default=None)
     search_parser.add_argument("--observed-to", default=None)
     search_parser.add_argument("--valid-on", default=None)
+    search_parser.add_argument("--min-importance", type=float, default=None)
+    search_parser.add_argument("--sort-by", choices=["score", "updated_at", "importance"], default="score")
     _add_handler(search_parser, handle_memory_search)
     _add_handler(memory_subparsers.add_parser("stats"), handle_memory_stats)
     relations_parser = memory_subparsers.add_parser("relations")
@@ -222,6 +229,7 @@ def build_parser() -> argparse.ArgumentParser:
     profile_parser.set_defaults(handler=None, help_parser=profile_parser)
     profile_subparsers = profile_parser.add_subparsers(dest="profile_command")
     profile_list_parser = profile_subparsers.add_parser("list")
+    profile_list_parser.add_argument("--sort-by", choices=["updated_at", "importance", "type"], default="updated_at")
     _add_handler(profile_list_parser, handle_memory_profile_list)
     profile_search_parser = profile_subparsers.add_parser("search")
     profile_search_parser.add_argument("query", nargs="?", default="")
@@ -243,6 +251,8 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_subparsers = candidate_parser.add_subparsers(dest="candidate_command")
     candidate_list_parser = candidate_subparsers.add_parser("list")
     candidate_list_parser.add_argument("--all", action="store_true")
+    candidate_list_parser.add_argument("--review-state", choices=["pending", "accepted", "rejected"], default=None)
+    candidate_list_parser.add_argument("--sort-by", choices=["updated_at", "importance", "type"], default="updated_at")
     _add_handler(candidate_list_parser, handle_memory_candidate_list)
     candidate_show_parser = candidate_subparsers.add_parser("show")
     candidate_show_parser.add_argument("candidate_id")
@@ -258,6 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_edit_parser.add_argument("--title", default=None)
     candidate_edit_parser.add_argument("--body", "--text", default=None)
     candidate_edit_parser.add_argument("--tag", action="append", default=None)
+    candidate_edit_parser.add_argument("--importance", type=float, default=None)
     candidate_edit_parser.add_argument("--observed-at", default=None)
     candidate_edit_parser.add_argument("--valid-from", default=None)
     candidate_edit_parser.add_argument("--valid-until", default=None)
@@ -267,7 +278,15 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_merge_parser.add_argument("candidate_id")
     candidate_merge_parser.add_argument("entry_id")
     _add_handler(candidate_merge_parser, handle_memory_candidate_merge)
-    source_parser = memory_subparsers.add_parser("source")
+    types_parser = memory_subparsers.add_parser("types")
+    types_parser.add_argument("--json", action="store_true")
+    _add_handler(types_parser, handle_memory_types)
+    _add_handler(memory_subparsers.add_parser("reindex"), handle_memory_reindex)
+    unquarantine_parser = memory_subparsers.add_parser("unquarantine")
+    unquarantine_parser.add_argument("entry_id")
+    _add_handler(unquarantine_parser, handle_memory_unquarantine)
+
+    source_parser = subparsers.add_parser("source")
     source_parser.set_defaults(handler=None, help_parser=source_parser)
     source_subparsers = source_parser.add_subparsers(dest="source_command")
     source_ingest_parser = source_subparsers.add_parser("ingest")
@@ -292,7 +311,6 @@ def build_parser() -> argparse.ArgumentParser:
     source_extract_parser = source_subparsers.add_parser("extract")
     source_extract_parser.add_argument("source_id")
     _add_handler(source_extract_parser, handle_memory_source_extract)
-    _add_handler(memory_subparsers.add_parser("reindex"), handle_memory_reindex)
 
     thread_parser = subparsers.add_parser("thread")
     thread_parser.set_defaults(handler=None, help_parser=thread_parser)
@@ -586,9 +604,16 @@ def handle_open(args: argparse.Namespace) -> int:
 def handle_memory_list(args: argparse.Namespace) -> int:
     repo = MemoryEntryRepository(args.project_root)
     entries = repo.list()
+    if args.review_state is not None:
+        entries = [e for e in entries if e.review_state == args.review_state]
     if not entries:
         print("No memory entries.")
         return 0
+    sort_by = args.sort_by
+    if sort_by == "importance":
+        entries = sorted(entries, key=lambda e: (-e.importance, e.updated_at, e.id))
+    elif sort_by == "type":
+        entries = sorted(entries, key=lambda e: (e.type, e.updated_at, e.id))
     for entry in entries:
         print(_format_memory_summary(entry))
     return 0
@@ -624,6 +649,7 @@ def handle_memory_add(args: argparse.Namespace) -> int:
         body=inferred.body,
         tags=list(inferred.tags),
         confidence=inferred.confidence,
+        importance=args.importance if args.importance is not None else inferred.importance,
     )
     repo.save(entry)
     repo.reindex()
@@ -642,6 +668,7 @@ def handle_memory_edit(args: argparse.Namespace) -> int:
         title=args.title,
         body=args.body,
         tags=list(args.tag) if args.tag is not None else None,
+        importance=args.importance,
     )
     repo.save(updated)
     repo.reindex()
@@ -672,6 +699,7 @@ def handle_memory_search(args: argparse.Namespace) -> int:
             observed_from=args.observed_from,
             observed_to=args.observed_to,
             valid_on=args.valid_on,
+            min_importance=args.min_importance,
         ),
     )
     if not entries:
@@ -782,6 +810,31 @@ def handle_memory_graph_closure(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_memory_types(args: argparse.Namespace) -> int:
+    registry = default_memory_type_registry()
+    if args.json:
+        import json as _json
+
+        output: list[dict[str, object]] = []
+        for name in registry.names():
+            example = registry.example(name)
+            output.append(
+                {
+                    "type": name,
+                    "description": registry.describe(name),
+                    "default_importance": registry.importance(example) if example is not None else None,
+                    "example": example.to_wire() if example is not None else None,
+                }
+            )
+        print(_json.dumps(output, indent=2, ensure_ascii=False))
+    else:
+        for name in registry.names():
+            example = registry.example(name)
+            default_imp = registry.importance(example) if example is not None else 0.5
+            print(f"{name}: {registry.describe(name)} (default importance {default_imp})")
+    return 0
+
+
 def handle_memory_reindex(args: argparse.Namespace) -> int:
     memory_repo = MemoryEntryRepository(args.project_root)
     memory_index_path = memory_repo.reindex()
@@ -794,6 +847,20 @@ def handle_memory_reindex(args: argparse.Namespace) -> int:
     print(f"Rebuilt symbolic graph: {graph_index_path}")
     print(f"Rebuilt source index: {source_index_path}")
     print(f"Rebuilt profile index: {profile_index_path}")
+    return 0
+
+
+def handle_memory_unquarantine(args: argparse.Namespace) -> int:
+    repo = MemoryEntryRepository(args.project_root)
+    try:
+        repo.unquarantine(args.entry_id)
+    except MemoryEntryNotFound:
+        print(f"Memory entry not found: {args.entry_id}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(f"Unquarantined memory entry: {args.entry_id}")
     return 0
 
 
@@ -1082,9 +1149,16 @@ def handle_memory_import(args: argparse.Namespace) -> int:
 def handle_memory_candidate_list(args: argparse.Namespace) -> int:
     repo = MemoryCandidateRepository(args.project_root)
     candidates = repo.list(include_reviewed=args.all)
+    if args.review_state is not None:
+        candidates = [c for c in candidates if c.review_state == args.review_state]
     if not candidates:
         print("No memory candidates.")
         return 0
+    sort_by = args.sort_by
+    if sort_by == "importance":
+        candidates = sorted(candidates, key=lambda c: (-c.importance, c.updated_at, c.id))
+    elif sort_by == "type":
+        candidates = sorted(candidates, key=lambda c: (c.type, c.updated_at, c.id))
     for candidate in candidates:
         print(_format_memory_candidate_summary(candidate))
     return 0
@@ -1129,20 +1203,20 @@ def handle_memory_candidate_reject(args: argparse.Namespace) -> int:
 def handle_memory_candidate_edit(args: argparse.Namespace) -> int:
     repo = MemoryCandidateRepository(args.project_root)
     try:
-        candidate = repo.get(args.candidate_id)
+        updated = repo.edit(
+            args.candidate_id,
+            title=args.title,
+            body=args.body,
+            tags=list(args.tag) if args.tag is not None else None,
+            importance=args.importance,
+            observed_at=args.observed_at,
+            valid_from=args.valid_from,
+            valid_until=args.valid_until,
+            temporal_note=args.temporal_note,
+        )
     except MemoryCandidateNotFound:
         print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
         return 1
-    updated = candidate.with_updates(
-        title=args.title,
-        body=args.body,
-        tags=list(args.tag) if args.tag is not None else None,
-        observed_at=args.observed_at,
-        valid_from=args.valid_from,
-        valid_until=args.valid_until,
-        temporal_note=args.temporal_note,
-    )
-    repo.save(updated)
     print(_format_memory_candidate_summary(updated))
     return 0
 
@@ -1254,6 +1328,11 @@ def handle_memory_profile_list(args: argparse.Namespace) -> int:
     if not items:
         print("No profile items.")
         return 0
+    sort_by = args.sort_by
+    if sort_by == "importance":
+        items = sorted(items, key=lambda i: (-i.importance, i.updated_at, i.id))
+    elif sort_by == "type":
+        items = sorted(items, key=lambda i: (i.type, i.updated_at, i.id))
     for item in items:
         print(_format_profile_item_summary(item))
     return 0
@@ -2030,7 +2109,10 @@ def _format_daemon_list(status: lifecycle.DaemonStatus) -> str:
 
 def _format_memory_summary(entry: MemoryEntry) -> str:
     tags = ",".join(entry.tags) if entry.tags else "-"
-    return f"{entry.id} [{entry.type}] {entry.title} tags={tags} state={entry.review_state}"
+    state = entry.review_state
+    if state == "quarantined":
+        state = "QUARANTINED"
+    return f"{entry.id} [{entry.type}] {entry.title} tags={tags} state={state} importance={entry.importance}"
 
 
 def _format_memory_detail(entry: MemoryEntry) -> str:
@@ -2042,6 +2124,7 @@ def _format_memory_detail(entry: MemoryEntry) -> str:
             f"title: {entry.title}",
             f"tags: {tags}",
             f"confidence: {entry.confidence}",
+            f"importance: {entry.importance}",
             f"privacy: {entry.privacy}",
             f"review_state: {entry.review_state}",
             f"created_at: {entry.created_at}",
@@ -2063,14 +2146,14 @@ def _format_memory_candidate_summary(candidate: MemoryCandidate) -> str:
     observed = candidate.observed_at or "-"
     return (
         f"{candidate.id} [{candidate.review_state}] {candidate.action} {candidate.type} "
-        f"{candidate.title} tags={tags} observed_at={observed}"
+        f"{candidate.title} tags={tags} importance={candidate.importance} observed_at={observed}"
     )
 
 
 def _format_profile_item_summary(item: ProfileItem) -> str:
     tags = ",".join(item.tags) if item.tags else "-"
     observed = item.observed_at or "-"
-    return f"{item.id} [{item.type}] {item.title} tags={tags} observed_at={observed}"
+    return f"{item.id} [{item.type}] {item.title} tags={tags} importance={item.importance} observed_at={observed}"
 
 
 def _format_profile_item_detail(item: ProfileItem) -> str:
@@ -2082,6 +2165,7 @@ def _format_profile_item_detail(item: ProfileItem) -> str:
             f"title: {item.title}",
             f"tags: {tags}",
             f"confidence: {item.confidence}",
+            f"importance: {item.importance}",
             f"privacy: {item.privacy}",
             f"created_at: {item.created_at}",
             f"updated_at: {item.updated_at}",
@@ -2107,6 +2191,7 @@ def _format_memory_candidate_detail(candidate: MemoryCandidate) -> str:
             f"title: {candidate.title}",
             f"tags: {tags}",
             f"confidence: {candidate.confidence}",
+            f"importance: {candidate.importance}",
             f"privacy: {candidate.privacy}",
             f"review_state: {candidate.review_state}",
             f"reason: {candidate.reason or '-'}",
@@ -2133,6 +2218,9 @@ def _format_memory_stats(stats: MemoryStats) -> str:
         f"pending_candidates: {stats.pending_candidates}",
         f"entries_with_observed_at: {stats.entries_with_observed_at}",
         f"entries_with_evidence: {stats.entries_with_evidence}",
+        f"avg_importance: {stats.avg_importance:.2f}",
+        f"max_importance: {stats.max_importance:.2f}",
+        f"avg_importance_by_type: {_format_float_counts(stats.avg_importance_by_type)}",
         f"entries_by_type: {_format_counts(stats.entries_by_type)}",
         f"entries_by_review_state: {_format_counts(stats.entries_by_review_state)}",
         f"candidates_by_review_state: {_format_counts(stats.candidates_by_review_state)}",
@@ -2212,6 +2300,12 @@ def _format_counts(counts: dict[str, int]) -> str:
     return ", ".join(f"{key}={counts[key]}" for key in sorted(counts))
 
 
+def _format_float_counts(counts: dict[str, float]) -> str:
+    if not counts:
+        return "-"
+    return ", ".join(f"{key}={counts[key]:.2f}" for key in sorted(counts))
+
+
 def _format_evidence_lines(evidence_items: list[MemoryEvidence]) -> list[str]:
     if not evidence_items:
         return ["  -"]
@@ -2251,19 +2345,8 @@ def _compact_text(text: str, limit: int) -> str:
     return compact[: max(limit - 3, 0)].rstrip() + "..."
 
 
-def _memory_type_choices() -> list[MemoryEntryType]:
-    return [
-        "source_note",
-        "profile_fact",
-        "belief",
-        "preference",
-        "goal",
-        "concept",
-        "style_trait",
-        "episode",
-        "open_question",
-        "instruction",
-    ]
+def _memory_type_choices() -> list[str]:
+    return list(default_memory_type_registry().names())
 
 
 if __name__ == "__main__":

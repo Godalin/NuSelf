@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.memory.repository import (
@@ -131,3 +132,116 @@ def test_memory_candidate_repository_missing_candidate(tmp_path: Path) -> None:
     except MemoryCandidateNotFound:
         return
     raise AssertionError("expected MemoryCandidateNotFound")
+
+
+def test_memory_candidate_repository_edit_updates_fields(tmp_path: Path) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = repo.save(
+        MemoryCandidate(type="belief", title="Old", body="Old body.")
+    )
+
+    updated = repo.edit(candidate.id, title="New", body="New body.")
+
+    got = repo.get(candidate.id)
+    assert got.title == "New"
+    assert got.body == "New body."
+    assert updated.title == "New"
+    assert updated.body == "New body."
+
+
+def test_memory_candidate_repository_reject_missing_raises(tmp_path: Path) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    try:
+        repo.reject("missing-id")
+    except MemoryCandidateNotFound:
+        return
+    raise AssertionError("expected MemoryCandidateNotFound")
+
+
+def test_memory_candidate_repository_merge_missing_raises(tmp_path: Path) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    try:
+        repo.merge("missing-id", "entry-id")
+    except MemoryCandidateNotFound:
+        return
+    raise AssertionError("expected MemoryCandidateNotFound")
+
+
+def test_memory_candidate_repository_list_excludes_reviewed_by_default(tmp_path: Path) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = repo.save(MemoryCandidate(type="belief", title="Test", body="Body."))
+    repo.accept(candidate.id)
+
+    assert repo.list() == []
+    assert len(repo.list(include_reviewed=True)) == 1
+
+
+def test_memory_candidate_to_memory_object_round_trip() -> None:
+    candidate = MemoryCandidate(
+        type="belief",
+        title="Test",
+        body="Body",
+        tags=["tag1"],
+        source_refs=["ref1"],
+        confidence=0.8,
+        evidence=[MemoryEvidence(source_type="thread", source_ref="t:1", summary="s")],
+    )
+    obj = candidate.to_memory_object()
+
+    assert obj.type == "belief"
+    assert obj.payload["title"] == "Test"
+    assert obj.payload["body"] == "Body"
+    assert obj.payload["tags"] == ["tag1"]
+    assert obj.confidence == 0.8
+    assert obj.source_refs == ["ref1"]
+    assert obj.metadata["candidate_schema"] == "MemoryCandidate/v1"
+    assert len(cast(list[object], obj.payload.get("evidence", []))) == 1
+
+
+def test_memory_candidate_repository_edit_missing_raises(tmp_path: Path) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    try:
+        repo.edit("missing-id", title="New")
+    except MemoryCandidateNotFound:
+        return
+    raise AssertionError("expected MemoryCandidateNotFound")
+
+
+def test_memory_candidate_importance_roundtrip_and_accept(tmp_path: Path) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = repo.save(
+        MemoryCandidate(
+            type="belief",
+            title="Importance candidate",
+            body="This candidate has custom importance.",
+            importance=0.85,
+        )
+    )
+    assert repo.get(candidate.id).importance == 0.85
+
+    wire = candidate.to_wire()
+    assert wire["importance"] == 0.85
+    restored = MemoryCandidate.from_wire(wire)
+    assert restored.importance == 0.85
+
+    entry = candidate.to_entry()
+    assert entry.importance == 0.85
+
+    accepted = repo.accept(candidate.id)
+    assert isinstance(accepted, MemoryEntry)
+    assert accepted.importance == 0.85
+
+
+def test_memory_candidate_edit_importance(tmp_path: Path) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = repo.save(
+        MemoryCandidate(
+            type="belief",
+            title="Edit importance",
+            body="Body",
+        )
+    )
+    updated = repo.edit(candidate.id, importance=0.95)
+    assert updated.importance == 0.95
+    loaded = repo.get(candidate.id)
+    assert loaded.importance == 0.95

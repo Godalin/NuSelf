@@ -29,6 +29,10 @@ def empty_str_counts() -> dict[str, int]:
     return {}
 
 
+def empty_str_floats() -> dict[str, float]:
+    return {}
+
+
 @dataclass(frozen=True)
 class MemorySearchFilters:
     """Deterministic filters for entry search."""
@@ -39,6 +43,7 @@ class MemorySearchFilters:
     observed_from: str | None = None
     observed_to: str | None = None
     valid_on: str | None = None
+    min_importance: float | None = None
 
 
 @dataclass(frozen=True)
@@ -53,6 +58,9 @@ class MemoryStats:
     entries_with_observed_at: int = 0
     entries_with_evidence: int = 0
     pending_candidates: int = 0
+    avg_importance: float = 0.0
+    max_importance: float = 0.0
+    avg_importance_by_type: dict[str, float] = field(default_factory=empty_str_floats)
 
 
 @dataclass(frozen=True)
@@ -187,7 +195,10 @@ class MemoryEntryRepository:
         return self._read_path(path)
 
     def save(self, entry: MemoryEntry) -> MemoryEntry:
-        self._registry.validate(entry.to_memory_object())
+        if self._registry.get(entry.type) is None and entry.review_state == "draft":
+            entry = entry.with_updates(review_state="quarantined")
+        else:
+            self._registry.validate(entry.to_memory_object())
         self.ensure()
         path = self._path_for(entry.id)
         path.write_text(
@@ -195,6 +206,18 @@ class MemoryEntryRepository:
             encoding="utf-8",
         )
         return entry
+
+    def unquarantine(self, entry_id: str) -> MemoryEntry:
+        entry = self.get(entry_id)
+        if entry.review_state != "quarantined":
+            raise ValueError(f"entry is not quarantined: {entry_id}")
+        updated = entry.with_updates(review_state="draft")
+        path = self._path_for(entry.id)
+        path.write_text(
+            json.dumps(updated.to_wire(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        return updated
 
     def save_object(self, memory: MemoryObject) -> MemoryObject:
         self._registry.validate(memory)
@@ -545,6 +568,33 @@ class MemoryCandidateRepository:
         self.save(rejected)
         return rejected
 
+    def edit(
+        self,
+        candidate_id: str,
+        *,
+        title: str | None = None,
+        body: str | None = None,
+        tags: list[str] | None = None,
+        importance: float | None = None,
+        observed_at: str | None = None,
+        valid_from: str | None = None,
+        valid_until: str | None = None,
+        temporal_note: str | None = None,
+    ) -> MemoryCandidate:
+        candidate = self.get(candidate_id)
+        updated = candidate.with_updates(
+            title=title,
+            body=body,
+            tags=tags,
+            importance=importance,
+            observed_at=observed_at,
+            valid_from=valid_from,
+            valid_until=valid_until,
+            temporal_note=temporal_note,
+        )
+        self.save(updated)
+        return updated
+
     def merge(self, candidate_id: str, entry_id: str) -> MemoryEntry | ProfileItem:
         candidate = self.get(candidate_id)
         if candidate.review_state != "pending":
@@ -575,6 +625,7 @@ class MemoryCandidateRepository:
             tags=candidate.tags or existing.tags,
             source_refs=[*existing.source_refs, *candidate.source_refs],
             confidence=candidate.confidence,
+            importance=candidate.importance,
             privacy=existing.privacy,
             review_state="draft",
             id=existing.id,
@@ -620,6 +671,10 @@ def memory_stats(project_root: Path | None = None) -> MemoryStats:
 
     entries = MemoryEntryRepository(project_root).list()
     candidates = MemoryCandidateRepository(project_root).list(include_reviewed=True)
+    importances = [entry.importance for entry in entries]
+    by_type: dict[str, list[float]] = {}
+    for entry in entries:
+        by_type.setdefault(entry.type, []).append(entry.importance)
     return MemoryStats(
         entries_total=len(entries),
         candidates_total=len(candidates),
@@ -629,6 +684,9 @@ def memory_stats(project_root: Path | None = None) -> MemoryStats:
         entries_with_observed_at=sum(1 for entry in entries if entry.observed_at is not None),
         entries_with_evidence=sum(1 for entry in entries if entry.evidence),
         pending_candidates=sum(1 for candidate in candidates if candidate.review_state == "pending"),
+        avg_importance=sum(importances) / len(importances) if importances else 0.0,
+        max_importance=max(importances) if importances else 0.0,
+        avg_importance_by_type={t: sum(v) / len(v) for t, v in by_type.items()},
     )
 
 
@@ -660,6 +718,8 @@ def _matches_filters(entry: MemoryEntry, filters: MemorySearchFilters | None) ->
             return False
         if entry.valid_until is not None and entry.valid_until < filters.valid_on:
             return False
+    if filters.min_importance is not None and entry.importance < filters.min_importance:
+        return False
     return True
 
 

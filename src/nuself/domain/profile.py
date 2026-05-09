@@ -20,6 +20,15 @@ def empty_str_list() -> list[str]:
     return []
 
 
+def _optional_float(data: dict[str, object], field_name: str) -> float | None:
+    value = data.get(field_name)
+    if value is None:
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    raise ValueError(f"field '{field_name}' must be a number or null")
+
+
 def new_profile_item_id(source_ref: str | None = None) -> str:
     if source_ref is None:
         return f"profile_{uuid5(NAMESPACE_URL, now_iso()).hex}"
@@ -36,6 +45,7 @@ class ProfileItem:
     tags: list[str] = field(default_factory=empty_str_list)
     source_refs: list[str] = field(default_factory=empty_str_list)
     confidence: float = 1.0
+    importance: float = 0.5
     privacy: PrivacyLevel = "private"
     id: str = field(default_factory=new_profile_item_id)
     created_at: str = field(default_factory=now_iso)
@@ -54,6 +64,7 @@ class ProfileItem:
         body: str | None = None,
         tags: list[str] | None = None,
         confidence: float | None = None,
+        importance: float | None = None,
         observed_at: str | None = None,
         valid_from: str | None = None,
         valid_until: str | None = None,
@@ -66,6 +77,7 @@ class ProfileItem:
             tags=tags if tags is not None else self.tags,
             source_refs=self.source_refs,
             confidence=confidence if confidence is not None else self.confidence,
+            importance=importance if importance is not None else self.importance,
             privacy=self.privacy,
             id=self.id,
             created_at=self.created_at,
@@ -87,6 +99,7 @@ class ProfileItem:
             "tags": self.tags,
             "source_refs": self.source_refs,
             "confidence": self.confidence,
+            "importance": self.importance,
             "privacy": self.privacy,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -118,6 +131,7 @@ class ProfileItem:
             tags=_expect_str_list(data, "tags"),
             source_refs=_expect_str_list(data, "source_refs"),
             confidence=_expect_float(data, "confidence"),
+            importance=_optional_float(data, "importance") or 0.5,
             privacy=_expect_privacy(data, "privacy"),
             created_at=_expect_str(data, "created_at"),
             updated_at=_expect_str(data, "updated_at"),

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-from nuself.domain.memory import MemoryEntry, RelationDescriptor, RelationDescriptorRegistry, ReviewState
+from nuself.domain.memory import MemoryEntry, MemoryTypeRegistry, RelationDescriptor, RelationDescriptorRegistry, ReviewState, default_memory_type_registry
 from nuself.domain.profile import ProfileItem
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceChunkMatch, SourceRepository
@@ -24,6 +24,7 @@ class MemoryQuery:
     review_states: tuple[ReviewState, ...] = ("draft", "reviewed")
     memory_types: tuple[str, ...] = ()
     tags: tuple[str, ...] = ()
+    min_importance: float | None = None
 
 
 @dataclass(frozen=True)
@@ -63,11 +64,13 @@ class MemoryQueryService:
         source_repository: SourceRepository | None = None,
         profile_repository: ProfileItemRepository | None = None,
         relation_registry: RelationDescriptorRegistry | None = None,
+        registry: MemoryTypeRegistry | None = None,
     ) -> None:
         self._repository = repository
         self._source_repository = source_repository
         self._profile_repository = profile_repository
         self._relation_registry = relation_registry or repository.relation_registry
+        self._registry = registry or default_memory_type_registry()
 
     def search(self, query: MemoryQuery) -> list[MemoryMatch]:
         tokens = _query_tokens(query.text)
@@ -76,12 +79,16 @@ class MemoryQueryService:
         eligible_entries = [
             entry
             for entry in self._repository.list()
-            if entry.review_state in query.review_states and _matches_query_filters(entry.type, entry.tags, query)
+            if entry.review_state in query.review_states
+            and _matches_query_filters(entry.type, entry.tags, query)
+            and self._registry.retrieve(entry.type, query.text, query.limit)
         ]
         matches: list[MemoryMatch] = []
         for entry in eligible_entries:
             match = _score_entry(entry, query.text, tokens)
             if match is not None:
+                if query.min_importance is not None and entry.importance < query.min_importance:
+                    continue
                 matches.append(match)
         return _expand_related_matches(
             matches,
@@ -206,6 +213,9 @@ def _score_entry(entry: MemoryEntry, raw_query: str, tokens: tuple[str, ...]) ->
     if entry.confidence > 0:
         score += min(entry.confidence, 1.0) * 0.25
         reasons.append("confidence")
+    if entry.importance > 0:
+        score += min(entry.importance, 1.0) * 0.5
+        reasons.append("importance")
     return MemoryMatch(entry=entry, score=score, reasons=tuple(reasons))
 
 

@@ -24,6 +24,7 @@ class MemoryIntakeResult:
     body: str
     tags: tuple[str, ...] = ()
     confidence: float = 0.7
+    importance: float = 0.5
 
 
 class MemoryIntakeAgent:
@@ -67,6 +68,7 @@ class MemoryIntakeAgent:
             body=normalized_body,
             tags=tuple(tags or inferred.tags),
             confidence=inferred.confidence,
+            importance=inferred.importance,
         )
 
     def _infer_with_llm(self, body: str) -> MemoryIntakeResult:
@@ -87,7 +89,7 @@ class MemoryIntakeAgent:
                     f"Memory note:\n{body}\n\n"
                     f"Existing profile items:\n{self._existing_profile_context(body) or '(none)'}\n\n"
                     "Return JSON like: "
-                    '{"type":"preference","title":"Concise CLI output","tags":["cli"],"confidence":0.8}'
+                    '{"type":"preference","title":"Concise CLI output","tags":["cli"],"confidence":0.8,"importance":0.6}'
                 ),
             ),
         ]
@@ -127,6 +129,7 @@ def _parse_intake_result(raw: str) -> MemoryIntakeResult:
         body="",
         tags=_string_tuple(data.get("tags")),
         confidence=_clamp_confidence(_number_field(data, "confidence", 0.7)),
+        importance=_clamp_importance(_number_field(data, "importance", 0.5)),
     )
 
 
@@ -146,12 +149,26 @@ def _infer_locally(body: str) -> MemoryIntakeResult:
     elif "?" in body:
         memory_type = "open_question"
 
+    type_defaults: dict[MemoryEntryType, float] = {
+        "profile_fact": 0.9,
+        "persona_instruction": 0.9,
+        "goal": 0.8,
+        "belief": 0.7,
+        "preference": 0.6,
+        "instruction": 0.6,
+        "concept": 0.5,
+        "style_trait": 0.5,
+        "episode": 0.4,
+        "source_note": 0.4,
+        "open_question": 0.3,
+    }
     return MemoryIntakeResult(
         type=memory_type,
         title=_local_title(body),
         body="",
         tags=(),
         confidence=0.55,
+        importance=type_defaults.get(memory_type, 0.5),
     )
 
 
@@ -210,4 +227,8 @@ def _number_field(raw: dict[str, object], field_name: str, default: float) -> fl
 
 
 def _clamp_confidence(value: float) -> float:
+    return max(0.0, min(value, 1.0))
+
+
+def _clamp_importance(value: float) -> float:
     return max(0.0, min(value, 1.0))

@@ -199,7 +199,7 @@ def test_interactive_memory_candidates_profile_and_sources(
     )
     source_path = tmp_path / "source.md"
     source_path.write_text("# Source Display\n\nA readable source paragraph.", encoding="utf-8")
-    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    main(["--project-root", str(tmp_path), "source", "ingest", str(source_path)])
     capsys.readouterr()
     monkeypatch.setattr(
         "sys.stdin",
@@ -868,6 +868,9 @@ def test_memory_stats_and_filtered_search(tmp_path: Path, capsys: CaptureFixture
     assert search_result == 0
     assert "entries_total: 2" in stats_output
     assert "pending_candidates: 1" in stats_output
+    assert "avg_importance: 0.50" in stats_output
+    assert "max_importance: 0.50" in stats_output
+    assert "avg_importance_by_type: belief=0.50, episode=0.50" in stats_output
     assert "entries_by_type: belief=1, episode=1" in stats_output
     assert "Temporal belief" in search_output
     assert "Unrelated episode" not in search_output
@@ -978,7 +981,6 @@ def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: Captu
         [
             "--project-root",
             str(tmp_path),
-            "memory",
             "source",
             "ingest",
             str(source_path),
@@ -989,12 +991,12 @@ def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: Captu
         ]
     )
     ingest_output = capsys.readouterr().out
-    list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
+    list_result = main(["--project-root", str(tmp_path), "source", "list"])
     list_output = capsys.readouterr().out
     source_id = list_output.split(" ", 1)[0]
-    show_result = main(["--project-root", str(tmp_path), "memory", "source", "show", source_id])
+    show_result = main(["--project-root", str(tmp_path), "source", "show", source_id])
     show_output = capsys.readouterr().out
-    chunks_result = main(["--project-root", str(tmp_path), "memory", "source", "chunks", source_id])
+    chunks_result = main(["--project-root", str(tmp_path), "source", "chunks", source_id])
     chunks_output = capsys.readouterr().out
 
     assert ingest_result == 0
@@ -1025,11 +1027,11 @@ def test_memory_source_search_and_reindex(tmp_path: Path, capsys: CaptureFixture
         ),
         encoding="utf-8",
     )
-    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    main(["--project-root", str(tmp_path), "source", "ingest", str(source_path)])
     capsys.readouterr()
 
     search_result = main(
-        ["--project-root", str(tmp_path), "memory", "source", "search", "durable citation", "--limit", "3"]
+        ["--project-root", str(tmp_path), "source", "search", "durable citation", "--limit", "3"]
     )
     search_output = capsys.readouterr().out
     reindex_result = main(["--project-root", str(tmp_path), "memory", "reindex"])
@@ -1068,14 +1070,14 @@ def test_memory_source_extract_creates_reviewable_profile_candidate(
         ),
         encoding="utf-8",
     )
-    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    main(["--project-root", str(tmp_path), "source", "ingest", str(source_path)])
     capsys.readouterr()
 
-    list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
+    list_result = main(["--project-root", str(tmp_path), "source", "list"])
     list_output = capsys.readouterr().out
     source_id = list_output.split(" ", 1)[0]
 
-    extract_result = main(["--project-root", str(tmp_path), "memory", "source", "extract", source_id])
+    extract_result = main(["--project-root", str(tmp_path), "source", "extract", source_id])
     extract_output = capsys.readouterr().out
     candidate_list_result = main(["--project-root", str(tmp_path), "memory", "candidate", "list"])
     candidate_list_output = capsys.readouterr().out
@@ -1101,15 +1103,15 @@ def test_memory_source_delete_cascades_profile_items(tmp_path: Path, capsys: Cap
         ),
         encoding="utf-8",
     )
-    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    main(["--project-root", str(tmp_path), "source", "ingest", str(source_path)])
     capsys.readouterr()
-    list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
+    list_result = main(["--project-root", str(tmp_path), "source", "list"])
     list_output = capsys.readouterr().out
     source_id = list_output.split(" ", 1)[0]
-    main(["--project-root", str(tmp_path), "memory", "source", "extract", source_id])
+    main(["--project-root", str(tmp_path), "source", "extract", source_id])
     capsys.readouterr()
 
-    delete_result = main(["--project-root", str(tmp_path), "memory", "source", "delete", source_id])
+    delete_result = main(["--project-root", str(tmp_path), "source", "delete", source_id])
     delete_output = capsys.readouterr().out
     profile_list_result = main(["--project-root", str(tmp_path), "memory", "profile", "list"])
     profile_list_output = capsys.readouterr().out
@@ -1135,12 +1137,12 @@ def test_memory_profile_delete_removes_item_and_reindexes(tmp_path: Path, capsys
         ),
         encoding="utf-8",
     )
-    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    main(["--project-root", str(tmp_path), "source", "ingest", str(source_path)])
     capsys.readouterr()
-    list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
+    list_result = main(["--project-root", str(tmp_path), "source", "list"])
     list_output = capsys.readouterr().out
     source_id = list_output.split(" ", 1)[0]
-    main(["--project-root", str(tmp_path), "memory", "source", "extract", source_id])
+    main(["--project-root", str(tmp_path), "source", "extract", source_id])
     capsys.readouterr()
     candidate_repo = MemoryCandidateRepository(tmp_path)
     candidate_id = candidate_repo.list()[0].id
@@ -1932,6 +1934,41 @@ def test_memory_list_empty_shows_message(tmp_path: Path, capsys: CaptureFixture)
     assert "No memory entries." in captured.out
 
 
+def test_memory_list_sorts_by_importance(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    low = repo.save(MemoryEntry(type="belief", title="Low", body="Low importance.", importance=0.2))
+    high = repo.save(MemoryEntry(type="belief", title="High", body="High importance.", importance=0.9))
+
+    result = main(["--project-root", str(tmp_path), "memory", "list", "--sort-by", "importance"])
+    captured = capsys.readouterr()
+    assert result == 0
+    high_pos = captured.out.index("High")
+    low_pos = captured.out.index("Low")
+    assert high_pos < low_pos
+    assert low.id in captured.out
+    assert high.id in captured.out
+
+
+def test_memory_list_filters_by_review_state(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    draft = repo.save(MemoryEntry(type="belief", title="Draft", body="Draft entry."))
+    reviewed = repo.save(MemoryEntry(type="belief", title="Reviewed", body="Reviewed entry.", review_state="reviewed"))
+
+    result = main(["--project-root", str(tmp_path), "memory", "list", "--review-state", "reviewed"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Reviewed" in captured.out
+    assert "Draft" not in captured.out
+    assert reviewed.id in captured.out
+    assert draft.id not in captured.out
+
+
 def test_memory_show_displays_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
@@ -1983,14 +2020,14 @@ def test_memory_source_list_shows_documents(tmp_path: Path, capsys: CaptureFixtu
     repo = SourceRepository(tmp_path)
     repo.save_document(SourceDocument(id="src-001", path="/tmp/test.txt", title="Test Source", kind="text"))
 
-    result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
+    result = main(["--project-root", str(tmp_path), "source", "list"])
     captured = capsys.readouterr()
     assert result == 0
     assert "Test Source" in captured.out
 
 
 def test_memory_source_list_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
+    result = main(["--project-root", str(tmp_path), "source", "list"])
     captured = capsys.readouterr()
     assert result == 0
     assert "No source documents." in captured.out
@@ -2004,14 +2041,14 @@ def test_memory_source_show_displays_document(tmp_path: Path, capsys: CaptureFix
     doc = SourceDocument(id="src-002", path="/tmp/test.txt", title="Test Source", kind="text")
     repo.save_document(doc)
 
-    result = main(["--project-root", str(tmp_path), "memory", "source", "show", doc.id])
+    result = main(["--project-root", str(tmp_path), "source", "show", doc.id])
     captured = capsys.readouterr()
     assert result == 0
     assert "Test Source" in captured.out
 
 
 def test_memory_source_show_missing_document(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "memory", "source", "show", "missing-id"])
+    result = main(["--project-root", str(tmp_path), "source", "show", "missing-id"])
     captured = capsys.readouterr()
     assert result == 1
     assert "Source document not found: missing-id" in captured.err
@@ -2025,27 +2062,27 @@ def test_memory_source_delete_removes_document(tmp_path: Path, capsys: CaptureFi
     doc = SourceDocument(id="src-003", path="/tmp/test.txt", title="Test Source", kind="text")
     repo.save_document(doc)
 
-    result = main(["--project-root", str(tmp_path), "memory", "source", "delete", doc.id])
+    result = main(["--project-root", str(tmp_path), "source", "delete", doc.id])
     assert result == 0
     assert len(repo.list_documents()) == 0
 
 
 def test_memory_source_chunks_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "memory", "source", "chunks", "some-id"])
+    result = main(["--project-root", str(tmp_path), "source", "chunks", "some-id"])
     captured = capsys.readouterr()
     assert result == 0
     assert "No source chunks." in captured.out
 
 
 def test_memory_source_search_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "memory", "source", "search", "xyz"])
+    result = main(["--project-root", str(tmp_path), "source", "search", "xyz"])
     captured = capsys.readouterr()
     assert result == 0
     assert "No matching source chunks." in captured.out
 
 
 def test_memory_source_extract_missing_document(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "memory", "source", "extract", "missing-id"])
+    result = main(["--project-root", str(tmp_path), "source", "extract", "missing-id"])
     captured = capsys.readouterr()
     assert result == 1
     assert "Source document not found: missing-id" in captured.err
@@ -2056,6 +2093,19 @@ def test_memory_stats_shows_empty_state(tmp_path: Path, capsys: CaptureFixture) 
     captured = capsys.readouterr()
     assert result == 0
     assert "entries_total: 0" in captured.out
+
+
+def test_memory_unquarantine_restores_draft(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.domain.memory import MemoryEntryType
+    repo = MemoryEntryRepository(tmp_path)
+    entry = repo.save(MemoryEntry(type=cast(MemoryEntryType, "truly_unknown_type"), title="Quarantined", body="Body"))
+    assert entry.review_state == "quarantined"
+
+    result = main(["--project-root", str(tmp_path), "memory", "unquarantine", entry.id])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert f"Unquarantined memory entry: {entry.id}" in captured.out
+    assert repo.get(entry.id).review_state == "draft"
 
 
 def test_memory_profile_list_shows_items(tmp_path: Path, capsys: CaptureFixture) -> None:
@@ -2076,6 +2126,24 @@ def test_memory_profile_list_empty_shows_message(tmp_path: Path, capsys: Capture
     captured = capsys.readouterr()
     assert result == 0
     assert "No profile items." in captured.out
+
+
+def test_memory_profile_list_sorts_by_importance(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.profile.repository import ProfileItemRepository
+    from nuself.domain.profile import ProfileItem
+
+    repo = ProfileItemRepository(tmp_path)
+    low = repo.save(ProfileItem(type="preference", title="Low", body="Low importance.", importance=0.2))
+    high = repo.save(ProfileItem(type="preference", title="High", body="High importance.", importance=0.9))
+
+    result = main(["--project-root", str(tmp_path), "memory", "profile", "list", "--sort-by", "importance"])
+    captured = capsys.readouterr()
+    assert result == 0
+    high_pos = captured.out.index("High")
+    low_pos = captured.out.index("Low")
+    assert high_pos < low_pos
+    assert low.id in captured.out
+    assert high.id in captured.out
 
 
 def test_memory_profile_show_displays_item(tmp_path: Path, capsys: CaptureFixture) -> None:
@@ -2186,6 +2254,41 @@ def test_memory_candidate_list_empty_shows_message(tmp_path: Path, capsys: Captu
     captured = capsys.readouterr()
     assert result == 0
     assert "No memory candidates." in captured.out
+
+
+def test_memory_candidate_list_filters_by_review_state(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryCandidateRepository
+    from nuself.domain.memory import MemoryCandidate
+
+    repo = MemoryCandidateRepository(tmp_path)
+    pending = repo.save(MemoryCandidate(type="belief", title="Pending", body="Pending candidate."))
+    accepted = repo.save(MemoryCandidate(type="belief", title="Accepted", body="Accepted candidate.", review_state="accepted"))
+
+    result = main(["--project-root", str(tmp_path), "memory", "candidate", "list", "--review-state", "accepted", "--all"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Accepted" in captured.out
+    assert "Pending" not in captured.out
+    assert accepted.id in captured.out
+    assert pending.id not in captured.out
+
+
+def test_memory_candidate_list_sorts_by_importance(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryCandidateRepository
+    from nuself.domain.memory import MemoryCandidate
+
+    repo = MemoryCandidateRepository(tmp_path)
+    low = repo.save(MemoryCandidate(type="belief", title="Low", body="Low importance.", importance=0.2))
+    high = repo.save(MemoryCandidate(type="belief", title="High", body="High importance.", importance=0.9))
+
+    result = main(["--project-root", str(tmp_path), "memory", "candidate", "list", "--sort-by", "importance"])
+    captured = capsys.readouterr()
+    assert result == 0
+    high_pos = captured.out.index("High")
+    low_pos = captured.out.index("Low")
+    assert high_pos < low_pos
+    assert low.id in captured.out
+    assert high.id in captured.out
 
 
 def test_memory_candidate_show_displays_candidate(tmp_path: Path, capsys: CaptureFixture) -> None:
@@ -2367,6 +2470,24 @@ def test_memory_reindex_rebuilds_indexes(tmp_path: Path, capsys: CaptureFixture)
     assert "Rebuilt source index:" in captured.out
 
 
+def test_memory_types_lists_registered_types(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "types"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "belief: a claim or stance" in captured.out
+    assert "episode: a concise event summary" in captured.out
+    assert "persona_instruction: persona instruction memory" in captured.out
+
+
+def test_memory_types_json_output(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "types", "--json"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert '"type": "belief"' in captured.out
+    assert '"description":' in captured.out
+    assert '"example":' in captured.out
+
+
 def test_daemon_list_shows_status(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(["--project-root", str(tmp_path), "daemon", "list"])
     captured = capsys.readouterr()
@@ -2484,7 +2605,8 @@ def test_top_level_subcommand_help(argv: list[str]) -> None:
         ["memory", "import", "--help"],
         ["memory", "profile", "--help"],
         ["memory", "candidate", "--help"],
-        ["memory", "source", "--help"],
+        ["memory", "types", "--help"],
+        ["source", "--help"],
         ["memory", "reindex", "--help"],
         ["thread", "list", "--help"],
         ["thread", "show", "--help"],
@@ -2524,13 +2646,13 @@ def test_nested_subcommand_help(argv: list[str]) -> None:
         ["memory", "candidate", "reject", "--help"],
         ["memory", "candidate", "edit", "--help"],
         ["memory", "candidate", "merge", "--help"],
-        ["memory", "source", "ingest", "--help"],
-        ["memory", "source", "list", "--help"],
-        ["memory", "source", "show", "--help"],
-        ["memory", "source", "delete", "--help"],
-        ["memory", "source", "chunks", "--help"],
-        ["memory", "source", "search", "--help"],
-        ["memory", "source", "extract", "--help"],
+        ["source", "ingest", "--help"],
+        ["source", "list", "--help"],
+        ["source", "show", "--help"],
+        ["source", "delete", "--help"],
+        ["source", "chunks", "--help"],
+        ["source", "search", "--help"],
+        ["source", "extract", "--help"],
     ],
 )
 def test_third_level_subcommand_help(argv: list[str]) -> None:
