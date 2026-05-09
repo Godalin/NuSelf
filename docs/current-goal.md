@@ -4,23 +4,22 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Milestone 11 (Notification Adapters) is complete. Shift focus to REPL polish and first usable interface improvements.
+Polish the REPL with a lightweight status bar and update README with real usage examples.
 
-All notification adapters (log-only, macOS, email) and deep links are now in place. The outbox CLI supports list, show, send, and dismiss. Reflection scheduler runs in the daemon background and writes reflection intents with deep links to the `reflections` thread.
+Milestone 11 (Notification Adapters) is complete. The REPL now has tab completion for commands and thread IDs. The next step is to add a status bar or header refresh after every turn, and update the README with concrete usage examples for notifications and deep links.
 
 ## Immediate Context
 
-- `nuself notify` subcommands: `list`, `show`, `send`, `dismiss`.
-- `nuself open --deep-link <url>` opens a thread from a notification.
-- `MacOSNotificationAdapter` and `EmailNotificationAdapter` both support dry-run mode.
-- The REPL already supports `:q`, `:threads`, `:thread`, `:rename`, `:branch`, `:archive`, `:memory`, `:logs`, `:status`.
+- `_InteractiveCompleter` provides tab completion for `:commands` and thread IDs after `:thread `.
+- `render_session_header` already shows daemon status and current thread.
+- The CLI has `nuself notify`, `nuself open --deep-link`, and daemon background reflection.
 
 ## Next Steps
 
-1. Add REPL autocomplete for commands and thread IDs.
-2. Add a lightweight status bar or header showing daemon status and current thread.
-3. Polish the `nuself` default entrypoint message to be more informative.
-4. Update README with real usage examples for notifications and deep links.
+1. Add a lightweight status bar that prints after every non-command turn.
+2. Polish the `nuself` default entrypoint message to be more informative.
+3. Update README with real usage examples for notifications and deep links.
+4. Update README.zh-CN in parallel.
 5. Update README TODOs together with the implementation.
 
 ## Not Now
@@ -35,8 +34,7 @@ All notification adapters (log-only, macOS, email) and deep links are now in pla
 
 ## Completion Criteria
 
-- REPL has autocomplete for commands.
-- Status bar or header shows daemon and thread context.
+- REPL prints a status line after every turn (daemon status, thread, last action).
 - README contains usage examples for notifications and deep links.
 - All operations are type-checked and tested.
 - README TODOs track completed progress, while this file stays limited to the active goal.
