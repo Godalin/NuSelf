@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from nuself.agent.chat import ThreadStore
 from nuself.config import config_int, runtime_paths
 from nuself.notification import LogOnlyNotificationAdapter, NotificationOutbox, OutboxEntry
 
@@ -62,8 +63,11 @@ class ReflectionScheduler:
             now = datetime.now(UTC)
         if not self.should_reflect(now):
             return False
-        self._write_last_reflection(now)
         intent = self._create_reflection_intent(now)
+        gate = RelevanceGate(self._project_root)
+        if not gate.passes(intent.body):
+            return False
+        self._write_last_reflection(now, intent.body)
         entry = self._outbox.add(intent)
         self._adapter.send(entry)
         return True
@@ -112,12 +116,15 @@ class ReflectionScheduler:
         except ValueError:
             return None
 
-    def _write_last_reflection(self, now: datetime) -> None:
+    def _write_last_reflection(self, now: datetime, body: str | None = None) -> None:
         import json
 
         self._last_reflection_path.parent.mkdir(parents=True, exist_ok=True)
+        payload: dict[str, object] = {"timestamp": now.isoformat()}
+        if body is not None:
+            payload["body"] = body
         self._last_reflection_path.write_text(
-            json.dumps({"timestamp": now.isoformat()}, sort_keys=True) + "\n",
+            json.dumps(payload, sort_keys=True) + "\n",
             encoding="utf-8",
         )
 
@@ -126,11 +133,78 @@ class ReflectionScheduler:
 
         thread_id = "reflections"
         deep_link = DeepLink(thread_id=thread_id).to_url()
+        body = IdeaCandidateGenerator(self._project_root).generate()
         return OutboxEntry(
             id=f"reflection-{now.strftime('%Y%m%d-%H%M%S')}-{now.microsecond:06d}",
             title="Daemon reflection",
-            body="Time for a self-reflection cycle.",
+            body=body,
             status="pending",
             idempotency_key=f"reflection-{now.date().isoformat()}",
             deep_link=deep_link,
         )
+
+
+class RelevanceGate:
+    """Filter reflection candidates by novelty and confidence."""
+
+    def __init__(self, project_root: Path | None = None) -> None:
+        from nuself.config import runtime_paths
+
+        paths = runtime_paths(project_root)
+        self._project_root = paths.project_root
+        self._last_reflection_path = paths.runtime_dir / "last_reflection.json"
+
+    def passes(self, candidate: str) -> bool:
+        if candidate == _FALLBACK_BODY:
+            # Allow fallback only on first reflection (no previous record)
+            return not self._last_reflection_path.exists()
+        last_body = self._read_last_body()
+        if last_body is not None and candidate == last_body:
+            return False
+        return True
+
+    def _read_last_body(self) -> str | None:
+        import json
+        from typing import cast
+
+        if not self._last_reflection_path.exists():
+            return None
+        try:
+            raw: object = json.loads(self._last_reflection_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None
+        if not isinstance(raw, dict):
+            return None
+        data = cast(dict[str, object], raw)
+        body = data.get("body")
+        return body if isinstance(body, str) else None
+
+
+_FALLBACK_BODY = "Time for a self-reflection cycle."
+
+
+class IdeaCandidateGenerator:
+    """Generate a short reflection prompt from recent thread activity."""
+
+    def __init__(self, project_root: Path | None = None) -> None:
+        from nuself.config import runtime_paths
+
+        paths = runtime_paths(project_root)
+        self._project_root = paths.project_root
+
+    def generate(self) -> str:
+        from nuself.agent.chat import ThreadStore
+
+        store = ThreadStore(self._project_root)
+        preview = self._latest_thread_preview(store)
+        if preview is not None:
+            return f"Consider: {preview}"
+        return "Time for a self-reflection cycle."
+
+    def _latest_thread_preview(self, store: ThreadStore) -> str | None:
+        for thread_id in reversed(store.list()):
+            state = store.load(thread_id)
+            for msg in reversed(state.messages):
+                if msg.role == "user":
+                    return msg.content[:80]
+        return None

@@ -146,3 +146,65 @@ def test_quiet_hours_non_wrapping_range() -> None:
     # Outside quiet hours
     assert scheduler._in_quiet_hours(datetime(2024, 1, 1, 8, 0, 0, tzinfo=UTC)) is False
     assert scheduler._in_quiet_hours(datetime(2024, 1, 1, 18, 0, 0, tzinfo=UTC)) is False
+
+
+def test_idea_candidate_generator_falls_back_when_no_threads(tmp_path: Path) -> None:
+    from nuself.reflection import IdeaCandidateGenerator
+
+    gen = IdeaCandidateGenerator(tmp_path)
+    assert gen.generate() == "Time for a self-reflection cycle."
+
+
+def test_idea_candidate_generator_uses_latest_user_message(tmp_path: Path) -> None:
+    from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
+    from nuself.reflection import IdeaCandidateGenerator
+
+    store = ThreadStore(tmp_path)
+    state = ThreadState.empty("default")
+    state.messages.append(ThreadMessage(role="user", content="What is the meaning of life?"))
+    store.save(state)
+
+    gen = IdeaCandidateGenerator(tmp_path)
+    body = gen.generate()
+    assert body.startswith("Consider:")
+    assert "meaning of life" in body
+
+
+def test_relevance_gate_allows_first_fallback(tmp_path: Path) -> None:
+    from nuself.reflection import RelevanceGate
+
+    gate = RelevanceGate(tmp_path)
+    assert gate.passes("Time for a self-reflection cycle.") is True
+
+
+def test_relevance_gate_rejects_duplicate_fallback(tmp_path: Path) -> None:
+    from nuself.reflection import RelevanceGate
+    import json
+
+    gate = RelevanceGate(tmp_path)
+    last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
+    last_path.parent.mkdir(parents=True, exist_ok=True)
+    last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "body": "Time for a self-reflection cycle."}))
+    assert gate.passes("Time for a self-reflection cycle.") is False
+
+
+def test_relevance_gate_allows_new_candidate(tmp_path: Path) -> None:
+    from nuself.reflection import RelevanceGate
+    import json
+
+    gate = RelevanceGate(tmp_path)
+    last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
+    last_path.parent.mkdir(parents=True, exist_ok=True)
+    last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "body": "Consider: old topic"}))
+    assert gate.passes("Consider: new topic") is True
+
+
+def test_relevance_gate_rejects_duplicate_candidate(tmp_path: Path) -> None:
+    from nuself.reflection import RelevanceGate
+    import json
+
+    gate = RelevanceGate(tmp_path)
+    last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
+    last_path.parent.mkdir(parents=True, exist_ok=True)
+    last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "body": "Consider: same topic"}))
+    assert gate.passes("Consider: same topic") is False
