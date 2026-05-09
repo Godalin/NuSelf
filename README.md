@@ -144,7 +144,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add notification outbox with idempotency keys and delivery state.
 - [x] Add log-only notification adapter.
 - [x] Add macOS notification adapter.
-- [ ] Add email adapter using ignored private configuration.
+- [x] Add email adapter using ignored private configuration.
 - [ ] Link notifications to a new or existing conversation.
 
 ### Evaluation And Quality

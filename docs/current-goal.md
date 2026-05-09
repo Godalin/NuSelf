@@ -4,24 +4,22 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Add an email notification adapter using ignored private configuration.
+Add deep links to outbox entries so notifications can open a specific thread.
 
-The outbox CLI commands (`nuself notify list/show/send/dismiss`) and the macOS notification adapter are now in place. The next step is to add an email adapter that reads SMTP credentials from an ignored private configuration file and delivers pending outbox entries via email.
+All three notification adapters (log-only, macOS, email) are now in place. The next step is to give outbox entries a `deep_link` field that resolves to a thread ID, and update the CLI so that clicking or following a deep link opens the corresponding conversation.
 
 ## Immediate Context
 
-- `NotificationOutbox` lives under `private/outbox/` with full CRUD and status lifecycle.
-- `LogOnlyNotificationAdapter` writes to the structured log.
-- `MacOSNotificationAdapter` delivers via `osascript` with dry-run support.
-- The CLI `nuself notify send <id>` uses `LogOnlyNotificationAdapter` by default.
-- Private configuration lives in `private/` (ignored by Git).
+- `OutboxEntry` already has an optional `deep_link` field.
+- `nuself open <thread-id>` opens a thread in interactive mode.
+- The daemon has access to `chat_agent` and `ThreadStore`.
 
 ## Next Steps
 
-1. Define email configuration schema (SMTP host, port, user, password, from/to addresses).
-2. Load credentials from an ignored private config file (e.g., `private/email.toml`).
-3. Implement `EmailNotificationAdapter` with SMTP delivery and dry-run support.
-4. Add adapter tests with a fake SMTP server or mock.
+1. Define deep link format (e.g., `nuself://thread/<thread-id>`).
+2. Update `ReflectionScheduler` to include a deep link pointing to a reflection thread.
+3. Add `nuself open --deep-link <url>` CLI command that parses and opens the target thread.
+4. Add tests for deep link parsing and resolution.
 5. Update README TODOs together with the implementation.
 
 ## Not Now
@@ -36,8 +34,8 @@ The outbox CLI commands (`nuself notify list/show/send/dismiss`) and the macOS n
 
 ## Completion Criteria
 
-- Email adapter reads SMTP config from ignored private file.
-- Email adapter delivers pending outbox entries via SMTP.
-- Dry-run mode supported for testing without real email delivery.
+- Outbox entries can carry deep links to threads.
+- CLI can open a thread from a deep link.
+- Deep links are tested for parsing and resolution.
 - All operations are type-checked and tested.
 - README TODOs track completed progress, while this file stays limited to the active goal.
