@@ -139,8 +139,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 ### Proactive Reflection And Notifications
 
 - [x] Add low-frequency daemon reflection scheduler with cooldowns and quiet hours.
-- [ ] Generate idea candidates from recent threads, memory, and sources.
-- [ ] Add relevance gate with novelty, confidence, urgency, cooldown, and interruption cost.
+- [x] Generate idea candidates from recent threads, memory, and sources.
+- [x] Add relevance gate with novelty, confidence, urgency, cooldown, and interruption cost.
 - [x] Add notification outbox with idempotency keys and delivery state.
 - [x] Add log-only notification adapter.
 - [x] Add macOS notification adapter.

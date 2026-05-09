@@ -139,8 +139,8 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 ### 主动反思与通知
 
 - [x] 添加低频 daemon reflection scheduler，支持 cooldowns 和 quiet hours。
-- [ ] 从近期 threads、memory 和 sources 中生成 idea candidates。
-- [ ] 添加 relevance gate：novelty、confidence、urgency、cooldown、interruption cost。
+- [x] 从近期 threads、memory 和 sources 中生成 idea candidates。
+- [x] 添加 relevance gate：novelty、confidence、urgency、cooldown、interruption cost。
 - [x] 添加 notification outbox，包含 idempotency keys 和 delivery state。
 - [x] 添加 log-only notification adapter。
 - [x] 添加 macOS notification adapter。

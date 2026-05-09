@@ -4,36 +4,34 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Milestone 13 is complete. Next: generate idea candidates from recent threads, memory, and sources.
-
-The evaluation harness now includes proactive-notification fixtures for reflection scheduler triggers, deep link parsing, and outbox delivery lifecycle. All Milestone 11 and 13 deliverables are done.
+Milestone 10–13 are functionally complete. The system now has proactive reflection with scheduling, candidate generation, relevance gating, multi-channel notifications, deep links, and evaluation fixtures.
 
 ## Immediate Context
 
-- `ReflectionScheduler` writes generic reflection intents to the outbox.
-- `NotificationOutbox` supports idempotency, status transitions, and CLI/REPL commands.
-- `DeepLink` connects notifications to threads.
-- The evaluation harness has 3 notification fixture files under `tests/fixtures/notifications/`.
+- `ReflectionScheduler`: interval, cooldown, quiet hours, daemon background thread.
+- `IdeaCandidateGenerator`: reads latest user message from threads for context-aware prompts.
+- `RelevanceGate`: drops duplicate or empty candidates.
+- Notification adapters: log-only, macOS (osascript), email (SMTP).
+- Deep links: `nuself://thread/<id>` with CLI resolution.
+- Evaluation harness: chat fixtures + notification fixtures.
 
 ## Next Steps
 
-1. Implement `IdeaCandidateGenerator` that reads recent thread turns and surfaces questions or observations.
-2. Wire candidate generation into `ReflectionScheduler` so reflection intents carry meaningful content.
-3. Update README TODOs together with the implementation.
+1. Review recent commits for any missed documentation or test gaps.
+2. Consider whether any remaining README TODOs should be re-prioritized.
+3. Update README TODOs together with any follow-up work.
 
 ## Not Now
 
 - Full multi-persona orchestration beyond the current bounded skeleton.
 - Vector, hybrid, or hosted graph indexes.
 - Plugin loading.
-- Relevance gate with full novelty/confidence/urgency scoring.
 - Web or GUI interface work.
 - Private memory schema migration.
 - Dashboard-style or dependency-heavy terminal UI.
 
 ## Completion Criteria
 
-- Reflection scheduler generates context-aware reflection content instead of a generic message.
-- Candidate generation is tested with fixture-based scenarios.
+- All Milestone 10–13 deliverables are implemented and tested.
+- README TODOs reflect current progress.
 - All operations are type-checked and tested.
-- README TODOs track completed progress, while this file stays limited to the active goal.
