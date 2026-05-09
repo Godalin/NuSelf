@@ -1234,6 +1234,7 @@ _INTERACTIVE_COMMANDS = [
     ":quit",
     ":exit",
     ":history",
+    ":sources",
     ":whoami",
     ":help",
     ":status",
@@ -1427,6 +1428,11 @@ def _handle_interactive_command(command: str, project_root: Path | None, current
         print(_handle_interactive_history_command(project_root, current_thread_id))
         print()
         return ("", current_thread_id)
+    if command == ":sources":
+        print()
+        print(_handle_interactive_sources_command(project_root))
+        print()
+        return ("", current_thread_id)
     if command == ":whoami":
         print()
         print(_handle_interactive_whoami_command(project_root))
@@ -1557,6 +1563,7 @@ def _interactive_help(command: str | None = None) -> str:
             "  :quit      exit",
             "  :exit      exit",
             "  :history   show recent thread messages",
+            "  :sources   list imported source documents",
             "  :whoami    show core profile",
             "  :notify    list pending notifications",
             "  :help      show this help",
@@ -1685,6 +1692,19 @@ def _interactive_memory_help(command: str | None = None) -> str:
             "  :mem why",
         ]
     )
+    return "\n".join(lines)
+
+
+def _handle_interactive_sources_command(project_root: Path | None) -> str:
+    from nuself.memory.source_repository import SourceRepository
+
+    repo = SourceRepository(project_root)
+    documents = repo.list_documents()
+    if not documents:
+        return "No imported source documents."
+    lines = ["Imported sources:"]
+    for doc in documents:
+        lines.append(f"  {doc.id}: {doc.title}")
     return "\n".join(lines)
 
 

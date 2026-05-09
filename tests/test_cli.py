@@ -1708,3 +1708,26 @@ def test_daemon_restart_stops_then_starts(
     assert "Stopped:" in captured.out
     assert "Started:" in captured.out
     assert "pid=789" in captured.out
+
+
+def test_interactive_sources_lists_documents(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    from nuself.memory.source_repository import SourceRepository
+    from nuself.domain.source import SourceDocument
+
+    repo = SourceRepository(tmp_path)
+    repo.save_document(SourceDocument(id="doc-001", title="Notes", path="notes.txt", kind="text"))
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":sources\n:q\n"))
+    monkeypatch.setattr(
+        "nuself.cli.lifecycle.status",
+        lambda project_root: DaemonStatus(
+            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
+        ),
+    )
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Imported sources:" in captured.out
+    assert "Notes" in captured.out
