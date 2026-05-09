@@ -3,9 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, cast
 
+import pytest
+
 from nuself import cli
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
-from nuself.cli import main
+from nuself.cli import build_parser, main
 from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.protocol import DaemonResponse
 from nuself.daemon.lifecycle import DaemonStatus
@@ -1912,3 +1914,29 @@ def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> Non
     assert result == 0
     assert "Imported 1 memory entries" in captured.out
     assert len(MemoryEntryRepository(tmp_path).list()) == 1
+
+
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["daemon", "--help"],
+        ["chat", "--help"],
+        ["attach", "--help"],
+        ["status", "--help"],
+        ["health", "--help"],
+        ["config", "--help"],
+        ["open", "--help"],
+        ["logs", "--help"],
+        ["eval", "--help"],
+        ["notify", "--help"],
+        ["memory", "--help"],
+        ["thread", "--help"],
+    ],
+)
+def test_top_level_subcommand_help(argv: list[str]) -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(argv)
+    assert exc_info.value.code == 0
