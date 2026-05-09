@@ -26,3 +26,28 @@ def test_status_when_daemon_is_missing(tmp_path: Path) -> None:
     assert status.pid is None
     assert status.socket_path == paths.socket_path
 
+
+def test_read_pid_missing_file_returns_none(tmp_path: Path) -> None:
+    paths = runtime_paths(tmp_path)
+    assert lifecycle.read_pid(paths) is None
+
+
+def test_read_pid_empty_file_returns_none(tmp_path: Path) -> None:
+    paths = runtime_paths(tmp_path)
+    paths.pid_path.parent.mkdir(parents=True, exist_ok=True)
+    paths.pid_path.write_text("", encoding="utf-8")
+    assert lifecycle.read_pid(paths) is None
+
+
+def test_read_pid_invalid_value_returns_none(tmp_path: Path) -> None:
+    paths = runtime_paths(tmp_path)
+    paths.pid_path.parent.mkdir(parents=True, exist_ok=True)
+    paths.pid_path.write_text("not-a-pid", encoding="utf-8")
+    assert lifecycle.read_pid(paths) is None
+
+
+def test_read_pid_valid_value_returns_int(tmp_path: Path) -> None:
+    paths = runtime_paths(tmp_path)
+    paths.pid_path.parent.mkdir(parents=True, exist_ok=True)
+    paths.pid_path.write_text("12345", encoding="utf-8")
+    assert lifecycle.read_pid(paths) == 12345
