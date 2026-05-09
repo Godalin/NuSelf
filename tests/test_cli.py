@@ -2126,6 +2126,13 @@ def test_memory_reindex_rebuilds_indexes(tmp_path: Path, capsys: CaptureFixture)
     assert "Rebuilt source index:" in captured.out
 
 
+def test_daemon_list_shows_status(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "daemon", "list"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "pid" in captured.out
+
+
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
