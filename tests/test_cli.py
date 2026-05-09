@@ -1574,3 +1574,37 @@ def test_interactive_notify_send_and_dismiss(
     captured = capsys.readouterr()
     assert result == 0
     assert "Dismissed: n-002" in captured.out
+
+
+def test_interactive_unknown_command_shows_hints(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput(":th\n:q\n"))
+    monkeypatch.setattr(
+        "nuself.cli.lifecycle.status",
+        lambda project_root: DaemonStatus(
+            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
+        ),
+    )
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Did you mean:" in captured.out
+    assert ":thread" in captured.out
+    assert ":threads" in captured.out
+
+
+def test_interactive_unknown_command_no_hints_for_unrelated(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput(":xyz\n:q\n"))
+    monkeypatch.setattr(
+        "nuself.cli.lifecycle.status",
+        lambda project_root: DaemonStatus(
+            running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
+        ),
+    )
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Did you mean:" not in captured.out

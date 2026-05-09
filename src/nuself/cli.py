@@ -1463,10 +1463,17 @@ def _handle_interactive_command(command: str, project_root: Path | None, current
     return ("", current_thread_id)
 
 
+def _interactive_command_hints(partial: str) -> list[str]:
+    return [cmd for cmd in _INTERACTIVE_COMMANDS if cmd.startswith(partial) and cmd != partial]
+
+
 def _interactive_help(command: str | None = None) -> str:
     lines: list[str] = []
     if command is not None:
         lines.append(f"Unknown interactive command: {command}")
+        hints = _interactive_command_hints(command)
+        if hints:
+            lines.append(f"Did you mean: {', '.join(hints)}?")
     lines.extend(
         [
             "Interactive commands:",
