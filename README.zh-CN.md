@@ -362,7 +362,7 @@ uv run nuself open <thread-id>
 uv run nuself open <thread-id> --message "hello"
 ```
 
-在 REPL 中，使用 `:thread <id>` 切换 thread，`:history` 查看近期消息，`:sources` 列出导入的 sources，`:search <query>` 搜索 memory，`:archive` 归档当前 thread。
+在 REPL 中，使用 `:thread <id>` 切换 thread，`:history` 查看近期消息，`:sources` 列出导入的 sources，`:search <query>` 搜索 memory，`:archive` 归档当前 thread，`:unarchive <id>` 恢复已归档 thread，`:archived` 列出已归档 threads，`:delete` 删除当前 thread。
 
 ## 记忆条目
 

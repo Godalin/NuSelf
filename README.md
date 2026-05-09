@@ -362,7 +362,7 @@ uv run nuself open <thread-id>
 uv run nuself open <thread-id> --message "hello"
 ```
 
-In the REPL, switch threads with `:thread <id>`, view recent messages with `:history`, list imported sources with `:sources`, search memory with `:search <query>`, and archive the current thread with `:archive`.
+In the REPL, switch threads with `:thread <id>`, view recent messages with `:history`, list imported sources with `:sources`, search memory with `:search <query>`, archive the current thread with `:archive`, restore an archived thread with `:unarchive <id>`, list archived threads with `:archived`, and delete the current thread with `:delete`.
 
 ## Memory Entries
 
