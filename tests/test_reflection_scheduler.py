@@ -86,6 +86,8 @@ def test_reflect_creates_outbox_entry(scheduler: ReflectionScheduler) -> None:
     assert entries[0].title == "Daemon reflection"
     assert entries[0].status == "pending"
     assert entries[0].idempotency_key == "reflection-2024-01-01"
+    assert entries[0].deep_link is not None
+    assert entries[0].deep_link.startswith("nuself://thread/reflections")
 
 
 def test_reflect_idempotent_per_day(scheduler: ReflectionScheduler) -> None:

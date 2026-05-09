@@ -1448,3 +1448,40 @@ def test_notify_list_empty(tmp_path: Path, capsys: CaptureFixture) -> None:
     output = capsys.readouterr().out
     assert result == 0
     assert "No outbox entries." in output
+
+
+def test_open_with_deep_link_parses_thread_id(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(
+        ["--project-root", str(tmp_path), "open", "--deep-link", "nuself://thread/my-thread"]
+    )
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Thread not found: my-thread" in captured.err
+
+
+def test_open_with_deep_link_and_message(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "open",
+            "--deep-link",
+            "nuself://thread/my-thread?message=hello",
+            "--create",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Created thread: my-thread" in captured.out
+
+
+def test_open_with_invalid_deep_link(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(
+        ["--project-root", str(tmp_path), "open", "--deep-link", "https://example.com"]
+    )
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Invalid deep link" in captured.err

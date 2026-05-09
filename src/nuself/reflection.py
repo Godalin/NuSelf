@@ -122,10 +122,15 @@ class ReflectionScheduler:
         )
 
     def _create_reflection_intent(self, now: datetime) -> OutboxEntry:
+        from nuself.notification.deep_link import DeepLink
+
+        thread_id = "reflections"
+        deep_link = DeepLink(thread_id=thread_id).to_url()
         return OutboxEntry(
             id=f"reflection-{now.strftime('%Y%m%d-%H%M%S')}-{now.microsecond:06d}",
             title="Daemon reflection",
             body="Time for a self-reflection cycle.",
             status="pending",
             idempotency_key=f"reflection-{now.date().isoformat()}",
+            deep_link=deep_link,
         )

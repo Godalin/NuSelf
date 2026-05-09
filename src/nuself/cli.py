@@ -101,9 +101,10 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(attach_parser, handle_attach)
 
     open_parser = subparsers.add_parser("open")
-    open_parser.add_argument("thread_id")
+    open_parser.add_argument("thread_id", nargs="?", default=None)
     open_parser.add_argument("--message", "-m", default=None)
     open_parser.add_argument("--create", action="store_true")
+    open_parser.add_argument("--deep-link", default=None)
     _add_handler(open_parser, handle_open)
 
     logs_parser = subparsers.add_parser("logs")
@@ -409,7 +410,24 @@ def handle_attach(args: argparse.Namespace) -> int:
 
 def handle_open(args: argparse.Namespace) -> int:
     store = ThreadStore(args.project_root)
-    thread_id = args.thread_id
+    thread_id: str | None = args.thread_id
+
+    if args.deep_link is not None:
+        from nuself.notification.deep_link import DeepLink
+
+        try:
+            link = DeepLink.parse(args.deep_link)
+        except ValueError as exc:
+            print(f"Invalid deep link: {exc}", file=sys.stderr)
+            return 1
+        thread_id = link.thread_id
+        if args.message is None and link.message is not None:
+            args.message = link.message
+
+    if thread_id is None:
+        print("Thread ID or --deep-link is required.", file=sys.stderr)
+        return 1
+
     if thread_id not in store.list():
         if args.create:
             store.save(ThreadState.empty(thread_id))
