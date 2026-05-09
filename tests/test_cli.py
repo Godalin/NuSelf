@@ -364,8 +364,8 @@ def test_default_entrypoint_creates_daemon_when_missing(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Creating new daemon..." in captured.out
-    assert "Created daemon:" in captured.out
+    assert "Starting NuSelf daemon..." in captured.out
+    assert "Daemon started:" in captured.out
     assert "pid=456" in captured.out
     assert "sent hello" in captured.out
 

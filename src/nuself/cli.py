@@ -357,14 +357,15 @@ def handle_default_entrypoint(args: argparse.Namespace) -> int:
     if result.running:
         print(f"Using current daemon: {_format_status(result)}")
     else:
-        print("Creating new daemon...")
+        print("Starting NuSelf daemon...")
         result = lifecycle.start(args.project_root)
         if not result.running:
-            print(f"Failed to create daemon: {_format_status(result)}", file=sys.stderr)
+            print(f"Failed to start daemon: {_format_status(result)}", file=sys.stderr)
             return 1
-        print(f"Created daemon: {_format_status(result)}")
+        print(f"Daemon started: {_format_status(result)}")
     if args.message is not None:
         return _send_chat(args.message, args.project_root)
+    print("Tip: type :help for commands, :q to quit, or start chatting.")
     return _interactive_loop(lambda message, thread_id: _send_chat(message, args.project_root, thread_id), args.project_root)
 
 
