@@ -1992,3 +1992,39 @@ def test_nested_subcommand_help(argv: list[str]) -> None:
     with pytest.raises(SystemExit) as exc_info:
         parser.parse_args(argv)
     assert exc_info.value.code == 0
+
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["memory", "graph", "nodes", "--help"],
+        ["memory", "graph", "edges", "--help"],
+        ["memory", "graph", "search", "--help"],
+        ["memory", "graph", "path", "--help"],
+        ["memory", "graph", "closure", "--help"],
+        ["memory", "profile", "list", "--help"],
+        ["memory", "profile", "search", "--help"],
+        ["memory", "profile", "show", "--help"],
+        ["memory", "profile", "delete", "--help"],
+        ["memory", "profile", "reindex", "--help"],
+        ["memory", "candidate", "list", "--help"],
+        ["memory", "candidate", "show", "--help"],
+        ["memory", "candidate", "accept", "--help"],
+        ["memory", "candidate", "reject", "--help"],
+        ["memory", "candidate", "edit", "--help"],
+        ["memory", "candidate", "merge", "--help"],
+        ["memory", "source", "ingest", "--help"],
+        ["memory", "source", "list", "--help"],
+        ["memory", "source", "show", "--help"],
+        ["memory", "source", "delete", "--help"],
+        ["memory", "source", "chunks", "--help"],
+        ["memory", "source", "search", "--help"],
+        ["memory", "source", "extract", "--help"],
+    ],
+)
+def test_third_level_subcommand_help(argv: list[str]) -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(argv)
+    assert exc_info.value.code == 0
