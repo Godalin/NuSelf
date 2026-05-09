@@ -2192,6 +2192,34 @@ def test_memory_candidate_reject_pending(tmp_path: Path, capsys: CaptureFixture)
     assert "Rejected memory candidate:" in captured.out
 
 
+def test_memory_candidate_edit_updates_fields(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryCandidateRepository
+    from nuself.domain.memory import MemoryCandidate
+
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = MemoryCandidate(action="create", type="belief", title="Focus", body="Deep work.")
+    repo.save(candidate)
+
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "candidate",
+            "edit",
+            candidate.id,
+            "--title",
+            "Concentration",
+            "--body",
+            "Focus deeply.",
+        ]
+    )
+    assert result == 0
+    updated = repo.get(candidate.id)
+    assert updated.title == "Concentration"
+    assert updated.body == "Focus deeply."
+
+
 def test_memory_add_creates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
 
