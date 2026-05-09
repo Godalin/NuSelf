@@ -1933,6 +1933,47 @@ def test_memory_search_no_match_shows_message(tmp_path: Path, capsys: CaptureFix
     assert "No matching memory entries." in captured.out
 
 
+def test_memory_source_list_shows_documents(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.source_repository import SourceRepository
+    from nuself.domain.source import SourceDocument
+
+    repo = SourceRepository(tmp_path)
+    repo.save_document(SourceDocument(id="src-001", path="/tmp/test.txt", title="Test Source", kind="text"))
+
+    result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Test Source" in captured.out
+
+
+def test_memory_source_list_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "No source documents." in captured.out
+
+
+def test_memory_source_show_displays_document(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.source_repository import SourceRepository
+    from nuself.domain.source import SourceDocument
+
+    repo = SourceRepository(tmp_path)
+    doc = SourceDocument(id="src-002", path="/tmp/test.txt", title="Test Source", kind="text")
+    repo.save_document(doc)
+
+    result = main(["--project-root", str(tmp_path), "memory", "source", "show", doc.id])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Test Source" in captured.out
+
+
+def test_memory_source_show_missing_document(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "source", "show", "missing-id"])
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Source document not found: missing-id" in captured.err
+
+
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
