@@ -285,6 +285,7 @@ uv run nuself daemon list
 uv run nuself daemon logs
 uv run nuself daemon attach --message "continue"
 uv run nuself daemon stop
+uv run nuself daemon restart
 ```
 
 也可以用通用日志查看器检查结构化本地日志：
@@ -293,6 +294,18 @@ uv run nuself daemon stop
 uv run nuself logs
 uv run nuself logs --component chat --tail 20
 uv run nuself logs --component memory --json
+```
+
+检查系统健康：
+
+```bash
+uv run nuself health
+```
+
+快速状态概览：
+
+```bash
+uv run nuself status
 ```
 
 不带子命令时，`daemon` 会显示守护进程子命令帮助。

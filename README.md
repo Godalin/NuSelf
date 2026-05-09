@@ -296,6 +296,18 @@ uv run nuself logs --component chat --tail 20
 uv run nuself logs --component memory --json
 ```
 
+Check system health:
+
+```bash
+uv run nuself health
+```
+
+Quick status overview:
+
+```bash
+uv run nuself status
+```
+
 Without a subcommand, `daemon` shows daemon subcommand help.
 
 Daemon runtime files are stored under:
