@@ -4,41 +4,44 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Milestone 8 (Lightweight Multi-Agent Selves) is complete. All bounded personas, routing, synthesis, durable instruction memory, and synthesizer-as-voice work is done.
+Add a notification outbox with log-only adapter.
 
-The next open question is whether to break the Not Now boundary for proactive reflection (Milestone 10), continue with memory system polish, or move toward the first usable interface polish (Milestone 13).
+Milestone 8 is complete. The next natural step is Milestone 10 (Proactive Agent And Outbox). The outbox is the foundational piece: it gives all later proactive features a controlled channel to surface ideas without becoming a noisy chatbot. Graph nodes and reflection schedulers will write notification intents into the outbox; adapters (starting with log-only) will deliver them. This keeps tests safe and keeps the system runnable before any real external notifications are wired.
 
 ## Immediate Context
 
-- Persona activation, routing, and synthesis are fully wired.
-- Synthesizer generates the user-facing response on activated turns.
-- Persona instructions can be stored and loaded from durable memory.
-- Evaluation harness with golden fixtures and offline scoring exists.
-- Thread management (create, rename, branch, archive, open) is complete.
-- All existing tests pass and pyright reports zero errors.
+- `private/logs/` already exists for structured log files.
+- The CLI has deep command trees for `daemon`, `chat`, `memory`, `thread`, `logs`, and `eval`.
+- `ThreadStore` and `MemoryEntryRepository` provide patterns for file-backed persistence with atomic writes.
+- The daemon runs a background memory curator thread; later it will also run a reflection scheduler.
+- `write_log_event` is the existing structured logging boundary.
 
-## Next Steps (TBD)
+## Next Steps
 
-Pending direction. Options:
-
-1. **Break Not Now boundary**: Start Milestone 10 (proactive reflection scheduler, idea candidates, relevance gate, notification outbox).
-2. **Memory system polish**: Add vector/hybrid/graph indexes, advanced retrieval, or memory system hardening.
-3. **Interface polish**: Improve CLI UX, REPL experience, or error handling for Milestone 13.
-4. **Architecture cleanup**: Refactor boundaries, remove dead code, or improve test coverage in under-tested areas.
+1. Design `OutboxEntry` and `NotificationOutbox` repository under `private/outbox/`.
+2. Add `NotificationAdapter` protocol with `send(entry) -> bool`.
+3. Implement `LogOnlyNotificationAdapter` that writes to `private/logs/notifications.log`.
+4. Add CLI commands: `nuself notify list`, `show`, `send`, `dismiss`.
+5. Ensure the outbox supports idempotency keys so duplicate intents are deduplicated.
+6. Add tests for outbox CRUD, adapter delivery, and idempotency.
+7. Update README TODOs together with the implementation.
 
 ## Not Now
 
 - Full multi-persona orchestration beyond the current bounded skeleton.
 - Vector, hybrid, or hosted graph indexes.
 - Plugin loading.
-- Proactive reflection or notification work.
+- Proactive reflection scheduler, idea candidates, or relevance gate (outbox first).
+- macOS or email notification adapters (outbox first).
 - Web or GUI interface work.
 - Private memory schema migration.
 - Dashboard-style or dependency-heavy terminal UI.
 
 ## Completion Criteria
 
-- Direction chosen and documented in this file.
-- Implementation follows the chosen direction.
+- Notification intents can be written to the outbox.
+- Log-only adapter delivers intents to a structured log file.
+- CLI can list, show, send, and dismiss outbox entries.
+- Idempotency keys prevent duplicate entries.
 - All operations are type-checked and tested.
 - README TODOs track completed progress, while this file stays limited to the active goal.

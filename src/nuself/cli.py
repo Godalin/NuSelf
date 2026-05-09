@@ -113,6 +113,20 @@ def build_parser() -> argparse.ArgumentParser:
     eval_parser.add_argument("--fixtures", type=Path, default=None)
     _add_handler(eval_parser, handle_eval)
 
+    notify_parser = subparsers.add_parser("notify")
+    notify_parser.set_defaults(handler=None, help_parser=notify_parser)
+    notify_subparsers = notify_parser.add_subparsers(dest="notify_command")
+    _add_handler(notify_subparsers.add_parser("list"), handle_notify_list)
+    notify_show_parser = notify_subparsers.add_parser("show")
+    notify_show_parser.add_argument("entry_id")
+    _add_handler(notify_show_parser, handle_notify_show)
+    notify_send_parser = notify_subparsers.add_parser("send")
+    notify_send_parser.add_argument("entry_id")
+    _add_handler(notify_send_parser, handle_notify_send)
+    notify_dismiss_parser = notify_subparsers.add_parser("dismiss")
+    notify_dismiss_parser.add_argument("entry_id")
+    _add_handler(notify_dismiss_parser, handle_notify_dismiss)
+
     memory_parser = subparsers.add_parser("memory")
     memory_parser.set_defaults(handler=None, help_parser=memory_parser)
     memory_subparsers = memory_parser.add_subparsers(dest="memory_command")
@@ -715,6 +729,70 @@ def handle_eval(args: argparse.Namespace) -> int:
             print(f"  - {failure}")
     print(f"\n{passed}/{total} passed")
     return 0 if passed == total else 1
+
+
+def handle_notify_list(args: argparse.Namespace) -> int:
+    from nuself.notification import NotificationOutbox
+
+    outbox = NotificationOutbox(args.project_root)
+    entries = outbox.list()
+    if not entries:
+        print("No outbox entries.")
+        return 0
+    for entry in entries:
+        print(f"{entry.id} [{entry.status}] {entry.title}")
+    return 0
+
+
+def handle_notify_show(args: argparse.Namespace) -> int:
+    from nuself.notification import NotificationOutbox, OutboxEntryNotFound
+
+    try:
+        entry = NotificationOutbox(args.project_root).get(args.entry_id)
+    except OutboxEntryNotFound:
+        print(f"Outbox entry not found: {args.entry_id}", file=sys.stderr)
+        return 1
+    print(f"id: {entry.id}")
+    print(f"status: {entry.status}")
+    print(f"title: {entry.title}")
+    print(f"body: {entry.body}")
+    if entry.deep_link is not None:
+        print(f"deep_link: {entry.deep_link}")
+    print(f"idempotency_key: {entry.idempotency_key}")
+    print(f"attempts: {entry.attempts}")
+    print(f"created_at: {entry.created_at}")
+    return 0
+
+
+def handle_notify_send(args: argparse.Namespace) -> int:
+    from nuself.notification import NotificationOutbox, LogOnlyNotificationAdapter, OutboxEntryNotFound
+
+    outbox = NotificationOutbox(args.project_root)
+    try:
+        entry = outbox.get(args.entry_id)
+    except OutboxEntryNotFound:
+        print(f"Outbox entry not found: {args.entry_id}", file=sys.stderr)
+        return 1
+    adapter = LogOnlyNotificationAdapter(args.project_root)
+    if adapter.send(entry):
+        outbox.mark_sent(args.entry_id)
+        print(f"Sent: {entry.id}")
+        return 0
+    outbox.mark_failed(args.entry_id)
+    print(f"Failed to send: {entry.id}", file=sys.stderr)
+    return 1
+
+
+def handle_notify_dismiss(args: argparse.Namespace) -> int:
+    from nuself.notification import NotificationOutbox, OutboxEntryNotFound
+
+    try:
+        NotificationOutbox(args.project_root).dismiss(args.entry_id)
+        print(f"Dismissed: {args.entry_id}")
+        return 0
+    except OutboxEntryNotFound:
+        print(f"Outbox entry not found: {args.entry_id}", file=sys.stderr)
+        return 1
 
 
 def handle_memory_update(args: argparse.Namespace) -> int:
