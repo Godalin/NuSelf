@@ -598,14 +598,14 @@ The chat agent should eventually show memory citations on demand:
 
 ## Implementation Roadmap
 
-### Slice 1: Memory Candidate Store
+### Slice 1: Memory Candidate Store ✅
 
 - Add `MemoryCandidate` domain model.
 - Add file-backed candidate repository.
 - Add CLI list/show/accept/reject commands.
 - Add tests for candidate lifecycle.
 
-### Slice 1A: Automatic Episode Curator
+### Slice 1A: Automatic Episode Curator ✅
 
 - Add a shared working-memory lock around `private/threads/default.json`.
 - Add a cursor that records which conversation turns have been summarized.
@@ -613,20 +613,20 @@ The chat agent should eventually show memory citations on demand:
 - Trigger the curator when interactive chat exits.
 - Log every memory update to `private/logs/memory.log`.
 
-### Slice 2: Conversation-To-Candidate Extraction
+### Slice 2: Conversation-To-Candidate Extraction ✅
 
 - After each chat turn, run a lightweight candidate extractor.
 - Start deterministic and conservative.
 - Store candidates as drafts; do not auto-commit personal facts.
 
-### Slice 3: Memory Query Service
+### Slice 3: Memory Query Service ✅
 
 - Implement typed query input and result output.
 - Search existing entries with lexical matching first.
 - Return match reasons and evidence refs.
 - Replace the temporary chat agent's "load first 24 entries" behavior with query-driven retrieval.
 
-### Slice 4: Context Packer
+### Slice 4: Context Packer ✅
 
 - Build a memory context budgeter.
 - Always include core profile.
@@ -639,7 +639,7 @@ The chat agent should eventually show memory citations on demand:
 - Use fake model tests for schema and control flow.
 - Keep all LangMem outputs as candidates, not committed entries.
 
-### Slice 6: Open Typed Memory Registry
+### Slice 6: Open Typed Memory Registry 🔄
 
 - Add `MemoryObject` and descriptor domain models.
 - Add descriptor registry with validation, summary, merge, decay, conflict, and retrieval hooks.
@@ -647,13 +647,13 @@ The chat agent should eventually show memory citations on demand:
 - Update curator and optimizer prompts to request descriptor-compatible payloads.
 - Add tests for unknown types, validation failures, merge behavior, and conflict surfacing.
 
-### Slice 7: Derived Indexes
+### Slice 7: Derived Indexes 🔄
 
 - Add lexical index and metadata stats under `private/derived/`.
 - Add embedding index only after query service behavior is stable.
 - Make `memory reindex` rebuild all derived artifacts.
 
-### Slice 8: Symbolic Temporal Memory
+### Slice 8: Symbolic Temporal Memory 🔄
 
 - Add symbolic node and relation models.
 - Add relation descriptor registry.

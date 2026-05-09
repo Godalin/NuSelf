@@ -234,17 +234,25 @@ Delivery policy fields:
 
 ## First Implementation Slice
 
-Build the interaction layer in this order:
+The interaction layer is now fully implemented through the first 10 steps:
 
-1. CLI skeleton and command routing.
-2. Daemon start/status/stop with pid file and socket path under `private/runtime/`.
-3. JSONL socket protocol with health check and daemon-backed chat request.
-4. Memory entry CRUD over local files.
-5. Temporary memory-aware chat agent using OpenAI-compatible model calls when configured.
-6. Thread registry with persisted messages and compressed conversation summaries under `private/threads/`.
-7. Proactive reflection scheduler that only logs candidates.
-8. Outbox and log-only notification adapter.
-9. macOS notification adapter.
-10. Email adapter.
+1. ✅ CLI skeleton and command routing (`nuself` with subcommands).
+2. ✅ Daemon start/status/stop with pid file and socket path under `private/runtime/`.
+3. ✅ JSONL socket protocol with health check and daemon-backed chat request.
+4. ✅ Memory entry CRUD over local files.
+5. ✅ Memory-aware chat agent using OpenAI-compatible model calls when configured.
+6. ✅ Thread registry with persisted messages and compressed conversation summaries under `private/threads/`.
+7. ✅ Proactive reflection scheduler with interval, cooldown, quiet hours, and daemon background thread.
+8. ✅ Outbox and log-only notification adapter.
+9. ✅ macOS notification adapter via `osascript`.
+10. ✅ Email adapter via SMTP with `private/email.toml` configuration.
 
-This keeps the daemon and CLI usable before the full LangGraph agent is complete.
+Additional completed work beyond the initial slice:
+
+- Deep links (`nuself://thread/<id>`) connect notifications to threads.
+- `nuself open --deep-link` resolves and opens notification targets.
+- REPL tab completion for commands and thread IDs.
+- `:whoami`, `:notify`, and command hints in the REPL.
+- `nuself status` shows daemon, threads, and pending notifications.
+- Evaluation harness with conversation and notification fixtures.
+- `IdeaCandidateGenerator` and `RelevanceGate` for context-aware reflection.

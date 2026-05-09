@@ -221,7 +221,9 @@ Responsibilities:
 - Score citation quality, unsupported personal claims, style fidelity, and refusal/uncertainty behavior.
 - Provide small fixtures that can run locally without external services where possible.
 
-## Suggested Package Layout
+## Current Package Layout
+
+The source tree evolved during active development. The current layout is:
 
 ```text
 src/nuself/
@@ -229,57 +231,55 @@ src/nuself/
   config.py
   private.py
   cli.py
+  llm.py
+  logs.py
+  eval.py
+  reflection.py
   daemon/
     client.py
     server.py
     protocol.py
     lifecycle.py
   domain/
-    sources.py
+    memory.py
     profile.py
-    conversation.py
-    evidence.py
-  ingestion/
-    loaders.py
-    normalize.py
-    pipeline.py
-  storage/
-    repository.py
-    indexes.py
-  retrieval/
-    query.py
-    rank.py
-  mirror/
-    prompts.py
-    orchestrator.py
-    guards.py
-  personas/
-    definitions.py
-    graph.py
-    synthesis.py
+    source.py
+  agent/
+    chat.py
+    graph_driver.py
+    persona.py
+    tools.py
   memory/
-    candidates.py
-    review.py
-  proactive/
-    scheduler.py
-    candidates.py
-    relevance.py
-    outbox.py
-  notifications/
-    adapters.py
+    curator.py
+    intake.py
+    optimizer.py
+    query.py
+    repository.py
+    source_repository.py
+  profile/
+    repository.py
+  notification/
+    __init__.py
+    deep_link.py
     email.py
     macos.py
-    links.py
-  evals/
-    cases.py
-    scoring.py
+  tui/
+    memory.py
+    render.py
 tests/
-  unit/
-  integration/
   fixtures/
-examples/
-  private/
+    conversations/
+    notifications/
 ```
+
+Differences from the original suggested layout:
+
+- `proactive/` was folded into top-level `reflection.py` alongside `IdeaCandidateGenerator` and `RelevanceGate`.
+- `evals/` is a single top-level `eval.py` with fixture helpers.
+- `agent/` holds the LangGraph conversation runtime, persona subgraph, and tool registry.
+- `memory/` includes repository, query, curator, optimizer, and source repository.
+- `tui/` provides rendering helpers for CLI output.
+- `notification/` keeps the outbox, adapters, and deep link parsing in one place.
 
 ## Data Model Boundaries
 
