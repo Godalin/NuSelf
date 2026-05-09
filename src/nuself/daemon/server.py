@@ -15,6 +15,7 @@ from nuself.config import config_int, ensure_runtime_dirs, runtime_paths
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
 from nuself.logs import write_log_event
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
+from nuself.reflection import ReflectionScheduler
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
 
@@ -33,6 +34,13 @@ class DaemonState:
             project_root,
         )
         self._memory_curator_thread: threading.Thread | None = None
+        self.reflection_scheduler = ReflectionScheduler(project_root)
+        self.reflection_check_interval_seconds = config_int(
+            "NUSELF_REFLECTION_CHECK_INTERVAL_SECONDS",
+            60,
+            project_root,
+        )
+        self._reflection_scheduler_thread: threading.Thread | None = None
 
     def start_background_memory_curator(self) -> None:
         if self._memory_curator_thread is not None:
@@ -52,6 +60,28 @@ class DaemonState:
         while not self.shutdown_requested.wait(self.memory_curator_interval_seconds):
             try:
                 self.memory_curator.run_once()
+            except RuntimeError:
+                continue
+
+    def start_background_reflection_scheduler(self) -> None:
+        if self._reflection_scheduler_thread is not None:
+            return
+        self._reflection_scheduler_thread = threading.Thread(
+            target=self._run_background_reflection_scheduler,
+            name="nuself-reflection-scheduler",
+            daemon=True,
+        )
+        self._reflection_scheduler_thread.start()
+
+    def stop_background_reflection_scheduler(self) -> None:
+        if self._reflection_scheduler_thread is not None:
+            self._reflection_scheduler_thread.join(timeout=1.0)
+
+    def _run_background_reflection_scheduler(self) -> None:
+        while not self.shutdown_requested.wait(self.reflection_check_interval_seconds):
+            try:
+                if self.reflection_scheduler.should_reflect():
+                    self.reflection_scheduler.reflect()
             except RuntimeError:
                 continue
 
@@ -189,6 +219,7 @@ def run_daemon(project_root: Path | None = None) -> int:
     try:
         write_log_event("daemon", "started", "daemon started", project_root=paths.project_root)
         state.start_background_memory_curator()
+        state.start_background_reflection_scheduler()
         with NuSelfUnixServer(str(paths.socket_path), RequestHandler, state) as server:
             server.timeout = 0.2
             while not state.shutdown_requested.is_set():
@@ -196,6 +227,7 @@ def run_daemon(project_root: Path | None = None) -> int:
     finally:
         write_log_event("daemon", "stopped", "daemon stopped", project_root=paths.project_root)
         state.stop_background_memory_curator()
+        state.stop_background_reflection_scheduler()
         if paths.socket_path.exists():
             paths.socket_path.unlink()
         if paths.pid_path.exists():
