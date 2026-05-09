@@ -316,6 +316,7 @@ uv run nuself notify list
 uv run nuself notify show <entry-id>
 uv run nuself notify send <entry-id>
 uv run nuself notify dismiss <entry-id>
+uv run nuself notify clear
 ```
 
 Reflection intents include a deep link to the `reflections` thread. Open a notification directly:

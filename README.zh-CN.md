@@ -315,6 +315,7 @@ uv run nuself notify list
 uv run nuself notify show <entry-id>
 uv run nuself notify send <entry-id>
 uv run nuself notify dismiss <entry-id>
+uv run nuself notify clear
 ```
 
 Reflection intent 包含指向 `reflections` thread 的 deep link。直接打开通知：
