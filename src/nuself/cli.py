@@ -282,6 +282,9 @@ def build_parser() -> argparse.ArgumentParser:
     thread_parser.set_defaults(handler=None, help_parser=thread_parser)
     thread_subparsers = thread_parser.add_subparsers(dest="thread_command")
     _add_handler(thread_subparsers.add_parser("list"), handle_thread_list)
+    thread_show_parser = thread_subparsers.add_parser("show")
+    thread_show_parser.add_argument("thread_id")
+    _add_handler(thread_show_parser, handle_thread_show)
     thread_create_parser = thread_subparsers.add_parser("create")
     thread_create_parser.add_argument("thread_id")
     _add_handler(thread_create_parser, handle_thread_create)
@@ -695,6 +698,23 @@ def handle_thread_list(args: argparse.Namespace) -> int:
         return 0
     for tid in ids:
         print(tid)
+    return 0
+
+
+def handle_thread_show(args: argparse.Namespace) -> int:
+    store = ThreadStore(args.project_root)
+    state = store.load(args.thread_id)
+    if not state.messages and args.thread_id not in store.list():
+        print(f"Thread not found: {args.thread_id}", file=sys.stderr)
+        return 1
+    print(f"Thread: {args.thread_id}")
+    print(f"Messages: {len(state.messages)}")
+    for msg in state.messages:
+        prefix = ">" if msg.role == "user" else "<"
+        content = msg.content[:120]
+        if len(msg.content) > 120:
+            content += "..."
+        print(f"  {prefix} {content}")
     return 0
 
 

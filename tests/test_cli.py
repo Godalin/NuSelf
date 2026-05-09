@@ -1653,3 +1653,25 @@ def test_interactive_history_shows_recent_messages(
     assert "Recent messages in 'default':" in captured.out
     assert "> Hello there" in captured.out
     assert "< Hi! How can I help?" in captured.out
+
+
+def test_thread_show_displays_messages(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
+
+    store = ThreadStore(tmp_path)
+    state = ThreadState.empty("focus")
+    state.messages.append(ThreadMessage(role="user", content="Tell me about memory."))
+    store.save(state)
+
+    result = main(["--project-root", str(tmp_path), "thread", "show", "focus"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Thread: focus" in captured.out
+    assert "> Tell me about memory." in captured.out
+
+
+def test_thread_show_missing_thread(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "thread", "show", "missing"])
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Thread not found: missing" in captured.err
