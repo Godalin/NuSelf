@@ -1794,6 +1794,49 @@ def test_daemon_restart_stops_then_starts(
     assert "pid=789" in captured.out
 
 
+def test_daemon_start_with_mocked_lifecycle(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    running = DaemonStatus(
+        running=True,
+        pid=456,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+
+    def fake_start(project_root: Path | None) -> DaemonStatus:
+        return running
+
+    monkeypatch.setattr("nuself.cli.lifecycle.start", fake_start)
+
+    result = main(["--project-root", str(tmp_path), "daemon", "start"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "daemon running" in captured.out
+    assert "pid=456" in captured.out
+
+
+def test_daemon_stop_with_mocked_lifecycle(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    stopped = DaemonStatus(
+        running=False,
+        pid=None,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+
+    def fake_stop(project_root: Path | None) -> DaemonStatus:
+        return stopped
+
+    monkeypatch.setattr("nuself.cli.lifecycle.stop", fake_stop)
+
+    result = main(["--project-root", str(tmp_path), "daemon", "stop"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "daemon stopped" in captured.out
+
+
 def test_interactive_sources_lists_documents(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
