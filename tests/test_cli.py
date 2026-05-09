@@ -1987,6 +1987,20 @@ def test_memory_source_delete_removes_document(tmp_path: Path, capsys: CaptureFi
     assert len(repo.list_documents()) == 0
 
 
+def test_memory_source_chunks_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "source", "chunks", "some-id"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "No source chunks." in captured.out
+
+
+def test_memory_source_search_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "source", "search", "xyz"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "No matching source chunks." in captured.out
+
+
 def test_memory_stats_shows_empty_state(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "stats"])
     captured = capsys.readouterr()
