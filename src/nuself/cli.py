@@ -210,6 +210,9 @@ def build_parser() -> argparse.ArgumentParser:
     optimize_parser = memory_subparsers.add_parser("optimize")
     optimize_parser.add_argument("--limit", type=int, default=50)
     _add_handler(optimize_parser, handle_memory_optimize)
+    export_parser = memory_subparsers.add_parser("export")
+    export_parser.add_argument("--output", "-o", type=Path, required=True)
+    _add_handler(export_parser, handle_memory_export)
     profile_parser = memory_subparsers.add_parser("profile")
     profile_parser.set_defaults(handler=None, help_parser=profile_parser)
     profile_subparsers = profile_parser.add_subparsers(dest="profile_command")
@@ -988,6 +991,18 @@ def handle_memory_optimize(args: argparse.Namespace) -> int:
     settings = MemoryOptimizerSettings(memory_limit=args.limit)
     result = MemoryOptimizer(args.project_root, settings=settings).run_once()
     print(f"Memory optimizer: {result.summary()} log={result.log_path}")
+    return 0
+
+
+def handle_memory_export(args: argparse.Namespace) -> int:
+    import json
+
+    repo = MemoryEntryRepository(args.project_root)
+    entries = repo.list()
+    data = [entry.to_wire() for entry in entries]
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"Exported {len(data)} memory entries to {args.output}")
     return 0
 
 

@@ -1787,3 +1787,24 @@ def test_config_command_shows_paths(tmp_path: Path, capsys: CaptureFixture) -> N
     assert "project_root:" in captured.out
     assert "private_root:" in captured.out
     assert "api_key: not set" in captured.out
+
+
+def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work."))
+    output = tmp_path / "export.json"
+
+    result = main(["--project-root", str(tmp_path), "memory", "export", "-o", str(output)])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Exported 1 memory entries" in captured.out
+    assert output.exists()
+    import json
+
+    data = json.loads(output.read_text(encoding="utf-8"))
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["title"] == "Focus"
