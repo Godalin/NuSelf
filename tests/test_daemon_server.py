@@ -72,3 +72,56 @@ def test_daemon_chat_runs_memory_curator_after_reply(tmp_path: Path) -> None:
 
     assert response.status == "ok"
     assert response.payload["memory_update"] == "processed=2 created=1 updated=0 ignored=0"
+
+
+def test_daemon_ping_returns_pong(tmp_path: Path) -> None:
+    state = DaemonState(tmp_path)
+    request = DaemonRequest(type="ping", payload={}, request_id="ping1")
+
+    response = handle_request(request, state)
+
+    assert response.status == "ok"
+    assert response.payload["message"] == "pong"
+
+
+def test_daemon_echo_returns_payload(tmp_path: Path) -> None:
+    state = DaemonState(tmp_path)
+    request = DaemonRequest(type="echo", payload={"test": "data"}, request_id="echo1")
+
+    response = handle_request(request, state)
+
+    assert response.status == "ok"
+    assert response.payload["test"] == "data"
+
+
+def test_daemon_shutdown_sets_flag(tmp_path: Path) -> None:
+    state = DaemonState(tmp_path)
+    request = DaemonRequest(type="shutdown", payload={}, request_id="shutdown1")
+
+    response = handle_request(request, state)
+
+    assert response.status == "ok"
+    assert response.payload["message"] == "shutdown requested"
+    assert state.shutdown_requested.is_set()
+
+
+def test_daemon_unsupported_type_returns_error(tmp_path: Path) -> None:
+    state = DaemonState(tmp_path)
+    request = DaemonRequest(type="unknown", payload={}, request_id="unknown1")  # type: ignore[arg-type]
+
+    response = handle_request(request, state)
+
+    assert response.status == "error"
+    assert response.error is not None
+    assert "unsupported request type" in response.error
+
+
+def test_daemon_chat_rejects_non_string_message(tmp_path: Path) -> None:
+    state = DaemonState(tmp_path)
+    request = DaemonRequest(type="chat", payload={"message": 123}, request_id="chat_bad")
+
+    response = handle_request(request, state)
+
+    assert response.status == "error"
+    assert response.error is not None
+    assert "requires string payload field 'message'" in response.error
