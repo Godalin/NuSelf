@@ -419,6 +419,7 @@ Export all memory entries to JSON:
 
 ```bash
 uv run nuself memory export -o backup/memory.json
+uv run nuself memory import backup/memory.json
 ```
 
 Run the memory curator immediately:

@@ -419,6 +419,7 @@ uv run nuself memory search "clarity"
 
 ```bash
 uv run nuself memory export -o backup/memory.json
+uv run nuself memory import backup/memory.json
 ```
 
 立即运行 memory curator：
