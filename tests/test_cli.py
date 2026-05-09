@@ -2051,6 +2051,42 @@ def test_memory_candidate_list_empty_shows_message(tmp_path: Path, capsys: Captu
     assert "No memory candidates." in captured.out
 
 
+def test_memory_add_creates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "add",
+            "--title",
+            "Focus",
+            "--body",
+            "Deep work is important.",
+            "--type",
+            "belief",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Focus" in captured.out
+    assert len(MemoryEntryRepository(tmp_path).list()) == 1
+
+
+def test_memory_delete_removes_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    entry = MemoryEntry(type="belief", title="Focus", body="Deep work.")
+    repo.save(entry)
+
+    result = main(["--project-root", str(tmp_path), "memory", "delete", entry.id])
+    assert result == 0
+    assert len(repo.list()) == 0
+
+
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
