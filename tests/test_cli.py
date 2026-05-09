@@ -2116,6 +2116,16 @@ def test_memory_edit_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> No
     assert updated.body == "Focus deeply."
 
 
+def test_memory_reindex_rebuilds_indexes(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "reindex"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Rebuilt memory index:" in captured.out
+    assert "Rebuilt relation index:" in captured.out
+    assert "Rebuilt symbolic graph:" in captured.out
+    assert "Rebuilt source index:" in captured.out
+
+
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
