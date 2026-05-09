@@ -84,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     daemon_subparsers = daemon_parser.add_subparsers(dest="daemon_command")
     _add_handler(daemon_subparsers.add_parser("start"), handle_daemon_start)
     _add_handler(daemon_subparsers.add_parser("stop"), handle_daemon_stop)
+    _add_handler(daemon_subparsers.add_parser("restart"), handle_daemon_restart)
     _add_handler(daemon_subparsers.add_parser("status"), handle_daemon_status)
     _add_handler(daemon_subparsers.add_parser("list"), handle_daemon_list)
     _add_log_arguments(daemon_subparsers.add_parser("logs"))
@@ -345,6 +346,26 @@ def handle_daemon_stop(args: argparse.Namespace) -> int:
     )
     print(_format_status(result))
     return 0 if not result.running else 1
+
+
+def handle_daemon_restart(args: argparse.Namespace) -> int:
+    write_log_event("daemon", "restart_requested", "daemon restart requested", project_root=args.project_root)
+    stop_result = lifecycle.stop(args.project_root)
+    if stop_result.running:
+        print(f"Failed to stop daemon: {_format_status(stop_result)}", file=sys.stderr)
+        return 1
+    print(f"Stopped: {_format_status(stop_result)}")
+    start_result = lifecycle.start(args.project_root)
+    write_log_event(
+        "daemon",
+        "restart_completed",
+        f"daemon restart {'completed' if start_result.running else 'failed'}",
+        project_root=args.project_root,
+        status="running" if start_result.running else "stopped",
+        metadata={"pid": start_result.pid, "socket": str(start_result.socket_path)},
+    )
+    print(f"Started: {_format_status(start_result)}")
+    return 0 if start_result.running else 1
 
 
 def handle_daemon_status(args: argparse.Namespace) -> int:

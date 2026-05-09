@@ -1675,3 +1675,36 @@ def test_thread_show_missing_thread(tmp_path: Path, capsys: CaptureFixture) -> N
     captured = capsys.readouterr()
     assert result == 1
     assert "Thread not found: missing" in captured.err
+
+
+def test_daemon_restart_stops_then_starts(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    stopped = DaemonStatus(
+        running=False,
+        pid=None,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+    running = DaemonStatus(
+        running=True,
+        pid=789,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+
+    def fake_stop(project_root: Path | None) -> DaemonStatus:
+        return stopped
+
+    def fake_start(project_root: Path | None) -> DaemonStatus:
+        return running
+
+    monkeypatch.setattr("nuself.cli.lifecycle.stop", fake_stop)
+    monkeypatch.setattr("nuself.cli.lifecycle.start", fake_start)
+
+    result = main(["--project-root", str(tmp_path), "daemon", "restart"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Stopped:" in captured.out
+    assert "Started:" in captured.out
+    assert "pid=789" in captured.out
