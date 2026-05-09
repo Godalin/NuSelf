@@ -1869,6 +1869,48 @@ def test_config_command_shows_paths(tmp_path: Path, capsys: CaptureFixture) -> N
     assert "api_key: not set" in captured.out
 
 
+def test_memory_list_shows_entries(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work."))
+
+    result = main(["--project-root", str(tmp_path), "memory", "list"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Focus" in captured.out
+
+
+def test_memory_list_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "list"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "No memory entries." in captured.out
+
+
+def test_memory_show_displays_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    entry = MemoryEntry(type="belief", title="Focus", body="Deep work.")
+    repo.save(entry)
+
+    result = main(["--project-root", str(tmp_path), "memory", "show", entry.id])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Focus" in captured.out
+    assert "Deep work." in captured.out
+
+
+def test_memory_show_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "show", "missing-id"])
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Memory entry not found: missing-id" in captured.err
+
+
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
