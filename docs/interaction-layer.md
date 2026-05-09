@@ -61,40 +61,62 @@ Use one executable, tentatively `nuself`.
 Core commands:
 
 ```text
-nuself daemon
-nuself --message "..."
 nuself daemon start
 nuself daemon stop
+nuself daemon restart
 nuself daemon status
 nuself daemon list
 nuself daemon logs
 nuself daemon attach
 
 nuself chat
-nuself chat --new
-nuself chat --thread <thread-id>
 nuself chat --message "..."
-nuself attach
 
-nuself threads list
-nuself threads show <thread-id>
-nuself threads rename <thread-id> <title>
-nuself threads archive <thread-id>
+nuself attach
+nuself attach --message "..."
+
+nuself thread list
+nuself thread show <thread-id>
+uself thread create <thread-id>
+nuself thread rename <old-id> <new-id>
+nuself thread branch <source-id> <new-id> [--index <n>]
+nuself thread archive <thread-id>
+nuself thread unarchive <thread-id>
+nuself thread archived
+nuself thread delete <thread-id>
 
 nuself memory list
+nuself memory preview
 nuself memory show <entry-id>
-nuself memory add --type <type> --text "..."
+nuself memory add --title "..." --body "..."
 nuself memory edit <entry-id>
 nuself memory delete <entry-id>
-nuself memory search "..."
+nuself memory search <query>
+nuself memory stats
+nuself memory relations
+nuself memory graph <subcommand>
+nuself memory update <entry-id>
+nuself memory optimize
+nuself memory export -o <path>
+nuself memory import <path>
+nuself memory profile <subcommand>
+nuself memory candidate <subcommand>
+nuself memory source <subcommand>
 nuself memory reindex
 
-nuself reflect now
-nuself reflect status
-nuself outbox list
-nuself outbox show <intent-id>
-nuself outbox send <intent-id>
-nuself outbox dismiss <intent-id>
+nuself notify list
+nuself notify show <entry-id>
+nuself notify send <entry-id>
+nuself notify dismiss <entry-id>
+nuself notify clear
+
+nuself eval --component <conversations|notifications|all>
+nuself status
+nuself health
+nuself config
+nuself logs
+nuself open <thread-id>
+nuself open --deep-link "nuself://thread/<id>"
 ```
 
 The default `nuself chat` behavior:
@@ -251,8 +273,12 @@ Additional completed work beyond the initial slice:
 
 - Deep links (`nuself://thread/<id>`) connect notifications to threads.
 - `nuself open --deep-link` resolves and opens notification targets.
-- REPL tab completion for commands and thread IDs.
-- `:whoami`, `:notify`, and command hints in the REPL.
+- REPL tab completion for commands, thread IDs, and archived thread IDs.
+- `:whoami`, `:notify`, `:history`, `:sources`, `:search`, `:archive`, `:unarchive`, `:archived`, `:delete`, and command hints in the REPL.
 - `nuself status` shows daemon, threads, and pending notifications.
+- `nuself health` reports configuration and daemon health.
+- `nuself config` shows project paths and API configuration status.
+- Thread lifecycle: `create`, `rename`, `branch`, `archive`, `unarchive`, `archived`, `delete`.
+- Memory import/export via JSON.
 - Evaluation harness with conversation and notification fixtures.
 - `IdeaCandidateGenerator` and `RelevanceGate` for context-aware reflection.
