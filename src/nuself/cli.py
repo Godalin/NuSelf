@@ -565,9 +565,16 @@ def handle_open(args: argparse.Namespace) -> int:
         except ValueError as exc:
             print(f"Invalid deep link: {exc}", file=sys.stderr)
             return 1
-        thread_id = link.thread_id
-        if args.message is None and link.message is not None:
-            args.message = link.message
+        if link.action == "new_thread":
+            thread_id = link.title or "new-thread"
+            store.save(ThreadState.empty(thread_id))
+            print(f"Created thread: {thread_id}")
+            if args.message is None and link.message is not None:
+                args.message = link.message
+        else:
+            thread_id = link.thread_id
+            if args.message is None and link.message is not None:
+                args.message = link.message
 
     if thread_id is None:
         print("Thread ID or --deep-link is required.", file=sys.stderr)

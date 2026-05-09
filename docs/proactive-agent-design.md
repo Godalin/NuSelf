@@ -173,6 +173,18 @@ class DeepLink:
     def for_new_thread(cls, title: str, seed_message: str, candidate_id: str) -> "DeepLink": ...
 ```
 
+## Competitive Persona Discussion
+
+High-value candidates (composite score above threshold) do not go straight to the outbox. They enter a **randomized competitive persona debate**:
+
+1. **Random Persona Selection**: From the available persona pool, randomly select 2–4 participants. No fixed mappings by candidate type—each reflection gets a different internal jury.
+2. **Competitive Scoring**: Each selected persona scores the candidate (0.0–1.0) and provides a short rationale. Personas may contradict each other. For example, `historian_self` might upscore a memory connection while `skeptic_self` downscores it as speculative.
+3. **Blocking Veto**: Any persona may issue a blocking concern (score < 0.3 with a strong rationale). If a blocking veto occurs, the candidate is dropped unless at least two other personas strongly override it (score > 0.8).
+4. **Synthesizer Arbitration**: `synthesizer_self` reviews the competing scores and rewrites the title and body to reflect the most compelling perspective. The synthesizer may also merge multiple related candidates into a single notification if several pass together.
+5. **Outcome**: Only synthesizer-approved candidates become outbox entries. Dropped candidates are logged with reasons for later tuning.
+
+This keeps the proactive agent unpredictable and internally honest—ideas must survive internal dissent before reaching the user.
+
 ## Daemon Integration
 
 ```python
@@ -193,9 +205,10 @@ class DaemonState:
 The `ReflectionScheduler.reflect()` method should:
 1. Generate candidates
 2. Score each through `RelevanceGate`
-3. Pick the best passing candidate
-4. Write a `NotificationIntent` to the outbox
-5. **Not** call any adapter directly
+3. For high-scoring candidates, run competitive persona discussion
+4. Pick synthesizer-approved candidates
+5. Write `NotificationIntent` entries to the outbox
+6. **Not** call any adapter directly
 
 ## Implementation Steps
 

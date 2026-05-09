@@ -15,6 +15,7 @@ from nuself.config import config_int, ensure_runtime_dirs, runtime_paths
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
 from nuself.logs import write_log_event
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
+from nuself.notification import NotificationDeliveryLoop
 from nuself.reflection import ReflectionScheduler
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
@@ -41,6 +42,13 @@ class DaemonState:
             project_root,
         )
         self._reflection_scheduler_thread: threading.Thread | None = None
+        self.notification_delivery_loop = NotificationDeliveryLoop(project_root)
+        self.notification_delivery_interval_seconds = config_int(
+            "NUSELF_NOTIFICATION_DELIVERY_INTERVAL_SECONDS",
+            30,
+            project_root,
+        )
+        self._notification_delivery_thread: threading.Thread | None = None
 
     def start_background_memory_curator(self) -> None:
         if self._memory_curator_thread is not None:
@@ -82,6 +90,27 @@ class DaemonState:
             try:
                 if self.reflection_scheduler.should_reflect():
                     self.reflection_scheduler.reflect()
+            except RuntimeError:
+                continue
+
+    def start_background_notification_delivery(self) -> None:
+        if self._notification_delivery_thread is not None:
+            return
+        self._notification_delivery_thread = threading.Thread(
+            target=self._run_background_notification_delivery,
+            name="nuself-notification-delivery",
+            daemon=True,
+        )
+        self._notification_delivery_thread.start()
+
+    def stop_background_notification_delivery(self) -> None:
+        if self._notification_delivery_thread is not None:
+            self._notification_delivery_thread.join(timeout=1.0)
+
+    def _run_background_notification_delivery(self) -> None:
+        while not self.shutdown_requested.wait(self.notification_delivery_interval_seconds):
+            try:
+                self.notification_delivery_loop.run_once()
             except RuntimeError:
                 continue
 
@@ -220,6 +249,7 @@ def run_daemon(project_root: Path | None = None) -> int:
         write_log_event("daemon", "started", "daemon started", project_root=paths.project_root)
         state.start_background_memory_curator()
         state.start_background_reflection_scheduler()
+        state.start_background_notification_delivery()
         with NuSelfUnixServer(str(paths.socket_path), RequestHandler, state) as server:
             server.timeout = 0.2
             while not state.shutdown_requested.is_set():
@@ -228,6 +258,7 @@ def run_daemon(project_root: Path | None = None) -> int:
         write_log_event("daemon", "stopped", "daemon stopped", project_root=paths.project_root)
         state.stop_background_memory_curator()
         state.stop_background_reflection_scheduler()
+        state.stop_background_notification_delivery()
         if paths.socket_path.exists():
             paths.socket_path.unlink()
         if paths.pid_path.exists():

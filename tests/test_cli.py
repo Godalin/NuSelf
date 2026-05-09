@@ -1560,6 +1560,24 @@ def test_open_with_invalid_deep_link(tmp_path: Path, capsys: CaptureFixture) -> 
     assert "Invalid deep link" in captured.err
 
 
+def test_open_with_new_thread_deep_link(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "open",
+            "--deep-link",
+            "nuself://new-thread?title=proactive-thread&message=hello%20there",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Created thread: proactive-thread" in captured.out
+
+
 def test_status_command_shows_daemon_threads_and_notifications(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(["--project-root", str(tmp_path), "status"])
     captured = capsys.readouterr()

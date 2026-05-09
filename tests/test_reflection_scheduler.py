@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from nuself.domain.proactive import IdeaCandidate
 from nuself.reflection import ReflectionScheduler, ReflectionSettings
 
 
@@ -21,6 +22,13 @@ def scheduler(tmp_path: Path) -> ReflectionScheduler:
     (tmp_path / "private" / "runtime").mkdir(parents=True)
     (tmp_path / "private" / "logs").mkdir(parents=True)
     (tmp_path / "private" / "outbox").mkdir(parents=True)
+    # Seed a default thread so IdeaCandidateGenerator has material
+    from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
+
+    store = ThreadStore(tmp_path)
+    state = ThreadState.empty("default")
+    state.messages.append(ThreadMessage(role="user", content="What is the meaning of life?"))
+    store.save(state)
     return ReflectionScheduler(tmp_path)
 
 
@@ -47,6 +55,8 @@ def test_should_reflect_respects_interval(scheduler: ReflectionScheduler) -> Non
         cooldown_seconds=300,
         quiet_start_hour=22,
         quiet_end_hour=7,
+        daily_cap=5,
+        jitter_percent=20,
     )
     assert scheduler.should_reflect(later) is False
 
@@ -69,6 +79,8 @@ def test_should_reflect_wraparound_quiet_hours(scheduler: ReflectionScheduler) -
         cooldown_seconds=300,
         quiet_start_hour=22,
         quiet_end_hour=7,
+        daily_cap=5,
+        jitter_percent=20,
     )
     # 06:59 is inside wraparound quiet hours
     early = datetime(2024, 1, 1, 6, 59, 0, tzinfo=UTC)
@@ -84,7 +96,7 @@ def test_reflect_creates_outbox_entry(scheduler: ReflectionScheduler) -> None:
     assert result is True
     entries = scheduler._outbox.list()
     assert len(entries) == 1
-    assert entries[0].title == "Daemon reflection"
+    assert entries[0].title == "Recent thread reflection"
     assert entries[0].status == "pending"
     assert entries[0].idempotency_key == "reflection-2024-01-01"
     assert entries[0].deep_link is not None
@@ -139,6 +151,8 @@ def test_quiet_hours_non_wrapping_range() -> None:
         cooldown_seconds=300,
         quiet_start_hour=9,
         quiet_end_hour=17,
+        daily_cap=5,
+        jitter_percent=20,
     )
     scheduler = ReflectionScheduler.__new__(ReflectionScheduler)
     scheduler._settings = settings
@@ -153,7 +167,8 @@ def test_idea_candidate_generator_falls_back_when_no_threads(tmp_path: Path) -> 
     from nuself.reflection import IdeaCandidateGenerator
 
     gen = IdeaCandidateGenerator(tmp_path)
-    assert gen.generate() == "Time for a self-reflection cycle."
+    candidates = gen.generate()
+    assert candidates == []
 
 
 def test_idea_candidate_generator_uses_latest_user_message(tmp_path: Path) -> None:
@@ -166,16 +181,40 @@ def test_idea_candidate_generator_uses_latest_user_message(tmp_path: Path) -> No
     store.save(state)
 
     gen = IdeaCandidateGenerator(tmp_path)
-    body = gen.generate()
-    assert body.startswith("Consider:")
-    assert "meaning of life" in body
+    candidates = gen.generate()
+    assert len(candidates) == 1
+    assert candidates[0].body.startswith("Consider:")
+    assert "meaning of life" in candidates[0].body
+
+
+def _make_candidate(
+    body: str,
+    confidence: float = 0.8,
+    novelty: float = 0.8,
+    urgency: float = 0.5,
+    interruption_cost: float = 0.2,
+) -> IdeaCandidate:
+    return IdeaCandidate(
+        id="c1",
+        title="Test",
+        body=body,
+        candidate_type="question",
+        confidence=confidence,
+        novelty=novelty,
+        urgency=urgency,
+        interruption_cost=interruption_cost,
+        evidence_refs=(),
+        suggested_thread_id=None,
+        source_summary="",
+        created_at="2024-01-01T00:00:00",
+    )
 
 
 def test_relevance_gate_allows_first_fallback(tmp_path: Path) -> None:
     from nuself.reflection import RelevanceGate
 
     gate = RelevanceGate(tmp_path)
-    assert gate.passes("Time for a self-reflection cycle.") is True
+    assert gate.passes(_make_candidate("Time for a self-reflection cycle.")) is True
 
 
 def test_relevance_gate_rejects_duplicate_fallback(tmp_path: Path) -> None:
@@ -186,7 +225,7 @@ def test_relevance_gate_rejects_duplicate_fallback(tmp_path: Path) -> None:
     last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
     last_path.parent.mkdir(parents=True, exist_ok=True)
     last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "body": "Time for a self-reflection cycle."}))
-    assert gate.passes("Time for a self-reflection cycle.") is False
+    assert gate.passes(_make_candidate("Time for a self-reflection cycle.")) is False
 
 
 def test_relevance_gate_allows_new_candidate(tmp_path: Path) -> None:
@@ -197,7 +236,7 @@ def test_relevance_gate_allows_new_candidate(tmp_path: Path) -> None:
     last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
     last_path.parent.mkdir(parents=True, exist_ok=True)
     last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "body": "Consider: old topic"}))
-    assert gate.passes("Consider: new topic") is True
+    assert gate.passes(_make_candidate("Consider: new topic")) is True
 
 
 def test_relevance_gate_rejects_duplicate_candidate(tmp_path: Path) -> None:
@@ -208,4 +247,33 @@ def test_relevance_gate_rejects_duplicate_candidate(tmp_path: Path) -> None:
     last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
     last_path.parent.mkdir(parents=True, exist_ok=True)
     last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "body": "Consider: same topic"}))
-    assert gate.passes("Consider: same topic") is False
+    assert gate.passes(_make_candidate("Consider: same topic")) is False
+
+
+def test_relevance_gate_scores_high_urgency_low_interruption(tmp_path: Path) -> None:
+    from nuself.reflection import RelevanceGate
+
+    gate = RelevanceGate(tmp_path)
+    score = gate.score(_make_candidate("Important idea", urgency=0.9, interruption_cost=0.1))
+    assert score.passes is True
+    assert score.urgency == 0.9
+    assert score.interruption_cost == 0.1
+    assert "high_urgency" in score.reasons
+
+
+def test_relevance_gate_blocks_high_interruption_low_urgency(tmp_path: Path) -> None:
+    from nuself.reflection import RelevanceGate
+
+    gate = RelevanceGate(tmp_path)
+    score = gate.score(_make_candidate("Interrupt", urgency=0.2, interruption_cost=0.9))
+    assert score.passes is False
+    assert "high_interruption_cost" in score.reasons
+
+
+def test_relevance_gate_composite_threshold(tmp_path: Path) -> None:
+    from nuself.reflection import RelevanceGate
+
+    gate = RelevanceGate(tmp_path)
+    score = gate.score(_make_candidate("Weak", confidence=0.1, novelty=0.1, urgency=0.1, interruption_cost=0.1))
+    assert score.passes is False
+    assert score.composite < 0.5

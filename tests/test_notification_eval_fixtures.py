@@ -35,6 +35,8 @@ def test_reflection_scheduler_fixture() -> None:
         cooldown_seconds=int(cast(Any, settings_data.get("cooldown_seconds", 300))),
         quiet_start_hour=int(cast(Any, settings_data.get("quiet_start_hour", 22))),
         quiet_end_hour=int(cast(Any, settings_data.get("quiet_end_hour", 7))),
+        daily_cap=int(cast(Any, settings_data.get("daily_cap", 5))),
+        jitter_percent=int(cast(Any, settings_data.get("jitter_percent", 20))),
     )
 
     scenarios_raw = data.get("scenarios")
@@ -52,6 +54,7 @@ def test_reflection_scheduler_fixture() -> None:
         scheduler = ReflectionScheduler.__new__(ReflectionScheduler)
         scheduler._settings = settings  # pyright: ignore[reportPrivateUsage]
         scheduler._last_reflection_path = Path("/dev/null")  # pyright: ignore[reportPrivateUsage]
+        scheduler._event_queue = []  # pyright: ignore[reportPrivateUsage]
         if last is not None:
             scheduler._write_last_reflection = lambda now: None  # type: ignore[method-assign]  # pyright: ignore[reportUnknownLambdaType]
             # Monkey-patch _read_last_reflection for this test

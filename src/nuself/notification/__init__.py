@@ -215,6 +215,36 @@ class NotificationOutbox:
         tmp_path.replace(path)
 
 
+class NotificationDeliveryLoop:
+    """Polls the outbox and dispatches pending entries through adapters."""
+
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        adapters: list[NotificationAdapter] | None = None,
+    ) -> None:
+        self._outbox = NotificationOutbox(project_root)
+        self._adapters = adapters or [LogOnlyNotificationAdapter(project_root)]
+
+    def run_once(self) -> int:
+        """Deliver all pending entries. Return count delivered."""
+        delivered = 0
+        for entry in self._outbox.list(status="pending"):
+            success = False
+            for adapter in self._adapters:
+                if adapter.send(entry):
+                    success = True
+                else:
+                    success = False
+                    break
+            if success:
+                self._outbox.mark_sent(entry.id)
+                delivered += 1
+            else:
+                self._outbox.mark_failed(entry.id)
+        return delivered
+
+
 class OutboxEntryNotFound(ValueError):
     """Raised when an outbox entry does not exist."""
 
