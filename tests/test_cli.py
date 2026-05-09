@@ -1974,6 +1974,13 @@ def test_memory_source_show_missing_document(tmp_path: Path, capsys: CaptureFixt
     assert "Source document not found: missing-id" in captured.err
 
 
+def test_memory_stats_shows_empty_state(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "stats"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "entries_total: 0" in captured.out
+
+
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
