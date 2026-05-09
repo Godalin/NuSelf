@@ -1911,6 +1911,28 @@ def test_memory_show_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> No
     assert "Memory entry not found: missing-id" in captured.err
 
 
+def test_memory_search_finds_match(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work."))
+    repo.save(MemoryEntry(type="belief", title="Relax", body="Take breaks."))
+
+    result = main(["--project-root", str(tmp_path), "memory", "search", "deep"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Focus" in captured.out
+    assert "Relax" not in captured.out
+
+
+def test_memory_search_no_match_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "search", "xyz"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "No matching memory entries." in captured.out
+
+
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
