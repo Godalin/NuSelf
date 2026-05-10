@@ -4,41 +4,37 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Enhanced outbox/notify terminal interface with color-coded formatting, filtering, and richer REPL commands.
+Make proactive multi-persona discussion feel alive: shared scratchpad, iterative rebuttal, and event-driven persona emergence.
 
 ## Immediate Context
 
-- `notify list` now supports `--status` filtering and color-coded output via `TerminalTheme`.
-- `notify show` renders formatted detail with colored status tags.
-- `notify stats` prints counts by status.
-- REPL `:notify list` shows all entries; `:notify show <id>` shows detail.
-- All outbox rendering lives in `tui/render.py` alongside log/event renderers.
-- 519 tests pass, pyright clean.
+- Current proactive persona flow is competitive and mostly single-pass: shared candidate input, heuristic selection, one round of contributions, then synthesis.
+- `ReflectionScheduler` can already trigger competitive persona discussion for high-value candidates.
+- `PersonaGraphDriver` and `ProactivePersonaDiscussion` are the main control points for evolving the discussion model.
+- The first slice should add a shared discussion context and at least one rebuttal/synthesis round without breaking existing outbox delivery.
+- Keep the change bounded so the current chat/runtime behavior stays stable.
 
 ## Next Steps
 
-1. ~~Add color-coded outbox formatting in `tui/render.py`.~~ Done.
-2. ~~Add `--status` filter to `notify list` and enhance output.~~ Done.
-3. ~~Enhance `notify show` with formatted detail view.~~ Done.
-4. ~~Add `notify stats` CLI command.~~ Done.
-5. ~~Add REPL `:notify list` and `:notify show <id>`.~~ Done.
-6. ~~Update README and README.zh-CN.md TODOs.~~ Done.
-7. Commit feature code and docs separately.
+1. Define a shared discussion scratchpad structure for persona rounds.
+2. Extend proactive persona debate to run at least one rebuttal round.
+3. Allow the discussion to emit emergent temporary persona instances when a candidate warrants it.
+4. Add tests that prove later personas can see earlier discussion context.
+5. Keep the existing outbox and daemon delivery path unchanged.
 
 ## Not Now
 
-- Full multi-persona orchestration beyond the current bounded skeleton.
 - Vector, hybrid, or hosted graph indexes.
 - Plugin loading.
 - Web or GUI interface work.
 - Private memory schema migration.
 - Dashboard-style or dependency-heavy terminal UI.
+- Broad rewrite of the chat runtime persona system before the proactive discussion slice lands.
 
 ## Completion Criteria
 
-- `notify list --status <filter>` works and outputs color-coded lines.
-- `notify show <id>` outputs formatted detail with colored status.
-- `notify stats` prints counts by status.
-- REPL `:notify list` and `:notify show <id>` work.
+- Competitive proactive discussions can share intermediate context across personas.
+- At least one rebuttal or follow-up round can influence the final synthesis.
+- A candidate can spawn a temporary persona-like role when the discussion warrants it.
+- Existing daemon, chat, and outbox behavior remains stable.
 - All new code passes `uv run pytest` and `uvx pyright`.
-- `README.md` and `README.zh-CN.md` TODOs updated.
