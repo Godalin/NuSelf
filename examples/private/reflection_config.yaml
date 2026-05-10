@@ -1,0 +1,65 @@
+# Reflection Scheduler Configuration
+#
+# This file controls how the daemon manages proactive reflection cycles,
+# including timing, frequency caps, relevance thresholds, and persona discussion policies.
+#
+# Copy this file to private/reflection_config.yaml to enable custom configuration.
+# All values are clamped to safe ranges. Missing fields use defaults.
+
+scheduler:
+  # Base interval between reflection cycles (seconds, minimum 60)
+  interval_seconds: 3600
+  
+  # Minimum cooldown after a reflection before attempting another (seconds)
+  cooldown_seconds: 300
+  
+  # Quiet hours: no reflection between quiet_start_hour and quiet_end_hour
+  # Use 24-hour format. If start > end, wraps around midnight (e.g., 22 to 7 = 22:00-07:00)
+  quiet_start_hour: 22
+  quiet_end_hour: 7
+  
+  # Maximum reflections per day
+  daily_cap: 5
+  
+  # Random jitter on interval to avoid clustering (0-50%)
+  jitter_percent: 20
+
+gate:
+  # Minimum composite score for a candidate to pass relevance gate (0.0-1.0)
+  relevance_threshold: 0.5
+  
+  # Score threshold to trigger multi-persona discussion (0.0-1.0)
+  # Candidates below this skip persona discussion and go straight to outbox
+  persona_discussion_threshold: 0.7
+
+moderator:
+  # Maximum rounds in a persona discussion before forcing conclusion
+  max_discussion_rounds: 10
+  
+  # Rounds to attempt convergence before moderator forces a decision
+  moderator_convergence_patience: 5
+
+# Example: Fast testing configuration
+# scheduler:
+#   interval_seconds: 10
+#   cooldown_seconds: 0
+#   quiet_start_hour: 23
+#   quiet_end_hour: 23
+#   daily_cap: 100
+#   jitter_percent: 0
+# gate:
+#   relevance_threshold: 0.0
+#   persona_discussion_threshold: 1.0
+# moderator:
+#   max_discussion_rounds: 2
+#   moderator_convergence_patience: 1
+
+# Example: Aggressive reflection (more frequent, lower thresholds)
+# scheduler:
+#   interval_seconds: 600
+#   cooldown_seconds: 60
+#   daily_cap: 20
+#   jitter_percent: 10
+# gate:
+#   relevance_threshold: 0.3
+#   persona_discussion_threshold: 0.5

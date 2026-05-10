@@ -41,16 +41,23 @@ class ProactivePersonaDiscussion:
         personas: tuple[PersonaDefinition, ...] | None = None,
         min_participants: int = 2,
         max_participants: int = 4,
-        max_turns: int = 9,
+        max_turns: int | None = None,
         blocking_threshold: float = 0.3,
         override_threshold: float = 0.8,
         composite_threshold: float = 0.5,
         consensus_spread_threshold: float = 0.2,
+        config: object | None = None,
     ) -> None:
+        # If config is provided, extract parameters from it
+        if config is not None:
+            from nuself.config_reflection import ReflectionConfig
+            if isinstance(config, ReflectionConfig):
+                max_turns = config.max_discussion_rounds
+        
         self._personas = personas if personas is not None else BUILTIN_PERSONAS
         self._min_participants = min(min_participants, max_participants)
         self._max_participants = max(min_participants, max_participants)
-        self._max_turns = max(1, max_turns)
+        self._max_turns = max(1, max_turns or 9)
         self._blocking_threshold = blocking_threshold
         self._override_threshold = override_threshold
         self._composite_threshold = composite_threshold

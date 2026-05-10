@@ -572,6 +572,7 @@ source = { editable = "." }
 dependencies = [
     { name = "langgraph" },
     { name = "langmem" },
+    { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
@@ -584,6 +585,7 @@ dev = [
 requires-dist = [
     { name = "langgraph", specifier = ">=1.1.10" },
     { name = "langmem", specifier = ">=0.0.30" },
+    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [package.metadata.requires-dev]

@@ -4,35 +4,37 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Real-time outbox watch mode for observing daemon proactive reflection output as it arrives.
+Configuration system for tuning proactive reflection scheduling and other high-level parameters. Allows users to adjust reflection frequency, daily caps, thresholds, and moderator policies without code changes.
 
 ## Immediate Context
 
-- `notify watch` CLI command polls the outbox every 5s (configurable via `--interval`) and prints new entries as they appear.
-- REPL `:watch` command enters the same watch mode with 2s polling.
-- Both modes track already-seen entries and only emit new ones, using the existing color-coded `render_outbox_summary`.
-- 522 tests pass, pyright clean.
+- `ReflectionScheduler` currently has fixed hardcoded parameters (interval, daily_cap, cooldown, jitter, quiet_hours).
+- Users cannot easily adjust reflection aggressiveness or tune policy thresholds.
+- Configuration needs to be file-based (TOML in `private/reflection_config.toml`), loaded on daemon startup, and applied to the scheduler and related components.
+- 522 tests pass, pyright clean; reflect/proactive modules have passing tests.
 
 ## Next Steps
 
-1. ~~Add `notify watch` CLI command with `--interval` flag.~~ Done.
-2. ~~Add REPL `:watch` command.~~ Done.
-3. ~~Update README and README.zh-CN.md TODOs.~~ Done.
-4. Commit feature code and docs separately.
+1. Design configuration schema (TOML format): scheduler params (interval, daily_cap, cooldown, jitter, quiet_hours), gate thresholds, moderator policies.
+2. Implement `ReflectionConfigLoader` in `src/nuself/config_reflection.py` to read and parse TOML.
+3. Update `ReflectionScheduler` constructor to accept a config object and apply parameters.
+4. Update daemon `LifecycleManager` to load and pass config when instantiating scheduler.
+5. Add fixtures for test configs and unit tests for loader and scheduler binding.
+6. Update `README.md` and `README.zh-CN.md` with config usage example and available parameters.
+7. Commit feature code and docs separately.
 
 ## Not Now
 
-- Full multi-persona orchestration beyond the current bounded skeleton.
-- Vector, hybrid, or hosted graph indexes.
-- Plugin loading.
-- Web or GUI interface work.
-- Private memory schema migration.
-- Dashboard-style or dependency-heavy terminal UI.
-- Background log polling in normal REPL input mode (watch mode is explicit).
+- Global unified config system (focus on reflection config first).
+- Hot reload or live update of config.
+- Config UI or interactive editor.
+- Config schema versioning or migration logic.
+- Encrypted credential storage in config.
 
 ## Completion Criteria
 
-- `nuself notify watch` prints new outbox entries in real time.
-- REPL `:watch` enters watch mode and exits cleanly on Ctrl+C.
+- `private/reflection_config.toml` is read on daemon startup.
+- `ReflectionScheduler` uses config parameters instead of hardcoded values.
+- Custom config adjusts reflection frequency in tests.
 - All new code passes `uv run pytest` and `uvx pyright`.
-- `README.md` and `README.zh-CN.md` TODOs updated.
+- `README.md` and `README.zh-CN.md` include configuration section with example.

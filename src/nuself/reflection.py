@@ -7,7 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from nuself.agent.chat import ThreadStore
-from nuself.config import config_int, runtime_paths
+from nuself.config import runtime_paths
+from nuself.config_reflection import ReflectionConfig
 from nuself.domain.memory import now_iso
 from nuself.domain.proactive import IdeaCandidate, RelevanceScore
 from nuself.notification import NotificationOutbox, OutboxEntry
@@ -22,42 +23,15 @@ class ReflectionEvent:
     created_at: str
 
 
-@dataclass(frozen=True)
-class ReflectionSettings:
-    """Configuration for the reflection scheduler."""
-
-    interval_seconds: int
-    cooldown_seconds: int
-    quiet_start_hour: int
-    quiet_end_hour: int
-    daily_cap: int
-    jitter_percent: int
-
-    @classmethod
-    def from_project(cls, project_root: Path | None = None) -> "ReflectionSettings":
-        interval = config_int("NUSELF_REFLECTION_INTERVAL_SECONDS", 3600, project_root)
-        cooldown = config_int("NUSELF_REFLECTION_COOLDOWN_SECONDS", 300, project_root)
-        quiet_start = config_int("NUSELF_REFLECTION_QUIET_START_HOUR", 22, project_root)
-        quiet_end = config_int("NUSELF_REFLECTION_QUIET_END_HOUR", 7, project_root)
-        daily_cap = config_int("NUSELF_REFLECTION_DAILY_CAP", 5, project_root)
-        jitter = config_int("NUSELF_REFLECTION_JITTER_PERCENT", 20, project_root)
-        return cls(
-            interval_seconds=max(interval, 60),
-            cooldown_seconds=max(cooldown, 0),
-            quiet_start_hour=max(0, min(quiet_start, 23)),
-            quiet_end_hour=max(0, min(quiet_end, 23)),
-            daily_cap=max(daily_cap, 1),
-            jitter_percent=max(0, min(jitter, 50)),
-        )
-
-
 class ReflectionScheduler:
     """Decides when the daemon should run a self-reflection cycle."""
 
-    def __init__(self, project_root: Path | None = None) -> None:
+    def __init__(self, project_root: Path | None = None, config: ReflectionConfig | None = None) -> None:
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
-        self._settings = ReflectionSettings.from_project(project_root)
+        self._config = config or ReflectionConfig.from_yaml(
+            project_root / "private" / "reflection_config.yaml" if project_root else None
+        )
         self._last_reflection_path = paths.runtime_dir / "last_reflection.json"
         self._outbox = NotificationOutbox(project_root)
         self._event_queue: list[ReflectionEvent] = []
@@ -101,10 +75,10 @@ class ReflectionScheduler:
         # High-value candidates go through competitive persona discussion
         title = best.title
         body = best.body
-        if score.composite >= 0.7:
+        if score.composite >= self._config.persona_discussion_threshold:
             from nuself.proactive_persona import ProactivePersonaDiscussion
 
-            discussion = ProactivePersonaDiscussion()
+            discussion = ProactivePersonaDiscussion(config=self._config)
             result = discussion.discuss(best)
             if not result.approved:
                 return False
@@ -117,8 +91,8 @@ class ReflectionScheduler:
 
     def _in_quiet_hours(self, now: datetime) -> bool:
         current_hour = now.hour
-        start = self._settings.quiet_start_hour
-        end = self._settings.quiet_end_hour
+        start = self._config.quiet_start_hour
+        end = self._config.quiet_end_hour
         if start < end:
             return start <= current_hour < end
         # Wraps around midnight, e.g. 22:00–07:00
@@ -129,7 +103,7 @@ class ReflectionScheduler:
         if last is None:
             return False
         elapsed = (now - last).total_seconds()
-        return elapsed < self._settings.cooldown_seconds
+        return elapsed < self._config.cooldown_seconds
 
     def _interval_not_elapsed(self, now: datetime) -> bool:
         last = self._read_last_reflection()
@@ -142,15 +116,15 @@ class ReflectionScheduler:
     def _jittered_interval(self) -> int:
         import random
 
-        base = self._settings.interval_seconds
-        jitter = base * self._settings.jitter_percent // 100
+        base = self._config.interval_seconds
+        jitter = base * self._config.jitter_percent // 100
         if jitter == 0:
             return base
         return base + random.randint(-jitter, jitter)
 
     def _daily_cap_not_reached(self, now: datetime) -> bool:
         count = self._reflection_count_today(now)
-        return count < self._settings.daily_cap
+        return count < self._config.daily_cap
 
     def _reflection_count_today(self, now: datetime) -> int:
         if not self._last_reflection_path.exists():

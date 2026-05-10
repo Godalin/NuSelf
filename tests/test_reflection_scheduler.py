@@ -8,8 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from nuself.config_reflection import ReflectionConfig
 from nuself.domain.proactive import IdeaCandidate
-from nuself.reflection import ReflectionScheduler, ReflectionSettings
+from nuself.reflection import ReflectionScheduler
 
 
 def empty_str_list() -> list[str]:
@@ -29,7 +30,9 @@ def scheduler(tmp_path: Path) -> ReflectionScheduler:
     state = ThreadState.empty("default")
     state.messages.append(ThreadMessage(role="user", content="What is the meaning of life?"))
     store.save(state)
-    return ReflectionScheduler(tmp_path)
+    # Use testing config for fast reflection
+    config = ReflectionConfig.for_testing()
+    return ReflectionScheduler(tmp_path, config=config)
 
 
 def test_should_reflect_first_time(scheduler: ReflectionScheduler) -> None:
@@ -50,37 +53,58 @@ def test_should_reflect_respects_interval(scheduler: ReflectionScheduler) -> Non
     scheduler.reflect(now)
     # After cooldown but before interval
     later = now.replace(minute=6)
-    scheduler._settings = ReflectionSettings(
+    scheduler._config = ReflectionConfig(
         interval_seconds=3600,
         cooldown_seconds=300,
         quiet_start_hour=22,
         quiet_end_hour=7,
         daily_cap=5,
         jitter_percent=20,
+        relevance_threshold=0.5,
+        persona_discussion_threshold=0.7,
+        max_discussion_rounds=10,
+        moderator_convergence_patience=5,
     )
     assert scheduler.should_reflect(later) is False
 
 
 def test_should_reflect_respects_quiet_hours(scheduler: ReflectionScheduler) -> None:
+    # Override with quiet hours that include 23:00
+    scheduler._config = ReflectionConfig(
+        interval_seconds=10,
+        cooldown_seconds=0,
+        quiet_start_hour=22,
+        quiet_end_hour=7,
+        daily_cap=100,
+        jitter_percent=0,
+        relevance_threshold=0.0,
+        persona_discussion_threshold=1.0,
+        max_discussion_rounds=2,
+        moderator_convergence_patience=1,
+    )
     # 23:00 is inside quiet hours (22-07)
     night = datetime(2024, 1, 1, 23, 0, 0, tzinfo=UTC)
     assert scheduler.should_reflect(night) is False
 
 
 def test_should_reflect_outside_quiet_hours(scheduler: ReflectionScheduler) -> None:
-    # 12:00 is outside quiet hours (22-07)
+    # 12:00 is outside quiet hours (22-07) with default test config
     noon = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     assert scheduler.should_reflect(noon) is True
 
 
 def test_should_reflect_wraparound_quiet_hours(scheduler: ReflectionScheduler) -> None:
-    scheduler._settings = ReflectionSettings(
+    scheduler._config = ReflectionConfig(
         interval_seconds=3600,
         cooldown_seconds=300,
         quiet_start_hour=22,
         quiet_end_hour=7,
         daily_cap=5,
         jitter_percent=20,
+        relevance_threshold=0.5,
+        persona_discussion_threshold=0.7,
+        max_discussion_rounds=10,
+        moderator_convergence_patience=5,
     )
     # 06:59 is inside wraparound quiet hours
     early = datetime(2024, 1, 1, 6, 59, 0, tzinfo=UTC)
@@ -112,6 +136,19 @@ def test_reflect_idempotent_per_day(scheduler: ReflectionScheduler) -> None:
 
 
 def test_reflect_returns_false_when_blocked(scheduler: ReflectionScheduler) -> None:
+    # Override with quiet hours that include 23:00
+    scheduler._config = ReflectionConfig(
+        interval_seconds=10,
+        cooldown_seconds=0,
+        quiet_start_hour=22,
+        quiet_end_hour=7,
+        daily_cap=100,
+        jitter_percent=0,
+        relevance_threshold=0.0,
+        persona_discussion_threshold=1.0,
+        max_discussion_rounds=2,
+        moderator_convergence_patience=1,
+    )
     now = datetime(2024, 1, 1, 23, 0, 0, tzinfo=UTC)
     result = scheduler.reflect(now)
     assert result is False
@@ -146,16 +183,20 @@ def test_read_last_reflection_invalid_timestamp(scheduler: ReflectionScheduler) 
 
 
 def test_quiet_hours_non_wrapping_range() -> None:
-    settings = ReflectionSettings(
+    config = ReflectionConfig(
         interval_seconds=3600,
         cooldown_seconds=300,
         quiet_start_hour=9,
         quiet_end_hour=17,
         daily_cap=5,
         jitter_percent=20,
+        relevance_threshold=0.5,
+        persona_discussion_threshold=0.7,
+        max_discussion_rounds=10,
+        moderator_convergence_patience=5,
     )
     scheduler = ReflectionScheduler.__new__(ReflectionScheduler)
-    scheduler._settings = settings
+    scheduler._config = config
     # Inside quiet hours
     assert scheduler._in_quiet_hours(datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)) is True
     # Outside quiet hours
