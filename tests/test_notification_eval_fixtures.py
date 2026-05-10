@@ -8,9 +8,10 @@ from typing import Any, cast
 
 import pytest
 
+from nuself.config_reflection import ReflectionConfig
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.notification.deep_link import DeepLink
-from nuself.reflection import ReflectionScheduler, ReflectionSettings
+from nuself.reflection import ReflectionScheduler
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "notifications"
@@ -30,13 +31,17 @@ def test_reflection_scheduler_fixture() -> None:
     settings_raw = data.get("settings")
     assert isinstance(settings_raw, dict)
     settings_data = cast(dict[str, object], settings_raw)
-    settings = ReflectionSettings(
+    settings = ReflectionConfig(
         interval_seconds=int(cast(Any, settings_data.get("interval_seconds", 3600))),
         cooldown_seconds=int(cast(Any, settings_data.get("cooldown_seconds", 300))),
         quiet_start_hour=int(cast(Any, settings_data.get("quiet_start_hour", 22))),
         quiet_end_hour=int(cast(Any, settings_data.get("quiet_end_hour", 7))),
         daily_cap=int(cast(Any, settings_data.get("daily_cap", 5))),
         jitter_percent=int(cast(Any, settings_data.get("jitter_percent", 20))),
+        relevance_threshold=0.5,
+        persona_discussion_threshold=1.0,
+        max_discussion_rounds=2,
+        moderator_convergence_patience=1,
     )
 
     scenarios_raw = data.get("scenarios")
@@ -52,7 +57,7 @@ def test_reflection_scheduler_fixture() -> None:
         expected = bool(scenario.get("expected_should_reflect"))
 
         scheduler = ReflectionScheduler.__new__(ReflectionScheduler)
-        scheduler._settings = settings  # pyright: ignore[reportPrivateUsage]
+        scheduler._config = settings  # pyright: ignore[reportPrivateUsage]
         scheduler._last_reflection_path = Path("/dev/null")  # pyright: ignore[reportPrivateUsage]
         scheduler._event_queue = []  # pyright: ignore[reportPrivateUsage]
         if last is not None:

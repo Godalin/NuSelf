@@ -12,9 +12,9 @@ from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.domain.memory import now_iso
 
 LogLevel = Literal["debug", "info", "warning", "error"]
-LogComponent = Literal["daemon", "chat", "memory", "persona", "outbox"]
+LogComponent = Literal["daemon", "chat", "memory", "persona", "outbox", "reflection"]
 
-LOG_COMPONENTS: tuple[LogComponent, ...] = ("daemon", "chat", "memory", "persona", "outbox")
+LOG_COMPONENTS: tuple[LogComponent, ...] = ("daemon", "chat", "memory", "persona", "outbox", "reflection")
 
 
 @dataclass(frozen=True)

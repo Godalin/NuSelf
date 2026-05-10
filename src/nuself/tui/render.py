@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from typing import cast
 
 from nuself.logs import LogEvent
 from nuself.notification import OutboxEntry
@@ -86,6 +87,8 @@ def _component_color(component: str) -> str:
         return "35"
     if component == "outbox":
         return "36"
+    if component == "reflection":
+        return "33"
     return "0"
 
 
@@ -128,4 +131,78 @@ def render_outbox_detail(entry: OutboxEntry, *, color: bool | None = None) -> st
         lines.append(f"deep_link:    {entry.deep_link}")
     lines.append("")
     lines.append(entry.body)
+    return "\n".join(lines)
+
+
+def render_reflection_summary(event: LogEvent, *, color: bool | None = None) -> str:
+    """Render one reflection log event as a compact terminal line."""
+    theme = TerminalTheme(color=color)
+    status = event.status or "unknown"
+    status_tag = theme.paint(f"[{status}]", "32" if status == "approved" else "31")
+    time_str = event.time[:19] if event.time else "-"
+    composite = ""
+    if event.metadata and isinstance(event.metadata.get("composite"), (int, float)):
+        composite = f"  score={event.metadata['composite']:.2f}"
+    return f"{time_str} {status_tag} {event.message}{composite}"
+
+
+def render_reflection_detail(event: LogEvent, *, color: bool | None = None) -> str:
+    """Render one reflection log event with full discussion trace."""
+    theme = TerminalTheme(color=color)
+    meta = event.metadata if event.metadata else {}
+    status = event.status or "unknown"
+    status_tag = theme.paint(status, "32" if status == "approved" else "31")
+
+    lines: list[str] = [
+        f"time:         {event.time}",
+        f"status:       {status_tag}",
+        f"message:      {event.message}",
+    ]
+    if meta.get("candidate_id"):
+        lines.append(f"candidate_id: {meta['candidate_id']}")
+    if meta.get("candidate_type"):
+        lines.append(f"type:         {meta['candidate_type']}")
+    if meta.get("composite") is not None:
+        lines.append(f"composite:    {meta['composite']:.3f}")
+
+    scores = meta.get("scores")
+    if isinstance(scores, dict) and scores:
+        score_dict = cast(dict[str, object], scores)
+        lines.append("")
+        lines.append("persona scores:")
+        for pid, score_val in sorted(score_dict.items()):
+            score = float(score_val) if isinstance(score_val, (int, float)) else 0.0
+            bar = "#" * int(score * 20)
+            lines.append(f"  {pid:20s}  {score:.2f}  {bar}")
+
+    blocking = meta.get("blocking_vetos")
+    if isinstance(blocking, list) and blocking:
+        blocking_list = cast(list[object], blocking)
+        lines.append("")
+        lines.append(f"blocking vetos: {', '.join(str(x) for x in blocking_list)}")
+
+    winners = meta.get("winner_persona_ids")
+    if isinstance(winners, list) and winners:
+        winners_list = cast(list[object], winners)
+        lines.append(f"winners:        {', '.join(str(x) for x in winners_list)}")
+
+    emergent = meta.get("emergent_persona_ids")
+    if isinstance(emergent, list) and emergent:
+        emergent_list = cast(list[object], emergent)
+        lines.append(f"emergent:       {', '.join(str(x) for x in emergent_list)}")
+
+    if meta.get("revised_title"):
+        lines.append("")
+        lines.append(f"revised title:  {meta['revised_title']}")
+    if meta.get("revised_body"):
+        lines.append(f"revised body:   {meta['revised_body']}")
+
+    trace = meta.get("discussion_trace")
+    if isinstance(trace, list) and trace:
+        trace_list = cast(list[object], trace)
+        lines.append("")
+        lines.append("discussion trace:")
+        for trace_line in trace_list:
+            lines.append(f"  {trace_line}")
+
     return "\n".join(lines)

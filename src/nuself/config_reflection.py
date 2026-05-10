@@ -115,7 +115,7 @@ class ReflectionConfig:
             daily_cap=5,
             jitter_percent=20,
             relevance_threshold=0.5,
-            persona_discussion_threshold=0.7,
+            persona_discussion_threshold=0.55,
             max_discussion_rounds=10,
             moderator_convergence_patience=5,
         )

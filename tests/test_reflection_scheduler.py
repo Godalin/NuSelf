@@ -205,15 +205,17 @@ def test_quiet_hours_non_wrapping_range() -> None:
 
 
 def test_idea_candidate_generator_falls_back_when_no_threads(tmp_path: Path) -> None:
+    from nuself.llm import LocalFallbackLLM
     from nuself.reflection import IdeaCandidateGenerator
 
-    gen = IdeaCandidateGenerator(tmp_path)
+    gen = IdeaCandidateGenerator(tmp_path, llm=LocalFallbackLLM())
     candidates = gen.generate()
     assert candidates == []
 
 
 def test_idea_candidate_generator_uses_latest_user_message(tmp_path: Path) -> None:
     from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
+    from nuself.llm import LocalFallbackLLM
     from nuself.reflection import IdeaCandidateGenerator
 
     store = ThreadStore(tmp_path)
@@ -221,11 +223,30 @@ def test_idea_candidate_generator_uses_latest_user_message(tmp_path: Path) -> No
     state.messages.append(ThreadMessage(role="user", content="What is the meaning of life?"))
     store.save(state)
 
-    gen = IdeaCandidateGenerator(tmp_path)
+    gen = IdeaCandidateGenerator(tmp_path, llm=LocalFallbackLLM())
     candidates = gen.generate()
     assert len(candidates) == 1
     assert candidates[0].body.startswith("Consider:")
     assert "meaning of life" in candidates[0].body
+
+
+def test_idea_candidate_generator_llm_fallback_on_error(tmp_path: Path) -> None:
+    from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
+    from nuself.reflection import IdeaCandidateGenerator
+
+    class _BrokenLLM:
+        def complete(self, messages: object) -> str:
+            raise RuntimeError("simulated LLM failure")
+
+    store = ThreadStore(tmp_path)
+    state = ThreadState.empty("default")
+    state.messages.append(ThreadMessage(role="user", content="Test topic"))
+    store.save(state)
+
+    gen = IdeaCandidateGenerator(tmp_path, llm=_BrokenLLM())  # type: ignore[arg-type]
+    candidates = gen.generate()
+    assert len(candidates) == 1
+    assert "Consider:" in candidates[0].body
 
 
 def _make_candidate(
@@ -265,7 +286,7 @@ def test_relevance_gate_rejects_duplicate_fallback(tmp_path: Path) -> None:
     gate = RelevanceGate(tmp_path)
     last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
     last_path.parent.mkdir(parents=True, exist_ok=True)
-    last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "body": "Time for a self-reflection cycle."}))
+    last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "title": "Recent thread reflection", "body": "Time for a self-reflection cycle."}))
     assert gate.passes(_make_candidate("Time for a self-reflection cycle.")) is False
 
 
@@ -276,7 +297,7 @@ def test_relevance_gate_allows_new_candidate(tmp_path: Path) -> None:
     gate = RelevanceGate(tmp_path)
     last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
     last_path.parent.mkdir(parents=True, exist_ok=True)
-    last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "body": "Consider: old topic"}))
+    last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "title": "Old topic", "body": "Consider: old topic"}))
     assert gate.passes(_make_candidate("Consider: new topic")) is True
 
 
@@ -287,8 +308,29 @@ def test_relevance_gate_rejects_duplicate_candidate(tmp_path: Path) -> None:
     gate = RelevanceGate(tmp_path)
     last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
     last_path.parent.mkdir(parents=True, exist_ok=True)
-    last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "body": "Consider: same topic"}))
+    last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "title": "Test", "body": "Consider: same topic"}))
     assert gate.passes(_make_candidate("Consider: same topic")) is False
+
+
+def test_relevance_gate_uses_config_threshold(tmp_path: Path) -> None:
+    from nuself.reflection import RelevanceGate
+
+    config = ReflectionConfig(
+        interval_seconds=3600,
+        cooldown_seconds=300,
+        quiet_start_hour=22,
+        quiet_end_hour=7,
+        daily_cap=5,
+        jitter_percent=20,
+        relevance_threshold=0.9,
+        persona_discussion_threshold=0.7,
+        max_discussion_rounds=10,
+        moderator_convergence_patience=5,
+    )
+    gate = RelevanceGate(tmp_path, config=config)
+    # A candidate with moderate scores won't pass 0.9 threshold
+    score = gate.score(_make_candidate("Moderate", confidence=0.5, urgency=0.5, interruption_cost=0.2))
+    assert score.passes is False
 
 
 def test_relevance_gate_scores_high_urgency_low_interruption(tmp_path: Path) -> None:

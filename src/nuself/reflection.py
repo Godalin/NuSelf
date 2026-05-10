@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from nuself.agent.chat import ThreadStore
 from nuself.config import runtime_paths
 from nuself.config_reflection import ReflectionConfig
 from nuself.domain.memory import now_iso
-from nuself.domain.proactive import IdeaCandidate, RelevanceScore
+from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
 from nuself.notification import NotificationOutbox, OutboxEntry
+
+if TYPE_CHECKING:
+    from nuself.llm import ChatLLM
 
 
 @dataclass(frozen=True)
@@ -64,10 +69,10 @@ class ReflectionScheduler:
             return False
         # Consume any queued events before generating candidates
         self._event_queue.clear()
-        candidates = IdeaCandidateGenerator(self._project_root).generate()
+        candidates = IdeaCandidateGenerator(self._project_root, config=self._config).generate()
         if not candidates:
             return False
-        gate = RelevanceGate(self._project_root)
+        gate = RelevanceGate(self._project_root, config=self._config)
         best = candidates[0]
         score = gate.score(best)
         if not score.passes:
@@ -80,12 +85,13 @@ class ReflectionScheduler:
 
             discussion = ProactivePersonaDiscussion(config=self._config)
             result = discussion.discuss(best)
+            self._write_discussion_log(best, score, result, now)
             if not result.approved:
                 return False
             title = result.revised_title
             body = result.revised_body
         intent = self._candidate_to_outbox_entry(best, now, title=title, body=body)
-        self._write_last_reflection(now, body)
+        self._write_last_reflection(now, title=title, body=body)
         self._outbox.add(intent)
         return True
 
@@ -129,9 +135,6 @@ class ReflectionScheduler:
     def _reflection_count_today(self, now: datetime) -> int:
         if not self._last_reflection_path.exists():
             return 0
-        import json
-        from typing import cast
-
         try:
             raw: object = json.loads(self._last_reflection_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
@@ -150,9 +153,6 @@ class ReflectionScheduler:
     def _read_last_reflection(self) -> datetime | None:
         if not self._last_reflection_path.exists():
             return None
-        import json
-        from typing import cast
-
         try:
             raw: object = json.loads(self._last_reflection_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
@@ -168,9 +168,7 @@ class ReflectionScheduler:
         except ValueError:
             return None
 
-    def _write_last_reflection(self, now: datetime, body: str | None = None) -> None:
-        import json
-
+    def _write_last_reflection(self, now: datetime, title: str | None = None, body: str | None = None) -> None:
         self._last_reflection_path.parent.mkdir(parents=True, exist_ok=True)
         count = self._reflection_count_today(now) + 1
         payload: dict[str, object] = {
@@ -178,6 +176,8 @@ class ReflectionScheduler:
             "daily_count": count,
             "daily_date": now.date().isoformat(),
         }
+        if title is not None:
+            payload["title"] = title
         if body is not None:
             payload["body"] = body
         self._last_reflection_path.write_text(
@@ -205,16 +205,53 @@ class ReflectionScheduler:
             deep_link=deep_link,
         )
 
+    def _write_discussion_log(
+        self,
+        candidate: IdeaCandidate,
+        score: RelevanceScore,
+        result: object,
+        now: datetime,
+    ) -> None:
+        from nuself.logs import write_log_event
+        from nuself.proactive_persona import PersonaCompetitionResult
+
+        if not isinstance(result, PersonaCompetitionResult):
+            return
+        metadata: dict[str, object] = {
+            "candidate_id": candidate.id,
+            "candidate_title": candidate.title,
+            "candidate_type": candidate.candidate_type,
+            "composite": round(score.composite, 3),
+            "approved": result.approved,
+            "scores": {k: round(v, 3) for k, v in result.scores.items()},
+            "blocking_vetos": list(result.blocking_vetos),
+            "winner_persona_ids": list(result.winner_persona_ids),
+            "emergent_persona_ids": list(result.emergent_persona_ids),
+            "discussion_trace": list(result.discussion_trace),
+            "revised_title": result.revised_title,
+            "revised_body": result.revised_body,
+        }
+        status = "approved" if result.approved else "rejected"
+        write_log_event(
+            "reflection",
+            "persona_discussion",
+            f"[{status}] {candidate.title} — {result.reason}",
+            project_root=self._project_root,
+            status=status,
+            metadata=metadata,
+        )
+
 
 class RelevanceGate:
     """Multi-dimensional relevance gate for proactive candidates."""
 
-    def __init__(self, project_root: Path | None = None) -> None:
+    def __init__(self, project_root: Path | None = None, config: ReflectionConfig | None = None) -> None:
         from nuself.config import runtime_paths
 
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
         self._last_reflection_path = paths.runtime_dir / "last_reflection.json"
+        self._config = config or ReflectionConfig.default()
 
     def score(self, candidate: IdeaCandidate) -> RelevanceScore:
         novelty = self._score_novelty(candidate)
@@ -246,7 +283,7 @@ class RelevanceGate:
         if not reasons:
             reasons.append("ok")
 
-        threshold = 0.5
+        threshold = self._config.relevance_threshold
         passes = composite >= threshold and not (interruption_cost >= 0.9 and urgency < 0.5)
 
         return RelevanceScore(
@@ -266,12 +303,19 @@ class RelevanceGate:
     def _score_novelty(self, candidate: IdeaCandidate) -> float:
         if candidate.body == _FALLBACK_BODY:
             return 1.0 if not self._last_reflection_path.exists() else 0.0
+        if not self._last_reflection_path.exists():
+            return 1.0
+        last_title = self._read_last_title()
         last_body = self._read_last_body()
+        # Same title → same topic, skip
+        if last_title is not None and candidate.title == last_title:
+            return 0.0
+        # Partial body overlap → reduced novelty
         if last_body is not None:
             if candidate.body == last_body:
-                return 0.0
+                return 0.1
             if candidate.body in last_body or last_body in candidate.body:
-                return 0.3
+                return 0.5
         return 1.0
 
     def _cooldown_ok(self) -> bool:
@@ -289,9 +333,6 @@ class RelevanceGate:
         return elapsed >= 300  # default cooldown 5 minutes
 
     def _read_last_body(self) -> str | None:
-        import json
-        from typing import cast
-
         if not self._last_reflection_path.exists():
             return None
         try:
@@ -304,10 +345,20 @@ class RelevanceGate:
         body = data.get("body")
         return body if isinstance(body, str) else None
 
-    def _read_last_timestamp(self) -> datetime | None:
-        import json
-        from typing import cast
+    def _read_last_title(self) -> str | None:
+        if not self._last_reflection_path.exists():
+            return None
+        try:
+            raw: object = json.loads(self._last_reflection_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None
+        if not isinstance(raw, dict):
+            return None
+        data = cast(dict[str, object], raw)
+        title = data.get("title")
+        return title if isinstance(title, str) else None
 
+    def _read_last_timestamp(self) -> datetime | None:
         if not self._last_reflection_path.exists():
             return None
         try:
@@ -332,11 +383,20 @@ _FALLBACK_BODY = "Time for a self-reflection cycle."
 class IdeaCandidateGenerator:
     """Generate structured reflection candidates from recent activity."""
 
-    def __init__(self, project_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        *,
+        llm: ChatLLM | None = None,
+        config: ReflectionConfig | None = None,
+    ) -> None:
         from nuself.config import runtime_paths
+        from nuself.llm import default_llm
 
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
+        self._llm: ChatLLM = llm or default_llm(self._project_root)
+        self._config = config or ReflectionConfig.default()
 
     def generate(self, max_candidates: int = 3) -> list[IdeaCandidate]:
         from nuself.agent.chat import ThreadStore
@@ -345,7 +405,98 @@ class IdeaCandidateGenerator:
         preview = self._latest_thread_preview(store)
         if preview is None:
             return []
-        candidate = IdeaCandidate(
+        try:
+            return self._generate_with_llm(max_candidates)
+        except (RuntimeError, ValueError, json.JSONDecodeError):
+            return self._generate_local_fallback(preview)
+
+    def _generate_with_llm(self, max_candidates: int) -> list[IdeaCandidate]:
+        from nuself.llm import ChatMessage
+
+        thread_ctx = self._recent_thread_context()
+        memory_ctx = self._recent_memory_context()
+        source_ctx = self._new_source_context()
+
+        system_prompt = (
+            "You are the NuSelf proactive idea generator. Your job is to scan recent conversations, "
+            "memory entries, and source documents to produce thoughtful reflection candidates.\n\n"
+            "Return a JSON object with a 'candidates' array. Each candidate has:\n"
+            '- "title": short descriptive title (max 80 chars)\n'
+            '- "body": 2-4 sentence description of the idea or question\n'
+            '- "candidate_type": one of "question", "connection", "contradiction", "action", "profile_update"\n'
+            '- "confidence": 0.0-1.0 how confident this is worth exploring\n'
+            '- "novelty": 0.0-1.0 how novel vs already-covered\n'
+            '- "urgency": 0.0-1.0 time-sensitivity\n'
+            '- "interruption_cost": 0.0-1.0 how disruptive it would be to surface now\n\n'
+            f"Generate 1-{max_candidates} candidates. Prefer quality over quantity. "
+            "Be honest about scores — a mundane observation should have low confidence and urgency. "
+            "Return ONLY the JSON object."
+        )
+
+        user_parts: list[str] = []
+        if thread_ctx:
+            user_parts.append(f"## Recent conversations\n{thread_ctx}")
+        if memory_ctx:
+            user_parts.append(f"## Recent memory entries\n{memory_ctx}")
+        if source_ctx:
+            user_parts.append(f"## Recent sources\n{source_ctx}")
+        if not user_parts:
+            user_parts.append("No recent activity found.")
+
+        messages = [
+            ChatMessage(role="system", content=system_prompt),
+            ChatMessage(role="user", content="\n\n".join(user_parts)),
+        ]
+        raw = self._llm.complete(messages)
+        return self._parse_candidates(raw, max_candidates)
+
+    def _parse_candidates(self, raw: str, max_candidates: int) -> list[IdeaCandidate]:
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+            stripped = "\n".join(lines).strip()
+        parsed: object = json.loads(stripped)
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM response is not a JSON object")
+        data = cast(dict[str, object], parsed)
+        raw_candidates = data.get("candidates")
+        if not isinstance(raw_candidates, list):
+            raise ValueError("LLM response missing 'candidates' array")
+        candidates_list = cast(list[object], raw_candidates)
+
+        valid_types = {"question", "connection", "contradiction", "action", "profile_update", "share_bundle"}
+        results: list[IdeaCandidate] = []
+        for item in candidates_list[:max_candidates]:
+            if not isinstance(item, dict):
+                continue
+            c = cast(dict[str, object], item)
+            title = c.get("title")
+            body = c.get("body")
+            if not isinstance(title, str) or not isinstance(body, str):
+                continue
+            candidate_type = c.get("candidate_type", "question")
+            if not isinstance(candidate_type, str) or candidate_type not in valid_types:
+                candidate_type = "question"
+            results.append(IdeaCandidate(
+                id=f"candidate-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{datetime.now(UTC).microsecond:06d}",
+                title=title[:80],
+                body=body,
+                candidate_type=cast(IdeaCandidateType, candidate_type),
+                confidence=_clamp_float(c.get("confidence"), 0.5),
+                novelty=_clamp_float(c.get("novelty"), 0.5),
+                urgency=_clamp_float(c.get("urgency"), 0.3),
+                interruption_cost=_clamp_float(c.get("interruption_cost"), 0.2),
+                evidence_refs=(),
+                suggested_thread_id=None,
+                source_summary="llm-generated",
+                created_at=now_iso(),
+            ))
+        if not results:
+            raise ValueError("LLM returned no valid candidates")
+        return results
+
+    def _generate_local_fallback(self, preview: str) -> list[IdeaCandidate]:
+        return [IdeaCandidate(
             id=f"candidate-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{datetime.now(UTC).microsecond:06d}",
             title="Recent thread reflection",
             body=f"Consider: {preview}",
@@ -358,8 +509,7 @@ class IdeaCandidateGenerator:
             suggested_thread_id=None,
             source_summary="latest user message",
             created_at=now_iso(),
-        )
-        return [candidate]
+        )]
 
     def _latest_thread_preview(self, store: ThreadStore) -> str | None:
         for thread_id in reversed(store.list()):
@@ -398,3 +548,9 @@ class IdeaCandidateGenerator:
         for doc in repo.list_documents()[-max_sources:]:
             lines.append(f"- {doc.title or doc.id}")
         return "\n".join(lines)
+
+
+def _clamp_float(value: object, default: float) -> float:
+    if isinstance(value, (int, float)):
+        return max(0.0, min(1.0, float(value)))
+    return default

@@ -167,6 +167,18 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(notify_watch_parser, handle_notify_watch)
     _add_handler(notify_subparsers.add_parser("clear"), handle_notify_clear)
 
+    reflection_parser = subparsers.add_parser("reflection")
+    reflection_parser.set_defaults(handler=None, help_parser=reflection_parser)
+    reflection_subparsers = reflection_parser.add_subparsers(dest="reflection_command")
+    reflection_list_parser = reflection_subparsers.add_parser("list")
+    reflection_list_parser.add_argument("--tail", type=int, default=20)
+    reflection_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
+    _add_handler(reflection_list_parser, handle_reflection_list)
+    reflection_show_parser = reflection_subparsers.add_parser("show")
+    reflection_show_parser.add_argument("event_index", type=int, help="Index from 'reflection list' (0-based)")
+    reflection_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
+    _add_handler(reflection_show_parser, handle_reflection_show)
+
     memory_parser = subparsers.add_parser("memory")
     memory_parser.set_defaults(handler=None, help_parser=memory_parser)
     memory_subparsers = memory_parser.add_subparsers(dest="memory_command")
@@ -1164,6 +1176,45 @@ def handle_notify_clear(args: argparse.Namespace) -> int:
 
     count = NotificationOutbox(args.project_root).clear("dismissed")
     print(f"Cleared {count} dismissed notification(s).")
+    return 0
+
+
+def handle_reflection_list(args: argparse.Namespace) -> int:
+    from nuself.tui.render import render_reflection_summary
+
+    events = read_log_events(project_root=args.project_root, component="reflection", tail=args.tail)
+    if not events:
+        print("No reflection events.")
+        return 0
+    if args.as_json:
+        import json
+
+        for event in events:
+            print(json.dumps(event.to_record(), sort_keys=True, ensure_ascii=True))
+        return 0
+    for idx, event in enumerate(events):
+        print(f"[{idx:3d}] {render_reflection_summary(event)}")
+    return 0
+
+
+def handle_reflection_show(args: argparse.Namespace) -> int:
+    from nuself.logs import LogEvent
+    from nuself.tui.render import render_reflection_detail
+
+    all_events: list[LogEvent] = read_log_events(project_root=args.project_root, component="reflection")
+    if not all_events:
+        print("No reflection events.", file=sys.stderr)
+        return 1
+    if args.event_index < 0 or args.event_index >= len(all_events):
+        print(f"Invalid index {args.event_index}. Valid range: 0-{len(all_events) - 1}", file=sys.stderr)
+        return 1
+    selected = all_events[args.event_index]  # pyright: ignore[reportUnknownVariableType]
+    if args.as_json:
+        import json
+
+        print(json.dumps(selected.to_record(), sort_keys=True, ensure_ascii=True))  # pyright: ignore[reportUnknownMemberType]
+        return 0
+    print(render_reflection_detail(selected))  # pyright: ignore[reportUnknownArgumentType]
     return 0
 
 
