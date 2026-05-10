@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from nuself.agent.chat import ThreadStore
 from nuself.config import runtime_paths
 from nuself.config_reflection import ReflectionConfig
 from nuself.domain.memory import now_iso
@@ -301,8 +300,6 @@ class RelevanceGate:
         return self.score(candidate).passes
 
     def _score_novelty(self, candidate: IdeaCandidate) -> float:
-        if candidate.body == _FALLBACK_BODY:
-            return 1.0 if not self._last_reflection_path.exists() else 0.0
         if not self._last_reflection_path.exists():
             return 1.0
         last_title = self._read_last_title()
@@ -377,11 +374,13 @@ class RelevanceGate:
             return None
 
 
-_FALLBACK_BODY = "Time for a self-reflection cycle."
-
-
 class IdeaCandidateGenerator:
-    """Generate structured reflection candidates from recent activity."""
+    """Proactively generate new ideas from memory, sources, and conversations.
+
+    The daemon calls this periodically. It reads whatever data exists and uses
+    the LLM to produce genuinely new ideas — connections, contradictions,
+    questions, and actions that the user hasn't explicitly asked about.
+    """
 
     def __init__(
         self,
@@ -399,53 +398,59 @@ class IdeaCandidateGenerator:
         self._config = config or ReflectionConfig.default()
 
     def generate(self, max_candidates: int = 3) -> list[IdeaCandidate]:
-        from nuself.agent.chat import ThreadStore
-
-        store = ThreadStore(self._project_root)
-        preview = self._latest_thread_preview(store)
-        if preview is None:
+        context = self._collect_context()
+        if context.is_empty():
             return []
         try:
-            return self._generate_with_llm(max_candidates)
+            return self._generate_with_llm(context, max_candidates)
         except (RuntimeError, ValueError, json.JSONDecodeError):
-            return self._generate_local_fallback(preview)
+            return []
 
-    def _generate_with_llm(self, max_candidates: int) -> list[IdeaCandidate]:
-        from nuself.llm import ChatMessage
-
-        thread_ctx = self._recent_thread_context()
-        memory_ctx = self._recent_memory_context()
-        source_ctx = self._new_source_context()
-
-        system_prompt = (
-            "You are the NuSelf proactive idea generator. Your job is to scan recent conversations, "
-            "memory entries, and source documents to produce thoughtful reflection candidates.\n\n"
-            "Return a JSON object with a 'candidates' array. Each candidate has:\n"
-            '- "title": short descriptive title (max 80 chars)\n'
-            '- "body": 2-4 sentence description of the idea or question\n'
-            '- "candidate_type": one of "question", "connection", "contradiction", "action", "profile_update"\n'
-            '- "confidence": 0.0-1.0 how confident this is worth exploring\n'
-            '- "novelty": 0.0-1.0 how novel vs already-covered\n'
-            '- "urgency": 0.0-1.0 time-sensitivity\n'
-            '- "interruption_cost": 0.0-1.0 how disruptive it would be to surface now\n\n'
-            f"Generate 1-{max_candidates} candidates. Prefer quality over quantity. "
-            "Be honest about scores — a mundane observation should have low confidence and urgency. "
-            "Return ONLY the JSON object."
+    def _collect_context(self) -> _ThinkingContext:
+        threads = self._recent_thread_context()
+        memories = self._recent_memory_context()
+        profile = self._profile_context()
+        sources = self._new_source_context()
+        return _ThinkingContext(
+            threads=threads,
+            memories=memories,
+            profile=profile,
+            sources=sources,
         )
 
-        user_parts: list[str] = []
-        if thread_ctx:
-            user_parts.append(f"## Recent conversations\n{thread_ctx}")
-        if memory_ctx:
-            user_parts.append(f"## Recent memory entries\n{memory_ctx}")
-        if source_ctx:
-            user_parts.append(f"## Recent sources\n{source_ctx}")
-        if not user_parts:
-            user_parts.append("No recent activity found.")
+    def _generate_with_llm(self, context: _ThinkingContext, max_candidates: int) -> list[IdeaCandidate]:
+        from nuself.llm import ChatMessage
 
+        system_prompt = (
+            "You are an independent thinker with access to someone's private memory, "
+            "conversation history, reading notes, and personal profile.\n\n"
+            "Your job: generate NEW ideas that the person hasn't explicitly asked about. "
+            "Look for:\n"
+            "- Contradictions between different memories or stated beliefs\n"
+            "- Connections between seemingly unrelated topics\n"
+            "- Unexplored questions suggested by the data\n"
+            "- Actionable insights or recommendations\n"
+            "- Patterns the person might not have noticed\n\n"
+            "Do NOT summarize or rephrase existing content. "
+            "Do NOT produce generic observations. "
+            "Each idea must be genuinely novel — something the person would not have thought of on their own.\n\n"
+            "Return a JSON object with a 'candidates' array (1 to 3 items). Each candidate:\n"
+            '{\n'
+            '  "title": "short title (max 80 chars)",\n'
+            '  "body": "2-4 sentences describing the new idea",\n'
+            '  "candidate_type": "question|connection|contradiction|action|profile_update",\n'
+            '  "confidence": 0.0-1.0,\n'
+            '  "novelty": 0.0-1.0,\n'
+            '  "urgency": 0.0-1.0,\n'
+            '  "interruption_cost": 0.0-1.0\n'
+            '}\n\n'
+            "Return ONLY the JSON object. No markdown fences."
+        )
+
+        user_message = context.to_prompt()
         messages = [
             ChatMessage(role="system", content=system_prompt),
-            ChatMessage(role="user", content="\n\n".join(user_parts)),
+            ChatMessage(role="user", content=user_message),
         ]
         raw = self._llm.complete(messages)
         return self._parse_candidates(raw, max_candidates)
@@ -495,30 +500,6 @@ class IdeaCandidateGenerator:
             raise ValueError("LLM returned no valid candidates")
         return results
 
-    def _generate_local_fallback(self, preview: str) -> list[IdeaCandidate]:
-        return [IdeaCandidate(
-            id=f"candidate-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{datetime.now(UTC).microsecond:06d}",
-            title="Recent thread reflection",
-            body=f"Consider: {preview}",
-            candidate_type="question",
-            confidence=0.5,
-            novelty=0.5,
-            urgency=0.3,
-            interruption_cost=0.2,
-            evidence_refs=(),
-            suggested_thread_id=None,
-            source_summary="latest user message",
-            created_at=now_iso(),
-        )]
-
-    def _latest_thread_preview(self, store: ThreadStore) -> str | None:
-        for thread_id in reversed(store.list()):
-            state = store.load(thread_id)
-            for msg in reversed(state.messages):
-                if msg.role == "user":
-                    return msg.content[:80]
-        return None
-
     def _recent_thread_context(self, max_threads: int = 5, max_messages: int = 10) -> str:
         from nuself.agent.chat import ThreadStore
 
@@ -540,6 +521,16 @@ class IdeaCandidateGenerator:
             lines.append(f"- [{entry.type}] {entry.title}: {entry.body[:120]}")
         return "\n".join(lines)
 
+    def _profile_context(self, max_items: int = 10) -> str:
+        from nuself.profile.repository import ProfileItemRepository
+
+        repo = ProfileItemRepository(self._project_root)
+        lines: list[str] = []
+        for item in repo.list()[:max_items]:
+            tags = f" (tags: {', '.join(item.tags)})" if item.tags else ""
+            lines.append(f"- [{item.type}] {item.title}{tags}: {item.body[:120]}")
+        return "\n".join(lines)
+
     def _new_source_context(self, max_sources: int = 5) -> str:
         from nuself.memory.source_repository import SourceRepository
 
@@ -548,6 +539,31 @@ class IdeaCandidateGenerator:
         for doc in repo.list_documents()[-max_sources:]:
             lines.append(f"- {doc.title or doc.id}")
         return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class _ThinkingContext:
+    """All available material for proactive idea generation."""
+
+    threads: str
+    memories: str
+    profile: str
+    sources: str
+
+    def is_empty(self) -> bool:
+        return not (self.threads or self.memories or self.profile or self.sources)
+
+    def to_prompt(self) -> str:
+        sections: list[str] = []
+        if self.memories:
+            sections.append(f"## Memory entries\n{self.memories}")
+        if self.threads:
+            sections.append(f"## Recent conversations\n{self.threads}")
+        if self.profile:
+            sections.append(f"## Personal profile\n{self.profile}")
+        if self.sources:
+            sections.append(f"## Source documents\n{self.sources}")
+        return "\n\n".join(sections)
 
 
 def _clamp_float(value: object, default: float) -> float:
