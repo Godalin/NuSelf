@@ -3,17 +3,34 @@
 
 from __future__ import annotations
 
+import pytest
+
 from nuself.agent.persona import (
     ANALYST_PERSONA,
     BUILDER_PERSONA,
     HISTORIAN_PERSONA,
     SKEPTIC_PERSONA,
+    PersonaContribution,
+    PersonaSynthesis,
+    PersonaTurnState,
 )
 from nuself.domain.proactive import IdeaCandidate
 from nuself.proactive_persona import (
     PersonaCompetitionResult,
     ProactivePersonaDiscussion,
 )
+
+
+class _FakePersonaDriver:
+    def run(self, turn_state: PersonaTurnState) -> PersonaTurnState:
+        persona = turn_state.selected_personas[0]
+        note = f"{persona.id}|{turn_state.input.memory_context}"
+        return PersonaTurnState(
+            input=turn_state.input,
+            selected_personas=turn_state.selected_personas,
+            contributions=(PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0),),
+            synthesis=PersonaSynthesis(summary=note, source_personas=(persona.id,), confidence=0.0),
+        )
 
 
 def _make_candidate(
@@ -116,3 +133,47 @@ def test_blocking_veto_with_weak_support() -> None:
     result = discussion.discuss(candidate)
     assert result.approved is False
     assert result.blocking_vetos
+
+
+def test_discuss_shares_context_across_rounds(monkeypatch: pytest.MonkeyPatch) -> None:
+    discussion = ProactivePersonaDiscussion(
+        personas=(ANALYST_PERSONA, SKEPTIC_PERSONA),
+        min_participants=2,
+        max_participants=2,
+    )
+    discussion._driver = _FakePersonaDriver()  # type: ignore[attr-defined]
+    monkeypatch.setattr("nuself.proactive_persona.random.sample", _sample_first)
+    candidate = _make_candidate(body="A shared context should evolve during debate.")
+
+    result = discussion.discuss(candidate)
+
+    assert result.approved is True
+    assert any(line.startswith("round-1:") for line in result.discussion_trace)
+    assert any(line.startswith("round-2:") for line in result.discussion_trace)
+    assert any(line.startswith("round-2:") and "round-1:" in line for line in result.discussion_trace)
+
+
+def test_discuss_spawns_emergent_temporary_persona(monkeypatch: pytest.MonkeyPatch) -> None:
+    discussion = ProactivePersonaDiscussion(
+        personas=(ANALYST_PERSONA, SKEPTIC_PERSONA, BUILDER_PERSONA),
+        min_participants=2,
+        max_participants=2,
+    )
+    discussion._driver = _FakePersonaDriver()  # type: ignore[attr-defined]
+    monkeypatch.setattr("nuself.proactive_persona.random.sample", _sample_first)
+    candidate = _make_candidate(
+        candidate_type="connection",
+        confidence=0.9,
+        novelty=0.9,
+        interruption_cost=0.2,
+    )
+
+    result = discussion.discuss(candidate)
+
+    assert result.approved is True
+    assert result.emergent_persona_ids == ("bridge_self",)
+    assert any("bridge_self" in line for line in result.discussion_trace)
+
+
+def _sample_first(seq: list[object], k: int) -> list[object]:
+    return list(seq)[:k]

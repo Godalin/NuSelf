@@ -27,6 +27,8 @@ class PersonaCompetitionResult:
     scores: dict[str, float]
     blocking_vetos: tuple[str, ...]
     reason: str
+    discussion_trace: tuple[str, ...] = ()
+    emergent_persona_ids: tuple[str, ...] = ()
 
 
 class ProactivePersonaDiscussion:
@@ -63,7 +65,25 @@ class ProactivePersonaDiscussion:
                 reason="no personas available",
             )
 
-        scores = self._score_candidate(candidate, selected)
+        emergent = self._maybe_spawn_emergent_persona(candidate, selected)
+        discussion_trace: list[str] = [
+            f"candidate: {candidate.title}",
+            f"type={candidate.candidate_type} confidence={candidate.confidence:.2f} novelty={candidate.novelty:.2f}",
+            candidate.body,
+        ]
+        scores = self._score_candidate(candidate, selected, discussion_trace, round_label="round-1")
+        second_round = tuple(reversed(selected))
+        if emergent is not None:
+            second_round = second_round + (emergent,)
+        scores.update(
+            self._score_candidate(
+                candidate,
+                second_round,
+                discussion_trace,
+                round_label="round-2",
+            )
+        )
+        emergent_persona_ids = (emergent.id,) if emergent is not None else ()
         blocking = tuple(
             pid for pid, score in scores.items() if score < self._blocking_threshold
         )
@@ -78,6 +98,8 @@ class ProactivePersonaDiscussion:
                 scores=scores,
                 blocking_vetos=blocking,
                 reason=f"blocked by {', '.join(blocking)}",
+                discussion_trace=tuple(discussion_trace),
+                emergent_persona_ids=emergent_persona_ids,
             )
 
         composite = sum(scores.values()) / len(scores) if scores else 0.0
@@ -90,6 +112,8 @@ class ProactivePersonaDiscussion:
                 scores=scores,
                 blocking_vetos=blocking,
                 reason=f"composite {composite:.2f} below threshold",
+                discussion_trace=tuple(discussion_trace),
+                emergent_persona_ids=emergent_persona_ids,
             )
 
         winners = tuple(
@@ -103,6 +127,8 @@ class ProactivePersonaDiscussion:
             scores=scores,
             blocking_vetos=blocking,
             reason="approved after competitive discussion",
+            discussion_trace=tuple(discussion_trace),
+            emergent_persona_ids=emergent_persona_ids,
         )
 
     def _select_personas(self) -> tuple[PersonaDefinition, ...]:
@@ -114,20 +140,54 @@ class ProactivePersonaDiscussion:
         return tuple(selected)
 
     def _score_candidate(
-        self, candidate: IdeaCandidate, personas: tuple[PersonaDefinition, ...]
+        self,
+        candidate: IdeaCandidate,
+        personas: tuple[PersonaDefinition, ...],
+        discussion_trace: list[str],
+        *,
+        round_label: str,
     ) -> dict[str, float]:
         scores: dict[str, float] = {}
-        turn_state = PersonaTurnState(
-            input=PersonaInput(
-                user_message=f"{candidate.title}\n{candidate.body}",
-            ),
-            selected_personas=personas,
-        )
-        result = self._driver.run(turn_state)
-        for contrib in result.contributions:
+        discussion_context = "\n".join(discussion_trace)
+        for persona in personas:
+            turn_state = PersonaTurnState(
+                input=PersonaInput(
+                    user_message=f"{candidate.title}\n{candidate.body}",
+                    memory_context=discussion_context,
+                ),
+                selected_personas=(persona,),
+            )
+            result = self._driver.run(turn_state)
+            if not result.contributions:
+                continue
+            contrib = result.contributions[0]
             score = self._heuristic_score(candidate, contrib)
             scores[contrib.persona_id] = score
+            note = contrib.notes[0] if contrib.notes else contrib.persona_id
+            discussion_trace.append(f"{round_label}:{contrib.persona_id}: {note}")
+            if result.synthesis is not None and result.synthesis.summary:
+                discussion_trace.append(f"{round_label}:synthesis: {result.synthesis.summary}")
+            discussion_context = "\n".join(discussion_trace)
         return scores
+
+    def _maybe_spawn_emergent_persona(
+        self,
+        candidate: IdeaCandidate,
+        selected: tuple[PersonaDefinition, ...],
+    ) -> PersonaDefinition | None:
+        if not selected:
+            return None
+        if candidate.candidate_type in {"connection", "contradiction"} and candidate.novelty >= 0.7:
+            return PersonaDefinition(
+                id="bridge_self",
+                description="A temporary bridge persona that links competing ideas and finds a shared frame.",
+            )
+        if candidate.candidate_type == "question" and candidate.urgency >= 0.8:
+            return PersonaDefinition(
+                id="urgency_self",
+                description="A temporary urgency persona that checks whether the candidate needs immediate attention.",
+            )
+        return None
 
     def _heuristic_score(
         self, candidate: IdeaCandidate, contrib: PersonaContribution
