@@ -4,38 +4,41 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Make proactive multi-persona discussion feel alive: moderator-guided free-form rebuttal, shared scratchpad, and event-driven persona emergence.
+Enhanced outbox/notify terminal interface with color-coded formatting, filtering, and richer REPL commands.
 
 ## Immediate Context
 
-- Current proactive persona flow is competitive and still more round-shaped than conversational.
-- `ReflectionScheduler` can already trigger competitive persona discussion for high-value candidates.
-- `PersonaGraphDriver` and `ProactivePersonaDiscussion` are the main control points for evolving the discussion model.
-- The next slice should add a moderator persona / host prompt that nudges convergence without forcing a tight round count.
-- Keep the change bounded so the current chat/runtime behavior stays stable.
+- `notify list` now supports `--status` filtering and color-coded output via `TerminalTheme`.
+- `notify show` renders formatted detail with colored status tags.
+- `notify stats` prints counts by status.
+- REPL `:notify list` shows all entries; `:notify show <id>` shows detail.
+- All outbox rendering lives in `tui/render.py` alongside log/event renderers.
+- 519 tests pass, pyright clean.
 
 ## Next Steps
 
-1. Add a moderator persona / host prompt that nudges personas toward convergence.
-2. Loosen the maximum discussion budget so backend reflection can keep talking longer when needed.
-3. Keep the shared scratchpad and emergent persona support in place.
-4. Add tests that prove later personas can see earlier discussion context and moderation cues.
-5. Keep the existing outbox and daemon delivery path unchanged.
+1. ~~Add color-coded outbox formatting in `tui/render.py`.~~ Done.
+2. ~~Add `--status` filter to `notify list` and enhance output.~~ Done.
+3. ~~Enhance `notify show` with formatted detail view.~~ Done.
+4. ~~Add `notify stats` CLI command.~~ Done.
+5. ~~Add REPL `:notify list` and `:notify show <id>`.~~ Done.
+6. ~~Update README and README.zh-CN.md TODOs.~~ Done.
+7. Commit feature code and docs separately.
 
 ## Not Now
 
+- Full multi-persona orchestration beyond the current bounded skeleton.
 - Vector, hybrid, or hosted graph indexes.
 - Plugin loading.
 - Web or GUI interface work.
 - Private memory schema migration.
 - Dashboard-style or dependency-heavy terminal UI.
-- Broad rewrite of the chat runtime persona system before the proactive discussion slice lands.
 
 ## Completion Criteria
 
-- Competitive proactive discussions can share intermediate context across personas.
-- A moderator persona / host prompt can nudge personas toward convergence.
-- Discussion can continue until it converges or hits a loose cap.
-- A candidate can spawn a temporary persona-like role when the discussion warrants it.
-- Existing daemon, chat, and outbox behavior remains stable.
+- `notify list --status <filter>` works and outputs color-coded lines.
+- `notify show <id>` outputs formatted detail with colored status.
+- `notify stats` prints counts by status.
+- REPL `:notify list` and `:notify show <id>` work.
 - All new code passes `uv run pytest` and `uvx pyright`.
+- `README.md` and `README.zh-CN.md` TODOs updated.

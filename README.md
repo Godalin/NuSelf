@@ -23,11 +23,16 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ### Current Goal
 
-- [ ] Make proactive multi-persona discussion feel alive.
-- [ ] Add a moderator persona / host prompt that nudges convergence.
-- [ ] Loosen the discussion cap so background reflection can keep talking longer when needed.
-- [ ] Keep the shared scratchpad and temporary persona support in place.
-- [ ] Keep the existing daemon, chat, and outbox paths stable.
+- [x] Complete REPL-shaped TUI, structured logging, and memory inspect polish.
+- [x] Add a persona activation gate for explicit requests and high-depth discussion cues.
+- [x] Wire the minimal persona skeleton into the conversation runtime internally.
+- [x] Keep persona contributions internal while preserving chat, CLI, and daemon payloads.
+- [x] Surface compact persona activity summaries in the REPL for activated turns.
+- [x] Add deterministic routing for `analyst_self`, `skeptic_self`, and `builder_self`.
+- [x] Add one more bounded persona (`historian_self`) and mixed-intent precedence rules.
+- [x] Add `care_self` and tune explicit multi-perspective routing.
+- [x] Add internal `synthesizer_self` for persona contribution fusion.
+- [x] Use synthesized persona insight in internal response planning.
 
 ### Project Foundation
 
