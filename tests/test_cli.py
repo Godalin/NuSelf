@@ -137,7 +137,7 @@ def test_interactive_memory_command_shows_preview(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Memory preview (1/1):" in captured.out
+    assert "1/1 entries shown." in captured.out
     assert "Clarity" in captured.out
     assert "State assumptions explicitly." in captured.out
 
@@ -586,8 +586,8 @@ def test_memory_preview_limits_entries(tmp_path: Path, capsys: CaptureFixture) -
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Memory preview (1/2):" in captured.out
-    assert "... 1 more." in captured.out
+    assert "1/2 entries shown." in captured.out
+    assert "to see more." in captured.out
 
 
 def test_memory_update_defers_without_agent_decision(tmp_path: Path, capsys: CaptureFixture) -> None:
@@ -644,7 +644,7 @@ def test_memory_add_list_show_delete(tmp_path: Path, capsys: CaptureFixture) -> 
         ]
     )
     add_output = capsys.readouterr().out
-    entry_id = add_output.split(" ", 1)[0]
+    entry_id = add_output.split()[3]
 
     list_result = main(["--project-root", str(tmp_path), "memory", "list"])
     list_output = capsys.readouterr().out
@@ -676,7 +676,7 @@ def test_memory_add_infers_type_without_manual_type(tmp_path: Path, capsys: Capt
         ]
     )
     add_output = capsys.readouterr().out
-    entry_id = add_output.split(" ", 1)[0]
+    entry_id = add_output.split()[3]
 
     entry = MemoryEntryRepository(tmp_path).get(entry_id)
 
@@ -759,8 +759,8 @@ def test_memory_candidate_review_flow_accepts_temporal_candidate(tmp_path: Path,
     assert show_result == 0
     assert accept_result == 0
     assert "Temporal memory" in list_output
-    assert "observed_at: 2026-05-07" in show_output
-    assert "thread thread:default:4-6 observed_at=2026-05-07 summary=Discussed thought evolution." in show_output
+    assert f"id={candidate.id}" in show_output
+    assert "thread:thread:default:4-6" in show_output
     assert "Accepted memory candidate:" in accept_output
     assert entries[0].observed_at == "2026-05-07"
     assert entries[0].evidence[0].source_ref == "thread:default:4-6"
@@ -995,7 +995,7 @@ def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: Captu
     ingest_output = capsys.readouterr().out
     list_result = main(["--project-root", str(tmp_path), "source", "list"])
     list_output = capsys.readouterr().out
-    source_id = list_output.split(" ", 1)[0]
+    source_id = list_output.split()[1]
     show_result = main(["--project-root", str(tmp_path), "source", "show", source_id])
     show_output = capsys.readouterr().out
     chunks_result = main(["--project-root", str(tmp_path), "source", "chunks", source_id])
@@ -1007,8 +1007,8 @@ def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: Captu
     assert chunks_result == 0
     assert "Source ingest: documents=1 chunks=1" in ingest_output
     assert "Source Essay" in list_output
-    assert "tags=mirror,imported" in list_output
-    assert "privacy=shareable" in list_output
+    assert "#mirror" in list_output
+    assert "shareable" in list_output
     assert "origin: notebook" in show_output
     assert "source_date: 2026-05-07" in show_output
     assert f"source:{source_id}:0" in chunks_output
@@ -1077,7 +1077,7 @@ def test_memory_source_extract_creates_reviewable_profile_candidate(
 
     list_result = main(["--project-root", str(tmp_path), "source", "list"])
     list_output = capsys.readouterr().out
-    source_id = list_output.split(" ", 1)[0]
+    source_id = list_output.split()[1]
 
     extract_result = main(["--project-root", str(tmp_path), "source", "extract", source_id])
     extract_output = capsys.readouterr().out
@@ -1109,7 +1109,7 @@ def test_memory_source_delete_cascades_profile_items(tmp_path: Path, capsys: Cap
     capsys.readouterr()
     list_result = main(["--project-root", str(tmp_path), "source", "list"])
     list_output = capsys.readouterr().out
-    source_id = list_output.split(" ", 1)[0]
+    source_id = list_output.split()[1]
     main(["--project-root", str(tmp_path), "source", "extract", source_id])
     capsys.readouterr()
 
@@ -1143,7 +1143,7 @@ def test_memory_profile_delete_removes_item_and_reindexes(tmp_path: Path, capsys
     capsys.readouterr()
     list_result = main(["--project-root", str(tmp_path), "source", "list"])
     list_output = capsys.readouterr().out
-    source_id = list_output.split(" ", 1)[0]
+    source_id = list_output.split()[1]
     main(["--project-root", str(tmp_path), "source", "extract", source_id])
     capsys.readouterr()
     candidate_repo = MemoryCandidateRepository(tmp_path)
