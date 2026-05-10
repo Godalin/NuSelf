@@ -71,23 +71,25 @@ def render_memory_entry_detail(entry: MemoryEntry, *, color: bool | None = None)
 
 
 def render_candidate_row(candidate: MemoryCandidate, *, color: bool | None = None) -> str:
+    """Render a candidate as a compact card with body text."""
     theme = TerminalTheme(color=color)
-    target = f"-> {candidate.target_entry_id}" if candidate.target_entry_id else ""
-    return " ".join(
+    header = " ".join(
         _omit_empty(
             [
                 theme.tag("[cand]", "memory"),
                 _state(theme, candidate.review_state),
-                candidate.action,
-                candidate.type,
-                theme.muted(candidate.id),
-                target,
+                f"{candidate.action} {candidate.type}:",
                 candidate.title,
-                _format_tags(candidate.tags),
-                f"imp={candidate.importance}",
+                theme.muted(f"conf={candidate.confidence:.2f}"),
+                theme.muted(candidate.id),
             ]
         )
     )
+    body_lines = _wrap_body(candidate.body)
+    if body_lines:
+        indented = "\n".join(f"  {line}" for line in body_lines)
+        return f"{header}\n{indented}"
+    return header
 
 
 def render_candidate_detail(candidate: MemoryCandidate, *, color: bool | None = None) -> str:

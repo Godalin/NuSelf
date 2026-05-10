@@ -1282,8 +1282,14 @@ def handle_memory_candidate_list(args: argparse.Namespace) -> int:
         candidates = sorted(candidates, key=lambda c: (-c.importance, c.updated_at, c.id))
     elif sort_by == "type":
         candidates = sorted(candidates, key=lambda c: (c.type, c.updated_at, c.id))
-    for candidate in candidates:
-        print(_format_memory_candidate_summary(candidate))
+    for i, candidate in enumerate(candidates):
+        if i > 0:
+            print()
+        print(render_candidate_row(candidate))
+    pending = [c for c in candidates if c.review_state == "pending"]
+    if pending:
+        print()
+        print(f"{len(pending)} pending candidate(s). Accept: nuself memory candidate accept <id>")
     return 0
 
 
@@ -1340,7 +1346,7 @@ def handle_memory_candidate_edit(args: argparse.Namespace) -> int:
     except MemoryCandidateNotFound:
         print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
         return 1
-    print(_format_memory_candidate_summary(updated))
+    print(render_candidate_row(updated))
     return 0
 
 
@@ -2331,13 +2337,6 @@ def _format_memory_detail(entry: MemoryEntry) -> str:
     )
 
 
-def _format_memory_candidate_summary(candidate: MemoryCandidate) -> str:
-    tags = ",".join(candidate.tags) if candidate.tags else "-"
-    observed = candidate.observed_at or "-"
-    return (
-        f"{candidate.id} [{candidate.review_state}] {candidate.action} {candidate.type} "
-        f"{candidate.title} tags={tags} importance={candidate.importance} observed_at={observed}"
-    )
 
 
 def _format_profile_item_summary(item: ProfileItem) -> str:
