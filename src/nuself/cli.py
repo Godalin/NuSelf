@@ -130,7 +130,9 @@ def build_parser() -> argparse.ArgumentParser:
     notify_parser = subparsers.add_parser("notify")
     notify_parser.set_defaults(handler=None, help_parser=notify_parser)
     notify_subparsers = notify_parser.add_subparsers(dest="notify_command")
-    _add_handler(notify_subparsers.add_parser("list"), handle_notify_list)
+    notify_list_parser = notify_subparsers.add_parser("list")
+    notify_list_parser.add_argument("--status", choices=["pending", "sent", "failed", "dismissed"], default=None)
+    _add_handler(notify_list_parser, handle_notify_list)
     notify_show_parser = notify_subparsers.add_parser("show")
     notify_show_parser.add_argument("entry_id")
     _add_handler(notify_show_parser, handle_notify_show)
@@ -140,6 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
     notify_dismiss_parser = notify_subparsers.add_parser("dismiss")
     notify_dismiss_parser.add_argument("entry_id")
     _add_handler(notify_dismiss_parser, handle_notify_dismiss)
+    _add_handler(notify_subparsers.add_parser("stats"), handle_notify_stats)
     _add_handler(notify_subparsers.add_parser("clear"), handle_notify_clear)
 
     memory_parser = subparsers.add_parser("memory")
@@ -1032,34 +1035,46 @@ def handle_eval(args: argparse.Namespace) -> int:
 
 def handle_notify_list(args: argparse.Namespace) -> int:
     from nuself.notification import NotificationOutbox
+    from nuself.tui.render import render_outbox_summary
 
     outbox = NotificationOutbox(args.project_root)
-    entries = outbox.list()
+    status = args.status
+    entries = outbox.list(status=status)
     if not entries:
-        print("No outbox entries.")
+        filter_msg = f" with status '{status}'" if status else ""
+        print(f"No outbox entries{filter_msg}.")
         return 0
     for entry in entries:
-        print(f"{entry.id} [{entry.status}] {entry.title}")
+        print(render_outbox_summary(entry))
     return 0
 
 
 def handle_notify_show(args: argparse.Namespace) -> int:
     from nuself.notification import NotificationOutbox, OutboxEntryNotFound
+    from nuself.tui.render import render_outbox_detail
 
     try:
         entry = NotificationOutbox(args.project_root).get(args.entry_id)
     except OutboxEntryNotFound:
         print(f"Outbox entry not found: {args.entry_id}", file=sys.stderr)
         return 1
-    print(f"id: {entry.id}")
-    print(f"status: {entry.status}")
-    print(f"title: {entry.title}")
-    print(f"body: {entry.body}")
-    if entry.deep_link is not None:
-        print(f"deep_link: {entry.deep_link}")
-    print(f"idempotency_key: {entry.idempotency_key}")
-    print(f"attempts: {entry.attempts}")
-    print(f"created_at: {entry.created_at}")
+    print(render_outbox_detail(entry))
+    return 0
+
+
+def handle_notify_stats(args: argparse.Namespace) -> int:
+    from nuself.notification import NotificationOutbox
+
+    outbox = NotificationOutbox(args.project_root)
+    entries = outbox.list()
+    counts: dict[str, int] = {"pending": 0, "sent": 0, "failed": 0, "dismissed": 0}
+    for entry in entries:
+        counts[entry.status] = counts.get(entry.status, 0) + 1
+    print(f"Total:      {len(entries)}")
+    print(f"Pending:    {counts['pending']}")
+    print(f"Sent:       {counts['sent']}")
+    print(f"Failed:     {counts['failed']}")
+    print(f"Dismissed:  {counts['dismissed']}")
     return 0
 
 
@@ -1712,11 +1727,17 @@ def _handle_interactive_command(command: str, project_root: Path | None, current
     if command.startswith(":notify "):
         print()
         parts = command[8:].strip().split(maxsplit=1)
-        if len(parts) < 2:
+        if not parts:
             print(_interactive_help(":notify"))
-        else:
+        elif parts[0] == "list":
+            print(_handle_interactive_notify_list_command(project_root))
+        elif parts[0] == "show" and len(parts) == 2:
+            print(_handle_interactive_notify_show_command(project_root, parts[1]))
+        elif len(parts) == 2:
             subcmd, entry_id = parts[0], parts[1]
             print(_handle_interactive_notify_subcommand(project_root, subcmd, entry_id))
+        else:
+            print(_interactive_help(":notify"))
         print()
         return ("", current_thread_id)
     if command == ":help":
@@ -1873,7 +1894,11 @@ def _interactive_help(command: str | None = None) -> str:
             "  :history   show recent thread messages",
             "  :sources   list imported source documents",
             "  :whoami    show core profile",
-            "  :notify    list pending notifications",
+            "  :notify         list pending notifications",
+            "  :notify list    list all notifications",
+            "  :notify show <id>  show one notification",
+            "  :notify send <id>  send a notification",
+            "  :notify dismiss <id>  dismiss a notification",
             "  :help      show this help",
             "  :status show daemon and thread status",
             "  :logs   show recent activity logs",
@@ -2058,14 +2083,39 @@ def _handle_interactive_whoami_command(project_root: Path | None) -> str:
 
 def _handle_interactive_notify_command(project_root: Path | None) -> str:
     from nuself.notification import NotificationOutbox
+    from nuself.tui.render import render_outbox_summary
 
     entries = NotificationOutbox(project_root).list(status="pending")
     if not entries:
         return "No pending notifications."
     lines = ["Pending notifications:"]
     for entry in entries:
-        lines.append(f"  {entry.id}  {entry.title}")
+        lines.append("  " + render_outbox_summary(entry))
     return "\n".join(lines)
+
+
+def _handle_interactive_notify_list_command(project_root: Path | None) -> str:
+    from nuself.notification import NotificationOutbox
+    from nuself.tui.render import render_outbox_summary
+
+    entries = NotificationOutbox(project_root).list()
+    if not entries:
+        return "No notifications."
+    lines = ["All notifications:"]
+    for entry in entries:
+        lines.append("  " + render_outbox_summary(entry))
+    return "\n".join(lines)
+
+
+def _handle_interactive_notify_show_command(project_root: Path | None, entry_id: str) -> str:
+    from nuself.notification import NotificationOutbox, OutboxEntryNotFound
+    from nuself.tui.render import render_outbox_detail
+
+    try:
+        entry = NotificationOutbox(project_root).get(entry_id)
+    except OutboxEntryNotFound:
+        return f"Outbox entry not found: {entry_id}"
+    return render_outbox_detail(entry)
 
 
 def _handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:

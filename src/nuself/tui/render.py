@@ -7,6 +7,7 @@ import os
 import sys
 
 from nuself.logs import LogEvent
+from nuself.notification import OutboxEntry
 
 
 class TerminalTheme:
@@ -86,3 +87,45 @@ def _component_color(component: str) -> str:
     if component == "outbox":
         return "36"
     return "0"
+
+
+def _status_color(status: str) -> str:
+    if status == "pending":
+        return "33"
+    if status == "sent":
+        return "32"
+    if status == "failed":
+        return "31"
+    if status == "dismissed":
+        return "90"
+    return "0"
+
+
+def render_outbox_summary(entry: OutboxEntry, *, color: bool | None = None) -> str:
+    """Render one outbox entry as a compact terminal line."""
+    theme = TerminalTheme(color=color)
+    status_tag = theme.paint(f"[{entry.status}]", _status_color(entry.status))
+    link_indicator = "link" if entry.deep_link else "-"
+    created = entry.created_at[:19] if entry.created_at else "-"
+    return f"{entry.id} {status_tag} {entry.title}  created={created}  attempts={entry.attempts}  {link_indicator}"
+
+
+def render_outbox_detail(entry: OutboxEntry, *, color: bool | None = None) -> str:
+    """Render one outbox entry as a multi-line detail view."""
+    theme = TerminalTheme(color=color)
+    status_tag = theme.paint(entry.status, _status_color(entry.status))
+    lines: list[str] = [
+        f"id:           {entry.id}",
+        f"status:       {status_tag}",
+        f"title:        {entry.title}",
+        f"idempotency:  {entry.idempotency_key}",
+        f"attempts:     {entry.attempts}",
+        f"created_at:   {entry.created_at}",
+    ]
+    if entry.sent_at is not None:
+        lines.append(f"sent_at:      {entry.sent_at}")
+    if entry.deep_link is not None:
+        lines.append(f"deep_link:    {entry.deep_link}")
+    lines.append("")
+    lines.append(entry.body)
+    return "\n".join(lines)

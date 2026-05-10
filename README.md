@@ -169,6 +169,9 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add macOS notification adapter.
 - [x] Add email adapter using ignored private configuration.
 - [x] Link notifications to a new or existing conversation.
+- [x] Add color-coded outbox formatting with status colors.
+- [x] Add `notify list --status` filter and `notify stats` command.
+- [x] Add REPL `:notify list` and `:notify show <id>` commands.
 
 ### Evaluation And Quality
 

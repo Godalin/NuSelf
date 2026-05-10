@@ -169,6 +169,9 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 添加 macOS notification adapter。
 - [x] 添加使用 ignored private configuration 的 email adapter。
 - [x] 将通知链接到新的或已有的 conversation。
+- [x] 添加颜色编码的 outbox 格式化，支持状态颜色。
+- [x] 添加 `notify list --status` 过滤和 `notify stats` 命令。
+- [x] 添加 REPL `:notify list` 和 `:notify show <id>` 命令。
 
 ### 评估与质量
 

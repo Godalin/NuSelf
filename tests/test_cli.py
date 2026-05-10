@@ -1523,6 +1523,95 @@ def test_notify_list_empty(tmp_path: Path, capsys: CaptureFixture) -> None:
     assert "No outbox entries." in output
 
 
+def test_notify_list_filters_by_status(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(OutboxEntry(id="e1", title="Pending", body="B", status="pending", idempotency_key="k1"))
+    outbox.add(OutboxEntry(id="e2", title="Sent", body="B", status="sent", idempotency_key="k2"))
+    outbox.add(OutboxEntry(id="e3", title="Failed", body="B", status="failed", idempotency_key="k3"))
+
+    result = main(["--project-root", str(tmp_path), "notify", "list", "--status", "pending"])
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "Pending" in output
+    assert "Sent" not in output
+    assert "Failed" not in output
+
+
+def test_notify_show_renders_detail(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="e1",
+            title="Test Title",
+            body="Test Body",
+            status="pending",
+            idempotency_key="k1",
+            deep_link="nuself://thread/default",
+        )
+    )
+    result = main(["--project-root", str(tmp_path), "notify", "show", "e1"])
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "Test Title" in output
+    assert "Test Body" in output
+    assert "pending" in output
+    assert "nuself://thread/default" in output
+    assert "idempotency:  k1" in output
+
+
+def test_notify_stats_counts(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(OutboxEntry(id="e1", title="A", body="B", status="pending", idempotency_key="k1"))
+    outbox.add(OutboxEntry(id="e2", title="A", body="B", status="sent", idempotency_key="k2"))
+    outbox.add(OutboxEntry(id="e3", title="A", body="B", status="sent", idempotency_key="k3"))
+    outbox.add(OutboxEntry(id="e4", title="A", body="B", status="failed", idempotency_key="k4"))
+
+    result = main(["--project-root", str(tmp_path), "notify", "stats"])
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "Total:      4" in output
+    assert "Pending:    1" in output
+    assert "Sent:       2" in output
+    assert "Failed:     1" in output
+    assert "Dismissed:  0" in output
+
+
+def test_repl_notify_list_shows_all(tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(OutboxEntry(id="e1", title="Pending", body="B", status="pending", idempotency_key="k1"))
+    outbox.add(OutboxEntry(id="e2", title="Sent", body="B", status="sent", idempotency_key="k2"))
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":notify list\n:q\n"))
+    result = main(["--project-root", str(tmp_path), "chat"])
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "All notifications:" in output
+    assert "Pending" in output
+    assert "Sent" in output
+
+
+def test_repl_notify_show_detail(tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(OutboxEntry(id="e1", title="Test", body="Body", status="pending", idempotency_key="k1"))
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":notify show e1\n:q\n"))
+    result = main(["--project-root", str(tmp_path), "chat"])
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "Test" in output
+    assert "Body" in output
+
+
 def test_open_with_deep_link_parses_thread_id(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(
         ["--project-root", str(tmp_path), "open", "--deep-link", "nuself://thread/my-thread"]
