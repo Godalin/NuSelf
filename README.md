@@ -24,9 +24,9 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 ### Current Goal
 
 - [ ] Make proactive multi-persona discussion feel alive.
-- [ ] Add a shared discussion scratchpad across persona rounds.
-- [ ] Add at least one rebuttal or follow-up round before synthesis.
-- [ ] Allow high-value candidates to spawn temporary persona-like roles.
+- [ ] Add a moderator persona / host prompt that nudges convergence.
+- [ ] Loosen the discussion cap so background reflection can keep talking longer when needed.
+- [ ] Keep the shared scratchpad and temporary persona support in place.
 - [ ] Keep the existing daemon, chat, and outbox paths stable.
 
 ### Project Foundation

@@ -24,9 +24,9 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 ### 当前目标
 
 - [ ] 让主动多 persona 讨论更有生命力。
-- [ ] 为 persona 各轮讨论引入共享 scratchpad。
-- [ ] 在 synthesis 之前至少增加一轮反驳或追问。
-- [ ] 允许高价值候选临时裂变出 persona-like 角色。
+- [ ] 增加一个主持人人格 / 主持人提示，推动各人格收敛。
+- [ ] 放宽讨论上限，让后台反思在需要时可以聊更久。
+- [ ] 保留共享 scratchpad 和临时 persona 支持。
 - [ ] 保持现有 daemon、chat 和 outbox 路径稳定。
 
 ### 项目基础
