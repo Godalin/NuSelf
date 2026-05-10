@@ -297,7 +297,7 @@ NUSELF_CONTEXT_SUMMARY_TARGET_CHARS=2400
 NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS=300
 ```
 
-The memory curator runs in the background in the daemon and also runs when interactive chat exits. It uses an agent to decide whether new working-memory turns should create, update, or ignore long-term memory. Trivial chat is ignored, similar existing memories should be updated instead of duplicated, and raw chat transcripts are rejected. A separate memory optimizer can be run manually, less frequently, to consolidate messy existing entries. Update events are written to `private/logs/memory.log`, and interactive chat prints compact activity lines for new chat, daemon, and memory events.
+The memory curator runs in the background in the daemon and also runs when interactive chat exits. It uses an agent to decide whether new working-memory turns should create, update, or ignore long-term memory. Trivial chat is ignored, similar existing memories should be updated instead of duplicated, and raw chat transcripts are rejected. By default, accepted candidates are automatically promoted to durable memory entries (`auto_accept=True`); you only need to review candidates when you want to edit or reject something. A separate memory optimizer can be run manually, less frequently, to consolidate messy existing entries. Update events are written to `private/logs/memory.log`, and interactive chat prints compact activity lines for new chat, daemon, and memory events.
 
 The current conversation graph is intentionally small: it preserves the CLI and daemon protocol boundary while keeping room for later persona subgraphs and richer agent routing.
 
@@ -321,6 +321,7 @@ Structured local logs can also be inspected with:
 uv run nuself logs
 uv run nuself logs --component chat --tail 20
 uv run nuself logs --component memory --json
+uv run nuself logs --component reflection --tail 10
 ```
 
 Check system health:
@@ -366,6 +367,26 @@ uv run nuself open --deep-link "nuself://thread/reflections"
 ```
 
 The macOS adapter delivers pending entries as system notifications via `osascript`. The email adapter reads SMTP credentials from `private/email.toml` and sends via SMTP. Both support dry-run mode for testing.
+
+## Reflection
+
+The daemon runs a proactive reflection scheduler that generates ideas from recent threads, memory entries, and source documents. Ideas are scored for novelty, confidence, urgency, and interruption cost, then debated by a randomized set of internal personas before surfacing as notifications.
+
+Reflection history can be inspected with:
+
+```bash
+uv run nuself reflection list
+uv run nuself reflection list --tail 50
+uv run nuself reflection show <index>
+```
+
+Reflection behavior is configured via YAML:
+
+```text
+private/reflection_config.yaml
+```
+
+See `examples/reflection_config.yaml` for available parameters including scheduler interval, daily caps, quiet hours, relevance thresholds, and persona discussion policies.
 
 ## Threads
 

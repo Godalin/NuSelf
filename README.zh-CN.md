@@ -297,7 +297,7 @@ NUSELF_CONTEXT_SUMMARY_TARGET_CHARS=2400
 NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS=300
 ```
 
-memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出时运行。它会用 agent 判断新的 working-memory 对话应该新增、修改还是忽略长期记忆。无意义闲聊会被忽略，已有相似记忆会优先更新而不是重复创建，原始对话流水账会被拒绝写入。另有一个 memory optimizer 可以手动、低频运行，用来整合已经存在的杂乱条目。更新事件会写入 `private/logs/memory.log`，交互式聊天也会用紧凑 activity lines 显示新的 chat、daemon 和 memory 事件。
+memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出时运行。它会用 agent 判断新的 working-memory 对话应该新增、修改还是忽略长期记忆。无意义闲聊会被忽略，已有相似记忆会优先更新而不是重复创建，原始对话流水账会被拒绝写入。默认情况下，候选记忆会自动提升为持久记忆条目（`auto_accept=True`）；只有需要编辑或拒绝时才需手动审查。另有一个 memory optimizer 可以手动、低频运行，用来整合已经存在的杂乱条目。更新事件会写入 `private/logs/memory.log`，交互式聊天也会用紧凑 activity lines 显示新的 chat、daemon 和 memory 事件。
 
 当前 conversation graph 有意保持较小：它保留 CLI 和 daemon protocol 边界，同时为后续 persona subgraphs 和更丰富的 agent routing 留出空间。
 
@@ -321,6 +321,7 @@ uv run nuself daemon restart
 uv run nuself logs
 uv run nuself logs --component chat --tail 20
 uv run nuself logs --component memory --json
+uv run nuself logs --component reflection --tail 10
 ```
 
 检查系统健康：
@@ -366,6 +367,26 @@ uv run nuself open --deep-link "nuself://thread/reflections"
 ```
 
 macOS adapter 通过 `osascript` 将 pending 条目投递为系统通知。email adapter 从 `private/email.toml` 读取 SMTP 凭证并通过 SMTP 发送。两者都支持 dry-run 模式用于测试。
+
+## 主动反思
+
+守护进程运行一个主动反思调度器，从近期 threads、记忆条目和 source documents 中生成想法候选。候选想法会按新颖度、置信度、紧急度和打断代价进行评分，再由一组随机抽取的内部人格进行讨论后才会作为通知推送。
+
+反思历史可以用以下命令查看：
+
+```bash
+uv run nuself reflection list
+uv run nuself reflection list --tail 50
+uv run nuself reflection show <index>
+```
+
+反思行为通过 YAML 配置：
+
+```text
+private/reflection_config.yaml
+```
+
+参见 `examples/reflection_config.yaml` 了解可用参数，包括调度间隔、每日上限、quiet hours、相关性阈值和人格讨论策略。
 
 ## Threads
 

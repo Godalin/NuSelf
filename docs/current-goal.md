@@ -4,37 +4,35 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Configuration system for tuning proactive reflection scheduling and other high-level parameters. Allows users to adjust reflection frequency, daily caps, thresholds, and moderator policies without code changes.
+Improve proactive reflection quality and memory curation UX. Recent work completed the LLM-powered idea generation, auto-accept pipeline, YAML-based configuration, and beautified TUI output. Next: evaluate reflection quality, tune thresholds, and add vector/hybrid indexes.
 
 ## Immediate Context
 
-- `ReflectionScheduler` currently has fixed hardcoded parameters (interval, daily_cap, cooldown, jitter, quiet_hours).
-- Users cannot easily adjust reflection aggressiveness or tune policy thresholds.
-- Configuration needs to be file-based (TOML in `private/reflection_config.toml`), loaded on daemon startup, and applied to the scheduler and related components.
-- 522 tests pass, pyright clean; reflect/proactive modules have passing tests.
+- `IdeaCandidateGenerator` uses LLM to scan threads, memory, and sources with structured JSON output.
+- `RelevanceGate` uses `config.relevance_threshold` from `private/reflection_config.yaml`.
+- `MemoryCurator` auto-accepts candidates into durable entries by default (`auto_accept=True`).
+- Competitive persona discussion persists traces to reflection log, viewable via `nuself reflection list/show`.
+- All user-facing memory output uses card-style TUI renderers.
+- `ReflectionConfig` YAML system covers scheduler, gate, and moderator parameters.
+- 545+ tests pass, pyright clean.
 
 ## Next Steps
 
-1. Design configuration schema (TOML format): scheduler params (interval, daily_cap, cooldown, jitter, quiet_hours), gate thresholds, moderator policies.
-2. Implement `ReflectionConfigLoader` in `src/nuself/config_reflection.py` to read and parse TOML.
-3. Update `ReflectionScheduler` constructor to accept a config object and apply parameters.
-4. Update daemon `LifecycleManager` to load and pass config when instantiating scheduler.
-5. Add fixtures for test configs and unit tests for loader and scheduler binding.
-6. Update `README.md` and `README.zh-CN.md` with config usage example and available parameters.
-7. Commit feature code and docs separately.
+1. Evaluate proactive reflection quality with real usage data; tune thresholds and prompts.
+2. Add derived vector and hybrid indexes for semantic memory retrieval.
+3. Improve memory search with embedding-based relevance alongside lexical matching.
+4. Add `nuself reflection evaluate` command to score reflection quality against outcomes.
 
 ## Not Now
 
-- Global unified config system (focus on reflection config first).
+- Global unified config system (reflection config is sufficient for now).
 - Hot reload or live update of config.
 - Config UI or interactive editor.
-- Config schema versioning or migration logic.
-- Encrypted credential storage in config.
+- LangMem integration (Phase 4).
+- Graphiti temporal graph store (Phase 3).
 
 ## Completion Criteria
 
-- `private/reflection_config.toml` is read on daemon startup.
-- `ReflectionScheduler` uses config parameters instead of hardcoded values.
-- Custom config adjusts reflection frequency in tests.
+- Reflection quality metrics tracked and thresholds tuned based on real data.
+- Vector index prototype integrated with `MemoryQueryService`.
 - All new code passes `uv run pytest` and `uvx pyright`.
-- `README.md` and `README.zh-CN.md` include configuration section with example.
