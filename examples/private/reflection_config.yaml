@@ -9,25 +9,25 @@
 scheduler:
   # Base interval between reflection cycles (seconds, minimum 60)
   interval_seconds: 3600
-  
+
   # Minimum cooldown after a reflection before attempting another (seconds)
   cooldown_seconds: 300
-  
+
   # Quiet hours: no reflection between quiet_start_hour and quiet_end_hour
   # Use 24-hour format. If start > end, wraps around midnight (e.g., 22 to 7 = 22:00-07:00)
   quiet_start_hour: 22
   quiet_end_hour: 7
-  
+
   # Maximum reflections per day
   daily_cap: 5
-  
+
   # Random jitter on interval to avoid clustering (0-50%)
   jitter_percent: 20
 
 gate:
   # Minimum composite score for a candidate to pass relevance gate (0.0-1.0)
   relevance_threshold: 0.5
-  
+
   # Score threshold to trigger multi-persona discussion (0.0-1.0)
   # Candidates below this skip persona discussion and go straight to outbox
   persona_discussion_threshold: 0.7
@@ -35,7 +35,7 @@ gate:
 moderator:
   # Maximum rounds in a persona discussion before forcing conclusion
   max_discussion_rounds: 10
-  
+
   # Rounds to attempt convergence before moderator forces a decision
   moderator_convergence_patience: 5
 
