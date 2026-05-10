@@ -6,56 +6,75 @@ import argparse
 from collections.abc import Callable, Sequence
 from pathlib import Path
 import sys
+import warnings
 
 try:
     import readline
 except ImportError:  # pragma: no cover - platform fallback
     readline = None  # type: ignore[assignment]
 
-from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.agent.chat import ChatAgent, ThreadState, ThreadStore
-from nuself.daemon import client, lifecycle
-from nuself.domain.memory import (
-    MemoryCandidate,
-    MemoryEntry,
-    MemoryEvidence,
-    PrivacyLevel,
-    default_memory_type_registry,
-    default_relation_descriptor_registry,
-)
-from nuself.domain.source import SourceChunk, SourceDocument
-from nuself.domain.profile import ProfileItem
-from nuself.memory.curator import MemoryCurator
-from nuself.memory.intake import MemoryIntakeAgent
-from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
-from nuself.memory.repository import (
-    MemoryCandidateNotFound,
-    MemoryCandidateRepository,
-    MemoryEntryNotFound,
-    MemoryEntryRepository,
-    MemoryRelationFilters,
-    MemoryRelationIndexRecord,
-    MemoryStats,
-    MemorySearchFilters,
-    SymbolicGraphEdge,
-    SymbolicGraphEdgeFilters,
-    SymbolicGraphNode,
-    SymbolicGraphNodeFilters,
-    memory_stats,
-)
-from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
-from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
-from nuself.logs import LOG_COMPONENTS, LogComponent, read_log_events, write_log_event
-from nuself.tui.memory import (
-    render_candidate_detail,
-    render_candidate_row,
-    render_memory_entry_detail,
-    render_memory_entry_row,
-    render_profile_row,
-    render_source_detail,
-    render_source_row,
-)
-from nuself.tui.render import render_log_event, render_log_event_json, render_session_header
+_original_warn = warnings.warn
+
+
+def _suppress_startup_warning(
+    message: Warning | str,
+    category: type[Warning] | None = None,
+    stacklevel: int = 1,
+    source: object | None = None,
+) -> None:
+    if "The default value of `allowed_objects` will change in a future version." in str(message):
+        return
+    _original_warn(message, category=category, stacklevel=stacklevel, source=source)
+
+
+warnings.warn = _suppress_startup_warning
+try:
+    from nuself.config import ensure_runtime_dirs, runtime_paths
+    from nuself.agent.chat import ChatAgent, ThreadState, ThreadStore
+    from nuself.daemon import client, lifecycle
+    from nuself.domain.memory import (
+        MemoryCandidate,
+        MemoryEntry,
+        MemoryEvidence,
+        PrivacyLevel,
+        default_memory_type_registry,
+        default_relation_descriptor_registry,
+    )
+    from nuself.domain.source import SourceChunk, SourceDocument
+    from nuself.domain.profile import ProfileItem
+    from nuself.memory.curator import MemoryCurator
+    from nuself.memory.intake import MemoryIntakeAgent
+    from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
+    from nuself.memory.repository import (
+        MemoryCandidateNotFound,
+        MemoryCandidateRepository,
+        MemoryEntryNotFound,
+        MemoryEntryRepository,
+        MemoryRelationFilters,
+        MemoryRelationIndexRecord,
+        MemoryStats,
+        MemorySearchFilters,
+        SymbolicGraphEdge,
+        SymbolicGraphEdgeFilters,
+        SymbolicGraphNode,
+        SymbolicGraphNodeFilters,
+        memory_stats,
+    )
+    from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
+    from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
+    from nuself.logs import LOG_COMPONENTS, LogComponent, read_log_events, write_log_event
+    from nuself.tui.memory import (
+        render_candidate_detail,
+        render_candidate_row,
+        render_memory_entry_detail,
+        render_memory_entry_row,
+        render_profile_row,
+        render_source_detail,
+        render_source_row,
+    )
+    from nuself.tui.render import render_log_event, render_log_event_json, render_session_header
+finally:
+    warnings.warn = _original_warn
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8

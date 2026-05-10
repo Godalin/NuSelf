@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
 from typing import Protocol, cast
 
 import pytest
@@ -2731,6 +2733,19 @@ def test_nested_subcommand_help(argv: list[str]) -> None:
     with pytest.raises(SystemExit) as exc_info:
         parser.parse_args(argv)
     assert exc_info.value.code == 0
+
+
+def test_help_does_not_emit_langgraph_warning() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "nuself.cli", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "usage: nuself" in result.stdout
+    assert "LangChainPendingDeprecationWarning" not in result.stderr
 
 
 
