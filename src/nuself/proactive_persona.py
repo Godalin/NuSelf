@@ -11,6 +11,7 @@ from nuself.agent.persona import (
     PersonaDefinition,
     PersonaGraphDriver,
     PersonaInput,
+    MODERATOR_PERSONA,
     PersonaTurnState,
 )
 from nuself.domain.proactive import IdeaCandidate
@@ -40,8 +41,7 @@ class ProactivePersonaDiscussion:
         personas: tuple[PersonaDefinition, ...] | None = None,
         min_participants: int = 2,
         max_participants: int = 4,
-        min_rounds: int = 3,
-        max_rounds: int = 5,
+        max_turns: int = 9,
         blocking_threshold: float = 0.3,
         override_threshold: float = 0.8,
         composite_threshold: float = 0.5,
@@ -50,8 +50,7 @@ class ProactivePersonaDiscussion:
         self._personas = personas if personas is not None else BUILTIN_PERSONAS
         self._min_participants = min(min_participants, max_participants)
         self._max_participants = max(min_participants, max_participants)
-        self._min_rounds = max(1, min_rounds)
-        self._max_rounds = max(self._min_rounds, max_rounds)
+        self._max_turns = max(1, max_turns)
         self._blocking_threshold = blocking_threshold
         self._override_threshold = override_threshold
         self._composite_threshold = composite_threshold
@@ -78,28 +77,24 @@ class ProactivePersonaDiscussion:
             candidate.body,
         ]
         round_scores: dict[str, float] = {}
-        consensus_round = self._max_rounds
-        round_number = 0
-        while round_number < self._max_rounds:
-            round_number += 1
-            participants = self._participants_for_round(selected, emergent, round_number)
+        turn_number = 0
+        while turn_number < self._max_turns:
+            turn_number += 1
+            moderator_note = self._moderator_prompt(candidate, discussion_trace, turn_number)
+            discussion_trace.append(f"host: {moderator_note}")
+            participants = self._participants_for_turn(selected, emergent)
             round_scores = self._score_candidate(
                 candidate,
                 participants,
                 discussion_trace,
-                round_label=f"round-{round_number}",
-                round_number=round_number,
+                turn_label=f"turn-{turn_number}",
+                turn_number=turn_number,
             )
             if self._round_has_consensus(round_scores):
-                consensus_round = round_number
-                if round_number >= self._min_rounds:
-                    break
-                discussion_trace.append(
-                    f"round-{round_number}: consensus candidate, continue to confirm"
-                )
-                continue
-            if round_number < self._max_rounds:
-                discussion_trace.append(f"round-{round_number}: continue discussion")
+                discussion_trace.append(f"turn-{turn_number}: reached convergence")
+                break
+            if turn_number < self._max_turns:
+                discussion_trace.append(f"turn-{turn_number}: moderator invites another pass")
         scores = round_scores
         emergent_persona_ids = (emergent.id,) if emergent is not None else ()
         blocking = tuple(
@@ -144,23 +139,24 @@ class ProactivePersonaDiscussion:
             revised_body=candidate.body,
             scores=scores,
             blocking_vetos=blocking,
-            reason=f"approved after {consensus_round} discussion round(s)",
+            reason=f"approved after {turn_number} discussion turn(s)",
             discussion_trace=tuple(discussion_trace),
             emergent_persona_ids=emergent_persona_ids,
         )
 
-    def _participants_for_round(
+    def _participants_for_turn(
         self,
         selected: tuple[PersonaDefinition, ...],
         emergent: PersonaDefinition | None,
-        round_number: int,
     ) -> tuple[PersonaDefinition, ...]:
-        ordered = selected if round_number % 2 == 1 else tuple(reversed(selected))
-        if emergent is None:
-            return ordered
-        if round_number == 1:
-            return ordered
-        return ordered + (emergent,)
+        pool = list(selected)
+        if emergent is not None:
+            pool.append(emergent)
+        if not pool:
+            return ()
+        count = random.randint(1, len(pool))
+        chosen = random.sample(pool, count)
+        return tuple(chosen)
 
     def _select_personas(self) -> tuple[PersonaDefinition, ...]:
         pool = [p for p in self._personas if p.id != "synthesizer_self"]
@@ -176,8 +172,8 @@ class ProactivePersonaDiscussion:
         personas: tuple[PersonaDefinition, ...],
         discussion_trace: list[str],
         *,
-        round_label: str,
-        round_number: int,
+        turn_label: str,
+        turn_number: int,
     ) -> dict[str, float]:
         scores: dict[str, float] = {}
         discussion_context = "\n".join(discussion_trace)
@@ -193,14 +189,32 @@ class ProactivePersonaDiscussion:
             if not result.contributions:
                 continue
             contrib = result.contributions[0]
-            score = self._heuristic_score(candidate, contrib, discussion_context=discussion_context, round_number=round_number)
+            score = self._heuristic_score(candidate, contrib, discussion_context=discussion_context, turn_number=turn_number)
             scores[contrib.persona_id] = score
             note = contrib.notes[0] if contrib.notes else contrib.persona_id
-            discussion_trace.append(f"{round_label}:{contrib.persona_id}: {note}")
+            discussion_trace.append(f"{turn_label}:{contrib.persona_id}: {note}")
             if result.synthesis is not None and result.synthesis.summary:
-                discussion_trace.append(f"{round_label}:synthesis: {result.synthesis.summary}")
+                discussion_trace.append(f"{turn_label}:synthesis: {result.synthesis.summary}")
             discussion_context = "\n".join(discussion_trace)
         return scores
+
+    def _moderator_prompt(
+        self,
+        candidate: IdeaCandidate,
+        discussion_trace: list[str],
+        turn_number: int,
+    ) -> str:
+        turn_state = PersonaTurnState(
+            input=PersonaInput(
+                user_message=f"Moderator turn {turn_number}: {candidate.title}",
+                memory_context="\n".join(discussion_trace),
+            ),
+            selected_personas=(MODERATOR_PERSONA,),
+        )
+        result = self._driver.run(turn_state)
+        if result.contributions and result.contributions[0].notes:
+            return result.contributions[0].notes[0]
+        return "Moderator asks the discussion to converge."
 
     def _round_has_consensus(self, scores: dict[str, float]) -> bool:
         if not scores:
@@ -241,14 +255,16 @@ class ProactivePersonaDiscussion:
         contrib: PersonaContribution,
         *,
         discussion_context: str = "",
-        round_number: int = 1,
+        turn_number: int = 1,
     ) -> float:
         # Base score from candidate confidence and novelty
         base = (candidate.confidence + candidate.novelty) / 2
-        if round_number > 1 and discussion_context:
-            base = min(1.0, base + min(0.08, 0.02 * (round_number - 1)))
+        if turn_number > 1 and discussion_context:
+            base = min(1.0, base + min(0.08, 0.02 * (turn_number - 1)))
         if "after hearing" in discussion_context:
             base = min(1.0, base + 0.03)
+        if contrib.persona_id == "moderator_self":
+            return 0.0
         # Persona-specific adjustments
         pid = contrib.persona_id
         if pid == "skeptic_self":

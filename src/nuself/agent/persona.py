@@ -97,6 +97,9 @@ class MinimalPersonaNode:
             context_note = f" after hearing: {_compact_text(memory_context, 140)}"
         else:
             context_note = ""
+        if persona.id == "moderator_self":
+            note = f"{persona.id} asked the discussion to converge, avoid repetition, and only continue if a new point appears.{context_note}"
+            return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
         if persona.id == "skeptic_self":
             note = f"{persona.id} challenged assumptions in: {persona_input.user_message}{context_note}"
             return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
@@ -384,6 +387,11 @@ CARE_PERSONA = PersonaDefinition(
 SYNTHESIZER_PERSONA = PersonaDefinition(
     id="synthesizer_self",
     description="Fuses persona contributions into compact internal synthesis.",
+)
+
+MODERATOR_PERSONA = PersonaDefinition(
+    id="moderator_self",
+    description="Keeps persona discussion converging and invites silence when a turn adds nothing new.",
 )
 
 BUILTIN_PERSONAS = (

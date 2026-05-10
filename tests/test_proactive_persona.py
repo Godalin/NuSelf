@@ -140,18 +140,24 @@ def test_discuss_shares_context_across_rounds(monkeypatch: pytest.MonkeyPatch) -
         personas=(ANALYST_PERSONA, SKEPTIC_PERSONA),
         min_participants=2,
         max_participants=2,
+        max_turns=3,
+        consensus_spread_threshold=0.0,
     )
     discussion._driver = _FakePersonaDriver()  # type: ignore[attr-defined]
     monkeypatch.setattr("nuself.proactive_persona.random.sample", _sample_first)
+    monkeypatch.setattr("nuself.proactive_persona.random.randint", _pick_upper_bound)
     candidate = _make_candidate(body="A shared context should evolve during debate.")
 
     result = discussion.discuss(candidate)
 
     assert result.approved is True
-    assert any(line.startswith("round-1:") for line in result.discussion_trace)
-    assert any(line.startswith("round-2:") for line in result.discussion_trace)
-    assert any(line.startswith("round-3:") for line in result.discussion_trace)
-    assert any(line.startswith("round-2:") and "round-1:" in line for line in result.discussion_trace)
+    assert any(line.startswith("host:") for line in result.discussion_trace)
+    assert any("moderator_self" in line for line in result.discussion_trace)
+    assert any(line.startswith("turn-1:") for line in result.discussion_trace)
+    assert any(line.startswith("turn-2:") for line in result.discussion_trace)
+    assert any(line.startswith("turn-3:") for line in result.discussion_trace)
+    assert any(line.startswith("turn-2:") and "turn-1:" in line for line in result.discussion_trace)
+    assert any(line.startswith("turn-3:") and "turn-2:" in line for line in result.discussion_trace)
 
 
 def test_discuss_spawns_emergent_temporary_persona(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -162,6 +168,7 @@ def test_discuss_spawns_emergent_temporary_persona(monkeypatch: pytest.MonkeyPat
     )
     discussion._driver = _FakePersonaDriver()  # type: ignore[attr-defined]
     monkeypatch.setattr("nuself.proactive_persona.random.sample", _sample_first)
+    monkeypatch.setattr("nuself.proactive_persona.random.randint", _pick_upper_bound)
     candidate = _make_candidate(
         candidate_type="connection",
         confidence=0.9,
@@ -178,3 +185,7 @@ def test_discuss_spawns_emergent_temporary_persona(monkeypatch: pytest.MonkeyPat
 
 def _sample_first(seq: list[object], k: int) -> list[object]:
     return list(seq)[:k]
+
+
+def _pick_upper_bound(low: int, high: int) -> int:
+    return high
