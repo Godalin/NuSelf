@@ -172,6 +172,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add color-coded outbox formatting with status colors.
 - [x] Add `notify list --status` filter and `notify stats` command.
 - [x] Add REPL `:notify list` and `:notify show <id>` commands.
+- [x] Add `notify watch` CLI command and REPL `:watch` for real-time outbox streaming.
 
 ### Evaluation And Quality
 
@@ -355,6 +356,7 @@ uv run nuself notify show <entry-id>
 uv run nuself notify send <entry-id>
 uv run nuself notify dismiss <entry-id>
 uv run nuself notify clear
+uv run nuself notify watch          # poll for new entries
 ```
 
 Reflection intents include a deep link to the `reflections` thread. Open a notification directly:

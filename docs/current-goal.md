@@ -4,26 +4,21 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Enhanced outbox/notify terminal interface with color-coded formatting, filtering, and richer REPL commands.
+Real-time outbox watch mode for observing daemon proactive reflection output as it arrives.
 
 ## Immediate Context
 
-- `notify list` now supports `--status` filtering and color-coded output via `TerminalTheme`.
-- `notify show` renders formatted detail with colored status tags.
-- `notify stats` prints counts by status.
-- REPL `:notify list` shows all entries; `:notify show <id>` shows detail.
-- All outbox rendering lives in `tui/render.py` alongside log/event renderers.
-- 519 tests pass, pyright clean.
+- `notify watch` CLI command polls the outbox every 5s (configurable via `--interval`) and prints new entries as they appear.
+- REPL `:watch` command enters the same watch mode with 2s polling.
+- Both modes track already-seen entries and only emit new ones, using the existing color-coded `render_outbox_summary`.
+- 522 tests pass, pyright clean.
 
 ## Next Steps
 
-1. ~~Add color-coded outbox formatting in `tui/render.py`.~~ Done.
-2. ~~Add `--status` filter to `notify list` and enhance output.~~ Done.
-3. ~~Enhance `notify show` with formatted detail view.~~ Done.
-4. ~~Add `notify stats` CLI command.~~ Done.
-5. ~~Add REPL `:notify list` and `:notify show <id>`.~~ Done.
-6. ~~Update README and README.zh-CN.md TODOs.~~ Done.
-7. Commit feature code and docs separately.
+1. ~~Add `notify watch` CLI command with `--interval` flag.~~ Done.
+2. ~~Add REPL `:watch` command.~~ Done.
+3. ~~Update README and README.zh-CN.md TODOs.~~ Done.
+4. Commit feature code and docs separately.
 
 ## Not Now
 
@@ -33,12 +28,11 @@ Enhanced outbox/notify terminal interface with color-coded formatting, filtering
 - Web or GUI interface work.
 - Private memory schema migration.
 - Dashboard-style or dependency-heavy terminal UI.
+- Background log polling in normal REPL input mode (watch mode is explicit).
 
 ## Completion Criteria
 
-- `notify list --status <filter>` works and outputs color-coded lines.
-- `notify show <id>` outputs formatted detail with colored status.
-- `notify stats` prints counts by status.
-- REPL `:notify list` and `:notify show <id>` work.
+- `nuself notify watch` prints new outbox entries in real time.
+- REPL `:watch` enters watch mode and exits cleanly on Ctrl+C.
 - All new code passes `uv run pytest` and `uvx pyright`.
 - `README.md` and `README.zh-CN.md` TODOs updated.

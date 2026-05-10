@@ -172,6 +172,7 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 添加颜色编码的 outbox 格式化，支持状态颜色。
 - [x] 添加 `notify list --status` 过滤和 `notify stats` 命令。
 - [x] 添加 REPL `:notify list` 和 `:notify show <id>` 命令。
+- [x] 添加 `notify watch` CLI 命令和 REPL `:watch`，用于实时 outbox 流式查看。
 
 ### 评估与质量
 
@@ -355,6 +356,7 @@ uv run nuself notify show <entry-id>
 uv run nuself notify send <entry-id>
 uv run nuself notify dismiss <entry-id>
 uv run nuself notify clear
+uv run nuself notify watch          # 轮询新条目
 ```
 
 Reflection intent 包含指向 `reflections` thread 的 deep link。直接打开通知：
