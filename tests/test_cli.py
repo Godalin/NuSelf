@@ -2782,3 +2782,120 @@ def test_third_level_subcommand_help(argv: list[str]) -> None:
     with pytest.raises(SystemExit) as exc_info:
         parser.parse_args(argv)
     assert exc_info.value.code == 0
+
+
+def test_notify_watch_detects_new_entries(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(OutboxEntry(id="e1", title="First", body="B", status="pending", idempotency_key="k1"))
+
+    sleep_calls: list[int] = []
+
+    def _fake_sleep(seconds: float) -> None:
+        sleep_calls.append(int(seconds))
+        # Inject after first poll; exit after second poll prints it
+        if len(sleep_calls) == 1:
+            outbox.add(
+                OutboxEntry(id="e2", title="Second", body="B", status="pending", idempotency_key="k2")
+            )
+        if len(sleep_calls) >= 2:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr("time.sleep", _fake_sleep)
+    result = main(["--project-root", str(tmp_path), "notify", "watch", "--interval", "1"])
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "Watching outbox every 1s" in output
+    assert "Second" in output
+    assert "Stopped watching" in output
+
+
+def test_notify_watch_default_interval(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    sleep_calls: list[int] = []
+
+    def _fake_sleep(seconds: float) -> None:
+        sleep_calls.append(int(seconds))
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("time.sleep", _fake_sleep)
+    result = main(["--project-root", str(tmp_path), "notify", "watch"])
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert sleep_calls == [5]
+    assert "Watching outbox every 5s" in output
+
+
+def test_repl_watch_detects_new_entries(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(OutboxEntry(id="e1", title="First", body="B", status="pending", idempotency_key="k1"))
+
+    sleep_calls: list[int] = []
+
+    def _fake_sleep(seconds: float) -> None:
+        sleep_calls.append(int(seconds))
+        if len(sleep_calls) == 1:
+            outbox.add(
+                OutboxEntry(id="e2", title="Second", body="B", status="pending", idempotency_key="k2")
+            )
+        if len(sleep_calls) >= 2:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr("time.sleep", _fake_sleep)
+    monkeypatch.setattr("sys.stdin", _TextInput(":watch\n:q\n"))
+    monkeypatch.setattr(
+        "nuself.cli.lifecycle.status",
+        _mock_status,
+    )
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Watching outbox" in captured.out
+    assert "Second" in captured.out
+    assert "Stopped watching" in captured.out
+    assert sleep_calls == [2, 2]
+
+
+def test_repl_notify_watch_subcommand(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(OutboxEntry(id="e1", title="First", body="B", status="pending", idempotency_key="k1"))
+
+    sleep_calls: list[int] = []
+
+    def _fake_sleep(seconds: float) -> None:
+        sleep_calls.append(int(seconds))
+        if len(sleep_calls) == 1:
+            outbox.add(
+                OutboxEntry(id="e2", title="Second", body="B", status="pending", idempotency_key="k2")
+            )
+        if len(sleep_calls) >= 2:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr("time.sleep", _fake_sleep)
+    monkeypatch.setattr("sys.stdin", _TextInput(":notify watch\n:q\n"))
+    monkeypatch.setattr(
+        "nuself.cli.lifecycle.status",
+        _mock_status,
+    )
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Watching outbox" in captured.out
+    assert "Second" in captured.out
+    assert "Stopped watching" in captured.out

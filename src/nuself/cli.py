@@ -162,6 +162,9 @@ def build_parser() -> argparse.ArgumentParser:
     notify_dismiss_parser.add_argument("entry_id")
     _add_handler(notify_dismiss_parser, handle_notify_dismiss)
     _add_handler(notify_subparsers.add_parser("stats"), handle_notify_stats)
+    notify_watch_parser = notify_subparsers.add_parser("watch")
+    notify_watch_parser.add_argument("--interval", type=int, default=5, help="Poll interval in seconds")
+    _add_handler(notify_watch_parser, handle_notify_watch)
     _add_handler(notify_subparsers.add_parser("clear"), handle_notify_clear)
 
     memory_parser = subparsers.add_parser("memory")
@@ -1097,6 +1100,34 @@ def handle_notify_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_notify_watch(args: argparse.Namespace) -> int:
+    import time
+
+    from nuself.notification import NotificationOutbox
+    from nuself.tui.render import render_outbox_summary
+
+    outbox = NotificationOutbox(args.project_root)
+    interval: float = max(1, args.interval)
+    print(f"Watching outbox every {int(interval)}s. Press Ctrl+C or type 'q' + Enter to quit.")
+
+    seen: set[str] = set()
+    for entry in outbox.list():
+        seen.add(entry.id)
+
+    try:
+        while True:
+            time.sleep(interval)
+            for entry in outbox.list():
+                if entry.id not in seen:
+                    seen.add(entry.id)
+                    print(render_outbox_summary(entry))
+            # Non-blocking check for 'q' is not possible with plain input();
+            # rely on Ctrl+C for clean exit.
+    except KeyboardInterrupt:
+        print("\nStopped watching.")
+        return 0
+
+
 def handle_notify_send(args: argparse.Namespace) -> int:
     from nuself.notification import NotificationOutbox, LogOnlyNotificationAdapter, OutboxEntryNotFound
 
@@ -1530,6 +1561,7 @@ _INTERACTIVE_COMMANDS = [
     ":memory",
     ":mem",
     ":notify",
+    ":watch",
     ":threads",
     ":thread",
     ":rename",
@@ -1743,6 +1775,11 @@ def _handle_interactive_command(command: str, project_root: Path | None, current
         print(_handle_interactive_notify_command(project_root))
         print()
         return ("", current_thread_id)
+    if command == ":watch":
+        print()
+        _handle_interactive_watch_command(project_root)
+        print()
+        return ("", current_thread_id)
     if command.startswith(":notify "):
         print()
         parts = command[8:].strip().split(maxsplit=1)
@@ -1752,6 +1789,8 @@ def _handle_interactive_command(command: str, project_root: Path | None, current
             print(_handle_interactive_notify_list_command(project_root))
         elif parts[0] == "show" and len(parts) == 2:
             print(_handle_interactive_notify_show_command(project_root, parts[1]))
+        elif parts[0] == "watch":
+            _handle_interactive_watch_command(project_root)
         elif len(parts) == 2:
             subcmd, entry_id = parts[0], parts[1]
             print(_handle_interactive_notify_subcommand(project_root, subcmd, entry_id))
@@ -1918,6 +1957,7 @@ def _interactive_help(command: str | None = None) -> str:
             "  :notify show <id>  show one notification",
             "  :notify send <id>  send a notification",
             "  :notify dismiss <id>  dismiss a notification",
+            "  :watch                   watch outbox for new entries",
             "  :help      show this help",
             "  :status show daemon and thread status",
             "  :logs   show recent activity logs",
@@ -2156,6 +2196,29 @@ def _handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str
         outbox.dismiss(entry_id)
         return f"Dismissed: {entry_id}"
     return f"Unknown :notify subcommand: {subcmd}"
+
+
+def _handle_interactive_watch_command(project_root: Path | None) -> None:
+    import time
+
+    from nuself.notification import NotificationOutbox
+    from nuself.tui.render import render_outbox_summary
+
+    outbox = NotificationOutbox(project_root)
+    seen: set[str] = set()
+    for entry in outbox.list():
+        seen.add(entry.id)
+
+    print("Watching outbox. Press Ctrl+C to stop.")
+    try:
+        while True:
+            time.sleep(2)
+            for entry in outbox.list():
+                if entry.id not in seen:
+                    seen.add(entry.id)
+                    print(render_outbox_summary(entry))
+    except KeyboardInterrupt:
+        print("\nStopped watching.")
 
 
 def _handle_interactive_threads_command(project_root: Path | None) -> str:

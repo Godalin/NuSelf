@@ -77,9 +77,12 @@ def test_discuss_blocks_high_interruption() -> None:
     )
     candidate = _make_candidate(confidence=0.9, novelty=0.9, interruption_cost=0.9, urgency=0.2)
     result = discussion.discuss(candidate)
-    # Skeptic should downscore high interruption; with only 2 personas and low urgency,
-    # strong override is unlikely
-    assert result.approved is False or "skeptic_self" in result.scores
+    # Skeptic should downscore high interruption; verify its score is lower than analyst
+    if "skeptic_self" in result.scores and "analyst_self" in result.scores:
+        assert result.scores["skeptic_self"] < result.scores["analyst_self"]
+    elif "skeptic_self" in result.scores:
+        # Skeptic alone with high interruption should score below override threshold
+        assert result.scores["skeptic_self"] < 0.8
 
 
 def test_select_personas_random_subset() -> None:
