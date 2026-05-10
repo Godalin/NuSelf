@@ -92,20 +92,32 @@ class MinimalPersonaNode:
     """Deterministic placeholder persona node used before LLM-backed personas."""
 
     def __call__(self, persona: PersonaDefinition, persona_input: PersonaInput) -> PersonaContribution:
+        memory_context = persona_input.memory_context.strip()
+        if memory_context:
+            context_note = f" after hearing: {_compact_text(memory_context, 140)}"
+        else:
+            context_note = ""
         if persona.id == "skeptic_self":
-            note = f"{persona.id} challenged assumptions in: {persona_input.user_message}"
+            note = f"{persona.id} challenged assumptions in: {persona_input.user_message}{context_note}"
             return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
         if persona.id == "builder_self":
-            note = f"{persona.id} proposed concrete steps for: {persona_input.user_message}"
+            note = f"{persona.id} proposed concrete steps for: {persona_input.user_message}{context_note}"
             return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
         if persona.id == "historian_self":
-            note = f"{persona.id} connected prior context to: {persona_input.user_message}"
+            note = f"{persona.id} connected prior context to: {persona_input.user_message}{context_note}"
             return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
         if persona.id == "care_self":
-            note = f"{persona.id} highlighted emotional and human impact in: {persona_input.user_message}"
+            note = f"{persona.id} highlighted emotional and human impact in: {persona_input.user_message}{context_note}"
             return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
-        note = f"{persona.id} considered: {persona_input.user_message}"
+        note = f"{persona.id} considered: {persona_input.user_message}{context_note}"
         return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0)
+
+
+def _compact_text(text: str, limit: int) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: max(limit - 3, 0)].rstrip() + "..."
 
 
 class MinimalSynthesizerNode:

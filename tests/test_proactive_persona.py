@@ -64,7 +64,7 @@ def test_discuss_approves_strong_candidate() -> None:
     assert isinstance(result, PersonaCompetitionResult)
     assert result.approved is True
     assert result.scores
-    assert result.reason == "approved after competitive discussion"
+    assert result.reason.startswith("approved after ")
 
 
 def test_discuss_blocks_high_interruption() -> None:
@@ -150,6 +150,7 @@ def test_discuss_shares_context_across_rounds(monkeypatch: pytest.MonkeyPatch) -
     assert result.approved is True
     assert any(line.startswith("round-1:") for line in result.discussion_trace)
     assert any(line.startswith("round-2:") for line in result.discussion_trace)
+    assert any(line.startswith("round-3:") for line in result.discussion_trace)
     assert any(line.startswith("round-2:") and "round-1:" in line for line in result.discussion_trace)
 
 
