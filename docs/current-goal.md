@@ -4,34 +4,36 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Unify all system configuration into a single `config.yaml` replacing scattered `.env`, `reflection_config.yaml`, and hardcoded defaults. Implement ConfigSystem loader with environment variable overrides and remove obsolete compatibility layers.
+Fix background reflection system to properly generate proactive ideas. Ensure daemon threads start correctly and reflection candidates are generated with high-quality insights.
 
 ## Immediate Context
 
-- New `ConfigSystem` class loads unified `config.yaml` with env variable overrides.
-- Config hierarchy: env vars > `private/config.yaml` > `examples/private/config.yaml` (for tests) > hardcoded defaults.
-- Reflection scheduling and persona discussion now only accept `ReflectionSettings` from `ConfigSystem`.
-- Chat.py, llm.py, daemon/server.py now use ConfigSystem instead of scattered legacy config helpers.
-- 545+ tests pass; need validation of config loading path.
+- ConfigSystem unified and merged to main.
+- Daemon server correctly starts 3 background threads: memory_curator, reflection_scheduler, notification_delivery.
+- IdeaCandidateGenerator may be failing silently (catches RuntimeError/ValueError/JSONDecodeError).
+- Possible root causes:
+  1. API key not configured → uses LocalFallbackLLM (low-quality output)
+  2. Memory/threads/sources empty → `context.is_empty()` → no candidates
+  3. Default LLM initialization fails → silent catch
+  4. Thread startup error not logged → threads die silently
 
 ## Next Steps
 
-1. Run tests to validate ConfigSystem migration.
-2. Update test fixtures to use `ReflectionSettings` and unified config helpers only.
-3. Migrate email.toml config into config.yaml section.
-4. Update CLI documentation to show config.yaml examples.
-5. Remove stale references to `.env` and `reflection_config.yaml` in docs/tests.
+1. **Diagnose**: Add logging to daemon thread startup and reflection cycle execution
+2. **Fix API Key Handling**: Ensure API key is always available (error earlier if missing)
+3. **Add Fallback Strategy**: When LocalFallbackLLM is used, provide visible warning in logs
+4. **Improve Error Reporting**: Log failures in reflection, not silently catch them
+5. **Validate Context Collection**: Ensure memory/threads/sources are being read correctly
 
 ## Not Now
 
-- LangMem integration (Phase 4).
-- Vector/hybrid indexes (Phase 3).
-- Hot reload or live config updates.
-- Config UI or interactive editor.
+- New reflection strategies (Phase 4).
+- LLM-less reflection (Phase 3).
+- Hot reload of reflection config.
 
 ## Completion Criteria
 
-- All core config reads use SystemConfig.
-- Tests pass with new config system.
-- Config file loading documented with examples.
-- All new code passes `uv run pytest` and `uvx pyright`.
+- Daemon logs show reflection checks running continuously.
+- When API key missing, system logs clear warning.
+- Failed candidates logged with reason (empty context, low score, etc).
+- At least 1 test validates end-to-end daemon reflection cycle.

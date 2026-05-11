@@ -66,20 +66,53 @@ class ReflectionScheduler:
 
     def reflect(self, now: datetime | None = None) -> bool:
         """Run one reflection cycle if conditions pass."""
+        from nuself.logs import write_log_event
+        
         if now is None:
             now = datetime.now(UTC)
+        
         if not self.should_reflect(now):
             return False
+        
+        write_log_event(
+            "reflection",
+            "cycle_started",
+            "reflection cycle triggered",
+            project_root=self._project_root,
+            level="info",
+            status="started"
+        )
+        
         # Consume any queued events before generating candidates
         self._event_queue.clear()
         candidates = IdeaCandidateGenerator(self._project_root, config=self._config).generate()
         if not candidates:
+            write_log_event(
+                "reflection",
+                "cycle_no_candidates",
+                "reflection cycle generated no candidates",
+                project_root=self._project_root,
+                level="info",
+                status="completed",
+                metadata={"reason": "no_candidates"}
+            )
             return False
+        
         gate = RelevanceGate(self._project_root, config=self._config)
         best = candidates[0]
         score = gate.score(best)
         if not score.passes:
+            write_log_event(
+                "reflection",
+                "cycle_filtered",
+                f"best candidate filtered by relevance gate: {best.title}",
+                project_root=self._project_root,
+                level="info",
+                status="completed",
+                metadata={"reason": "filtered_by_gate", "score": float(score.composite)}
+            )
             return False
+        
         # High-value candidates go through competitive persona discussion
         title = best.title
         body = best.body
@@ -90,12 +123,32 @@ class ReflectionScheduler:
             result = discussion.discuss(best)
             self._write_discussion_log(best, score, result, now)
             if not result.approved:
+                write_log_event(
+                    "reflection",
+                    "cycle_discussion_rejected",
+                    f"persona discussion rejected candidate: {best.title}",
+                    project_root=self._project_root,
+                    level="info",
+                    status="completed",
+                    metadata={"reason": "discussion_rejected"}
+                )
                 return False
             title = result.revised_title
             body = result.revised_body
+        
         intent = self._candidate_to_outbox_entry(best, now, title=title, body=body)
         self._write_last_reflection(now, title=title, body=body)
         self._outbox.add(intent)
+        
+        write_log_event(
+            "reflection",
+            "cycle_completed",
+            f"reflection cycle published: {title}",
+            project_root=self._project_root,
+            level="info",
+            status="completed",
+            metadata={"reason": "published", "score": float(score.composite), "idea_type": best.candidate_type}
+        )
         return True
 
     def _in_quiet_hours(self, now: datetime) -> bool:
@@ -412,12 +465,32 @@ class IdeaCandidateGenerator:
         self._config_obj = system_config.reflection
 
     def generate(self, max_candidates: int = 3) -> list[IdeaCandidate]:
+        from nuself.logs import write_log_event
+        
         context = self._collect_context()
         if context.is_empty():
+            write_log_event(
+                "reflection",
+                "candidate_generation_skipped",
+                "no context available for idea generation",
+                project_root=self._project_root,
+                level="debug",
+                status="skipped",
+                metadata={"reason": "empty_context"}
+            )
             return []
         try:
             return self._generate_with_llm(context, max_candidates)
-        except (RuntimeError, ValueError, json.JSONDecodeError):
+        except (RuntimeError, ValueError, json.JSONDecodeError) as e:
+            write_log_event(
+                "reflection",
+                "candidate_generation_failed",
+                f"failed to generate candidates: {type(e).__name__}",
+                project_root=self._project_root,
+                level="warning",
+                status="error",
+                error=str(e)
+            )
             return []
 
     def _collect_context(self) -> _ThinkingContext:

@@ -59,6 +59,17 @@ class DaemonState:
             self._memory_curator_thread.join(timeout=1.0)
 
     def _run_background_memory_curator(self) -> None:
+        from nuself.logs import write_log_event
+        
+        write_log_event(
+            "daemon",
+            "memory_curator_started",
+            "memory curator thread started",
+            project_root=self.project_root,
+            level="info",
+            status="started"
+        )
+        
         while not self.shutdown_requested.wait(self.memory_curator_interval_seconds):
             try:
                 self.memory_curator.run_once()
@@ -80,11 +91,32 @@ class DaemonState:
             self._reflection_scheduler_thread.join(timeout=1.0)
 
     def _run_background_reflection_scheduler(self) -> None:
+        from nuself.logs import write_log_event
+        
+        write_log_event(
+            "daemon",
+            "reflection_scheduler_started",
+            "reflection scheduler thread started",
+            project_root=self.project_root,
+            level="info",
+            status="started"
+        )
+        
         while not self.shutdown_requested.wait(self.reflection_check_interval_seconds):
             try:
-                if self.reflection_scheduler.should_reflect():
+                should_reflect = self.reflection_scheduler.should_reflect()
+                if should_reflect:
                     self.reflection_scheduler.reflect()
-            except RuntimeError:
+            except RuntimeError as e:
+                write_log_event(
+                    "daemon",
+                    "reflection_scheduler_error",
+                    f"reflection scheduler error: {str(e)}",
+                    project_root=self.project_root,
+                    level="error",
+                    status="error",
+                    error=str(e)
+                )
                 continue
 
     def start_background_notification_delivery(self) -> None:
@@ -102,6 +134,17 @@ class DaemonState:
             self._notification_delivery_thread.join(timeout=1.0)
 
     def _run_background_notification_delivery(self) -> None:
+        from nuself.logs import write_log_event
+        
+        write_log_event(
+            "daemon",
+            "notification_delivery_started",
+            "notification delivery thread started",
+            project_root=self.project_root,
+            level="info",
+            status="started"
+        )
+        
         while not self.shutdown_requested.wait(self.notification_delivery_interval_seconds):
             try:
                 self.notification_delivery_loop.run_once()
