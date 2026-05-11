@@ -261,6 +261,9 @@ class ConfigSystem:
         if config_path is None and project_root is not None:
             config_path = project_root / "private" / "config.yaml"
 
+        # Load .env file if present (so environment variables are available)
+        cls._load_env_file(project_root)
+
         # Start with defaults
         defaults = cls._default_config()
 
@@ -276,6 +279,41 @@ class ConfigSystem:
 
         # Merge and apply environment overrides
         return cls._merge_with_env_overrides(defaults, yaml_data)
+    
+    @staticmethod
+    def _load_env_file(project_root: Path | None = None) -> None:
+        """Load .env file into os.environ if it exists."""
+        if project_root is None:
+            from nuself.config import find_project_root
+            project_root = find_project_root()
+        
+        env_file = project_root / ".env"
+        if not env_file.exists():
+            return
+        
+        try:
+            env_content = env_file.read_text(encoding="utf-8")
+            for line in env_content.split("\n"):
+                line = line.strip()
+                # Skip empty lines and comments
+                if not line or line.startswith("#"):
+                    continue
+                # Parse KEY=VALUE
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip()
+                    # Remove quotes if present
+                    if value.startswith('"') and value.endswith('"'):
+                        value = value[1:-1]
+                    elif value.startswith("'") and value.endswith("'"):
+                        value = value[1:-1]
+                    # Only set if not already in environment (YAML/CLI values take precedence)
+                    if key not in os.environ:
+                        os.environ[key] = value
+        except Exception:
+            # Fail silently, continue without .env
+            pass
 
     @staticmethod
     def _merge_with_env_overrides(defaults: SystemConfig, yaml_data: dict[str, Any]) -> SystemConfig:
