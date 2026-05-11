@@ -14,6 +14,7 @@ from nuself.agent.persona import (
     MODERATOR_PERSONA,
     PersonaTurnState,
 )
+from nuself.config_system import ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 
 
@@ -46,13 +47,10 @@ class ProactivePersonaDiscussion:
         override_threshold: float = 0.8,
         composite_threshold: float = 0.5,
         consensus_spread_threshold: float = 0.2,
-        config: object | None = None,
+        config: ReflectionSettings | None = None,
     ) -> None:
-        # If config is provided, extract parameters from it
         if config is not None:
-            from nuself.config_reflection import ReflectionConfig
-            if isinstance(config, ReflectionConfig):
-                max_turns = config.max_discussion_rounds
+            max_turns = config.moderator.max_discussion_rounds
         
         self._personas = personas if personas is not None else BUILTIN_PERSONAS
         self._min_participants = min(min_participants, max_participants)

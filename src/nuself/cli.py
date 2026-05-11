@@ -486,25 +486,14 @@ def handle_status(args: argparse.Namespace) -> int:
 
 
 def handle_health(args: argparse.Namespace) -> int:
-    import os
-
     issues: list[str] = []
     paths = runtime_paths(args.project_root)
+    config_path = paths.private_root / "config.yaml"
 
     if not paths.private_root.exists():
         issues.append(f"private root missing: {paths.private_root}")
-    if not (paths.project_root / ".env").exists():
-        issues.append(".env file missing")
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        env_path = paths.project_root / ".env"
-        if env_path.exists():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("OPENAI_API_KEY="):
-                    api_key = line.split("=", 1)[1].strip().strip('"')
-                    break
-    if not api_key:
-        issues.append("OPENAI_API_KEY not configured")
+    if paths.private_root.exists() and not config_path.exists():
+        issues.append(f"config file missing: {config_path}")
 
     daemon = lifecycle.status(args.project_root)
     if not daemon.running:

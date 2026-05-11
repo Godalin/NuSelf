@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.logs import LogEvent, write_log_event
+from nuself.logs import write_log_event
 
 
 @pytest.fixture

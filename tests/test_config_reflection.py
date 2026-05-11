@@ -1,125 +1,36 @@
-"""Tests for reflection configuration system."""
+"""Tests for reflection configuration through unified ConfigSystem."""
 
 from __future__ import annotations
 
 from pathlib import Path
-import tempfile
 
-import pytest
-
-from nuself.config_reflection import ReflectionConfig
+from nuself.config_system import ConfigSystem
 
 
-def test_reflection_config_default() -> None:
-    """Test that default config is safe and reasonable."""
-    config = ReflectionConfig.default()
-    assert config.interval_seconds >= 60
-    assert config.daily_cap >= 1
-    assert 0.0 <= config.relevance_threshold <= 1.0
-    assert 0.0 <= config.persona_discussion_threshold <= 1.0
-    assert config.max_discussion_rounds >= 1
+def test_reflection_settings_default_loaded_from_system(tmp_path: Path) -> None:
+    config = ConfigSystem.load(project_root=tmp_path)
+    assert config.reflection.scheduler.interval_seconds >= 60
+    assert config.reflection.scheduler.daily_cap >= 1
+    assert 0.0 <= config.reflection.gate.relevance_threshold <= 1.0
+    assert 0.0 <= config.reflection.gate.persona_discussion_threshold <= 1.0
+    assert config.reflection.moderator.max_discussion_rounds >= 1
 
 
-def test_reflection_config_from_yaml_missing_file() -> None:
-    """Test that missing config file returns defaults."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "nonexistent.yaml"
-        config = ReflectionConfig.from_yaml(config_path)
-        assert config.interval_seconds >= 60
-        assert config.daily_cap >= 1
+def test_reflection_settings_from_yaml(tmp_path: Path) -> None:
+    private_dir = tmp_path / "private"
+    private_dir.mkdir(parents=True)
+    (private_dir / "config.yaml").write_text(
+        """
+reflection:
+  scheduler:
+    interval_seconds: 600
+  gate:
+    relevance_threshold: 0.3
+""",
+        encoding="utf-8",
+    )
 
-
-def test_reflection_config_from_yaml_empty_file() -> None:
-    """Test that empty YAML file returns defaults."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "empty.yaml"
-        config_path.write_text("")
-        config = ReflectionConfig.from_yaml(config_path)
-        assert config.interval_seconds >= 60
-        assert config.daily_cap >= 1
-
-
-def test_reflection_config_from_yaml_partial_config() -> None:
-    """Test that partial config merges with defaults."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "partial.yaml"
-        config_path.write_text("""
-scheduler:
-  interval_seconds: 600
-gate:
-  relevance_threshold: 0.3
-""")
-        config = ReflectionConfig.from_yaml(config_path)
-        assert config.interval_seconds == 600
-        assert config.relevance_threshold == 0.3
-        assert config.daily_cap == 5  # default
-
-
-def test_reflection_config_clamping() -> None:
-    """Test that config values are properly clamped to safe ranges."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "invalid.yaml"
-        config_path.write_text("""
-scheduler:
-  interval_seconds: 10
-  quiet_start_hour: 30
-  quiet_end_hour: -5
-  daily_cap: 0
-  jitter_percent: 100
-gate:
-  relevance_threshold: 1.5
-  persona_discussion_threshold: -0.5
-moderator:
-  max_discussion_rounds: 0
-  moderator_convergence_patience: 0
-""")
-        config = ReflectionConfig.from_yaml(config_path)
-        assert config.interval_seconds == 60  # clamped to minimum
-        assert config.quiet_start_hour == 23  # clamped to 0-23
-        assert config.quiet_end_hour == 0  # clamped to 0-23
-        assert config.daily_cap == 1  # clamped to minimum
-        assert config.jitter_percent == 50  # clamped to maximum
-        assert config.relevance_threshold == 1.0  # clamped to 0-1
-        assert config.persona_discussion_threshold == 0.0  # clamped to 0-1
-        assert config.max_discussion_rounds == 1  # clamped to minimum
-        assert config.moderator_convergence_patience == 1  # clamped to minimum
-
-
-def test_reflection_config_for_testing() -> None:
-    """Test that fast testing config disables most features."""
-    config = ReflectionConfig.for_testing(interval_seconds=5, daily_cap=50)
-    assert config.interval_seconds == 5
-    assert config.daily_cap == 50
-    assert config.cooldown_seconds == 0
-    assert config.jitter_percent == 0
-    assert config.relevance_threshold == 0.0
-    assert config.persona_discussion_threshold == 1.0  # high, effectively disables discussion
-
-
-def test_reflection_config_uses_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that environment variables override YAML values."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "config.yaml"
-        config_path.write_text(
-            """
-scheduler:
-  interval_seconds: 600
-gate:
-  relevance_threshold: 0.4
-"""
-        )
-        monkeypatch.setenv("NUSELF_REFLECTION_INTERVAL_SECONDS", "120")
-        monkeypatch.setenv("NUSELF_REFLECTION_RELEVANCE_THRESHOLD", "0.8")
-        config = ReflectionConfig.from_yaml(config_path)
-        assert config.interval_seconds == 120
-        assert config.relevance_threshold == 0.8
-
-
-def test_reflection_config_missing_fields_match_default() -> None:
-    """Test that YAML with missing fields uses the same defaults as default()."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "only_scheduler.yaml"
-        config_path.write_text("scheduler:\n  interval_seconds: 600\n")
-        config = ReflectionConfig.from_yaml(config_path)
-        defaults = ReflectionConfig.default()
-        assert config.persona_discussion_threshold == defaults.persona_discussion_threshold
+    config = ConfigSystem.load(project_root=tmp_path)
+    assert config.reflection.scheduler.interval_seconds == 600
+    assert config.reflection.gate.relevance_threshold == 0.3
+    assert config.reflection.scheduler.daily_cap == 5

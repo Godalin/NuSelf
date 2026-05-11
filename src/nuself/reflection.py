@@ -9,40 +9,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from nuself.config import runtime_paths
-from nuself.config_system import ConfigSystem, ReflectionSettings, ReflectionSchedulerConfig, ReflectionGateConfig, ReflectionModeratorConfig
+from nuself.config_system import ConfigSystem, ReflectionSettings
 from nuself.domain.memory import now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
 from nuself.notification import NotificationOutbox, OutboxEntry
 
 if TYPE_CHECKING:
     from nuself.llm import ChatLLM
-
-
-def _convert_old_reflection_config_to_settings(config: object) -> ReflectionSettings:
-    """Convert old ReflectionConfig object to new ReflectionSettings for backward compat."""
-    # Check if this looks like the old ReflectionConfig structure
-    if hasattr(config, 'interval_seconds') and hasattr(config, 'quiet_start_hour'):
-        # It's the old flat structure
-        return ReflectionSettings(
-            scheduler=ReflectionSchedulerConfig(
-                interval_seconds=getattr(config, 'interval_seconds', 3600),
-                cooldown_seconds=getattr(config, 'cooldown_seconds', 300),
-                quiet_start_hour=getattr(config, 'quiet_start_hour', 22),
-                quiet_end_hour=getattr(config, 'quiet_end_hour', 7),
-                daily_cap=getattr(config, 'daily_cap', 5),
-                jitter_percent=getattr(config, 'jitter_percent', 20),
-            ),
-            gate=ReflectionGateConfig(
-                relevance_threshold=getattr(config, 'relevance_threshold', 0.5),
-                persona_discussion_threshold=getattr(config, 'persona_discussion_threshold', 0.55),
-            ),
-            moderator=ReflectionModeratorConfig(
-                max_discussion_rounds=getattr(config, 'max_discussion_rounds', 10),
-                moderator_convergence_patience=getattr(config, 'moderator_convergence_patience', 5),
-            ),
-        )
-    # If it's already ReflectionSettings, return as-is
-    return cast(ReflectionSettings, config)
 
 
 @dataclass(frozen=True)
@@ -57,29 +30,19 @@ class ReflectionEvent:
 class ReflectionScheduler:
     """Decides when the daemon should run a self-reflection cycle."""
 
-    def __init__(self, project_root: Path | None = None, config: object | None = None) -> None:
-        # Support both old config style (for tests) and new SystemConfig style
+    def __init__(self, project_root: Path | None = None, config: ReflectionSettings | None = None) -> None:
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
-        
+
         if config is not None:
-            # Legacy path: accept old ReflectionConfig for backward compat
-            self._config: ReflectionSettings = _convert_old_reflection_config_to_settings(config)
+            self._config = config
         else:
-            # New path: load from SystemConfig
             system_config = ConfigSystem.load(project_root=project_root)
             self._config = system_config.reflection
-        
+
         self._last_reflection_path = paths.runtime_dir / "last_reflection.json"
         self._outbox = NotificationOutbox(project_root)
         self._event_queue: list[ReflectionEvent] = []
-
-    def __setattr__(self, name: str, value: object) -> None:
-        """Override setattr to convert old ReflectionConfig to ReflectionSettings."""
-        if name == "_config":
-            # Intercept _config assignment and convert if needed
-            value = _convert_old_reflection_config_to_settings(value)
-        super().__setattr__(name, value)
 
     def trigger_event(self, event: ReflectionEvent) -> None:
         """Queue an event-triggered reflection request."""
@@ -285,27 +248,18 @@ class ReflectionScheduler:
 class RelevanceGate:
     """Multi-dimensional relevance gate for proactive candidates."""
 
-    def __init__(self, project_root: Path | None = None, config: object | None = None) -> None:
+    def __init__(self, project_root: Path | None = None, config: ReflectionSettings | None = None) -> None:
         from nuself.config import runtime_paths
 
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
         self._last_reflection_path = paths.runtime_dir / "last_reflection.json"
-        
+
         if config is not None:
-            # Legacy path: accept old ReflectionConfig for backward compat
-            self._config: ReflectionSettings = _convert_old_reflection_config_to_settings(config)
+            self._config = config
         else:
-            # New path: load from SystemConfig
             system_config = ConfigSystem.load(project_root=project_root)
             self._config = system_config.reflection
-
-    def __setattr__(self, name: str, value: object) -> None:
-        """Override setattr to convert old ReflectionConfig to ReflectionSettings."""
-        if name == "_config":
-            # Intercept _config assignment and convert if needed
-            value = _convert_old_reflection_config_to_settings(value)
-        super().__setattr__(name, value)
 
     def score(self, candidate: IdeaCandidate) -> RelevanceScore:
         novelty = self._score_novelty(candidate)
@@ -442,7 +396,7 @@ class IdeaCandidateGenerator:
         project_root: Path | None = None,
         *,
         llm: ChatLLM | None = None,
-        config: object | None = None,
+        config: ReflectionSettings | None = None,
     ) -> None:
         from nuself.config import runtime_paths
         from nuself.llm import default_llm
@@ -452,12 +406,10 @@ class IdeaCandidateGenerator:
         self._llm: ChatLLM = llm or default_llm(self._project_root)
         
         if config is not None:
-            # Accept either ReflectionSettings (new) or ReflectionConfig (old)
-            self._config_obj: ReflectionSettings = _convert_old_reflection_config_to_settings(config)
-        else:
-            # Load from system config if not provided
-            system_config = ConfigSystem.load(project_root=self._project_root)
-            self._config_obj = system_config.reflection
+            self._config_obj = config
+            return
+        system_config = ConfigSystem.load(project_root=self._project_root)
+        self._config_obj = system_config.reflection
 
     def generate(self, max_candidates: int = 3) -> list[IdeaCandidate]:
         context = self._collect_context()

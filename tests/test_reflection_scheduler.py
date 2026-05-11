@@ -9,9 +9,42 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config_reflection import ReflectionConfig
+from nuself.config_system import ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.reflection import IdeaCandidateGenerator, ReflectionScheduler
+
+
+def _reflection_settings(
+    *,
+    interval_seconds: int = 3600,
+    cooldown_seconds: int = 300,
+    quiet_start_hour: int = 22,
+    quiet_end_hour: int = 7,
+    daily_cap: int = 5,
+    jitter_percent: int = 20,
+    relevance_threshold: float = 0.5,
+    persona_discussion_threshold: float = 0.7,
+    max_discussion_rounds: int = 10,
+    moderator_convergence_patience: int = 5,
+) -> ReflectionSettings:
+    return ReflectionSettings(
+        scheduler=ReflectionSchedulerConfig(
+            interval_seconds=interval_seconds,
+            cooldown_seconds=cooldown_seconds,
+            quiet_start_hour=quiet_start_hour,
+            quiet_end_hour=quiet_end_hour,
+            daily_cap=daily_cap,
+            jitter_percent=jitter_percent,
+        ),
+        gate=ReflectionGateConfig(
+            relevance_threshold=relevance_threshold,
+            persona_discussion_threshold=persona_discussion_threshold,
+        ),
+        moderator=ReflectionModeratorConfig(
+            max_discussion_rounds=max_discussion_rounds,
+            moderator_convergence_patience=moderator_convergence_patience,
+        ),
+    )
 
 
 class _FakeLLM:
@@ -60,10 +93,21 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
     (tmp_path / "private" / "logs").mkdir(parents=True)
     (tmp_path / "private" / "outbox").mkdir(parents=True)
     # Monkeypatch default_llm so IdeaCandidateGenerator gets a fake LLM
-    monkeypatch.setattr("nuself.llm.default_llm", lambda root: _FakeLLM())
+    monkeypatch.setattr(  # type: ignore[reportUnknownArgumentType]
+        "nuself.llm.default_llm", lambda root: _FakeLLM()  # type: ignore[reportUnknownLambdaType]
+    )
     # Seed data so generator has context
     _seed_memory(tmp_path)
-    config = ReflectionConfig.for_testing()
+    config = _reflection_settings(
+        interval_seconds=5,
+        cooldown_seconds=0,
+        daily_cap=50,
+        jitter_percent=0,
+        relevance_threshold=0.0,
+        persona_discussion_threshold=1.0,
+        max_discussion_rounds=2,
+        moderator_convergence_patience=1,
+    )
     return ReflectionScheduler(tmp_path, config=config)
 
 
@@ -84,7 +128,7 @@ def test_should_reflect_respects_interval(scheduler: ReflectionScheduler) -> Non
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     scheduler._write_last_reflection(now)
     later = now.replace(minute=6)
-    scheduler._config = ReflectionConfig(
+    scheduler._config = _reflection_settings(
         interval_seconds=3600,
         cooldown_seconds=300,
         quiet_start_hour=22,
@@ -100,7 +144,7 @@ def test_should_reflect_respects_interval(scheduler: ReflectionScheduler) -> Non
 
 
 def test_should_reflect_respects_quiet_hours(scheduler: ReflectionScheduler) -> None:
-    scheduler._config = ReflectionConfig(
+    scheduler._config = _reflection_settings(
         interval_seconds=10,
         cooldown_seconds=0,
         quiet_start_hour=22,
@@ -122,7 +166,7 @@ def test_should_reflect_outside_quiet_hours(scheduler: ReflectionScheduler) -> N
 
 
 def test_should_reflect_wraparound_quiet_hours(scheduler: ReflectionScheduler) -> None:
-    scheduler._config = ReflectionConfig(
+    scheduler._config = _reflection_settings(
         interval_seconds=3600,
         cooldown_seconds=300,
         quiet_start_hour=22,
@@ -164,7 +208,7 @@ def test_reflect_idempotent_per_day(scheduler: ReflectionScheduler) -> None:
 
 
 def test_reflect_returns_false_when_blocked(scheduler: ReflectionScheduler) -> None:
-    scheduler._config = ReflectionConfig(
+    scheduler._config = _reflection_settings(
         interval_seconds=10,
         cooldown_seconds=0,
         quiet_start_hour=22,
@@ -211,7 +255,7 @@ def test_read_last_reflection_invalid_timestamp(scheduler: ReflectionScheduler) 
 
 
 def test_quiet_hours_non_wrapping_range() -> None:
-    config = ReflectionConfig(
+    config = _reflection_settings(
         interval_seconds=3600,
         cooldown_seconds=300,
         quiet_start_hour=9,
@@ -241,7 +285,10 @@ def test_generator_returns_empty_with_no_data(tmp_path: Path) -> None:
 
 def test_generator_produces_ideas_from_memory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Memory entries alone should be enough to generate ideas."""
-    monkeypatch.setattr("nuself.llm.default_llm", lambda root: _FakeLLM())
+    # Monkeypatch default_llm so IdeaCandidateGenerator gets a fake LLM
+    monkeypatch.setattr(  # type: ignore[reportUnknownArgumentType]
+        "nuself.llm.default_llm", lambda root: _FakeLLM()  # type: ignore[reportUnknownLambdaType]
+    )
     _seed_memory(tmp_path)
 
     gen = IdeaCandidateGenerator(tmp_path, llm=_FakeLLM())
@@ -292,7 +339,7 @@ def test_generator_parses_multiple_candidates(tmp_path: Path, monkeypatch: pytes
         {"title": "Idea A", "body": "First idea", "candidate_type": "question", "confidence": 0.8, "novelty": 0.9, "urgency": 0.3, "interruption_cost": 0.1},
         {"title": "Idea B", "body": "Second idea", "candidate_type": "connection", "confidence": 0.7, "novelty": 0.8, "urgency": 0.5, "interruption_cost": 0.2},
     ])
-    monkeypatch.setattr("nuself.llm.default_llm", lambda root: multi_llm)
+    monkeypatch.setattr("nuself.llm.default_llm", lambda root: multi_llm)  # type: ignore[reportUnknownArgumentType,reportUnknownLambdaType]
     _seed_memory(tmp_path)
 
     gen = IdeaCandidateGenerator(tmp_path, llm=multi_llm)
@@ -321,7 +368,7 @@ def _make_candidate(
         novelty=novelty,
         urgency=urgency,
         interruption_cost=interruption_cost,
-        evidence_refs=[],
+        evidence_refs=(),
         suggested_thread_id=None,
         source_summary="",
         created_at="2024-01-01T00:00:00",
@@ -369,7 +416,7 @@ def test_relevance_gate_reduces_novelty_on_body_overlap(tmp_path: Path) -> None:
 def test_relevance_gate_uses_config_threshold(tmp_path: Path) -> None:
     from nuself.reflection import RelevanceGate
 
-    config = ReflectionConfig(
+    config = _reflection_settings(
         interval_seconds=3600, cooldown_seconds=300,
         quiet_start_hour=22, quiet_end_hour=7,
         daily_cap=5, jitter_percent=20,

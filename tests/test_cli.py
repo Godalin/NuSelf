@@ -37,6 +37,18 @@ class CaptureFixture(Protocol):
 
 class MonkeyPatchFixture(Protocol):
     def setattr(self, target: str, value: object) -> None: ...
+    def delenv(self, name: str, raising: bool = True) -> None: ...
+
+
+@pytest.fixture(autouse=True)
+def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[reportUnusedFunction]
+    """Automatically clear LLM-related env vars for all tests for deterministic behavior."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+    monkeypatch.delenv("NUSELF_LLM_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("NUSELF_LLM_OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("NUSELF_LLM_OPENAI_MODEL", raising=False)
 
 
 class FakeChangedCuratorResult:
@@ -1988,14 +2000,14 @@ def test_notify_clear_removes_dismissed(tmp_path: Path, capsys: CaptureFixture) 
     assert len(outbox.list(status="dismissed")) == 0
 
 
-def test_health_command_reports_issues_without_api_key(
+def test_health_command_reports_missing_config(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     result = main(["--project-root", str(tmp_path), "health"])
     captured = capsys.readouterr()
     assert result == 1
     assert "Health issues:" in captured.out
-    assert "OPENAI_API_KEY not configured" in captured.out
+    assert "private root missing" in captured.out
 
 
 def test_interactive_search_finds_memory(
@@ -2025,10 +2037,10 @@ def test_config_command_shows_paths(tmp_path: Path, capsys: CaptureFixture) -> N
     assert result == 0
     assert "project_root:" in captured.out
     assert "private_root:" in captured.out
-    assert "reflection_config_path:" in captured.out
-    assert "reflection_config_file:" in captured.out
-    assert "reflection_effective:" in captured.out
-    assert "api_key:" in captured.out
+    assert "config_path:" in captured.out
+    assert "config_file:" in captured.out
+    assert "config_effective:" in captured.out
+    assert "llm.openai.api_key:" in captured.out
 
 
 def test_memory_list_shows_entries(tmp_path: Path, capsys: CaptureFixture) -> None:
