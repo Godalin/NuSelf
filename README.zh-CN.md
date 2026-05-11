@@ -133,7 +133,7 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 ### Agent Runtime
 
 - [x] 添加临时 memory-aware chat agent，使用 OpenAI-compatible `/chat/completions`。
-- [x] 添加被忽略的 `.env` 配置和提交的 `examples/.env`。
+- [x] 添加私有 `config.yaml` 配置和提交的 `examples/private/config.yaml`。
 - [x] 未配置 API key 时保持确定性的 fallback 行为。
 - [x] 添加用于 LangGraph 迁移的最小 conversation runtime boundary。
 - [x] 添加 typed conversation runtime state 和 node contracts。

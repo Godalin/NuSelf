@@ -22,7 +22,7 @@ Development constraints for `src/nuself/`.
 - Keep daemon runtime files, sockets, pid files, and logs under ignored `private/`.
 - Keep the CLI-to-daemon protocol independent from LangGraph internals.
 - Protocol changes should directly update client, server, tests, and docs; do not keep old wire formats during early development.
-- Root `.env` is local private configuration and must stay ignored. Commit `examples/.env` when adding user-facing settings.
+- User-facing configuration lives in `private/config.yaml` and `examples/private/config.yaml`.
 - Chat thread state belongs under ignored `private/threads/`.
 - The default thread is shared working memory for the current NuSelf mind; writes must be serialized with a lock.
 - Temporary chat agent behavior must stay deterministic without an API key so tests do not require network access.

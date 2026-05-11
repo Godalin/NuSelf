@@ -1,6 +1,6 @@
 # Unified Configuration System Design
 
-This document outlines the new unified configuration system for NuSelf, consolidating previously scattered configuration sources (`.env`, `reflection_config.yaml`, `email.toml`, hardcoded defaults) into a single `config.yaml`.
+This document outlines the unified configuration system for NuSelf, consolidating previously scattered configuration sources (`.env`, `reflection_config.yaml`, `email.toml`, hardcoded defaults) into a single `config.yaml`.
 
 ## Goals
 
@@ -8,7 +8,7 @@ This document outlines the new unified configuration system for NuSelf, consolid
 2. **Environment override**: CLI and environment variables still take precedence for testing/deployment.
 3. **Clear defaults**: All defaults documented in example config.
 4. **Type safety**: Structured validation with defaults and clamping.
-5. **Backward compatibility**: `.env` fallback for gradual migration.
+5. **No legacy fallback**: old reflection config and `.env` parsing are removed from runtime paths.
 
 ## Configuration Hierarchy
 
@@ -84,7 +84,7 @@ experimental:
 
 ## ConfigSystem Class
 
-The `ConfigSystem` class replaces the scatter of `config_value()`, `config_int()`, and `ReflectionConfig` methods:
+The `ConfigSystem` class replaces the scatter of legacy config helpers and reflection-only config classes:
 
 ```python
 @dataclass(frozen=True)
@@ -94,7 +94,7 @@ class SystemConfig:
     llm: LlmConfig
     chat: ChatConfig
     daemon: DaemonConfig
-    reflection: ReflectionConfig
+    reflection: ReflectionSettings
     email: EmailConfig
     macos_notification: MacosNotificationConfig
     experimental: ExperimentalConfig
@@ -114,24 +114,18 @@ class ConfigSystem:
 
 ## Migration Path
 
-### Phase 1 (Current)
-- New `ConfigSystem` lives alongside old config functions
-- `.env` continues to work
-- Tests updated to use both paths
+### Phase 1 (Done)
+- All production code switched to `ConfigSystem`
+- Reflection scheduling and persona discussion use `ReflectionSettings`
+- Old reflection config module and YAML files removed
 
-### Phase 2 (Next Sprint)
-- All production code switches to `ConfigSystem`
-- Old `config_int`, `config_value`, `ReflectionConfig` deprecated
-- `.env` still works as fallback
-
-### Phase 3 (Later)
-- Remove `.env` dependency for prod code
-- Keep examples/.env for reference only
-- Full migration to `config.yaml`
+### Phase 2 (In Progress)
+- Remove stale test/docs references to old config formats
+- Keep environment-variable overrides as the only non-file override mechanism
 
 ## Environment Variable Mapping
 
-For backward compatibility, env vars still work but use new precedence:
+Environment variables work as direct overrides over `config.yaml` values:
 
 - `OPENAI_*` → `llm.openai.*`
 - `NUSELF_CONTEXT_*` → `chat.context.*`

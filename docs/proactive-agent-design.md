@@ -6,15 +6,15 @@ This design turns the existing skeleton (`reflection.py`, `notification/`, daemo
 
 ## Current Baseline vs. Gap
 
-| Component | Current State | Gap to Milestone 10 |
-|-----------|--------------|---------------------|
-| `ReflectionScheduler` | Randomized jitter, daily cap, quiet hours, cooldown, event triggers. Background thread in daemon polls. Configurable via `private/reflection_config.yaml`. | Done. |
-| `IdeaCandidateGenerator` | Uses LLM to scan recent threads, private memory, and new sources. Generates structured candidates with types, confidence, and evidence. Falls back to local candidate on LLM failure. | Done. |
-| `RelevanceGate` | Multi-dimensional scoring: novelty, confidence, urgency, cooldown, interruption cost. Uses `config.relevance_threshold` from YAML config. | Done. |
-| `NotificationOutbox` | File-backed with idempotency, statuses, and CRUD. Daemon writes intents here without calling adapters directly. | Done. |
-| `DeepLink` | Supports both `open_thread` and `new_thread` actions. | Done. |
-| `Adapters` | `NotificationDeliveryLoop` polls pending outbox entries and dispatches through configured adapters. | Done. |
-| `Daemon` | `reflect()` writes to outbox only; delivery thread handles adapters separately. Discussion traces persisted to reflection log. | Done. |
+| Component                | Current State                                                                                                                                                                         | Gap to Milestone 10 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `ReflectionScheduler`    | Randomized jitter, daily cap, quiet hours, cooldown, event triggers. Background thread in daemon polls. Configurable via `private/config.yaml` under `reflection.*`.                  | Done.               |
+| `IdeaCandidateGenerator` | Uses LLM to scan recent threads, private memory, and new sources. Generates structured candidates with types, confidence, and evidence. Falls back to local candidate on LLM failure. | Done.               |
+| `RelevanceGate`          | Multi-dimensional scoring: novelty, confidence, urgency, cooldown, interruption cost. Uses `config.relevance_threshold` from YAML config.                                             | Done.               |
+| `NotificationOutbox`     | File-backed with idempotency, statuses, and CRUD. Daemon writes intents here without calling adapters directly.                                                                       | Done.               |
+| `DeepLink`               | Supports both `open_thread` and `new_thread` actions.                                                                                                                                 | Done.               |
+| `Adapters`               | `NotificationDeliveryLoop` polls pending outbox entries and dispatches through configured adapters.                                                                                   | Done.               |
+| `Daemon`                 | `reflect()` writes to outbox only; delivery thread handles adapters separately. Discussion traces persisted to reflection log.                                                        | Done.               |
 
 ## Design Decisions
 

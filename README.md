@@ -133,7 +133,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 ### Agent Runtime
 
 - [x] Add temporary memory-aware chat agent with OpenAI-compatible `/chat/completions`.
-- [x] Add ignored `.env` configuration and committed `examples/.env`.
+- [x] Add private `config.yaml` configuration with committed `examples/private/config.yaml`.
 - [x] Keep deterministic fallback behavior when no API key is configured.
 - [x] Add minimal conversation runtime boundary for the LangGraph migration.
 - [x] Add typed conversation runtime state and node contracts.
