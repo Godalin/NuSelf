@@ -9,7 +9,7 @@ from typing import Literal, Protocol, TypeAlias, cast
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from nuself.config import config_value
+from nuself.config_system import ConfigSystem
 
 ChatRole: TypeAlias = Literal["system", "user", "assistant"]
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
@@ -43,10 +43,11 @@ class LLMSettings:
 
     @classmethod
     def from_project(cls, project_root: Path | None = None) -> "LLMSettings":
+        config = ConfigSystem.load(project_root=project_root)
         return cls(
-            base_url=config_value("OPENAI_BASE_URL", "https://api.openai.com/v1", project_root),
-            api_key=config_value("OPENAI_API_KEY", "", project_root),
-            model=config_value("OPENAI_MODEL", "gpt-4.1-mini", project_root),
+            base_url=config.llm.openai.base_url,
+            api_key=config.llm.openai.api_key,
+            model=config.llm.openai.model,
         )
 
 

@@ -11,7 +11,7 @@ from nuself.domain.memory import (
 )
 from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
-from nuself.memory.curator import MemoryCurator
+from nuself.memory.curator import MemoryCurator, MemoryCuratorSettings
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
 
@@ -43,7 +43,7 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
         '"confidence":0.8,"reason":"important memory model decision"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     second_result = curator.run_once()
@@ -88,7 +88,7 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
         + '","title":"Memory preview style","body":"The user prefers concise memory previews.",'
         '"confidence":0.75,"reason":"user clarified preview style"}]}'
     )
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     candidates = MemoryCandidateRepository(tmp_path).list()
@@ -123,7 +123,7 @@ def test_memory_curator_includes_profile_context_in_prompt(tmp_path: Path) -> No
         )
     )
     llm = FakeCuratorLLM('{"actions":[{"action":"ignore","reason":"no durable memory"}]}')
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, profile_repository=profile_repo)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, profile_repository=profile_repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     curator.run_once()
 
@@ -149,7 +149,7 @@ def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None
             raise RuntimeError("LLM unavailable")
 
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=FailingCuratorLLM(), thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, llm=FailingCuratorLLM(), thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -171,7 +171,7 @@ def test_memory_curator_ignores_trivial_chat_when_agent_says_ignore(tmp_path: Pa
     )
     llm = FakeCuratorLLM('{"actions":[{"action":"ignore","reason":"trivial name ping"}]}')
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     second_result = curator.run_once()
@@ -205,7 +205,7 @@ def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> No
         '"confidence":0.85,"reason":"explicit memory-system decision"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     candidates = MemoryCandidateRepository(tmp_path).list()
@@ -242,7 +242,7 @@ def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: 
         '"confidence":0.8,"reason":"cursor correctness"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     second_result = curator.run_once()
@@ -271,7 +271,7 @@ def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:
         '"confidence":0.9,"reason":"bad raw transcript"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -296,7 +296,7 @@ def test_memory_curator_accepts_fenced_json(tmp_path: Path) -> None:
         '"confidence":0.82,"reason":"durable memory-system decision"}]}\n```'
     )
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -358,7 +358,7 @@ def test_memory_curator_defers_descriptor_validation_until_candidate_acceptance(
         '"confidence":0.8,"reason":"typed memory pipeline"}]}'
     )
     repo = MemoryEntryRepository(tmp_path, registry=MemoryTypeRegistry([RejectingEpisodeDescriptor()]))
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -399,7 +399,7 @@ def test_memory_curator_merges_duplicate_into_existing_entry(tmp_path: Path) -> 
         '"body":"The user really likes shared working memory.",'
         '"confidence":0.8,"reason":"duplicate detection test"}]}'
     )
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     candidates = MemoryCandidateRepository(tmp_path).list()
@@ -410,3 +410,41 @@ def test_memory_curator_merges_duplicate_into_existing_entry(tmp_path: Path) -> 
     assert candidates[0].action == "update"
     assert candidates[0].target_entry_id == existing.id
     assert candidates[0].body == "The user really likes shared working memory."
+
+
+def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
+    """With auto_accept=True (default), candidates become entries immediately."""
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(role="user", content=(
+                    "I have decided to learn Rust for systems programming because I want "
+                    "to build high-performance tools. I prefer it over C++ for memory safety."
+                )),
+                ThreadMessage(role="assistant", content="Great choice, Rust has excellent memory safety guarantees."),
+            ],
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"create","type":"belief","title":"Interest in Rust",'
+        '"body":"The user wants to learn Rust for systems programming.",'
+        '"confidence":0.85,"reason":"explicit learning goal"}]}'
+    )
+    repo = MemoryEntryRepository(tmp_path)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+
+    result = curator.run_once()
+
+    # Candidate was auto-accepted → it's now an entry
+    entries = repo.list()
+    assert len(entries) == 1
+    assert entries[0].title == "Interest in Rust"
+    assert entries[0].review_state == "reviewed"
+    assert result.created == 1
+
+    # Candidate exists but is marked accepted
+    candidates = MemoryCandidateRepository(tmp_path).list(include_reviewed=True)
+    assert len(candidates) == 1
+    assert candidates[0].review_state == "accepted"

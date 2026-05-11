@@ -315,7 +315,7 @@ new conversation turn or source import
   -> duplicate/conflict search
   -> candidate record
   -> optional curator agent expansion
-  -> human review or policy gate
+  -> auto-accept (default) or manual review
   -> durable MemoryEntry update
   -> rebuild derived indexes
 ```
@@ -324,7 +324,8 @@ Hot-path writes:
 
 - Extract obvious low-risk candidates after a chat turn.
 - Never block the user-facing answer on expensive memory consolidation.
-- Store candidates as draft/review records.
+- By default, candidates are auto-accepted into durable entries (`auto_accept=True`). Users only intervene to edit or reject undesirable memories.
+- Manual review queue remains available for workflows that prefer human gating (`auto_accept=False`).
 
 Background writes:
 
@@ -436,6 +437,7 @@ Use a separate curator agent for write management:
 - Search existing memory before creating new entries.
 - Propose merges, updates, contradictions, and deletions.
 - Produce structured candidate records.
+- Auto-accept candidates into durable entries by default (`auto_accept=True`). Users can disable this to require manual review.
 - Apply low-risk episode memories automatically when policy allows.
 - Keep semantic and procedural updates as draft or low-confidence entries until the review model is mature.
 - Write each applied action to `private/logs/memory.log`.
@@ -617,7 +619,7 @@ The chat agent should eventually show memory citations on demand:
 
 - After each chat turn, run a lightweight candidate extractor.
 - Start deterministic and conservative.
-- Store candidates as drafts; do not auto-commit personal facts.
+- Candidates are auto-accepted into durable entries by default. Manual review queue available when `auto_accept=False`.
 
 ### Slice 3: Memory Query Service ✅
 

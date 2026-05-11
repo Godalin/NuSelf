@@ -4,35 +4,34 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Real-time outbox watch mode for observing daemon proactive reflection output as it arrives.
+Unify all system configuration into a single `config.yaml` replacing scattered `.env`, `reflection_config.yaml`, and hardcoded defaults. Implement ConfigSystem loader with environment variable overrides and remove obsolete compatibility layers.
 
 ## Immediate Context
 
-- `notify watch` CLI command polls the outbox every 5s (configurable via `--interval`) and prints new entries as they appear.
-- REPL `:watch` command enters the same watch mode with 2s polling.
-- Both modes track already-seen entries and only emit new ones, using the existing color-coded `render_outbox_summary`.
-- 522 tests pass, pyright clean.
+- New `ConfigSystem` class loads unified `config.yaml` with env variable overrides.
+- Config hierarchy: env vars > `private/config.yaml` > `examples/private/config.yaml` (for tests) > hardcoded defaults.
+- Reflection scheduling and persona discussion now only accept `ReflectionSettings` from `ConfigSystem`.
+- Chat.py, llm.py, daemon/server.py now use ConfigSystem instead of scattered legacy config helpers.
+- 545+ tests pass; need validation of config loading path.
 
 ## Next Steps
 
-1. ~~Add `notify watch` CLI command with `--interval` flag.~~ Done.
-2. ~~Add REPL `:watch` command.~~ Done.
-3. ~~Update README and README.zh-CN.md TODOs.~~ Done.
-4. Commit feature code and docs separately.
+1. Run tests to validate ConfigSystem migration.
+2. Update test fixtures to use `ReflectionSettings` and unified config helpers only.
+3. Migrate email.toml config into config.yaml section.
+4. Update CLI documentation to show config.yaml examples.
+5. Remove stale references to `.env` and `reflection_config.yaml` in docs/tests.
 
 ## Not Now
 
-- Full multi-persona orchestration beyond the current bounded skeleton.
-- Vector, hybrid, or hosted graph indexes.
-- Plugin loading.
-- Web or GUI interface work.
-- Private memory schema migration.
-- Dashboard-style or dependency-heavy terminal UI.
-- Background log polling in normal REPL input mode (watch mode is explicit).
+- LangMem integration (Phase 4).
+- Vector/hybrid indexes (Phase 3).
+- Hot reload or live config updates.
+- Config UI or interactive editor.
 
 ## Completion Criteria
 
-- `nuself notify watch` prints new outbox entries in real time.
-- REPL `:watch` enters watch mode and exits cleanly on Ctrl+C.
+- All core config reads use SystemConfig.
+- Tests pass with new config system.
+- Config file loading documented with examples.
 - All new code passes `uv run pytest` and `uvx pyright`.
-- `README.md` and `README.zh-CN.md` TODOs updated.

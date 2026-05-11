@@ -11,7 +11,8 @@ import time
 from typing import override
 
 from nuself.agent.chat import ChatAgent
-from nuself.config import config_int, ensure_runtime_dirs, runtime_paths
+from nuself.config import ensure_runtime_dirs, runtime_paths
+from nuself.config_system import ConfigSystem
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
 from nuself.logs import write_log_event
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
@@ -28,26 +29,19 @@ class DaemonState:
         self.project_root = project_root
         self.shutdown_requested = threading.Event()
         self.chat_agent = ChatAgent(project_root)
+        
+        config = ConfigSystem.load(project_root=project_root)
+        
         self.memory_curator = MemoryCurator(project_root)
-        self.memory_curator_interval_seconds = config_int(
-            "NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS",
-            DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS,
-            project_root,
-        )
+        self.memory_curator_interval_seconds = config.daemon.memory_curator.interval_seconds
         self._memory_curator_thread: threading.Thread | None = None
+        
         self.reflection_scheduler = ReflectionScheduler(project_root)
-        self.reflection_check_interval_seconds = config_int(
-            "NUSELF_REFLECTION_CHECK_INTERVAL_SECONDS",
-            60,
-            project_root,
-        )
+        self.reflection_check_interval_seconds = config.daemon.reflection_scheduler.check_interval_seconds
         self._reflection_scheduler_thread: threading.Thread | None = None
+        
         self.notification_delivery_loop = NotificationDeliveryLoop(project_root)
-        self.notification_delivery_interval_seconds = config_int(
-            "NUSELF_NOTIFICATION_DELIVERY_INTERVAL_SECONDS",
-            30,
-            project_root,
-        )
+        self.notification_delivery_interval_seconds = config.daemon.notification_delivery.interval_seconds
         self._notification_delivery_thread: threading.Thread | None = None
 
     def start_background_memory_curator(self) -> None:

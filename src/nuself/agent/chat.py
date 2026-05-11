@@ -19,7 +19,8 @@ from nuself.agent.persona import (
     PersonaTurnState,
     load_persona_definitions,
 )
-from nuself.config import config_int, runtime_paths
+from nuself.config import runtime_paths
+from nuself.config_system import ConfigSystem
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
@@ -52,12 +53,11 @@ class ChatAgentSettings:
 
     @classmethod
     def from_project(cls, project_root: Path | None = None) -> "ChatAgentSettings":
-        recent = config_int("NUSELF_CONTEXT_RECENT_MESSAGES", 12, project_root)
-        trigger = config_int("NUSELF_CONTEXT_SUMMARY_TRIGGER_MESSAGES", 18, project_root)
+        config = ConfigSystem.load(project_root=project_root)
         return cls(
-            recent_messages=recent,
-            summary_trigger_messages=max(trigger, recent + 2),
-            summary_target_chars=config_int("NUSELF_CONTEXT_SUMMARY_TARGET_CHARS", 2400, project_root),
+            recent_messages=config.chat.context.recent_messages,
+            summary_trigger_messages=config.chat.context.summary_trigger_messages,
+            summary_target_chars=config.chat.context.summary_target_chars,
         )
 
 

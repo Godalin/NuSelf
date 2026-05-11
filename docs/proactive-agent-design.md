@@ -6,15 +6,15 @@ This design turns the existing skeleton (`reflection.py`, `notification/`, daemo
 
 ## Current Baseline vs. Gap
 
-| Component | Current State | Gap to Milestone 10 |
-|-----------|--------------|---------------------|
-| `ReflectionScheduler` | Fixed interval + cooldown + quiet hours. Background thread in daemon polls every 60s. | Needs randomized low-frequency jitter, event-based triggers (e.g. new high-importance memory), and a cleaner separation between "generate" and "deliver". |
-| `IdeaCandidateGenerator` | Reads the latest user message from the most recent thread. No LLM, no memory scan, no source scan. | Needs to scan recent threads, private memory, and new sources; use LLM to generate structured candidates with types, confidence, and evidence. |
-| `RelevanceGate` | Only checks string equality against the previous reflection body. | Needs multi-dimensional scoring: novelty, confidence, urgency, cooldown, interruption cost. |
-| `NotificationOutbox` | File-backed with idempotency, statuses, and CRUD. | Good enough. Need to ensure daemon writes intents here without calling adapters directly from graph/agent nodes. |
-| `DeepLink` | Opens existing thread via `nuself://thread/<id>`. | Needs to support creating a new thread from a candidate (`nuself://new-thread?...`). |
-| `Adapters` | `LogOnlyNotificationAdapter`, `MacOSNotificationAdapter`, `EmailNotificationAdapter` stubs exist. | Need a delivery loop in the daemon that reads pending outbox entries and dispatches through configured adapters. |
-| `Daemon` | `ReflectionScheduler.reflect()` directly calls `adapter.send()`. | Needs decoupling: scheduler writes to outbox; a separate delivery thread handles adapters. |
+| Component                | Current State                                                                                                                                                                         | Gap to Milestone 10 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `ReflectionScheduler`    | Randomized jitter, daily cap, quiet hours, cooldown, event triggers. Background thread in daemon polls. Configurable via `private/config.yaml` under `reflection.*`.                  | Done.               |
+| `IdeaCandidateGenerator` | Uses LLM to scan recent threads, private memory, and new sources. Generates structured candidates with types, confidence, and evidence. Falls back to local candidate on LLM failure. | Done.               |
+| `RelevanceGate`          | Multi-dimensional scoring: novelty, confidence, urgency, cooldown, interruption cost. Uses `config.relevance_threshold` from YAML config.                                             | Done.               |
+| `NotificationOutbox`     | File-backed with idempotency, statuses, and CRUD. Daemon writes intents here without calling adapters directly.                                                                       | Done.               |
+| `DeepLink`               | Supports both `open_thread` and `new_thread` actions.                                                                                                                                 | Done.               |
+| `Adapters`               | `NotificationDeliveryLoop` polls pending outbox entries and dispatches through configured adapters.                                                                                   | Done.               |
+| `Daemon`                 | `reflect()` writes to outbox only; delivery thread handles adapters separately. Discussion traces persisted to reflection log.                                                        | Done.               |
 
 ## Design Decisions
 
@@ -233,12 +233,12 @@ We implement in small, testable slices:
 
 ## Completion Criteria
 
-- [ ] `IdeaCandidate` and `RelevanceScore` are typed, serializable, and tested.
-- [ ] `IdeaCandidateGenerator` scans threads, memory, and sources; produces structured candidates.
-- [ ] `RelevanceGate` scores across novelty, confidence, urgency, interruption cost, and cooldown.
-- [ ] `ReflectionScheduler` supports randomized intervals, daily caps, quiet hours, cooldowns, and event triggers.
-- [ ] `NotificationDeliveryLoop` polls pending outbox entries and dispatches through configured adapters.
-- [ ] Daemon `reflect()` writes to outbox only; adapters are called only from the delivery loop.
-- [ ] `DeepLink` supports both `open_thread` and `new_thread` actions.
-- [ ] All new code passes `uv run pytest` and `uvx pyright`.
-- [ ] `README.md` and `README.zh-CN.md` TODOs updated for proactive agent features.
+- [x] `IdeaCandidate` and `RelevanceScore` are typed, serializable, and tested.
+- [x] `IdeaCandidateGenerator` scans threads, memory, and sources; produces structured candidates.
+- [x] `RelevanceGate` scores across novelty, confidence, urgency, interruption cost, and cooldown.
+- [x] `ReflectionScheduler` supports randomized intervals, daily caps, quiet hours, cooldowns, and event triggers.
+- [x] `NotificationDeliveryLoop` polls pending outbox entries and dispatches through configured adapters.
+- [x] Daemon `reflect()` writes to outbox only; adapters are called only from the delivery loop.
+- [x] `DeepLink` supports both `open_thread` and `new_thread` actions.
+- [x] All new code passes `uv run pytest` and `uvx pyright`.
+- [x] `README.md` and `README.zh-CN.md` TODOs updated for proactive agent features.

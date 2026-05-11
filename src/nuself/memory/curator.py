@@ -9,7 +9,7 @@ from typing import Literal, TypeAlias, cast
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.domain.memory import MemoryCandidate, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry, now_iso
+from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry, now_iso
 from nuself.profile.repository import ProfileItemRepository
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
@@ -24,6 +24,7 @@ class MemoryCuratorSettings:
 
     min_quality_chars: int = 120
     existing_memory_limit: int = 12
+    auto_accept: bool = True
 
 
 @dataclass(frozen=True)
@@ -269,6 +270,7 @@ class MemoryCurator:
                     relations=existing.relations,
                 )
                 self._candidate_repository.save(candidate)
+                self._auto_accept(candidate)
                 self._append_log(
                     f"merged candidate={candidate.id} target={existing.id} title={candidate.title!r} reason={action.reason!r}"
                 )
@@ -291,6 +293,7 @@ class MemoryCurator:
             reason=action.reason,
         )
         self._candidate_repository.save(candidate)
+        self._auto_accept(candidate)
         self._append_log(
             f"created candidate={candidate.id} type={candidate.type} title={candidate.title!r} reason={action.reason!r}"
         )
@@ -329,8 +332,20 @@ class MemoryCurator:
             relations=existing.relations,
         )
         self._candidate_repository.save(candidate)
+        self._auto_accept(candidate)
         self._append_log(f"updated candidate={candidate.id} target={existing.id} title={candidate.title!r}")
         return True
+
+    def _auto_accept(self, candidate: MemoryCandidate) -> None:
+        if not self._settings.auto_accept:
+            return
+        try:
+            result = self._candidate_repository.accept(candidate.id)
+            if isinstance(result, MemoryEntry):
+                reviewed = result.with_updates(review_state="reviewed")
+                self._repository.save(reviewed)
+        except (ValueError, MemoryEntryNotFound):
+            pass
 
     def _load_cursor(self, thread_id: str) -> int:
         path = self._cursor_path(thread_id)

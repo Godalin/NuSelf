@@ -133,7 +133,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 ### Agent Runtime
 
 - [x] Add temporary memory-aware chat agent with OpenAI-compatible `/chat/completions`.
-- [x] Add ignored `.env` configuration and committed `examples/.env`.
+- [x] Add private `config.yaml` configuration with committed `examples/private/config.yaml`.
 - [x] Keep deterministic fallback behavior when no API key is configured.
 - [x] Add minimal conversation runtime boundary for the LangGraph migration.
 - [x] Add typed conversation runtime state and node contracts.
@@ -173,6 +173,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add `notify list --status` filter and `notify stats` command.
 - [x] Add REPL `:notify list` and `:notify show <id>` commands.
 - [x] Add `notify watch` CLI command and REPL `:watch` for real-time outbox streaming.
+- [x] Add reflection config env overrides and effective-config inspection in `nuself config`.
+- [x] Unify configuration into single `config.yaml` with env overrides replacing scattered `.env` and `reflection_config.yaml`.
 
 ### Evaluation And Quality
 
@@ -201,29 +203,85 @@ uv run pytest
 uvx pyright
 ```
 
-## LLM Configuration
+## Configuration
 
-NuSelf reads private model settings from the ignored root file:
+NuSelf configuration is unified in a single YAML file:
 
 ```text
-.env
+private/config.yaml
 ```
 
-Start from the committed example:
+Configuration priority (highest to lowest):
+1. Environment variables (NUSELF_* or OPENAI_*)
+2. `private/config.yaml`
+3. Hardcoded defaults in code
+
+### LLM Configuration
+
+```text
+llm:
+  openai:
+    base_url: https://api.openai.com/v1
+    api_key: ""        # Leave empty for local fallback
+    model: gpt-4.1-mini
+```
+
+Environment variables for backward compat:
+
+```text
+OPENAI_BASE_URL
+OPENAI_API_KEY
+OPENAI_MODEL
+```
+
+### Chat Settings
+
+```text
+chat:
+  context:
+    recent_messages: 12
+    summary_trigger_messages: 18
+    summary_target_chars: 2400
+```
+
+### Daemon Intervals
+
+```text
+daemon:
+  memory_curator:
+    interval_seconds: 300
+  reflection_scheduler:
+    check_interval_seconds: 60
+  notification_delivery:
+    interval_seconds: 30
+```
+
+### Reflection System
+
+```text
+reflection:
+  scheduler:
+    interval_seconds: 3600
+    cooldown_seconds: 300
+    quiet_start_hour: 22
+    quiet_end_hour: 7
+    daily_cap: 5
+    jitter_percent: 20
+  gate:
+    relevance_threshold: 0.5
+    persona_discussion_threshold: 0.7
+  moderator:
+    max_discussion_rounds: 10
+    moderator_convergence_patience: 5
+```
+
+See `examples/private/config.yaml` for a complete annotated example and additional sections (email, macOS notifications, experimental features).
+
+Inspect effective configuration:
 
 ```bash
-cp examples/.env .env
+uv run nuself config
 ```
-
-Then fill in:
-
-```text
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-4.1-mini
-```
-
-The current client uses an OpenAI-compatible `/chat/completions` API. If `OPENAI_API_KEY` is empty, chat uses a deterministic local fallback that still persists the thread but does not perform real model reasoning.
 
 ## Private Directory
 
@@ -288,16 +346,7 @@ Current chat uses a LangGraph-backed conversation runtime that searches memory e
 
 `private/threads/default.json` is shared working memory for the current NuSelf mind. Multiple terminal attachments to the same daemon share it. The thread store serializes writes with a lock so concurrent turns do not overwrite each other.
 
-Context compression can be tuned in `.env`:
-
-```text
-NUSELF_CONTEXT_RECENT_MESSAGES=12
-NUSELF_CONTEXT_SUMMARY_TRIGGER_MESSAGES=18
-NUSELF_CONTEXT_SUMMARY_TARGET_CHARS=2400
-NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS=300
-```
-
-The memory curator runs in the background in the daemon and also runs when interactive chat exits. It uses an agent to decide whether new working-memory turns should create, update, or ignore long-term memory. Trivial chat is ignored, similar existing memories should be updated instead of duplicated, and raw chat transcripts are rejected. A separate memory optimizer can be run manually, less frequently, to consolidate messy existing entries. Update events are written to `private/logs/memory.log`, and interactive chat prints compact activity lines for new chat, daemon, and memory events.
+The memory curator runs in the background in the daemon and also runs when interactive chat exits. It uses an agent to decide whether new working-memory turns should create, update, or ignore long-term memory. Trivial chat is ignored, similar existing memories should be updated instead of duplicated, and raw chat transcripts are rejected. By default, accepted candidates are automatically promoted to durable memory entries (`auto_accept=True`); you only need to review candidates when you want to edit or reject something. A separate memory optimizer can be run manually, less frequently, to consolidate messy existing entries. Update events are written to `private/logs/memory.log`, and interactive chat prints compact activity lines for new chat, daemon, and memory events.
 
 The current conversation graph is intentionally small: it preserves the CLI and daemon protocol boundary while keeping room for later persona subgraphs and richer agent routing.
 
@@ -321,6 +370,7 @@ Structured local logs can also be inspected with:
 uv run nuself logs
 uv run nuself logs --component chat --tail 20
 uv run nuself logs --component memory --json
+uv run nuself logs --component reflection --tail 10
 ```
 
 Check system health:
@@ -366,6 +416,18 @@ uv run nuself open --deep-link "nuself://thread/reflections"
 ```
 
 The macOS adapter delivers pending entries as system notifications via `osascript`. The email adapter reads SMTP credentials from `private/email.toml` and sends via SMTP. Both support dry-run mode for testing.
+
+## Reflection
+
+The daemon runs a proactive reflection scheduler that generates ideas from recent threads, memory entries, and source documents. Ideas are scored for novelty, confidence, urgency, and interruption cost, then debated by a randomized set of internal personas before surfacing as notifications.
+
+Reflection history can be inspected with:
+
+```bash
+uv run nuself reflection list
+uv run nuself reflection list --tail 50
+uv run nuself reflection show <index>
+```
 
 ## Threads
 

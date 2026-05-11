@@ -33,15 +33,12 @@ try:
     from nuself.agent.chat import ChatAgent, ThreadState, ThreadStore
     from nuself.daemon import client, lifecycle
     from nuself.domain.memory import (
-        MemoryCandidate,
         MemoryEntry,
-        MemoryEvidence,
         PrivacyLevel,
         default_memory_type_registry,
         default_relation_descriptor_registry,
     )
-    from nuself.domain.source import SourceChunk, SourceDocument
-    from nuself.domain.profile import ProfileItem
+    from nuself.domain.source import SourceChunk
     from nuself.memory.curator import MemoryCurator
     from nuself.memory.intake import MemoryIntakeAgent
     from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
@@ -63,11 +60,13 @@ try:
     from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
     from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
     from nuself.logs import LOG_COMPONENTS, LogComponent, read_log_events, write_log_event
+    from nuself.config_system import ConfigSystem
     from nuself.tui.memory import (
         render_candidate_detail,
         render_candidate_row,
         render_memory_entry_detail,
         render_memory_entry_row,
+        render_profile_detail,
         render_profile_row,
         render_source_detail,
         render_source_row,
@@ -166,6 +165,18 @@ def build_parser() -> argparse.ArgumentParser:
     notify_watch_parser.add_argument("--interval", type=int, default=5, help="Poll interval in seconds")
     _add_handler(notify_watch_parser, handle_notify_watch)
     _add_handler(notify_subparsers.add_parser("clear"), handle_notify_clear)
+
+    reflection_parser = subparsers.add_parser("reflection")
+    reflection_parser.set_defaults(handler=None, help_parser=reflection_parser)
+    reflection_subparsers = reflection_parser.add_subparsers(dest="reflection_command")
+    reflection_list_parser = reflection_subparsers.add_parser("list")
+    reflection_list_parser.add_argument("--tail", type=int, default=20)
+    reflection_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
+    _add_handler(reflection_list_parser, handle_reflection_list)
+    reflection_show_parser = reflection_subparsers.add_parser("show")
+    reflection_show_parser.add_argument("event_index", type=int, help="Index from 'reflection list' (0-based)")
+    reflection_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
+    _add_handler(reflection_show_parser, handle_reflection_show)
 
     memory_parser = subparsers.add_parser("memory")
     memory_parser.set_defaults(handler=None, help_parser=memory_parser)
@@ -475,25 +486,14 @@ def handle_status(args: argparse.Namespace) -> int:
 
 
 def handle_health(args: argparse.Namespace) -> int:
-    import os
-
     issues: list[str] = []
     paths = runtime_paths(args.project_root)
+    config_path = paths.private_root / "config.yaml"
 
     if not paths.private_root.exists():
         issues.append(f"private root missing: {paths.private_root}")
-    if not (paths.project_root / ".env").exists():
-        issues.append(".env file missing")
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        env_path = paths.project_root / ".env"
-        if env_path.exists():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("OPENAI_API_KEY="):
-                    api_key = line.split("=", 1)[1].strip().strip('"')
-                    break
-    if not api_key:
-        issues.append("OPENAI_API_KEY not configured")
+    if paths.private_root.exists() and not config_path.exists():
+        issues.append(f"config file missing: {config_path}")
 
     daemon = lifecycle.status(args.project_root)
     if not daemon.running:
@@ -509,32 +509,19 @@ def handle_health(args: argparse.Namespace) -> int:
 
 
 def handle_config(args: argparse.Namespace) -> int:
-    import os
-
     paths = runtime_paths(args.project_root)
+    config_path = paths.private_root / "config.yaml"
     print(f"project_root: {paths.project_root}")
     print(f"private_root: {paths.private_root}")
     print(f"socket_path: {paths.socket_path}")
+    print(f"config_path: {config_path}")
+    print(f"config_file: {'found' if config_path.exists() else 'not found (using defaults)'}")
 
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        env_path = paths.project_root / ".env"
-        if env_path.exists():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("OPENAI_API_KEY="):
-                    api_key = line.split("=", 1)[1].strip().strip('"')
-                    break
-    print(f"api_key: {'set' if api_key else 'not set'}")
-
-    model = os.environ.get("OPENAI_MODEL", "")
-    if not model:
-        env_path = paths.project_root / ".env"
-        if env_path.exists():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("OPENAI_MODEL="):
-                    model = line.split("=", 1)[1].strip().strip('"')
-                    break
-    print(f"model: {model or 'default'}")
+    system_config = ConfigSystem.load(config_path, args.project_root)
+    print("config_effective:")
+    config_system = ConfigSystem()
+    for key, value in sorted(config_system.as_flat_dict(system_config).items()):
+        print(f"  {key}: {value}")
     return 0
 
 
@@ -647,7 +634,7 @@ def handle_memory_list(args: argparse.Namespace) -> int:
     elif sort_by == "type":
         entries = sorted(entries, key=lambda e: (e.type, e.updated_at, e.id))
     for entry in entries:
-        print(_format_memory_summary(entry))
+        print(render_memory_entry_row(entry))
     return 0
 
 
@@ -663,7 +650,7 @@ def handle_memory_show(args: argparse.Namespace) -> int:
     except MemoryEntryNotFound:
         print(f"Memory entry not found: {args.entry_id}", file=sys.stderr)
         return 1
-    print(_format_memory_detail(entry))
+    print(render_memory_entry_detail(entry))
     return 0
 
 
@@ -685,7 +672,7 @@ def handle_memory_add(args: argparse.Namespace) -> int:
     )
     repo.save(entry)
     repo.reindex()
-    print(_format_memory_summary(entry))
+    print(render_memory_entry_row(entry))
     return 0
 
 
@@ -704,7 +691,7 @@ def handle_memory_edit(args: argparse.Namespace) -> int:
     )
     repo.save(updated)
     repo.reindex()
-    print(_format_memory_summary(updated))
+    print(render_memory_entry_row(updated))
     return 0
 
 
@@ -738,7 +725,7 @@ def handle_memory_search(args: argparse.Namespace) -> int:
         print("No matching memory entries.")
         return 0
     for entry in entries:
-        print(_format_memory_summary(entry))
+        print(render_memory_entry_row(entry))
     return 0
 
 
@@ -1167,6 +1154,45 @@ def handle_notify_clear(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_reflection_list(args: argparse.Namespace) -> int:
+    from nuself.tui.render import render_reflection_summary
+
+    events = read_log_events(project_root=args.project_root, component="reflection", tail=args.tail)
+    if not events:
+        print("No reflection events.")
+        return 0
+    if args.as_json:
+        import json
+
+        for event in events:
+            print(json.dumps(event.to_record(), sort_keys=True, ensure_ascii=True))
+        return 0
+    for idx, event in enumerate(events):
+        print(f"[{idx:3d}] {render_reflection_summary(event)}")
+    return 0
+
+
+def handle_reflection_show(args: argparse.Namespace) -> int:
+    from nuself.logs import LogEvent
+    from nuself.tui.render import render_reflection_detail
+
+    all_events: list[LogEvent] = read_log_events(project_root=args.project_root, component="reflection")
+    if not all_events:
+        print("No reflection events.", file=sys.stderr)
+        return 1
+    if args.event_index < 0 or args.event_index >= len(all_events):
+        print(f"Invalid index {args.event_index}. Valid range: 0-{len(all_events) - 1}", file=sys.stderr)
+        return 1
+    selected = all_events[args.event_index]  # pyright: ignore[reportUnknownVariableType]
+    if args.as_json:
+        import json
+
+        print(json.dumps(selected.to_record(), sort_keys=True, ensure_ascii=True))  # pyright: ignore[reportUnknownMemberType]
+        return 0
+    print(render_reflection_detail(selected))  # pyright: ignore[reportUnknownArgumentType]
+    return 0
+
+
 def handle_memory_update(args: argparse.Namespace) -> int:
     result = MemoryCurator(args.project_root).run_once()
     print(f"Memory curator: {result.summary()} log={result.log_path}")
@@ -1231,8 +1257,14 @@ def handle_memory_candidate_list(args: argparse.Namespace) -> int:
         candidates = sorted(candidates, key=lambda c: (-c.importance, c.updated_at, c.id))
     elif sort_by == "type":
         candidates = sorted(candidates, key=lambda c: (c.type, c.updated_at, c.id))
-    for candidate in candidates:
-        print(_format_memory_candidate_summary(candidate))
+    for i, candidate in enumerate(candidates):
+        if i > 0:
+            print()
+        print(render_candidate_row(candidate))
+    pending = [c for c in candidates if c.review_state == "pending"]
+    if pending:
+        print()
+        print(f"{len(pending)} pending candidate(s). Accept: nuself memory candidate accept <id>")
     return 0
 
 
@@ -1243,7 +1275,7 @@ def handle_memory_candidate_show(args: argparse.Namespace) -> int:
     except MemoryCandidateNotFound:
         print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
         return 1
-    print(_format_memory_candidate_detail(candidate))
+    print(render_candidate_detail(candidate))
     return 0
 
 
@@ -1289,7 +1321,7 @@ def handle_memory_candidate_edit(args: argparse.Namespace) -> int:
     except MemoryCandidateNotFound:
         print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
         return 1
-    print(_format_memory_candidate_summary(updated))
+    print(render_candidate_row(updated))
     return 0
 
 
@@ -1328,7 +1360,7 @@ def handle_memory_source_list(args: argparse.Namespace) -> int:
         print("No source documents.")
         return 0
     for document in documents:
-        print(_format_source_document_summary(document))
+        print(render_source_row(document))
     return 0
 
 
@@ -1339,7 +1371,7 @@ def handle_memory_source_show(args: argparse.Namespace) -> int:
     except SourceDocumentNotFound:
         print(f"Source document not found: {args.source_id}", file=sys.stderr)
         return 1
-    print(_format_source_document_detail(document, len(repo.list_chunks(document.id))))
+    print(render_source_detail(document, chunk_count=len(repo.list_chunks(document.id))))
     return 0
 
 
@@ -1406,7 +1438,7 @@ def handle_memory_profile_list(args: argparse.Namespace) -> int:
     elif sort_by == "type":
         items = sorted(items, key=lambda i: (i.type, i.updated_at, i.id))
     for item in items:
-        print(_format_profile_item_summary(item))
+        print(render_profile_row(item))
     return 0
 
 
@@ -1426,7 +1458,7 @@ def handle_memory_profile_search(args: argparse.Namespace) -> int:
         print("No matching profile items.")
         return 0
     for item in items:
-        print(_format_profile_item_summary(item))
+        print(render_profile_row(item))
     return 0
 
 
@@ -1437,7 +1469,7 @@ def handle_memory_profile_show(args: argparse.Namespace) -> int:
     except ProfileItemNotFound:
         print(f"Profile item not found: {args.profile_id}", file=sys.stderr)
         return 1
-    print(_format_profile_item_detail(item))
+    print(render_profile_detail(item))
     return 0
 
 
@@ -2246,109 +2278,6 @@ def _format_daemon_list(status: lifecycle.DaemonStatus) -> str:
     )
 
 
-def _format_memory_summary(entry: MemoryEntry) -> str:
-    tags = ",".join(entry.tags) if entry.tags else "-"
-    state = entry.review_state
-    if state == "quarantined":
-        state = "QUARANTINED"
-    return f"{entry.id} [{entry.type}] {entry.title} tags={tags} state={state} importance={entry.importance}"
-
-
-def _format_memory_detail(entry: MemoryEntry) -> str:
-    tags = ", ".join(entry.tags) if entry.tags else "-"
-    return "\n".join(
-        [
-            f"id: {entry.id}",
-            f"type: {entry.type}",
-            f"title: {entry.title}",
-            f"tags: {tags}",
-            f"confidence: {entry.confidence}",
-            f"importance: {entry.importance}",
-            f"privacy: {entry.privacy}",
-            f"review_state: {entry.review_state}",
-            f"created_at: {entry.created_at}",
-            f"updated_at: {entry.updated_at}",
-            f"observed_at: {entry.observed_at or '-'}",
-            f"valid_from: {entry.valid_from or '-'}",
-            f"valid_until: {entry.valid_until or '-'}",
-            f"temporal_note: {entry.temporal_note or '-'}",
-            "evidence:",
-            *_format_evidence_lines(entry.evidence),
-            "",
-            entry.body,
-        ]
-    )
-
-
-def _format_memory_candidate_summary(candidate: MemoryCandidate) -> str:
-    tags = ",".join(candidate.tags) if candidate.tags else "-"
-    observed = candidate.observed_at or "-"
-    return (
-        f"{candidate.id} [{candidate.review_state}] {candidate.action} {candidate.type} "
-        f"{candidate.title} tags={tags} importance={candidate.importance} observed_at={observed}"
-    )
-
-
-def _format_profile_item_summary(item: ProfileItem) -> str:
-    tags = ",".join(item.tags) if item.tags else "-"
-    observed = item.observed_at or "-"
-    return f"{item.id} [{item.type}] {item.title} tags={tags} importance={item.importance} observed_at={observed}"
-
-
-def _format_profile_item_detail(item: ProfileItem) -> str:
-    tags = ", ".join(item.tags) if item.tags else "-"
-    return "\n".join(
-        [
-            f"id: {item.id}",
-            f"type: {item.type}",
-            f"title: {item.title}",
-            f"tags: {tags}",
-            f"confidence: {item.confidence}",
-            f"importance: {item.importance}",
-            f"privacy: {item.privacy}",
-            f"created_at: {item.created_at}",
-            f"updated_at: {item.updated_at}",
-            f"observed_at: {item.observed_at or '-'}",
-            f"valid_from: {item.valid_from or '-'}",
-            f"valid_until: {item.valid_until or '-'}",
-            f"temporal_note: {item.temporal_note or '-'}",
-            "evidence:",
-            *_format_evidence_lines(item.evidence),
-            "",
-            item.body,
-        ]
-    )
-
-
-def _format_memory_candidate_detail(candidate: MemoryCandidate) -> str:
-    tags = ", ".join(candidate.tags) if candidate.tags else "-"
-    return "\n".join(
-        [
-            f"id: {candidate.id}",
-            f"action: {candidate.action}",
-            f"type: {candidate.type}",
-            f"title: {candidate.title}",
-            f"tags: {tags}",
-            f"confidence: {candidate.confidence}",
-            f"importance: {candidate.importance}",
-            f"privacy: {candidate.privacy}",
-            f"review_state: {candidate.review_state}",
-            f"reason: {candidate.reason or '-'}",
-            f"target_entry_id: {candidate.target_entry_id or '-'}",
-            f"created_at: {candidate.created_at}",
-            f"updated_at: {candidate.updated_at}",
-            f"reviewed_at: {candidate.reviewed_at or '-'}",
-            f"observed_at: {candidate.observed_at or '-'}",
-            f"valid_from: {candidate.valid_from or '-'}",
-            f"valid_until: {candidate.valid_until or '-'}",
-            f"temporal_note: {candidate.temporal_note or '-'}",
-            "evidence:",
-            *_format_evidence_lines(candidate.evidence),
-            "",
-            candidate.body,
-        ]
-    )
-
 
 def _format_memory_stats(stats: MemoryStats) -> str:
     lines = [
@@ -2386,28 +2315,6 @@ def _format_symbolic_graph_edge(edge: SymbolicGraphEdge) -> str:
     return f"{edge.id} {edge.source} --{edge.relation}-> {edge.target} confidence={edge.confidence:.2f}"
 
 
-def _format_source_document_summary(document: SourceDocument) -> str:
-    tags = ",".join(document.tags) if document.tags else "-"
-    return f"{document.id} [{document.kind}] {document.title} tags={tags} privacy={document.privacy}"
-
-
-def _format_source_document_detail(document: SourceDocument, chunk_count: int) -> str:
-    tags = ", ".join(document.tags) if document.tags else "-"
-    return "\n".join(
-        [
-            f"id: {document.id}",
-            f"title: {document.title}",
-            f"path: {document.path}",
-            f"kind: {document.kind}",
-            f"origin: {document.origin}",
-            f"privacy: {document.privacy}",
-            f"tags: {tags}",
-            f"source_date: {document.source_date or '-'}",
-            f"created_at: {document.created_at}",
-            f"updated_at: {document.updated_at}",
-            f"chunks: {chunk_count}",
-        ]
-    )
 
 
 def _format_source_chunk_summary(chunk: SourceChunk) -> str:
@@ -2445,16 +2352,6 @@ def _format_float_counts(counts: dict[str, float]) -> str:
     return ", ".join(f"{key}={counts[key]:.2f}" for key in sorted(counts))
 
 
-def _format_evidence_lines(evidence_items: list[MemoryEvidence]) -> list[str]:
-    if not evidence_items:
-        return ["  -"]
-    lines: list[str] = []
-    for evidence in evidence_items:
-        observed = evidence.observed_at or "-"
-        summary = f" summary={evidence.summary}" if evidence.summary else ""
-        lines.append(f"  - {evidence.source_type} {evidence.source_ref} observed_at={observed}{summary}")
-    return lines or ["  -"]
-
 
 def _format_memory_preview(project_root: Path | None, limit: int = DEFAULT_MEMORY_PREVIEW_LIMIT) -> str:
     normalized_limit = max(limit, 1)
@@ -2462,18 +2359,17 @@ def _format_memory_preview(project_root: Path | None, limit: int = DEFAULT_MEMOR
     if not entries:
         return "No memory entries."
     shown = entries[:normalized_limit]
-    lines = [f"Memory preview ({len(shown)}/{len(entries)}):"]
-    for entry in shown:
-        body = _compact_text(entry.body, 96)
-        tags = ",".join(entry.tags) if entry.tags else "-"
-        lines.append(
-            f"- {entry.id} [{entry.type}] {entry.title} "
-            f"tags={tags} confidence={entry.confidence:.2f} state={entry.review_state}"
-        )
-        if body != "":
-            lines.append(f"  {body}")
+    lines: list[str] = []
+    for i, entry in enumerate(shown):
+        if i > 0:
+            lines.append("")
+        lines.append(render_memory_entry_row(entry))
+        if entry.body:
+            lines.extend(f"  {line}" for line in _wrap_body_preview(entry.body))
+    lines.append("")
+    lines.append(f"  {len(shown)}/{len(entries)} entries shown.")
     if len(entries) > normalized_limit:
-        lines.append(f"... {len(entries) - normalized_limit} more. Use `nuself memory list` or `nuself memory preview --limit N`.")
+        lines.append(f"  Use `nuself memory list` or `nuself memory preview --limit N` to see more.")
     return "\n".join(lines)
 
 
@@ -2482,6 +2378,14 @@ def _compact_text(text: str, limit: int) -> str:
     if len(compact) <= limit:
         return compact
     return compact[: max(limit - 3, 0)].rstrip() + "..."
+
+
+def _wrap_body_preview(body: str, width: int = 88) -> list[str]:
+    import shutil
+    import textwrap
+
+    cols = shutil.get_terminal_size((width, 24)).columns
+    return textwrap.wrap(body, width=max(min(cols, width), 40)) or [""]
 
 
 def _memory_type_choices() -> list[str]:
