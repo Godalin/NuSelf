@@ -7,6 +7,7 @@ Environment variables can override YAML settings for testing and deployment.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Any, cast
 
@@ -35,14 +36,31 @@ class ReflectionConfig:
     # Moderator parameters
     max_discussion_rounds: int  # Maximum rounds in persona discussion
     moderator_convergence_patience: int  # Rounds to try before forcing conclusion
+
+    @staticmethod
+    def _default_values() -> dict[str, int | float]:
+        return {
+            "interval_seconds": 3600,
+            "cooldown_seconds": 300,
+            "quiet_start_hour": 22,
+            "quiet_end_hour": 7,
+            "daily_cap": 5,
+            "jitter_percent": 20,
+            "relevance_threshold": 0.5,
+            "persona_discussion_threshold": 0.55,
+            "max_discussion_rounds": 10,
+            "moderator_convergence_patience": 5,
+        }
     
     @classmethod
     def from_yaml(cls, config_path: Path | None = None) -> ReflectionConfig:
-        """Load configuration from YAML file, with safe defaults."""
+        """Load config from YAML with environment overrides and safe defaults."""
         if config_path is None:
             from nuself.config import find_project_root
             project_root = find_project_root()
             config_path = project_root / "private" / "reflection_config.yaml"
+
+        defaults = cls._default_values()
         
         try:
             with open(config_path, "r", encoding="utf-8") as f:
@@ -89,35 +107,99 @@ class ReflectionConfig:
                 except ValueError:
                     return default
             return default
+
+        def env_int(name: str, fallback: int) -> int:
+            raw = os.environ.get(name)
+            if raw is None:
+                return fallback
+            try:
+                return int(raw)
+            except ValueError:
+                return fallback
+
+        def env_float(name: str, fallback: float) -> float:
+            raw = os.environ.get(name)
+            if raw is None:
+                return fallback
+            try:
+                return float(raw)
+            except ValueError:
+                return fallback
+
+        interval_seconds = env_int(
+            "NUSELF_REFLECTION_INTERVAL_SECONDS",
+            get_int(scheduler, "interval_seconds", int(defaults["interval_seconds"])),
+        )
+        cooldown_seconds = env_int(
+            "NUSELF_REFLECTION_COOLDOWN_SECONDS",
+            get_int(scheduler, "cooldown_seconds", int(defaults["cooldown_seconds"])),
+        )
+        quiet_start_hour = env_int(
+            "NUSELF_REFLECTION_QUIET_START_HOUR",
+            get_int(scheduler, "quiet_start_hour", int(defaults["quiet_start_hour"])),
+        )
+        quiet_end_hour = env_int(
+            "NUSELF_REFLECTION_QUIET_END_HOUR",
+            get_int(scheduler, "quiet_end_hour", int(defaults["quiet_end_hour"])),
+        )
+        daily_cap = env_int(
+            "NUSELF_REFLECTION_DAILY_CAP",
+            get_int(scheduler, "daily_cap", int(defaults["daily_cap"])),
+        )
+        jitter_percent = env_int(
+            "NUSELF_REFLECTION_JITTER_PERCENT",
+            get_int(scheduler, "jitter_percent", int(defaults["jitter_percent"])),
+        )
+        relevance_threshold = env_float(
+            "NUSELF_REFLECTION_RELEVANCE_THRESHOLD",
+            get_float(gate, "relevance_threshold", float(defaults["relevance_threshold"])),
+        )
+        persona_discussion_threshold = env_float(
+            "NUSELF_REFLECTION_PERSONA_DISCUSSION_THRESHOLD",
+            get_float(gate, "persona_discussion_threshold", float(defaults["persona_discussion_threshold"])),
+        )
+        max_discussion_rounds = env_int(
+            "NUSELF_REFLECTION_MAX_DISCUSSION_ROUNDS",
+            get_int(moderator, "max_discussion_rounds", int(defaults["max_discussion_rounds"])),
+        )
+        moderator_convergence_patience = env_int(
+            "NUSELF_REFLECTION_MODERATOR_CONVERGENCE_PATIENCE",
+            get_int(
+                moderator,
+                "moderator_convergence_patience",
+                int(defaults["moderator_convergence_patience"]),
+            ),
+        )
         
         # Apply values with clamping
         return cls(
-            interval_seconds=max(get_int(scheduler, "interval_seconds", 3600), 60),
-            cooldown_seconds=max(get_int(scheduler, "cooldown_seconds", 300), 0),
-            quiet_start_hour=max(0, min(get_int(scheduler, "quiet_start_hour", 22), 23)),
-            quiet_end_hour=max(0, min(get_int(scheduler, "quiet_end_hour", 7), 23)),
-            daily_cap=max(get_int(scheduler, "daily_cap", 5), 1),
-            jitter_percent=max(0, min(get_int(scheduler, "jitter_percent", 20), 50)),
-            relevance_threshold=max(0.0, min(get_float(gate, "relevance_threshold", 0.5), 1.0)),
-            persona_discussion_threshold=max(0.0, min(get_float(gate, "persona_discussion_threshold", 0.7), 1.0)),
-            max_discussion_rounds=max(get_int(moderator, "max_discussion_rounds", 10), 1),
-            moderator_convergence_patience=max(get_int(moderator, "moderator_convergence_patience", 5), 1),
+            interval_seconds=max(interval_seconds, 60),
+            cooldown_seconds=max(cooldown_seconds, 0),
+            quiet_start_hour=max(0, min(quiet_start_hour, 23)),
+            quiet_end_hour=max(0, min(quiet_end_hour, 23)),
+            daily_cap=max(daily_cap, 1),
+            jitter_percent=max(0, min(jitter_percent, 50)),
+            relevance_threshold=max(0.0, min(relevance_threshold, 1.0)),
+            persona_discussion_threshold=max(0.0, min(persona_discussion_threshold, 1.0)),
+            max_discussion_rounds=max(max_discussion_rounds, 1),
+            moderator_convergence_patience=max(moderator_convergence_patience, 1),
         )
     
     @classmethod
     def default(cls) -> ReflectionConfig:
         """Return a safe default configuration."""
+        defaults = cls._default_values()
         return cls(
-            interval_seconds=3600,
-            cooldown_seconds=300,
-            quiet_start_hour=22,
-            quiet_end_hour=7,
-            daily_cap=5,
-            jitter_percent=20,
-            relevance_threshold=0.5,
-            persona_discussion_threshold=0.55,
-            max_discussion_rounds=10,
-            moderator_convergence_patience=5,
+            interval_seconds=int(defaults["interval_seconds"]),
+            cooldown_seconds=int(defaults["cooldown_seconds"]),
+            quiet_start_hour=int(defaults["quiet_start_hour"]),
+            quiet_end_hour=int(defaults["quiet_end_hour"]),
+            daily_cap=int(defaults["daily_cap"]),
+            jitter_percent=int(defaults["jitter_percent"]),
+            relevance_threshold=float(defaults["relevance_threshold"]),
+            persona_discussion_threshold=float(defaults["persona_discussion_threshold"]),
+            max_discussion_rounds=int(defaults["max_discussion_rounds"]),
+            moderator_convergence_patience=int(defaults["moderator_convergence_patience"]),
         )
     
     @classmethod
@@ -135,3 +217,18 @@ class ReflectionConfig:
             max_discussion_rounds=2,
             moderator_convergence_patience=1,
         )
+
+    def as_flat_dict(self) -> dict[str, int | float]:
+        """Return effective values as flat key/value pairs for CLI inspection."""
+        return {
+            "scheduler.interval_seconds": self.interval_seconds,
+            "scheduler.cooldown_seconds": self.cooldown_seconds,
+            "scheduler.quiet_start_hour": self.quiet_start_hour,
+            "scheduler.quiet_end_hour": self.quiet_end_hour,
+            "scheduler.daily_cap": self.daily_cap,
+            "scheduler.jitter_percent": self.jitter_percent,
+            "gate.relevance_threshold": self.relevance_threshold,
+            "gate.persona_discussion_threshold": self.persona_discussion_threshold,
+            "moderator.max_discussion_rounds": self.max_discussion_rounds,
+            "moderator.moderator_convergence_patience": self.moderator_convergence_patience,
+        }

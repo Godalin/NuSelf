@@ -173,6 +173,8 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 添加 `notify list --status` 过滤和 `notify stats` 命令。
 - [x] 添加 REPL `:notify list` 和 `:notify show <id>` 命令。
 - [x] 添加 `notify watch` CLI 命令和 REPL `:watch`，用于实时 outbox 流式查看。
+- [x] 为反思配置添加环境变量覆盖，并在 `nuself config` 中显示生效配置。
+- [x] 将配置统一到单个 `config.yaml`，用环境变量覆盖代替散布的 `.env` 和 `reflection_config.yaml`。
 
 ### 评估与质量
 
@@ -201,29 +203,85 @@ uv run pytest
 uvx pyright
 ```
 
-## LLM 配置
+## 配置
 
-NuSelf 从根目录下被忽略的私有文件读取模型配置：
+NuSelf 所有配置都集中在一个 YAML 文件中：
 
 ```text
-.env
+private/config.yaml
 ```
 
-可以从仓库中的样例开始：
+配置优先级（从高到低）：
+1. 环境变量（NUSELF_* 或 OPENAI_*）
+2. `private/config.yaml`
+3. 代码中的硬编码默认值
+
+### LLM 配置
+
+```text
+llm:
+  openai:
+    base_url: https://api.openai.com/v1
+    api_key: ""        # 留空使用本地 fallback
+    model: gpt-4.1-mini
+```
+
+向后兼容的环境变量：
+
+```text
+OPENAI_BASE_URL
+OPENAI_API_KEY
+OPENAI_MODEL
+```
+
+### 聊天设置
+
+```text
+chat:
+  context:
+    recent_messages: 12
+    summary_trigger_messages: 18
+    summary_target_chars: 2400
+```
+
+### 守护进程间隔
+
+```text
+daemon:
+  memory_curator:
+    interval_seconds: 300
+  reflection_scheduler:
+    check_interval_seconds: 60
+  notification_delivery:
+    interval_seconds: 30
+```
+
+### 主动反思系统
+
+```text
+reflection:
+  scheduler:
+    interval_seconds: 3600
+    cooldown_seconds: 300
+    quiet_start_hour: 22
+    quiet_end_hour: 7
+    daily_cap: 5
+    jitter_percent: 20
+  gate:
+    relevance_threshold: 0.5
+    persona_discussion_threshold: 0.7
+  moderator:
+    max_discussion_rounds: 10
+    moderator_convergence_patience: 5
+```
+
+参见 `examples/private/config.yaml` 了解完整带注解的示例和其他配置部分（email、macOS 通知、实验性功能）。
+
+查看生效配置：
 
 ```bash
-cp examples/.env .env
+uv run nuself config
 ```
-
-然后填写：
-
-```text
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-4.1-mini
-```
-
-当前客户端使用 OpenAI-compatible `/chat/completions` API。如果 `OPENAI_API_KEY` 为空，聊天会使用确定性的本地 fallback：它仍会保存线程，但不会进行真实模型推理。
 
 ## 私人目录
 
@@ -287,15 +345,6 @@ uv run nuself daemon attach --message "continue"
 当前聊天使用一个基于 LangGraph 的 conversation runtime。它会检索 memory entries、derived profile items 和 imported source chunks，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。当前记忆检索是确定性的词法检索，带有 descriptor-aware 类型提示、type/tag filters、基于现有 memory links 的 relation expansion 和排序原因；向量索引和图索引会作为后续派生检索层加入。
 
 `private/threads/default.json` 是当前 NuSelf mind 的共享 working memory。多个终端连接同一个 daemon 时会共享它。thread store 会用锁串行化写入，避免并发对话互相覆盖。
-
-上下文压缩可在 `.env` 中调整：
-
-```text
-NUSELF_CONTEXT_RECENT_MESSAGES=12
-NUSELF_CONTEXT_SUMMARY_TRIGGER_MESSAGES=18
-NUSELF_CONTEXT_SUMMARY_TARGET_CHARS=2400
-NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS=300
-```
 
 memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出时运行。它会用 agent 判断新的 working-memory 对话应该新增、修改还是忽略长期记忆。无意义闲聊会被忽略，已有相似记忆会优先更新而不是重复创建，原始对话流水账会被拒绝写入。默认情况下，候选记忆会自动提升为持久记忆条目（`auto_accept=True`）；只有需要编辑或拒绝时才需手动审查。另有一个 memory optimizer 可以手动、低频运行，用来整合已经存在的杂乱条目。更新事件会写入 `private/logs/memory.log`，交互式聊天也会用紧凑 activity lines 显示新的 chat、daemon 和 memory 事件。
 
@@ -379,14 +428,6 @@ uv run nuself reflection list
 uv run nuself reflection list --tail 50
 uv run nuself reflection show <index>
 ```
-
-反思行为通过 YAML 配置：
-
-```text
-private/reflection_config.yaml
-```
-
-参见 `examples/reflection_config.yaml` 了解可用参数，包括调度间隔、每日上限、quiet hours、相关性阈值和人格讨论策略。
 
 ## Threads
 

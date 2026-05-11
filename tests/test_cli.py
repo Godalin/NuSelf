@@ -55,7 +55,12 @@ class FakeChangedCurator:
         return FakeChangedCuratorResult()
 
 
-def test_chat_uses_one_shot_when_daemon_is_missing(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_chat_uses_one_shot_when_daemon_is_missing(tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture) -> None:
+    # Ensure LLM API is not configured by clearing env vars
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("NUSELF_LLM_OPENAI_API_KEY", raising=False)
+    
     result = main(["--project-root", str(tmp_path), "chat", "--message", "hello"])
     captured = capsys.readouterr()
 
@@ -2020,7 +2025,10 @@ def test_config_command_shows_paths(tmp_path: Path, capsys: CaptureFixture) -> N
     assert result == 0
     assert "project_root:" in captured.out
     assert "private_root:" in captured.out
-    assert "api_key: not set" in captured.out
+    assert "reflection_config_path:" in captured.out
+    assert "reflection_config_file:" in captured.out
+    assert "reflection_effective:" in captured.out
+    assert "api_key:" in captured.out
 
 
 def test_memory_list_shows_entries(tmp_path: Path, capsys: CaptureFixture) -> None:

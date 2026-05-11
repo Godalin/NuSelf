@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 import tempfile
 
+import pytest
+
 from nuself.config_reflection import ReflectionConfig
 
 
@@ -92,3 +94,32 @@ def test_reflection_config_for_testing() -> None:
     assert config.jitter_percent == 0
     assert config.relevance_threshold == 0.0
     assert config.persona_discussion_threshold == 1.0  # high, effectively disables discussion
+
+
+def test_reflection_config_uses_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that environment variables override YAML values."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_path = Path(tmpdir) / "config.yaml"
+        config_path.write_text(
+            """
+scheduler:
+  interval_seconds: 600
+gate:
+  relevance_threshold: 0.4
+"""
+        )
+        monkeypatch.setenv("NUSELF_REFLECTION_INTERVAL_SECONDS", "120")
+        monkeypatch.setenv("NUSELF_REFLECTION_RELEVANCE_THRESHOLD", "0.8")
+        config = ReflectionConfig.from_yaml(config_path)
+        assert config.interval_seconds == 120
+        assert config.relevance_threshold == 0.8
+
+
+def test_reflection_config_missing_fields_match_default() -> None:
+    """Test that YAML with missing fields uses the same defaults as default()."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_path = Path(tmpdir) / "only_scheduler.yaml"
+        config_path.write_text("scheduler:\n  interval_seconds: 600\n")
+        config = ReflectionConfig.from_yaml(config_path)
+        defaults = ReflectionConfig.default()
+        assert config.persona_discussion_threshold == defaults.persona_discussion_threshold

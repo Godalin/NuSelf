@@ -4,35 +4,35 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Improve proactive reflection quality and memory curation UX. Recent work completed the LLM-powered idea generation, auto-accept pipeline, YAML-based configuration, and beautified TUI output. Next: evaluate reflection quality, tune thresholds, and add vector/hybrid indexes.
+Unify all system configuration into a single `config.yaml` replacing scattered `.env`, `reflection_config.yaml`, and hardcoded defaults. Implement ConfigSystem loader with environment variable overrides. Next: validate new config path, add more test coverage, ensure smooth migration from old formats.
 
 ## Immediate Context
 
-- `IdeaCandidateGenerator` uses LLM to scan threads, memory, and sources with structured JSON output.
-- `RelevanceGate` uses `config.relevance_threshold` from `private/reflection_config.yaml`.
-- `MemoryCurator` auto-accepts candidates into durable entries by default (`auto_accept=True`).
-- Competitive persona discussion persists traces to reflection log, viewable via `nuself reflection list/show`.
-- All user-facing memory output uses card-style TUI renderers.
-- `ReflectionConfig` YAML system covers scheduler, gate, and moderator parameters.
-- 545+ tests pass, pyright clean.
+- New `ConfigSystem` class loads unified `config.yaml` with env variable overrides.
+- Config hierarchy: env vars > `private/config.yaml` > `examples/private/config.yaml` (for tests) > hardcoded defaults.
+- Backward compat: ReflectionScheduler/RelevanceGate accept both old ReflectionConfig (for tests) and new ReflectionSettings.
+- Chat.py, llm.py, daemon/server.py now use ConfigSystem instead of scattered config_int/config_value calls.
+- 545+ tests pass; need validation of config loading path.
 
 ## Next Steps
 
-1. Evaluate proactive reflection quality with real usage data; tune thresholds and prompts.
-2. Add derived vector and hybrid indexes for semantic memory retrieval.
-3. Improve memory search with embedding-based relevance alongside lexical matching.
-4. Add `nuself reflection evaluate` command to score reflection quality against outcomes.
+1. Run tests to validate ConfigSystem migration.
+2. Update test fixtures to use ConfigSystem.for_testing().
+3. Migrate email.toml config into config.yaml section.
+4. Update CLI documentation to show config.yaml examples.
+5. Consider deprecation/cleanup of .env and reflection_config.yaml.
 
 ## Not Now
 
-- Global unified config system (reflection config is sufficient for now).
-- Hot reload or live update of config.
-- Config UI or interactive editor.
 - LangMem integration (Phase 4).
-- Graphiti temporal graph store (Phase 3).
+- Vector/hybrid indexes (Phase 3).
+- Hot reload or live config updates.
+- Config UI or interactive editor.
 
 ## Completion Criteria
 
-- Reflection quality metrics tracked and thresholds tuned based on real data.
-- Vector index prototype integrated with `MemoryQueryService`.
+- All core config reads use SystemConfig.
+- Tests pass with new config system.
+- Config file loading documented with examples.
+- Backward compat with old formats maintained where needed.
 - All new code passes `uv run pytest` and `uvx pyright`.

@@ -60,6 +60,7 @@ try:
     from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
     from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
     from nuself.logs import LOG_COMPONENTS, LogComponent, read_log_events, write_log_event
+    from nuself.config_system import ConfigSystem
     from nuself.tui.memory import (
         render_candidate_detail,
         render_candidate_row,
@@ -519,32 +520,19 @@ def handle_health(args: argparse.Namespace) -> int:
 
 
 def handle_config(args: argparse.Namespace) -> int:
-    import os
-
     paths = runtime_paths(args.project_root)
+    config_path = paths.private_root / "config.yaml"
     print(f"project_root: {paths.project_root}")
     print(f"private_root: {paths.private_root}")
     print(f"socket_path: {paths.socket_path}")
+    print(f"config_path: {config_path}")
+    print(f"config_file: {'found' if config_path.exists() else 'not found (using defaults)'}")
 
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        env_path = paths.project_root / ".env"
-        if env_path.exists():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("OPENAI_API_KEY="):
-                    api_key = line.split("=", 1)[1].strip().strip('"')
-                    break
-    print(f"api_key: {'set' if api_key else 'not set'}")
-
-    model = os.environ.get("OPENAI_MODEL", "")
-    if not model:
-        env_path = paths.project_root / ".env"
-        if env_path.exists():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("OPENAI_MODEL="):
-                    model = line.split("=", 1)[1].strip().strip('"')
-                    break
-    print(f"model: {model or 'default'}")
+    system_config = ConfigSystem.load(config_path, args.project_root)
+    print("config_effective:")
+    config_system = ConfigSystem()
+    for key, value in sorted(config_system.as_flat_dict(system_config).items()):
+        print(f"  {key}: {value}")
     return 0
 
 
