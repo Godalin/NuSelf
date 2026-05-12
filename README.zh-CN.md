@@ -33,9 +33,9 @@ LangGraph 现在已经支撑 conversation runtime，而且内部 persona 系统�
 - [x] 增加 `care_self`，并优化显式多视角路由策略。
 - [x] 增加内部 `synthesizer_self`，用于融合 persona contributions。
 - [x] 在内部响应规划中使用融合后的 persona insight。
-- [ ] 将竞争式讨论系统抽成聊天和反思共用的服务。
-- [ ] 让主人格作为多人格讨论的唯一升级门控。
-- [ ] 让聊天与反思都能在 REPL 和日志中看见讨论轨迹。
+- [x] 将竞争式讨论系统抽成聊天和反思共用的服务。
+- [x] 让主人格作为多人格讨论的唯一升级门控。
+- [x] 让聊天与反思都能在 REPL 和日志中看见讨论轨迹。
 
 ### 项目基础
 
