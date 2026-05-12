@@ -4,26 +4,22 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Fix background reflection system to properly generate proactive ideas. Ensure daemon threads start correctly and reflection candidates are generated with high-quality insights.
+Redesign the proactive reflection dialogue so multi-persona discussion feels closer to a real live debate, with visible per-person discoveries and a moderator conclusion after sufficient depth.
 
 ## Immediate Context
 
-- ConfigSystem unified and merged to main.
-- Daemon server correctly starts 3 background threads: memory_curator, reflection_scheduler, notification_delivery.
-- IdeaCandidateGenerator may be failing silently (catches RuntimeError/ValueError/JSONDecodeError).
-- Possible root causes:
-  1. API key not configured → uses LocalFallbackLLM (low-quality output)
-  2. Memory/threads/sources empty → `context.is_empty()` → no candidates
-  3. Default LLM initialization fails → silent catch
-  4. Thread startup error not logged → threads die silently
+- Reflection scheduler and daemon startup are functioning.
+- Reflection checks are now less noisy by default.
+- Multi-persona discussion still uses a bounded randomized debate flow, so it needs a redesign to better expose live back-and-forth reasoning.
+- Root `private/config.yaml` should be treated as the live user config file.
 
 ## Next Steps
 
-1. **Diagnose**: Add logging to daemon thread startup and reflection cycle execution
-2. **Fix API Key Handling**: Ensure API key is always available (error earlier if missing)
-3. **Add Fallback Strategy**: When LocalFallbackLLM is used, provide visible warning in logs
-4. **Improve Error Reporting**: Log failures in reflection, not silently catch them
-5. **Validate Context Collection**: Ensure memory/threads/sources are being read correctly
+1. **Design**: Define a more realistic multi-persona debate format with shared transcript visibility
+2. **Expose**: Make `reflection show` surface the full persona discussion in a readable structure
+3. **Moderate**: Let the moderator summarize and conclude only after enough discussion depth
+4. **Tune**: Replace hard-coded participant counts with config-driven or adaptive participation rules
+5. **Validate**: Add tests that assert the discussion trace is preserved and readable
 
 ## Not Now
 
