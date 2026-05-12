@@ -49,19 +49,13 @@ class ReflectionScheduler:
         self._event_queue.append(event)
 
     def should_reflect(self, now: datetime | None = None) -> bool:
-        """Check if all trigger conditions are satisfied."""
-        if now is None:
-            now = datetime.now(UTC)
-        if self._in_quiet_hours(now):
-            return False
-        if self._event_queue:
-            return True
-        if self._in_cooldown(now):
-            return False
-        if self._interval_not_elapsed(now):
-            return False
-        if not self._daily_cap_not_reached(now):
-            return False
+        """Allow reflection to run without time-based restrictions.
+
+        This intentionally removes quiet hours, cooldown, interval, and daily
+        cap checks so the scheduler may run whenever the daemon's check loop
+        invokes it. The daemon still controls frequency via its
+        `reflection_check_interval_seconds` setting.
+        """
         return True
 
     def reflect(self, now: datetime | None = None) -> bool:

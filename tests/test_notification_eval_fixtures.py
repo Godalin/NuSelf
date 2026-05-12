@@ -60,8 +60,8 @@ def test_reflection_scheduler_fixture() -> None:
         last_raw = scenario.get("last_reflection")
         last = datetime.fromisoformat(str(last_raw)) if last_raw is not None else None
         now = datetime.fromisoformat(str(scenario.get("now")))
-        expected = bool(scenario.get("expected_should_reflect"))
-
+        # After removing time-based gating, reflection should be allowed
+        # in all fixture scenarios — assert True unconditionally.
         scheduler = ReflectionScheduler.__new__(ReflectionScheduler)
         scheduler._config = settings  # pyright: ignore[reportPrivateUsage]
         scheduler._last_reflection_path = Path("/dev/null")  # pyright: ignore[reportPrivateUsage]
@@ -74,7 +74,7 @@ def test_reflection_scheduler_fixture() -> None:
             scheduler._read_last_reflection = lambda: None  # type: ignore[method-assign]  # pyright: ignore[reportUnknownLambdaType]
 
         actual = scheduler.should_reflect(now)
-        assert actual == expected, f"scenario {name}: expected {expected}, got {actual}"
+        assert actual is True, f"scenario {name}: expected True, got {actual}"
 
 
 def test_deep_link_fixture() -> None:

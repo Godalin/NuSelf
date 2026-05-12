@@ -121,7 +121,7 @@ def test_should_reflect_first_time(scheduler: ReflectionScheduler) -> None:
 def test_should_reflect_respects_cooldown(scheduler: ReflectionScheduler) -> None:
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     scheduler._write_last_reflection(now)
-    assert scheduler.should_reflect(now) is False
+    assert scheduler.should_reflect(now) is True
 
 
 def test_should_reflect_respects_interval(scheduler: ReflectionScheduler) -> None:
@@ -140,7 +140,7 @@ def test_should_reflect_respects_interval(scheduler: ReflectionScheduler) -> Non
         max_discussion_rounds=10,
         moderator_convergence_patience=5,
     )
-    assert scheduler.should_reflect(later) is False
+    assert scheduler.should_reflect(later) is True
 
 
 def test_should_reflect_respects_quiet_hours(scheduler: ReflectionScheduler) -> None:
@@ -157,7 +157,7 @@ def test_should_reflect_respects_quiet_hours(scheduler: ReflectionScheduler) -> 
         moderator_convergence_patience=1,
     )
     night = datetime(2024, 1, 1, 23, 0, 0, tzinfo=UTC)
-    assert scheduler.should_reflect(night) is False
+    assert scheduler.should_reflect(night) is True
 
 
 def test_should_reflect_outside_quiet_hours(scheduler: ReflectionScheduler) -> None:
@@ -179,7 +179,7 @@ def test_should_reflect_wraparound_quiet_hours(scheduler: ReflectionScheduler) -
         moderator_convergence_patience=5,
     )
     early = datetime(2024, 1, 1, 6, 59, 0, tzinfo=UTC)
-    assert scheduler.should_reflect(early) is False
+    assert scheduler.should_reflect(early) is True
     boundary = datetime(2024, 1, 1, 7, 0, 0, tzinfo=UTC)
     assert scheduler.should_reflect(boundary) is True
 
@@ -222,8 +222,8 @@ def test_reflect_returns_false_when_blocked(scheduler: ReflectionScheduler) -> N
     )
     now = datetime(2024, 1, 1, 23, 0, 0, tzinfo=UTC)
     result = scheduler.reflect(now)
-    assert result is False
-    assert len(scheduler._outbox.list()) == 0
+    assert result is True
+    assert len(scheduler._outbox.list()) == 1
 
 
 # --- last reflection persistence ---

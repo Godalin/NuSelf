@@ -171,6 +171,7 @@ def build_parser() -> argparse.ArgumentParser:
     reflection_subparsers = reflection_parser.add_subparsers(dest="reflection_command")
     reflection_list_parser = reflection_subparsers.add_parser("list")
     reflection_list_parser.add_argument("--tail", type=int, default=20)
+    reflection_list_parser.add_argument("--include-started", action="store_true", default=False)
     reflection_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reflection_list_parser, handle_reflection_list)
     reflection_show_parser = reflection_subparsers.add_parser("show")
@@ -1158,6 +1159,8 @@ def handle_reflection_list(args: argparse.Namespace) -> int:
     from nuself.tui.render import render_reflection_summary
 
     events = read_log_events(project_root=args.project_root, component="reflection", tail=args.tail)
+    if not getattr(args, "include_started", False):
+        events = [event for event in events if event.event != "cycle_started"]
     if not events:
         print("No reflection events.")
         return 0

@@ -68,6 +68,45 @@ def test_reflection_list_with_events(project_root: Path, capsys: pytest.CaptureF
     assert "[rejected]" in output
 
 
+def test_reflection_list_hides_started_by_default(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from nuself.cli import handle_reflection_list
+    import argparse
+
+    write_log_event(
+        "reflection",
+        "cycle_started",
+        "reflection cycle triggered",
+        project_root=project_root,
+        status="started",
+    )
+    _seed_reflection_events(project_root, 1)
+
+    args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_started=False)
+    assert handle_reflection_list(args) == 0
+    output = capsys.readouterr().out
+    assert "triggered" not in output
+    assert "[approved]" in output
+
+
+def test_reflection_list_can_include_started(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from nuself.cli import handle_reflection_list
+    import argparse
+
+    write_log_event(
+        "reflection",
+        "cycle_started",
+        "reflection cycle triggered",
+        project_root=project_root,
+        status="started",
+    )
+    _seed_reflection_events(project_root, 1)
+
+    args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_started=True)
+    assert handle_reflection_list(args) == 0
+    output = capsys.readouterr().out
+    assert "triggered" in output
+
+
 def test_reflection_list_json(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from nuself.cli import handle_reflection_list
     import argparse
