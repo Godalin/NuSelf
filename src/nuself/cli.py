@@ -1158,9 +1158,11 @@ def handle_notify_clear(args: argparse.Namespace) -> int:
 def handle_reflection_list(args: argparse.Namespace) -> int:
     from nuself.tui.render import render_reflection_summary
 
-    events = read_log_events(project_root=args.project_root, component="reflection", tail=args.tail)
-    if not getattr(args, "include_started", False):
-        events = [event for event in events if event.event != "cycle_started"]
+    events = _reflection_events_for_display(
+        project_root=args.project_root,
+        tail=args.tail,
+        include_started=getattr(args, "include_started", False),
+    )
     if not events:
         print("No reflection events.")
         return 0
@@ -1179,14 +1181,17 @@ def handle_reflection_show(args: argparse.Namespace) -> int:
     from nuself.logs import LogEvent
     from nuself.tui.render import render_reflection_detail
 
-    all_events: list[LogEvent] = read_log_events(project_root=args.project_root, component="reflection")
+    all_events = _reflection_events_for_display(
+        project_root=args.project_root,
+        include_started=getattr(args, "include_started", False),
+    )
     if not all_events:
         print("No reflection events.", file=sys.stderr)
         return 1
     if args.event_index < 0 or args.event_index >= len(all_events):
         print(f"Invalid index {args.event_index}. Valid range: 0-{len(all_events) - 1}", file=sys.stderr)
         return 1
-    selected = all_events[args.event_index]  # pyright: ignore[reportUnknownVariableType]
+    selected = all_events[args.event_index]
     if args.as_json:
         import json
 
@@ -1194,6 +1199,20 @@ def handle_reflection_show(args: argparse.Namespace) -> int:
         return 0
     print(render_reflection_detail(selected))  # pyright: ignore[reportUnknownArgumentType]
     return 0
+
+
+def _reflection_events_for_display(
+    *,
+    project_root: Path | None,
+    tail: int | None = None,
+    include_started: bool = False,
+) -> list["LogEvent"]:
+    from nuself.logs import LogEvent
+
+    events = read_log_events(project_root=project_root, component="reflection", tail=tail)
+    if not include_started:
+        events = [event for event in events if event.event != "cycle_started"]
+    return events
 
 
 def handle_memory_update(args: argparse.Namespace) -> int:
