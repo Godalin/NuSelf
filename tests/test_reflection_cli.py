@@ -161,6 +161,25 @@ def test_reflection_show_uses_same_indexing_as_list(project_root: Path, capsys: 
     assert "triggered" not in show_output
 
 
+def test_reflection_show_respects_default_tail_window(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from nuself.cli import handle_reflection_list, handle_reflection_show
+    import argparse
+
+    _seed_reflection_events(project_root, 25)
+
+    list_args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_started=False)
+    assert handle_reflection_list(list_args) == 0
+    list_output = capsys.readouterr().out
+    assert "Test idea 5" in list_output
+    assert "Test idea 4" not in list_output
+
+    show_args = argparse.Namespace(project_root=project_root, event_index=0, tail=20, as_json=False, include_started=False)
+    assert handle_reflection_show(show_args) == 0
+    show_output = capsys.readouterr().out
+    assert "Test idea 5" in show_output
+    assert "Test idea 4" not in show_output
+
+
 def test_reflection_show_json(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from nuself.cli import handle_reflection_show
     import argparse

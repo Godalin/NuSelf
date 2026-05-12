@@ -176,6 +176,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(reflection_list_parser, handle_reflection_list)
     reflection_show_parser = reflection_subparsers.add_parser("show")
     reflection_show_parser.add_argument("event_index", type=int, help="Index from 'reflection list' (0-based)")
+    reflection_show_parser.add_argument("--tail", type=int, default=20)
+    reflection_show_parser.add_argument("--include-started", action="store_true", default=False)
     reflection_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reflection_show_parser, handle_reflection_show)
 
@@ -1178,11 +1180,11 @@ def handle_reflection_list(args: argparse.Namespace) -> int:
 
 
 def handle_reflection_show(args: argparse.Namespace) -> int:
-    from nuself.logs import LogEvent
     from nuself.tui.render import render_reflection_detail
 
     all_events = _reflection_events_for_display(
         project_root=args.project_root,
+        tail=getattr(args, "tail", 20),
         include_started=getattr(args, "include_started", False),
     )
     if not all_events:
