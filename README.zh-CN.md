@@ -13,7 +13,7 @@ NuSelf 是一个本地 AI 镜像项目。它的目标是逐步成长为一个带
 - 在 ignored `private/sources/` 下支持 Markdown 和纯文本 source ingestion，并可从导入的 chunks 提取可审阅候选项。
 - 持久化聊天线程，并能压缩较早的对话上下文。
 
-LangGraph 现在已经支撑 conversation runtime，而且内部 persona 系统正朝着“聊天与反思共用一套讨论流程”的方向演进。persona subgraphs、主动反思、邮件和 macOS 通知仍是后续规划。
+LangGraph 现在已经支撑 conversation runtime，而且内部 persona 系统正朝着“聊天与后台反思共用一套竞争式讨论流程”的方向演进。persona subgraphs、主动反思、邮件和 macOS 通知仍是后续规划。
 
 ## 项目 TODOs
 
@@ -33,8 +33,9 @@ LangGraph 现在已经支撑 conversation runtime，而且内部 persona 系统�
 - [x] 增加 `care_self`，并优化显式多视角路由策略。
 - [x] 增加内部 `synthesizer_self`，用于融合 persona contributions。
 - [x] 在内部响应规划中使用融合后的 persona insight。
-- [ ] 让聊天主人格能主动把想法升级为多人格讨论。
-- [ ] 将有价值的聊天讨论结果通过聊天路径进入长期记忆。
+- [ ] 将竞争式讨论系统抽成聊天和反思共用的服务。
+- [ ] 让主人格参与决定是否升级到多人格讨论。
+- [ ] 让聊天与反思都能在 REPL 和日志中看见讨论轨迹。
 
 ### 项目基础
 
@@ -179,8 +180,8 @@ LangGraph 现在已经支撑 conversation runtime，而且内部 persona 系统�
 - [x] 将配置统一到单个 `config.yaml`，用环境变量覆盖代替散布的 `.env` 和 `reflection_config.yaml`。
 - [x] 默认让 `reflection list` 只聚焦于已完成或被拒绝的反思结果；如需查看原始调度启动事件，可使用 `--include-started` 或 `nuself logs --component reflection`。
 - [x] 将 daemon 反思检查默认间隔改为 10 分钟，并提供根目录 `private/config.yaml` 模板。
-- [ ] 让交互式聊天复用同一套竞争式讨论策略，再进入记忆流程。
-- [ ] 让聊天触发的讨论结果在 REPL 中即时可见，并可继续进入记忆路由。
+- [ ] 让交互式聊天复用与后台反思相同的竞争式讨论策略。
+- [ ] 让共享讨论结果在 REPL 和结构化日志中即时可见。
 
 ### 评估与质量
 
