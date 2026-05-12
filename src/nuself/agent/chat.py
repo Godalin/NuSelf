@@ -29,6 +29,7 @@ from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
+from nuself.persona_discussion_service import SharedPersonaDiscussionService
 
 ThreadRole = Literal["user", "assistant"]
 ConversationNodeName = Literal[
@@ -478,6 +479,7 @@ class ConversationGraphRuntime:
         persona_definitions = load_persona_definitions(project_root)
         self._persona_activation_policy = PersonaActivationPolicy(persona_definitions)
         self._persona_driver = PersonaGraphDriver()
+        self._persona_discussion_service = SharedPersonaDiscussionService(project_root=project_root)
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),
             SourceRepository(project_root),
@@ -578,29 +580,16 @@ class ConversationGraphRuntime:
         try:
             if activation is not None and activation.trigger in ("explicit_relevant_personas", "explicit_request", "mixed_intent_heuristic"):
                 # Build a lightweight IdeaCandidate from the chat turn
-                cfg = ConfigSystem.load(project_root=self._project_root)
                 lines = state.user_message.splitlines()
                 title = (lines[0] if lines else state.user_message)[:120]
-                ctype = "question" if "?" in state.user_message else "action"
-
-                candidate = IdeaCandidate(
-                    id=f"chat-{state.thread_id}-{int(datetime.now(UTC).timestamp())}",
-                    title=title,
-                    body=state.user_message,
-                    candidate_type=ctype,  # type: ignore[arg-type]
-                    confidence=0.8,
-                    novelty=0.5,
-                    urgency=0.2,
-                    interruption_cost=0.1,
-                    evidence_refs=(),
-                    suggested_thread_id=state.thread_id,
-                    source_summary=updated_persona_turn_state.synthesis.summary if updated_persona_turn_state.synthesis is not None else "",
-                    created_at=datetime.now(UTC).isoformat(),
+                result = self._persona_discussion_service.discuss(
+                    self._build_chat_discussion_candidate(
+                        thread_id=state.thread_id,
+                        user_message=state.user_message,
+                        title=title,
+                        source_summary=updated_persona_turn_state.synthesis.summary if updated_persona_turn_state.synthesis is not None else "",
+                    )
                 )
-                from nuself.proactive_persona import ProactivePersonaDiscussion
-
-                discussion = ProactivePersonaDiscussion(config=cfg.reflection)
-                result = discussion.discuss(candidate)
                 # Log and REPL-print discussion outcome
                 try:
                     write_log_event(
@@ -636,6 +625,30 @@ class ConversationGraphRuntime:
                 persona_turn_state=updated_persona_turn_state,
                 node_trace=(*state.node_trace, "run_personas"),
             ),
+        )
+
+    def _build_chat_discussion_candidate(
+        self,
+        *,
+        thread_id: str,
+        user_message: str,
+        title: str,
+        source_summary: str,
+    ) -> IdeaCandidate:
+        ctype = "question" if "?" in user_message else "action"
+        return IdeaCandidate(
+            id=f"chat-{thread_id}-{int(datetime.now(UTC).timestamp())}",
+            title=title,
+            body=user_message,
+            candidate_type=ctype,  # type: ignore[arg-type]
+            confidence=0.8,
+            novelty=0.5,
+            urgency=0.2,
+            interruption_cost=0.1,
+            evidence_refs=(),
+            suggested_thread_id=thread_id,
+            source_summary=source_summary,
+            created_at=datetime.now(UTC).isoformat(),
         )
 
     def initial_response_node(self, state: ConversationTurnState) -> ConversationNodeResult:

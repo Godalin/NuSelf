@@ -13,6 +13,7 @@ from nuself.config_system import ConfigSystem, ReflectionSettings
 from nuself.domain.memory import now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
 from nuself.notification import NotificationOutbox, OutboxEntry
+from nuself.persona_discussion_service import SharedPersonaDiscussionService
 
 if TYPE_CHECKING:
     from nuself.llm import ChatLLM
@@ -111,10 +112,10 @@ class ReflectionScheduler:
         title = best.title
         body = best.body
         if score.composite >= self._config.gate.persona_discussion_threshold:
-            from nuself.proactive_persona import ProactivePersonaDiscussion
-
-            discussion = ProactivePersonaDiscussion(config=self._config)
-            result = discussion.discuss(best)
+            result = SharedPersonaDiscussionService(
+                project_root=self._project_root,
+                config=self._config,
+            ).discuss(best)
             self._write_discussion_log(best, score, result, now)
             if not result.approved:
                 write_log_event(
