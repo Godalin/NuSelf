@@ -17,6 +17,7 @@ from nuself.agent.persona import (
     PersonaGraphDriver,
     PersonaInput,
     PersonaSynthesis,
+    HostDiscussionPolicy,
     PersonaTurnState,
     load_persona_definitions,
 )
@@ -478,6 +479,7 @@ class ConversationGraphRuntime:
         self._project_root = project_root
         persona_definitions = load_persona_definitions(project_root)
         self._persona_activation_policy = PersonaActivationPolicy(persona_definitions)
+        self._host_discussion_policy = HostDiscussionPolicy()
         self._persona_driver = PersonaGraphDriver()
         self._persona_discussion_service = SharedPersonaDiscussionService(project_root=project_root)
         self._memory_query_service = memory_query_service or MemoryQueryService(
@@ -575,11 +577,34 @@ class ConversationGraphRuntime:
                 print("--- End Persona Synthesis ---")
         except Exception:
             pass
-        # Prototype: if activation indicates explicit escalation or mixed intent,
-        # run the full competitive persona discussion (shared service) and log result.
+        host_decision = self._host_discussion_policy.decide(
+            user_message=state.user_message,
+            synthesis_summary=updated_persona_turn_state.synthesis.summary if updated_persona_turn_state.synthesis is not None else "",
+            selected_personas=updated_persona_turn_state.selected_personas,
+        )
         try:
-            if activation is not None and activation.trigger in ("explicit_relevant_personas", "explicit_request", "mixed_intent_heuristic"):
-                # Build a lightweight IdeaCandidate from the chat turn
+            write_log_event(
+                "persona",
+                "host_discussion_decision",
+                host_decision.reason,
+                project_root=self._project_root,
+                thread_id=state.thread_id,
+                status="approved" if host_decision.should_escalate else "skipped",
+                metadata={
+                    "should_escalate": host_decision.should_escalate,
+                    "matched_markers": list(host_decision.matched_markers),
+                },
+            )
+        except Exception:
+            pass
+        try:
+            print(f"--- Host Decision: {'escalate' if host_decision.should_escalate else 'skip'} ({host_decision.reason}) ---")
+        except Exception:
+            pass
+        # Host decision is the only gate for entering competitive discussion.
+        try:
+            if host_decision.should_escalate:
+                # Build a lightweight IdeaCandidate from the chat turn.
                 lines = state.user_message.splitlines()
                 title = (lines[0] if lines else state.user_message)[:120]
                 result = self._persona_discussion_service.discuss(

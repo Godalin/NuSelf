@@ -308,6 +308,66 @@ class PersonaActivationPolicy:
         return PersonaActivation(trigger="not_needed")
 
 
+@dataclass(frozen=True)
+class HostDiscussionDecision:
+    """Decision about whether the host should escalate into a competitive discussion."""
+
+    should_escalate: bool
+    reason: str
+    matched_markers: tuple[str, ...] = ()
+
+
+class HostDiscussionPolicy:
+    """Host-level gate for deciding when chat should enter competitive discussion."""
+
+    _explicit_markers = PersonaActivationPolicy._explicit_markers
+    _depth_markers = PersonaActivationPolicy._depth_markers
+
+    def decide(
+        self,
+        *,
+        user_message: str,
+        synthesis_summary: str,
+        selected_personas: tuple[PersonaDefinition, ...],
+    ) -> HostDiscussionDecision:
+        combined = " ".join(part for part in (user_message, synthesis_summary) if part).strip()
+        normalized = combined.lower()
+        if normalized == "":
+            return HostDiscussionDecision(False, "host sees no discussion signal")
+
+        explicit_matches = tuple(marker for marker in self._explicit_markers if marker in normalized)
+        if explicit_matches:
+            return HostDiscussionDecision(
+                True,
+                "host sees explicit request for multi-perspective discussion",
+                explicit_matches,
+            )
+
+        depth_matches = tuple(marker for marker in self._depth_markers if marker in normalized)
+        if depth_matches and len(selected_personas) >= 2:
+            return HostDiscussionDecision(
+                True,
+                "host sees a deep tradeoff that merits competitive discussion",
+                depth_matches,
+            )
+
+        if len(user_message) >= 180 and ("?" in user_message or "？" in user_message):
+            return HostDiscussionDecision(
+                True,
+                "host sees a long reflective question that warrants discussion",
+            )
+
+        comparison_markers = tuple(marker for marker in ("compare", "comparison", "debate") if marker in normalized)
+        if comparison_markers:
+            return HostDiscussionDecision(
+                True,
+                "host sees an explicit comparison or debate request",
+                comparison_markers,
+            )
+
+        return HostDiscussionDecision(False, "host does not see enough discussion depth")
+
+
 class PersonaGraphDriver:
     """Minimal LangGraph-backed persona subgraph."""
 
