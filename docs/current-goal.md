@@ -11,12 +11,13 @@ Redesign the proactive reflection and chat persona flows so they share one compe
 - Reflection checks are now less noisy by default.
 - Chat and reflection currently share the same persona primitives (`PersonaGraphDriver`, `PersonaTurnState`, persona definitions) but have different triggers and surfacing.
 - The near-term goal is to improve the shared competitive discussion system itself so both chat and background reflection can use it consistently.
+- There is no fallback toggle for discussion entry; the host persona is the sole decision-maker for escalation in chat.
 - Root `private/config.yaml` should be treated as the live user config file.
 
 ## Next Steps
 
 1. **Shared service**: Refactor `ProactivePersonaDiscussion` into a reusable service interface that chat and reflection can call.
-2. **Host-driven activation**: Let the host persona in chat participate in the decision to escalate into a multi-persona discussion.
+2. **Host-driven activation**: Let the host persona in chat be the sole gate for escalating into a multi-persona discussion.
 3. **Immediate visibility**: Keep the discussion trace readable in the REPL and logs for both chat and reflection.
 4. **Compatibility**: Keep current reflection behavior working while incrementally switching both entry points to the shared discussion path.
 5. **Tests**: Add unit and integration tests covering shared discussion behavior and log emission.

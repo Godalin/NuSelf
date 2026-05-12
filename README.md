@@ -34,7 +34,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add internal `synthesizer_self` for persona contribution fusion.
 - [x] Use synthesized persona insight in internal response planning.
 - [ ] Refactor the competitive discussion system into a shared service for chat and reflection.
-- [ ] Make host-driven escalation part of the shared discussion flow.
+- [ ] Make host-driven escalation the sole gate for chat discussion entry.
 - [ ] Keep discussion traces visible in REPL and logs for both entry points.
 
 ### Project Foundation
