@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 import fcntl
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol, TypeVar, cast
 
@@ -19,6 +20,7 @@ from nuself.agent.persona import (
     PersonaTurnState,
     load_persona_definitions,
 )
+from nuself.domain.proactive import IdeaCandidate
 from nuself.config import runtime_paths
 from nuself.config_system import ConfigSystem
 from nuself.llm import ChatLLM, ChatMessage, default_llm
@@ -558,6 +560,74 @@ class ConversationGraphRuntime:
                 },
             )
         except Exception:
+            pass
+        # Immediate REPL/console visibility for interactive debugging and UX:
+        try:
+            print(f"--- Persona Trigger: {trigger} (selected={len(updated_persona_turn_state.selected_personas)}) ---")
+            for contrib in updated_persona_turn_state.contributions:
+                note = contrib.notes[0] if contrib.notes else "(no note)"
+                print(f"{contrib.persona_id}: {note}")
+            if updated_persona_turn_state.synthesis is not None:
+                print("--- Persona Synthesis ---")
+                print(updated_persona_turn_state.synthesis.summary)
+                print("--- End Persona Synthesis ---")
+        except Exception:
+            pass
+        # Prototype: if activation indicates explicit escalation or mixed intent,
+        # run the full competitive persona discussion (shared service) and log result.
+        try:
+            if activation is not None and activation.trigger in ("explicit_relevant_personas", "explicit_request", "mixed_intent_heuristic"):
+                # Build a lightweight IdeaCandidate from the chat turn
+                cfg = ConfigSystem.load(project_root=self._project_root)
+                lines = state.user_message.splitlines()
+                title = (lines[0] if lines else state.user_message)[:120]
+                ctype = "question" if "?" in state.user_message else "action"
+
+                candidate = IdeaCandidate(
+                    id=f"chat-{state.thread_id}-{int(datetime.now(UTC).timestamp())}",
+                    title=title,
+                    body=state.user_message,
+                    candidate_type=ctype,  # type: ignore[arg-type]
+                    confidence=0.8,
+                    novelty=0.5,
+                    urgency=0.2,
+                    interruption_cost=0.1,
+                    evidence_refs=(),
+                    suggested_thread_id=state.thread_id,
+                    source_summary=updated_persona_turn_state.synthesis.summary if updated_persona_turn_state.synthesis is not None else "",
+                    created_at=datetime.now(UTC).isoformat(),
+                )
+                from nuself.proactive_persona import ProactivePersonaDiscussion
+
+                discussion = ProactivePersonaDiscussion(config=cfg.reflection)
+                result = discussion.discuss(candidate)
+                # Log and REPL-print discussion outcome
+                try:
+                    write_log_event(
+                        "persona",
+                        "persona_discussion",
+                        f"chat-triggered discussion: {result.reason}",
+                        project_root=self._project_root,
+                        thread_id=state.thread_id,
+                        status=trigger,
+                        metadata={
+                            "winner_persona_ids": list(result.winner_persona_ids),
+                            "emergent_persona_ids": list(result.emergent_persona_ids),
+                            "blocking_vetos": list(result.blocking_vetos),
+                            "reason": result.reason,
+                        },
+                    )
+                except Exception:
+                    pass
+                try:
+                    print("=== Chat-triggered Persona Discussion ===")
+                    for line in result.discussion_trace:
+                        print(line)
+                    print("=== End Discussion ===")
+                except Exception:
+                    pass
+        except Exception:
+            # Keep chat robust: failures in discussion should not break response
             pass
         return ConversationNodeResult(
             node="run_personas",
