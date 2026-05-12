@@ -31,7 +31,7 @@ from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
-from nuself.tui.render import render_discussion_trace
+from nuself.tui.render import render_discussion_trace, render_host_decision
 
 ThreadRole = Literal["user", "assistant"]
 ConversationNodeName = Literal[
@@ -583,8 +583,9 @@ class ConversationGraphRuntime:
             synthesis_summary=updated_persona_turn_state.synthesis.summary if updated_persona_turn_state.synthesis is not None else "",
             selected_personas=updated_persona_turn_state.selected_personas,
         )
+        host_decision_event = None
         try:
-            write_log_event(
+            host_decision_event = write_log_event(
                 "persona",
                 "host_discussion_decision",
                 host_decision.reason,
@@ -597,9 +598,13 @@ class ConversationGraphRuntime:
                 },
             )
         except Exception:
-            pass
+            host_decision_event = None
         try:
-            print(f"--- Host Decision: {'escalate' if host_decision.should_escalate else 'skip'} ({host_decision.reason}) ---")
+            if host_decision_event is not None:
+                for line in render_host_decision(host_decision_event):
+                    print(line)
+            else:
+                print(f"--- Host Decision: {'escalate' if host_decision.should_escalate else 'skip'} ({host_decision.reason}) ---")
         except Exception:
             pass
         # Host decision is the only gate for entering competitive discussion.

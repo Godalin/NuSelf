@@ -211,3 +211,20 @@ def render_discussion_trace(trace: list[object], *, title: str = "discussion tra
     for trace_line in trace:
         lines.append(f"  {trace_line}")
     return lines
+
+
+def render_host_decision(event: LogEvent, *, color: bool | None = None) -> list[str]:
+    """Render a structured host discussion decision event for REPL display."""
+    theme = TerminalTheme(color=color)
+    meta = event.metadata if event.metadata else {}
+    should = meta.get("should_escalate")
+    matched = meta.get("matched_markers") or []
+    status = event.status or "unknown"
+    header = theme.tag("[host decision]", "persona")
+    lines: list[str] = [f"{header} {event.message}  status={status}"]
+    lines.append(f"  should_escalate: {bool(should)}")
+    if isinstance(matched, list) and matched:
+        lines.append(f"  matched_markers: {', '.join(str(x) for x in matched)}")
+    if event.thread_id:
+        lines.append(f"  thread: {event.thread_id}")
+    return lines

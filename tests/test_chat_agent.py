@@ -239,6 +239,21 @@ def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
     assert "old question" in prompt_text
 
 
+def test_chat_agent_writes_host_discussion_decision_log(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    llm = FakeLLM()
+    agent = ChatAgent(tmp_path, llm=llm)
+
+    agent.respond("compare the tradeoffs and debate the options")
+
+    events = [event for event in read_log_events(project_root=tmp_path, component="persona") if event.event == "host_discussion_decision"]
+    assert events
+    assert events[-1].status in {"approved", "skipped"}
+    assert events[-1].metadata is not None
+    assert "should_escalate" in events[-1].metadata
+    captured = capsys.readouterr().out
+    assert "[host decision]" in captured
+
+
 def test_thread_store_update_writes_under_transaction(tmp_path: Path) -> None:
     thread_store = ThreadStore(tmp_path)
 
