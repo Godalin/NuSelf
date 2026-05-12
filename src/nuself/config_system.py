@@ -178,7 +178,7 @@ class ConfigSystem:
             ),
             daemon=DaemonConfig(
                 memory_curator=DaemonMemoryCuratorConfig(interval_seconds=300),
-                reflection_scheduler=DaemonReflectionSchedulerConfig(check_interval_seconds=60),
+                reflection_scheduler=DaemonReflectionSchedulerConfig(check_interval_seconds=600),
                 notification_delivery=DaemonNotificationDeliveryConfig(interval_seconds=30),
             ),
             reflection=ReflectionSettings(

@@ -30,7 +30,7 @@ daemon:
     interval_seconds: 300
   reflection_scheduler:
     # Interval in seconds to check if reflection should run
-    check_interval_seconds: 60
+    check_interval_seconds: 600
   notification_delivery:
     # Interval in seconds to check and deliver pending notifications
     interval_seconds: 30

@@ -176,6 +176,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add reflection config env overrides and effective-config inspection in `nuself config`.
 - [x] Unify configuration into single `config.yaml` with env overrides replacing scattered `.env` and `reflection_config.yaml`.
 - [x] Keep `reflection list` focused on completed or rejected reflection outcomes by default; use `--include-started` or `nuself logs --component reflection` for raw scheduler start events.
+- [x] Set the daemon reflection check interval default to 10 minutes and provide a root `private/config.yaml` template.
 
 ### Evaluation And Quality
 
