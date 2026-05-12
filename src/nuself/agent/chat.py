@@ -31,6 +31,7 @@ from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
+from nuself.tui.render import render_discussion_trace
 
 ThreadRole = Literal["user", "assistant"]
 ConversationNodeName = Literal[
@@ -635,7 +636,7 @@ class ConversationGraphRuntime:
                     pass
                 try:
                     print("=== Chat-triggered Persona Discussion ===")
-                    for line in result.discussion_trace:
+                    for line in render_discussion_trace(list(result.discussion_trace), title="discussion trace"):
                         print(line)
                     print("=== End Discussion ===")
                 except Exception:

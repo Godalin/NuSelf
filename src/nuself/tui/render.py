@@ -199,10 +199,15 @@ def render_reflection_detail(event: LogEvent, *, color: bool | None = None) -> s
 
     trace = meta.get("discussion_trace")
     if isinstance(trace, list) and trace:
-        trace_list = cast(list[object], trace)
         lines.append("")
-        lines.append("discussion trace:")
-        for trace_line in trace_list:
-            lines.append(f"  {trace_line}")
+        lines.extend(render_discussion_trace(cast(list[object], trace), title="discussion trace"))
 
     return "\n".join(lines)
+
+
+def render_discussion_trace(trace: list[object], *, title: str = "discussion trace") -> list[str]:
+    """Render a discussion trace as an indented block for terminal display."""
+    lines = [f"{title}:"]
+    for trace_line in trace:
+        lines.append(f"  {trace_line}")
+    return lines
