@@ -13,7 +13,7 @@ The current implementation is an early CLI-first system:
 - File-backed source ingestion for Markdown and plain text under ignored `private/sources/`, plus reviewable candidates extracted from imported chunks.
 - Persisted chat threads with compressed conversation context.
 
-LangGraph now backs the conversation runtime, and a gated internal persona skeleton can run on explicit or deep turns. Full persona subgraphs, proactive reflection, email, and macOS notifications are still planned.
+LangGraph now backs the conversation runtime, and the internal persona system is being pushed toward a shared chat-and-reflection discussion flow. Full persona subgraphs, proactive reflection, email, and macOS notifications are still planned.
 
 ## Project TODOs
 
@@ -33,6 +33,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add `care_self` and tune explicit multi-perspective routing.
 - [x] Add internal `synthesizer_self` for persona contribution fusion.
 - [x] Use synthesized persona insight in internal response planning.
+- [ ] Let chat host personas proactively escalate ideas into multi-persona discussion.
+- [ ] Route useful chat discussion outcomes into durable memory through the chat path.
 
 ### Project Foundation
 
@@ -177,6 +179,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Unify configuration into single `config.yaml` with env overrides replacing scattered `.env` and `reflection_config.yaml`.
 - [x] Keep `reflection list` focused on completed or rejected reflection outcomes by default; use `--include-started` or `nuself logs --component reflection` for raw scheduler start events.
 - [x] Set the daemon reflection check interval default to 10 minutes and provide a root `private/config.yaml` template.
+- [ ] Let interactive chat reuse the same competitive discussion strategy before memory intake.
+- [ ] Make chat-triggered discussion results visible in the REPL and eligible for memory routing.
 
 ### Evaluation And Quality
 
