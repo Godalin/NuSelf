@@ -3,23 +3,25 @@
 This file is the short-term execution guide for NuSelf. Keep it focused on the active target, immediate context, and the next few steps. Completed work belongs in the README TODOs, not here.
 
 ## Focus
-
-Redesign the proactive reflection dialogue so multi-persona discussion feels closer to a real live debate, with visible per-person discoveries and a moderator conclusion after sufficient depth.
+Redesign the proactive reflection and chat persona flows so multi-persona discussion is a shared, observable capability: a single competitive discussion strategy should be reusable from both background reflection and interactive chat, exposing per-person discoveries and a moderator conclusion when appropriate.
 
 ## Immediate Context
 
 - Reflection scheduler and daemon startup are functioning.
 - Reflection checks are now less noisy by default.
-- Multi-persona discussion still uses a bounded randomized debate flow, so it needs a redesign to better expose live back-and-forth reasoning.
+- Chat and reflection currently share the same persona primitives (`PersonaGraphDriver`, `PersonaTurnState`, persona definitions) but have different triggers and surfacing. The near-term goal is to converge their discussion orchestration so the same competitive-style discussion can be invoked from either path.
 - Root `private/config.yaml` should be treated as the live user config file.
 
 ## Next Steps
 
-1. **Design**: Define a more realistic multi-persona debate format with shared transcript visibility
-2. **Expose**: Make `reflection show` surface the full persona discussion in a readable structure
-3. **Moderate**: Let the moderator summarize and conclude only after enough discussion depth
-4. **Tune**: Replace hard-coded participant counts with config-driven or adaptive participation rules
-5. **Validate**: Add tests that assert the discussion trace is preserved and readable
+ 1. **Converge**: Define a single competitive discussion strategy that both `reflection` and `chat` can call (shared API/service).
+ 2. **Host-driven activation**: Remove special-purpose numeric thresholds as the main trigger; let the host persona (the active persona in chat) decide when to escalate into a multi-persona discussion.
+ 3. **Immediate visibility**: For interactive chat, emit immediate REPL-level logs when a multi-persona discussion is started: trigger reason, per-person contributions, and the host persona's synthesis/summary.
+ 4. **Refactor**: Factor `ProactivePersonaDiscussion` into a reusable service interface (adapter pattern) so both reflection and chat can call the same implementation.
+ 5. **Back-compat**: Keep current reflection behavior working while incrementally switching chat to call the shared discussion service; add config flags to toggle new behavior.
+ 6. **Tests**: Add unit and integration tests covering chat-triggered discussion, log emissions, and shared-service correctness.
+ 7. **Docs**: Update README and `docs/current-goal.md` to document the shared discussion design and migration plan.
+ 8. **QA**: Run integration checks and manual REPL verification to ensure logs and behavior match expectations.
 
 ## Not Now
 
