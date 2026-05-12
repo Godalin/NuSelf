@@ -175,6 +175,7 @@ LangGraph 现在已经支撑 conversation runtime，而且一个受 gate 控制�
 - [x] 添加 `notify watch` CLI 命令和 REPL `:watch`，用于实时 outbox 流式查看。
 - [x] 为反思配置添加环境变量覆盖，并在 `nuself config` 中显示生效配置。
 - [x] 将配置统一到单个 `config.yaml`，用环境变量覆盖代替散布的 `.env` 和 `reflection_config.yaml`。
+- [x] 默认让 `reflection list` 只聚焦于已完成或被拒绝的反思结果；如需查看原始调度启动事件，可使用 `--include-started` 或 `nuself logs --component reflection`。
 
 ### 评估与质量
 
