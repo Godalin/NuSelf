@@ -186,7 +186,7 @@ def build_parser() -> argparse.ArgumentParser:
     memory_subparsers = memory_parser.add_subparsers(dest="memory_command")
     list_parser = memory_subparsers.add_parser("list")
     list_parser.add_argument("--sort-by", choices=["updated_at", "importance", "type"], default="updated_at")
-    list_parser.add_argument("--review-state", choices=["draft", "reviewed", "rejected", "quarantined"], default=None)
+    list_parser.add_argument("--review-state", choices=["draft", "reviewed", "rejected", "quarantined", "archived"], default=None)
     _add_handler(list_parser, handle_memory_list)
     preview_parser = memory_subparsers.add_parser("preview")
     preview_parser.add_argument("--limit", type=int, default=DEFAULT_MEMORY_PREVIEW_LIMIT)
@@ -207,6 +207,7 @@ def build_parser() -> argparse.ArgumentParser:
     edit_parser.add_argument("--body", "--text", default=None)
     edit_parser.add_argument("--tag", action="append", default=None)
     edit_parser.add_argument("--importance", type=float, default=None)
+    edit_parser.add_argument("--review-state", choices=["draft", "reviewed", "rejected", "quarantined", "archived"], default=None)
     _add_handler(edit_parser, handle_memory_edit)
     delete_parser = memory_subparsers.add_parser("delete")
     delete_parser.add_argument("entry_id")
@@ -215,7 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("query", nargs="?", default="")
     search_parser.add_argument("--type", choices=_memory_type_choices(), default=None)
     search_parser.add_argument("--tag", default=None)
-    search_parser.add_argument("--review-state", choices=["draft", "reviewed", "rejected", "quarantined"], default=None)
+    search_parser.add_argument("--review-state", choices=["draft", "reviewed", "rejected", "quarantined", "archived"], default=None)
     search_parser.add_argument("--observed-from", default=None)
     search_parser.add_argument("--observed-to", default=None)
     search_parser.add_argument("--valid-on", default=None)
@@ -691,6 +692,7 @@ def handle_memory_edit(args: argparse.Namespace) -> int:
         body=args.body,
         tags=list(args.tag) if args.tag is not None else None,
         importance=args.importance,
+        review_state=args.review_state,
     )
     repo.save(updated)
     repo.reindex()

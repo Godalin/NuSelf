@@ -239,6 +239,8 @@ def _state(theme: TerminalTheme, state: str) -> str:
         return theme.paint(state, "32")
     if state in {"rejected"}:
         return theme.paint(state, "31")
+    if state in {"archived"}:
+        return theme.paint(state, "34")
     return theme.paint(state, "33")
 
 

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from nuself.memory.query import MemoryQuery, MemoryQueryService
+from nuself.memory.repository import MemoryEntryRepository
 from nuself.notification import NotificationOutbox
 
 
@@ -152,6 +153,77 @@ class DismissReflectionTool:
         entry = entries[idx - 1]
         self.outbox.dismiss(entry.id)
         return f'Dismissed "{entry.title}".'
+
+
+@dataclass(frozen=True)
+class ArchiveMemoryTool:
+    """Tool for archiving a memory entry."""
+
+    project_root: object
+    name: str = "archive_memory"
+    description: str = (
+        "Archive a memory entry so it is excluded from default search and chat context. "
+        "Use when the user says a memory is outdated, no longer relevant, or should be hidden. "
+        "Requires the memory entry_id."
+    )
+
+    def invoke(self, entry_id: str) -> str:
+        """Archive a memory entry by ID.
+
+        Args:
+            entry_id: The ID of the memory entry to archive.
+
+        Returns:
+            Confirmation or error message.
+        """
+        try:
+            repo = MemoryEntryRepository(self.project_root)  # type: ignore[arg-type]
+            entry = repo.get(entry_id)
+        except Exception as e:
+            return f"Error: could not find memory entry: {e}"
+        updated = entry.with_updates(review_state="archived")
+        repo.save(updated)
+        repo.reindex()
+        return f'Archived "{updated.title}".'
+
+
+@dataclass(frozen=True)
+class UpdateMemoryImportanceTool:
+    """Tool for adjusting a memory entry's importance score."""
+
+    project_root: object
+    name: str = "update_memory_importance"
+    description: str = (
+        "Adjust the importance score (0.0–1.0) of a memory entry. "
+        "Use when the user emphasizes or downplays the significance of a memory. "
+        "Requires the memory entry_id and a new importance value."
+    )
+
+    def invoke(self, entry_id: str, importance: float) -> str:
+        """Update the importance of a memory entry.
+
+        Args:
+            entry_id: The ID of the memory entry.
+            importance: New importance score between 0.0 and 1.0.
+
+        Returns:
+            Confirmation or error message.
+        """
+        try:
+            importance_float = float(importance)
+        except (ValueError, TypeError):
+            return "Error: importance must be a number"
+        if not 0.0 <= importance_float <= 1.0:
+            return "Error: importance must be between 0.0 and 1.0"
+        try:
+            repo = MemoryEntryRepository(self.project_root)  # type: ignore[arg-type]
+            entry = repo.get(entry_id)
+        except Exception as e:
+            return f"Error: could not find memory entry: {e}"
+        updated = entry.with_updates(importance=importance_float)
+        repo.save(updated)
+        repo.reindex()
+        return f'Updated importance of "{updated.title}" to {importance_float:.2f}.'
 
 
 def get_tool_description(tool: Tool) -> dict[str, Any]:

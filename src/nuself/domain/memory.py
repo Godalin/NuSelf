@@ -22,7 +22,7 @@ MemoryEntryType: TypeAlias = Literal[
     "persona_instruction",
 ]
 
-ReviewState: TypeAlias = Literal["draft", "reviewed", "rejected", "quarantined"]
+ReviewState: TypeAlias = Literal["draft", "reviewed", "rejected", "quarantined", "archived"]
 PrivacyLevel: TypeAlias = Literal["private", "shareable"]
 MemoryCandidateAction: TypeAlias = Literal["create", "update", "merge", "delete"]
 MemoryCandidateReviewState: TypeAlias = Literal["pending", "accepted", "rejected"]
@@ -1148,7 +1148,7 @@ def _memory_object_type_as_entry_type(value: str) -> MemoryEntryType:
 
 def _expect_review_state(data: dict[str, object], field_name: str) -> ReviewState:
     value = _expect_str(data, field_name)
-    if value not in {"draft", "reviewed", "rejected", "quarantined"}:
+    if value not in {"draft", "reviewed", "rejected", "quarantined", "archived"}:
         raise ValueError(f"unsupported review state: {value}")
     return cast(ReviewState, value)
 

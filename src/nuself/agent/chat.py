@@ -492,13 +492,20 @@ class ConversationGraphRuntime:
         from nuself.agent.tools import DismissReflectionTool, ListPendingReflectionsTool
 
         outbox = NotificationOutbox(project_root)
-        from nuself.agent.tools import DismissReflectionTool, ListPendingReflectionsTool
+        from nuself.agent.tools import (
+            ArchiveMemoryTool,
+            DismissReflectionTool,
+            ListPendingReflectionsTool,
+            UpdateMemoryImportanceTool,
+        )
 
         outbox = NotificationOutbox(project_root)
         self._tools: dict[str, Any] = {
             "search_memory": MemorySearchTool(query_service=self._memory_query_service),
             "list_pending_reflections": ListPendingReflectionsTool(outbox=outbox),
             "dismiss_reflection": DismissReflectionTool(outbox=outbox),
+            "archive_memory": ArchiveMemoryTool(project_root=project_root),
+            "update_memory_importance": UpdateMemoryImportanceTool(project_root=project_root),
         }
         from nuself.agent.graph_driver import ConversationGraphDriver
 
@@ -901,6 +908,16 @@ class ConversationGraphRuntime:
                 "- dismiss_reflection(index: int): "
                 "Remove a pending idea from the active pool when the user explicitly declines interest. "
                 "Index corresponds to the numbered list from list_pending_reflections."
+            ),
+            (
+                "- archive_memory(entry_id: str): "
+                "Archive a memory entry so it is excluded from default search. "
+                "Use when the user says a memory is outdated or no longer relevant."
+            ),
+            (
+                "- update_memory_importance(entry_id: str, importance: float): "
+                "Adjust the importance score (0.0–1.0) of a memory entry. "
+                "Use when the user emphasizes or downplays the significance of a memory."
             ),
         ])
         return "\n".join(parts)

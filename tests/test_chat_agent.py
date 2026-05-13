@@ -990,3 +990,71 @@ def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -
     system_prompt = llm.calls[0][0].content
     assert "list_pending_reflections" in system_prompt
     assert "dismiss_reflection" in system_prompt
+
+
+# --- Memory management tools ---
+
+def test_archive_memory_tool_success(tmp_path: Path) -> None:
+    from nuself.agent.tools import ArchiveMemoryTool
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(id="m1", type="belief", title="Old belief", body="..."))
+    tool = ArchiveMemoryTool(project_root=tmp_path)
+    result = tool.invoke(entry_id="m1")
+    assert "Archived" in result
+    assert "Old belief" in result
+    entry = repo.get("m1")
+    assert entry.review_state == "archived"
+
+
+def test_archive_memory_tool_not_found(tmp_path: Path) -> None:
+    from nuself.agent.tools import ArchiveMemoryTool
+
+    tool = ArchiveMemoryTool(project_root=tmp_path)
+    result = tool.invoke(entry_id="nonexistent")
+    assert "Error" in result
+
+
+def test_update_memory_importance_tool_success(tmp_path: Path) -> None:
+    from nuself.agent.tools import UpdateMemoryImportanceTool
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(id="m1", type="belief", title="Key belief", body="...", importance=0.3))
+    tool = UpdateMemoryImportanceTool(project_root=tmp_path)
+    result = tool.invoke(entry_id="m1", importance=0.9)
+    assert "Updated importance" in result
+    assert "0.90" in result
+    entry = repo.get("m1")
+    assert entry.importance == 0.9
+
+
+def test_update_memory_importance_tool_out_of_range(tmp_path: Path) -> None:
+    from nuself.agent.tools import UpdateMemoryImportanceTool
+
+    tool = UpdateMemoryImportanceTool(project_root=tmp_path)
+    assert "Error" in tool.invoke(entry_id="m1", importance=1.5)
+    assert "Error" in tool.invoke(entry_id="m1", importance=-0.1)
+
+
+def test_update_memory_importance_tool_not_found(tmp_path: Path) -> None:
+    from nuself.agent.tools import UpdateMemoryImportanceTool
+
+    tool = UpdateMemoryImportanceTool(project_root=tmp_path)
+    result = tool.invoke(entry_id="nonexistent", importance=0.5)
+    assert "Error" in result
+
+
+def test_chat_agent_includes_memory_tools_in_system_prompt(tmp_path: Path) -> None:
+    from nuself.agent.chat import ChatAgent
+
+    llm = FakeLLM()
+    agent = ChatAgent(tmp_path, llm=llm)
+    agent.respond("test")
+
+    system_prompt = llm.calls[0][0].content
+    assert "archive_memory" in system_prompt
+    assert "update_memory_importance" in system_prompt
