@@ -8,18 +8,19 @@ Extend the chat agent from a pure Q&A interface into a **conversational decision
 
 ## Immediate Context
 
-The chat agent tool suite is now complete with memory curation capabilities:
+The chat agent tool suite is now complete:
 
-- **`archive_memory`**: Agent can archive outdated memory entries during conversation.
-- **`update_memory_importance`**: Agent can adjust memory importance when the user emphasizes or downplays significance.
-- Both tools validate inputs, reindex after changes, and are covered by tests.
+- **Memory curation**: `archive_memory`, `update_memory_importance`
+- **Reflection consumption**: `list_pending_reflections`, `dismiss_reflection`
+- **Memory search**: `search_memory`
+- **Behavioral guidelines**: Agent proactively introduces reflection ideas when conversation rhythm allows; dismisses on disinterest; archives/adjusts importance on user signal.
 
-The persona discussion system also generates genuinely distinct voices via LLM-backed nodes, and the reflection consumption tools (`list_pending_reflections`, `dismiss_reflection`) are live.
+The persona discussion system generates genuinely distinct voices via LLM-backed nodes, with all turn participants running in a single shared graph invocation.
 
 ## Next Steps
 
-1. **Proactive topic injection**: Update the system prompt behavioral guidelines so the agent naturally introduces pending reflection ideas when the conversation rhythm allows, rather than only on explicit request.
-2. **Dismiss → clear lifecycle**: Consider whether dismissed reflections should auto-clear from the outbox after a period, or if `notify clear` is sufficient.
+1. **Dismiss → clear lifecycle**: Consider whether dismissed reflections should auto-clear from the outbox after a period, or if `notify clear` is sufficient.
+2. **QA integration**: End-to-end test that exercises the full chat → tool invocation → outbox/memory mutation → daemon delivery path.
 
 ### Recently Done
 
@@ -31,6 +32,7 @@ The persona discussion system also generates genuinely distinct voices via LLM-b
 - Replaced deterministic persona placeholder nodes with LLM-backed nodes for distinct discussion voices.
 - Fixed multi-persona graph invocation: all turn participants now run in a single shared graph run.
 - Added memory management tools (`archive_memory`, `update_memory_importance`) with `archived` review state support.
+- Added proactive topic injection behavioral guidelines to system prompt.
 
 ## Not Now
 
