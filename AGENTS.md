@@ -2,44 +2,15 @@
 
 An AI mirror for deep personal discussion — someone with similar life experience but broader perspective.
 
-## Code Standard
+> Behavioral specifications live in [`docs/spec/`](docs/spec/). This file is for project context and high-level direction.
 
-- Standard Python project managed by `uv`.
-- Type-check with `uvx pyright`.
-- Sub-components must be individually tested.
-- User-facing changes must update both `README.md` and `README.zh-CN.md`.
-- Track progress in `README.md` TODOs; short-term focus in `docs/current-goal.md`.
+## Quick Links
 
-## Development Style
-
-- Early development: prefer direct, clean implementation over compatibility shims.
-- Interface changes must update all callers, tests, examples, and docs in the same commit.
-- Do not preserve obsolete CLI commands, protocols, schemas, or APIs unless a document explicitly requires them.
-- Refactors are welcome when they clarify architecture; always pair them with doc and test updates.
-- Separate commits: **(1)** functional code + tests, **(2)** `docs/current-goal.md`, README TODOs, and guidance updates.
-- Check `docs/current-goal.md` before non-trivial work. Mention conflicts before proceeding.
-- Keep `docs/current-goal.md` concise (active focus, next steps, out-of-scope, completion criteria). Move completed history to README TODOs.
-- Keep scoped implementation constraints in local `AGENTS.md` files, not the root README.
-
-## Project Design
-
-Keep these current when system shape or boundaries change:
-
-- Short-term goal: [`docs/current-goal.md`](docs/current-goal.md)
-- Progress TODOs: [`README.md`](README.md)
-- Architecture: [`docs/architecture.md`](docs/architecture.md)
-- Plans: [`docs/development-plan.md`](docs/development-plan.md), [`docs/agent-framework.md`](docs/agent-framework.md), [`docs/interaction-layer.md`](docs/interaction-layer.md), [`docs/memory-management.md`](docs/memory-management.md)
-- Sample memory: [`examples/private/`](examples/private/)
-
-## Memory Architecture Direction
-
-- Prefer open typed memory (`MemoryObject + MemoryTypeDescriptor`) over closed enums.
-- Descriptors own validation, summarization, merge, decay, conflict, retrieval, and reflection rules.
-- Symbolic memory evolves as a derived open graph with `RelationDescriptor` rules.
-- File-backed private memory is authoritative; all indexes are derived and rebuildable.
-
-## Private Memory
-
-- Real personal memory lives in the root `private/` directory.
-- `private/` is ignored by Git and must not be committed.
-- Code loads from `private/` by default; tests and demos use `examples/private/`.
+- [`docs/spec/development-process.md`](docs/spec/development-process.md) — code standards, commit policy, architecture direction
+- [`docs/spec/cli-interaction.md`](docs/spec/cli-interaction.md) — CLI/REPL output contracts
+- [`docs/spec/memory.md`](docs/spec/memory.md) — memory system behavioral contracts
+- [`docs/spec/reflection.md`](docs/spec/reflection.md) — reflection event taxonomy and pipeline
+- [`docs/spec/notification.md`](docs/spec/notification.md) — outbox state machine and delivery
+- [`docs/spec/persona-discussion.md`](docs/spec/persona-discussion.md) — competitive discussion flow
+- [`docs/spec/logging.md`](docs/spec/logging.md) — log write/read contracts
+- [`docs/spec/configuration.md`](docs/spec/configuration.md) — config hierarchy and runtime paths

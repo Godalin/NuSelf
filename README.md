@@ -656,7 +656,7 @@ Supported entry types:
 - [Development plan](docs/development-plan.md)
 - [Agent framework plan](docs/agent-framework.md)
 - [Interaction layer plan](docs/interaction-layer.md)
-- [CLI & interaction behavior spec](docs/cli-behavior-spec.md)
+- [System specifications](docs/spec/) — behavioral contracts for CLI, memory, reflection, notifications, etc.
 - [Agent instructions](AGENTS.md)
 
 ## Development Policy
