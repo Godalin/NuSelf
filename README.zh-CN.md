@@ -8,12 +8,12 @@ NuSelf 是一个本地 AI 镜像项目。它的目标是逐步成长为一个带
 
 - 本地 `nuself` 命令。
 - 可选的本地后台守护进程，通过 Unix socket 通信。
-- 一个基于 LangGraph 的带记忆聊天 agent，可以用 one-shot 模式运行，也可以通过守护进程运行。
+- 一个基于 LangGraph 的带记忆聊天 agent，支持 one-shot 和守护进程模式，可在对话中使用工具进行记忆搜索、反思检视和记忆整理。
 - 基于文件的记忆条目和 profile items，可列出、查看、新增、编辑、删除、搜索和重建索引。
 - 在 ignored `private/sources/` 下支持 Markdown 和纯文本 source ingestion，并可从导入的 chunks 提取可审阅候选项。
 - 持久化聊天线程，并能压缩较早的对话上下文。
 
-LangGraph 现在已经支撑 conversation runtime，而且内部 persona 系统正朝着“聊天与后台反思共用一套竞争式讨论流程”的方向演进。persona subgraphs、主动反思、邮件和 macOS 通知仍是后续规划。
+LangGraph 现已支撑 conversation runtime。聊天 agent 可在对话中调用工具搜索记忆、列出和搁置待讨论反思主题、归档过时记忆、调整重要性分数。内部 persona 系统对聊天和后台反思共用一套竞争式讨论流程，LLM 驱动的人格节点可生成独立观点。邮件和 macOS 通知在配置后可用。
 
 ## 项目 TODOs
 
@@ -178,7 +178,7 @@ uv run nuself daemon attach --message "continue"
 
 不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。以 `:` 开头的输入会被识别为交互指令。输入 `:status` 可以查看 daemon/thread 状态，输入 `:logs` 可以查看最近 activity events，输入 `:memory` 或 `:mem` 可以预览当前记忆条目。只读记忆 inspect 快捷命令包括 `:mem search <query>`、`:mem show <entry-id>`、`:mem candidates`、`:mem candidate <candidate-id>`、`:mem profile <query>`、`:mem sources` 和 `:mem source <source-id>`。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
 
-当前聊天使用一个基于 LangGraph 的 conversation runtime。它会检索 memory entries、derived profile items 和 imported source chunks，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。当前记忆检索是确定性的词法检索，带有 descriptor-aware 类型提示、type/tag filters、基于现有 memory links 的 relation expansion 和排序原因；向量索引和图索引会作为后续派生检索层加入。
+当前聊天使用一个基于 LangGraph 的 conversation runtime。它会检索 memory entries、derived profile items 和 imported source chunks，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。Agent 还可以在对话中调用工具：`search_memory` 进行定向检索，`list_pending_reflections` / `dismiss_reflection` 检视和管理主动想法，`archive_memory` / `update_memory_importance` 整理长期记忆。当前记忆检索是确定性的词法检索，带有 descriptor-aware 类型提示、type/tag filters、基于现有 memory links 的 relation expansion 和排序原因；向量索引和图索引会作为后续派生检索层加入。
 
 `private/threads/default.json` 是当前 NuSelf mind 的共享 working memory。多个终端连接同一个 daemon 时会共享它。thread store 会用锁串行化写入，避免并发对话互相覆盖。
 

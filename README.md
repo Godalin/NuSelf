@@ -8,12 +8,12 @@ The current implementation is an early CLI-first system:
 
 - Local `nuself` command.
 - Optional local background daemon over a Unix socket.
-- A LangGraph-backed memory-aware chat agent that can run one-shot or through the daemon.
+- A LangGraph-backed memory-aware chat agent that can run one-shot or through the daemon, with tool use for memory search, reflection inspection, and memory curation.
 - File-backed memory entries and profile items that can be listed, viewed, added, edited, deleted, searched, and re-indexed.
 - File-backed source ingestion for Markdown and plain text under ignored `private/sources/`, plus reviewable candidates extracted from imported chunks.
 - Persisted chat threads with compressed conversation context.
 
-LangGraph now backs the conversation runtime, and the internal persona system is being pushed toward one shared competitive discussion flow for both chat and background reflection. Full persona subgraphs, proactive reflection, email, and macOS notifications are still planned.
+LangGraph now backs the conversation runtime. The chat agent can invoke tools to search memory, list and dismiss pending reflection ideas, archive outdated memories, and adjust importance scores. The internal persona system uses a shared competitive discussion flow for both chat and background reflection, with LLM-backed persona nodes generating distinct voices. Email and macOS notifications are supported when configured.
 
 ## Project TODOs
 
@@ -178,7 +178,7 @@ uv run nuself daemon attach --message "continue"
 
 Without `--message`, `chat` and `attach` enter interactive mode. When terminal support is available, line editing and arrow-key history are backed by `private/runtime/interactive_history`. Input starting with `:` is treated as an interactive command. Type `:status` for daemon/thread status, `:logs` for recent activity events, and `:memory` or `:mem` to preview current memory entries. Read-only memory inspection shortcuts include `:mem search <query>`, `:mem show <entry-id>`, `:mem candidates`, `:mem candidate <candidate-id>`, `:mem profile <query>`, `:mem sources`, and `:mem source <source-id>`. Type `:q`, `:quit`, `:exit`, or send EOF to leave; unknown commands print interactive help and keep the session open.
 
-Current chat uses a LangGraph-backed conversation runtime that searches memory entries, derived profile items, and imported source chunks, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The memory search is deterministic lexical retrieval with descriptor-aware type hints, type/tag filters, relation expansion over existing memory links, and ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
+Current chat uses a LangGraph-backed conversation runtime that searches memory entries, derived profile items, and imported source chunks, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The agent can also invoke tools during conversation: `search_memory` for targeted retrieval, `list_pending_reflections` / `dismiss_reflection` to inspect and manage proactive ideas, and `archive_memory` / `update_memory_importance` to curate durable memory. The memory search is deterministic lexical retrieval with descriptor-aware type hints, type/tag filters, relation expansion over existing memory links, and ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
 
 `private/threads/default.json` is shared working memory for the current NuSelf mind. Multiple terminal attachments to the same daemon share it. The thread store serializes writes with a lock so concurrent turns do not overwrite each other.
 

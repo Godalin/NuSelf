@@ -272,7 +272,7 @@ def test_llm_backed_synthesizer_node_produces_summary() -> None:
     assert result.source_personas == ("a", "b")
 
 
-def test_proactive_persona_discussion_uses_llm_when_provided() -> None:
+def test_proactive_persona_discussion_uses_llm_when_provided(monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.proactive_persona import ProactivePersonaDiscussion
     from nuself.domain.proactive import IdeaCandidate
     from nuself.agent.persona import PersonaDefinition
@@ -283,6 +283,8 @@ def test_proactive_persona_discussion_uses_llm_when_provided() -> None:
         PersonaDefinition(id="analyst_self", description="Decomposes questions."),
     )
     discussion = ProactivePersonaDiscussion(personas=personas, llm=_FakePersonaLLM(), min_participants=3, max_participants=3)
+    # Ensure every turn uses all personas so the test is deterministic.
+    monkeypatch.setattr(discussion, "_participants_for_turn", lambda selected, emergent: personas)
     candidate = IdeaCandidate(
         id="c1",
         title="Test idea",
