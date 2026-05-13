@@ -8,17 +8,17 @@ Extend the chat agent from a pure Q&A interface into a **conversational decision
 
 ## Immediate Context
 
-The reflection consumption tool suite is now live:
+The persona discussion system now generates genuinely distinct voices:
+
+- **LLMBackedPersonaNode**: Each persona responds from its unique perspective using the configured LLM, building on or challenging prior contributions within the same turn.
+- **LLMBackedSynthesizerNode**: Produces a crisp per-turn summary rather than concatenating identical notes.
+- Both nodes fall back to Minimal placeholders when no LLM is configured.
+
+The reflection consumption tool suite is also live:
 
 - **`list_pending_reflections`**: Agent can view pending outbox ideas during conversation.
 - **`dismiss_reflection`**: Agent can mark declined ideas as dismissed.
 - Both tools are wired into `ConversationGraphRuntime`, described in the system prompt, and covered by tests.
-
-The threshold/depth adjustment from the previous cycle is also complete:
-
-- `relevance_threshold` 0.5 → 0.35, `persona_discussion_threshold` 0.7 → 0.55
-- `min_participants` 2 → 3, `max_participants` 4 → 5, `max_turns` fallback 9 → 12
-- `ReflectionDiscussionConfig` added to `ReflectionSettings` with full YAML/env configurability
 
 ## Next Steps
 
@@ -33,6 +33,7 @@ The threshold/depth adjustment from the previous cycle is also complete:
 - Specified chat-agent-tools architecture in `docs/spec/chat-agent-tools.md`.
 - Implemented `ListPendingReflectionsTool` and `DismissReflectionTool`.
 - Wired reflection tools into chat agent runtime and system prompt.
+- Replaced deterministic persona placeholder nodes with LLM-backed nodes for distinct discussion voices.
 
 ## Not Now
 
@@ -44,7 +45,8 @@ The threshold/depth adjustment from the previous cycle is also complete:
 ## Completion Criteria
 
 - Chat agent can list and dismiss pending reflections via tool invocation.
-- Tool results are injected back into conversation context correctly.
+- Persona discussion traces contain genuinely distinct per-persona utterances.
+- Tool results and discussion traces are injected back into context correctly.
 - System prompt guides the agent on when to surface vs. dismiss ideas.
-- All new tools have unit and integration tests.
+- All new tools and nodes have unit and integration tests.
 - Spec and current-goal are synchronized with implementation.
