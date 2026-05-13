@@ -198,25 +198,23 @@ class ProactivePersonaDiscussion:
     ) -> dict[str, float]:
         scores: dict[str, float] = {}
         discussion_context = "\n".join(discussion_trace)
-        for persona in personas:
-            turn_state = PersonaTurnState(
-                input=PersonaInput(
-                    user_message=f"{candidate.title}\n{candidate.body}",
-                    memory_context=discussion_context,
-                ),
-                selected_personas=(persona,),
-            )
-            result = self._driver.run(turn_state)
-            if not result.contributions:
-                continue
-            contrib = result.contributions[0]
+        # Run all participants in a single graph invocation so they share
+        # the same turn context and their contributions are synthesized together.
+        turn_state = PersonaTurnState(
+            input=PersonaInput(
+                user_message=f"{candidate.title}\n{candidate.body}",
+                memory_context=discussion_context,
+            ),
+            selected_personas=personas,
+        )
+        result = self._driver.run(turn_state)
+        for contrib in result.contributions:
             score = self._heuristic_score(candidate, contrib, discussion_context=discussion_context, turn_number=turn_number)
             scores[contrib.persona_id] = score
             note = contrib.notes[0] if contrib.notes else contrib.persona_id
             discussion_trace.append(f"{turn_label}:{contrib.persona_id}: {note}")
-            if result.synthesis is not None and result.synthesis.summary:
-                discussion_trace.append(f"{turn_label}:synthesis: {result.synthesis.summary}")
-            discussion_context = "\n".join(discussion_trace)
+        if result.synthesis is not None and result.synthesis.summary:
+            discussion_trace.append(f"{turn_label}:synthesis: {result.synthesis.summary}")
         return scores
 
     def _moderator_prompt(

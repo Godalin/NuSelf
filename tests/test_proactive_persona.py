@@ -23,13 +23,21 @@ from nuself.proactive_persona import (
 
 class _FakePersonaDriver:
     def run(self, turn_state: PersonaTurnState) -> PersonaTurnState:
-        persona = turn_state.selected_personas[0]
-        note = f"{persona.id}|{turn_state.input.memory_context}"
+        contributions: list[PersonaContribution] = []
+        notes: list[str] = []
+        for persona in turn_state.selected_personas:
+            note = f"{persona.id}|{turn_state.input.memory_context}"
+            contributions.append(PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0))
+            notes.append(note)
         return PersonaTurnState(
             input=turn_state.input,
             selected_personas=turn_state.selected_personas,
-            contributions=(PersonaContribution(persona_id=persona.id, notes=(note,), confidence=0.0),),
-            synthesis=PersonaSynthesis(summary=note, source_personas=(persona.id,), confidence=0.0),
+            contributions=tuple(contributions),
+            synthesis=PersonaSynthesis(
+                summary=" | ".join(notes),
+                source_personas=tuple(p.id for p in turn_state.selected_personas),
+                confidence=0.0,
+            ),
         )
 
 
