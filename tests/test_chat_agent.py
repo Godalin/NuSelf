@@ -875,3 +875,118 @@ def test_memory_search_tool_with_invalid_inputs(tmp_path: Path) -> None:
     # Invalid limit
     result = tool.invoke(query="test", limit=0)
     assert "Error" in result
+
+
+# --- Reflection consumption tools ---
+
+def test_list_pending_reflections_empty_outbox(tmp_path: Path) -> None:
+    from nuself.agent.tools import ListPendingReflectionsTool
+    from nuself.notification import NotificationOutbox
+
+    outbox = NotificationOutbox(tmp_path)
+    tool = ListPendingReflectionsTool(outbox=outbox)
+    result = tool.invoke()
+    assert "No pending reflection ideas" in result
+
+
+def test_list_pending_reflections_with_entries(tmp_path: Path) -> None:
+    from nuself.agent.tools import ListPendingReflectionsTool
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="r1",
+            title="Explore recursion in habits",
+            body="Your memory suggests...",
+            status="pending",
+            idempotency_key="ref-1",
+        )
+    )
+    outbox.add(
+        OutboxEntry(
+            id="r2",
+            title="Sleep and creativity link",
+            body="Underdeveloped...",
+            status="pending",
+            idempotency_key="ref-2",
+        )
+    )
+    tool = ListPendingReflectionsTool(outbox=outbox)
+    result = tool.invoke()
+    assert "Pending reflection ideas:" in result
+    assert "[1] Explore recursion in habits" in result
+    assert "[2] Sleep and creativity link" in result
+
+
+def test_list_pending_reflections_respects_limit(tmp_path: Path) -> None:
+    from nuself.agent.tools import ListPendingReflectionsTool
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    for i in range(5):
+        outbox.add(
+            OutboxEntry(
+                id=f"r{i}",
+                title=f"Idea {i}",
+                body="...",
+                status="pending",
+                idempotency_key=f"ref-{i}",
+            )
+        )
+    tool = ListPendingReflectionsTool(outbox=outbox)
+    result = tool.invoke(limit=2)
+    assert result.count("[") == 2  # only two numbered items
+
+
+def test_dismiss_reflection_success(tmp_path: Path) -> None:
+    from nuself.agent.tools import DismissReflectionTool
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="r1",
+            title="Explore recursion in habits",
+            body="...",
+            status="pending",
+            idempotency_key="ref-1",
+        )
+    )
+    tool = DismissReflectionTool(outbox=outbox)
+    result = tool.invoke(index=1)
+    assert "Dismissed" in result
+    assert "Explore recursion in habits" in result
+    assert outbox.list(status="pending") == []
+
+
+def test_dismiss_reflection_out_of_range(tmp_path: Path) -> None:
+    from nuself.agent.tools import DismissReflectionTool
+    from nuself.notification import NotificationOutbox
+
+    outbox = NotificationOutbox(tmp_path)
+    tool = DismissReflectionTool(outbox=outbox)
+    result = tool.invoke(index=1)
+    assert "out of range" in result
+
+
+def test_dismiss_reflection_invalid_index(tmp_path: Path) -> None:
+    from nuself.agent.tools import DismissReflectionTool
+    from nuself.notification import NotificationOutbox
+
+    outbox = NotificationOutbox(tmp_path)
+    tool = DismissReflectionTool(outbox=outbox)
+    assert "Error" in tool.invoke(index=0)
+    assert "Error" in tool.invoke(index=-1)
+
+
+def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -> None:
+    from nuself.agent.chat import ChatAgent
+
+    llm = FakeLLM()
+    agent = ChatAgent(tmp_path, llm=llm)
+    agent.respond("test")
+
+    system_prompt = llm.calls[0][0].content
+    assert "list_pending_reflections" in system_prompt
+    assert "dismiss_reflection" in system_prompt

@@ -28,6 +28,7 @@ from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
+from nuself.notification import NotificationOutbox
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
@@ -488,8 +489,16 @@ class ConversationGraphRuntime:
             SourceRepository(project_root),
             ProfileItemRepository(project_root),
         )
-        self._tools: dict[str, MemorySearchTool] = {
-            "search_memory": MemorySearchTool(query_service=self._memory_query_service)
+        from nuself.agent.tools import DismissReflectionTool, ListPendingReflectionsTool
+
+        outbox = NotificationOutbox(project_root)
+        from nuself.agent.tools import DismissReflectionTool, ListPendingReflectionsTool
+
+        outbox = NotificationOutbox(project_root)
+        self._tools: dict[str, Any] = {
+            "search_memory": MemorySearchTool(query_service=self._memory_query_service),
+            "list_pending_reflections": ListPendingReflectionsTool(outbox=outbox),
+            "dismiss_reflection": DismissReflectionTool(outbox=outbox),
         }
         from nuself.agent.graph_driver import ConversationGraphDriver
 
@@ -875,13 +884,23 @@ class ConversationGraphRuntime:
         parts.extend([
             "",
             "Available tools:",
-            'If you need more specific memory context, you can use the search_memory tool by including a "tool" field in your JSON:',
+            'You may invoke a tool by including a "tool" field in your JSON:',
             '{"answer": "...", "tool": "search_memory", "tool_args": {"query": "search term"}, ...}',
-            'This will search all memory and return additional context before generating your final answer.',
+            'The tool result will be injected back into context before your final answer.',
             'Tools available:',
             (
                 "- search_memory(query: str, limit: int = 8, types: list[str] = [], tags: list[str] = []): "
                 "Search durable memory for relevant context, optionally narrowed by memory type or tag."
+            ),
+            (
+                "- list_pending_reflections(limit: int = 5): "
+                "View pending proactive ideas generated from the user's memory and conversations. "
+                "Use when the user seems open to exploring new topics or when the conversation naturally pauses."
+            ),
+            (
+                "- dismiss_reflection(index: int): "
+                "Remove a pending idea from the active pool when the user explicitly declines interest. "
+                "Index corresponds to the numbered list from list_pending_reflections."
             ),
         ])
         return "\n".join(parts)
