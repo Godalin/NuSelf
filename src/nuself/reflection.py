@@ -82,15 +82,6 @@ class ReflectionScheduler:
         self._event_queue.clear()
         candidates = IdeaCandidateGenerator(self._project_root, config=self._config).generate()
         if not candidates:
-            write_log_event(
-                "reflection",
-                "cycle_no_candidates",
-                "reflection cycle generated no candidates",
-                project_root=self._project_root,
-                level="info",
-                status="completed",
-                metadata={"reason": "no_candidates"}
-            )
             return False
         
         gate = RelevanceGate(self._project_root, config=self._config)
@@ -475,7 +466,18 @@ class IdeaCandidateGenerator:
             )
             return []
         try:
-            return self._generate_with_llm(context, max_candidates)
+            candidates = self._generate_with_llm(context, max_candidates)
+            if not candidates:
+                write_log_event(
+                    "reflection",
+                    "cycle_no_candidates",
+                    "reflection cycle generated no candidates",
+                    project_root=self._project_root,
+                    level="info",
+                    status="completed",
+                    metadata={"reason": "no_candidates"}
+                )
+            return candidates
         except (RuntimeError, ValueError, json.JSONDecodeError) as e:
             write_log_event(
                 "reflection",
@@ -578,8 +580,6 @@ class IdeaCandidateGenerator:
                 source_summary="llm-generated",
                 created_at=now_iso(),
             ))
-        if not results:
-            raise ValueError("LLM returned no valid candidates")
         return results
 
     def _recent_thread_context(self, max_threads: int = 5, max_messages: int = 10) -> str:

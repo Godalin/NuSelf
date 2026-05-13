@@ -341,7 +341,7 @@ class MemoryCurator:
             return
         try:
             result = self._candidate_repository.accept(candidate.id)
-            if isinstance(result, MemoryEntry):
+            if isinstance(result, MemoryEntry) and result.review_state != "quarantined":
                 reviewed = result.with_updates(review_state="reviewed")
                 self._repository.save(reviewed)
         except (ValueError, MemoryEntryNotFound):

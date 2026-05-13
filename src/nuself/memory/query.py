@@ -85,10 +85,10 @@ class MemoryQueryService:
         ]
         matches: list[MemoryMatch] = []
         for entry in eligible_entries:
+            if query.min_importance is not None and entry.importance < query.min_importance:
+                continue
             match = _score_entry(entry, query.text, tokens)
             if match is not None:
-                if query.min_importance is not None and entry.importance < query.min_importance:
-                    continue
                 matches.append(match)
         return _expand_related_matches(
             matches,

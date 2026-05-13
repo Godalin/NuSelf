@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from nuself.agent.chat import ChatAgent
@@ -7,6 +8,7 @@ from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.server import DaemonState, handle_request
 from nuself.llm import ChatMessage
 from nuself.memory.curator import MemoryCuratorResult
+from nuself.notification import NotificationOutbox, OutboxEntry
 
 
 class StructuredFakeLLM:
@@ -125,3 +127,39 @@ def test_daemon_chat_rejects_non_string_message(tmp_path: Path) -> None:
     assert response.status == "error"
     assert response.error is not None
     assert "requires string payload field 'message'" in response.error
+
+
+def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: Path) -> None:
+    """End-to-end: daemon starts reflection scheduler thread, which reflects and creates an outbox entry."""
+    state = DaemonState(tmp_path)
+    state.reflection_check_interval_seconds = 0.05
+
+    class MockScheduler:
+        def should_reflect(self, now: object = None) -> bool:
+            return True
+
+        def reflect(self, now: object = None) -> bool:
+            outbox = NotificationOutbox(tmp_path)
+            outbox.add(
+                OutboxEntry(
+                    id="reflection-test-001",
+                    title="test reflection idea",
+                    body="test body",
+                    status="pending",
+                    idempotency_key="reflection-test-key",
+                )
+            )
+            return True
+
+    state.reflection_scheduler = MockScheduler()  # type: ignore[assignment]
+    state.start_background_reflection_scheduler()
+
+    time.sleep(0.15)
+
+    state.shutdown_requested.set()
+    state.stop_background_reflection_scheduler()
+
+    outbox = NotificationOutbox(tmp_path)
+    entries = outbox.list()
+    assert len(entries) >= 1
+    assert any(e.title == "test reflection idea" for e in entries)
