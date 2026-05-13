@@ -5,12 +5,15 @@ from nuself.tui.render import render_discussion_trace, render_host_decision
 
 
 def test_render_discussion_trace_formats_block() -> None:
-    lines = render_discussion_trace(["host: start", "turn-1: analyst considered the idea"], title="discussion trace")
+    lines = render_discussion_trace(["host: start", "turn-1:analyst: considered the idea"], title="discussion trace")
 
     assert lines == [
         "discussion trace:",
-        "  host: start",
-        "  turn-1: analyst considered the idea",
+        "  ── host ──",
+        "    [host]             start",
+        "",
+        "  ── turn-1 ──",
+        "    [analyst]          considered the idea",
     ]
 
 

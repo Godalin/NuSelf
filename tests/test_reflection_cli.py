@@ -24,7 +24,7 @@ def _seed_reflection_events(project_root: Path, count: int = 3) -> None:
         write_log_event(
             "reflection",
             "persona_discussion",
-            f"[{'approved' if i % 2 == 0 else 'rejected'}] Test idea {i}",
+            f"Test idea {i}",
             project_root=project_root,
             status="approved" if i % 2 == 0 else "rejected",
             metadata={

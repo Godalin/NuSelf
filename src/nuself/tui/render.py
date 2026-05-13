@@ -140,10 +140,16 @@ def render_reflection_summary(event: LogEvent, *, color: bool | None = None) -> 
     status = event.status or "unknown"
     status_tag = theme.paint(f"[{status}]", "32" if status == "approved" else "31")
     time_str = event.time[:19] if event.time else "-"
+
+    message = event.message or ""
+    prefix = f"[{status}] "
+    if message.startswith(prefix):
+        message = message[len(prefix):]
+
     composite = ""
     if event.metadata and isinstance(event.metadata.get("composite"), (int, float)):
         composite = f"  score={event.metadata['composite']:.2f}"
-    return f"{time_str} {status_tag} {event.message}{composite}"
+    return f"{time_str} {status_tag} {message}{composite}"
 
 
 def render_reflection_detail(event: LogEvent, *, color: bool | None = None) -> str:
@@ -153,10 +159,15 @@ def render_reflection_detail(event: LogEvent, *, color: bool | None = None) -> s
     status = event.status or "unknown"
     status_tag = theme.paint(status, "32" if status == "approved" else "31")
 
+    message = event.message or ""
+    prefix = f"[{status}] "
+    if message.startswith(prefix):
+        message = message[len(prefix):]
+
     lines: list[str] = [
         f"time:         {event.time}",
         f"status:       {status_tag}",
-        f"message:      {event.message}",
+        f"message:      {message}",
     ]
     if meta.get("candidate_id"):
         lines.append(f"candidate_id: {meta['candidate_id']}")
@@ -205,11 +216,45 @@ def render_reflection_detail(event: LogEvent, *, color: bool | None = None) -> s
     return "\n".join(lines)
 
 
+def _parse_trace_entry(text: str) -> tuple[str | None, str | None, str]:
+    """Parse a discussion trace string into (turn_label, speaker, content)."""
+    if text.startswith("host:"):
+        return "host", "host", text[5:].strip()
+    if text.startswith("candidate:"):
+        return "candidate", "candidate", text[10:].strip()
+    if text.startswith("turn-"):
+        parts = text.split(":", 2)
+        if len(parts) >= 3:
+            return parts[0], parts[1].strip(), parts[2].strip()
+        if len(parts) == 2:
+            return parts[0], None, parts[1].strip()
+    return None, None, text
+
+
 def render_discussion_trace(trace: list[object], *, title: str = "discussion trace") -> list[str]:
-    """Render a discussion trace as an indented block for terminal display."""
-    lines = [f"{title}:"]
-    for trace_line in trace:
-        lines.append(f"  {trace_line}")
+    """Render a discussion trace grouped by turn with per-speaker labels."""
+    lines: list[str] = [f"{title}:"]
+    current_turn: str | None = None
+
+    for entry in trace:
+        text = str(entry)
+        turn_label, speaker, content = _parse_trace_entry(text)
+
+        if turn_label is not None and turn_label != current_turn:
+            if current_turn is not None:
+                lines.append("")
+            lines.append(f"  ── {turn_label} ──")
+            current_turn = turn_label
+
+        if speaker is not None:
+            tag = f"[{speaker}]"
+            lines.append(f"    {tag:<18} {content}")
+        elif turn_label is not None:
+            lines.append(f"    {'':18} {content}")
+        else:
+            indent = "    " if current_turn is not None else "  "
+            lines.append(f"{indent}{text}")
+
     return lines
 
 

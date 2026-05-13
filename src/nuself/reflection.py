@@ -286,7 +286,7 @@ class ReflectionScheduler:
         write_log_event(
             "reflection",
             "persona_discussion",
-            f"[{status}] {candidate.title} — {result.reason}",
+            f"{candidate.title} — {result.reason}",
             project_root=self._project_root,
             status=status,
             metadata=metadata,
