@@ -22,13 +22,13 @@ evaluate(blocking, strong_support, composite)
 
 | Parameter | Default | Description |
 |---|---|---|
-| `min_participants` | `2` | Minimum personas selected |
-| `max_participants` | `4` | Maximum personas selected |
-| `max_turns` | `9` (from config) | Discussion round limit |
-| `blocking_threshold` | `0.3` | Score below this triggers a blocking veto |
-| `override_threshold` | `0.8` | Score above this counts as strong support |
-| `composite_threshold` | `0.5` | Average score must meet this to approve |
-| `consensus_spread_threshold` | `0.2` | Max spread for consensus |
+| `min_participants` | `3` | Minimum personas selected |
+| `max_participants` | `5` | Maximum personas selected |
+| `max_turns` | `12` (from config) | Discussion round limit |
+| `blocking_threshold` | `0.35` | Score below this triggers a blocking veto |
+| `override_threshold` | `0.7` | Score above this counts as strong support |
+| `composite_threshold` | `0.4` | Average score must meet this to approve |
+| `consensus_spread_threshold` | `0.15` | Max spread for consensus |
 
 ## Emergent Personas
 

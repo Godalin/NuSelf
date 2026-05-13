@@ -100,11 +100,23 @@ class ReflectionModeratorConfig:
 
 
 @dataclass(frozen=True)
+class ReflectionDiscussionConfig:
+    """Competitive persona discussion parameters."""
+    blocking_threshold: float = 0.35
+    override_threshold: float = 0.7
+    composite_threshold: float = 0.4
+    consensus_spread_threshold: float = 0.15
+    min_participants: int = 3
+    max_participants: int = 5
+
+
+@dataclass(frozen=True)
 class ReflectionSettings:
     """Proactive reflection system configuration."""
     scheduler: ReflectionSchedulerConfig
     gate: ReflectionGateConfig
     moderator: ReflectionModeratorConfig
+    discussion: ReflectionDiscussionConfig
 
 
 @dataclass(frozen=True)
@@ -191,12 +203,20 @@ class ConfigSystem:
                     jitter_percent=20,
                 ),
                 gate=ReflectionGateConfig(
-                    relevance_threshold=0.5,
-                    persona_discussion_threshold=0.7,
+                    relevance_threshold=0.4,
+                    persona_discussion_threshold=0.6,
                 ),
                 moderator=ReflectionModeratorConfig(
-                    max_discussion_rounds=10,
+                    max_discussion_rounds=12,
                     moderator_convergence_patience=5,
+                ),
+                discussion=ReflectionDiscussionConfig(
+                    blocking_threshold=0.35,
+                    override_threshold=0.7,
+                    composite_threshold=0.4,
+                    consensus_spread_threshold=0.15,
+                    min_participants=3,
+                    max_participants=5,
                 ),
             ),
             email=EmailConfig(
@@ -246,6 +266,7 @@ class ConfigSystem:
                     max_discussion_rounds=2,
                     moderator_convergence_patience=1,
                 ),
+                discussion=ReflectionDiscussionConfig(),
             ),
             email=defaults.email,
             macos_notification=defaults.macos_notification,
@@ -436,6 +457,12 @@ class ConfigSystem:
         refl_discussion = max(0.0, min(get_float(yaml_data, "reflection.gate.persona_discussion_threshold", defaults.reflection.gate.persona_discussion_threshold), 1.0))
         refl_max_rounds = max(1, get_int(yaml_data, "reflection.moderator.max_discussion_rounds", defaults.reflection.moderator.max_discussion_rounds))
         refl_patience = max(1, get_int(yaml_data, "reflection.moderator.moderator_convergence_patience", defaults.reflection.moderator.moderator_convergence_patience))
+        refl_blocking = max(0.0, min(get_float(yaml_data, "reflection.discussion.blocking_threshold", defaults.reflection.discussion.blocking_threshold), 1.0))
+        refl_override = max(0.0, min(get_float(yaml_data, "reflection.discussion.override_threshold", defaults.reflection.discussion.override_threshold), 1.0))
+        refl_composite = max(0.0, min(get_float(yaml_data, "reflection.discussion.composite_threshold", defaults.reflection.discussion.composite_threshold), 1.0))
+        refl_spread = max(0.0, min(get_float(yaml_data, "reflection.discussion.consensus_spread_threshold", defaults.reflection.discussion.consensus_spread_threshold), 1.0))
+        refl_min_participants = max(1, get_int(yaml_data, "reflection.discussion.min_participants", defaults.reflection.discussion.min_participants))
+        refl_max_participants = max(1, get_int(yaml_data, "reflection.discussion.max_participants", defaults.reflection.discussion.max_participants))
 
         # Email Config
         email_enabled = get_bool(yaml_data, "email.enabled", defaults.email.enabled)
@@ -490,6 +517,14 @@ class ConfigSystem:
                     max_discussion_rounds=refl_max_rounds,
                     moderator_convergence_patience=refl_patience,
                 ),
+                discussion=ReflectionDiscussionConfig(
+                    blocking_threshold=refl_blocking,
+                    override_threshold=refl_override,
+                    composite_threshold=refl_composite,
+                    consensus_spread_threshold=refl_spread,
+                    min_participants=refl_min_participants,
+                    max_participants=refl_max_participants,
+                ),
             ),
             email=EmailConfig(
                 enabled=email_enabled,
@@ -531,6 +566,12 @@ class ConfigSystem:
             "reflection.gate.persona_discussion_threshold": config.reflection.gate.persona_discussion_threshold,
             "reflection.moderator.max_discussion_rounds": config.reflection.moderator.max_discussion_rounds,
             "reflection.moderator.moderator_convergence_patience": config.reflection.moderator.moderator_convergence_patience,
+            "reflection.discussion.blocking_threshold": config.reflection.discussion.blocking_threshold,
+            "reflection.discussion.override_threshold": config.reflection.discussion.override_threshold,
+            "reflection.discussion.composite_threshold": config.reflection.discussion.composite_threshold,
+            "reflection.discussion.consensus_spread_threshold": config.reflection.discussion.consensus_spread_threshold,
+            "reflection.discussion.min_participants": config.reflection.discussion.min_participants,
+            "reflection.discussion.max_participants": config.reflection.discussion.max_participants,
             "email.enabled": config.email.enabled,
             "macos_notification.enabled": config.macos_notification.enabled,
             "experimental.langmem_adapter": config.experimental.langmem_adapter,

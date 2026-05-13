@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import pytest
 
-from nuself.config_system import ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
+from nuself.config_system import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.notification.deep_link import DeepLink
 from nuself.reflection import ReflectionScheduler
@@ -48,6 +48,7 @@ def test_reflection_scheduler_fixture() -> None:
             max_discussion_rounds=2,
             moderator_convergence_patience=1,
         ),
+        discussion=ReflectionDiscussionConfig(),
     )
 
     scenarios_raw = data.get("scenarios")

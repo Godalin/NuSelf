@@ -39,11 +39,17 @@ Composite = novelty×0.25 + confidence×0.20 + urgency×0.25 − interruption_co
 - `passes` if composite ≥ threshold AND NOT (interruption_cost ≥ 0.9 AND urgency < 0.5).
 - Reasons: `low_novelty`, `low_confidence`, `high_urgency`, `high_interruption_cost`, `cooldown_active`, `ok`.
 
-## Persona Discussion Threshold
+## Gate Thresholds
 
-- Default: `0.7`.
-- Candidates at or above this threshold enter competitive persona discussion.
-- Candidates below but passing the gate proceed directly to outbox without discussion.
+| Threshold | Default | Purpose |
+|---|---|---|
+| `relevance_threshold` | `0.35` | Minimum composite to enter the pipeline at all |
+| `persona_discussion_threshold` | `0.55` | Composite at or above this triggers competitive persona discussion |
+| `composite_threshold` | `0.4` | Minimum average persona score to approve after discussion |
+| `blocking_threshold` | `0.35` | Score below this triggers a blocking veto |
+| `override_threshold` | `0.7` | Score above this counts as strong support |
+
+Candidates below `persona_discussion_threshold` but passing the gate proceed directly to outbox without discussion.
 
 ## Outbox Creation
 

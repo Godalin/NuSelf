@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config_system import ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
+from nuself.config_system import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.reflection import IdeaCandidateGenerator, ReflectionScheduler
 
@@ -44,6 +44,7 @@ def _reflection_settings(
             max_discussion_rounds=max_discussion_rounds,
             moderator_convergence_patience=moderator_convergence_patience,
         ),
+        discussion=ReflectionDiscussionConfig(),
     )
 
 
@@ -452,7 +453,15 @@ def test_relevance_gate_blocks_high_interruption_low_urgency(tmp_path: Path) -> 
 def test_relevance_gate_composite_threshold(tmp_path: Path) -> None:
     from nuself.reflection import RelevanceGate
 
-    gate = RelevanceGate(tmp_path)
+    config = _reflection_settings(
+        interval_seconds=3600, cooldown_seconds=300,
+        quiet_start_hour=22, quiet_end_hour=7,
+        daily_cap=5, jitter_percent=20,
+        relevance_threshold=0.5,
+        persona_discussion_threshold=0.7,
+        max_discussion_rounds=10, moderator_convergence_patience=5,
+    )
+    gate = RelevanceGate(tmp_path, config=config)
     score = gate.score(_make_candidate("Weak", confidence=0.1, novelty=0.1, urgency=0.1, interruption_cost=0.1))
     assert score.passes is False
     assert score.composite < 0.5

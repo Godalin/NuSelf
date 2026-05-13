@@ -331,7 +331,7 @@ class RelevanceGate:
             reasons.append("ok")
 
         threshold = self._config.gate.relevance_threshold
-        passes = composite >= threshold and not (interruption_cost >= 0.9 and urgency < 0.5)
+        passes = composite >= threshold and not (interruption_cost >= 0.9 and urgency < 0.5) and novelty > 0.0
 
         return RelevanceScore(
             passes=passes,

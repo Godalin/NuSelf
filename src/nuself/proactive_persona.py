@@ -40,22 +40,28 @@ class ProactivePersonaDiscussion:
         self,
         *,
         personas: tuple[PersonaDefinition, ...] | None = None,
-        min_participants: int = 2,
-        max_participants: int = 4,
+        min_participants: int = 3,
+        max_participants: int = 5,
         max_turns: int | None = None,
-        blocking_threshold: float = 0.3,
-        override_threshold: float = 0.8,
-        composite_threshold: float = 0.5,
-        consensus_spread_threshold: float = 0.2,
+        blocking_threshold: float = 0.35,
+        override_threshold: float = 0.7,
+        composite_threshold: float = 0.4,
+        consensus_spread_threshold: float = 0.15,
         config: ReflectionSettings | None = None,
     ) -> None:
         if config is not None:
             max_turns = config.moderator.max_discussion_rounds
-        
+            min_participants = config.discussion.min_participants
+            max_participants = config.discussion.max_participants
+            blocking_threshold = config.discussion.blocking_threshold
+            override_threshold = config.discussion.override_threshold
+            composite_threshold = config.discussion.composite_threshold
+            consensus_spread_threshold = config.discussion.consensus_spread_threshold
+
         self._personas = personas if personas is not None else BUILTIN_PERSONAS
         self._min_participants = min(min_participants, max_participants)
         self._max_participants = max(min_participants, max_participants)
-        self._max_turns = max(1, max_turns or 9)
+        self._max_turns = max(1, max_turns or 12)
         self._blocking_threshold = blocking_threshold
         self._override_threshold = override_threshold
         self._composite_threshold = composite_threshold
