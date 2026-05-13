@@ -77,3 +77,54 @@ def test_delivery_loop_all_adapters_must_succeed(tmp_path: Path) -> None:
     assert len(good.sent_entries) == 1
     assert len(bad.sent_entries) == 1
     assert len(outbox.list(status="failed")) == 1
+
+
+def test_outbox_clear_dismissed_older_than_removes_old_entries(tmp_path: Path) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    outbox = NotificationOutbox(tmp_path)
+    old = OutboxEntry(
+        id="old",
+        title="Old",
+        body="B",
+        status="dismissed",
+        idempotency_key="old",
+        created_at=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
+    )
+    recent = OutboxEntry(
+        id="recent",
+        title="Recent",
+        body="B",
+        status="dismissed",
+        idempotency_key="recent",
+        created_at=(datetime.now(UTC) - timedelta(days=3)).isoformat(),
+    )
+    outbox.add(old)
+    outbox.add(recent)
+
+    removed = outbox.clear_dismissed_older_than(days=7)
+
+    assert removed == 1
+    assert outbox.list(status="dismissed") == [recent]
+
+
+def test_delivery_loop_auto_clears_old_dismissed_entries(tmp_path: Path) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(OutboxEntry(id="pending1", title="P", body="B", status="pending", idempotency_key="p1"))
+    old_dismissed = OutboxEntry(
+        id="old_dismissed",
+        title="Old",
+        body="B",
+        status="dismissed",
+        idempotency_key="od",
+        created_at=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
+    )
+    outbox.add(old_dismissed)
+
+    adapter = FakeAdapter(succeed=True)
+    loop = NotificationDeliveryLoop(tmp_path, adapters=[adapter])
+    loop.run_once()
+
+    assert outbox.list(status="dismissed") == []

@@ -183,6 +183,23 @@ class NotificationOutbox:
                 removed += 1
         return removed
 
+    def clear_dismissed_older_than(self, days: int) -> int:
+        """Remove dismissed entries older than the given number of days."""
+        removed = 0
+        cutoff = datetime.now(UTC).timestamp() - days * 86400
+        for entry in self.list(status="dismissed"):
+            try:
+                created = datetime.fromisoformat(entry.created_at)
+                if created.timestamp() < cutoff:
+                    path = self._path_for(entry.id)
+                    if path.exists():
+                        path.unlink()
+                        removed += 1
+            except (ValueError, OSError):
+                continue
+        return removed
+        return removed
+
     def _idempotency_key_exists(self, key: str) -> bool:
         return self._find_by_idempotency_key(key) is not None
 
@@ -242,6 +259,8 @@ class NotificationDeliveryLoop:
                 delivered += 1
             else:
                 self._outbox.mark_failed(entry.id)
+        # Clean up old dismissed entries so the outbox does not grow forever.
+        self._outbox.clear_dismissed_older_than(days=7)
         return delivered
 
 
