@@ -17,6 +17,9 @@
 
 ## Development Style
 
+- **Design before implement**: For any non-trivial feature or behavioral change, write or update the relevant spec document **before** writing implementation code.
+- **Spec is authoritative**: A feature change is not complete until the spec that governs it is updated in the same change.
+- **No spec drift**: If code behavior diverges from its spec, either fix the code or update the spec. The spec must always describe the actual system.
 - Early development: prefer direct, clean implementation over compatibility shims.
 - Interface changes must update all callers, tests, examples, and docs in the same commit.
 - Do not preserve obsolete CLI commands, protocols, schemas, or APIs unless a document explicitly requires them.

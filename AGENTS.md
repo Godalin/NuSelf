@@ -4,6 +4,12 @@ An AI mirror for deep personal discussion — someone with similar life experien
 
 > Behavioral specifications live in [`docs/spec/`](docs/spec/). This file is for project context and high-level direction.
 
+## Development Constraints
+
+- **Design before implement**: For any non-trivial feature or behavioral change, write or update the relevant `docs/spec/` document **before** writing implementation code.
+- **Spec is authoritative**: A feature change is not complete until the spec that governs it is updated in the same change.
+- **No spec drift**: If code behavior diverges from its spec, either fix the code or update the spec. The spec must always describe the actual system.
+
 ## Quick Links
 
 - [`docs/spec/development-process.md`](docs/spec/development-process.md) — code standards, commit policy, architecture direction
