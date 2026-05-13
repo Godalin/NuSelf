@@ -483,7 +483,7 @@ class ConversationGraphRuntime:
         self._persona_activation_policy = PersonaActivationPolicy(persona_definitions)
         self._host_discussion_policy = HostDiscussionPolicy()
         self._persona_driver = PersonaGraphDriver()
-        self._persona_discussion_service = SharedPersonaDiscussionService(project_root=project_root)
+        self._persona_discussion_service = SharedPersonaDiscussionService(project_root=project_root, llm=self._llm)
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),
             SourceRepository(project_root),

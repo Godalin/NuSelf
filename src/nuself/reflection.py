@@ -13,6 +13,7 @@ from nuself.config_system import ConfigSystem, ReflectionSettings
 from nuself.domain.memory import now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
 from nuself.notification import NotificationOutbox, OutboxEntry
+from nuself.llm import default_llm
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
 
 if TYPE_CHECKING:
@@ -106,6 +107,7 @@ class ReflectionScheduler:
             result = SharedPersonaDiscussionService(
                 project_root=self._project_root,
                 config=self._config,
+                llm=default_llm(self._project_root),
             ).discuss(best)
             self._write_discussion_log(best, score, result, now)
             if not result.approved:

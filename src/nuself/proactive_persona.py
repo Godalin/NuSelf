@@ -7,6 +7,8 @@ import random
 
 from nuself.agent.persona import (
     BUILTIN_PERSONAS,
+    LLMBackedPersonaNode,
+    LLMBackedSynthesizerNode,
     PersonaContribution,
     PersonaDefinition,
     PersonaGraphDriver,
@@ -16,6 +18,7 @@ from nuself.agent.persona import (
 )
 from nuself.config_system import ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
+from nuself.llm import ChatLLM
 
 
 @dataclass(frozen=True)
@@ -48,6 +51,7 @@ class ProactivePersonaDiscussion:
         composite_threshold: float = 0.4,
         consensus_spread_threshold: float = 0.15,
         config: ReflectionSettings | None = None,
+        llm: ChatLLM | None = None,
     ) -> None:
         if config is not None:
             max_turns = config.moderator.max_discussion_rounds
@@ -66,7 +70,13 @@ class ProactivePersonaDiscussion:
         self._override_threshold = override_threshold
         self._composite_threshold = composite_threshold
         self._consensus_spread_threshold = consensus_spread_threshold
-        self._driver = PersonaGraphDriver()
+        if llm is not None:
+            self._driver = PersonaGraphDriver(
+                persona_node=LLMBackedPersonaNode(llm),
+                synthesizer_node=LLMBackedSynthesizerNode(llm),
+            )
+        else:
+            self._driver = PersonaGraphDriver()
 
     def discuss(self, candidate: IdeaCandidate) -> PersonaCompetitionResult:
         selected = self._select_personas()

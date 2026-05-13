@@ -192,3 +192,108 @@ def _sample_first(seq: list[object], k: int) -> list[object]:
 
 def _pick_upper_bound(low: int, high: int) -> int:
     return high
+
+
+# --- LLM-backed persona node tests ---
+
+class _FakePersonaLLM:
+    """Deterministic LLM that returns persona-specific responses."""
+
+    def complete(self, messages: object) -> str:
+        # Extract persona id from system prompt
+        import json
+        text = json.dumps([{"role": m.role, "content": m.content} for m in messages])  # type: ignore[union-attr]
+        if "skeptic_self" in text:
+            return "Skeptic challenges the core assumption here."
+        if "builder_self" in text:
+            return "Builder proposes three concrete steps to act on this."
+        if "care_self" in text:
+            return "Care notices the emotional weight and suggests pacing."
+        return "Analyst breaks this into components and implications."
+
+
+def test_llm_backed_persona_node_generates_distinct_notes() -> None:
+    from nuself.agent.persona import LLMBackedPersonaNode, PersonaDefinition, PersonaInput
+
+    llm = _FakePersonaLLM()
+    node = LLMBackedPersonaNode(llm)
+
+    analyst = PersonaDefinition(id="analyst_self", description="Decomposes questions.")
+    skeptic = PersonaDefinition(id="skeptic_self", description="Challenges assumptions.")
+    builder = PersonaDefinition(id="builder_self", description="Proposes steps.")
+
+    inp = PersonaInput(user_message="Test candidate")
+
+    a = node(analyst, inp)
+    s = node(skeptic, inp)
+    b = node(builder, inp)
+
+    assert a.notes[0] == "Analyst breaks this into components and implications."
+    assert s.notes[0] == "Skeptic challenges the core assumption here."
+    assert b.notes[0] == "Builder proposes three concrete steps to act on this."
+    assert a.notes[0] != s.notes[0]
+    assert s.notes[0] != b.notes[0]
+
+
+def test_llm_backed_synthesizer_node_produces_summary() -> None:
+    from nuself.agent.persona import (
+        LLMBackedSynthesizerNode,
+        PersonaContribution,
+        PersonaTurnState,
+        PersonaInput,
+    )
+
+    class _EchoLLM:
+        def complete(self, messages: object) -> str:
+            return "Summary of the discussion."
+
+    llm = _EchoLLM()
+    node = LLMBackedSynthesizerNode(llm)
+
+    state = PersonaTurnState(
+        input=PersonaInput(user_message="test"),
+        selected_personas=(),
+        contributions=(
+            PersonaContribution(persona_id="a", notes=("note a",)),
+            PersonaContribution(persona_id="b", notes=("note b",)),
+        ),
+    )
+    result = node(state)
+    assert result is not None
+    assert result.summary == "Summary of the discussion."
+    assert result.source_personas == ("a", "b")
+
+
+def test_proactive_persona_discussion_uses_llm_when_provided() -> None:
+    from nuself.proactive_persona import ProactivePersonaDiscussion
+    from nuself.domain.proactive import IdeaCandidate
+    from nuself.agent.persona import PersonaDefinition
+
+    personas = (
+        PersonaDefinition(id="skeptic_self", description="Challenges assumptions."),
+        PersonaDefinition(id="builder_self", description="Proposes steps."),
+        PersonaDefinition(id="analyst_self", description="Decomposes questions."),
+    )
+    discussion = ProactivePersonaDiscussion(personas=personas, llm=_FakePersonaLLM(), min_participants=3, max_participants=3)
+    candidate = IdeaCandidate(
+        id="c1",
+        title="Test idea",
+        body="A test idea for discussion.",
+        candidate_type="question",
+        confidence=0.8,
+        novelty=0.8,
+        urgency=0.5,
+        interruption_cost=0.2,
+        evidence_refs=(),
+        suggested_thread_id=None,
+        source_summary="",
+        created_at="2024-01-01T00:00:00",
+    )
+    result = discussion.discuss(candidate)
+
+    # With the fake LLM, all personas return non-empty distinct notes,
+    # so the composite should be above threshold and it should approve.
+    assert result.approved is True
+    trace = result.discussion_trace
+    assert any("skeptic_self" in entry for entry in trace)
+    assert any("builder_self" in entry for entry in trace)

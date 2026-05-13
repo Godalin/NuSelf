@@ -8,6 +8,8 @@ from typing import Any, Protocol, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
 
+from nuself.llm import ChatLLM, ChatMessage
+
 
 @dataclass(frozen=True)
 class PersonaDefinition:
@@ -142,6 +144,74 @@ class MinimalSynthesizerNode:
             summary=summary,
             source_personas=persona_ids,
             confidence=0.0,
+        )
+
+
+class LLMBackedPersonaNode:
+    """LLM-driven persona node that generates genuinely distinct perspectives."""
+
+    def __init__(self, llm: ChatLLM) -> None:
+        self._llm = llm
+
+    def __call__(self, persona: PersonaDefinition, persona_input: PersonaInput) -> PersonaContribution:
+        prior = persona_input.memory_context.strip()
+        if prior:
+            prior_block = f"\nPrior discussion:\n{prior}"
+        else:
+            prior_block = ""
+
+        messages = [
+            ChatMessage(
+                role="system",
+                content=(
+                    f"You are {persona.id} in a private reflection council. "
+                    f"Your role: {persona.description}\n"
+                    "Respond in 1-2 sentences from your unique perspective. "
+                    "Do not repeat what others said. If others have spoken, build on or challenge their points."
+                ),
+            ),
+            ChatMessage(
+                role="user",
+                content=f"Topic:\n{persona_input.user_message}{prior_block}",
+            ),
+        ]
+        try:
+            response = self._llm.complete(messages).strip()
+        except Exception:
+            response = f"{persona.id} considered the topic."
+
+        return PersonaContribution(persona_id=persona.id, notes=(response,), confidence=0.5)
+
+
+class LLMBackedSynthesizerNode:
+    """LLM-driven synthesizer that produces a crisp summary of contributions."""
+
+    def __init__(self, llm: ChatLLM) -> None:
+        self._llm = llm
+
+    def __call__(self, turn_state: PersonaTurnState) -> PersonaSynthesis | None:
+        if not turn_state.contributions:
+            return None
+        lines: list[str] = []
+        for contrib in turn_state.contributions:
+            note = contrib.notes[0] if contrib.notes else "(no note)"
+            lines.append(f"- {contrib.persona_id}: {note}")
+        discussion = "\n".join(lines)
+        messages = [
+            ChatMessage(
+                role="system",
+                content="You are the synthesizer. Distill the discussion into 1-2 crisp sentences that capture the consensus or key tension.",
+            ),
+            ChatMessage(role="user", content=discussion),
+        ]
+        try:
+            summary = self._llm.complete(messages).strip()
+        except Exception:
+            summary = " | ".join(lines)
+        return PersonaSynthesis(
+            summary=summary,
+            source_personas=tuple(c.persona_id for c in turn_state.contributions),
+            confidence=0.5,
         )
 
 
