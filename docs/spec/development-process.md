@@ -6,7 +6,7 @@
 - Type-check with `uvx pyright`.
 - Sub-components must be individually tested.
 - User-facing changes must update both `README.md` and `README.zh-CN.md`.
-- Track progress in `README.md` TODOs; short-term focus in `docs/current-goal.md`.
+- Track progress in [`docs/TODOs.md`](docs/TODOs.md); short-term focus in `docs/current-goal.md`.
 
 ## Commit Policy
 

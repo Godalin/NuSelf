@@ -1,6 +1,6 @@
 # Current Goal
 
-This file is the short-term execution guide for NuSelf. Keep it focused on the active target, immediate context, and the next few steps. Completed work belongs in the README TODOs, not here.
+This file is the short-term execution guide for NuSelf. Keep it focused on the active target, immediate context, and the next few steps. Completed work belongs in [`docs/TODOs.md`](docs/TODOs.md), not here.
 
 ## Focus
 Polish the shared competitive discussion system so chat and background reflection continue to use the same strategy, with clear host-driven escalation and readable traces in the REPL and logs.
