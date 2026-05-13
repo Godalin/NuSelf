@@ -3,29 +3,32 @@
 This file is the short-term execution guide for NuSelf. Keep it focused on the active target, immediate context, and the next few steps. Completed work belongs in [`docs/TODOs.md`](docs/TODOs.md), not here.
 
 ## Focus
-Polish the shared competitive discussion system so chat and background reflection continue to use the same strategy, with clear host-driven escalation and readable traces in the REPL and logs.
+
+Audit and fix spec-code gaps across reflection, memory, and notification subsystems. The goal is to make the codebase strictly conform to the behavioral contracts in `docs/spec/`.
 
 ## Immediate Context
 
-- Reflection scheduler and daemon startup are functioning.
-- Reflection checks are now less noisy by default.
-- Chat and reflection currently share the same persona primitives (`PersonaGraphDriver`, `PersonaTurnState`, persona definitions) but have different triggers and surfacing.
-- The shared discussion service is already in place; the next work is polish, validation, and any remaining logging clarity.
-- There is no fallback toggle for discussion entry; the host persona is the sole decision-maker for escalation in chat.
-- Root `private/config.yaml` should be treated as the live user config file.
+A cross-subsystem audit found the following spec-code gaps:
+
+**Reflection**
+- `reflect()` emits redundant `cycle_no_candidates` after `candidate_generation_skipped`/`candidate_generation_failed`, causing double events for the same condition.
+- No end-to-end test covers the daemon background scheduler startup through outbox creation.
+
+**Memory**
+- `MemoryQueryService._score_entry()` excludes `score <= 0` entries before applying quality bonuses (`reviewed`, `confidence`, `importance`), so entries with no text matches but positive quality signals are wrongly dropped.
+- `min_importance` is filtered after scoring; the spec requires it before scoring.
+- Unknown-type candidates accepted by auto-accept conflict with `MemoryEntryRepository` quarantine: the curator forces `review_state="reviewed"`, but the repository quarantines unknown types and raises `MemoryValidationError`, which is silently swallowed.
+
+**Notification**
+- The daemon `NotificationDeliveryLoop` only uses `LogOnlyNotificationAdapter`, ignoring configured `email.enabled` and `macos_notification.enabled` settings.
 
 ## Next Steps
 
-1. **QA**: Run integration checks and manual REPL verification to confirm both chat and reflection use the shared discussion system end-to-end.
-2. **Docs**: Keep README, README.zh-CN, current-goal, and the new CLI behavior spec synchronized with the shared discussion design.
-
-### Recently Done
-
-- Fixed duplicated status tag in `reflection list` output.
-- Redesigned `reflection show` discussion trace as grouped per-turn persona utterances.
-- Wrote `docs/cli-behavior-spec.md` as the system-wide CLI/REPL/logging behavior contract.
-- Fixed `reflection list` to show only `persona_discussion` outcomes by default; replaced `--include-started` with `--include-all` to reveal scheduler internals.
-- Established `docs/spec/` as the authoritative behavioral spec directory; codified "design before implement" and "no spec drift" constraints in AGENTS.md.
+1. **Fix reflection double-event bug**: Remove the redundant `cycle_no_candidates` emission when generation-specific events have already been logged.
+2. **Add end-to-end reflection test**: Cover daemon scheduler startup → `reflect()` → outbox entry creation.
+3. **Fix memory scoring order**: Move `score <= 0` exclusion to after quality bonuses; move `min_importance` filter to the pre-scoring phase.
+4. **Fix unknown-type auto-accept conflict**: Make curator skip the `reviewed` overwrite for quarantined entries, or handle the validation error explicitly.
+5. **Wire notification adapters into daemon**: Construct `EmailNotificationAdapter` and `MacOSNotificationAdapter` in the daemon server when their config flags are enabled.
 
 ## Not Now
 
@@ -33,10 +36,13 @@ Polish the shared competitive discussion system so chat and background reflectio
 - Memory-routing changes for chat discussion outcomes.
 - LLM-less reflection (Phase 3).
 - Hot reload of reflection config.
+- Vector and hybrid indexes (still planned but not in this slice).
 
 ## Completion Criteria
 
-- Daemon logs show reflection checks running continuously.
-- When API key missing, system logs clear warning.
-- Failed candidates logged with reason (empty context, low score, etc).
-- At least 1 test validates end-to-end daemon reflection cycle.
+- `reflect()` emits exactly one event per outcome path (no double events).
+- At least 1 test validates the end-to-end daemon reflection cycle (scheduler thread → outbox).
+- `MemoryQueryService` scoring matches the spec order: filters first, then bonuses, then exclusion.
+- Unknown-type candidates accepted by auto-accept do not silently fail.
+- Daemon notification delivery respects configured email and macOS adapters.
+- All changes update the corresponding spec in `docs/spec/`.
