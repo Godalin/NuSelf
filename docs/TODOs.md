@@ -83,9 +83,9 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add transitive-closure traversal for `transitive=True` relation descriptors.
 - [x] Add path-finding commands between specific memory nodes.
 - [x] Wire transitive-closure into `MemoryQueryService` automatic context expansion.
-- [ ] Fix `MemoryQueryService` scoring order: `score <= 0` exclusion should run after quality bonuses (spec-code gap).
-- [ ] Move `min_importance` filter to pre-scoring phase in `MemoryQueryService` (spec-code gap).
-- [ ] Fix unknown-type auto-accept conflict between `MemoryCurator` and `MemoryEntryRepository` (spec-code gap).
+- [x] Fix `MemoryQueryService` scoring order: `score <= 0` exclusion should run after quality bonuses (spec-code gap).
+- [x] Move `min_importance` filter to pre-scoring phase in `MemoryQueryService` (spec-code gap).
+- [x] Fix unknown-type auto-accept conflict between `MemoryCurator` and `MemoryEntryRepository` (spec-code gap).
 - [x] Replace the temporary runtime with a LangGraph conversation graph.
 - [x] Add memory stats and richer query commands.
 - [x] Add `importance` scalar to memory entries, candidates, objects, and profile items with descriptor-aware retrieval scoring.
@@ -105,11 +105,11 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add randomized low-frequency reflection with jitter, daily caps, and event triggers.
 - [x] Add competitive persona discussion with randomized jury, scoring, blocking vetoes, and synthesizer arbitration.
 - [x] Add `NotificationDeliveryLoop` that decouples outbox writing from adapter dispatch.
-- [ ] Wire configured email/macOS adapters into daemon `NotificationDeliveryLoop` (spec-code gap: currently only LogOnly adapter runs in daemon).
+- [x] Wire configured email/macOS adapters into daemon `NotificationDeliveryLoop` (spec-code gap: currently only LogOnly adapter runs in daemon).
 - [x] Enhance `DeepLink` with `new_thread` action for proactive candidate routing.
 - [x] Wire proactive agent pipeline into daemon with separate reflection and delivery threads.
-- [ ] Fix `reflect()` emitting redundant `cycle_no_candidates` after generation-specific events (spec-code gap).
-- [ ] Add end-to-end test for daemon background reflection scheduler through outbox creation (spec-code gap).
+- [x] Fix `reflect()` emitting redundant `cycle_no_candidates` after generation-specific events (spec-code gap).
+- [x] Add end-to-end test for daemon background reflection scheduler through outbox creation (spec-code gap).
 
 ## Ingestion And Knowledge Store
 

@@ -24,7 +24,7 @@ reflect()
   ├─ cycle_started
   ├─ candidate_generation_skipped  (if no context)
   ├─ candidate_generation_failed   (if LLM errors)
-  ├─ cycle_no_candidates           (if empty list)
+  ├─ cycle_no_candidates           (if LLM returns valid but empty candidates)
   ├─ RelevanceGate.score(best)
   │   └─ cycle_filtered            (if !passes)
   ├─ persona_discussion            (if score ≥ persona_discussion_threshold)
