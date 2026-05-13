@@ -919,6 +919,12 @@ class ConversationGraphRuntime:
                 "Adjust the importance score (0.0–1.0) of a memory entry. "
                 "Use when the user emphasizes or downplays the significance of a memory."
             ),
+            "",
+            "Behavioral guidelines:",
+            "- If the conversation naturally pauses or touches on topics related to pending reflections, you may proactively bring one idea into the discussion in your own words. Do not dump the raw list.",
+            "- If the user shows no interest in a suggested topic, dismiss the reflection.",
+            "- If the user engages with a reflection idea, the conversation itself will naturally capture the outcome into memory.",
+            "- You can also help curate memory: archive outdated entries or adjust importance when the user signals relevance changes.",
         ])
         return "\n".join(parts)
 
