@@ -8,7 +8,7 @@ Extend the chat agent from a pure Q&A interface into a **conversational decision
 
 ## Immediate Context
 
-The conversational decision proxy milestone is now feature-complete:
+The conversational decision proxy milestone is now feature-complete and tested:
 
 - **5 chat agent tools**: `search_memory`, `list_pending_reflections`, `dismiss_reflection`, `archive_memory`, `update_memory_importance`
 - **Behavioral guidelines**: Agent proactively introduces reflection ideas, dismisses on disinterest, archives/adjusts importance on user signal.
@@ -16,11 +16,12 @@ The conversational decision proxy milestone is now feature-complete:
 - **LLM-backed persona discussion**: Distinct voices, single graph invocation per turn.
 - **Reflection thresholds lowered**: More ideas enter discussion; discussion depth increased.
 - **READMEs synchronized**: Both English and Chinese versions document new capabilities.
+- **End-to-end test**: `test_chat_agent_end_to_end_archive_memory_via_tool` validates chat → tool → memory mutation.
 
 ## Next Steps
 
-1. **QA integration**: End-to-end test exercising chat → tool invocation → memory/outbox mutation.
-2. **Stabilize**: Run extended manual REPL verification to confirm tool invocation and memory curation work smoothly in practice.
+1. **Stabilize**: Run extended manual REPL verification to confirm tool invocation and memory curation work smoothly in practice.
+2. **Decide next milestone**: Options include memory optimizer integration, vector/hybrid indexes, or hot reload of reflection config.
 
 ### Recently Done
 
@@ -34,6 +35,7 @@ The conversational decision proxy milestone is now feature-complete:
 - Added proactive topic injection behavioral guidelines to system prompt.
 - Auto-clear dismissed outbox entries older than 7 days.
 - Updated README.md and README.zh-CN.md.
+- Added end-to-end test for chat → tool → memory mutation.
 
 ## Not Now
 
