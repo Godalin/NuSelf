@@ -17,12 +17,14 @@ Polish the shared competitive discussion system so chat and background reflectio
 ## Next Steps
 
 1. **QA**: Run integration checks and manual REPL verification to confirm both chat and reflection use the shared discussion system end-to-end.
-2. **Docs**: Keep README, README.zh-CN, and this file synchronized with the shared discussion design.
+2. **Docs**: Keep README, README.zh-CN, current-goal, and the new CLI behavior spec synchronized with the shared discussion design.
 
 ### Recently Done
 
 - Fixed duplicated status tag in `reflection list` output.
 - Redesigned `reflection show` discussion trace as grouped per-turn persona utterances.
+- Wrote `docs/cli-behavior-spec.md` as the system-wide CLI/REPL/logging behavior contract.
+- Fixed `reflection list` to show only `persona_discussion` outcomes by default; replaced `--include-started` with `--include-all` to reveal scheduler internals.
 
 ## Not Now
 
