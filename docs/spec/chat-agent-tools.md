@@ -66,14 +66,31 @@ The LLM outputs a JSON object. If it contains `"tool": "<name>"` and `"tool_args
 - **Returns**: Confirmation or error message.
 - **When to use**: After the user explicitly declines interest in a suggested reflection topic.
 
-### Future: Memory Management Tools
+### New: Memory Management Tools
 
 | Tool | Purpose |
 |---|---|
-| `archive_memory` | Change a memory entry's review state to `archived` (requires new state). |
-| `update_memory_importance` | Adjust importance score of a memory entry. |
+| `archive_memory` | Change a memory entry's review state to `archived`. Archived entries are excluded from default search. |
+| `update_memory_importance` | Adjust the importance score (0.0–1.0) of a memory entry. |
 
-These are reserved for a later phase; the current scope is reflection consumption only.
+#### `archive_memory`
+
+- **Args**: `entry_id: str`
+- **Behavior**: Loads the memory entry, sets `review_state="archived"`, and saves it back.
+- **Returns**: Confirmation with entry title, or error if not found.
+- **When to use**: When the user indicates a memory is outdated, no longer relevant, or should be hidden from active context.
+
+#### `update_memory_importance`
+
+- **Args**: `entry_id: str`, `importance: float`
+- **Behavior**: Updates the entry's importance score and saves it back.
+- **Returns**: Confirmation with new importance value, or error if not found.
+- **When to use**: When the user emphasizes or downplays the significance of a memory during conversation.
+
+### Behavioral Guidelines for Memory Curation (Prompt-Level)
+
+> "You can also help the user curate their memory. If they say something like 'that doesn't matter anymore' or 'this is very important', you may archive the entry or adjust its importance. Always confirm the action with the user before invoking the tool."
+
 
 ## System Prompt Integration
 
