@@ -8,23 +8,18 @@ Extend the chat agent from a pure Q&A interface into a **conversational decision
 
 ## Immediate Context
 
-The persona discussion system now generates genuinely distinct voices:
+The chat agent tool suite is now complete with memory curation capabilities:
 
-- **LLMBackedPersonaNode**: Each persona responds from its unique perspective using the configured LLM, building on or challenging prior contributions within the same turn.
-- **LLMBackedSynthesizerNode**: Produces a crisp per-turn summary rather than concatenating identical notes.
-- Both nodes fall back to Minimal placeholders when no LLM is configured.
+- **`archive_memory`**: Agent can archive outdated memory entries during conversation.
+- **`update_memory_importance`**: Agent can adjust memory importance when the user emphasizes or downplays significance.
+- Both tools validate inputs, reindex after changes, and are covered by tests.
 
-The reflection consumption tool suite is also live:
-
-- **`list_pending_reflections`**: Agent can view pending outbox ideas during conversation.
-- **`dismiss_reflection`**: Agent can mark declined ideas as dismissed.
-- Both tools are wired into `ConversationGraphRuntime`, described in the system prompt, and covered by tests.
+The persona discussion system also generates genuinely distinct voices via LLM-backed nodes, and the reflection consumption tools (`list_pending_reflections`, `dismiss_reflection`) are live.
 
 ## Next Steps
 
-1. **Memory management tools**: Add `archive_memory` and `update_memory_importance` tools so the agent can help the user curate memory during conversation.
-2. **Proactive topic injection**: Update the system prompt behavioral guidelines so the agent naturally introduces pending reflection ideas when the conversation rhythm allows, rather than only on explicit request.
-3. **Dismiss → clear lifecycle**: Consider whether dismissed reflections should auto-clear from the outbox after a period, or if `notify clear` is sufficient.
+1. **Proactive topic injection**: Update the system prompt behavioral guidelines so the agent naturally introduces pending reflection ideas when the conversation rhythm allows, rather than only on explicit request.
+2. **Dismiss → clear lifecycle**: Consider whether dismissed reflections should auto-clear from the outbox after a period, or if `notify clear` is sufficient.
 
 ### Recently Done
 
@@ -34,6 +29,8 @@ The reflection consumption tool suite is also live:
 - Implemented `ListPendingReflectionsTool` and `DismissReflectionTool`.
 - Wired reflection tools into chat agent runtime and system prompt.
 - Replaced deterministic persona placeholder nodes with LLM-backed nodes for distinct discussion voices.
+- Fixed multi-persona graph invocation: all turn participants now run in a single shared graph run.
+- Added memory management tools (`archive_memory`, `update_memory_importance`) with `archived` review state support.
 
 ## Not Now
 
@@ -44,7 +41,7 @@ The reflection consumption tool suite is also live:
 
 ## Completion Criteria
 
-- Chat agent can list and dismiss pending reflections via tool invocation.
+- Chat agent can list, dismiss, archive, and re-prioritize memory during conversation.
 - Persona discussion traces contain genuinely distinct per-persona utterances.
 - Tool results and discussion traces are injected back into context correctly.
 - System prompt guides the agent on when to surface vs. dismiss ideas.
