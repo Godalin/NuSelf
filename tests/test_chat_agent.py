@@ -1058,3 +1058,32 @@ def test_chat_agent_includes_memory_tools_in_system_prompt(tmp_path: Path) -> No
     system_prompt = llm.calls[0][0].content
     assert "archive_memory" in system_prompt
     assert "update_memory_importance" in system_prompt
+
+
+def test_chat_agent_end_to_end_archive_memory_via_tool(tmp_path: Path) -> None:
+    """Full path: chat → tool request → archive_memory → verify entry archived."""
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(type="belief", id="m1", title="Old belief", body="..."))
+
+    class ArchiveToolLLM:
+        def __init__(self) -> None:
+            self.call_count = 0
+
+        def complete(self, messages: list[ChatMessage]) -> str:
+            self.call_count += 1
+            if self.call_count == 1:
+                return '{"answer":"Let me archive that for you.","tool":"archive_memory","tool_args":{"entry_id":"m1"}}'
+            return '{"answer":"Done. The entry has been archived.","evidence_references":[]}'
+
+    llm = ArchiveToolLLM()
+    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(repo))
+
+    result = agent.respond("archive that old belief")
+
+    assert "archived" in result.answer.lower() or "Done" in result.answer
+    assert llm.call_count == 2
+    entry = repo.get("m1")
+    assert entry.review_state == "archived"

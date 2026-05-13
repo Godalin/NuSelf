@@ -284,7 +284,7 @@ def test_proactive_persona_discussion_uses_llm_when_provided(monkeypatch: pytest
     )
     discussion = ProactivePersonaDiscussion(personas=personas, llm=_FakePersonaLLM(), min_participants=3, max_participants=3)
     # Ensure every turn uses all personas so the test is deterministic.
-    monkeypatch.setattr(discussion, "_participants_for_turn", lambda selected, emergent: personas)
+    monkeypatch.setattr(discussion, "_participants_for_turn", lambda selected, emergent: personas)  # type: ignore[arg-type]
     candidate = IdeaCandidate(
         id="c1",
         title="Test idea",
