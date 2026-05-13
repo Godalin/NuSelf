@@ -25,6 +25,7 @@ Polish the shared competitive discussion system so chat and background reflectio
 - Redesigned `reflection show` discussion trace as grouped per-turn persona utterances.
 - Wrote `docs/cli-behavior-spec.md` as the system-wide CLI/REPL/logging behavior contract.
 - Fixed `reflection list` to show only `persona_discussion` outcomes by default; replaced `--include-started` with `--include-all` to reveal scheduler internals.
+- Established `docs/spec/` as the authoritative behavioral spec directory; codified "design before implement" and "no spec drift" constraints in AGENTS.md.
 
 ## Not Now
 
