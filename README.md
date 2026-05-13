@@ -180,8 +180,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Unify configuration into single `config.yaml` with env overrides replacing scattered `.env` and `reflection_config.yaml`.
 - [x] Keep `reflection list` focused on completed or rejected reflection outcomes by default; use `--include-started` or `nuself logs --component reflection` for raw scheduler start events.
 - [x] Set the daemon reflection check interval default to 10 minutes and provide a root `private/config.yaml` template.
-- [ ] Let interactive chat reuse the same competitive discussion strategy as background reflection.
-- [ ] Make shared-discussion results visible in the REPL and structured logs.
+- [x] Let interactive chat reuse the same competitive discussion strategy as background reflection.
+- [x] Make shared-discussion results visible in the REPL and structured logs.
 
 ### Evaluation And Quality
 

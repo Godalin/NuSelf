@@ -16,9 +16,13 @@ Polish the shared competitive discussion system so chat and background reflectio
 
 ## Next Steps
 
-1. **QA**: Run integration checks and manual REPL verification to confirm both paths use the shared system.
-2. **Logging polish**: Tighten host decision and discussion trace rendering if any gaps remain in the interactive experience.
-3. **Docs**: Keep README, README.zh-CN, and this file synchronized with the shared discussion design.
+1. **QA**: Run integration checks and manual REPL verification to confirm both chat and reflection use the shared discussion system end-to-end.
+2. **Docs**: Keep README, README.zh-CN, and this file synchronized with the shared discussion design.
+
+### Recently Done
+
+- Fixed duplicated status tag in `reflection list` output.
+- Redesigned `reflection show` discussion trace as grouped per-turn persona utterances.
 
 ## Not Now
 
