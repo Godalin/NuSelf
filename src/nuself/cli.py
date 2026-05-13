@@ -171,13 +171,13 @@ def build_parser() -> argparse.ArgumentParser:
     reflection_subparsers = reflection_parser.add_subparsers(dest="reflection_command")
     reflection_list_parser = reflection_subparsers.add_parser("list")
     reflection_list_parser.add_argument("--tail", type=int, default=20)
-    reflection_list_parser.add_argument("--include-started", action="store_true", default=False)
+    reflection_list_parser.add_argument("--include-all", action="store_true", default=False)
     reflection_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reflection_list_parser, handle_reflection_list)
     reflection_show_parser = reflection_subparsers.add_parser("show")
     reflection_show_parser.add_argument("event_index", type=int, help="Index from 'reflection list' (0-based)")
     reflection_show_parser.add_argument("--tail", type=int, default=20)
-    reflection_show_parser.add_argument("--include-started", action="store_true", default=False)
+    reflection_show_parser.add_argument("--include-all", action="store_true", default=False)
     reflection_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reflection_show_parser, handle_reflection_show)
 
@@ -1163,7 +1163,7 @@ def handle_reflection_list(args: argparse.Namespace) -> int:
     events = _reflection_events_for_display(
         project_root=args.project_root,
         tail=args.tail,
-        include_started=getattr(args, "include_started", False),
+        include_all=getattr(args, "include_all", False),
     )
     if not events:
         print("No reflection events.")
@@ -1185,7 +1185,7 @@ def handle_reflection_show(args: argparse.Namespace) -> int:
     all_events = _reflection_events_for_display(
         project_root=args.project_root,
         tail=getattr(args, "tail", 20),
-        include_started=getattr(args, "include_started", False),
+        include_all=getattr(args, "include_all", False),
     )
     if not all_events:
         print("No reflection events.", file=sys.stderr)
@@ -1207,13 +1207,13 @@ def _reflection_events_for_display(
     *,
     project_root: Path | None,
     tail: int | None = None,
-    include_started: bool = False,
+    include_all: bool = False,
 ) -> list["LogEvent"]:
     from nuself.logs import LogEvent
 
     events = read_log_events(project_root=project_root, component="reflection", tail=tail)
-    if not include_started:
-        events = [event for event in events if event.event != "cycle_started"]
+    if not include_all:
+        events = [event for event in events if event.event == "persona_discussion"]
     return events
 
 

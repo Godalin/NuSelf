@@ -81,14 +81,14 @@ def test_reflection_list_hides_started_by_default(project_root: Path, capsys: py
     )
     _seed_reflection_events(project_root, 1)
 
-    args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_started=False)
+    args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_all=False)
     assert handle_reflection_list(args) == 0
     output = capsys.readouterr().out
     assert "triggered" not in output
     assert "[approved]" in output
 
 
-def test_reflection_list_can_include_started(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_reflection_list_can_include_all(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from nuself.cli import handle_reflection_list
     import argparse
 
@@ -101,7 +101,7 @@ def test_reflection_list_can_include_started(project_root: Path, capsys: pytest.
     )
     _seed_reflection_events(project_root, 1)
 
-    args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_started=True)
+    args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_all=True)
     assert handle_reflection_list(args) == 0
     output = capsys.readouterr().out
     assert "triggered" in output
@@ -148,13 +148,13 @@ def test_reflection_show_uses_same_indexing_as_list(project_root: Path, capsys: 
     )
     _seed_reflection_events(project_root, 2)
 
-    list_args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_started=False)
+    list_args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_all=False)
     assert handle_reflection_list(list_args) == 0
     list_output = capsys.readouterr().out
     assert "Test idea 0" in list_output
     assert "triggered" not in list_output
 
-    show_args = argparse.Namespace(project_root=project_root, event_index=0, as_json=False, include_started=False)
+    show_args = argparse.Namespace(project_root=project_root, event_index=0, as_json=False, include_all=False)
     assert handle_reflection_show(show_args) == 0
     show_output = capsys.readouterr().out
     assert "Test idea 0" in show_output
@@ -167,13 +167,13 @@ def test_reflection_show_respects_default_tail_window(project_root: Path, capsys
 
     _seed_reflection_events(project_root, 25)
 
-    list_args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_started=False)
+    list_args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_all=False)
     assert handle_reflection_list(list_args) == 0
     list_output = capsys.readouterr().out
     assert "Test idea 5" in list_output
     assert "Test idea 4" not in list_output
 
-    show_args = argparse.Namespace(project_root=project_root, event_index=0, tail=20, as_json=False, include_started=False)
+    show_args = argparse.Namespace(project_root=project_root, event_index=0, tail=20, as_json=False, include_all=False)
     assert handle_reflection_show(show_args) == 0
     show_output = capsys.readouterr().out
     assert "Test idea 5" in show_output
