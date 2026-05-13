@@ -4,43 +4,47 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Audit and fix spec-code gaps across reflection, memory, and notification subsystems.
+Extend the chat agent from a pure Q&A interface into a **conversational decision proxy** that can perform user-facing actions during chat: inspect pending reflections, manage memory state, and surface proactive ideas naturally.
 
 ## Immediate Context
 
-All identified spec-code gaps from the audit have been fixed:
+The reflection consumption tool suite is now live:
 
-- **Reflection**: `cycle_no_candidates` is now emitted only when the generator receives a valid but empty candidate list, not after `candidate_generation_skipped`/`candidate_generation_failed`.
-- **Memory**: `min_importance` filter moved to pre-scoring phase; quarantined entries no longer silently fail during curator auto-accept.
-- **Notification**: Daemon `NotificationDeliveryLoop` now constructs `EmailNotificationAdapter` and `MacOSNotificationAdapter` when their config flags are enabled.
-- **Testing**: Added `test_daemon_background_reflection_scheduler_creates_outbox_entry` covering the full daemon thread → scheduler → outbox path.
+- **`list_pending_reflections`**: Agent can view pending outbox ideas during conversation.
+- **`dismiss_reflection`**: Agent can mark declined ideas as dismissed.
+- Both tools are wired into `ConversationGraphRuntime`, described in the system prompt, and covered by tests.
+
+The threshold/depth adjustment from the previous cycle is also complete:
+
+- `relevance_threshold` 0.5 → 0.35, `persona_discussion_threshold` 0.7 → 0.55
+- `min_participants` 2 → 3, `max_participants` 4 → 5, `max_turns` fallback 9 → 12
+- `ReflectionDiscussionConfig` added to `ReflectionSettings` with full YAML/env configurability
 
 ## Next Steps
 
-1. **QA**: Run integration checks and manual REPL verification to confirm the fixes work end-to-end.
-2. **Docs**: Keep README, README.zh-CN, current-goal, and specs synchronized.
+1. **Memory management tools**: Add `archive_memory` and `update_memory_importance` tools so the agent can help the user curate memory during conversation.
+2. **Proactive topic injection**: Update the system prompt behavioral guidelines so the agent naturally introduces pending reflection ideas when the conversation rhythm allows, rather than only on explicit request.
+3. **Dismiss → clear lifecycle**: Consider whether dismissed reflections should auto-clear from the outbox after a period, or if `notify clear` is sufficient.
 
 ### Recently Done
 
-- Fixed reflection double-event emission.
-- Added end-to-end daemon reflection cycle test.
-- Fixed `MemoryQueryService` `min_importance` phase mismatch.
-- Fixed unknown-type auto-accept conflict.
-- Wired configured notification adapters into daemon delivery loop.
+- Lowered reflection thresholds and deepened persona discussion parameters.
+- Added `ReflectionDiscussionConfig` to the configuration system.
+- Specified chat-agent-tools architecture in `docs/spec/chat-agent-tools.md`.
+- Implemented `ListPendingReflectionsTool` and `DismissReflectionTool`.
+- Wired reflection tools into chat agent runtime and system prompt.
 
 ## Not Now
 
-- New reflection strategies (Phase 4).
-- Memory-routing changes for chat discussion outcomes.
 - LLM-less reflection (Phase 3).
 - Hot reload of reflection config.
 - Vector and hybrid indexes.
+- Automatic reflection-to-memory conversion without user chat engagement.
 
 ## Completion Criteria
 
-- `reflect()` emits exactly one event per outcome path (no double events).
-- At least 1 test validates the end-to-end daemon reflection cycle (scheduler thread → outbox).
-- `MemoryQueryService` filters `min_importance` before scoring.
-- Unknown-type candidates accepted by auto-accept do not silently fail.
-- Daemon notification delivery respects configured email and macOS adapters.
-- All changes update the corresponding spec in `docs/spec/`.
+- Chat agent can list and dismiss pending reflections via tool invocation.
+- Tool results are injected back into conversation context correctly.
+- System prompt guides the agent on when to surface vs. dismiss ideas.
+- All new tools have unit and integration tests.
+- Spec and current-goal are synchronized with implementation.
