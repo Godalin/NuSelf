@@ -88,12 +88,15 @@ When color is enabled, each known self label in a `persona_summary` block uses a
 
 ### Transcript Export
 
-- Command: `:export` writes a user-readable Markdown transcript for the current thread.
-- Clipboard: `:export --copy` or `:export copy` also copies the saved transcript contents to the system clipboard.
-- Scope: transcript export starts at the current interactive connection time. Re-running export later in the same connection includes the full conversation from that same connection start, not only messages since the previous export.
+- Command: `:export` or `:e` writes a user-readable Markdown transcript for the current thread and copies the saved content to the system clipboard by default.
+- Options may be combined in any order:
+  - `all`: include all logs captured during this interactive connection.
+  - `noclip`: save the file without copying to clipboard.
+- Default log scope: chat transcript plus shareable internal logs (`persona_summary`, `host_discussion_decision`, `persona_discussion`, and high-level reflection outcomes). Low-level daemon, memory, and chat completion logs are omitted unless `all` is used.
+- Scope: transcript export starts at the current interactive connection time. Re-running export later in the same connection includes the full conversation and captured logs from that same connection start, not only messages/logs since the previous export.
 - Storage: files are written under `private/transcripts/`.
 - Filename: includes the connection start time and export command time, e.g. `chat-default-20260514T120000123456Z-20260514T121500654321Z.md`.
-- Output: after saving, print the file path. If clipboard copy was requested, print whether copying succeeded.
+- Output: after saving, print the file path and clipboard copy result. If `noclip` is used, do not attempt clipboard copying.
 
 ## Command Group Reference
 

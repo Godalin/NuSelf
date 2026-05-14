@@ -261,7 +261,14 @@ def test_interactive_turn_prints_activity_events(
 def test_interactive_export_saves_connection_transcript(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
+    copied: list[str] = []
+
+    def fake_copy(text: str) -> tuple[bool, str]:
+        copied.append(text)
+        return True, ""
+
     monkeypatch.setattr("sys.stdin", _TextInput("first message\n:export\nsecond message\n:export\n:q\n"))
+    monkeypatch.setattr("nuself.cli._copy_text_to_clipboard", fake_copy)
 
     result = main(["--project-root", str(tmp_path), "chat"])
     captured = capsys.readouterr()
@@ -277,6 +284,8 @@ def test_interactive_export_saves_connection_transcript(
     assert "first message" in second_export
     assert "second message" in second_export
     assert "- Thread: `default`" in second_export
+    assert len(copied) == 2
+    assert "second message" in copied[-1]
 
 
 def test_interactive_export_copy_copies_saved_transcript(
@@ -288,7 +297,7 @@ def test_interactive_export_copy_copies_saved_transcript(
         copied.append(text)
         return True, ""
 
-    monkeypatch.setattr("sys.stdin", _TextInput("share this\n:export --copy\n:q\n"))
+    monkeypatch.setattr("sys.stdin", _TextInput("share this\n:export\n:q\n"))
     monkeypatch.setattr("nuself.cli._copy_text_to_clipboard", fake_copy)
 
     result = main(["--project-root", str(tmp_path), "chat"])
@@ -300,6 +309,44 @@ def test_interactive_export_copy_copies_saved_transcript(
     assert len(copied) == 1
     assert "share this" in copied[0]
     assert "# NuSelf Chat Transcript" in copied[0]
+
+
+def test_interactive_export_noclip_skips_clipboard(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    copied: list[str] = []
+
+    def fake_copy(text: str) -> tuple[bool, str]:
+        copied.append(text)
+        return True, ""
+
+    monkeypatch.setattr("sys.stdin", _TextInput("do not copy\n:e noclip\n:q\n"))
+    monkeypatch.setattr("nuself.cli._copy_text_to_clipboard", fake_copy)
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Saved transcript:" in captured.out
+    assert "Copied transcript to clipboard." not in captured.out
+    assert copied == []
+
+
+def test_interactive_export_all_includes_all_logs(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput("include logs\n:e all noclip\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    capsys.readouterr()
+
+    assert result == 0
+    exports = sorted((tmp_path / "private" / "transcripts").glob("chat-default-*.md"))
+    assert len(exports) == 1
+    content = exports[0].read_text(encoding="utf-8")
+    assert "- Logs: all" in content
+    assert "## Internal Process Logs" in content
+    assert "[chat] one_shot_chat_completed" in content
 
 
 def test_interactive_history_skips_consecutive_duplicates(

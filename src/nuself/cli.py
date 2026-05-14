@@ -6,6 +6,7 @@ import argparse
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -63,7 +64,7 @@ try:
     )
     from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
     from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
-    from nuself.logs import LOG_COMPONENTS, LogComponent, read_log_events, write_log_event
+    from nuself.logs import LOG_COMPONENTS, LogComponent, LogEvent, read_log_events, write_log_event
     from nuself.config_system import ConfigSystem
     from nuself.tui.memory import (
         render_candidate_detail,
@@ -91,6 +92,10 @@ def empty_captured_thread_messages() -> dict[str, list[tuple[int, str, str]]]:
     return {}
 
 
+def empty_captured_log_events() -> dict[str, list[LogEvent]]:
+    return {}
+
+
 @dataclass
 class InteractiveSession:
     """State that belongs to one interactive CLI connection."""
@@ -99,6 +104,7 @@ class InteractiveSession:
     thread_start_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
     captured_messages: dict[str, list[tuple[int, str, str]]] = field(default_factory=empty_captured_thread_messages)
     captured_next_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
+    captured_log_events: dict[str, list[LogEvent]] = field(default_factory=empty_captured_log_events)
 
     def start_index_for(self, project_root: Path | None, thread_id: str) -> int:
         if thread_id not in self.thread_start_indexes:
@@ -120,6 +126,17 @@ class InteractiveSession:
     def transcript_messages(self, project_root: Path | None, thread_id: str) -> list[tuple[int, str, str]]:
         self.capture_new_messages(project_root, thread_id)
         return list(self.captured_messages.get(thread_id, []))
+
+    def capture_log_events(self, thread_id: str, events: list[LogEvent]) -> None:
+        if not events:
+            return
+        self.captured_log_events.setdefault(thread_id, []).extend(events)
+
+    def transcript_log_events(self, thread_id: str, *, include_all: bool) -> list[LogEvent]:
+        events = list(self.captured_log_events.get(thread_id, []))
+        if include_all:
+            return events
+        return [event for event in events if _is_shareable_transcript_log(event)]
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1710,7 +1727,9 @@ def _interactive_loop(
             event_offset = len(read_log_events(project_root=project_root))
             result = send_message(message, current_thread_id)
             session.capture_new_messages(project_root, current_thread_id)
-            _print_interactive_activity(project_root, event_offset)
+            events = _interactive_activity_events(project_root, event_offset)
+            session.capture_log_events(current_thread_id, events)
+            _print_interactive_activity_events(events)
             print()
             print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
             if result != 0:
@@ -1733,6 +1752,7 @@ _INTERACTIVE_COMMANDS = [
     ":status",
     ":logs",
     ":export",
+    ":e",
     ":memory",
     ":mem",
     ":reflection",
@@ -2015,7 +2035,7 @@ def _handle_interactive_command(
         _print_recent_logs(project_root, limit=8)
         print()
         return ("", current_thread_id)
-    if command == ":export" or command.startswith(":export "):
+    if command in {":export", ":e"} or command.startswith(":export ") or command.startswith(":e "):
         print()
         print(_handle_interactive_export_command(command, project_root, current_thread_id, session))
         print()
@@ -2173,7 +2193,8 @@ def _interactive_help(command: str | None = None) -> str:
             "  :help      show this help",
             "  :status show daemon and thread status",
             "  :logs   show recent activity logs",
-            "  :export [--copy]          save this connection's chat transcript",
+            "  :export [all] [noclip]    save and copy this connection's transcript",
+            "  :e [all] [noclip]         shorthand for :export",
             "  :memory preview memory entries",
             "  :mem    preview memory entries",
             "  :search <query>           quick memory search",
@@ -2225,9 +2246,13 @@ def _print_recent_logs(project_root: Path | None, *, limit: int) -> None:
         print(render_log_event(event))
 
 
-def _print_interactive_activity(project_root: Path | None, event_offset: int) -> None:
+def _interactive_activity_events(project_root: Path | None, event_offset: int) -> list[LogEvent]:
     events = read_log_events(project_root=project_root)
-    for event in events[event_offset:]:
+    return events[event_offset:]
+
+
+def _print_interactive_activity_events(events: list[LogEvent]) -> None:
+    for event in events:
         print(render_log_event(event))
 
 
@@ -2237,13 +2262,20 @@ def _handle_interactive_export_command(
     thread_id: str,
     session: InteractiveSession,
 ) -> str:
-    args = command.removeprefix(":export").strip().split()
-    copy_requested = False
+    body = command.removeprefix(":export") if command.startswith(":export") else command.removeprefix(":e")
+    args = body.strip().split()
+    copy_requested = True
+    include_all_logs = False
     if args:
-        if all(arg in {"--copy", "copy"} for arg in args):
-            copy_requested = True
-        else:
-            return _interactive_help(":export")
+        for arg in args:
+            if arg == "all":
+                include_all_logs = True
+            elif arg == "noclip":
+                copy_requested = False
+            elif arg in {"--copy", "copy"}:
+                copy_requested = True
+            else:
+                return _interactive_help(":export")
 
     exported_at = datetime.now(UTC)
     try:
@@ -2255,6 +2287,8 @@ def _handle_interactive_export_command(
             connected_at=session.connected_at,
             exported_at=exported_at,
             messages=session.transcript_messages(project_root, thread_id),
+            log_events=session.transcript_log_events(thread_id, include_all=include_all_logs),
+            include_all_logs=include_all_logs,
         )
     except ValueError as exc:
         return f"Error: {exc}"
@@ -2277,6 +2311,8 @@ def _export_interactive_transcript(
     connected_at: datetime,
     exported_at: datetime,
     messages: list[tuple[int, str, str]] | None = None,
+    log_events: list[LogEvent] | None = None,
+    include_all_logs: bool = False,
 ) -> tuple[Path, str]:
     paths = runtime_paths(project_root)
     if messages is None:
@@ -2297,6 +2333,8 @@ def _export_interactive_transcript(
         connected_at=connected_at,
         exported_at=exported_at,
         messages=messages,
+        log_events=log_events or [],
+        include_all_logs=include_all_logs,
     )
     path.write_text(content, encoding="utf-8")
     return path, content
@@ -2317,6 +2355,8 @@ def _render_chat_transcript(
     connected_at: datetime,
     exported_at: datetime,
     messages: list[tuple[int, str, str]],
+    log_events: list[LogEvent],
+    include_all_logs: bool,
 ) -> str:
     lines = [
         "# NuSelf Chat Transcript",
@@ -2324,6 +2364,7 @@ def _render_chat_transcript(
         f"- Thread: `{thread_id}`",
         f"- Connected: {connected_at.isoformat()}",
         f"- Exported: {exported_at.isoformat()}",
+        f"- Logs: {'all' if include_all_logs else 'share'}",
         "",
     ]
     for index, role, content in messages:
@@ -2334,7 +2375,43 @@ def _render_chat_transcript(
             content.strip(),
             "",
         ])
+    if log_events:
+        lines.extend(["## Internal Process Logs", ""])
+        for event in log_events:
+            lines.extend(_render_transcript_log_event(event))
+            lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_transcript_log_event(event: LogEvent) -> list[str]:
+    title = f"### {event.time} [{event.component}] {event.event}"
+    details: list[str] = []
+    if event.status:
+        details.append(f"status={event.status}")
+    if event.thread_id:
+        details.append(f"thread={event.thread_id}")
+    if event.request_id:
+        details.append(f"request={event.request_id}")
+    if event.duration_ms is not None:
+        details.append(f"duration_ms={event.duration_ms}")
+    if event.error:
+        details.append(f"error={event.error}")
+
+    lines = [title]
+    if details:
+        lines.extend(["", " ".join(details)])
+    lines.extend(["", event.message])
+    if event.metadata:
+        lines.extend(["", "```json", json.dumps(event.metadata, indent=2, sort_keys=True, ensure_ascii=True), "```"])
+    return lines
+
+
+def _is_shareable_transcript_log(event: LogEvent) -> bool:
+    if event.component == "persona":
+        return event.event in {"persona_summary", "host_discussion_decision", "persona_discussion"}
+    if event.component == "reflection":
+        return event.event in {"persona_discussion", "cycle_completed", "cycle_discussion_rejected"}
+    return False
 
 
 def _copy_text_to_clipboard(text: str) -> tuple[bool, str]:
