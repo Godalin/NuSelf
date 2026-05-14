@@ -282,4 +282,4 @@ Additional completed work beyond the initial slice:
 - Thread lifecycle: `create`, `rename`, `branch`, `archive`, `unarchive`, `archived`, `delete`.
 - Memory import/export via JSON.
 - Evaluation harness with conversation and notification fixtures.
-- `IdeaCandidateGenerator` and `RelevanceGate` for context-aware reflection.
+- `IdeaCandidateGenerator` and `LLMRelevanceGate` for context-aware reflection.

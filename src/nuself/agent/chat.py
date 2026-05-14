@@ -13,11 +13,10 @@ from typing import Any, Literal, Protocol, TypeVar, cast
 from nuself.agent.tools import MemorySearchTool
 from nuself.agent.persona import (
     PersonaActivation,
-    PersonaActivationPolicy,
+    LLMBackedActivationPolicy,
     PersonaGraphDriver,
     PersonaInput,
     PersonaSynthesis,
-    HostDiscussionPolicy,
     PersonaTurnState,
     load_persona_definitions,
 )
@@ -481,8 +480,7 @@ class ConversationGraphRuntime:
         system_config = ConfigSystem.load(project_root=project_root)
         self._language_preference = system_config.chat.language_preference
         persona_definitions = load_persona_definitions(project_root)
-        self._persona_activation_policy = PersonaActivationPolicy(persona_definitions)
-        self._host_discussion_policy = HostDiscussionPolicy()
+        self._activation_policy = LLMBackedActivationPolicy(persona_definitions, llm=self._llm)
         self._persona_driver = PersonaGraphDriver()
         self._persona_discussion_service = SharedPersonaDiscussionService(project_root=project_root, llm=self._llm)
         self._memory_query_service = memory_query_service or MemoryQueryService(
@@ -546,7 +544,7 @@ class ConversationGraphRuntime:
         )
 
     def persona_activation_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        activation = self._persona_activation_policy.decide(
+        activation = self._activation_policy.decide(
             PersonaInput(user_message=state.user_message, memory_context=state.memory_context)
         )
         persona_turn_state = None
@@ -597,23 +595,21 @@ class ConversationGraphRuntime:
                 print("--- End Persona Synthesis ---")
         except Exception:
             pass
-        host_decision = self._host_discussion_policy.decide(
-            user_message=state.user_message,
-            synthesis_summary=updated_persona_turn_state.synthesis.summary if updated_persona_turn_state.synthesis is not None else "",
-            selected_personas=updated_persona_turn_state.selected_personas,
-        )
+        activation = state.persona_activation
+        should_escalate = activation.should_escalate if activation is not None else False
+        escalation_reason = activation.escalation_reason if activation is not None else "no activation"
         host_decision_event = None
         try:
             host_decision_event = write_log_event(
                 "persona",
                 "host_discussion_decision",
-                host_decision.reason,
+                escalation_reason,
                 project_root=self._project_root,
                 thread_id=state.thread_id,
-                status="approved" if host_decision.should_escalate else "skipped",
+                status="approved" if should_escalate else "skipped",
                 metadata={
-                    "should_escalate": host_decision.should_escalate,
-                    "matched_markers": list(host_decision.matched_markers),
+                    "should_escalate": should_escalate,
+                    "escalation_reason": escalation_reason,
                 },
             )
         except Exception:
@@ -623,12 +619,12 @@ class ConversationGraphRuntime:
                 for line in render_host_decision(host_decision_event):
                     print(line)
             else:
-                print(f"--- Host Decision: {'escalate' if host_decision.should_escalate else 'skip'} ({host_decision.reason}) ---")
+                print(f"--- Host Decision: {'escalate' if should_escalate else 'skip'} ({escalation_reason}) ---")
         except Exception:
             pass
         # Host decision is the only gate for entering competitive discussion.
         try:
-            if host_decision.should_escalate:
+            if should_escalate:
                 # Build a lightweight IdeaCandidate from the chat turn.
                 lines = state.user_message.splitlines()
                 title = (lines[0] if lines else state.user_message)[:120]

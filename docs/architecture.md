@@ -11,6 +11,65 @@ NuSelf is an AI mirror for one person's ideas, memory, experience, and reasoning
 - Local-first core: the project should be usable as a standard Python application before adding hosted services.
 - Current-design implementation: during early development, update interfaces directly instead of preserving compatibility with obsolete local APIs.
 
+## LLM-Driven Decision Architecture
+
+A defining characteristic of NuSelf is that **the LLM is not only a generator but also the primary decision-maker** for all judgments that require understanding context, nuance, and user state. Hardcoded numeric formulas and keyword heuristics are replaced with LLM-backed contextual decisions wherever the "right answer" depends on "what this means for this person, right now."
+
+### Manifesto: Ten Principles
+
+These ten principles guide every L2 decision in NuSelf. They are non-negotiable project identity.
+
+1. **The LLM is the judge, not a calculator.** When a decision depends on meaning, mood, relevance, or personal context, the LLM decides. Weighted formulas, keyword lists, and length thresholds are mechanical fallbacks, not primary logic.
+
+2. **Prompt is policy.** The behavior of the system at a decision point is defined by the prompt, not by code. Changing a decision policy means editing a prompt, not rewriting arithmetic.
+
+3. **Context is complete.** Every L2 prompt receives the full relevant context: the candidate, recent history, current user state, and time. The LLM is never asked to judge in a vacuum.
+
+4. **Schema over freedom.** LLM outputs are constrained to typed JSON schemas with validated fields. Unstructured reasoning is allowed inside `reason` strings; the decision itself is structured.
+
+5. **Fail safe, fail visible.** If the LLM call fails, the parser breaks, or a required field is missing, the system falls back to the safest deterministic default (typically "reject" or "do nothing") and logs the failure. An L2 failure must never crash the pipeline.
+
+6. **Traceable judgment.** Every L2 decision is logged with its raw prompt, parsed output, and reasoning string. The user should be able to inspect why a reflection was approved or why a persona was activated.
+
+7. **Mechanical separation.** L0 (infrastructure) and L1 (policy) remain deterministic code. The LLM does not count seconds, enforce daily caps, or clamp floats. Human-defined rules stay in code; interpretive judgment moves to the LLM.
+
+8. **Progressive replacement.** Replace heuristics one decision point at a time. Each replacement is a self-contained change: new class, new prompt, new tests. Do not refactor the whole system at once.
+
+9. **Novelty is semantic, not lexical.** String-matching novelty (`body in last_body`) is a mechanical hack. True novelty is judged by meaning: a variant of an old topic can be novel if it brings a new angle.
+
+10. **Human override.** Every L2 decision is a recommendation, not a command. The user can override, dismiss, or archive any LLM-approved reflection. The system never treats LLM judgment as absolute.
+
+### Three-Layer Decision Stack
+
+Every system decision is classified into one of three layers:
+
+| Layer | Name | Responsibility | Implementation |
+|---|---|---|---|
+| **L0** | Infrastructure | Mechanical, stateless operations | Deterministic code |
+| **L1** | Policy | User-configurable system rules | Config-driven deterministic |
+| **L2** | Judgment | Context-aware qualitative decisions | **LLM-driven** |
+
+**L0 examples**: file I/O, JSON parsing, clamping values to [0, 1], time arithmetic, string tokenization.
+
+**L1 examples**: `daily_cap`, `quiet_hours`, `cooldown_seconds`, `recent_messages` limit — rules the user explicitly configures and the system enforces mechanically.
+
+**L2 examples**: relevance scoring, novelty assessment, persona matching, discussion depth judgment, emergent persona spawning, and host escalation decisions. These require understanding meaning, user mood, topic relevance, and temporal context.
+
+**Key rule**: If a decision requires interpreting "what this candidate means relative to this person's recent thoughts," it belongs in L2. If it is purely mechanical or explicitly user-configured, it stays in L0/L1.
+
+### Current L2 Targets
+
+1. **RelevanceGate** (P0): Replace the weighted formula `novelty*0.25 + confidence*0.20 + urgency*0.25 - interruption*0.15` and crude string-matching novelty with an LLM that judges semantic relevance against recent reflections.
+2. **LLMBackedActivationPolicy** (P1): Replace `PersonaActivationPolicy` + `HostDiscussionPolicy` with a single LLM-driven policy. One structured prompt receives the user message, memory context, and available persona list; the LLM returns `selected_persona_ids`, `trigger`, `should_escalate`, and `escalation_reason`. No keyword markers, no length thresholds.
+3. **PersonaDiscussion scoring** (P2): Replace hardcoded persona-specific score adjustments and consensus thresholds with LLM-reported scores and moderator judgment.
+
+### What Stays Deterministic
+
+- **Time gates** (`cooldown_ok`, `quiet_hours`, `daily_cap`): L1 policy. The LLM does not need to count seconds.
+- **Context limits** (`max_threads`, `max_messages`, `max_entries`): L0 infrastructure. Budgeting is mechanical.
+- **Lexical retrieval weights** (`memory/query.py`): L0 retrieval scoring. Future hybrid search may add an L2 LLM reranking overlay, but the base lexical layer remains deterministic.
+- **Clamping and validation** (`max(0.0, min(1.0, x))`): L0 safety bounds.
+
 ## System Shape
 
 The initial implementation should be a modular Python application managed by `uv`.
@@ -274,7 +333,7 @@ tests/
 
 Differences from the original suggested layout:
 
-- `proactive/` was folded into top-level `reflection.py` alongside `IdeaCandidateGenerator` and `RelevanceGate`.
+- `proactive/` was folded into top-level reflection modules alongside `IdeaCandidateGenerator` and `LLMRelevanceGate`.
 - `evals/` is a single top-level `eval.py` with fixture helpers.
 - `agent/` holds the LangGraph conversation runtime, persona subgraph, and tool registry.
 - `memory/` includes repository, query, curator, optimizer, and source repository.

@@ -50,9 +50,13 @@ def _reflection_settings(
 
 
 class _FakeLLM:
-    """Deterministic LLM that returns a valid candidates JSON."""
+    """Deterministic LLM that handles both candidate generation and relevance scoring."""
 
-    def __init__(self, candidates: list[dict[str, object]] | None = None) -> None:
+    def __init__(
+        self,
+        candidates: list[dict[str, object]] | None = None,
+        relevance_response: dict[str, object] | None = None,
+    ) -> None:
         self._candidates = candidates or [
             {
                 "title": "Proactive insight about memory patterns",
@@ -64,8 +68,20 @@ class _FakeLLM:
                 "interruption_cost": 0.1,
             }
         ]
+        self._relevance_response = relevance_response or {
+            "novelty": 0.9,
+            "confidence": 0.8,
+            "urgency": 0.3,
+            "interruption_cost": 0.1,
+            "composite": 0.8,
+            "passes": True,
+            "reason": "good idea",
+        }
 
-    def complete(self, messages: object) -> str:
+    def complete(self, messages: list[ChatMessage]) -> str:
+        system_prompt = messages[0].content if messages else ""
+        if "Relevance Gate" in system_prompt:
+            return json.dumps(self._relevance_response)
         return json.dumps({"candidates": self._candidates})
 
 
@@ -403,7 +419,7 @@ def test_generator_injects_language_instruction(tmp_path: Path) -> None:
     assert "Respond in zh-CN" in system_prompt
 
 
-# --- RelevanceGate tests ---
+# --- LLMRelevanceGate tests ---
 
 def _make_candidate(
     body: str,
@@ -429,92 +445,133 @@ def _make_candidate(
     )
 
 
-def test_relevance_gate_allows_first_candidate(tmp_path: Path) -> None:
-    from nuself.reflection import RelevanceGate
+def test_relevance_gate_allows_passing_candidate(tmp_path: Path) -> None:
+    from nuself.reflection import LLMRelevanceGate
 
-    gate = RelevanceGate(tmp_path)
-    assert gate.passes(_make_candidate("New insight about X")) is True
-
-
-def test_relevance_gate_rejects_duplicate_title(tmp_path: Path) -> None:
-    from nuself.reflection import RelevanceGate
-
-    gate = RelevanceGate(tmp_path)
-    last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
-    last_path.parent.mkdir(parents=True, exist_ok=True)
-    last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "title": "Same Title", "body": "Some body"}))
-    assert gate.passes(_make_candidate("Different body", title="Same Title")) is False
-
-
-def test_relevance_gate_allows_different_title(tmp_path: Path) -> None:
-    from nuself.reflection import RelevanceGate
-
-    gate = RelevanceGate(tmp_path)
-    last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
-    last_path.parent.mkdir(parents=True, exist_ok=True)
-    last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "title": "Old topic", "body": "Old body"}))
-    assert gate.passes(_make_candidate("New body", title="New topic")) is True
-
-
-def test_relevance_gate_reduces_novelty_on_body_overlap(tmp_path: Path) -> None:
-    from nuself.reflection import RelevanceGate
-
-    gate = RelevanceGate(tmp_path)
-    last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
-    last_path.parent.mkdir(parents=True, exist_ok=True)
-    last_path.write_text(json.dumps({"timestamp": "2024-01-01T00:00:00", "title": "Old", "body": "This is the full body text"}))
-    score = gate.score(_make_candidate("full body text", title="Different"))
-    assert score.novelty == 0.5  # partial overlap
-
-
-def test_relevance_gate_uses_config_threshold(tmp_path: Path) -> None:
-    from nuself.reflection import RelevanceGate
-
-    config = _reflection_settings(
-        interval_seconds=3600, cooldown_seconds=300,
-        quiet_start_hour=22, quiet_end_hour=7,
-        daily_cap=5, jitter_percent=20,
-        relevance_threshold=0.9,
-        persona_discussion_threshold=0.7,
-        max_discussion_rounds=10, moderator_convergence_patience=5,
-    )
-    gate = RelevanceGate(tmp_path, config=config)
-    score = gate.score(_make_candidate("Moderate", confidence=0.5, urgency=0.5, interruption_cost=0.2))
-    assert score.passes is False
-
-
-def test_relevance_gate_scores_high_urgency_low_interruption(tmp_path: Path) -> None:
-    from nuself.reflection import RelevanceGate
-
-    gate = RelevanceGate(tmp_path)
-    score = gate.score(_make_candidate("Important idea", urgency=0.9, interruption_cost=0.1))
+    gate = LLMRelevanceGate(tmp_path, llm=_FakeLLM())
+    score = gate.score(_make_candidate("New insight about X"))
     assert score.passes is True
-    assert score.urgency == 0.9
-    assert score.interruption_cost == 0.1
-    assert "high_urgency" in score.reasons
+    assert score.composite == 0.8
 
 
-def test_relevance_gate_blocks_high_interruption_low_urgency(tmp_path: Path) -> None:
-    from nuself.reflection import RelevanceGate
+def test_relevance_gate_rejects_failing_candidate(tmp_path: Path) -> None:
+    from nuself.reflection import LLMRelevanceGate
 
-    gate = RelevanceGate(tmp_path)
-    score = gate.score(_make_candidate("Interrupt", urgency=0.2, interruption_cost=0.9))
-    assert score.passes is False
-    assert "high_interruption_cost" in score.reasons
-
-
-def test_relevance_gate_composite_threshold(tmp_path: Path) -> None:
-    from nuself.reflection import RelevanceGate
-
-    config = _reflection_settings(
-        interval_seconds=3600, cooldown_seconds=300,
-        quiet_start_hour=22, quiet_end_hour=7,
-        daily_cap=5, jitter_percent=20,
-        relevance_threshold=0.5,
-        persona_discussion_threshold=0.7,
-        max_discussion_rounds=10, moderator_convergence_patience=5,
+    gate = LLMRelevanceGate(
+        tmp_path,
+        llm=_FakeLLM(relevance_response={
+            "novelty": 0.1, "confidence": 0.1, "urgency": 0.1,
+            "interruption_cost": 0.9, "composite": 0.1, "passes": False,
+            "reason": "not relevant",
+        }),
     )
-    gate = RelevanceGate(tmp_path, config=config)
-    score = gate.score(_make_candidate("Weak", confidence=0.1, novelty=0.1, urgency=0.1, interruption_cost=0.1))
+    score = gate.score(_make_candidate("Boring idea"))
     assert score.passes is False
-    assert score.composite < 0.5
+    assert score.reasons == ("not relevant",)
+
+
+def test_relevance_gate_uses_llm_judgment_not_formula(tmp_path: Path) -> None:
+    from nuself.reflection import LLMRelevanceGate
+
+    # LLM says passes=True even if scores look low — judgment overrides formula
+    gate = LLMRelevanceGate(
+        tmp_path,
+        llm=_FakeLLM(relevance_response={
+            "novelty": 0.2, "confidence": 0.2, "urgency": 0.2,
+            "interruption_cost": 0.2, "composite": 0.3, "passes": True,
+            "reason": "contextually important",
+        }),
+    )
+    score = gate.score(_make_candidate("Contextual"))
+    assert score.passes is True
+    assert score.reasons == ("contextually important",)
+
+
+def test_relevance_gate_clamps_floats(tmp_path: Path) -> None:
+    from nuself.reflection import LLMRelevanceGate
+
+    gate = LLMRelevanceGate(
+        tmp_path,
+        llm=_FakeLLM(relevance_response={
+            "novelty": 1.5, "confidence": -0.3, "urgency": 0.5,
+            "interruption_cost": 0.5, "composite": 2.0, "passes": True,
+            "reason": "clamped",
+        }),
+    )
+    score = gate.score(_make_candidate("Overflow"))
+    assert score.novelty == 1.0
+    assert score.confidence == 0.0
+    assert score.composite == 1.0
+
+
+def test_relevance_gate_fallback_on_llm_failure(tmp_path: Path) -> None:
+    from nuself.reflection import LLMRelevanceGate
+
+    gate = LLMRelevanceGate(tmp_path, llm=_BrokenLLM())  # type: ignore[arg-type]
+    candidate = _make_candidate("Will fail")
+    score = gate.score(candidate)
+    assert score.passes is False
+    assert score.composite == 0.0
+    assert score.reasons == ("llm_fallback",)
+    assert score.novelty == candidate.novelty
+
+
+def test_relevance_gate_fallback_on_bad_json(tmp_path: Path) -> None:
+    from nuself.reflection import LLMRelevanceGate
+
+    class _BadJSONLLM:
+        def complete(self, messages: object) -> str:
+            return "not json"
+
+    gate = LLMRelevanceGate(tmp_path, llm=_BadJSONLLM())  # type: ignore[arg-type]
+    score = gate.score(_make_candidate("Bad json"))
+    assert score.passes is False
+    assert score.reasons == ("llm_fallback",)
+
+
+def test_relevance_gate_fallback_on_missing_field(tmp_path: Path) -> None:
+    from nuself.reflection import LLMRelevanceGate
+
+    class _MissingFieldLLM:
+        def complete(self, messages: object) -> str:
+            return json.dumps({"novelty": 0.5})  # missing passes, composite, etc.
+
+    gate = LLMRelevanceGate(tmp_path, llm=_MissingFieldLLM())  # type: ignore[arg-type]
+    score = gate.score(_make_candidate("Missing field"))
+    assert score.passes is False
+    assert score.reasons == ("llm_fallback",)
+
+
+def test_relevance_gate_parses_passes_from_string(tmp_path: Path) -> None:
+    from nuself.reflection import LLMRelevanceGate
+
+    class _StringPassesLLM:
+        def complete(self, messages: object) -> str:
+            return json.dumps({
+                "novelty": 0.5, "confidence": 0.5, "urgency": 0.5,
+                "interruption_cost": 0.5, "composite": 0.5, "passes": "true",
+                "reason": "string true",
+            })
+
+    gate = LLMRelevanceGate(tmp_path, llm=_StringPassesLLM())  # type: ignore[arg-type]
+    score = gate.score(_make_candidate("String true"))
+    assert score.passes is True
+
+
+def test_relevance_gate_cooldown_uses_config(tmp_path: Path) -> None:
+    from nuself.reflection import LLMRelevanceGate
+
+    config = _reflection_settings(cooldown_seconds=600)
+    gate = LLMRelevanceGate(tmp_path, config=config)
+    # Write a recent last_reflection to trigger cooldown
+    last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
+    last_path.parent.mkdir(parents=True, exist_ok=True)
+    last_path.write_text(json.dumps({"timestamp": datetime.now(UTC).isoformat()}))
+    assert gate._cooldown_ok() is False
+
+
+def test_relevance_gate_no_cooldown_when_no_last_reflection(tmp_path: Path) -> None:
+    from nuself.reflection import LLMRelevanceGate
+
+    gate = LLMRelevanceGate(tmp_path, llm=_FakeLLM())
+    assert gate._cooldown_ok() is True

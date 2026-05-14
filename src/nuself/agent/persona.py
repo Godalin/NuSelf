@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Protocol, TypedDict, cast
@@ -55,6 +56,8 @@ class PersonaActivation:
 
     trigger: str
     selected_personas: tuple[PersonaDefinition, ...] = ()
+    should_escalate: bool = False
+    escalation_reason: str = ""
 
     @property
     def activated(self) -> bool:
@@ -215,227 +218,118 @@ class LLMBackedSynthesizerNode:
         )
 
 
-class PersonaActivationPolicy:
-    """Small deterministic gate for the minimal persona slice."""
+class LLMBackedActivationPolicy:
+    """LLM-driven policy that decides which personas to activate and whether to escalate."""
 
-    _explicit_markers = (
-        "multiple perspectives",
-        "different perspectives",
-        "several perspectives",
-        "personas",
-        "persona",
-        "selves",
-        "debate",
-        "discuss this",
-        "多人格",
-        "多角度",
-        "几个角度",
-        "不同视角",
-        "讨论一下",
-    )
-    _depth_markers = (
-        "tradeoff",
-        "trade-off",
-        "decision",
-        "long-term",
-        "architecture",
-        "strategy",
-        "should i",
-        "取舍",
-        "决策",
-        "长期",
-        "规划",
-        "架构",
-        "怎么办",
-        "要不要",
-    )
-    _skeptic_markers = (
-        "risk",
-        "risks",
-        "risky",
-        "blind spot",
-        "blind spots",
-        "failure mode",
-        "counterexample",
-        "counter-example",
-        "风险",
-        "漏洞",
-        "反例",
-        "质疑",
-        "坏处",
-        "隐患",
-    )
-    _builder_markers = (
-        "plan",
-        "roadmap",
-        "implement",
-        "implementation",
-        "build",
-        "steps",
-        "milestone",
-        "execution",
-        "计划",
-        "路线图",
-        "实现",
-        "步骤",
-        "里程碑",
-        "执行",
-        "怎么做",
-    )
-    _historian_markers = (
-        "history",
-        "historical",
-        "timeline",
-        "earlier",
-        "previously",
-        "before",
-        "past",
-        "回顾",
-        "之前",
-        "过去",
-        "时间线",
-        "复盘",
-    )
-    _care_markers = (
-        "feel",
-        "feeling",
-        "emotion",
-        "emotional",
-        "stress",
-        "burnout",
-        "support",
-        "care",
-        "担心",
-        "焦虑",
-        "情绪",
-        "压力",
-        "照顾",
-        "支持",
-        "共情",
-    )
-
-    def __init__(self, personas: tuple[PersonaDefinition, ...] | None = None) -> None:
+    def __init__(
+        self,
+        personas: tuple[PersonaDefinition, ...] | None = None,
+        llm: ChatLLM | None = None,
+    ) -> None:
         self._personas = personas if personas is not None else BUILTIN_PERSONAS
         self._persona_by_id = {p.id: p for p in self._personas}
-
-    def _maybe(self, persona_id: str) -> PersonaDefinition | None:
-        return self._persona_by_id.get(persona_id)
+        self._llm = llm
 
     def decide(self, persona_input: PersonaInput) -> PersonaActivation:
-        text = persona_input.user_message.strip()
-        normalized = text.lower()
-        has_skeptic = any(marker in normalized for marker in self._skeptic_markers)
-        has_builder = any(marker in normalized for marker in self._builder_markers)
-        has_depth = any(marker in normalized for marker in self._depth_markers) or (
-            len(text) >= 180 and ("?" in text or "？" in text)
+        if self._llm is None:
+            # No LLM available → safe fallback: no activation, no escalation
+            return PersonaActivation(trigger="no_llm")
+        try:
+            return self._decide_with_llm(persona_input)
+        except (RuntimeError, ValueError, json.JSONDecodeError, KeyError) as e:
+            return PersonaActivation(
+                trigger="llm_fallback",
+                selected_personas=(),
+                should_escalate=False,
+                escalation_reason=f"fallback: {e}",
+            )
+
+    def _decide_with_llm(self, persona_input: PersonaInput) -> PersonaActivation:
+        assert self._llm is not None
+        messages = self._build_prompt(persona_input)
+        raw = self._llm.complete(messages)
+        return self._parse_response(raw)
+
+    def _build_prompt(self, persona_input: PersonaInput) -> list[ChatMessage]:
+        from nuself.llm import ChatMessage
+
+        system = (
+            "You are the Persona Activation Gate for NuSelf, a private AI mirror. "
+            "Your job is to decide which internal thought selves (personas) should "
+            "respond to the user's message, and whether the topic warrants a "
+            "competitive multi-persona discussion.\n\n"
+            "Return ONLY a JSON object with these fields:\n"
+            "- activated (bool): Should any personas respond?\n"
+            "- selected_persona_ids (list of strings): Which personas are relevant? Empty if none.\n"
+            "- trigger (string): Brief reason for the selection.\n"
+            "- should_escalate (bool): Should this enter competitive multi-persona discussion?\n"
+            "- escalation_reason (string): Brief reason for escalation.\n\n"
+            "No markdown fences."
         )
-        has_historian = any(marker in normalized for marker in self._historian_markers)
-        has_care = any(marker in normalized for marker in self._care_markers)
 
-        selected_by_relevance: list[PersonaDefinition] = []
-        skeptic = self._maybe("skeptic_self")
-        builder = self._maybe("builder_self")
-        analyst = self._maybe("analyst_self")
-        historian = self._maybe("historian_self")
-        care = self._maybe("care_self")
+        persona_lines = [f"- {p.id}: {p.description}" for p in self._personas]
 
-        if has_skeptic and skeptic is not None:
-            selected_by_relevance.append(skeptic)
-        if has_builder and builder is not None:
-            selected_by_relevance.append(builder)
-        if has_depth and analyst is not None:
-            selected_by_relevance.append(analyst)
-        if has_historian and historian is not None:
-            selected_by_relevance.append(historian)
-        if has_care and care is not None:
-            selected_by_relevance.append(care)
+        lines: list[str] = [
+            "Available personas:",
+            *persona_lines,
+            "",
+            f"User message: {persona_input.user_message}",
+        ]
+        if persona_input.memory_context:
+            lines.append(f"Memory context: {persona_input.memory_context}")
 
-        if any(marker in normalized for marker in self._explicit_markers):
-            if selected_by_relevance:
-                return PersonaActivation(trigger="explicit_relevant_personas", selected_personas=tuple(selected_by_relevance))
-            fallback: list[PersonaDefinition] = []
-            if analyst is not None:
-                fallback.append(analyst)
-            if skeptic is not None:
-                fallback.append(skeptic)
-            if fallback:
-                return PersonaActivation(trigger="explicit_request", selected_personas=tuple(fallback))
-            return PersonaActivation(trigger="not_needed")
+        return [
+            ChatMessage(role="system", content=system),
+            ChatMessage(role="user", content="\n".join(lines)),
+        ]
 
-        if len(selected_by_relevance) >= 2:
-            return PersonaActivation(trigger="mixed_intent_heuristic", selected_personas=tuple(selected_by_relevance))
+    def _parse_response(self, raw: str) -> PersonaActivation:
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+            stripped = "\n".join(lines).strip()
+        parsed: object = json.loads(stripped)
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM response is not a JSON object")
+        data = cast(dict[str, object], parsed)
 
-        if has_skeptic and skeptic is not None:
-            return PersonaActivation(trigger="skeptic_heuristic", selected_personas=(skeptic,))
-        if has_builder and builder is not None:
-            return PersonaActivation(trigger="builder_heuristic", selected_personas=(builder,))
-        if has_depth and analyst is not None:
-            return PersonaActivation(trigger="depth_heuristic", selected_personas=(analyst,))
-        if has_historian and historian is not None:
-            return PersonaActivation(trigger="historian_heuristic", selected_personas=(historian,))
-        if has_care and care is not None:
-            return PersonaActivation(trigger="care_heuristic", selected_personas=(care,))
-        return PersonaActivation(trigger="not_needed")
+        activated = data.get("activated")
+        if isinstance(activated, bool):
+            pass
+        elif isinstance(activated, str):
+            activated = activated.lower() in {"true", "yes", "1"}
+        else:
+            activated = False
 
+        selected_ids = data.get("selected_persona_ids")
+        selected: list[PersonaDefinition] = []
+        if isinstance(selected_ids, list):
+            for pid in cast(list[object], selected_ids):
+                if isinstance(pid, str) and pid in self._persona_by_id:
+                    selected.append(self._persona_by_id[pid])
 
-@dataclass(frozen=True)
-class HostDiscussionDecision:
-    """Decision about whether the host should escalate into a competitive discussion."""
+        trigger = data.get("trigger")
+        if not isinstance(trigger, str):
+            trigger = "llm judgment"
 
-    should_escalate: bool
-    reason: str
-    matched_markers: tuple[str, ...] = ()
+        should_escalate = data.get("should_escalate")
+        if isinstance(should_escalate, bool):
+            pass
+        elif isinstance(should_escalate, str):
+            should_escalate = should_escalate.lower() in {"true", "yes", "1"}
+        else:
+            should_escalate = False
 
+        escalation_reason = data.get("escalation_reason")
+        if not isinstance(escalation_reason, str):
+            escalation_reason = ""
 
-class HostDiscussionPolicy:
-    """Host-level gate for deciding when chat should enter competitive discussion."""
-
-    _explicit_markers = PersonaActivationPolicy._explicit_markers  # type: ignore[reportPrivateUsage]
-    _depth_markers = PersonaActivationPolicy._depth_markers  # type: ignore[reportPrivateUsage]
-
-    def decide(
-        self,
-        *,
-        user_message: str,
-        synthesis_summary: str,
-        selected_personas: tuple[PersonaDefinition, ...],
-    ) -> HostDiscussionDecision:
-        combined = " ".join(part for part in (user_message, synthesis_summary) if part).strip()
-        normalized = combined.lower()
-        if normalized == "":
-            return HostDiscussionDecision(False, "host sees no discussion signal")
-
-        explicit_matches = tuple(marker for marker in self._explicit_markers if marker in normalized)
-        if explicit_matches:
-            return HostDiscussionDecision(
-                True,
-                "host sees explicit request for multi-perspective discussion",
-                explicit_matches,
-            )
-
-        depth_matches = tuple(marker for marker in self._depth_markers if marker in normalized)
-        if depth_matches and len(selected_personas) >= 2:
-            return HostDiscussionDecision(
-                True,
-                "host sees a deep tradeoff that merits competitive discussion",
-                depth_matches,
-            )
-
-        if len(user_message) >= 180 and ("?" in user_message or "？" in user_message):
-            return HostDiscussionDecision(
-                True,
-                "host sees a long reflective question that warrants discussion",
-            )
-
-        comparison_markers = tuple(marker for marker in ("compare", "comparison", "debate") if marker in normalized)
-        if comparison_markers:
-            return HostDiscussionDecision(
-                True,
-                "host sees an explicit comparison or debate request",
-                comparison_markers,
-            )
-
-        return HostDiscussionDecision(False, "host does not see enough discussion depth")
+        return PersonaActivation(
+            trigger=trigger,
+            selected_personas=tuple(selected),
+            should_escalate=should_escalate,
+            escalation_reason=escalation_reason,
+        )
 
 
 class PersonaGraphDriver:

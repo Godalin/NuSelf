@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import json
+
 from nuself.agent.persona import (
     PersonaDefinition,
-    PersonaActivationPolicy,
+    LLMBackedActivationPolicy,
     PersonaInput,
     load_persona_definitions,
 )
@@ -111,23 +113,58 @@ def test_load_persona_definitions_from_memory(tmp_path: Path) -> None:
     assert custom.description == "A custom persona."
 
 
+class _FakeActivationLLM:
+    def __init__(self, response: dict[str, object]) -> None:
+        self._response = response
+
+    def complete(self, messages: object) -> str:
+        return json.dumps(self._response)
+
+
 def test_activation_policy_uses_custom_personas() -> None:
     custom = PersonaDefinition(id="custom_self", description="Custom.")
-    policy = PersonaActivationPolicy(personas=(custom,))
+    policy = LLMBackedActivationPolicy(
+        personas=(custom,),
+        llm=_FakeActivationLLM({
+            "activated": False,
+            "selected_persona_ids": [],
+            "trigger": "not relevant",
+            "should_escalate": False,
+            "escalation_reason": "",
+        }),
+    )
     activation = policy.decide(PersonaInput(user_message="What are the risks?"))
-    # custom_self has no hard-coded markers, so no activation
     assert not activation.activated
 
 
 def test_activation_policy_skips_missing_builtin_personas() -> None:
-    policy = PersonaActivationPolicy(personas=())
+    policy = LLMBackedActivationPolicy(
+        personas=(),
+        llm=_FakeActivationLLM({
+            "activated": True,
+            "selected_persona_ids": ["ghost_self"],
+            "trigger": "test",
+            "should_escalate": False,
+            "escalation_reason": "",
+        }),
+    )
     activation = policy.decide(PersonaInput(user_message="What are the risks?"))
+    # ghost_self is not in the available personas, so no activation
     assert not activation.activated
 
 
 def test_activation_policy_explicit_request_with_partial_personas() -> None:
     analyst = PersonaDefinition(id="analyst_self", description="Analyst.")
-    policy = PersonaActivationPolicy(personas=(analyst,))
+    policy = LLMBackedActivationPolicy(
+        personas=(analyst,),
+        llm=_FakeActivationLLM({
+            "activated": True,
+            "selected_persona_ids": ["analyst_self"],
+            "trigger": "explicit request",
+            "should_escalate": False,
+            "escalation_reason": "",
+        }),
+    )
     activation = policy.decide(PersonaInput(user_message="Discuss this from multiple perspectives"))
     assert activation.activated
     assert activation.selected_personas == (analyst,)

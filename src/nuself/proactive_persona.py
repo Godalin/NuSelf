@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-import random
+from typing import cast
 
 from nuself.agent.persona import (
     BUILTIN_PERSONAS,
-    LLMBackedPersonaNode,
     LLMBackedSynthesizerNode,
     PersonaContribution,
     PersonaDefinition,
@@ -18,7 +18,7 @@ from nuself.agent.persona import (
 )
 from nuself.config_system import ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
-from nuself.llm import ChatLLM
+from nuself.llm import ChatLLM, ChatMessage
 
 
 @dataclass(frozen=True)
@@ -36,8 +36,66 @@ class PersonaCompetitionResult:
     emergent_persona_ids: tuple[str, ...] = ()
 
 
+class LLMBackedScoringPersonaNode:
+    """LLM-driven persona node that generates both a note and a 0-1 score."""
+
+    def __init__(self, llm: ChatLLM) -> None:
+        self._llm = llm
+
+    def __call__(self, persona: PersonaDefinition, persona_input: PersonaInput) -> PersonaContribution:
+        prior = persona_input.memory_context.strip()
+        if prior:
+            prior_block = f"\nPrior discussion:\n{prior}"
+        else:
+            prior_block = ""
+
+        system = (
+            f"You are {persona.id} in a competitive discussion about a proactive reflection idea.\n"
+            f"Your role: {persona.description}\n\n"
+            f"Candidate:\n{persona_input.user_message}{prior_block}\n\n"
+            "Give your perspective (1-2 sentences) AND a score (0.0-1.0) for how strongly you support this idea.\n\n"
+            'Return ONLY JSON: {"note": "your perspective", "score": 0.7}\n'
+            "No markdown fences."
+        )
+
+        messages = [
+            ChatMessage(role="system", content=system),
+            ChatMessage(role="user", content="Respond with your perspective and score."),
+        ]
+        try:
+            raw = self._llm.complete(messages).strip()
+            note, score = self._parse_response(raw)
+        except (RuntimeError, ValueError, json.JSONDecodeError, KeyError):
+            note = f"{persona.id} considered the topic."
+            score = 0.5
+
+        return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=score)
+
+    def _parse_response(self, raw: str) -> tuple[str, float]:
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+            stripped = "\n".join(lines).strip()
+        parsed: object = json.loads(stripped)
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM response is not a JSON object")
+        data = cast(dict[str, object], parsed)
+
+        note = data.get("note")
+        if not isinstance(note, str):
+            raise KeyError("missing or invalid note")
+
+        score = data.get("score")
+        if isinstance(score, (int, float)):
+            score = max(0.0, min(1.0, float(score)))
+        else:
+            raise KeyError("missing or invalid score")
+
+        return note, score
+
+
 class ProactivePersonaDiscussion:
-    """Run a randomized competitive persona debate over a candidate."""
+    """Run a competitive persona debate over a candidate."""
 
     def __init__(
         self,
@@ -70,16 +128,18 @@ class ProactivePersonaDiscussion:
         self._override_threshold = override_threshold
         self._composite_threshold = composite_threshold
         self._consensus_spread_threshold = consensus_spread_threshold
+        self._llm = llm
+
         if llm is not None:
             self._driver = PersonaGraphDriver(
-                persona_node=LLMBackedPersonaNode(llm),
+                persona_node=LLMBackedScoringPersonaNode(llm),
                 synthesizer_node=LLMBackedSynthesizerNode(llm),
             )
         else:
             self._driver = PersonaGraphDriver()
 
     def discuss(self, candidate: IdeaCandidate) -> PersonaCompetitionResult:
-        selected = self._select_personas()
+        selected = self._select_personas_with_llm(candidate)
         if not selected:
             return PersonaCompetitionResult(
                 approved=True,
@@ -91,13 +151,13 @@ class ProactivePersonaDiscussion:
                 reason="no personas available",
             )
 
-        emergent = self._maybe_spawn_emergent_persona(candidate, selected)
         discussion_trace: list[str] = [
             f"candidate: {candidate.title}",
             f"type={candidate.candidate_type} confidence={candidate.confidence:.2f} novelty={candidate.novelty:.2f}",
             candidate.body,
         ]
         round_scores: dict[str, float] = {}
+        emergent: PersonaDefinition | None = None
         turn_number = 0
         while turn_number < self._max_turns:
             turn_number += 1
@@ -111,7 +171,13 @@ class ProactivePersonaDiscussion:
                 turn_label=f"turn-{turn_number}",
                 turn_number=turn_number,
             )
-            if self._round_has_consensus(round_scores):
+            judgment = self._moderator_judgment(round_scores, discussion_trace, turn_number)
+            emergent_pid = judgment.get("emergent_persona")
+            if isinstance(emergent_pid, str) and emergent_pid not in ("none", ""):
+                new_emergent = self._create_emergent_persona(emergent_pid)
+                if new_emergent is not None:
+                    emergent = new_emergent
+            if judgment.get("converged"):
                 discussion_trace.append(f"turn-{turn_number}: reached convergence")
                 break
             if turn_number < self._max_turns:
@@ -170,22 +236,73 @@ class ProactivePersonaDiscussion:
         selected: tuple[PersonaDefinition, ...],
         emergent: PersonaDefinition | None,
     ) -> tuple[PersonaDefinition, ...]:
-        pool = list(selected)
         if emergent is not None:
+            pool = list(selected[: max(0, self._max_participants - 1)])
             pool.append(emergent)
+        else:
+            pool = list(selected)
         if not pool:
             return ()
-        count = random.randint(1, len(pool))
-        chosen = random.sample(pool, count)
-        return tuple(chosen)
+        return tuple(pool[: self._max_participants])
 
-    def _select_personas(self) -> tuple[PersonaDefinition, ...]:
+    def _select_personas_with_llm(self, candidate: IdeaCandidate) -> tuple[PersonaDefinition, ...]:
         pool = [p for p in self._personas if p.id != "synthesizer_self"]
         if not pool:
             return ()
-        count = random.randint(self._min_participants, min(self._max_participants, len(pool)))
-        selected = random.sample(pool, count)
+        if self._llm is None:
+            count = min(self._max_participants, len(pool))
+            return tuple(pool[:count])
+
+        persona_lines = [f"- {p.id}: {p.description}" for p in pool]
+        system = (
+            "You are the Discussion Host. Select the 3-5 most relevant personas to discuss this reflection idea.\n\n"
+            'Return ONLY JSON: {"selected_persona_ids": [...], "reason": "..."}\n'
+            "No markdown fences."
+        )
+        user = (
+            "Available personas:\n"
+            + "\n".join(persona_lines)
+            + f"\n\nCandidate: {candidate.title}\n{candidate.body}\n"
+            f"Type: {candidate.candidate_type} | Confidence: {candidate.confidence:.2f} | "
+            f"Novelty: {candidate.novelty:.2f} | Urgency: {candidate.urgency:.2f}"
+        )
+        messages = [
+            ChatMessage(role="system", content=system),
+            ChatMessage(role="user", content=user),
+        ]
+        try:
+            raw = self._llm.complete(messages).strip()
+            selected_ids = self._parse_selected_personas(raw)
+        except (RuntimeError, ValueError, json.JSONDecodeError, KeyError):
+            selected_ids = []
+
+        selected: list[PersonaDefinition] = []
+        persona_by_id = {p.id: p for p in pool}
+        for pid in selected_ids:
+            if pid in persona_by_id:
+                selected.append(persona_by_id[pid])
+
+        if not selected:
+            count = min(self._max_participants, len(pool))
+            return tuple(pool[:count])
+
         return tuple(selected)
+
+    def _parse_selected_personas(self, raw: str) -> list[str]:
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+            stripped = "\n".join(lines).strip()
+        parsed: object = json.loads(stripped)
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM response is not a JSON object")
+        data = cast(dict[str, object], parsed)
+
+        selected_ids = data.get("selected_persona_ids")
+        if not isinstance(selected_ids, list):
+            raise KeyError("missing or invalid selected_persona_ids")
+        selected_ids_list = cast(list[object], selected_ids)
+        return [pid for pid in selected_ids_list if isinstance(pid, str)]
 
     def _score_candidate(
         self,
@@ -198,8 +315,6 @@ class ProactivePersonaDiscussion:
     ) -> dict[str, float]:
         scores: dict[str, float] = {}
         discussion_context = "\n".join(discussion_trace)
-        # Run all participants in a single graph invocation so they share
-        # the same turn context and their contributions are synthesized together.
         turn_state = PersonaTurnState(
             input=PersonaInput(
                 user_message=f"{candidate.title}\n{candidate.body}",
@@ -209,7 +324,10 @@ class ProactivePersonaDiscussion:
         )
         result = self._driver.run(turn_state)
         for contrib in result.contributions:
-            score = self._heuristic_score(candidate, contrib, discussion_context=discussion_context, turn_number=turn_number)
+            if self._llm is not None:
+                score = contrib.confidence if contrib.confidence is not None else 0.5
+            else:
+                score = 0.5
             scores[contrib.persona_id] = score
             note = contrib.notes[0] if contrib.notes else contrib.persona_id
             discussion_trace.append(f"{turn_label}:{contrib.persona_id}: {note}")
@@ -235,75 +353,81 @@ class ProactivePersonaDiscussion:
             return result.contributions[0].notes[0]
         return "Moderator asks the discussion to converge."
 
-    def _round_has_consensus(self, scores: dict[str, float]) -> bool:
-        if not scores:
-            return False
-        composite = sum(scores.values()) / len(scores)
-        spread = max(scores.values()) - min(scores.values())
-        support = sum(1 for score in scores.values() if score >= self._override_threshold)
-        no_blocking = all(score >= self._blocking_threshold for score in scores.values())
-        return (
-            composite >= self._composite_threshold
-            and spread <= self._consensus_spread_threshold
-            and no_blocking
-            and support >= 2
-        )
-
-    def _maybe_spawn_emergent_persona(
+    def _moderator_judgment(
         self,
-        candidate: IdeaCandidate,
-        selected: tuple[PersonaDefinition, ...],
-    ) -> PersonaDefinition | None:
-        if not selected:
-            return None
-        if candidate.candidate_type in {"connection", "contradiction"} and candidate.novelty >= 0.7:
+        scores: dict[str, float],
+        discussion_trace: list[str],
+        turn_number: int,
+    ) -> dict[str, object]:
+        if self._llm is None:
+            return {"converged": False, "emergent_persona": "none", "reason": "no llm"}
+
+        score_lines = [f"- {pid}: {score:.2f}" for pid, score in scores.items()]
+        system = (
+            "You are the moderator for a competitive persona debate.\n"
+            "After reviewing the current scores and discussion, judge whether the discussion has converged "
+            "and whether an emergent persona should join the next round.\n\n"
+            'Return ONLY JSON: {"converged": true|false, "emergent_persona": "bridge_self|urgency_self|none", "reason": "..."}\n'
+            "No markdown fences."
+        )
+        user = (
+            "Current scores:\n"
+            + "\n".join(score_lines)
+            + "\n\nDiscussion trace:\n"
+            + "\n".join(discussion_trace[-10:])
+            + f"\n\nTurn {turn_number} of {self._max_turns}."
+        )
+        messages = [
+            ChatMessage(role="system", content=system),
+            ChatMessage(role="user", content=user),
+        ]
+        try:
+            raw = self._llm.complete(messages).strip()
+            return self._parse_moderator_judgment(raw)
+        except (RuntimeError, ValueError, json.JSONDecodeError, KeyError):
+            return {"converged": False, "emergent_persona": "none", "reason": "fallback"}
+
+    def _parse_moderator_judgment(self, raw: str) -> dict[str, object]:
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+            stripped = "\n".join(lines).strip()
+        parsed: object = json.loads(stripped)
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM response is not a JSON object")
+        data = cast(dict[str, object], parsed)
+
+        converged = data.get("converged")
+        if isinstance(converged, bool):
+            pass
+        elif isinstance(converged, str):
+            converged = converged.lower() in {"true", "yes", "1"}
+        else:
+            converged = False
+
+        emergent = data.get("emergent_persona")
+        if not isinstance(emergent, str):
+            emergent = "none"
+
+        reason = data.get("reason")
+        if not isinstance(reason, str):
+            reason = ""
+
+        return {
+            "converged": converged,
+            "emergent_persona": emergent,
+            "reason": reason,
+        }
+
+    def _create_emergent_persona(self, persona_id: str) -> PersonaDefinition | None:
+        if persona_id == "bridge_self":
             return PersonaDefinition(
                 id="bridge_self",
                 description="A temporary bridge persona that links competing ideas and finds a shared frame.",
             )
-        if candidate.candidate_type == "question" and candidate.urgency >= 0.8:
+        if persona_id == "urgency_self":
             return PersonaDefinition(
                 id="urgency_self",
                 description="A temporary urgency persona that checks whether the candidate needs immediate attention.",
             )
         return None
-
-    def _heuristic_score(
-        self,
-        candidate: IdeaCandidate,
-        contrib: PersonaContribution,
-        *,
-        discussion_context: str = "",
-        turn_number: int = 1,
-    ) -> float:
-        # Base score from candidate confidence and novelty
-        base = (candidate.confidence + candidate.novelty) / 2
-        if turn_number > 1 and discussion_context:
-            base = min(1.0, base + min(0.08, 0.02 * (turn_number - 1)))
-        if "after hearing" in discussion_context:
-            base = min(1.0, base + 0.03)
-        if contrib.persona_id == "moderator_self":
-            return 0.0
-        # Persona-specific adjustments
-        pid = contrib.persona_id
-        if pid == "skeptic_self":
-            # Skeptic downscores speculative or high-interruption candidates
-            if candidate.interruption_cost > 0.6:
-                return max(0.0, base - 0.3)
-            if candidate.candidate_type in {"contradiction", "question"}:
-                return min(1.0, base + 0.1)
-        if pid == "builder_self":
-            if candidate.candidate_type == "action":
-                return min(1.0, base + 0.2)
-        if pid == "historian_self":
-            if candidate.candidate_type in {"connection", "profile_update"}:
-                return min(1.0, base + 0.15)
-        if pid == "care_self":
-            if candidate.urgency > 0.7:
-                return min(1.0, base + 0.1)
-            if candidate.interruption_cost > 0.7:
-                return max(0.0, base - 0.2)
-        if pid == "analyst_self":
-            if candidate.evidence_refs:
-                return min(1.0, base + 0.1)
-        return base

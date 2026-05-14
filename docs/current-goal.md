@@ -4,53 +4,56 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Decouple reflection from the notification outbox. Reflection ideas become first-class domain objects in their own repository (`private/reflections/`). The notification outbox becomes a generic event bus that can be used by any background job (reflection with `auto_notify`, memory curator, etc.).
+Replace hardcoded numeric scoring and heuristic rules with LLM-driven contextual decisions. This is a defining architectural characteristic of the project: the LLM is not only a generator but also the primary decision-maker for all judgments that require understanding context, nuance, and user state.
+
+The LLM-Driven Decision manifesto (ten principles) is now in [`docs/architecture.md`](architecture.md).
 
 ## Immediate Context
 
-The reflection/notify decoupling is complete:
+The three-layer decision stack is documented in [`docs/architecture.md`](architecture.md) and behavioral contracts are in [`docs/spec/llm-driven-decisions.md`](spec/llm-driven-decisions.md):
 
-- **ReflectionRepository** (`private/reflections/`): Stores reflection entries with `pending` / `dismissed` / `archived` status.
-- **ReflectionScheduler** no longer writes directly to `NotificationOutbox`. It writes to `ReflectionRepository` by default.
-- **`auto_notify` config**: When `true`, a brief outbox entry is created pointing to the reflection.
-- **CLI refactored**: `reflection list/show/dismiss/archive` all operate on `ReflectionRepository`, supporting `--by-index`.
-- **Chat agent tools updated**: `list_pending_reflections` and `dismiss_reflection` now read from `ReflectionRepository` instead of `NotificationOutbox`.
-- **Specs updated**: `docs/spec/reflection.md`, `docs/spec/notification.md`, `docs/spec/chat-agent-tools.md` rewritten to match new architecture.
-- **READMEs synchronized**: Both English and Chinese versions document the new reflection and notify behavior.
-- **JSON Schema**: `docs/nuself-config.schema.json` added for VS Code YAML validation.
-- **pyright clean**: 0 errors after fixing all type issues introduced by the refactor.
-- **Tests**: 585 passed. New `test_reflection_repository.py` covers CRUD, status filtering, dismiss/archive.
+- **L0 Infrastructure**: deterministic mechanical operations (file I/O, clamping, time arithmetic)
+- **L1 Policy**: user-configurable rules (daily_cap, quiet_hours, cooldown_seconds)
+- **L2 Judgment**: LLM-driven contextual decisions (relevance, novelty, persona matching, discussion depth)
 
-## Next Steps
+Previous work (reflection decoupling, language preference, env-var removal, chat reflection tools) is complete and committed.
 
-1. **Stabilize**: Run extended manual REPL verification to confirm tool invocation and memory curation work smoothly.
-2. **Decide next milestone**: Options include memory optimizer integration, vector/hybrid indexes, or hot reload of reflection config.
+## Next Steps (design → spec → impl)
 
-### Recently Done
+### Done: P0 — LLMRelevanceGate
 
-- Decoupled reflection from notification outbox.
-- Created `ReflectionRepository` with `ReflectionEntry` (pending/dismissed/archived).
-- Updated `ReflectionScheduler` to store ideas in `ReflectionRepository`.
-- Added `auto_notify` to `ReflectionSettings`.
-- Refactored CLI reflection commands to use `ReflectionRepository`.
-- Updated chat agent tools (`list_pending_reflections`, `dismiss_reflection`) to use `ReflectionRepository`.
-- Updated all specs to match new architecture.
-- Updated README.md and README.zh-CN.md.
-- Added JSON Schema for config.yaml.
-- Fixed all pyright type errors.
+- [x] **Design**: Three-layer stack + ten-principle manifesto written to `docs/architecture.md`
+- [x] **Spec**: P0 contract written to `docs/spec/llm-driven-decisions.md`
+- [x] **Impl**: `LLMRelevanceGate` class added to `scheduler.py` (replaces deleted `RelevanceGate`)
+- [x] **Test**: Rewrote `test_reflection_scheduler.py` with `FakeLLM` deterministic JSON responses
+- [x] **Verify**: `pytest` + `pyright` clean
+
+### Done: P1 — Persona Activation + Host Escalation
+
+- [x] **Spec**: Defined `LLMBackedActivationPolicy` prompt schema and fallback behavior in `docs/spec/llm-driven-decisions.md`
+- [x] **Impl**: `LLMBackedActivationPolicy` replaces both `PersonaActivationPolicy` and `HostDiscussionPolicy`
+  - Single LLM call decides selected personas + escalation
+  - Structured JSON output: `activated`, `selected_persona_ids`, `trigger`, `should_escalate`, `escalation_reason`
+  - Safe fallback on any LLM/JSON/parsing failure
+- [x] **Test**: FakeLLM tests for activation, escalation, fallback, unknown persona IDs, string bool parsing
+- [x] **Verify**: `pytest` (591 passed) + `pyright` (0 errors) clean
+
+### Done: P2 — Persona Discussion Scoring
+
+- [x] **Spec**: Defined LLM-reported score schema, moderator judgment, emergent persona rules, and deterministic participant turns
+- [x] **Impl**: Replaced heuristic scoring, consensus checks, emergent-persona heuristics, and random persona selection with LLM-backed decisions plus safe fallbacks
+- [x] **Test**: Added deterministic FakeLLM fixtures for scoring, selection, moderator convergence, emergent personas, and approval/blocking outcomes
 
 ## Not Now
 
-- LLM-less reflection (Phase 3).
-- Hot reload of reflection config.
-- Vector and hybrid indexes.
-- Automatic reflection-to-memory conversion without user chat engagement.
+- Memory query scoring (`memory/query.py`) — keep lexical L0, defer LLM reranking to hybrid-search milestone
+- P3+ LLM-less reflection (Phase 3)
+- Vector and hybrid indexes
 
 ## Completion Criteria
 
-- Reflection ideas live in `private/reflections/`, not mixed into notify outbox.
-- `nuself reflection list/show/dismiss/archive` work correctly.
-- Chat agent tools read from `ReflectionRepository`.
-- `auto_notify` optionally creates brief outbox entries.
-- All specs and READMEs synchronized.
-- All tests pass, pyright clean.
+- [x] P0: `LLMRelevanceGate` passes tests with FakeLLM, fallback verified, pyright clean
+- [x] P1: `LLMBackedActivationPolicy` replaces keyword-marker heuristics and length thresholds with LLM judgment
+- [x] P2: Persona discussion uses LLM-reported scores
+- [x] All specs and architecture docs synchronized
+- [x] All tests pass, pyright clean

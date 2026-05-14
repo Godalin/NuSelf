@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -29,22 +30,42 @@ from nuself.profile.repository import ProfileItemRepository
 
 
 class FakeLLM:
-    def __init__(self) -> None:
+    def __init__(self, activation_response: dict[str, object] | None = None) -> None:
         self.calls: list[list[ChatMessage]] = []
+        self._activation_response = activation_response or {
+            "activated": False,
+            "selected_persona_ids": [],
+            "trigger": "test",
+            "should_escalate": False,
+            "escalation_reason": "",
+        }
 
     def complete(self, messages: list[ChatMessage]) -> str:
+        content = messages[0].content
+        if "Persona Activation Gate" in content:
+            return json.dumps(self._activation_response)
         self.calls.append(messages)
-        if "Compress a private NuSelf conversation" in messages[0].content:
+        if "Compress a private NuSelf conversation" in content:
             return "compressed context"
         return "agent reply"
 
 
 class StructuredFakeLLM:
-    def __init__(self, response: str) -> None:
+    def __init__(self, response: str, activation_response: dict[str, object] | None = None) -> None:
         self.response = response
         self.calls: list[list[ChatMessage]] = []
+        self._activation_response = activation_response or {
+            "activated": False,
+            "selected_persona_ids": [],
+            "trigger": "test",
+            "should_escalate": False,
+            "escalation_reason": "",
+        }
 
     def complete(self, messages: list[ChatMessage]) -> str:
+        content = messages[0].content
+        if "Persona Activation Gate" in content:
+            return json.dumps(self._activation_response)
         self.calls.append(messages)
         return self.response
 
@@ -240,16 +261,22 @@ def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
 
 
 def test_chat_agent_writes_host_discussion_decision_log(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    llm = FakeLLM()
+    llm = FakeLLM(activation_response={
+        "activated": True,
+        "selected_persona_ids": ["analyst_self"],
+        "trigger": "debate request",
+        "should_escalate": True,
+        "escalation_reason": "user asked for debate",
+    })
     agent = ChatAgent(tmp_path, llm=llm)
 
     agent.respond("compare the tradeoffs and debate the options")
 
     events = [event for event in read_log_events(project_root=tmp_path, component="persona") if event.event == "host_discussion_decision"]
     assert events
-    assert events[-1].status in {"approved", "skipped"}
+    assert events[-1].status == "approved"
     assert events[-1].metadata is not None
-    assert "should_escalate" in events[-1].metadata
+    assert events[-1].metadata.get("should_escalate") is True
     captured = capsys.readouterr().out
     assert "[host decision]" in captured
 
@@ -378,7 +405,16 @@ def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path
 
 
 def test_conversation_runtime_runs_persona_skeleton_when_activated(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM('{"answer":"Persona reply.","evidence_references":[],"confidence":0.4}')
+    llm = StructuredFakeLLM(
+        '{"answer":"Persona reply.","evidence_references":[],"confidence":0.4}',
+        activation_response={
+            "activated": True,
+            "selected_persona_ids": ["analyst_self"],
+            "trigger": "analytical question",
+            "should_escalate": False,
+            "escalation_reason": "",
+        },
+    )
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
@@ -424,197 +460,6 @@ def test_conversation_runtime_runs_persona_skeleton_when_activated(tmp_path: Pat
         "compression",
     )
 
-
-def test_conversation_runtime_routes_builder_persona_for_planning_prompt(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM('{"answer":"Builder reply.","evidence_references":[],"confidence":0.4}')
-    runtime = ConversationGraphRuntime(
-        tmp_path,
-        llm=llm,
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
-    )
-
-    turn_state = ConversationTurnState.start(
-        ThreadState.empty("builder"),
-        "Please propose an implementation roadmap with concrete steps.",
-        "builder",
-    )
-    prepared = runtime.prepare_context_node(turn_state)
-    activated = runtime.persona_activation_node(prepared.state)
-
-    assert activated.state.persona_activation is not None
-    assert activated.state.persona_activation.trigger == "builder_heuristic"
-    assert activated.state.persona_turn_state is not None
-
-    run_personas = runtime.run_personas_node(activated.state)
-    assert run_personas.state.persona_turn_state is not None
-    assert run_personas.state.persona_turn_state.contributions == (
-        PersonaContribution(
-            persona_id="builder_self",
-            notes=(
-                "builder_self proposed concrete steps for: Please propose an implementation roadmap with concrete steps.",
-            ),
-            confidence=0.0,
-        ),
-    )
-
-
-def test_conversation_runtime_routes_historian_persona_for_timeline_prompt(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM('{"answer":"Historian reply.","evidence_references":[],"confidence":0.4}')
-    runtime = ConversationGraphRuntime(
-        tmp_path,
-        llm=llm,
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
-    )
-
-    turn_state = ConversationTurnState.start(
-        ThreadState.empty("historian"),
-        "Can we review the timeline and what happened earlier?",
-        "historian",
-    )
-    prepared = runtime.prepare_context_node(turn_state)
-    activated = runtime.persona_activation_node(prepared.state)
-
-    assert activated.state.persona_activation is not None
-    assert activated.state.persona_activation.trigger == "historian_heuristic"
-
-    run_personas = runtime.run_personas_node(activated.state)
-    assert run_personas.state.persona_turn_state is not None
-    assert run_personas.state.persona_turn_state.contributions == (
-        PersonaContribution(
-            persona_id="historian_self",
-            notes=("historian_self connected prior context to: Can we review the timeline and what happened earlier?",),
-            confidence=0.0,
-        ),
-    )
-
-
-def test_conversation_runtime_uses_mixed_intent_persona_precedence(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM('{"answer":"Mixed intent reply.","evidence_references":[],"confidence":0.4}')
-    runtime = ConversationGraphRuntime(
-        tmp_path,
-        llm=llm,
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
-    )
-
-    turn_state = ConversationTurnState.start(
-        ThreadState.empty("mixed"),
-        "What are the risks, and can you give an implementation roadmap for this decision?",
-        "mixed",
-    )
-    prepared = runtime.prepare_context_node(turn_state)
-    activated = runtime.persona_activation_node(prepared.state)
-
-    assert activated.state.persona_activation is not None
-    assert activated.state.persona_activation.trigger == "mixed_intent_heuristic"
-
-    run_personas = runtime.run_personas_node(activated.state)
-    assert run_personas.state.persona_turn_state is not None
-    assert run_personas.state.persona_turn_state.contributions == (
-        PersonaContribution(
-            persona_id="skeptic_self",
-            notes=(
-                "skeptic_self challenged assumptions in: What are the risks, and can you give an implementation roadmap for this decision?",
-            ),
-            confidence=0.0,
-        ),
-        PersonaContribution(
-            persona_id="builder_self",
-            notes=(
-                "builder_self proposed concrete steps for: What are the risks, and can you give an implementation roadmap for this decision?",
-            ),
-            confidence=0.0,
-        ),
-        PersonaContribution(
-            persona_id="analyst_self",
-            notes=(
-                "analyst_self considered: What are the risks, and can you give an implementation roadmap for this decision?",
-            ),
-            confidence=0.0,
-        ),
-    )
-
-
-def test_conversation_runtime_routes_care_persona_for_emotional_prompt(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM('{"answer":"Care reply.","evidence_references":[],"confidence":0.4}')
-    runtime = ConversationGraphRuntime(
-        tmp_path,
-        llm=llm,
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
-    )
-
-    turn_state = ConversationTurnState.start(
-        ThreadState.empty("care"),
-        "I'm feeling stressed and anxious about this situation.",
-        "care",
-    )
-    prepared = runtime.prepare_context_node(turn_state)
-    activated = runtime.persona_activation_node(prepared.state)
-
-    assert activated.state.persona_activation is not None
-    assert activated.state.persona_activation.trigger == "care_heuristic"
-
-    run_personas = runtime.run_personas_node(activated.state)
-    assert run_personas.state.persona_turn_state is not None
-    assert run_personas.state.persona_turn_state.contributions == (
-        PersonaContribution(
-            persona_id="care_self",
-            notes=("care_self highlighted emotional and human impact in: I'm feeling stressed and anxious about this situation.",),
-            confidence=0.0,
-        ),
-    )
-
-
-def test_conversation_runtime_explicit_multi_view_routes_all_relevant_personas(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM('{"answer":"All perspectives reply.","evidence_references":[],"confidence":0.4}')
-    runtime = ConversationGraphRuntime(
-        tmp_path,
-        llm=llm,
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
-    )
-
-    turn_state = ConversationTurnState.start(
-        ThreadState.empty("explicit-multi"),
-        "Please provide multiple perspectives: what are the risks, implementation roadmap, timeline context, and emotional impact?",
-        "explicit-multi",
-    )
-    prepared = runtime.prepare_context_node(turn_state)
-    activated = runtime.persona_activation_node(prepared.state)
-
-    assert activated.state.persona_activation is not None
-    assert activated.state.persona_activation.trigger == "explicit_relevant_personas"
-
-    run_personas = runtime.run_personas_node(activated.state)
-    assert run_personas.state.persona_turn_state is not None
-    assert run_personas.state.persona_turn_state.contributions == (
-        PersonaContribution(
-            persona_id="skeptic_self",
-            notes=(
-                "skeptic_self challenged assumptions in: Please provide multiple perspectives: what are the risks, implementation roadmap, timeline context, and emotional impact?",
-            ),
-            confidence=0.0,
-        ),
-        PersonaContribution(
-            persona_id="builder_self",
-            notes=(
-                "builder_self proposed concrete steps for: Please provide multiple perspectives: what are the risks, implementation roadmap, timeline context, and emotional impact?",
-            ),
-            confidence=0.0,
-        ),
-        PersonaContribution(
-            persona_id="historian_self",
-            notes=(
-                "historian_self connected prior context to: Please provide multiple perspectives: what are the risks, implementation roadmap, timeline context, and emotional impact?",
-            ),
-            confidence=0.0,
-        ),
-        PersonaContribution(
-            persona_id="care_self",
-            notes=(
-                "care_self highlighted emotional and human impact in: Please provide multiple perspectives: what are the risks, implementation roadmap, timeline context, and emotional impact?",
-            ),
-            confidence=0.0,
-        ),
-    )
 
 
 def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path: Path) -> None:
@@ -664,6 +509,9 @@ def test_conversation_graph_runtime_routes_tool_calls_through_tool_node(tmp_path
             self.call_count = 0
 
         def complete(self, messages: list[ChatMessage]) -> str:
+            content = messages[0].content
+            if "Persona Activation Gate" in content:
+                return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
             self.call_count += 1
             if self.call_count == 1:
                 return '{"answer":"Searching memory.","tool":"search_memory","tool_args":{"query":"clarity"}}'
@@ -776,6 +624,9 @@ def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
             self.calls: list[list[ChatMessage]] = []
 
         def complete(self, messages: list[ChatMessage]) -> str:
+            content = messages[0].content
+            if "Persona Activation Gate" in content:
+                return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
             self.calls.append(messages)
             self.call_count += 1
             if self.call_count == 1:
@@ -1183,6 +1034,9 @@ def test_chat_agent_end_to_end_archive_memory_via_tool(tmp_path: Path) -> None:
             self.call_count = 0
 
         def complete(self, messages: list[ChatMessage]) -> str:
+            content = messages[0].content
+            if "Persona Activation Gate" in content:
+                return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
             self.call_count += 1
             if self.call_count == 1:
                 return '{"answer":"Let me archive that for you.","tool":"archive_memory","tool_args":{"entry_id":"m1"}}'

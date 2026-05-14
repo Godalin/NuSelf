@@ -10,7 +10,7 @@ This design turns the existing skeleton (`reflection.py`, `notification/`, daemo
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
 | `ReflectionScheduler`    | Randomized jitter, daily cap, quiet hours, cooldown, event triggers. Background thread in daemon polls. Configurable via `private/config.yaml` under `reflection.*`.                  | Done.               |
 | `IdeaCandidateGenerator` | Uses LLM to scan recent threads, private memory, and new sources. Generates structured candidates with types, confidence, and evidence. Falls back to local candidate on LLM failure. | Done.               |
-| `RelevanceGate`          | Multi-dimensional scoring: novelty, confidence, urgency, cooldown, interruption cost. Uses `config.relevance_threshold` from YAML config.                                             | Done.               |
+| `LLMRelevanceGate`       | LLM-driven contextual scoring: novelty, confidence, urgency, interruption cost, composite, pass/fail with reasoning. Reads recent reflections for semantic context. Uses `config.gate.relevance_threshold`. | Done.               |
 | `NotificationOutbox`     | File-backed with idempotency, statuses, and CRUD. Daemon writes intents here without calling adapters directly.                                                                       | Done.               |
 | `DeepLink`               | Supports both `open_thread` and `new_thread` actions.                                                                                                                                 | Done.               |
 | `Adapters`               | `NotificationDeliveryLoop` polls pending outbox entries and dispatches through configured adapters.                                                                                   | Done.               |
@@ -131,10 +131,10 @@ class IdeaCandidateGenerator:
     def _new_source_context(self) -> str: ...
 ```
 
-### Enhanced RelevanceGate
+### LLMRelevanceGate
 
 ```python
-class RelevanceGate:
+class LLMRelevanceGate:
     def __init__(self, project_root: Path | None = None) -> None: ...
     
     def score(self, candidate: IdeaCandidate) -> RelevanceScore: ...
@@ -204,7 +204,7 @@ class DaemonState:
 
 The `ReflectionScheduler.reflect()` method should:
 1. Generate candidates
-2. Score each through `RelevanceGate`
+2. Score each through `LLMRelevanceGate`
 3. For high-scoring candidates, run competitive persona discussion
 4. Pick synthesizer-approved candidates
 5. Write `NotificationIntent` entries to the outbox
@@ -216,7 +216,7 @@ We implement in small, testable slices:
 
 1. **Add `IdeaCandidate` and `RelevanceScore` models** with wire serialization tests.
 2. **Enhance `IdeaCandidateGenerator`** to use LLM over thread/memory/source context. Add fixture-based tests.
-3. **Enhance `RelevanceGate`** with multi-dimensional scoring. Add threshold and composite score tests.
+3. **Replace `RelevanceGate` with `LLMRelevanceGate`** using LLM-driven contextual scoring. Add fallback, JSON parsing, and clamping tests.
 4. **Enhance `ReflectionScheduler`** with jitter, daily cap, and event triggers. Add fake-time tests.
 5. **Add `NotificationDeliveryLoop`** that polls outbox and dispatches through adapters. Add fake-adapter tests.
 6. **Decouple daemon**: make `reflect()` write to outbox only; start delivery thread. Add integration tests.
@@ -235,7 +235,7 @@ We implement in small, testable slices:
 
 - [x] `IdeaCandidate` and `RelevanceScore` are typed, serializable, and tested.
 - [x] `IdeaCandidateGenerator` scans threads, memory, and sources; produces structured candidates.
-- [x] `RelevanceGate` scores across novelty, confidence, urgency, interruption cost, and cooldown.
+- [x] `LLMRelevanceGate` uses LLM judgment for novelty, confidence, urgency, interruption cost, composite, and pass/fail with reasoning.
 - [x] `ReflectionScheduler` supports randomized intervals, daily caps, quiet hours, cooldowns, and event triggers.
 - [x] `NotificationDeliveryLoop` polls pending outbox entries and dispatches through configured adapters.
 - [x] Daemon `reflect()` writes to outbox only; adapters are called only from the delivery loop.

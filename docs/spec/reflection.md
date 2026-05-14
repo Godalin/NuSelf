@@ -47,7 +47,7 @@ reflect()
   ├─ candidate_generation_skipped  (if no context)
   ├─ candidate_generation_failed   (if LLM errors)
   ├─ cycle_no_candidates           (if LLM returns empty)
-  ├─ RelevanceGate.score(best)
+  ├─ LLMRelevanceGate.score(best)
   │   └─ cycle_filtered            (if !passes)
   ├─ persona_discussion            (if score ≥ persona_discussion_threshold)
   │   └─ cycle_discussion_rejected (if !approved)
@@ -55,12 +55,26 @@ reflect()
        └─ auto_notify? → NotificationOutbox.add(brief notify)
 ```
 
-## RelevanceGate Scoring
+## LLMRelevanceGate Scoring
 
-Composite = novelty×0.25 + confidence×0.20 + urgency×0.25 − interruption_cost×0.15 + cooldown_ok×0.15
+The gate is LLM-driven (L2 judgment). The LLM receives the candidate, recent reflection history, and cooldown state, then returns a structured JSON judgment:
 
-- `passes` if composite ≥ threshold AND NOT (interruption_cost ≥ 0.9 AND urgency < 0.5).
-- Reasons: `low_novelty`, `low_confidence`, `high_urgency`, `high_interruption_cost`, `cooldown_active`, `ok`.
+```json
+{
+  "novelty": 0.0-1.0,
+  "confidence": 0.0-1.0,
+  "urgency": 0.0-1.0,
+  "interruption_cost": 0.0-1.0,
+  "composite": 0.0-1.0,
+  "passes": true|false,
+  "reason": "explanation of the judgment"
+}
+```
+
+- All floats are clamped to `[0, 1]`.
+- `passes` is the LLM's holistic judgment, not a derived formula.
+- On any LLM/JSON/parsing failure, fallback to `passes=false`, `composite=0.0`, `reason="llm_fallback"`.
+- `cooldown_ok` remains L1 deterministic: checked before the LLM call using `config.scheduler.cooldown_seconds`.
 
 ## Gate Thresholds
 

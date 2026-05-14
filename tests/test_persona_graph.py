@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from nuself.agent.persona import (
     ANALYST_PERSONA,
     BUILDER_PERSONA,
@@ -8,12 +10,35 @@ from nuself.agent.persona import (
     SKEPTIC_PERSONA,
     PersonaContribution,
     PersonaDefinition,
-    PersonaActivationPolicy,
+    LLMBackedActivationPolicy,
+    LLMBackedPersonaNode,
+    LLMBackedSynthesizerNode,
     PersonaGraphDriver,
     PersonaInput,
     PersonaSynthesis,
     PersonaTurnState,
 )
+
+
+class _FakeActivationLLM:
+    """Deterministic LLM that returns activation JSON responses."""
+
+    def __init__(self, response: dict[str, object] | None = None) -> None:
+        self._response = response or {
+            "activated": True,
+            "selected_persona_ids": ["skeptic_self"],
+            "trigger": "risk detected",
+            "should_escalate": False,
+            "escalation_reason": "",
+        }
+
+    def complete(self, messages: object) -> str:
+        return json.dumps(self._response)
+
+
+class _BrokenLLM:
+    def complete(self, messages: object) -> str:
+        raise RuntimeError("simulated LLM failure")
 
 
 def test_persona_graph_runs_minimal_internal_persona() -> None:
@@ -73,36 +98,6 @@ def test_persona_graph_accepts_custom_persona_node() -> None:
     )
 
 
-def test_persona_activation_policy_selects_analyst_and_skeptic_for_explicit_multi_view_request() -> None:
-    policy = PersonaActivationPolicy()
-
-    activation = policy.decide(PersonaInput(user_message="Please give me multiple perspectives on this plan."))
-
-    assert activation.activated is True
-    assert activation.trigger == "explicit_relevant_personas"
-    assert activation.selected_personas == (BUILDER_PERSONA,)
-
-
-def test_persona_activation_policy_selects_skeptic_for_risk_prompt() -> None:
-    policy = PersonaActivationPolicy()
-
-    activation = policy.decide(PersonaInput(user_message="What are the biggest risks and blind spots here?"))
-
-    assert activation.activated is True
-    assert activation.trigger == "skeptic_heuristic"
-    assert activation.selected_personas == (SKEPTIC_PERSONA,)
-
-
-def test_persona_activation_policy_selects_builder_for_planning_prompt() -> None:
-    policy = PersonaActivationPolicy()
-
-    activation = policy.decide(PersonaInput(user_message="Can you propose an implementation roadmap with steps?"))
-
-    assert activation.activated is True
-    assert activation.trigger == "builder_heuristic"
-    assert activation.selected_personas == (BUILDER_PERSONA,)
-
-
 def test_persona_graph_runs_builder_persona_notes() -> None:
     driver = PersonaGraphDriver()
     state = PersonaTurnState(
@@ -119,28 +114,6 @@ def test_persona_graph_runs_builder_persona_notes() -> None:
             confidence=0.0,
         ),
     )
-
-
-def test_persona_activation_policy_selects_historian_for_retrospective_prompt() -> None:
-    policy = PersonaActivationPolicy()
-
-    activation = policy.decide(PersonaInput(user_message="Can we review the timeline and what happened earlier?"))
-
-    assert activation.activated is True
-    assert activation.trigger == "historian_heuristic"
-    assert activation.selected_personas == (HISTORIAN_PERSONA,)
-
-
-def test_persona_activation_policy_applies_mixed_intent_precedence() -> None:
-    policy = PersonaActivationPolicy()
-
-    activation = policy.decide(
-        PersonaInput(user_message="What are the risks, and can you give an implementation roadmap for this decision?")
-    )
-
-    assert activation.activated is True
-    assert activation.trigger == "mixed_intent_heuristic"
-    assert activation.selected_personas == (SKEPTIC_PERSONA, BUILDER_PERSONA, ANALYST_PERSONA)
 
 
 def test_persona_graph_runs_historian_persona_notes() -> None:
@@ -161,38 +134,6 @@ def test_persona_graph_runs_historian_persona_notes() -> None:
     )
 
 
-def test_persona_activation_policy_selects_care_for_emotional_prompt() -> None:
-    policy = PersonaActivationPolicy()
-
-    activation = policy.decide(PersonaInput(user_message="I'm feeling stressed and anxious about this situation."))
-
-    assert activation.activated is True
-    assert activation.trigger == "care_heuristic"
-    assert activation.selected_personas == (CARE_PERSONA,)
-
-
-def test_persona_activation_policy_explicit_multi_view_includes_all_relevant_personas() -> None:
-    policy = PersonaActivationPolicy()
-
-    activation = policy.decide(
-        PersonaInput(
-            user_message=(
-                "Please provide multiple perspectives: what are the risks, implementation roadmap, "
-                "timeline context, and emotional impact?"
-            )
-        )
-    )
-
-    assert activation.activated is True
-    assert activation.trigger == "explicit_relevant_personas"
-    assert activation.selected_personas == (
-        SKEPTIC_PERSONA,
-        BUILDER_PERSONA,
-        HISTORIAN_PERSONA,
-        CARE_PERSONA,
-    )
-
-
 def test_persona_graph_runs_care_persona_notes() -> None:
     driver = PersonaGraphDriver()
     state = PersonaTurnState(
@@ -209,3 +150,146 @@ def test_persona_graph_runs_care_persona_notes() -> None:
             confidence=0.0,
         ),
     )
+
+
+def test_persona_graph_runs_analyst_and_skeptic_together() -> None:
+    driver = PersonaGraphDriver()
+    state = PersonaTurnState(
+        input=PersonaInput(user_message="Should I split this project?"),
+        selected_personas=(ANALYST_PERSONA, SKEPTIC_PERSONA),
+    )
+
+    result = driver.run(state)
+
+    assert result.node_trace == ("run_personas", "run_synthesizer")
+    assert len(result.contributions) == 2
+    assert result.contributions[0].persona_id == "analyst_self"
+    assert result.contributions[1].persona_id == "skeptic_self"
+    assert result.synthesis is not None
+    assert result.synthesis.source_personas == ("analyst_self", "skeptic_self")
+
+
+def test_persona_graph_with_llm_backed_nodes() -> None:
+    from nuself.llm import ChatLLM, ChatMessage
+
+    class FakeLLM(ChatLLM):
+        def complete(self, messages: list[ChatMessage]) -> str:
+            return "fake note"
+
+    driver = PersonaGraphDriver(
+        persona_node=LLMBackedPersonaNode(llm=FakeLLM()),
+        synthesizer_node=LLMBackedSynthesizerNode(llm=FakeLLM()),
+    )
+    state = PersonaTurnState(
+        input=PersonaInput(user_message="What is consciousness?"),
+        selected_personas=(ANALYST_PERSONA,),
+    )
+
+    result = driver.run(state)
+
+    assert result.contributions[0].notes == ("fake note",)
+    assert result.synthesis is not None
+    assert result.synthesis.summary == "fake note"
+
+
+# --- LLMBackedActivationPolicy tests ---
+
+
+def test_llm_backed_activation_selects_personas() -> None:
+    policy = LLMBackedActivationPolicy(llm=_FakeActivationLLM())
+
+    activation = policy.decide(PersonaInput(user_message="What are the biggest risks?"))
+
+    assert activation.activated is True
+    assert activation.selected_personas == (SKEPTIC_PERSONA,)
+    assert activation.trigger == "risk detected"
+
+
+def test_llm_backed_activation_escalates() -> None:
+    policy = LLMBackedActivationPolicy(
+        llm=_FakeActivationLLM({
+            "activated": True,
+            "selected_persona_ids": ["analyst_self", "skeptic_self"],
+            "trigger": "deep tradeoff",
+            "should_escalate": True,
+            "escalation_reason": "complex decision needs competitive discussion",
+        })
+    )
+
+    activation = policy.decide(PersonaInput(user_message="Should I take this job or start a company?"))
+
+    assert activation.activated is True
+    assert activation.selected_personas == (ANALYST_PERSONA, SKEPTIC_PERSONA)
+    assert activation.should_escalate is True
+    assert activation.escalation_reason == "complex decision needs competitive discussion"
+
+
+def test_llm_backed_activation_no_match_returns_empty() -> None:
+    policy = LLMBackedActivationPolicy(
+        llm=_FakeActivationLLM({
+            "activated": False,
+            "selected_persona_ids": [],
+            "trigger": "not relevant",
+            "should_escalate": False,
+            "escalation_reason": "",
+        })
+    )
+
+    activation = policy.decide(PersonaInput(user_message="Hello"))
+
+    assert activation.activated is False
+    assert activation.selected_personas == ()
+    assert activation.should_escalate is False
+
+
+def test_llm_backed_activation_fallback_on_failure() -> None:
+    policy = LLMBackedActivationPolicy(llm=_BrokenLLM())
+
+    activation = policy.decide(PersonaInput(user_message="What are the risks?"))
+
+    assert activation.activated is False
+    assert activation.trigger == "llm_fallback"
+    assert activation.should_escalate is False
+
+
+def test_llm_backed_activation_ignores_unknown_persona_ids() -> None:
+    policy = LLMBackedActivationPolicy(
+        llm=_FakeActivationLLM({
+            "activated": True,
+            "selected_persona_ids": ["unknown_self", "skeptic_self"],
+            "trigger": "mixed",
+            "should_escalate": False,
+            "escalation_reason": "",
+        })
+    )
+
+    activation = policy.decide(PersonaInput(user_message="Test"))
+
+    assert activation.selected_personas == (SKEPTIC_PERSONA,)
+
+
+def test_llm_backed_activation_parses_string_bool() -> None:
+    policy = LLMBackedActivationPolicy(
+        llm=_FakeActivationLLM({
+            "activated": "true",
+            "selected_persona_ids": ["builder_self"],
+            "trigger": "planning",
+            "should_escalate": "yes",
+            "escalation_reason": "needs roadmap",
+        })
+    )
+
+    activation = policy.decide(PersonaInput(user_message="Plan this"))
+
+    assert activation.activated is True
+    assert activation.should_escalate is True
+    assert activation.selected_personas == (BUILDER_PERSONA,)
+
+
+def test_llm_backed_activation_no_llm_returns_safe_fallback() -> None:
+    policy = LLMBackedActivationPolicy(llm=None)
+
+    activation = policy.decide(PersonaInput(user_message="Anything"))
+
+    assert activation.activated is False
+    assert activation.trigger == "no_llm"

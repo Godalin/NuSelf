@@ -18,7 +18,7 @@ from nuself.llm import default_llm
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
 
 if TYPE_CHECKING:
-    from nuself.llm import ChatLLM
+    from nuself.llm import ChatLLM, ChatMessage
 
 
 @dataclass(frozen=True)
@@ -87,7 +87,7 @@ class ReflectionScheduler:
         if not candidates:
             return False
         
-        gate = RelevanceGate(self._project_root, config=self._config)
+        gate = LLMRelevanceGate(self._project_root, config=self._config)
         best = candidates[0]
         score = gate.score(best)
         if not score.passes:
@@ -322,11 +322,17 @@ class ReflectionScheduler:
         )
 
 
-class RelevanceGate:
-    """Multi-dimensional relevance gate for proactive candidates."""
+class LLMRelevanceGate:
+    """LLM-driven relevance gate for proactive candidates."""
 
-    def __init__(self, project_root: Path | None = None, config: ReflectionSettings | None = None) -> None:
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        config: ReflectionSettings | None = None,
+        llm: ChatLLM | None = None,
+    ) -> None:
         from nuself.config import runtime_paths
+        from nuself.llm import default_llm
 
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
@@ -338,68 +344,136 @@ class RelevanceGate:
             system_config = ConfigSystem.load(project_root=project_root)
             self._config = system_config.reflection
 
+        self._llm = llm or default_llm(self._project_root)
+        self._reflection_repo = ReflectionRepository(self._project_root)
+
     def score(self, candidate: IdeaCandidate) -> RelevanceScore:
-        novelty = self._score_novelty(candidate)
-        confidence = max(0.0, min(1.0, candidate.confidence))
-        urgency = max(0.0, min(1.0, candidate.urgency))
-        interruption_cost = max(0.0, min(1.0, candidate.interruption_cost))
         cooldown_ok = self._cooldown_ok()
+        try:
+            return self._score_with_llm(candidate, cooldown_ok)
+        except (RuntimeError, ValueError, json.JSONDecodeError, KeyError) as e:
+            from nuself.logs import write_log_event
 
-        composite = (
-            novelty * 0.25
-            + confidence * 0.20
-            + urgency * 0.25
-            - interruption_cost * 0.15
-            + (1.0 if cooldown_ok else 0.0) * 0.15
-        )
-        composite = max(0.0, min(1.0, composite))
-
-        reasons: list[str] = []
-        if novelty < 0.5:
-            reasons.append("low_novelty")
-        if confidence < 0.5:
-            reasons.append("low_confidence")
-        if urgency >= 0.7:
-            reasons.append("high_urgency")
-        if interruption_cost >= 0.7:
-            reasons.append("high_interruption_cost")
-        if not cooldown_ok:
-            reasons.append("cooldown_active")
-        if not reasons:
-            reasons.append("ok")
-
-        threshold = self._config.gate.relevance_threshold
-        passes = composite >= threshold and not (interruption_cost >= 0.9 and urgency < 0.5) and novelty > 0.0
-
-        return RelevanceScore(
-            passes=passes,
-            novelty=novelty,
-            confidence=confidence,
-            urgency=urgency,
-            interruption_cost=interruption_cost,
-            cooldown_ok=cooldown_ok,
-            composite=composite,
-            reasons=tuple(reasons),
-        )
+            write_log_event(
+                "reflection",
+                "relevance_gate_fallback",
+                f"LLM relevance gate failed, using fallback: {e}",
+                project_root=self._project_root,
+                level="warning",
+                status="error",
+            )
+            return self._fallback_score(candidate, cooldown_ok)
 
     def passes(self, candidate: IdeaCandidate) -> bool:
         return self.score(candidate).passes
 
-    def _score_novelty(self, candidate: IdeaCandidate) -> float:
-        if not self._last_reflection_path.exists():
-            return 1.0
-        last_title = self._read_last_title()
-        last_body = self._read_last_body()
-        # Same title → same topic, skip
-        if last_title is not None and candidate.title == last_title:
-            return 0.0
-        # Partial body overlap → reduced novelty
-        if last_body is not None:
-            if candidate.body == last_body:
-                return 0.1
-            if candidate.body in last_body or last_body in candidate.body:
-                return 0.5
-        return 1.0
+    def _score_with_llm(self, candidate: IdeaCandidate, cooldown_ok: bool) -> RelevanceScore:
+        recent = self._reflection_repo.list()[:3]
+        messages = self._build_prompt(candidate, recent, cooldown_ok)
+        raw = self._llm.complete(messages)
+        return self._parse_response(raw, candidate, cooldown_ok)
+
+    def _build_prompt(
+        self,
+        candidate: IdeaCandidate,
+        recent: list[ReflectionEntry],
+        cooldown_ok: bool,
+    ) -> list[ChatMessage]:
+        from nuself.llm import ChatMessage
+
+        system = (
+            "You are the Relevance Gate for NuSelf, a private AI mirror. Your job is to judge "
+            "whether a newly generated reflection idea is worth surfacing to the user right now.\n\n"
+            "Judge these dimensions (0.0–1.0):\n"
+            "- novelty: Is this genuinely new relative to recent reflections? Consider semantic meaning, not just string similarity.\n"
+            "- confidence: How well-supported is this idea by the user's memory and conversations?\n"
+            "- urgency: How time-sensitive is this? Should the user see it soon?\n"
+            "- interruption_cost: How disruptive would it be to interrupt the user with this now?\n"
+            "- composite: Your overall assessment of the idea's value.\n"
+            "- passes: Should this idea be allowed through the gate? (true/false)\n"
+            "- reason: A brief sentence explaining your judgment.\n\n"
+            "Return ONLY a JSON object with fields: novelty, confidence, urgency, interruption_cost, composite, passes, reason. "
+            "No markdown fences."
+        )
+
+        lines = [
+            "Candidate:",
+            f"- Title: {candidate.title}",
+            f"- Body: {candidate.body}",
+            f"- Type: {candidate.candidate_type}",
+            f"- Original scores: confidence={candidate.confidence:.2f}, novelty={candidate.novelty:.2f}, urgency={candidate.urgency:.2f}, interruption={candidate.interruption_cost:.2f}",
+            "",
+        ]
+
+        if recent:
+            lines.append("Recent reflections:")
+            for i, entry in enumerate(recent, start=1):
+                lines.append(f"{i}. [{entry.candidate_type}] {entry.title}: {entry.body[:200]}")
+        else:
+            lines.append("No recent reflections.")
+
+        lines.extend([
+            "",
+            f"Cooldown active: {'no' if cooldown_ok else 'yes'}",
+            f"Time: {datetime.now(UTC).isoformat()}",
+        ])
+
+        return [
+            ChatMessage(role="system", content=system),
+            ChatMessage(role="user", content="\n".join(lines)),
+        ]
+
+    def _parse_response(self, raw: str, candidate: IdeaCandidate, cooldown_ok: bool) -> RelevanceScore:
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+            stripped = "\n".join(lines).strip()
+        parsed: object = json.loads(stripped)
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM response is not a JSON object")
+        data = cast(dict[str, object], parsed)
+
+        def _get_float(key: str) -> float:
+            val = data.get(key)
+            if isinstance(val, (int, float)):
+                return max(0.0, min(1.0, float(val)))
+            raise KeyError(f"missing or invalid float: {key}")
+
+        passes_raw = data.get("passes")
+        passes: bool
+        if isinstance(passes_raw, bool):
+            passes = passes_raw
+        elif isinstance(passes_raw, str):
+            passes = passes_raw.lower() in {"true", "yes", "1"}
+        else:
+            raise KeyError("missing or invalid passes")
+
+        reason = data.get("reason")
+        if not isinstance(reason, str):
+            reason = "llm judgment"
+
+        return RelevanceScore(
+            passes=passes,
+            novelty=_get_float("novelty"),
+            confidence=_get_float("confidence"),
+            urgency=_get_float("urgency"),
+            interruption_cost=_get_float("interruption_cost"),
+            cooldown_ok=cooldown_ok,
+            composite=_get_float("composite"),
+            reasons=(reason,),
+        )
+
+    def _fallback_score(self, candidate: IdeaCandidate, cooldown_ok: bool) -> RelevanceScore:
+        return RelevanceScore(
+            passes=False,
+            novelty=candidate.novelty,
+            confidence=candidate.confidence,
+            urgency=candidate.urgency,
+            interruption_cost=candidate.interruption_cost,
+            cooldown_ok=cooldown_ok,
+            composite=0.0,
+            reasons=("llm_fallback",),
+        )
 
     def _cooldown_ok(self) -> bool:
         if not self._last_reflection_path.exists():
@@ -407,39 +481,11 @@ class RelevanceGate:
         last = self._read_last_timestamp()
         if last is None:
             return True
-        from datetime import UTC, datetime
-
         now = datetime.now(UTC)
         if last.tzinfo is None:
             last = last.replace(tzinfo=UTC)
         elapsed = (now - last).total_seconds()
-        return elapsed >= 300  # default cooldown 5 minutes
-
-    def _read_last_body(self) -> str | None:
-        if not self._last_reflection_path.exists():
-            return None
-        try:
-            raw: object = json.loads(self._last_reflection_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return None
-        if not isinstance(raw, dict):
-            return None
-        data = cast(dict[str, object], raw)
-        body = data.get("body")
-        return body if isinstance(body, str) else None
-
-    def _read_last_title(self) -> str | None:
-        if not self._last_reflection_path.exists():
-            return None
-        try:
-            raw: object = json.loads(self._last_reflection_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return None
-        if not isinstance(raw, dict):
-            return None
-        data = cast(dict[str, object], raw)
-        title = data.get("title")
-        return title if isinstance(title, str) else None
+        return elapsed >= self._config.scheduler.cooldown_seconds
 
     def _read_last_timestamp(self) -> datetime | None:
         if not self._last_reflection_path.exists():

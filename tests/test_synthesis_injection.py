@@ -14,14 +14,26 @@ from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 
 
+import json
+
 class StructuredFakeLLM:
     """Fake LLM that captures all calls and returns structured response."""
-    
-    def __init__(self, response: str) -> None:
+
+    def __init__(self, response: str, activation_response: dict[str, object] | None = None) -> None:
         self.response = response
         self.calls: list[list[ChatMessage]] = []
+        self._activation_response = activation_response or {
+            "activated": True,
+            "selected_persona_ids": ["skeptic_self", "builder_self", "analyst_self"],
+            "trigger": "mixed intent",
+            "should_escalate": False,
+            "escalation_reason": "",
+        }
 
     def complete(self, messages: list[ChatMessage]) -> str:
+        content = messages[0].content
+        if "Persona Activation Gate" in content:
+            return json.dumps(self._activation_response)
         self.calls.append(messages)
         return self.response
 
@@ -45,10 +57,10 @@ def test_synthesis_is_injected_into_initial_response_prompt(tmp_path: Path) -> N
     # Step 1: prepare_context
     prepared = runtime.prepare_context_node(turn_state)
     
-    # Step 2: activate personas (mixed_intent_heuristic should activate skeptic + builder + analyst for long question)
+    # Step 2: activate personas (LLM returns skeptic + builder + analyst for mixed intent)
     activated = runtime.persona_activation_node(prepared.state)
     assert activated.state.persona_activation is not None
-    assert activated.state.persona_activation.trigger == "mixed_intent_heuristic"
+    assert activated.state.persona_activation.activated is True
     
     # Step 3: run personas to generate synthesis
     run_personas = runtime.run_personas_node(activated.state)
@@ -79,7 +91,7 @@ def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
 
     result = runtime.run_turn(
         ThreadState.empty("payload-test"),
-        "What are the risks and implementation steps for this?",  # Mixed intent triggers synthesis
+        "What are the risks and implementation steps for this?",
         "payload-test",
     )
 
@@ -100,7 +112,16 @@ def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
 
 def test_synthesis_empty_when_personas_not_activated(tmp_path: Path) -> None:
     """Verify that synthesis is None when personas are not activated."""
-    llm = StructuredFakeLLM('{"answer":"No synthesis reply.","evidence_references":[],"confidence":0.5}')
+    llm = StructuredFakeLLM(
+        '{"answer":"No synthesis reply.","evidence_references":[],"confidence":0.5}',
+        activation_response={
+            "activated": False,
+            "selected_persona_ids": [],
+            "trigger": "not relevant",
+            "should_escalate": False,
+            "escalation_reason": "",
+        },
+    )
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
@@ -109,7 +130,7 @@ def test_synthesis_empty_when_personas_not_activated(tmp_path: Path) -> None:
 
     turn_state = ConversationTurnState.start(
         ThreadState.empty("no-synthesis"),
-        "Hello there.",  # Trivial message, no persona activation
+        "Hello there.",
         "no-synthesis",
     )
     
@@ -130,7 +151,16 @@ def test_synthesis_empty_when_personas_not_activated(tmp_path: Path) -> None:
 
 def test_synthesis_included_with_explicit_multi_persona_request(tmp_path: Path) -> None:
     """Verify synthesis is generated and injected for explicit multi-persona requests."""
-    llm = StructuredFakeLLM('{"answer":"Multi-view reply.","evidence_references":[],"confidence":0.6}')
+    llm = StructuredFakeLLM(
+        '{"answer":"Multi-view reply.","evidence_references":[],"confidence":0.6}',
+        activation_response={
+            "activated": True,
+            "selected_persona_ids": ["skeptic_self", "builder_self", "historian_self", "care_self"],
+            "trigger": "explicit multi-view request",
+            "should_escalate": False,
+            "escalation_reason": "",
+        },
+    )
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
@@ -147,8 +177,8 @@ def test_synthesis_included_with_explicit_multi_persona_request(tmp_path: Path) 
     activated = runtime.persona_activation_node(prepared.state)
     
     assert activated.state.persona_activation is not None
-    assert activated.state.persona_activation.trigger == "explicit_relevant_personas"
-    assert len(activated.state.persona_activation.selected_personas) >= 3  # At least 3 personas
+    assert activated.state.persona_activation.activated is True
+    assert len(activated.state.persona_activation.selected_personas) == 4
     
     # Run personas to generate synthesis
     run_personas = runtime.run_personas_node(activated.state)
@@ -249,7 +279,16 @@ def test_activated_turn_uses_synthesizer_for_initial_response(tmp_path: Path) ->
 
 def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
     """Verify that non-activated turns still use the main LLM system prompt."""
-    llm = StructuredFakeLLM('{"answer":"Normal reply.","evidence_references":[],"confidence":0.5}')
+    llm = StructuredFakeLLM(
+        '{"answer":"Normal reply.","evidence_references":[],"confidence":0.5}',
+        activation_response={
+            "activated": False,
+            "selected_persona_ids": [],
+            "trigger": "not relevant",
+            "should_escalate": False,
+            "escalation_reason": "",
+        },
+    )
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,

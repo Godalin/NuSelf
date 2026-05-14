@@ -101,9 +101,9 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Add `memory unquarantine` CLI command to recover quarantined entries.
 - [x] Add structured `IdeaCandidate` and `RelevanceScore` models for proactive agent.
 - [x] Enhance `IdeaCandidateGenerator` to scan threads, memory, and sources.
-- [x] Add multi-dimensional `RelevanceGate` with novelty, confidence, urgency, interruption cost, and cooldown.
+- [x] Replace `RelevanceGate` with `LLMRelevanceGate`: LLM-driven contextual scoring with semantic novelty judgment, structured JSON output, clamping, and safe fallback on failure.
 - [x] Add randomized low-frequency reflection with jitter, daily caps, and event triggers.
-- [x] Add competitive persona discussion with randomized jury, scoring, blocking vetoes, and synthesizer arbitration.
+- [x] Add competitive persona discussion with LLM-selected personas, LLM-reported scores, moderator judgment, blocking vetoes, and synthesizer arbitration.
 - [x] Add `NotificationDeliveryLoop` that decouples outbox writing from adapter dispatch.
 - [x] Wire configured email/macOS adapters into daemon `NotificationDeliveryLoop` (spec-code gap: currently only LogOnly adapter runs in daemon).
 - [x] Enhance `DeepLink` with `new_thread` action for proactive candidate routing.

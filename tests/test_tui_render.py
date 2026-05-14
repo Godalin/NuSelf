@@ -23,17 +23,16 @@ def test_render_host_decision_formats_block() -> None:
         level="info",
         component="persona",
         event="host_discussion_decision",
-        message="host sees explicit request for multi-perspective discussion",
+        message="user asked for multi-perspective discussion",
         thread_id="default",
         status="approved",
-        metadata={"should_escalate": True, "matched_markers": ["persona", "debate"]},
+        metadata={"should_escalate": True, "escalation_reason": "multi-perspective request"},
     )
 
     lines = render_host_decision(event)
 
     assert lines == [
-        "[host decision] host sees explicit request for multi-perspective discussion  status=approved",
+        "[host decision] user asked for multi-perspective discussion  status=approved",
         "  should_escalate: True",
-        "  matched_markers: persona, debate",
         "  thread: default",
     ]
