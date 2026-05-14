@@ -94,6 +94,7 @@ reflection:
     quiet_end_hour: 7
     daily_cap: 5
     jitter_percent: 20
+    max_pending_entries: 20
   gate:
     relevance_threshold: 0.5
     persona_discussion_threshold: 0.7

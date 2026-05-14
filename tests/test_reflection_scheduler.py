@@ -12,7 +12,9 @@ import pytest
 from nuself.config_system import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatMessage
+from nuself.logs import read_log_events
 from nuself.reflection import IdeaCandidateGenerator, ReflectionScheduler
+from nuself.reflection.repository import ReflectionEntry
 
 
 def _reflection_settings(
@@ -23,6 +25,7 @@ def _reflection_settings(
     quiet_end_hour: int = 7,
     daily_cap: int = 5,
     jitter_percent: int = 20,
+    max_pending_entries: int = 20,
     relevance_threshold: float = 0.5,
     persona_discussion_threshold: float = 0.7,
     max_discussion_rounds: int = 10,
@@ -36,6 +39,7 @@ def _reflection_settings(
             quiet_end_hour=quiet_end_hour,
             daily_cap=daily_cap,
             jitter_percent=jitter_percent,
+            max_pending_entries=max_pending_entries,
         ),
         gate=ReflectionGateConfig(
             relevance_threshold=relevance_threshold,
@@ -102,6 +106,26 @@ def _seed_memory(tmp_path: Path) -> None:
         tags=[], source_refs=[], importance=0.5, review_state="reviewed",
         created_at="2024-01-01T00:00:00", updated_at="2024-01-01T00:00:00",
     ))
+
+
+def _sample_reflection_entry(index: int = 0) -> ReflectionEntry:
+    return ReflectionEntry(
+        id=f"reflection-test-{index:03d}",
+        title=f"Test idea {index}",
+        body=f"Body {index}",
+        candidate_type="question",
+        confidence=0.8,
+        novelty=0.9,
+        urgency=0.3,
+        interruption_cost=0.1,
+        composite_score=0.7,
+        status="pending",
+        discussion_approved=None,
+        discussion_trace=(),
+        deep_link="nuself://thread/reflections",
+        created_at=f"2024-01-01T12:00:0{index}+00:00",
+        reviewed_at=None,
+    )
 
 
 @pytest.fixture
@@ -227,6 +251,24 @@ def test_reflect_creates_multiple_reflection_entries(scheduler: ReflectionSchedu
     scheduler.reflect(now)
     entries = scheduler._reflection_repo.list()
     assert len(entries) == 2
+
+
+def test_reflect_skips_when_pending_reflection_limit_reached(scheduler: ReflectionScheduler) -> None:
+    scheduler._config = _reflection_settings(
+        relevance_threshold=0.0,
+        persona_discussion_threshold=1.0,
+        max_pending_entries=1,
+    )
+    scheduler._reflection_repo.add(_sample_reflection_entry())
+
+    result = scheduler.reflect(datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC))
+
+    assert result is False
+    assert len(scheduler._reflection_repo.list(status="pending")) == 1
+    events = read_log_events(project_root=scheduler._project_root, component="reflection")
+    assert events[-1].event == "cycle_pending_limit_reached"
+    assert events[-1].status == "skipped"
+    assert events[-1].metadata == {"max_pending_entries": 1, "pending_count": 1}
 
 
 def test_reflect_auto_notify_creates_outbox_entry(scheduler: ReflectionScheduler) -> None:

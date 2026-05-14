@@ -80,6 +80,22 @@ class ReflectionScheduler:
             level="info",
             status="started"
         )
+
+        pending_count = len(self._reflection_repo.list(status="pending"))
+        if pending_count >= self._config.scheduler.max_pending_entries:
+            write_log_event(
+                "reflection",
+                "cycle_pending_limit_reached",
+                "reflection cycle skipped because pending candidate limit was reached",
+                project_root=self._project_root,
+                level="info",
+                status="skipped",
+                metadata={
+                    "pending_count": pending_count,
+                    "max_pending_entries": self._config.scheduler.max_pending_entries,
+                },
+            )
+            return False
         
         # Consume any queued events before generating candidates
         self._event_queue.clear()

@@ -44,6 +44,7 @@ Stored as one JSON file per entry in `private/reflections/{id}.json`.
 ```
 reflect()
   ├─ cycle_started                 (audit log)
+  ├─ cycle_pending_limit_reached   (if pending entries ≥ max_pending_entries)
   ├─ candidate_generation_skipped  (if no context)
   ├─ candidate_generation_failed   (if LLM errors)
   ├─ cycle_no_candidates           (if LLM returns empty)
@@ -88,6 +89,12 @@ The gate is LLM-driven (L2 judgment). The LLM receives the candidate, recent ref
 
 Candidates below `persona_discussion_threshold` but passing the gate proceed directly to `ReflectionRepository` without discussion.
 
+## Pending Candidate Limit
+
+`reflection.scheduler.max_pending_entries` caps how many pending reflection ideas may exist at once. If the number of `pending` entries is greater than or equal to this value, the scheduler skips candidate generation for that cycle and writes `cycle_pending_limit_reached`.
+
+Default is `20`.
+
 ## Optional Notify Bridge
 
 If `reflection.auto_notify` is `true`, a brief `OutboxEntry` is created **pointing to** the reflection:
@@ -105,6 +112,7 @@ The scheduler still emits these events into `reflection.log`:
 | Event | Status | Visibility |
 |---|---|---|
 | `cycle_started` | `started` | `nuself logs --component reflection` |
+| `cycle_pending_limit_reached` | `skipped` | `nuself logs --component reflection` |
 | `persona_discussion` | `approved` / `rejected` | `nuself logs --component reflection` |
 | `cycle_discussion_rejected` | `completed` | `nuself logs --component reflection` |
 | `cycle_completed` | `completed` | `nuself logs --component reflection` |

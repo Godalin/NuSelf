@@ -49,6 +49,8 @@ reflection:
     daily_cap: 5
     # Random jitter on interval to avoid clustering (0-50%)
     jitter_percent: 20
+    # Skip reflection when pending reflection ideas are at or above this count
+    max_pending_entries: 20
   gate:
     # Minimum composite score for a candidate to pass relevance gate (0.0-1.0)
     relevance_threshold: 0.5

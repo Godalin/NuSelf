@@ -83,6 +83,7 @@ class ReflectionSchedulerConfig:
     quiet_end_hour: int
     daily_cap: int
     jitter_percent: int
+    max_pending_entries: int = 20
 
 
 @dataclass(frozen=True)
@@ -203,6 +204,7 @@ class ConfigSystem:
                     quiet_end_hour=7,
                     daily_cap=5,
                     jitter_percent=20,
+                    max_pending_entries=20,
                 ),
                 gate=ReflectionGateConfig(
                     relevance_threshold=0.4,
@@ -395,6 +397,7 @@ class ConfigSystem:
         refl_quiet_end = max(0, min(get_int(yaml_data, "reflection.scheduler.quiet_end_hour", defaults.reflection.scheduler.quiet_end_hour), 23))
         refl_daily_cap = max(1, get_int(yaml_data, "reflection.scheduler.daily_cap", defaults.reflection.scheduler.daily_cap))
         refl_jitter = max(0, min(get_int(yaml_data, "reflection.scheduler.jitter_percent", defaults.reflection.scheduler.jitter_percent), 50))
+        refl_max_pending = max(1, get_int(yaml_data, "reflection.scheduler.max_pending_entries", defaults.reflection.scheduler.max_pending_entries))
         refl_relevance = max(0.0, min(get_float(yaml_data, "reflection.gate.relevance_threshold", defaults.reflection.gate.relevance_threshold), 1.0))
         refl_discussion = max(0.0, min(get_float(yaml_data, "reflection.gate.persona_discussion_threshold", defaults.reflection.gate.persona_discussion_threshold), 1.0))
         refl_max_rounds = max(1, get_int(yaml_data, "reflection.moderator.max_discussion_rounds", defaults.reflection.moderator.max_discussion_rounds))
@@ -452,6 +455,7 @@ class ConfigSystem:
                     quiet_end_hour=refl_quiet_end,
                     daily_cap=refl_daily_cap,
                     jitter_percent=refl_jitter,
+                    max_pending_entries=refl_max_pending,
                 ),
                 gate=ReflectionGateConfig(
                     relevance_threshold=refl_relevance,
@@ -508,6 +512,7 @@ class ConfigSystem:
             "reflection.scheduler.quiet_end_hour": config.reflection.scheduler.quiet_end_hour,
             "reflection.scheduler.daily_cap": config.reflection.scheduler.daily_cap,
             "reflection.scheduler.jitter_percent": config.reflection.scheduler.jitter_percent,
+            "reflection.scheduler.max_pending_entries": config.reflection.scheduler.max_pending_entries,
             "reflection.gate.relevance_threshold": config.reflection.gate.relevance_threshold,
             "reflection.gate.persona_discussion_threshold": config.reflection.gate.persona_discussion_threshold,
             "reflection.moderator.max_discussion_rounds": config.reflection.moderator.max_discussion_rounds,

@@ -24,6 +24,7 @@ def test_reflection_settings_from_yaml(tmp_path: Path) -> None:
 reflection:
   scheduler:
     interval_seconds: 600
+    max_pending_entries: 3
   gate:
     relevance_threshold: 0.3
 """,
@@ -32,6 +33,7 @@ reflection:
 
     config = ConfigSystem.load(project_root=tmp_path)
     assert config.reflection.scheduler.interval_seconds == 600
+    assert config.reflection.scheduler.max_pending_entries == 3
     assert config.reflection.gate.relevance_threshold == 0.3
     assert config.reflection.scheduler.daily_cap == 5
 
