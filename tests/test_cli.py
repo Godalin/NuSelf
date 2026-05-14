@@ -269,7 +269,7 @@ def test_interactive_logs_command_shows_recent_activity(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "[chat] chat turn completed" in captured.out
+    assert "[chat] turn_completed chat turn completed" in captured.out
 
 
 def test_interactive_turn_prints_activity_events(
@@ -281,9 +281,9 @@ def test_interactive_turn_prints_activity_events(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "[chat] one-shot chat turn completed" in captured.out
-    assert "[chat] one-shot chat turn completed status=ok thread=default\nsession thread=default daemon=one-shot" in captured.out
-    assert "[chat] one-shot chat turn completed status=ok thread=default\n\nsession thread=default daemon=one-shot" not in captured.out
+    assert "[chat] one_shot_chat_completed one-shot chat turn completed" in captured.out
+    assert "[chat] one_shot_chat_completed one-shot chat turn completed status=ok thread=default\nsession thread=default daemon=one-shot" in captured.out
+    assert "[chat] one_shot_chat_completed one-shot chat turn completed status=ok thread=default\n\nsession thread=default daemon=one-shot" not in captured.out
 
 
 def test_interactive_export_saves_connection_transcript(
@@ -374,7 +374,24 @@ def test_interactive_export_all_includes_all_logs(
     content = exports[0].read_text(encoding="utf-8")
     assert "- Logs: all" in content
     assert "## Internal Process Logs" in content
-    assert "[chat] one_shot_chat_completed" in content
+    assert "```text\n[chat] one_shot_chat_completed one-shot chat turn completed status=ok thread=default\n```" in content
+    assert "```json" not in content
+
+
+def test_interactive_quit_auto_saves_unexported_transcript(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput("autosave this\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Saved transcript:" in captured.out
+    assert "Copied transcript to clipboard." not in captured.out
+    exports = sorted((tmp_path / "private" / "transcripts").glob("chat-default-*.md"))
+    assert len(exports) == 1
+    assert "autosave this" in exports[0].read_text(encoding="utf-8")
 
 
 def test_interactive_history_skips_consecutive_duplicates(
@@ -637,7 +654,7 @@ def test_logs_command_renders_structured_events(tmp_path: Path, capsys: CaptureF
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "[chat] chat turn completed" in captured.out
+    assert "[chat] turn_completed chat turn completed" in captured.out
     assert "thread=default" in captured.out
     assert "[memory]" not in captured.out
 

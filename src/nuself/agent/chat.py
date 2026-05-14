@@ -1099,7 +1099,68 @@ def _parse_chat_response(raw: str) -> ParsedChatResponse:
                 tool=tool,
                 tool_args=tool_args,
             )
+    markdown_response = _parse_markdown_chat_response(raw)
+    if markdown_response is not None:
+        return markdown_response
     return ParsedChatResponse(answer=raw)
+
+
+def _parse_markdown_chat_response(raw: str) -> ParsedChatResponse | None:
+    lines = raw.strip().splitlines()
+    fields: dict[str, list[str]] = {}
+    preface: list[str] = []
+    current_field: str | None = None
+    saw_structured_field = False
+    for line in lines:
+        field_name, value = _markdown_response_field(line)
+        if field_name is not None:
+            saw_structured_field = True
+            current_field = field_name
+            fields.setdefault(field_name, [])
+            if value:
+                fields[field_name].append(value)
+            continue
+        if current_field is None:
+            preface.append(line)
+        else:
+            fields[current_field].append(line)
+    answer_lines = fields.get("answer")
+    if not saw_structured_field or not answer_lines:
+        return None
+    answer = "\n".join([*preface, *answer_lines]).strip()
+    if answer == "":
+        return None
+    return ParsedChatResponse(
+        answer=answer,
+        evidence_references=_parse_markdown_evidence_references("\n".join(fields.get("evidence_references", []))),
+        confidence=_optional_float("\n".join(fields.get("confidence", []))),
+        epistemic_status=(
+            _string_field("\n".join(fields.get("epistemic_status", [])).strip(), default="inferred") or "inferred"
+        ),
+        tool=_string_field("\n".join(fields.get("tool", [])).strip()),
+    )
+
+
+def _markdown_response_field(line: str) -> tuple[str | None, str]:
+    left, separator, right = line.partition(":")
+    if not separator:
+        return (None, "")
+    normalized = left.strip().strip("*").strip().casefold()
+    normalized = normalized.replace("-", "_").replace(" ", "_")
+    if normalized in {"answer", "evidence_references", "confidence", "epistemic_status", "tool"}:
+        return (normalized, right.strip())
+    return (None, "")
+
+
+def _parse_markdown_evidence_references(value: str) -> tuple[str, ...]:
+    stripped = value.strip()
+    if stripped == "":
+        return ()
+    if stripped.startswith("[") and stripped.endswith("]"):
+        stripped = stripped[1:-1].strip()
+    if stripped == "":
+        return ()
+    return tuple(part.strip().strip("\"'") for part in stripped.split(",") if part.strip())
 
 
 def _apply_unsupported_claim_guard(response: ParsedChatResponse) -> ParsedChatResponse:
@@ -1151,6 +1212,11 @@ def _string_tuple(value: object) -> tuple[str, ...]:
 def _optional_float(value: object) -> float | None:
     if isinstance(value, int | float):
         return float(value)
+    if isinstance(value, str) and value.strip() != "":
+        try:
+            return float(value)
+        except ValueError:
+            return None
     return None
 
 

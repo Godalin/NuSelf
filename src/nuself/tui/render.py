@@ -44,17 +44,8 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
 
     theme = TerminalTheme(color=color)
     tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
-    pieces = [tag, event.message]
-    if event.status:
-        pieces.append(theme.muted(f"status={event.status}"))
-    if event.duration_ms is not None:
-        pieces.append(theme.muted(f"{event.duration_ms}ms"))
-    if event.thread_id:
-        pieces.append(theme.muted(f"thread={event.thread_id}"))
-    if event.request_id:
-        pieces.append(theme.muted(f"request={event.request_id}"))
-    if event.error:
-        pieces.append(theme.error(f"error={event.error}"))
+    pieces = [tag, event.event, event.message]
+    pieces.extend(_render_log_fields(event, theme))
     return " ".join(pieces)
 
 
@@ -63,16 +54,62 @@ def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None)
     theme = TerminalTheme(color=color)
     tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
     header = [tag, "persona_summary"]
-    if event.status:
-        header.append(theme.muted(f"status={event.status}"))
-    if event.thread_id:
-        header.append(theme.muted(f"thread={event.thread_id}"))
+    header.extend(_render_log_fields(event, theme))
     lines = [" ".join(header)]
     body_lines = [line for line in event.message.splitlines() if line.strip()]
     if not body_lines:
         body_lines = ["(no persona contributions)"]
     lines.extend(f"  {_color_persona_line(line, theme)}" for line in body_lines)
     return "\n".join(lines)
+
+
+def _render_log_fields(event: LogEvent, theme: TerminalTheme) -> list[str]:
+    fields: list[str] = []
+    if event.status:
+        fields.append(theme.muted(_format_log_field("status", event.status)))
+    if event.duration_ms is not None:
+        fields.append(theme.muted(_format_log_field("duration_ms", event.duration_ms)))
+    if event.thread_id:
+        fields.append(theme.muted(_format_log_field("thread", event.thread_id)))
+    if event.request_id:
+        fields.append(theme.muted(_format_log_field("request", event.request_id)))
+    if event.node:
+        fields.append(theme.muted(_format_log_field("node", event.node)))
+    if event.error:
+        fields.append(theme.error(_format_log_field("error", event.error)))
+    if event.metadata:
+        for key in sorted(event.metadata):
+            if key in {"message_body", "answer", "reply"}:
+                continue
+            fields.append(theme.muted(_format_log_field(key, event.metadata[key])))
+    return fields
+
+
+def _format_log_field(key: str, value: object) -> str:
+    return f"{key}={_format_log_value(value)}"
+
+
+def _format_log_value(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        return str(value)
+    if isinstance(value, str):
+        return _quote_log_value(value)
+    if isinstance(value, list | tuple):
+        items = cast(list[object] | tuple[object, ...], value)
+        return "[" + ", ".join(_format_log_value(item) for item in items) + "]"
+    if value is None:
+        return "null"
+    return _quote_log_value(json.dumps(value, sort_keys=True, ensure_ascii=True))
+
+
+def _quote_log_value(value: str) -> str:
+    if value == "":
+        return '""'
+    if any(character.isspace() for character in value):
+        return json.dumps(value, ensure_ascii=False)
+    return value
 
 
 def _color_persona_line(line: str, theme: TerminalTheme) -> str:
@@ -262,16 +299,7 @@ def render_discussion_trace(trace: list[object], *, title: str = "discussion tra
 def render_host_decision(event: LogEvent, *, color: bool | None = None) -> list[str]:
     """Render a structured host discussion decision event for REPL display."""
     theme = TerminalTheme(color=color)
-    meta = event.metadata if event.metadata else {}
-    should = meta.get("should_escalate")
-    matched_raw = meta.get("matched_markers")
-    matched = cast(list[str], matched_raw) if isinstance(matched_raw, list) else []
-    status = event.status or "unknown"
     header = theme.tag("[host decision]", "persona")
-    lines: list[str] = [f"{header} {event.message}  status={status}"]
-    lines.append(f"  should_escalate: {bool(should)}")
-    if matched:
-        lines.append(f"  matched_markers: {', '.join(str(x) for x in matched)}")
-    if event.thread_id:
-        lines.append(f"  thread: {event.thread_id}")
-    return lines
+    pieces = [header, event.event, event.message]
+    pieces.extend(_render_log_fields(event, theme))
+    return [" ".join(pieces)]

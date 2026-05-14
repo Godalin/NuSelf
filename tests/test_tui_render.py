@@ -32,9 +32,7 @@ def test_render_host_decision_formats_block() -> None:
     lines = render_host_decision(event)
 
     assert lines == [
-        "[host decision] user asked for multi-perspective discussion  status=approved",
-        "  should_escalate: True",
-        "  thread: default",
+        '[host decision] host_discussion_decision user asked for multi-perspective discussion status=approved thread=default escalation_reason="multi-perspective request" should_escalate=true',
     ]
 
 
@@ -55,7 +53,7 @@ def test_render_persona_summary_formats_personas_on_separate_lines() -> None:
     )
 
     assert render_log_event(event, color=False).splitlines() == [
-        "[selves] persona_summary status=deep tradeoff thread=default",
+        '[selves] persona_summary status="deep tradeoff" thread=default has_synthesis=true persona_count=2',
         "  analyst_self: Analyst decomposes the question.",
         "  skeptic_self: Skeptic challenges the assumption.",
         "  synthesizer_self: Synthesis keeps the useful tension.",

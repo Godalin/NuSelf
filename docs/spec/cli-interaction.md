@@ -85,7 +85,9 @@ All interactive commands start with `:`.
 
 After each chat turn, the REPL prints all new log events that occurred during that turn using `render_log_event()`.
 
-`persona_summary` activity is rendered as a multi-line block. The header names the event once, then each persona contribution is printed on its own indented line in contribution order, followed by the synthesizer line if present. It must not collapse multiple persona thoughts into one pipe-delimited line.
+All human-readable logs use one metadata style: `[component] event message key=value ...`. Standard event fields and displayable metadata fields must use this same `key=value` style; they must not mix colon labels, raw JSON blocks, or ad hoc Markdown fields.
+
+`persona_summary` activity is rendered as a multi-line block. The header follows the same `[component] event message key=value ...` rule and names the event once, then each persona contribution is printed on its own indented line in contribution order, followed by the synthesizer line if present. It must not collapse multiple persona thoughts into one pipe-delimited line.
 
 When color is enabled, each known self label in a `persona_summary` block uses a stable distinct color. Color applies only to the speaker label, not the thought text, and no-color mode preserves the same plain text without ANSI escapes.
 
@@ -96,7 +98,9 @@ When color is enabled, each known self label in a `persona_summary` block uses a
   - `all`: include all logs captured during this interactive connection.
   - `noclip`: save the file without copying to clipboard.
 - Default log scope: chat transcript plus shareable internal logs (`persona_summary`, `host_discussion_decision`, `persona_discussion`, and high-level reflection outcomes). Low-level daemon, memory, and chat completion logs are omitted unless `all` is used.
+- Logs in transcript Markdown use the same human-readable rendering as interactive activity logs. Transcript logs must not expose raw JSON blocks.
 - Scope: transcript export starts at the current interactive connection time. Re-running export later in the same connection includes the full conversation and captured logs from that same connection start, not only messages/logs since the previous export.
+- Exit commands (`:q`, `:quit`, `:exit`) automatically save one transcript for the current thread when there are chat messages that have not already been covered by a manual export. This automatic save does not copy to the clipboard.
 - Storage: files are written under `private/transcripts/`.
 - Filename: includes the connection start time and export command time, e.g. `chat-default-20260514T120000123456Z-20260514T121500654321Z.md`.
 - Output: after saving, print the file path and clipboard copy result. If `noclip` is used, do not attempt clipboard copying.

@@ -6,7 +6,6 @@ import argparse
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -109,6 +108,7 @@ class InteractiveSession:
     captured_messages: dict[str, list[tuple[int, str, str]]] = field(default_factory=empty_captured_thread_messages)
     captured_next_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
     captured_log_events: dict[str, list[LogEvent]] = field(default_factory=empty_captured_log_events)
+    exported_next_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
 
     def start_index_for(self, project_root: Path | None, thread_id: str) -> int:
         if thread_id not in self.thread_start_indexes:
@@ -141,6 +141,18 @@ class InteractiveSession:
         if include_all:
             return events
         return [event for event in events if _is_shareable_transcript_log(event)]
+
+    def has_unexported_messages(self, project_root: Path | None, thread_id: str) -> bool:
+        self.capture_new_messages(project_root, thread_id)
+        next_index = self.captured_next_indexes.get(thread_id, self.start_index_for(project_root, thread_id))
+        exported_index = self.exported_next_indexes.get(thread_id, self.start_index_for(project_root, thread_id))
+        return next_index > exported_index
+
+    def mark_transcript_exported(self, project_root: Path | None, thread_id: str) -> None:
+        self.capture_new_messages(project_root, thread_id)
+        self.exported_next_indexes[thread_id] = self.captured_next_indexes.get(
+            thread_id, self.start_index_for(project_root, thread_id)
+        )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1958,6 +1970,18 @@ def _handle_interactive_command(
     session: InteractiveSession,
 ) -> tuple[str, str]:
     if command in {":q", ":quit", ":exit"}:
+        if session.has_unexported_messages(project_root, current_thread_id):
+            print()
+            print(
+                _save_interactive_transcript(
+                    project_root,
+                    current_thread_id,
+                    session,
+                    include_all_logs=False,
+                    copy_requested=False,
+                    exported_at=datetime.now(UTC),
+                )
+            )
         return ("exit", current_thread_id)
     if command == ":history":
         print()
@@ -2286,6 +2310,25 @@ def _handle_interactive_export_command(
                 return _interactive_help(":export")
 
     exported_at = datetime.now(UTC)
+    return _save_interactive_transcript(
+        project_root,
+        thread_id,
+        session,
+        include_all_logs=include_all_logs,
+        copy_requested=copy_requested,
+        exported_at=exported_at,
+    )
+
+
+def _save_interactive_transcript(
+    project_root: Path | None,
+    thread_id: str,
+    session: InteractiveSession,
+    *,
+    include_all_logs: bool,
+    copy_requested: bool,
+    exported_at: datetime,
+) -> str:
     try:
         start_index = session.start_index_for(project_root, thread_id)
         path, content = _export_interactive_transcript(
@@ -2301,6 +2344,7 @@ def _handle_interactive_export_command(
     except ValueError as exc:
         return f"Error: {exc}"
 
+    session.mark_transcript_exported(project_root, thread_id)
     lines = [f"Saved transcript: {path}"]
     if copy_requested:
         copied, reason = _copy_text_to_clipboard(content)
@@ -2392,26 +2436,7 @@ def _render_chat_transcript(
 
 
 def _render_transcript_log_event(event: LogEvent) -> list[str]:
-    title = f"### {event.time} [{event.component}] {event.event}"
-    details: list[str] = []
-    if event.status:
-        details.append(f"status={event.status}")
-    if event.thread_id:
-        details.append(f"thread={event.thread_id}")
-    if event.request_id:
-        details.append(f"request={event.request_id}")
-    if event.duration_ms is not None:
-        details.append(f"duration_ms={event.duration_ms}")
-    if event.error:
-        details.append(f"error={event.error}")
-
-    lines = [title]
-    if details:
-        lines.extend(["", " ".join(details)])
-    lines.extend(["", event.message])
-    if event.metadata:
-        lines.extend(["", "```json", json.dumps(event.metadata, indent=2, sort_keys=True, ensure_ascii=True), "```"])
-    return lines
+    return ["```text", render_log_event(event, color=False), "```"]
 
 
 def _is_shareable_transcript_log(event: LogEvent) -> bool:

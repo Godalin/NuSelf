@@ -193,6 +193,23 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
     assert "Use the profile context." in text
 
 
+def test_chat_agent_parses_markdown_structured_response(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM(
+        "(synthesizer_self keeps context)\n\n"
+        "**answer**: Use the profile context.\n\n"
+        "**evidence_references**: [mem_123]\n"
+        "**epistemic_status**: grounded\n"
+    )
+    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
+
+    result = agent.respond("profile context")
+
+    assert result.answer == "(synthesizer_self keeps context)\n\nUse the profile context."
+    assert result.evidence_references == ("mem_123",)
+    assert result.epistemic_status == "grounded"
+    assert "evidence_references" not in result.reply
+
+
 def test_chat_agent_flags_unsupported_personal_claims_without_evidence(tmp_path: Path) -> None:
     llm = StructuredFakeLLM(
         '{"answer":"You prefer concise output.","evidence_references":[],"confidence":0.81,"epistemic_status":"grounded"}'
