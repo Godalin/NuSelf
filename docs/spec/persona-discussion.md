@@ -20,12 +20,14 @@ evaluate(blocking, strong_support, composite)
 
 ## Persona Node Implementation
 
-When an LLM is available, discussion uses **LLM-backed nodes**:
+When an LLM is available, both ordinary chat self passes and competitive discussions use **LLM-backed nodes**:
 
 - **LLMBackedPersonaNode**: Prompts the LLM with the persona's `id` and `description`, plus the current topic and prior discussion context. Each persona generates a 1–2 sentence response from its unique perspective. Later personas in the same turn see earlier personas' contributions and can build on or challenge them.
 - **LLMBackedSynthesizerNode**: Prompts the LLM to distill the turn's contributions into a 1–2 sentence summary capturing consensus or key tension.
 
 When no LLM is configured, the system falls back to **MinimalPersonaNode** / **MinimalSynthesizerNode**, which produce deterministic placeholder utterances.
+
+`persona_summary` logs are ordinary activated self passes. They are not proof that competitive discussion ran. Competitive chat discussion only runs when `LLMBackedActivationPolicy.should_escalate` is true; otherwise the host decision log is `status=skipped`.
 
 ## Parameters
 

@@ -44,6 +44,10 @@ class FakeLLM:
         content = messages[0].content
         if "Persona Activation Gate" in content:
             return json.dumps(self._activation_response)
+        if "private reflection council" in content:
+            return "analyst_self gives a concrete LLM-backed perspective."
+        if "You are the synthesizer. Distill" in content:
+            return "LLM-backed synthesis of internal perspectives."
         self.calls.append(messages)
         if "Compress a private NuSelf conversation" in content:
             return "compressed context"
@@ -66,6 +70,10 @@ class StructuredFakeLLM:
         content = messages[0].content
         if "Persona Activation Gate" in content:
             return json.dumps(self._activation_response)
+        if "private reflection council" in content:
+            return "analyst_self gives a concrete LLM-backed perspective."
+        if "You are the synthesizer. Distill" in content:
+            return "LLM-backed synthesis of internal perspectives."
         self.calls.append(messages)
         return self.response
 
@@ -404,7 +412,7 @@ def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path
     )
 
 
-def test_conversation_runtime_runs_persona_skeleton_when_activated(tmp_path: Path) -> None:
+def test_conversation_runtime_runs_llm_backed_personas_when_activated(tmp_path: Path) -> None:
     llm = StructuredFakeLLM(
         '{"answer":"Persona reply.","evidence_references":[],"confidence":0.4}',
         activation_response={
@@ -435,8 +443,8 @@ def test_conversation_runtime_runs_persona_skeleton_when_activated(tmp_path: Pat
     assert run_personas.state.persona_turn_state.contributions == (
         PersonaContribution(
             persona_id="analyst_self",
-            notes=("analyst_self considered: Should I split this project?",),
-            confidence=0.0,
+            notes=("analyst_self gives a concrete LLM-backed perspective.",),
+            confidence=0.5,
         ),
     )
     assert run_personas.state.persona_turn_state.synthesis is not None
@@ -444,7 +452,7 @@ def test_conversation_runtime_runs_persona_skeleton_when_activated(tmp_path: Pat
 
     persona_events = [event for event in read_log_events(project_root=tmp_path, component="persona") if event.event == "persona_summary"]
     assert len(persona_events) >= 1
-    assert "analyst_self considered: Should I split this project?" in persona_events[-1].message
+    assert "analyst_self gives a concrete LLM-backed perspective." in persona_events[-1].message
     assert " | " not in persona_events[-1].message
     assert persona_events[-1].metadata == {"persona_count": 1, "has_synthesis": True}
 

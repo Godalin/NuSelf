@@ -14,6 +14,8 @@ from nuself.agent.tools import MemorySearchTool
 from nuself.agent.persona import (
     PersonaActivation,
     LLMBackedActivationPolicy,
+    LLMBackedPersonaNode,
+    LLMBackedSynthesizerNode,
     PersonaGraphDriver,
     PersonaInput,
     PersonaSynthesis,
@@ -481,7 +483,10 @@ class ConversationGraphRuntime:
         self._language_preference = system_config.chat.language_preference
         persona_definitions = load_persona_definitions(project_root)
         self._activation_policy = LLMBackedActivationPolicy(persona_definitions, llm=self._llm)
-        self._persona_driver = PersonaGraphDriver()
+        self._persona_driver = PersonaGraphDriver(
+            persona_node=LLMBackedPersonaNode(llm=self._llm),
+            synthesizer_node=LLMBackedSynthesizerNode(llm=self._llm),
+        )
         self._persona_discussion_service = SharedPersonaDiscussionService(project_root=project_root, llm=self._llm)
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),

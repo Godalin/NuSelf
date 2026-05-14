@@ -34,6 +34,10 @@ class StructuredFakeLLM:
         content = messages[0].content
         if "Persona Activation Gate" in content:
             return json.dumps(self._activation_response)
+        if "private reflection council" in content:
+            return "LLM-backed persona perspective."
+        if "You are the synthesizer. Distill" in content:
+            return "LLM-backed synthesis of internal perspectives."
         self.calls.append(messages)
         return self.response
 
