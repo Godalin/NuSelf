@@ -119,6 +119,7 @@ nuself reflection archive <id_or_index> [--by-index]
 ```
 
 - `list` default: shows **all** statuses.
+- Plain-text `list` output uses the visible `[index]` as the operational handle and does **not** print long `reflection-candidate-*` entry IDs. `show`, `--json`, and id-based actions still expose/accept the full entry ID.
 - `--status`: filters to one status.
 - `show` / `dismiss` / `archive` accept either an entry ID or a `--by-index` flag (0-based from `list`).
 

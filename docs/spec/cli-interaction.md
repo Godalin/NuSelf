@@ -87,20 +87,21 @@ After each chat turn, the REPL prints all new log events that occurred during th
 ### Reflection
 
 ```
-nuself reflection list [--tail N] [--include-all] [--json]
+nuself reflection list [--status pending|dismissed|archived] [--json]
 ```
 
-- **Default view**: Only `persona_discussion` events (approved/rejected outcomes).
-- **`--include-all`**: Show all reflection events (including scheduler internals).
-- **Output**: Indexed compact lines `[  N] <time> [<status>] <message>  score=<composite>`.
-- **Empty**: `No reflection events.`
+- **Default view**: All reflection entries.
+- **`--status`**: Filter to one entry status.
+- **Output**: Indexed compact lines `[  N] [<status>] <title>  created=<timestamp>  type=<candidate_type>  score=<composite>`.
+- **ID display**: Plain-text list output does not print long `reflection-candidate-*` entry IDs. Use the visible index with `--by-index`, or use `--json` when the full ID is needed.
+- **Empty**: `No reflection entries.`
 
 ```
-nuself reflection show <event_index> [--tail N] [--include-all] [--json]
+nuself reflection show <id_or_index> [--by-index] [--json]
 ```
 
 - Indexes into the same filtered list used by `reflection list`.
-- **Detail view**: Time, status, message, candidate metadata, persona score bars, blocking vetos, winners, emergent personas, revised title/body, and grouped discussion trace.
+- **Detail view**: ID, title, status, candidate metadata, deep link, timestamps, body, and raw discussion trace.
 
 ### Logs
 

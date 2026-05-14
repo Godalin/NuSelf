@@ -140,7 +140,7 @@ def render_reflection_entry_summary(entry: ReflectionEntry, *, color: bool | Non
     theme = TerminalTheme(color=color)
     status_tag = theme.paint(f"[{entry.status}]", _status_color(entry.status))
     created = entry.created_at[:19] if entry.created_at else "-"
-    return f"{entry.id} {status_tag} {entry.title}  created={created}  type={entry.candidate_type}  score={entry.composite_score:.2f}"
+    return f"{status_tag} {entry.title}  created={created}  type={entry.candidate_type}  score={entry.composite_score:.2f}"
 
 
 def render_reflection_entry_detail(entry: ReflectionEntry, *, color: bool | None = None) -> str:

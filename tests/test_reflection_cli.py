@@ -58,7 +58,7 @@ def test_reflection_list_with_entries(project_root: Path, capsys: pytest.Capture
     from nuself.cli import handle_reflection_list
     import argparse
 
-    _seed_reflection_entries(project_root, 3)
+    entries = _seed_reflection_entries(project_root, 3)
     args = argparse.Namespace(project_root=project_root, status=None, as_json=False)
     assert handle_reflection_list(args) == 0
     output = capsys.readouterr().out
@@ -66,6 +66,8 @@ def test_reflection_list_with_entries(project_root: Path, capsys: pytest.Capture
     assert "Test idea 1" in output
     assert "[pending]" in output
     assert "[dismissed]" in output
+    assert entries[0].id not in output
+    assert entries[1].id not in output
 
 
 def test_reflection_list_filters_by_status(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
