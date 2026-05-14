@@ -205,7 +205,7 @@ def test_chat_agent_uses_local_summary_without_api_key(tmp_path: Path) -> None:
     thread_path = tmp_path / "private" / "threads" / "default.json"
     text = thread_path.read_text(encoding="utf-8")
 
-    assert "OPENAI_API_KEY is not configured" not in text
+    assert "LLM API key is not configured" not in text
     assert '"content": "three"' in text
     assert '"summary":' in text
 
@@ -221,7 +221,7 @@ def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
                     role="assistant",
                     content=(
                         "LLM API is not configured yet. I saved the message and can use local memory/context, "
-                        "but real reasoning needs NUSELF_LLM_API_KEY. Last message: old question"
+                        "but real reasoning needs an API key. Last message: old question"
                     ),
                 ),
             ],
@@ -812,6 +812,22 @@ def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) 
     assert "Search durable memory" in system_prompt
 
 
+def test_chat_agent_injects_language_instruction(tmp_path: Path) -> None:
+    private_dir = tmp_path / "private"
+    private_dir.mkdir(parents=True)
+    (private_dir / "config.yaml").write_text(
+        "chat:\n  language_preference: zh-CN\n",
+        encoding="utf-8",
+    )
+    llm = FakeLLM()
+    agent = ChatAgent(tmp_path, llm=llm)
+
+    agent.respond("hello")
+
+    system_prompt = llm.calls[0][0].content
+    assert "Respond to the user in zh-CN" in system_prompt
+
+
 def test_memory_search_tool_invocation_with_limit(tmp_path: Path) -> None:
     from nuself.agent.tools import MemorySearchTool
 
@@ -1020,6 +1036,59 @@ def test_dismiss_reflection_invalid_index(tmp_path: Path) -> None:
     assert "Error" in tool.invoke(index=-1)
 
 
+def test_archive_reflection_success(tmp_path: Path) -> None:
+    from nuself.agent.tools import ArchiveReflectionTool
+    from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+
+    repo = ReflectionRepository(tmp_path)
+    repo.add(
+        ReflectionEntry(
+            id="r1",
+            title="Explore recursion in habits",
+            body="...",
+            candidate_type="connection",
+            confidence=0.8,
+            novelty=0.9,
+            urgency=0.3,
+            interruption_cost=0.1,
+            composite_score=0.7,
+            status="pending",
+            discussion_approved=None,
+            discussion_trace=(),
+            deep_link="nuself://thread/reflections",
+            created_at="2024-01-01T00:00:00+00:00",
+            reviewed_at=None,
+        )
+    )
+    tool = ArchiveReflectionTool(repository=repo)
+    result = tool.invoke(index=1)
+    assert "Archived" in result
+    assert "Explore recursion in habits" in result
+    assert repo.list(status="pending") == []
+    archived = repo.list(status="archived")
+    assert len(archived) == 1
+
+
+def test_archive_reflection_out_of_range(tmp_path: Path) -> None:
+    from nuself.agent.tools import ArchiveReflectionTool
+    from nuself.reflection.repository import ReflectionRepository
+
+    repo = ReflectionRepository(tmp_path)
+    tool = ArchiveReflectionTool(repository=repo)
+    result = tool.invoke(index=1)
+    assert "out of range" in result
+
+
+def test_archive_reflection_invalid_index(tmp_path: Path) -> None:
+    from nuself.agent.tools import ArchiveReflectionTool
+    from nuself.reflection.repository import ReflectionRepository
+
+    repo = ReflectionRepository(tmp_path)
+    tool = ArchiveReflectionTool(repository=repo)
+    assert "Error" in tool.invoke(index=0)
+    assert "Error" in tool.invoke(index=-1)
+
+
 def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -> None:
     from nuself.agent.chat import ChatAgent
 
@@ -1028,8 +1097,53 @@ def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -
     agent.respond("test")
 
     system_prompt = llm.calls[0][0].content
-    assert "list_pending_reflections" in system_prompt
+    assert "archive_reflection" in system_prompt
     assert "dismiss_reflection" in system_prompt
+
+
+def test_chat_agent_shows_pending_reflections_in_system_prompt(tmp_path: Path) -> None:
+    from nuself.agent.chat import ChatAgent
+    from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+
+    repo = ReflectionRepository(tmp_path)
+    repo.add(
+        ReflectionEntry(
+            id="r1",
+            title="Explore recursion in habits",
+            body="Your memory suggests...",
+            candidate_type="connection",
+            confidence=0.8,
+            novelty=0.9,
+            urgency=0.3,
+            interruption_cost=0.1,
+            composite_score=0.7,
+            status="pending",
+            discussion_approved=None,
+            discussion_trace=(),
+            deep_link="nuself://thread/reflections",
+            created_at="2024-01-01T00:00:00+00:00",
+            reviewed_at=None,
+        )
+    )
+
+    llm = FakeLLM()
+    agent = ChatAgent(tmp_path, llm=llm)
+    agent.respond("test")
+
+    system_prompt = llm.calls[0][0].content
+    assert "Pending reflection ideas:" in system_prompt
+    assert "Explore recursion in habits" in system_prompt
+
+
+def test_chat_agent_omits_reflection_section_when_empty(tmp_path: Path) -> None:
+    from nuself.agent.chat import ChatAgent
+
+    llm = FakeLLM()
+    agent = ChatAgent(tmp_path, llm=llm)
+    agent.respond("test")
+
+    system_prompt = llm.calls[0][0].content
+    assert "Pending reflection ideas:" not in system_prompt
 
 
 # --- Memory management tools ---

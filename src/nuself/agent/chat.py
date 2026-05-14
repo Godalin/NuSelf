@@ -478,6 +478,8 @@ class ConversationGraphRuntime:
         self._llm = llm or default_llm(project_root)
         self._settings = settings or ChatAgentSettings.from_project(project_root)
         self._project_root = project_root
+        system_config = ConfigSystem.load(project_root=project_root)
+        self._language_preference = system_config.chat.language_preference
         persona_definitions = load_persona_definitions(project_root)
         self._persona_activation_policy = PersonaActivationPolicy(persona_definitions)
         self._host_discussion_policy = HostDiscussionPolicy()
@@ -492,17 +494,19 @@ class ConversationGraphRuntime:
 
         from nuself.agent.tools import (
             ArchiveMemoryTool,
+            ArchiveReflectionTool,
             DismissReflectionTool,
             ListPendingReflectionsTool,
             UpdateMemoryImportanceTool,
         )
         from nuself.reflection.repository import ReflectionRepository
 
-        reflection_repo = ReflectionRepository(project_root)
+        self._reflection_repo = ReflectionRepository(project_root)
         self._tools: dict[str, Any] = {
             "search_memory": MemorySearchTool(query_service=self._memory_query_service),
-            "list_pending_reflections": ListPendingReflectionsTool(repository=reflection_repo),
-            "dismiss_reflection": DismissReflectionTool(repository=reflection_repo),
+            "list_pending_reflections": ListPendingReflectionsTool(repository=self._reflection_repo),
+            "dismiss_reflection": DismissReflectionTool(repository=self._reflection_repo),
+            "archive_reflection": ArchiveReflectionTool(repository=self._reflection_repo),
             "archive_memory": ArchiveMemoryTool(project_root=project_root),
             "update_memory_importance": UpdateMemoryImportanceTool(project_root=project_root),
         }
@@ -832,6 +836,8 @@ class ConversationGraphRuntime:
             "confidence should be a number between 0 and 1 when you can estimate it; otherwise omit it.",
             "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
         ]
+        if self._language_preference != "en":
+            parts.append(f"Respond to the user in {self._language_preference}.")
         if state.memory_context != "":
             parts.extend(["", "Relevant memory context:", state.memory_context])
         if state.persisted_state.summary != "":
@@ -853,14 +859,17 @@ class ConversationGraphRuntime:
 
     def _build_follow_up_prompt(self, state: ThreadState, tool_result: str) -> list[ChatMessage]:
         """Build a prompt for the follow-up after tool invocation."""
+        follow_up_system = (
+            "You are NuSelf. The previous tool call returned the following results. "
+            "Use these results to generate your final answer. "
+            "Return a JSON object with answer, evidence_references, confidence, and epistemic_status."
+        )
+        if self._language_preference != "en":
+            follow_up_system += f"\n\nRespond to the user in {self._language_preference}."
         prompt: list[ChatMessage] = [
             ChatMessage(
                 role="system",
-                content=(
-                    "You are NuSelf. The previous tool call returned the following results. "
-                    "Use these results to generate your final answer. "
-                    "Return a JSON object with answer, evidence_references, confidence, and epistemic_status."
-                ),
+                content=follow_up_system,
             )
         ]
         # Include recent message history
@@ -881,12 +890,22 @@ class ConversationGraphRuntime:
             "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
             "Answer directly, keep uncertainty explicit, and surface useful questions when appropriate.",
         ]
+        if self._language_preference != "en":
+            parts.append(f"Respond to the user in {self._language_preference}.")
         if state.memory_context != "":
             parts.extend(["", "Relevant memory context:", state.memory_context])
         if state.persisted_state.summary != "":
             parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
         if synthesis is not None:
             parts.extend(["", "Internal perspective fusion:", f"Summary: {synthesis.summary}", f"Perspectives involved: {', '.join(synthesis.source_personas)}"])
+        # Inject pending reflections directly into context
+        pending_reflections = self._reflection_repo.list(status="pending")
+        if pending_reflections:
+            refl_lines = ["Pending reflection ideas:"]
+            for i, entry in enumerate(pending_reflections[:3], start=1):
+                refl_lines.append(f"[{i}] {entry.title}: {entry.body}")
+            parts.extend(["", "\n".join(refl_lines)])
+
         parts.extend([
             "",
             "Available tools:",
@@ -899,14 +918,15 @@ class ConversationGraphRuntime:
                 "Search durable memory for relevant context, optionally narrowed by memory type or tag."
             ),
             (
-                "- list_pending_reflections(limit: int = 5): "
-                "View pending proactive ideas generated from the user's memory and conversations. "
-                "Use when the user seems open to exploring new topics or when the conversation naturally pauses."
-            ),
-            (
                 "- dismiss_reflection(index: int): "
                 "Remove a pending idea from the active pool when the user explicitly declines interest. "
-                "Index corresponds to the numbered list from list_pending_reflections."
+                "Index corresponds to the numbered list from pending reflections above."
+            ),
+            (
+                "- archive_reflection(index: int): "
+                "Archive a pending reflection idea after the discussion is complete. "
+                "Use when the user has engaged with a reflection and the topic feels resolved. "
+                "Index corresponds to the numbered list from pending reflections above."
             ),
             (
                 "- archive_memory(entry_id: str): "
@@ -920,9 +940,9 @@ class ConversationGraphRuntime:
             ),
             "",
             "Behavioral guidelines:",
-            "- If the conversation naturally pauses or touches on topics related to pending reflections, you may proactively bring one idea into the discussion in your own words. Do not dump the raw list.",
-            "- If the user shows no interest in a suggested topic, dismiss the reflection.",
-            "- If the user engages with a reflection idea, the conversation itself will naturally capture the outcome into memory.",
+            "- Pending reflections are shown above. If the conversation naturally touches on one of them, discuss it in your own words. Do not dump the raw list.",
+            "- If the user shows no interest in a suggested topic, call dismiss_reflection.",
+            "- If the user engages with a reflection and the discussion feels complete, call archive_reflection. The conversation itself captures the outcome into memory.",
             "- You can also help curate memory: archive outdated entries or adjust importance when the user signals relevance changes.",
         ])
         return "\n".join(parts)

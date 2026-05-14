@@ -156,6 +156,43 @@ class DismissReflectionTool:
 
 
 @dataclass(frozen=True)
+class ArchiveReflectionTool:
+    """Tool for archiving a reflection idea after discussion is complete."""
+
+    repository: ReflectionRepository
+    name: str = "archive_reflection"
+    description: str = (
+        "Archive a pending reflection idea after the discussion is complete. "
+        "Use when the user has engaged with a reflection idea and the topic feels resolved. "
+        "The index corresponds to the numbered list shown in the pending reflections context."
+    )
+
+    def invoke(self, index: int) -> str:
+        """Archive a reflection idea by its 1-based index.
+
+        Args:
+            index: 1-based index from the pending reflections list.
+
+        Returns:
+            Confirmation or error message.
+        """
+        try:
+            idx = int(index)
+        except (ValueError, TypeError):
+            return "Error: index must be an integer"
+        if idx < 1:
+            return "Error: index must be a positive integer"
+
+        entries = self.repository.list(status="pending")
+        if idx > len(entries):
+            return f"Error: index {idx} is out of range (only {len(entries)} pending ideas)"
+
+        entry = entries[idx - 1]
+        self.repository.archive(entry.id)
+        return f'Archived "{entry.title}". The discussion has been captured into memory through the conversation.'
+
+
+@dataclass(frozen=True)
 class ArchiveMemoryTool:
     """Tool for archiving a memory entry."""
 
