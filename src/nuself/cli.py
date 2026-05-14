@@ -1741,11 +1741,15 @@ def _interactive_loop(
                 continue
             print()
             event_offset = len(read_log_events(project_root=project_root))
+            print("NuSelf:")
             result = send_message(message, current_thread_id)
             session.capture_new_messages(project_root, current_thread_id)
             events = _interactive_activity_events(project_root, event_offset)
             session.capture_log_events(current_thread_id, events)
-            _print_interactive_activity_events(events)
+            if events:
+                print()
+                print("Logs:")
+                _print_interactive_activity_events(events)
             print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
             if result != 0:
                 return result

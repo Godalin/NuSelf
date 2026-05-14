@@ -281,6 +281,8 @@ def test_interactive_turn_prints_activity_events(
     captured = capsys.readouterr()
 
     assert result == 0
+    assert "NuSelf:\nLLM API is not configured yet." in captured.out
+    assert "\n\nLogs:\n[chat] one_shot_chat_completed" in captured.out
     assert "[chat] one_shot_chat_completed one-shot chat turn completed" in captured.out
     assert "[chat] one_shot_chat_completed one-shot chat turn completed status=ok thread=default\nsession thread=default daemon=one-shot" in captured.out
     assert "[chat] one_shot_chat_completed one-shot chat turn completed status=ok thread=default\n\nsession thread=default daemon=one-shot" not in captured.out

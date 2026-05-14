@@ -73,7 +73,7 @@ All interactive commands start with `:`.
 ### Output Formatting
 
 - Commands print one leading blank line before their output and do not add a trailing blank line before the next prompt or session header.
-- Chat turns print one leading blank line before the assistant reply. Activity logs and the session header follow the reply without extra blank spacer lines.
+- Chat turns print one leading blank line, then a `NuSelf:` label before the assistant reply. Activity logs are separated from the reply by one blank line plus a compact `Logs:` label, and the session header follows the logs without extra blank spacer lines.
 - Session header reprinted after non-command turns and thread-switching commands:
   ```
   session thread=<id> daemon=<running|one-shot>
