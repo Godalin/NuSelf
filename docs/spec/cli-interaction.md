@@ -86,6 +86,15 @@ After each chat turn, the REPL prints all new log events that occurred during th
 
 When color is enabled, each known self label in a `persona_summary` block uses a stable distinct color. Color applies only to the speaker label, not the thought text, and no-color mode preserves the same plain text without ANSI escapes.
 
+### Transcript Export
+
+- Command: `:export` writes a user-readable Markdown transcript for the current thread.
+- Clipboard: `:export --copy` or `:export copy` also copies the saved transcript contents to the system clipboard.
+- Scope: transcript export starts at the current interactive connection time. Re-running export later in the same connection includes the full conversation from that same connection start, not only messages since the previous export.
+- Storage: files are written under `private/transcripts/`.
+- Filename: includes the connection start time and export command time, e.g. `chat-default-20260514T120000123456Z-20260514T121500654321Z.md`.
+- Output: after saving, print the file path. If clipboard copy was requested, print whether copying succeeded.
+
 ## Command Group Reference
 
 ### Reflection

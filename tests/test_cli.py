@@ -258,6 +258,50 @@ def test_interactive_turn_prints_activity_events(
     assert "[chat] one-shot chat turn completed" in captured.out
 
 
+def test_interactive_export_saves_connection_transcript(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput("first message\n:export\nsecond message\n:export\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Saved transcript:" in captured.out
+    exports = sorted((tmp_path / "private" / "transcripts").glob("chat-default-*.md"))
+    assert len(exports) == 2
+    first_export = exports[0].read_text(encoding="utf-8")
+    second_export = exports[1].read_text(encoding="utf-8")
+    assert "first message" in first_export
+    assert "second message" not in first_export
+    assert "first message" in second_export
+    assert "second message" in second_export
+    assert "- Thread: `default`" in second_export
+
+
+def test_interactive_export_copy_copies_saved_transcript(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    copied: list[str] = []
+
+    def fake_copy(text: str) -> tuple[bool, str]:
+        copied.append(text)
+        return True, ""
+
+    monkeypatch.setattr("sys.stdin", _TextInput("share this\n:export --copy\n:q\n"))
+    monkeypatch.setattr("nuself.cli._copy_text_to_clipboard", fake_copy)
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Saved transcript:" in captured.out
+    assert "Copied transcript to clipboard." in captured.out
+    assert len(copied) == 1
+    assert "share this" in copied[0]
+    assert "# NuSelf Chat Transcript" in copied[0]
+
+
 def test_interactive_history_skips_consecutive_duplicates(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:

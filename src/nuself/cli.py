@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import warnings
 
@@ -77,6 +81,45 @@ finally:
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
+
+
+def empty_thread_start_indexes() -> dict[str, int]:
+    return {}
+
+
+def empty_captured_thread_messages() -> dict[str, list[tuple[int, str, str]]]:
+    return {}
+
+
+@dataclass
+class InteractiveSession:
+    """State that belongs to one interactive CLI connection."""
+
+    connected_at: datetime
+    thread_start_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
+    captured_messages: dict[str, list[tuple[int, str, str]]] = field(default_factory=empty_captured_thread_messages)
+    captured_next_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
+
+    def start_index_for(self, project_root: Path | None, thread_id: str) -> int:
+        if thread_id not in self.thread_start_indexes:
+            next_index = ThreadStore(project_root).load(thread_id).next_message_index
+            self.thread_start_indexes[thread_id] = next_index
+            self.captured_next_indexes[thread_id] = next_index
+        return self.thread_start_indexes[thread_id]
+
+    def capture_new_messages(self, project_root: Path | None, thread_id: str) -> None:
+        start_index = self.start_index_for(project_root, thread_id)
+        capture_start = self.captured_next_indexes.get(thread_id, start_index)
+        thread = ThreadStore(project_root).load(thread_id)
+        new_messages = _thread_messages_from_index(thread, capture_start)
+        if not new_messages:
+            return
+        self.captured_messages.setdefault(thread_id, []).extend(new_messages)
+        self.captured_next_indexes[thread_id] = new_messages[-1][0] + 1
+
+    def transcript_messages(self, project_root: Path | None, thread_id: str) -> list[tuple[int, str, str]]:
+        self.capture_new_messages(project_root, thread_id)
+        return list(self.captured_messages.get(thread_id, []))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1637,6 +1680,8 @@ def _interactive_loop(
     history_path = _load_interactive_history(project_root)
     _setup_interactive_completer(project_root)
     current_thread_id = initial_thread_id
+    session = InteractiveSession(connected_at=datetime.now(UTC))
+    session.start_index_for(project_root, current_thread_id)
     print(_brand_banner())
     print("νSelf interactive mode. Type :q, :quit, or :exit to leave.")
     print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
@@ -1653,8 +1698,9 @@ def _interactive_loop(
             _remember_interactive_input(message)
             if message.startswith(":"):
                 command_result, current_thread_id = _handle_interactive_command(
-                    message, project_root, current_thread_id
+                    message, project_root, current_thread_id, session
                 )
+                session.start_index_for(project_root, current_thread_id)
                 if command_result == "exit":
                     return 0
                 if command_result == "redraw_header":
@@ -1663,6 +1709,7 @@ def _interactive_loop(
             print()
             event_offset = len(read_log_events(project_root=project_root))
             result = send_message(message, current_thread_id)
+            session.capture_new_messages(project_root, current_thread_id)
             _print_interactive_activity(project_root, event_offset)
             print()
             print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
@@ -1685,6 +1732,7 @@ _INTERACTIVE_COMMANDS = [
     ":help",
     ":status",
     ":logs",
+    ":export",
     ":memory",
     ":mem",
     ":reflection",
@@ -1880,7 +1928,12 @@ def _brand_banner() -> str:
     )
 
 
-def _handle_interactive_command(command: str, project_root: Path | None, current_thread_id: str) -> tuple[str, str]:
+def _handle_interactive_command(
+    command: str,
+    project_root: Path | None,
+    current_thread_id: str,
+    session: InteractiveSession,
+) -> tuple[str, str]:
     if command in {":q", ":quit", ":exit"}:
         return ("exit", current_thread_id)
     if command == ":history":
@@ -1960,6 +2013,11 @@ def _handle_interactive_command(command: str, project_root: Path | None, current
     if command == ":logs":
         print()
         _print_recent_logs(project_root, limit=8)
+        print()
+        return ("", current_thread_id)
+    if command == ":export" or command.startswith(":export "):
+        print()
+        print(_handle_interactive_export_command(command, project_root, current_thread_id, session))
         print()
         return ("", current_thread_id)
     if command in {":memory", ":mem"}:
@@ -2115,6 +2173,7 @@ def _interactive_help(command: str | None = None) -> str:
             "  :help      show this help",
             "  :status show daemon and thread status",
             "  :logs   show recent activity logs",
+            "  :export [--copy]          save this connection's chat transcript",
             "  :memory preview memory entries",
             "  :mem    preview memory entries",
             "  :search <query>           quick memory search",
@@ -2170,6 +2229,144 @@ def _print_interactive_activity(project_root: Path | None, event_offset: int) ->
     events = read_log_events(project_root=project_root)
     for event in events[event_offset:]:
         print(render_log_event(event))
+
+
+def _handle_interactive_export_command(
+    command: str,
+    project_root: Path | None,
+    thread_id: str,
+    session: InteractiveSession,
+) -> str:
+    args = command.removeprefix(":export").strip().split()
+    copy_requested = False
+    if args:
+        if all(arg in {"--copy", "copy"} for arg in args):
+            copy_requested = True
+        else:
+            return _interactive_help(":export")
+
+    exported_at = datetime.now(UTC)
+    try:
+        start_index = session.start_index_for(project_root, thread_id)
+        path, content = _export_interactive_transcript(
+            project_root,
+            thread_id=thread_id,
+            start_index=start_index,
+            connected_at=session.connected_at,
+            exported_at=exported_at,
+            messages=session.transcript_messages(project_root, thread_id),
+        )
+    except ValueError as exc:
+        return f"Error: {exc}"
+
+    lines = [f"Saved transcript: {path}"]
+    if copy_requested:
+        copied, reason = _copy_text_to_clipboard(content)
+        if copied:
+            lines.append("Copied transcript to clipboard.")
+        else:
+            lines.append(f"Clipboard copy failed: {reason}")
+    return "\n".join(lines)
+
+
+def _export_interactive_transcript(
+    project_root: Path | None,
+    *,
+    thread_id: str,
+    start_index: int,
+    connected_at: datetime,
+    exported_at: datetime,
+    messages: list[tuple[int, str, str]] | None = None,
+) -> tuple[Path, str]:
+    paths = runtime_paths(project_root)
+    if messages is None:
+        thread = ThreadStore(project_root).load(thread_id)
+        messages = _thread_messages_from_index(thread, start_index)
+    if not messages:
+        raise ValueError("no chat messages in this connection yet")
+
+    export_dir = paths.private_root / "transcripts"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    filename = (
+        f"chat-{_safe_filename_component(thread_id)}-"
+        f"{_compact_timestamp(connected_at)}-{_compact_timestamp(exported_at)}.md"
+    )
+    path = export_dir / filename
+    content = _render_chat_transcript(
+        thread_id=thread_id,
+        connected_at=connected_at,
+        exported_at=exported_at,
+        messages=messages,
+    )
+    path.write_text(content, encoding="utf-8")
+    return path, content
+
+
+def _thread_messages_from_index(thread: ThreadState, start_index: int) -> list[tuple[int, str, str]]:
+    messages: list[tuple[int, str, str]] = []
+    for offset, message in enumerate(thread.messages):
+        index = thread.message_start_index + offset
+        if index >= start_index:
+            messages.append((index, message.role, message.content))
+    return messages
+
+
+def _render_chat_transcript(
+    *,
+    thread_id: str,
+    connected_at: datetime,
+    exported_at: datetime,
+    messages: list[tuple[int, str, str]],
+) -> str:
+    lines = [
+        "# NuSelf Chat Transcript",
+        "",
+        f"- Thread: `{thread_id}`",
+        f"- Connected: {connected_at.isoformat()}",
+        f"- Exported: {exported_at.isoformat()}",
+        "",
+    ]
+    for index, role, content in messages:
+        label = "User" if role == "user" else "NuSelf"
+        lines.extend([
+            f"## {index}. {label}",
+            "",
+            content.strip(),
+            "",
+        ])
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _copy_text_to_clipboard(text: str) -> tuple[bool, str]:
+    command = _clipboard_command()
+    if command is None:
+        return False, "no supported clipboard command found"
+    try:
+        subprocess.run(command, input=text, text=True, check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        return False, str(exc)
+    return True, ""
+
+
+def _clipboard_command() -> list[str] | None:
+    if sys.platform == "darwin" and shutil.which("pbcopy") is not None:
+        return ["pbcopy"]
+    if shutil.which("wl-copy") is not None:
+        return ["wl-copy"]
+    if shutil.which("xclip") is not None:
+        return ["xclip", "-selection", "clipboard"]
+    if shutil.which("xsel") is not None:
+        return ["xsel", "--clipboard", "--input"]
+    return None
+
+
+def _safe_filename_component(text: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in text)
+    return cleaned.strip("-") or "thread"
+
+
+def _compact_timestamp(value: datetime) -> str:
+    return value.astimezone(UTC).strftime("%Y%m%dT%H%M%S%fZ")
 
 
 def _handle_interactive_memory_search(query: str, project_root: Path | None) -> str:
