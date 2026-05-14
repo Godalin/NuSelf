@@ -255,6 +255,8 @@ def test_interactive_status_command_shows_daemon_status(
 
     assert result == 0
     assert "daemon stopped" in captured.out
+    assert "daemon stopped pid=- socket=" in captured.out
+    assert "\n\nNuSelf> " not in captured.out.split("daemon stopped", maxsplit=1)[1]
 
 
 def test_interactive_logs_command_shows_recent_activity(
@@ -280,6 +282,8 @@ def test_interactive_turn_prints_activity_events(
 
     assert result == 0
     assert "[chat] one-shot chat turn completed" in captured.out
+    assert "[chat] one-shot chat turn completed status=ok thread=default\nsession thread=default daemon=one-shot" in captured.out
+    assert "[chat] one-shot chat turn completed status=ok thread=default\n\nsession thread=default daemon=one-shot" not in captured.out
 
 
 def test_interactive_export_saves_connection_transcript(

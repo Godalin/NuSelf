@@ -1734,7 +1734,6 @@ def _interactive_loop(
             events = _interactive_activity_events(project_root, event_offset)
             session.capture_log_events(current_thread_id, events)
             _print_interactive_activity_events(events)
-            print()
             print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
             if result != 0:
                 return result
@@ -1963,22 +1962,18 @@ def _handle_interactive_command(
     if command == ":history":
         print()
         print(_handle_interactive_history_command(project_root, current_thread_id))
-        print()
         return ("", current_thread_id)
     if command == ":sources":
         print()
         print(_handle_interactive_sources_command(project_root))
-        print()
         return ("", current_thread_id)
     if command == ":whoami":
         print()
         print(_handle_interactive_whoami_command(project_root))
-        print()
         return ("", current_thread_id)
     if command == ":reflection":
         print()
         print(_handle_interactive_reflection_command(project_root))
-        print()
         return ("", current_thread_id)
     if command.startswith(":reflection "):
         print()
@@ -1994,17 +1989,14 @@ def _handle_interactive_command(
             print(_handle_interactive_reflection_subcommand(project_root, subcmd, entry_id))
         else:
             print(_interactive_help(":reflection"))
-        print()
         return ("", current_thread_id)
     if command == ":notify":
         print()
         print(_handle_interactive_notify_command(project_root))
-        print()
         return ("", current_thread_id)
     if command == ":watch":
         print()
         _handle_interactive_watch_command(project_root)
-        print()
         return ("", current_thread_id)
     if command.startswith(":notify "):
         print()
@@ -2022,37 +2014,30 @@ def _handle_interactive_command(
             print(_handle_interactive_notify_subcommand(project_root, subcmd, entry_id))
         else:
             print(_interactive_help(":notify"))
-        print()
         return ("", current_thread_id)
     if command == ":help":
         print()
         print(_interactive_help())
-        print()
         return ("", current_thread_id)
     if command == ":status":
         print()
         print(_format_status(lifecycle.status(project_root)))
-        print()
         return ("", current_thread_id)
     if command == ":logs":
         print()
         _print_recent_logs(project_root, limit=8)
-        print()
         return ("", current_thread_id)
     if command in {":export", ":e"} or command.startswith(":export ") or command.startswith(":e "):
         print()
         print(_handle_interactive_export_command(command, project_root, current_thread_id, session))
-        print()
         return ("", current_thread_id)
     if command in {":memory", ":mem"}:
         print()
         print(_format_memory_preview(project_root))
-        print()
         return ("", current_thread_id)
     if command.startswith(":mem "):
         print()
         print(_handle_interactive_memory_command(command[5:].strip(), project_root))
-        print()
         return ("", current_thread_id)
     if command.startswith(":search "):
         print()
@@ -2061,12 +2046,10 @@ def _handle_interactive_command(
             print(_interactive_help(":search"))
         else:
             print(_handle_interactive_memory_search(query, project_root))
-        print()
         return ("", current_thread_id)
     if command == ":threads":
         print()
         print(_handle_interactive_threads_command(project_root))
-        print()
         return ("", current_thread_id)
     if command.startswith(":thread "):
         print()
@@ -2078,7 +2061,6 @@ def _handle_interactive_command(
             if new_id not in store.list():
                 store.save(ThreadState.empty(new_id))
             print(f"Switched to thread: {new_id}")
-        print()
         return ("redraw_header", new_id if new_id != "" else current_thread_id)
     if command.startswith(":rename "):
         print()
@@ -2091,7 +2073,6 @@ def _handle_interactive_command(
                 print(f"Renamed thread to: {new_id}")
             except ValueError as exc:
                 print(f"Error: {exc}")
-        print()
         return ("redraw_header", new_id if new_id != "" else current_thread_id)
     if command.startswith(":branch "):
         print()
@@ -2103,7 +2084,6 @@ def _handle_interactive_command(
                 index = int(parts[1])
             except ValueError:
                 print(f"Invalid index: {parts[1]}")
-                print()
                 return ("", current_thread_id)
         if new_id == "":
             print(_interactive_help(":branch"))
@@ -2113,7 +2093,6 @@ def _handle_interactive_command(
                 print(f"Branched to thread: {new_id}")
             except ValueError as exc:
                 print(f"Error: {exc}")
-        print()
         return ("redraw_header", new_id if new_id != "" else current_thread_id)
     if command == ":archive":
         print()
@@ -2122,7 +2101,6 @@ def _handle_interactive_command(
             print(f"Archived thread: {current_thread_id}")
         except ValueError as exc:
             print(f"Error: {exc}")
-        print()
         return ("redraw_header", "default")
     if command.startswith(":unarchive "):
         print()
@@ -2135,7 +2113,6 @@ def _handle_interactive_command(
                 print(f"Unarchived thread: {thread_id}")
             except ValueError as exc:
                 print(f"Error: {exc}")
-        print()
         return ("", current_thread_id)
     if command == ":archived":
         print()
@@ -2146,7 +2123,6 @@ def _handle_interactive_command(
         else:
             for thread_id in ids:
                 print(thread_id)
-        print()
         return ("", current_thread_id)
     if command == ":delete":
         print()
@@ -2155,11 +2131,9 @@ def _handle_interactive_command(
             print(f"Deleted thread: {current_thread_id}")
         except ValueError as exc:
             print(f"Error: {exc}")
-        print()
         return ("redraw_header", "default")
     print()
     print(_interactive_help(command))
-    print()
     return ("", current_thread_id)
 
 
