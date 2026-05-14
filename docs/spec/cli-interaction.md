@@ -77,6 +77,8 @@ All interactive commands start with `:`.
   ```
   session thread=<id> daemon=<running|one-shot>
   ```
+- NuSelf assistant replies printed to an interactive terminal are rendered as Markdown.
+- Terminal assistant replies are streamed with a small typewriter effect so the reply appears progressively. The plain stored transcript remains unchanged.
 
 ### Activity Printing
 

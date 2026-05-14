@@ -11,6 +11,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 import warnings
 
 try:
@@ -19,6 +20,9 @@ except ImportError:  # pragma: no cover - platform fallback
     readline = None  # type: ignore[assignment]
 
 _original_warn = warnings.warn
+
+TYPEWRITER_DELAY_SECONDS = 0.01
+TYPEWRITER_REFRESH_PER_SECOND = 30
 
 
 def _suppress_startup_warning(
@@ -1671,7 +1675,7 @@ def _send_chat(message: str, project_root: Path | None, thread_id: str = "defaul
         return 1
     reply = response.payload.get("reply")
     if isinstance(reply, str):
-        print(reply)
+        _print_assistant_reply(reply)
         memory_update = response.payload.get("memory_update")
         if isinstance(memory_update, str) and memory_update != "":
             print(f"[memory] {memory_update}")
@@ -1882,7 +1886,7 @@ def _dedupe_interactive_history() -> None:
 
 def _send_one_shot_chat(message: str, project_root: Path | None, thread_id: str = "default") -> int:
     try:
-        print(_one_shot_reply(message, project_root, thread_id))
+        _print_assistant_reply(_one_shot_reply(message, project_root, thread_id))
         write_log_event(
             "chat",
             "one_shot_chat_completed",
@@ -2220,6 +2224,36 @@ def _interactive_help(command: str | None = None) -> str:
 
 def _one_shot_reply(message: str, project_root: Path | None, thread_id: str = "default") -> str:
     return ChatAgent(project_root).respond(message, thread_id=thread_id).reply
+
+
+def _print_assistant_reply(text: str) -> None:
+    if not sys.stdout.isatty():
+        print(text)
+        return
+    _render_assistant_reply_rich(text)
+
+
+def _render_assistant_reply_rich(text: str) -> None:
+    from rich.console import Console
+    from rich.live import Live
+    from rich.markdown import Markdown
+
+    console = Console()
+    if text == "":
+        console.print("")
+        return
+
+    visible_text = ""
+    with Live(
+        Markdown(""),
+        console=console,
+        refresh_per_second=TYPEWRITER_REFRESH_PER_SECOND,
+        transient=False,
+    ) as live:
+        for character in text:
+            visible_text += character
+            live.update(Markdown(visible_text))
+            time.sleep(TYPEWRITER_DELAY_SECONDS)
 
 
 def _log_component_arg(value: object) -> LogComponent | None:

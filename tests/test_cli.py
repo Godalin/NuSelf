@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 import subprocess
 import sys
@@ -77,6 +78,29 @@ def test_one_shot_chat_runs_memory_curator_after_reply(
     assert result == 0
     assert "Last message: remember this preference" in captured.out
     assert "[memory] processed=2 created=1 updated=0 ignored=0" in captured.out
+
+
+def test_assistant_reply_prints_plain_text_when_stdout_is_not_tty(
+    capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    print_assistant_reply = cast(Callable[[str], None], getattr(cli, "_print_assistant_reply"))
+
+    print_assistant_reply("**hello**")
+
+    captured = capsys.readouterr()
+    assert captured.out == "**hello**\n"
+
+
+def test_assistant_reply_uses_rich_renderer_when_stdout_is_tty(monkeypatch: MonkeyPatchFixture) -> None:
+    rendered: list[str] = []
+    monkeypatch.setattr("sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr("nuself.cli._render_assistant_reply_rich", rendered.append)
+    print_assistant_reply = cast(Callable[[str], None], getattr(cli, "_print_assistant_reply"))
+
+    print_assistant_reply("**hello**")
+
+    assert rendered == ["**hello**"]
 
 
 def test_chat_without_message_enters_one_shot_interactive_mode(
