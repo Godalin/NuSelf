@@ -85,6 +85,7 @@ finally:
 
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
+INTERACTIVE_CHAT_ATTEMPTS = 2
 
 
 def empty_thread_start_indexes() -> dict[str, int]:
@@ -1740,23 +1741,52 @@ def _interactive_loop(
                     print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
                 continue
             print()
-            event_offset = len(read_log_events(project_root=project_root))
             print("NuSelf:")
-            result = send_message(message, current_thread_id)
-            session.capture_new_messages(project_root, current_thread_id)
-            events = _interactive_activity_events(project_root, event_offset)
-            session.capture_log_events(current_thread_id, events)
-            if events:
-                print()
-                print("Logs:")
-                _print_interactive_activity_events(events)
+            result = _send_interactive_chat_turn(
+                send_message,
+                project_root,
+                current_thread_id,
+                message,
+                session,
+            )
             print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
             if result != 0:
-                return result
+                continue
     finally:
         if history_path is not None:
             _write_interactive_history(history_path)
         _run_memory_curator(project_root)
+
+
+def _send_interactive_chat_turn(
+    send_message: Callable[[str, str], int],
+    project_root: Path | None,
+    thread_id: str,
+    message: str,
+    session: InteractiveSession,
+) -> int:
+    event_offset = len(read_log_events(project_root=project_root))
+    result = 1
+    printed_logs = False
+    for attempt in range(1, INTERACTIVE_CHAT_ATTEMPTS + 1):
+        if attempt > 1:
+            print()
+            print(f"Retrying message after failed attempt ({attempt}/{INTERACTIVE_CHAT_ATTEMPTS})...")
+        result = send_message(message, thread_id)
+        session.capture_new_messages(project_root, thread_id)
+        events = _interactive_activity_events(project_root, event_offset)
+        event_offset += len(events)
+        session.capture_log_events(thread_id, events)
+        if events:
+            if not printed_logs:
+                print()
+                print("Logs:")
+                printed_logs = True
+            _print_interactive_activity_events(events)
+        if result == 0:
+            return 0
+    print("Message failed after retry; REPL remains open.", file=sys.stderr)
+    return result
 
 
 _INTERACTIVE_COMMANDS = [

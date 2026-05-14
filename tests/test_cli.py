@@ -288,6 +288,56 @@ def test_interactive_turn_prints_activity_events(
     assert "[chat] one_shot_chat_completed one-shot chat turn completed status=ok thread=default\n\nsession thread=default daemon=one-shot" not in captured.out
 
 
+def test_interactive_daemon_timeout_retries_and_preserves_logs(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    daemon_status = DaemonStatus(
+        running=True,
+        pid=123,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+    calls = 0
+
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        return daemon_status
+
+    def fake_request(
+        request_type: object,
+        payload: object | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            write_log_event(
+                "persona",
+                "persona_summary",
+                "builder_self: first attempt reached persona discussion",
+                project_root=project_root,
+                thread_id="default",
+                status="retryable timeout",
+            )
+            raise DaemonConnectionError("timed out")
+        return DaemonResponse(request_id="r1", status="ok", payload={"reply": "daemon reply"})
+
+    monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.cli.client.request", fake_request)
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert calls == 2
+    assert "daemon request failed: timed out" in captured.err
+    assert "Retrying message after failed attempt (2/2)..." in captured.out
+    assert "builder_self: first attempt reached persona discussion" in captured.out
+    assert "daemon reply" in captured.out
+
+
 def test_interactive_export_saves_connection_transcript(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
