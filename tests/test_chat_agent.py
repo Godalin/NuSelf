@@ -1097,53 +1097,9 @@ def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -
     agent.respond("test")
 
     system_prompt = llm.calls[0][0].content
+    assert "list_pending_reflections" in system_prompt
     assert "archive_reflection" in system_prompt
     assert "dismiss_reflection" in system_prompt
-
-
-def test_chat_agent_shows_pending_reflections_in_system_prompt(tmp_path: Path) -> None:
-    from nuself.agent.chat import ChatAgent
-    from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
-
-    repo = ReflectionRepository(tmp_path)
-    repo.add(
-        ReflectionEntry(
-            id="r1",
-            title="Explore recursion in habits",
-            body="Your memory suggests...",
-            candidate_type="connection",
-            confidence=0.8,
-            novelty=0.9,
-            urgency=0.3,
-            interruption_cost=0.1,
-            composite_score=0.7,
-            status="pending",
-            discussion_approved=None,
-            discussion_trace=(),
-            deep_link="nuself://thread/reflections",
-            created_at="2024-01-01T00:00:00+00:00",
-            reviewed_at=None,
-        )
-    )
-
-    llm = FakeLLM()
-    agent = ChatAgent(tmp_path, llm=llm)
-    agent.respond("test")
-
-    system_prompt = llm.calls[0][0].content
-    assert "Pending reflection ideas:" in system_prompt
-    assert "Explore recursion in habits" in system_prompt
-
-
-def test_chat_agent_omits_reflection_section_when_empty(tmp_path: Path) -> None:
-    from nuself.agent.chat import ChatAgent
-
-    llm = FakeLLM()
-    agent = ChatAgent(tmp_path, llm=llm)
-    agent.respond("test")
-
-    system_prompt = llm.calls[0][0].content
-    assert "Pending reflection ideas:" not in system_prompt
 
 
 # --- Memory management tools ---

@@ -898,13 +898,6 @@ class ConversationGraphRuntime:
             parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
         if synthesis is not None:
             parts.extend(["", "Internal perspective fusion:", f"Summary: {synthesis.summary}", f"Perspectives involved: {', '.join(synthesis.source_personas)}"])
-        # Inject pending reflections directly into context
-        pending_reflections = self._reflection_repo.list(status="pending")
-        if pending_reflections:
-            refl_lines = ["Pending reflection ideas:"]
-            for i, entry in enumerate(pending_reflections[:3], start=1):
-                refl_lines.append(f"[{i}] {entry.title}: {entry.body}")
-            parts.extend(["", "\n".join(refl_lines)])
 
         parts.extend([
             "",
@@ -918,15 +911,20 @@ class ConversationGraphRuntime:
                 "Search durable memory for relevant context, optionally narrowed by memory type or tag."
             ),
             (
+                "- list_pending_reflections(limit: int = 5): "
+                "View pending proactive ideas generated from the user's memory and conversations. "
+                "Use when the user seems open to exploring new topics or when the conversation naturally pauses."
+            ),
+            (
                 "- dismiss_reflection(index: int): "
                 "Remove a pending idea from the active pool when the user explicitly declines interest. "
-                "Index corresponds to the numbered list from pending reflections above."
+                "Index corresponds to the numbered list from list_pending_reflections."
             ),
             (
                 "- archive_reflection(index: int): "
                 "Archive a pending reflection idea after the discussion is complete. "
                 "Use when the user has engaged with a reflection and the topic feels resolved. "
-                "Index corresponds to the numbered list from pending reflections above."
+                "Index corresponds to the numbered list from list_pending_reflections."
             ),
             (
                 "- archive_memory(entry_id: str): "
@@ -940,7 +938,8 @@ class ConversationGraphRuntime:
             ),
             "",
             "Behavioral guidelines:",
-            "- Pending reflections are shown above. If the conversation naturally touches on one of them, discuss it in your own words. Do not dump the raw list.",
+            "- When the user is in a casual or open-ended mood, or when the conversation naturally pauses, you may call list_pending_reflections to discover topics worth discussing.",
+            "- If a reflection topic resonates with the user, discuss it naturally in your own words. Do not dump the raw list.",
             "- If the user shows no interest in a suggested topic, call dismiss_reflection.",
             "- If the user engages with a reflection and the discussion feels complete, call archive_reflection. The conversation itself captures the outcome into memory.",
             "- You can also help curate memory: archive outdated entries or adjust importance when the user signals relevance changes.",
