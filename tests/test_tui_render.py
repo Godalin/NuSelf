@@ -60,3 +60,26 @@ def test_render_persona_summary_formats_personas_on_separate_lines() -> None:
         "  skeptic_self: Skeptic challenges the assumption.",
         "  synthesizer_self: Synthesis keeps the useful tension.",
     ]
+
+
+def test_render_persona_summary_colors_each_self_label() -> None:
+    event = LogEvent(
+        time="2026-05-12T10:00:00Z",
+        level="info",
+        component="persona",
+        event="persona_summary",
+        message=(
+            "analyst_self: Analyst decomposes the question.\n"
+            "skeptic_self: Skeptic challenges the assumption.\n"
+            "builder_self: Builder proposes the next move."
+        ),
+        thread_id="default",
+        status="deep tradeoff",
+        metadata={"persona_count": 3, "has_synthesis": False},
+    )
+
+    lines = render_log_event(event, color=True).splitlines()
+
+    assert lines[1] == "  \033[36manalyst_self\033[0m: Analyst decomposes the question."
+    assert lines[2] == "  \033[31mskeptic_self\033[0m: Skeptic challenges the assumption."
+    assert lines[3] == "  \033[32mbuilder_self\033[0m: Builder proposes the next move."

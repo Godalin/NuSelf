@@ -71,8 +71,34 @@ def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None)
     body_lines = [line for line in event.message.splitlines() if line.strip()]
     if not body_lines:
         body_lines = ["(no persona contributions)"]
-    lines.extend(f"  {line}" for line in body_lines)
+    lines.extend(f"  {_color_persona_line(line, theme)}" for line in body_lines)
     return "\n".join(lines)
+
+
+def _color_persona_line(line: str, theme: TerminalTheme) -> str:
+    speaker, separator, text = line.partition(":")
+    if not separator:
+        return line
+    label = theme.paint(speaker, _persona_color(speaker))
+    return f"{label}:{text}"
+
+
+def _persona_color(persona_id: str) -> str:
+    colors = {
+        "analyst_self": "36",
+        "skeptic_self": "31",
+        "builder_self": "32",
+        "historian_self": "34",
+        "care_self": "35",
+        "synthesizer_self": "33",
+        "moderator_self": "90",
+        "bridge_self": "96",
+        "urgency_self": "91",
+    }
+    if persona_id in colors:
+        return colors[persona_id]
+    palette = ("36", "31", "32", "34", "35", "33")
+    return palette[sum(ord(ch) for ch in persona_id) % len(palette)]
 
 
 def render_log_event_json(event: LogEvent) -> str:

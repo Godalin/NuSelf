@@ -84,6 +84,8 @@ After each chat turn, the REPL prints all new log events that occurred during th
 
 `persona_summary` activity is rendered as a multi-line block. The header names the event once, then each persona contribution is printed on its own indented line in contribution order, followed by the synthesizer line if present. It must not collapse multiple persona thoughts into one pipe-delimited line.
 
+When color is enabled, each known self label in a `persona_summary` block uses a stable distinct color. Color applies only to the speaker label, not the thought text, and no-color mode preserves the same plain text without ANSI escapes.
+
 ## Command Group Reference
 
 ### Reflection
