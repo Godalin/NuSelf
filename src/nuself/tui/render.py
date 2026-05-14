@@ -41,6 +41,8 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
 
     if event.component == "persona" and event.event == "persona_summary":
         return _render_persona_summary_event(event, color=color)
+    if _discussion_trace_metadata(event):
+        return _render_discussion_log_event(event, color=color)
 
     theme = TerminalTheme(color=color)
     tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
@@ -63,6 +65,27 @@ def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None)
     return "\n".join(lines)
 
 
+def _render_discussion_log_event(event: LogEvent, *, color: bool | None = None) -> str:
+    theme = TerminalTheme(color=color)
+    tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
+    header = [tag, event.event, event.message]
+    header.extend(_render_log_fields(event, theme))
+    lines = [" ".join(header)]
+    trace = _discussion_trace_metadata(event)
+    for line in render_discussion_trace(trace, title="discussion"):
+        lines.append(f"  {line}" if line else "")
+    return "\n".join(lines)
+
+
+def _discussion_trace_metadata(event: LogEvent) -> list[object]:
+    if not event.metadata:
+        return []
+    raw = event.metadata.get("discussion_trace")
+    if not isinstance(raw, list) or not raw:
+        return []
+    return cast(list[object], raw)
+
+
 def _render_log_fields(event: LogEvent, theme: TerminalTheme) -> list[str]:
     fields: list[str] = []
     if event.status:
@@ -80,6 +103,8 @@ def _render_log_fields(event: LogEvent, theme: TerminalTheme) -> list[str]:
     if event.metadata:
         for key in sorted(event.metadata):
             if key in {"message_body", "answer", "reply"}:
+                continue
+            if key == "discussion_trace":
                 continue
             fields.append(theme.muted(_format_log_field(key, event.metadata[key])))
     return fields

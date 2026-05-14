@@ -81,3 +81,36 @@ def test_render_persona_summary_colors_each_self_label() -> None:
     assert lines[1] == "  \033[36manalyst_self\033[0m: Analyst decomposes the question."
     assert lines[2] == "  \033[31mskeptic_self\033[0m: Skeptic challenges the assumption."
     assert lines[3] == "  \033[32mbuilder_self\033[0m: Builder proposes the next move."
+
+
+def test_render_discussion_log_expands_trace_metadata() -> None:
+    event = LogEvent(
+        time="2026-05-12T10:00:00Z",
+        level="info",
+        component="reflection",
+        event="persona_discussion",
+        message="New idea - approved after discussion",
+        thread_id="default",
+        status="approved",
+        metadata={
+            "candidate_id": "candidate-1",
+            "discussion_trace": [
+                "candidate: New idea",
+                "turn-1:analyst_self: this is worth pursuing",
+                "turn-1:skeptic_self: check timing first",
+                "turn-1:synthesis: proceed carefully",
+            ],
+        },
+    )
+
+    assert render_log_event(event, color=False).splitlines() == [
+        "[reflection] persona_discussion New idea - approved after discussion status=approved thread=default candidate_id=candidate-1",
+        "  discussion:",
+        "    ── candidate ──",
+        "      [candidate]        New idea",
+        "",
+        "    ── turn-1 ──",
+        "      [analyst_self]     this is worth pursuing",
+        "      [skeptic_self]     check timing first",
+        "      [synthesis]        proceed carefully",
+    ]

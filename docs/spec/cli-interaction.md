@@ -91,6 +91,8 @@ All human-readable logs use one metadata style: `[component] event message key=v
 
 `persona_summary` activity is rendered as a multi-line block. The header follows the same `[component] event message key=value ...` rule and names the event once, then each persona contribution is printed on its own indented line in contribution order, followed by the synthesizer line if present. It must not collapse multiple persona thoughts into one pipe-delimited line.
 
+Logs with `discussion_trace` metadata, including chat and reflection `persona_discussion` events, render the header as one compact log line and then print the trace underneath using the discussion trace block format. The trace block is indented relative to the log header so each self contribution reads like a chat message instead of a single serialized metadata list.
+
 When color is enabled, each known self label in a `persona_summary` block uses a stable distinct color. Color applies only to the speaker label, not the thought text, and no-color mode preserves the same plain text without ANSI escapes.
 
 ### Transcript Export
