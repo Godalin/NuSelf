@@ -34,3 +34,20 @@ reflection:
     assert config.reflection.scheduler.interval_seconds == 600
     assert config.reflection.gate.relevance_threshold == 0.3
     assert config.reflection.scheduler.daily_cap == 5
+
+
+def test_language_preference_default_is_en(tmp_path: Path) -> None:
+    config = ConfigSystem.load(project_root=tmp_path)
+    assert config.chat.language_preference == "en"
+
+
+def test_language_preference_from_yaml(tmp_path: Path) -> None:
+    private_dir = tmp_path / "private"
+    private_dir.mkdir(parents=True)
+    (private_dir / "config.yaml").write_text(
+        "chat:\n  language_preference: zh-CN\n",
+        encoding="utf-8",
+    )
+
+    config = ConfigSystem.load(project_root=tmp_path)
+    assert config.chat.language_preference == "zh-CN"

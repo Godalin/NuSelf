@@ -40,17 +40,6 @@ class MonkeyPatchFixture(Protocol):
     def delenv(self, name: str, raising: bool = True) -> None: ...
 
 
-@pytest.fixture(autouse=True)
-def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[reportUnusedFunction]
-    """Automatically clear LLM-related env vars for all tests for deterministic behavior."""
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    monkeypatch.delenv("OPENAI_MODEL", raising=False)
-    monkeypatch.delenv("NUSELF_LLM_OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("NUSELF_LLM_OPENAI_BASE_URL", raising=False)
-    monkeypatch.delenv("NUSELF_LLM_OPENAI_MODEL", raising=False)
-
-
 class FakeChangedCuratorResult:
     changed = True
     log_path = Path("memory.log")
@@ -68,11 +57,6 @@ class FakeChangedCurator:
 
 
 def test_chat_uses_one_shot_when_daemon_is_missing(tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture) -> None:
-    # Ensure LLM API is not configured by clearing env vars
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    monkeypatch.delenv("NUSELF_LLM_OPENAI_API_KEY", raising=False)
-    
     result = main(["--project-root", str(tmp_path), "chat", "--message", "hello"])
     captured = capsys.readouterr()
 

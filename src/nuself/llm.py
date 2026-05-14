@@ -59,7 +59,7 @@ class OpenAICompatibleLLM:
 
     def complete(self, messages: list[ChatMessage]) -> str:
         if self._settings.api_key.strip() == "":
-            raise RuntimeError("OPENAI_API_KEY is not configured")
+            raise RuntimeError("LLM API key is not configured")
         wire_messages: list[JsonValue] = [message.to_wire() for message in messages]
         payload: dict[str, JsonValue] = {
             "model": self._settings.model,
@@ -91,7 +91,7 @@ class LocalFallbackLLM:
 
     def complete(self, messages: list[ChatMessage]) -> str:
         if messages and "Compress a private NuSelf conversation" in messages[0].content:
-            raise RuntimeError("OPENAI_API_KEY is not configured")
+            raise RuntimeError("LLM API key is not configured")
         last_user = ""
         for message in reversed(messages):
             if message.role == "user":
@@ -99,7 +99,7 @@ class LocalFallbackLLM:
                 break
         return (
             "LLM API is not configured yet. I saved the message and can use local memory/context, "
-            f"but real reasoning needs OPENAI_API_KEY. Last message: {last_user}"
+            f"but real reasoning needs an API key. Last message: {last_user}"
         )
 
 

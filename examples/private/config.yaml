@@ -1,7 +1,6 @@
 # NuSelf Unified Configuration
 # Copy this to private/config.yaml to customize your NuSelf instance.
 # All values are optional; missing fields use safe defaults.
-# Environment variables (NUSELF_*, OPENAI_*) override YAML values.
 
 # LLM Configuration
 llm:

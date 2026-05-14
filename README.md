@@ -48,9 +48,8 @@ private/config.yaml
 ```
 
 Configuration priority (highest to lowest):
-1. Environment variables (NUSELF_* or OPENAI_*)
-2. `private/config.yaml`
-3. Hardcoded defaults in code
+1. `private/config.yaml`
+2. Hardcoded defaults in code
 
 ### LLM Configuration
 
@@ -60,14 +59,6 @@ llm:
     base_url: https://api.openai.com/v1
     api_key: ""        # Leave empty for local fallback
     model: gpt-4.1-mini
-```
-
-Environment variables for backward compat:
-
-```text
-OPENAI_BASE_URL
-OPENAI_API_KEY
-OPENAI_MODEL
 ```
 
 ### Chat Settings

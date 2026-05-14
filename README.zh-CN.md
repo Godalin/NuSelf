@@ -48,9 +48,8 @@ private/config.yaml
 ```
 
 配置优先级（从高到低）：
-1. 环境变量（NUSELF_* 或 OPENAI_*）
-2. `private/config.yaml`
-3. 代码中的硬编码默认值
+1. `private/config.yaml`
+2. 代码中的硬编码默认值
 
 ### LLM 配置
 
@@ -60,14 +59,6 @@ llm:
     base_url: https://api.openai.com/v1
     api_key: ""        # 留空使用本地 fallback
     model: gpt-4.1-mini
-```
-
-向后兼容的环境变量：
-
-```text
-OPENAI_BASE_URL
-OPENAI_API_KEY
-OPENAI_MODEL
 ```
 
 ### 聊天设置

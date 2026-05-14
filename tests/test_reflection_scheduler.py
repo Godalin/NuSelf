@@ -11,6 +11,7 @@ import pytest
 
 from nuself.config_system import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
+from nuself.llm import ChatMessage
 from nuself.reflection import IdeaCandidateGenerator, ReflectionScheduler
 
 
@@ -374,6 +375,32 @@ def test_generator_parses_multiple_candidates(tmp_path: Path, monkeypatch: pytes
     assert len(candidates) == 2
     assert candidates[0].title == "Idea A"
     assert candidates[1].title == "Idea B"
+
+
+def test_generator_injects_language_instruction(tmp_path: Path) -> None:
+    """Non-English language preference appends a language directive to the system prompt."""
+    private_dir = tmp_path / "private"
+    private_dir.mkdir(parents=True)
+    (private_dir / "config.yaml").write_text(
+        "chat:\n  language_preference: zh-CN\n",
+        encoding="utf-8",
+    )
+    _seed_memory(tmp_path)
+
+    class _RecordingLLM:
+        def __init__(self) -> None:
+            self.messages: list[list[ChatMessage]] = []
+
+        def complete(self, messages: list[ChatMessage]) -> str:
+            self.messages.append(messages)
+            return json.dumps({"candidates": []})
+
+    llm = _RecordingLLM()
+    gen = IdeaCandidateGenerator(tmp_path, llm=llm)  # type: ignore[arg-type]
+    gen.generate()
+    assert len(llm.messages) == 1
+    system_prompt = llm.messages[0][0].content
+    assert "Respond in zh-CN" in system_prompt
 
 
 # --- RelevanceGate tests ---

@@ -55,7 +55,7 @@ class LangMemCurator:
         except ImportError as exc:
             raise RuntimeError("langmem or langchain-openai is not installed") from exc
         if self._settings.api_key.strip() == "":
-            raise RuntimeError("OPENAI_API_KEY is not configured")
+            raise RuntimeError("LLM API key is not configured")
         from pydantic import SecretStr
 
         llm = ChatOpenAI(

@@ -5,19 +5,16 @@ This document outlines the unified configuration system for NuSelf, consolidatin
 ## Goals
 
 1. **Single source of truth**: All system configuration in one place.
-2. **Environment override**: CLI and environment variables still take precedence for testing/deployment.
-3. **Clear defaults**: All defaults documented in example config.
-4. **Type safety**: Structured validation with defaults and clamping.
-5. **No legacy fallback**: old reflection config and `.env` parsing are removed from runtime paths.
+2. **Clear defaults**: All defaults documented in example config.
+3. **Type safety**: Structured validation with defaults and clamping.
+4. **No legacy fallback**: old reflection config and `.env` parsing are removed from runtime paths.
 
 ## Configuration Hierarchy
 
 Priority order (highest to lowest):
-1. CLI arguments (when added)
-2. Environment variables (NUSELF_* and OPENAI_*)
-3. `private/config.yaml` (if present)
-4. `examples/private/config.yaml` (sample, for test mode)
-5. Hardcoded defaults in code
+1. `private/config.yaml` (if present)
+2. `examples/private/config.yaml` (sample, for test mode)
+3. Hardcoded defaults in code
 
 ## Config.yaml Structure
 
@@ -29,8 +26,9 @@ llm:
     api_key: ""  # Empty = deterministic fallback
     model: gpt-4.1-mini
 
-# Chat Agent Settings (context compression)
+# Chat Agent Settings (context compression and language preference)
 chat:
+  language_preference: en
   context:
     recent_messages: 12         # Recent messages to keep in context
     summary_trigger_messages: 18 # When to compress context
@@ -100,16 +98,15 @@ class SystemConfig:
     experimental: ExperimentalConfig
 
 class ConfigSystem:
-    """Unified configuration loader with env override support."""
+    """Unified configuration loader."""
     
     @classmethod
     def load(cls, project_root: Path | None = None) -> SystemConfig:
-        """Load config from YAML with env overrides."""
+        """Load config from YAML with defaults."""
         # 1. Start with defaults
         # 2. Merge YAML if present
-        # 3. Apply env var overrides
-        # 4. Clamp/validate values
-        # 5. Return immutable config
+        # 3. Clamp/validate values
+        # 4. Return immutable config
 ```
 
 ## Migration Path
@@ -119,19 +116,9 @@ class ConfigSystem:
 - Reflection scheduling and persona discussion use `ReflectionSettings`
 - Old reflection config module and YAML files removed
 
-### Phase 2 (In Progress)
-- Remove stale test/docs references to old config formats
-- Keep environment-variable overrides as the only non-file override mechanism
-
-## Environment Variable Mapping
-
-Environment variables work as direct overrides over `config.yaml` values:
-
-- `OPENAI_*` → `llm.openai.*`
-- `NUSELF_CONTEXT_*` → `chat.context.*`
-- `NUSELF_MEMORY_CURATOR_INTERVAL_SECONDS` → `daemon.memory_curator.interval_seconds`
-- `NUSELF_REFLECTION_*` → `reflection.*`
-- `NUSELF_EMAIL_*` → `email.*`
+### Phase 2 (Done)
+- Removed `.env` parsing and environment variable overrides
+- Configuration is now exclusively file-based
 
 ## Error Handling
 
@@ -142,6 +129,6 @@ Environment variables work as direct overrides over `config.yaml` values:
 
 ## Testing
 
-- `ConfigSystem.for_testing()` → heavily disabled/fast config
-- `ConfigSystem.default()` → production defaults
+- `ConfigSystem._test_config()` → heavily disabled/fast config
+- `ConfigSystem._default_config()` → production defaults
 - Tests can inject custom configs without file I/O

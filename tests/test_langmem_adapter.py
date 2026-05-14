@@ -37,7 +37,7 @@ def test_langmem_curator_raises_when_api_key_missing(tmp_path: Path) -> None:
     try:
         curator.extract([ChatMessage(role="user", content="hello")])
     except RuntimeError as exc:
-        assert "OPENAI_API_KEY is not configured" in str(exc)
+        assert "LLM API key is not configured" in str(exc)
         return
     raise AssertionError("expected RuntimeError")
 

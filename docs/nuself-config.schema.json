@@ -61,6 +61,11 @@
               "description": "Target size in characters for compressed summary"
             }
           }
+        },
+        "language_preference": {
+          "type": "string",
+          "default": "en",
+          "description": "Preferred language for user-facing LLM outputs (e.g. en, zh-CN, zh-TW)"
         }
       }
     },

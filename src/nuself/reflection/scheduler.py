@@ -481,12 +481,16 @@ class IdeaCandidateGenerator:
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
         self._llm: ChatLLM = llm or default_llm(self._project_root)
-        
+
         if config is not None:
             self._config_obj = config
-            return
+        else:
+            system_config = ConfigSystem.load(project_root=self._project_root)
+            self._config_obj = system_config.reflection
+
+        # Load language preference for user-facing output
         system_config = ConfigSystem.load(project_root=self._project_root)
-        self._config_obj = system_config.reflection
+        self._language_preference = system_config.chat.language_preference
 
     def generate(self, max_candidates: int = 3) -> list[IdeaCandidate]:
         from nuself.logs import write_log_event
@@ -568,6 +572,8 @@ class IdeaCandidateGenerator:
             '}\n\n'
             "Return ONLY the JSON object. No markdown fences."
         )
+        if self._language_preference != "en":
+            system_prompt += f"\n\nRespond in {self._language_preference}."
 
         user_message = context.to_prompt()
         messages = [

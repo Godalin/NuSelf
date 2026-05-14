@@ -1,14 +1,13 @@
 """Unified configuration system for NuSelf.
 
-All system configuration lives in private/config.yaml with environment
-variable overrides. This replaces the scattered .env, reflection_config.yaml,
+All system configuration lives in private/config.yaml.
+This replaces previously scattered reflection_config.yaml
 and hardcoded defaults.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 from pathlib import Path
 from typing import Any, cast
 
@@ -46,6 +45,7 @@ class ChatContextConfig:
 class ChatConfig:
     """Chat agent configuration."""
     context: ChatContextConfig
+    language_preference: str = "en"
 
 
 @dataclass(frozen=True)
@@ -169,7 +169,7 @@ class SystemConfig:
 
 
 class ConfigSystem:
-    """Unified configuration loader with environment overrides."""
+    """Unified configuration loader."""
 
     @staticmethod
     def _default_config() -> SystemConfig:
@@ -187,7 +187,8 @@ class ConfigSystem:
                     recent_messages=12,
                     summary_trigger_messages=18,
                     summary_target_chars=2400,
-                )
+                ),
+                language_preference="en",
             ),
             daemon=DaemonConfig(
                 memory_curator=DaemonMemoryCuratorConfig(interval_seconds=300),
@@ -278,15 +279,12 @@ class ConfigSystem:
 
     @classmethod
     def load(cls, config_path: Path | None = None, project_root: Path | None = None) -> SystemConfig:
-        """Load configuration from YAML with env overrides and defaults."""
+        """Load configuration from YAML with defaults."""
         if config_path is None and project_root is None:
             from nuself.config import find_project_root
             project_root = find_project_root()
         if config_path is None and project_root is not None:
             config_path = project_root / "private" / "config.yaml"
-
-        # Load .env file if present (so environment variables are available)
-        cls._load_env_file(project_root)
 
         # Start with defaults
         defaults = cls._default_config()
@@ -301,53 +299,15 @@ class ConfigSystem:
                 # Fail silently, use defaults
                 pass
 
-        # Merge and apply environment overrides
-        return cls._merge_with_env_overrides(defaults, yaml_data)
-    
-    @staticmethod
-    def _load_env_file(project_root: Path | None = None) -> None:
-        """Load .env file into os.environ if it exists."""
-        if project_root is None:
-            from nuself.config import find_project_root
-            project_root = find_project_root()
-        
-        env_file = project_root / ".env"
-        if not env_file.exists():
-            return
-        
-        try:
-            env_content = env_file.read_text(encoding="utf-8")
-            for line in env_content.split("\n"):
-                line = line.strip()
-                # Skip empty lines and comments
-                if not line or line.startswith("#"):
-                    continue
-                # Parse KEY=VALUE
-                if "=" in line:
-                    key, value = line.split("=", 1)
-                    key = key.strip()
-                    value = value.strip()
-                    # Remove quotes if present
-                    if value.startswith('"') and value.endswith('"'):
-                        value = value[1:-1]
-                    elif value.startswith("'") and value.endswith("'"):
-                        value = value[1:-1]
-                    # Only set if not already in environment (YAML/CLI values take precedence)
-                    if key not in os.environ:
-                        os.environ[key] = value
-        except Exception:
-            # Fail silently, continue without .env
-            pass
+        # Merge YAML over defaults
+        return cls._merge_yaml_with_defaults(defaults, yaml_data)
 
     @staticmethod
-    def _merge_with_env_overrides(defaults: SystemConfig, yaml_data: dict[str, Any]) -> SystemConfig:
-        """Merge YAML config with environment variable overrides."""
+    def _merge_yaml_with_defaults(defaults: SystemConfig, yaml_data: dict[str, Any]) -> SystemConfig:
+        """Merge YAML config over hardcoded defaults."""
 
         def get_str(d: dict[str, Any], path: str, default: str) -> str:
-            """Get string value from nested dict, env override, or default."""
-            env_key = f"NUSELF_{path.upper().replace('.', '_')}"
-            if env_key in os.environ:
-                return os.environ[env_key]
+            """Get string value from nested dict or default."""
             keys = path.split(".")
             val: Any = d
             for key in keys:
@@ -361,13 +321,7 @@ class ConfigSystem:
             return default
 
         def get_int(d: dict[str, Any], path: str, default: int) -> int:
-            """Get int value from nested dict, env override, or default."""
-            env_key = f"NUSELF_{path.upper().replace('.', '_')}"
-            if env_key in os.environ:
-                try:
-                    return int(os.environ[env_key])
-                except ValueError:
-                    pass
+            """Get int value from nested dict or default."""
             keys = path.split(".")
             val: Any = d
             for key in keys:
@@ -386,13 +340,7 @@ class ConfigSystem:
             return default
 
         def get_float(d: dict[str, Any], path: str, default: float) -> float:
-            """Get float value from nested dict, env override, or default."""
-            env_key = f"NUSELF_{path.upper().replace('.', '_')}"
-            if env_key in os.environ:
-                try:
-                    return float(os.environ[env_key])
-                except ValueError:
-                    pass
+            """Get float value from nested dict or default."""
             keys = path.split(".")
             val: Any = d
             for key in keys:
@@ -411,10 +359,7 @@ class ConfigSystem:
             return default
 
         def get_bool(d: dict[str, Any], path: str, default: bool) -> bool:
-            """Get bool value from nested dict, env override, or default."""
-            env_key = f"NUSELF_{path.upper().replace('.', '_')}"
-            if env_key in os.environ:
-                return os.environ[env_key].lower() in {"true", "yes", "1", "on"}
+            """Get bool value from nested dict or default."""
             keys = path.split(".")
             val: Any = d
             for key in keys:
@@ -430,19 +375,13 @@ class ConfigSystem:
         # LLM Config
         openai_base_url = get_str(yaml_data, "llm.openai.base_url", defaults.llm.openai.base_url)
         openai_api_key = get_str(yaml_data, "llm.openai.api_key", defaults.llm.openai.api_key)
-        # Also check OPENAI_* env vars for backward compat
-        if "OPENAI_API_KEY" in os.environ:
-            openai_api_key = os.environ["OPENAI_API_KEY"]
-        if "OPENAI_BASE_URL" in os.environ:
-            openai_base_url = os.environ["OPENAI_BASE_URL"]
         openai_model = get_str(yaml_data, "llm.openai.model", defaults.llm.openai.model)
-        if "OPENAI_MODEL" in os.environ:
-            openai_model = os.environ["OPENAI_MODEL"]
 
         # Chat Config
         recent_messages = max(1, get_int(yaml_data, "chat.context.recent_messages", defaults.chat.context.recent_messages))
         summary_trigger = max(recent_messages + 2, get_int(yaml_data, "chat.context.summary_trigger_messages", defaults.chat.context.summary_trigger_messages))
         summary_target = max(100, get_int(yaml_data, "chat.context.summary_target_chars", defaults.chat.context.summary_target_chars))
+        chat_language = get_str(yaml_data, "chat.language_preference", defaults.chat.language_preference)
 
         # Daemon Config
         curator_interval = max(1, get_int(yaml_data, "daemon.memory_curator.interval_seconds", defaults.daemon.memory_curator.interval_seconds))
@@ -497,7 +436,8 @@ class ConfigSystem:
                     recent_messages=recent_messages,
                     summary_trigger_messages=summary_trigger,
                     summary_target_chars=summary_target,
-                )
+                ),
+                language_preference=chat_language,
             ),
             daemon=DaemonConfig(
                 memory_curator=DaemonMemoryCuratorConfig(interval_seconds=curator_interval),
@@ -558,6 +498,7 @@ class ConfigSystem:
             "chat.context.recent_messages": config.chat.context.recent_messages,
             "chat.context.summary_trigger_messages": config.chat.context.summary_trigger_messages,
             "chat.context.summary_target_chars": config.chat.context.summary_target_chars,
+            "chat.language_preference": config.chat.language_preference,
             "daemon.memory_curator.interval_seconds": config.daemon.memory_curator.interval_seconds,
             "daemon.reflection_scheduler.check_interval_seconds": config.daemon.reflection_scheduler.check_interval_seconds,
             "daemon.notification_delivery.interval_seconds": config.daemon.notification_delivery.interval_seconds,

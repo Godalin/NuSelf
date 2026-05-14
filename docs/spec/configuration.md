@@ -4,30 +4,17 @@
 
 | Priority | Source | Override Behavior |
 |---|---|---|
-| 1 (highest) | Process environment variables (`OPENAI_*`, `NUSELF_*`) | Wins over all lower layers |
-| 2 | `.env` file at project root | Loads into `os.environ` only if key not already present |
-| 3 | `private/config.yaml` | Overrides hardcoded defaults; silently ignored if missing or malformed |
-| 4 (lowest) | Hardcoded defaults in `ConfigSystem._default_config()` | Safe production values |
+| 1 (highest) | `private/config.yaml` | Overrides hardcoded defaults; silently ignored if missing or malformed |
+| 2 (lowest) | Hardcoded defaults in `ConfigSystem._default_config()` | Safe production values |
 
-**Key rule**: Env vars beat YAML beat defaults. The `.env` loader prefills `os.environ` without clobbering existing variables.
-
-## Environment Variable Conventions
-
-| Pattern | Example | Scope |
-|---|---|---|
-| `NUSELF_<DOTPATH_UPPER>` | `NUSELF_LLM_OPENAI_API_KEY` | General override for nested YAML path |
-| `OPENAI_API_KEY` | `OPENAI_API_KEY` | Backward-compat; takes precedence over `NUSELF_LLM_OPENAI_API_KEY` |
-| `OPENAI_BASE_URL` | `OPENAI_BASE_URL` | Backward-compat |
-| `OPENAI_MODEL` | `OPENAI_MODEL` | Backward-compat |
-
-**Type coercion**: `str` direct; `int` via `int()`; `float` via `float()`; `bool` accepts `true|yes|1|on` (case-insensitive).
+**Key rule**: YAML overrides hardcoded defaults. No other override mechanisms exist.
 
 ## Config Sections
 
 | Section | Dataclass | Purpose |
 |---|---|---|
 | `llm` | `LlmOpenAiConfig` | OpenAI-compatible endpoint |
-| `chat` | `ChatContextConfig` | Context compression thresholds |
+| `chat` | `ChatConfig` | Context compression thresholds and language preference |
 | `daemon` | `DaemonConfig` | Background task intervals |
 | `reflection` | `ReflectionSettings` | Scheduling, gates, moderator |
 | `email` | `EmailSmtpConfig` | SMTP settings |
@@ -56,6 +43,17 @@
 
 `runtime_paths(project_root)` resolves these. `ensure_runtime_dirs()` creates missing directories.
 
+## Language Preference
+
+`chat.language_preference` controls the language of user-facing LLM outputs:
+- Chat agent responses (including persona-synthesized and tool follow-up replies)
+- Reflection idea titles and bodies
+- Notification texts derived from reflections
+
+Internal prompts (persona discussions, memory curation, compression) remain in English regardless of this setting.
+
+Supported values: any IETF language tag string (e.g. `en`, `zh-CN`, `zh-TW`). Default is `en`.
+
 ## Missing Config File Behavior
 
-If `private/config.yaml` is missing, `ConfigSystem.load()` proceeds with defaults + env overrides. No error is raised.
+If `private/config.yaml` is missing, `ConfigSystem.load()` proceeds with hardcoded defaults. No error is raised.
