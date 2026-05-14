@@ -549,7 +549,8 @@ def handle_daemon_list(args: argparse.Namespace) -> int:
 def handle_default_entrypoint(args: argparse.Namespace) -> int:
     result = lifecycle.status(args.project_root)
     if result.running:
-        print(f"Using current daemon: {_format_status(result)}")
+        if args.message is not None:
+            print(f"Using current daemon: {_format_status(result)}")
     else:
         print("Starting NuSelf daemon...")
         result = lifecycle.start(args.project_root)
@@ -559,7 +560,6 @@ def handle_default_entrypoint(args: argparse.Namespace) -> int:
         print(f"Daemon started: {_format_status(result)}")
     if args.message is not None:
         return _send_chat(args.message, args.project_root)
-    print("Tip: type :help for commands, :q to quit, or start chatting.")
     return _interactive_loop(lambda message, thread_id: _send_chat(message, args.project_root, thread_id), args.project_root)
 
 
@@ -1716,7 +1716,7 @@ def _interactive_loop(
     session = InteractiveSession(connected_at=datetime.now(UTC))
     session.start_index_for(project_root, current_thread_id)
     print(_brand_banner())
-    print("νSelf interactive mode. Type :q, :quit, or :exit to leave.")
+    print("νSelf interactive mode. Type :help for commands, :q to quit.")
     print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
     try:
         while True:

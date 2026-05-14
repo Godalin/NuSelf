@@ -479,6 +479,32 @@ def test_default_entrypoint_uses_existing_daemon_with_message(
     assert "sent hello" in captured.out
 
 
+def test_default_entrypoint_interactive_omits_redundant_startup_preamble(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    daemon_status = DaemonStatus(
+        running=True,
+        pid=123,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        return daemon_status
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+
+    result = main(["--project-root", str(tmp_path)])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Using current daemon:" not in captured.out
+    assert "Tip:" not in captured.out
+    assert "νSelf interactive mode. Type :help for commands, :q to quit." in captured.out
+    assert "session thread=default daemon=running" in captured.out
+
+
 def test_default_entrypoint_creates_daemon_when_missing(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
