@@ -390,8 +390,8 @@ class HostDiscussionDecision:
 class HostDiscussionPolicy:
     """Host-level gate for deciding when chat should enter competitive discussion."""
 
-    _explicit_markers = PersonaActivationPolicy._explicit_markers
-    _depth_markers = PersonaActivationPolicy._depth_markers
+    _explicit_markers = PersonaActivationPolicy._explicit_markers  # type: ignore[reportPrivateUsage]
+    _depth_markers = PersonaActivationPolicy._depth_markers  # type: ignore[reportPrivateUsage]
 
     def decide(
         self,

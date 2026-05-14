@@ -16,7 +16,7 @@ from nuself.config_system import ConfigSystem
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
 from nuself.logs import write_log_event
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
-from nuself.notification import NotificationDeliveryLoop
+from nuself.notification import NotificationAdapter, NotificationDeliveryLoop
 from nuself.notification.email import EmailNotificationAdapter
 from nuself.notification.macos import MacOSNotificationAdapter
 from nuself.reflection import ReflectionScheduler
@@ -39,10 +39,10 @@ class DaemonState:
         self._memory_curator_thread: threading.Thread | None = None
         
         self.reflection_scheduler = ReflectionScheduler(project_root)
-        self.reflection_check_interval_seconds = config.daemon.reflection_scheduler.check_interval_seconds
+        self.reflection_check_interval_seconds: float = config.daemon.reflection_scheduler.check_interval_seconds
         self._reflection_scheduler_thread: threading.Thread | None = None
         
-        adapters: list[object] = []
+        adapters: list[NotificationAdapter] = []
         if config.email.enabled:
             adapters.append(EmailNotificationAdapter(project_root))
         if config.macos_notification.enabled:

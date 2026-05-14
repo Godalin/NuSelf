@@ -20,7 +20,7 @@ class _FakeResult:
     emergent_persona_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.scores is None:
+        if self.scores is None:  # type: ignore[reportUnnecessaryComparison]
             object.__setattr__(self, "scores", {"analyst_self": 0.9})
 
 

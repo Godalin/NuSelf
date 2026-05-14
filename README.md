@@ -234,18 +234,20 @@ The first protocol is JSON lines over a Unix domain socket at `private/runtime/n
 
 ## Notifications
 
-The daemon runs a reflection scheduler in the background. When conditions pass (interval, cooldown, quiet hours), it writes a reflection intent to the notification outbox:
+The notification outbox is a generic event bus for "something happened" alerts. It can be used by any background job (reflection with `auto_notify`, memory curator, etc.).
 
 ```bash
 uv run nuself notify list
 uv run nuself notify show <entry-id>
+uv run nuself notify show -i <index>
 uv run nuself notify send <entry-id>
 uv run nuself notify dismiss <entry-id>
+uv run nuself notify dismiss -i <index>
 uv run nuself notify clear
 uv run nuself notify watch          # poll for new entries
 ```
 
-Reflection intents include a deep link to the `reflections` thread. Open a notification directly:
+Notifications include a deep link. Open one directly:
 
 ```bash
 uv run nuself open --deep-link "nuself://thread/reflections"
@@ -255,15 +257,21 @@ The macOS adapter delivers pending entries as system notifications via `osascrip
 
 ## Reflection
 
-The daemon runs a proactive reflection scheduler that generates ideas from recent threads, memory entries, and source documents. Ideas are scored for novelty, confidence, urgency, and interruption cost, then debated by a randomized set of internal personas before surfacing as notifications.
+The daemon runs a proactive reflection scheduler that generates ideas from recent threads, memory entries, and source documents. Ideas are scored for novelty, confidence, urgency, and interruption cost, then debated by a randomized set of internal personas. Approved ideas are stored in `private/reflections/` as first-class entries with `pending`, `dismissed`, or `archived` status.
 
-Reflection history can be inspected with:
+Reflection ideas can be inspected and managed with:
 
 ```bash
 uv run nuself reflection list
-uv run nuself reflection list --tail 50
-uv run nuself reflection show <index>
+uv run nuself reflection list --status pending
+uv run nuself reflection list --status dismissed
+uv run nuself reflection show <id>
+uv run nuself reflection show -i <index>
+nuself reflection dismiss <id>
+nuself reflection archive <id>
 ```
+
+When `reflection.auto_notify` is enabled in config, a brief notification is also created in the outbox pointing to the new reflection idea.
 
 ## Threads
 

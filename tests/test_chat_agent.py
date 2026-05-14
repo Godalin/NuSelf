@@ -879,40 +879,60 @@ def test_memory_search_tool_with_invalid_inputs(tmp_path: Path) -> None:
 
 # --- Reflection consumption tools ---
 
-def test_list_pending_reflections_empty_outbox(tmp_path: Path) -> None:
+def test_list_pending_reflections_empty(tmp_path: Path) -> None:
     from nuself.agent.tools import ListPendingReflectionsTool
-    from nuself.notification import NotificationOutbox
+    from nuself.reflection.repository import ReflectionRepository
 
-    outbox = NotificationOutbox(tmp_path)
-    tool = ListPendingReflectionsTool(outbox=outbox)
+    repo = ReflectionRepository(tmp_path)
+    tool = ListPendingReflectionsTool(repository=repo)
     result = tool.invoke()
     assert "No pending reflection ideas" in result
 
 
 def test_list_pending_reflections_with_entries(tmp_path: Path) -> None:
     from nuself.agent.tools import ListPendingReflectionsTool
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    outbox = NotificationOutbox(tmp_path)
-    outbox.add(
-        OutboxEntry(
+    repo = ReflectionRepository(tmp_path)
+    repo.add(
+        ReflectionEntry(
             id="r1",
             title="Explore recursion in habits",
             body="Your memory suggests...",
+            candidate_type="connection",
+            confidence=0.8,
+            novelty=0.9,
+            urgency=0.3,
+            interruption_cost=0.1,
+            composite_score=0.7,
             status="pending",
-            idempotency_key="ref-1",
+            discussion_approved=None,
+            discussion_trace=(),
+            deep_link="nuself://thread/reflections",
+            created_at="2024-01-01T00:00:00+00:00",
+            reviewed_at=None,
         )
     )
-    outbox.add(
-        OutboxEntry(
+    repo.add(
+        ReflectionEntry(
             id="r2",
             title="Sleep and creativity link",
             body="Underdeveloped...",
+            candidate_type="question",
+            confidence=0.7,
+            novelty=0.8,
+            urgency=0.3,
+            interruption_cost=0.1,
+            composite_score=0.6,
             status="pending",
-            idempotency_key="ref-2",
+            discussion_approved=None,
+            discussion_trace=(),
+            deep_link="nuself://thread/reflections",
+            created_at="2024-01-01T00:00:00+00:00",
+            reviewed_at=None,
         )
     )
-    tool = ListPendingReflectionsTool(outbox=outbox)
+    tool = ListPendingReflectionsTool(repository=repo)
     result = tool.invoke()
     assert "Pending reflection ideas:" in result
     assert "[1] Explore recursion in habits" in result
@@ -921,61 +941,81 @@ def test_list_pending_reflections_with_entries(tmp_path: Path) -> None:
 
 def test_list_pending_reflections_respects_limit(tmp_path: Path) -> None:
     from nuself.agent.tools import ListPendingReflectionsTool
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    outbox = NotificationOutbox(tmp_path)
+    repo = ReflectionRepository(tmp_path)
     for i in range(5):
-        outbox.add(
-            OutboxEntry(
+        repo.add(
+            ReflectionEntry(
                 id=f"r{i}",
                 title=f"Idea {i}",
                 body="...",
+                candidate_type="question",
+                confidence=0.8,
+                novelty=0.9,
+                urgency=0.3,
+                interruption_cost=0.1,
+                composite_score=0.7,
                 status="pending",
-                idempotency_key=f"ref-{i}",
+                discussion_approved=None,
+                discussion_trace=(),
+                deep_link="nuself://thread/reflections",
+                created_at="2024-01-01T00:00:00+00:00",
+                reviewed_at=None,
             )
         )
-    tool = ListPendingReflectionsTool(outbox=outbox)
+    tool = ListPendingReflectionsTool(repository=repo)
     result = tool.invoke(limit=2)
     assert result.count("[") == 2  # only two numbered items
 
 
 def test_dismiss_reflection_success(tmp_path: Path) -> None:
     from nuself.agent.tools import DismissReflectionTool
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    outbox = NotificationOutbox(tmp_path)
-    outbox.add(
-        OutboxEntry(
+    repo = ReflectionRepository(tmp_path)
+    repo.add(
+        ReflectionEntry(
             id="r1",
             title="Explore recursion in habits",
             body="...",
+            candidate_type="connection",
+            confidence=0.8,
+            novelty=0.9,
+            urgency=0.3,
+            interruption_cost=0.1,
+            composite_score=0.7,
             status="pending",
-            idempotency_key="ref-1",
+            discussion_approved=None,
+            discussion_trace=(),
+            deep_link="nuself://thread/reflections",
+            created_at="2024-01-01T00:00:00+00:00",
+            reviewed_at=None,
         )
     )
-    tool = DismissReflectionTool(outbox=outbox)
+    tool = DismissReflectionTool(repository=repo)
     result = tool.invoke(index=1)
     assert "Dismissed" in result
     assert "Explore recursion in habits" in result
-    assert outbox.list(status="pending") == []
+    assert repo.list(status="pending") == []
 
 
 def test_dismiss_reflection_out_of_range(tmp_path: Path) -> None:
     from nuself.agent.tools import DismissReflectionTool
-    from nuself.notification import NotificationOutbox
+    from nuself.reflection.repository import ReflectionRepository
 
-    outbox = NotificationOutbox(tmp_path)
-    tool = DismissReflectionTool(outbox=outbox)
+    repo = ReflectionRepository(tmp_path)
+    tool = DismissReflectionTool(repository=repo)
     result = tool.invoke(index=1)
     assert "out of range" in result
 
 
 def test_dismiss_reflection_invalid_index(tmp_path: Path) -> None:
     from nuself.agent.tools import DismissReflectionTool
-    from nuself.notification import NotificationOutbox
+    from nuself.reflection.repository import ReflectionRepository
 
-    outbox = NotificationOutbox(tmp_path)
-    tool = DismissReflectionTool(outbox=outbox)
+    repo = ReflectionRepository(tmp_path)
+    tool = DismissReflectionTool(repository=repo)
     assert "Error" in tool.invoke(index=0)
     assert "Error" in tool.invoke(index=-1)
 

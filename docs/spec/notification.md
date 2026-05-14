@@ -1,5 +1,15 @@
 # Notification Spec
 
+## Purpose
+
+The notification outbox is a **generic event bus** for "something happened, go look at X" style events. It is **not** owned by reflection.
+
+Sources that may create outbox entries:
+- Reflection scheduler (when `reflection.auto_notify` is `true`)
+- Memory curator (future)
+- Memory optimizer (future)
+- Any background job that needs user attention
+
 ## Outbox State Machine
 
 ### States

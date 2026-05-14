@@ -1,0 +1,323 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NuSelf Configuration",
+  "description": "Configuration schema for NuSelf AI mirror",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "llm": {
+      "type": "object",
+      "description": "LLM backend configuration",
+      "additionalProperties": false,
+      "properties": {
+        "openai": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "base_url": {
+              "type": "string",
+              "default": "https://api.openai.com/v1",
+              "description": "OpenAI-compatible API endpoint"
+            },
+            "api_key": {
+              "type": "string",
+              "default": "",
+              "description": "API key (leave empty for local fallback)"
+            },
+            "model": {
+              "type": "string",
+              "default": "gpt-4.1-mini",
+              "description": "Model name for completions"
+            }
+          }
+        }
+      }
+    },
+    "chat": {
+      "type": "object",
+      "description": "Chat agent settings",
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "recent_messages": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 12,
+              "description": "Recent messages to keep in full context"
+            },
+            "summary_trigger_messages": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 18,
+              "description": "When to compress context (messages threshold)"
+            },
+            "summary_target_chars": {
+              "type": "integer",
+              "minimum": 100,
+              "default": 2400,
+              "description": "Target size in characters for compressed summary"
+            }
+          }
+        }
+      }
+    },
+    "daemon": {
+      "type": "object",
+      "description": "Daemon background task intervals",
+      "additionalProperties": false,
+      "properties": {
+        "memory_curator": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "interval_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 300,
+              "description": "Interval between memory curation cycles"
+            }
+          }
+        },
+        "reflection_scheduler": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "check_interval_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 600,
+              "description": "Interval to check if reflection should run"
+            }
+          }
+        },
+        "notification_delivery": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "interval_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 30,
+              "description": "Interval to check and deliver pending notifications"
+            }
+          }
+        }
+      }
+    },
+    "reflection": {
+      "type": "object",
+      "description": "Proactive reflection system",
+      "additionalProperties": false,
+      "properties": {
+        "scheduler": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "interval_seconds": {
+              "type": "integer",
+              "minimum": 60,
+              "default": 3600,
+              "description": "Base interval between reflection cycles (seconds)"
+            },
+            "cooldown_seconds": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 300,
+              "description": "Minimum cooldown after a reflection before another"
+            },
+            "quiet_start_hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23,
+              "default": 22,
+              "description": "Quiet hours start (24h format)"
+            },
+            "quiet_end_hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23,
+              "default": 7,
+              "description": "Quiet hours end (24h format)"
+            },
+            "daily_cap": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5,
+              "description": "Maximum reflections per day"
+            },
+            "jitter_percent": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 50,
+              "default": 20,
+              "description": "Random jitter on interval (0-50%)"
+            }
+          }
+        },
+        "gate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "relevance_threshold": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.35,
+              "description": "Minimum composite score to pass relevance gate"
+            },
+            "persona_discussion_threshold": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.55,
+              "description": "Score threshold to trigger multi-persona discussion"
+            }
+          }
+        },
+        "moderator": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_discussion_rounds": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 12,
+              "description": "Maximum rounds before forcing conclusion"
+            },
+            "moderator_convergence_patience": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5,
+              "description": "Rounds to attempt convergence before forcing decision"
+            }
+          }
+        },
+        "discussion": {
+          "type": "object",
+          "description": "Competitive persona discussion parameters",
+          "additionalProperties": false,
+          "properties": {
+            "blocking_threshold": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.35,
+              "description": "Below this score, a persona blocks the candidate"
+            },
+            "override_threshold": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.7,
+              "description": "Above this score, a single persona can override"
+            },
+            "composite_threshold": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.4,
+              "description": "Minimum composite to consider approval"
+            },
+            "consensus_spread_threshold": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.15,
+              "description": "Max spread between best and worst score for consensus"
+            },
+            "min_participants": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 3,
+              "description": "Minimum personas to include in discussion"
+            },
+            "max_participants": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5,
+              "description": "Maximum personas to include in discussion"
+            }
+          }
+        },
+        "auto_notify": {
+          "type": "boolean",
+          "default": false,
+          "description": "Create a notification outbox entry when a new reflection is produced"
+        }
+      }
+    },
+    "email": {
+      "type": "object",
+      "description": "Email notification adapter",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "smtp": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "host": {
+              "type": "string",
+              "default": "smtp.gmail.com"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 587
+            },
+            "use_tls": {
+              "type": "boolean",
+              "default": true
+            },
+            "username": {
+              "type": "string",
+              "default": ""
+            },
+            "password": {
+              "type": "string",
+              "default": ""
+            }
+          }
+        },
+        "from_address": {
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
+    "macos_notification": {
+      "type": "object",
+      "description": "macOS system notification adapter",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "experimental": {
+      "type": "object",
+      "description": "Experimental features",
+      "additionalProperties": false,
+      "properties": {
+        "langmem_adapter": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable LangMem memory adapter"
+        },
+        "vector_index": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable vector/hybrid search index"
+        }
+      }
+    }
+  }
+}

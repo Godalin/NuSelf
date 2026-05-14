@@ -49,20 +49,20 @@ The LLM outputs a JSON object. If it contains `"tool": "<name>"` and `"tool_args
 
 | Tool | Purpose |
 |---|---|
-| `list_pending_reflections` | Return pending reflection ideas from the outbox. |
+| `list_pending_reflections` | Return pending reflection ideas from the reflection repository. |
 | `dismiss_reflection` | Mark a reflection idea as dismissed. |
 
 #### `list_pending_reflections`
 
 - **Args**: `limit: int = 5`
-- **Behavior**: Reads `NotificationOutbox.list(status="pending")` and formats entries for the LLM.
-- **Returns**: A numbered list of pending ideas with title, type, and confidence. Empty message if none.
+- **Behavior**: Reads `ReflectionRepository.list(status="pending")` and formats entries for the LLM.
+- **Returns**: A numbered list of pending ideas with title, type, and score. Empty message if none.
 - **When to use**: The agent may call this when the conversation naturally pauses or when the user asks about "ideas", "thoughts", or "reflections".
 
 #### `dismiss_reflection`
 
 - **Args**: `index: int` (1-based index from `list_pending_reflections` output)
-- **Behavior**: Looks up the pending entry at the given index, calls `NotificationOutbox.dismiss(entry.id)`, and returns confirmation.
+- **Behavior**: Looks up the pending entry at the given index, calls `ReflectionRepository.dismiss(entry.id)`, and returns confirmation.
 - **Returns**: Confirmation or error message.
 - **When to use**: After the user explicitly declines interest in a suggested reflection topic.
 
@@ -118,13 +118,12 @@ The system prompt should include:
 
 ## Dismissed Reflection Lifecycle
 
-1. `dismiss_reflection` calls `NotificationOutbox.dismiss(entry_id)`.
+1. `dismiss_reflection` calls `ReflectionRepository.dismiss(entry_id)`.
 2. Entry status becomes `dismissed`.
 3. `list_pending_reflections` only queries `status="pending"`, so dismissed entries disappear from the agent's view.
-4. `nuself notify clear` (existing CLI) physically deletes `dismissed` files.
 
 ## Testing Strategy
 
 - Unit test each new tool in isolation.
 - Integration test: verify the agent can invoke `list_pending_reflections` and `dismiss_reflection` through the graph runtime.
-- Test edge cases: empty outbox, invalid index, duplicate dismiss.
+- Test edge cases: empty repository, invalid index, duplicate dismiss.

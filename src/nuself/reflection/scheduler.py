@@ -13,6 +13,7 @@ from nuself.config_system import ConfigSystem, ReflectionSettings
 from nuself.domain.memory import now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
 from nuself.notification import NotificationOutbox, OutboxEntry
+from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.llm import default_llm
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
 
@@ -43,6 +44,7 @@ class ReflectionScheduler:
             self._config = system_config.reflection
 
         self._last_reflection_path = paths.runtime_dir / "last_reflection.json"
+        self._reflection_repo = ReflectionRepository(project_root)
         self._outbox = NotificationOutbox(project_root)
         self._event_queue: list[ReflectionEvent] = []
 
@@ -103,6 +105,8 @@ class ReflectionScheduler:
         # High-value candidates go through competitive persona discussion
         title = best.title
         body = best.body
+        discussion_approved: bool | None = None
+        discussion_trace: tuple[str, ...] = ()
         if score.composite >= self._config.gate.persona_discussion_threshold:
             result = SharedPersonaDiscussionService(
                 project_root=self._project_root,
@@ -110,6 +114,8 @@ class ReflectionScheduler:
                 llm=default_llm(self._project_root),
             ).discuss(best)
             self._write_discussion_log(best, score, result, now)
+            discussion_approved = result.approved
+            discussion_trace = result.discussion_trace
             if not result.approved:
                 write_log_event(
                     "reflection",
@@ -124,10 +130,18 @@ class ReflectionScheduler:
             title = result.revised_title
             body = result.revised_body
         
-        intent = self._candidate_to_outbox_entry(best, now, title=title, body=body)
+        entry = self._candidate_to_reflection_entry(
+            best, now, score, title=title, body=body,
+            discussion_approved=discussion_approved,
+            discussion_trace=discussion_trace,
+        )
+        self._reflection_repo.add(entry)
         self._write_last_reflection(now, title=title, body=body)
-        self._outbox.add(intent)
-        
+
+        if self._config.auto_notify:
+            intent = self._candidate_to_notify_entry(entry)
+            self._outbox.add(intent)
+
         write_log_event(
             "reflection",
             "cycle_completed",
@@ -229,24 +243,46 @@ class ReflectionScheduler:
             encoding="utf-8",
         )
 
-    def _candidate_to_outbox_entry(
+    def _candidate_to_reflection_entry(
         self,
         candidate: IdeaCandidate,
         now: datetime,
+        score: RelevanceScore,
         title: str | None = None,
         body: str | None = None,
-    ) -> OutboxEntry:
+        discussion_approved: bool | None = None,
+        discussion_trace: tuple[str, ...] = (),
+    ) -> ReflectionEntry:
         from nuself.notification.deep_link import DeepLink
 
         thread_id = candidate.suggested_thread_id or "reflections"
         deep_link = DeepLink(action="open_thread", thread_id=thread_id).to_url()
-        return OutboxEntry(
-            id=f"reflection-{now.strftime('%Y%m%d-%H%M%S')}-{now.microsecond:06d}",
+        return ReflectionEntry(
+            id=f"reflection-{candidate.id}",
             title=title if title is not None else candidate.title,
             body=body if body is not None else candidate.body,
+            candidate_type=candidate.candidate_type,
+            confidence=candidate.confidence,
+            novelty=candidate.novelty,
+            urgency=candidate.urgency,
+            interruption_cost=candidate.interruption_cost,
+            composite_score=score.composite,
             status="pending",
-            idempotency_key=f"reflection-{now.date().isoformat()}",
+            discussion_approved=discussion_approved,
+            discussion_trace=discussion_trace,
             deep_link=deep_link,
+            created_at=now.isoformat(),
+            reviewed_at=None,
+        )
+
+    def _candidate_to_notify_entry(self, entry: ReflectionEntry) -> OutboxEntry:
+        return OutboxEntry(
+            id=f"notify-{entry.id}",
+            title=f"New reflection: {entry.title}",
+            body=f"A new reflection idea is available. View it with: nuself reflection show {entry.id}",
+            status="pending",
+            idempotency_key=f"notify-{entry.id}",
+            deep_link=entry.deep_link,
         )
 
     def _write_discussion_log(

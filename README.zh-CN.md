@@ -234,18 +234,20 @@ private/logs/
 
 ## 通知
 
-守护进程在后台运行 reflection scheduler。当条件满足时（间隔、cooldown、quiet hours），它会将 reflection intent 写入通知 outbox：
+通知 outbox 是一个通用事件总线，用于存放"发生了某事"的提醒。任何后台任务都可以使用它（如 reflection 在 `auto_notify` 开启时、memory curator 等）。
 
 ```bash
 uv run nuself notify list
 uv run nuself notify show <entry-id>
+uv run nuself notify show -i <index>
 uv run nuself notify send <entry-id>
 uv run nuself notify dismiss <entry-id>
+uv run nuself notify dismiss -i <index>
 uv run nuself notify clear
 uv run nuself notify watch          # 轮询新条目
 ```
 
-Reflection intent 包含指向 `reflections` thread 的 deep link。直接打开通知：
+通知包含 deep link，可以直接打开：
 
 ```bash
 uv run nuself open --deep-link "nuself://thread/reflections"
@@ -255,15 +257,21 @@ macOS adapter 通过 `osascript` 将 pending 条目投递为系统通知。email
 
 ## 主动反思
 
-守护进程运行一个主动反思调度器，从近期 threads、记忆条目和 source documents 中生成想法候选。候选想法会按新颖度、置信度、紧急度和打断代价进行评分，再由一组随机抽取的内部人格进行讨论后才会作为通知推送。
+守护进程运行一个主动反思调度器，从近期 threads、记忆条目和 source documents 中生成想法候选。候选想法会按新颖度、置信度、紧急度和打断代价进行评分，再由一组随机抽取的内部人格进行讨论。通过 gate 的想法会被存储到 `private/reflections/`，作为带有 `pending` / `dismissed` / `archived` 状态的一等条目。
 
-反思历史可以用以下命令查看：
+反思想法可以通过以下命令查看和管理：
 
 ```bash
 uv run nuself reflection list
-uv run nuself reflection list --tail 50
-uv run nuself reflection show <index>
+uv run nuself reflection list --status pending
+uv run nuself reflection list --status dismissed
+uv run nuself reflection show <id>
+uv run nuself reflection show -i <index>
+nuself reflection dismiss <id>
+nuself reflection archive <id>
 ```
+
+当配置中 `reflection.auto_notify` 开启时，每次产生反思想法还会同时在 notify outbox 中创建一条简短提醒。
 
 ## Threads
 

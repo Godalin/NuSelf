@@ -1535,6 +1535,44 @@ def test_notify_dismiss_missing_entry(tmp_path: Path, capsys: CaptureFixture) ->
     assert "not found" in output
 
 
+def test_notify_show_by_index(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(OutboxEntry(id="e1", title="First", body="B1", status="pending", idempotency_key="k1"))
+    outbox.add(OutboxEntry(id="e2", title="Second", body="B2", status="pending", idempotency_key="k2"))
+
+    result = main(["--project-root", str(tmp_path), "notify", "show", "-i", "1"])
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "Second" in output
+
+
+def test_notify_dismiss_by_index(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(OutboxEntry(id="e1", title="First", body="B1", status="pending", idempotency_key="k1"))
+    outbox.add(OutboxEntry(id="e2", title="Second", body="B2", status="pending", idempotency_key="k2"))
+
+    result = main(["--project-root", str(tmp_path), "notify", "dismiss", "--by-index", "0"])
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "Dismissed: e1" in output
+
+
+def test_notify_by_index_out_of_range(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(OutboxEntry(id="e1", title="First", body="B1", status="pending", idempotency_key="k1"))
+
+    result = main(["--project-root", str(tmp_path), "notify", "show", "-i", "5"])
+    output = capsys.readouterr().err
+    assert result == 1
+    assert "Invalid index" in output
+
+
 def test_notify_list_empty(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(["--project-root", str(tmp_path), "notify", "list"])
     output = capsys.readouterr().out

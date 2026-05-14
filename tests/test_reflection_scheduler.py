@@ -187,25 +187,51 @@ def test_should_reflect_wraparound_quiet_hours(scheduler: ReflectionScheduler) -
 
 # --- reflection pipeline tests ---
 
-def test_reflect_creates_outbox_entry(scheduler: ReflectionScheduler) -> None:
+def test_reflect_creates_reflection_entry(scheduler: ReflectionScheduler) -> None:
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     result = scheduler.reflect(now)
     assert result is True
-    entries = scheduler._outbox.list()
+    entries = scheduler._reflection_repo.list()
     assert len(entries) == 1
     assert entries[0].title == "Proactive insight about memory patterns"
     assert entries[0].status == "pending"
-    assert entries[0].idempotency_key == "reflection-2024-01-01"
+    assert entries[0].id.startswith("reflection-candidate-")
     assert entries[0].deep_link is not None
     assert entries[0].deep_link.startswith("nuself://thread/reflections")
 
 
-def test_reflect_idempotent_per_day(scheduler: ReflectionScheduler) -> None:
+def test_reflect_creates_multiple_reflection_entries(scheduler: ReflectionScheduler) -> None:
+    import time
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     scheduler.reflect(now)
+    # Clear last reflection so the second run is not blocked by novelty gate
+    scheduler._last_reflection_path.unlink(missing_ok=True)
+    time.sleep(0.01)  # ensure unique candidate id timestamp
     scheduler.reflect(now)
-    entries = scheduler._outbox.list()
-    assert len(entries) == 1
+    entries = scheduler._reflection_repo.list()
+    assert len(entries) == 2
+
+
+def test_reflect_auto_notify_creates_outbox_entry(scheduler: ReflectionScheduler) -> None:
+    from nuself.config_system import ReflectionSettings
+    scheduler._config = ReflectionSettings(
+        scheduler=scheduler._config.scheduler,
+        gate=scheduler._config.gate,
+        moderator=scheduler._config.moderator,
+        discussion=scheduler._config.discussion,
+        auto_notify=True,
+    )
+    now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+    result = scheduler.reflect(now)
+    assert result is True
+    # Reflection repo has the entry
+    refl_entries = scheduler._reflection_repo.list()
+    assert len(refl_entries) == 1
+    # Outbox has a notify entry pointing to it
+    outbox_entries = scheduler._outbox.list()
+    assert len(outbox_entries) == 1
+    assert outbox_entries[0].title.startswith("New reflection:")
+    assert refl_entries[0].id in outbox_entries[0].body
 
 
 def test_reflect_returns_false_when_blocked(scheduler: ReflectionScheduler) -> None:
@@ -224,7 +250,7 @@ def test_reflect_returns_false_when_blocked(scheduler: ReflectionScheduler) -> N
     now = datetime(2024, 1, 1, 23, 0, 0, tzinfo=UTC)
     result = scheduler.reflect(now)
     assert result is True
-    assert len(scheduler._outbox.list()) == 1
+    assert len(scheduler._reflection_repo.list()) == 1
 
 
 # --- last reflection persistence ---

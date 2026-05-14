@@ -117,6 +117,7 @@ class ReflectionSettings:
     gate: ReflectionGateConfig
     moderator: ReflectionModeratorConfig
     discussion: ReflectionDiscussionConfig
+    auto_notify: bool = False
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,7 @@ class ConfigSystem:
                     min_participants=3,
                     max_participants=5,
                 ),
+                auto_notify=False,
             ),
             email=EmailConfig(
                 enabled=False,
@@ -267,6 +269,7 @@ class ConfigSystem:
                     moderator_convergence_patience=1,
                 ),
                 discussion=ReflectionDiscussionConfig(),
+                auto_notify=False,
             ),
             email=defaults.email,
             macos_notification=defaults.macos_notification,
@@ -463,6 +466,7 @@ class ConfigSystem:
         refl_spread = max(0.0, min(get_float(yaml_data, "reflection.discussion.consensus_spread_threshold", defaults.reflection.discussion.consensus_spread_threshold), 1.0))
         refl_min_participants = max(1, get_int(yaml_data, "reflection.discussion.min_participants", defaults.reflection.discussion.min_participants))
         refl_max_participants = max(1, get_int(yaml_data, "reflection.discussion.max_participants", defaults.reflection.discussion.max_participants))
+        refl_auto_notify = get_bool(yaml_data, "reflection.auto_notify", defaults.reflection.auto_notify)
 
         # Email Config
         email_enabled = get_bool(yaml_data, "email.enabled", defaults.email.enabled)
@@ -525,6 +529,7 @@ class ConfigSystem:
                     min_participants=refl_min_participants,
                     max_participants=refl_max_participants,
                 ),
+                auto_notify=refl_auto_notify,
             ),
             email=EmailConfig(
                 enabled=email_enabled,

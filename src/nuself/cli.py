@@ -153,12 +153,15 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(notify_list_parser, handle_notify_list)
     notify_show_parser = notify_subparsers.add_parser("show")
     notify_show_parser.add_argument("entry_id")
+    notify_show_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'notify list'")
     _add_handler(notify_show_parser, handle_notify_show)
     notify_send_parser = notify_subparsers.add_parser("send")
     notify_send_parser.add_argument("entry_id")
+    notify_send_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'notify list'")
     _add_handler(notify_send_parser, handle_notify_send)
     notify_dismiss_parser = notify_subparsers.add_parser("dismiss")
     notify_dismiss_parser.add_argument("entry_id")
+    notify_dismiss_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'notify list'")
     _add_handler(notify_dismiss_parser, handle_notify_dismiss)
     _add_handler(notify_subparsers.add_parser("stats"), handle_notify_stats)
     notify_watch_parser = notify_subparsers.add_parser("watch")
@@ -171,15 +174,22 @@ def build_parser() -> argparse.ArgumentParser:
     reflection_subparsers = reflection_parser.add_subparsers(dest="reflection_command")
     reflection_list_parser = reflection_subparsers.add_parser("list")
     reflection_list_parser.add_argument("--tail", type=int, default=20)
-    reflection_list_parser.add_argument("--include-all", action="store_true", default=False)
+    reflection_list_parser.add_argument("--status", choices=["pending", "dismissed", "archived"], default=None)
     reflection_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reflection_list_parser, handle_reflection_list)
     reflection_show_parser = reflection_subparsers.add_parser("show")
-    reflection_show_parser.add_argument("event_index", type=int, help="Index from 'reflection list' (0-based)")
-    reflection_show_parser.add_argument("--tail", type=int, default=20)
-    reflection_show_parser.add_argument("--include-all", action="store_true", default=False)
+    reflection_show_parser.add_argument("entry_id")
+    reflection_show_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
     reflection_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reflection_show_parser, handle_reflection_show)
+    reflection_dismiss_parser = reflection_subparsers.add_parser("dismiss")
+    reflection_dismiss_parser.add_argument("entry_id")
+    reflection_dismiss_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
+    _add_handler(reflection_dismiss_parser, handle_reflection_dismiss)
+    reflection_archive_parser = reflection_subparsers.add_parser("archive")
+    reflection_archive_parser.add_argument("entry_id")
+    reflection_archive_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
+    _add_handler(reflection_archive_parser, handle_reflection_archive)
 
     memory_parser = subparsers.add_parser("memory")
     memory_parser.set_defaults(handler=None, help_parser=memory_parser)
@@ -1063,14 +1073,36 @@ def handle_notify_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_notify_entry_id(args: argparse.Namespace) -> str | None:
+    """Resolve entry_id to actual entry id, supporting --by-index lookup."""
+    from nuself.notification import NotificationOutbox
+
+    if not getattr(args, "by_index", False):
+        return args.entry_id
+    outbox = NotificationOutbox(args.project_root)
+    entries = outbox.list()
+    try:
+        idx = int(args.entry_id)
+    except ValueError:
+        print(f"Invalid index: {args.entry_id}", file=sys.stderr)
+        return None
+    if idx < 0 or idx >= len(entries):
+        print(f"Invalid index {idx}. Valid range: 0-{len(entries) - 1}", file=sys.stderr)
+        return None
+    return entries[idx].id
+
+
 def handle_notify_show(args: argparse.Namespace) -> int:
     from nuself.notification import NotificationOutbox, OutboxEntryNotFound
     from nuself.tui.render import render_outbox_detail
 
+    entry_id = _resolve_notify_entry_id(args)
+    if entry_id is None:
+        return 1
     try:
-        entry = NotificationOutbox(args.project_root).get(args.entry_id)
+        entry = NotificationOutbox(args.project_root).get(entry_id)
     except OutboxEntryNotFound:
-        print(f"Outbox entry not found: {args.entry_id}", file=sys.stderr)
+        print(f"Outbox entry not found: {entry_id}", file=sys.stderr)
         return 1
     print(render_outbox_detail(entry))
     return 0
@@ -1123,18 +1155,21 @@ def handle_notify_watch(args: argparse.Namespace) -> int:
 def handle_notify_send(args: argparse.Namespace) -> int:
     from nuself.notification import NotificationOutbox, LogOnlyNotificationAdapter, OutboxEntryNotFound
 
+    entry_id = _resolve_notify_entry_id(args)
+    if entry_id is None:
+        return 1
     outbox = NotificationOutbox(args.project_root)
     try:
-        entry = outbox.get(args.entry_id)
+        entry = outbox.get(entry_id)
     except OutboxEntryNotFound:
-        print(f"Outbox entry not found: {args.entry_id}", file=sys.stderr)
+        print(f"Outbox entry not found: {entry_id}", file=sys.stderr)
         return 1
     adapter = LogOnlyNotificationAdapter(args.project_root)
     if adapter.send(entry):
-        outbox.mark_sent(args.entry_id)
+        outbox.mark_sent(entry_id)
         print(f"Sent: {entry.id}")
         return 0
-    outbox.mark_failed(args.entry_id)
+    outbox.mark_failed(entry_id)
     print(f"Failed to send: {entry.id}", file=sys.stderr)
     return 1
 
@@ -1142,12 +1177,15 @@ def handle_notify_send(args: argparse.Namespace) -> int:
 def handle_notify_dismiss(args: argparse.Namespace) -> int:
     from nuself.notification import NotificationOutbox, OutboxEntryNotFound
 
+    entry_id = _resolve_notify_entry_id(args)
+    if entry_id is None:
+        return 1
     try:
-        NotificationOutbox(args.project_root).dismiss(args.entry_id)
-        print(f"Dismissed: {args.entry_id}")
+        NotificationOutbox(args.project_root).dismiss(entry_id)
+        print(f"Dismissed: {entry_id}")
         return 0
     except OutboxEntryNotFound:
-        print(f"Outbox entry not found: {args.entry_id}", file=sys.stderr)
+        print(f"Outbox entry not found: {entry_id}", file=sys.stderr)
         return 1
 
 
@@ -1159,64 +1197,95 @@ def handle_notify_clear(args: argparse.Namespace) -> int:
     return 0
 
 
-def handle_reflection_list(args: argparse.Namespace) -> int:
-    from nuself.tui.render import render_reflection_summary
+def _resolve_reflection_entry_id(args: argparse.Namespace) -> str | None:
+    """Resolve entry_id to actual reflection id, supporting --by-index lookup."""
+    from nuself.reflection.repository import ReflectionRepository
 
-    events = _reflection_events_for_display(
-        project_root=args.project_root,
-        tail=args.tail,
-        include_all=getattr(args, "include_all", False),
-    )
-    if not events:
-        print("No reflection events.")
+    if not getattr(args, "by_index", False):
+        return args.entry_id
+    repo = ReflectionRepository(args.project_root)
+    entries = repo.list()
+    try:
+        idx = int(args.entry_id)
+    except ValueError:
+        print(f"Invalid index: {args.entry_id}", file=sys.stderr)
+        return None
+    if idx < 0 or idx >= len(entries):
+        print(f"Invalid index {idx}. Valid range: 0-{len(entries) - 1}", file=sys.stderr)
+        return None
+    return entries[idx].id
+
+
+def handle_reflection_list(args: argparse.Namespace) -> int:
+    from nuself.reflection.repository import ReflectionRepository
+    from nuself.tui.render import render_reflection_entry_summary
+
+    repo = ReflectionRepository(args.project_root)
+    entries = repo.list(status=args.status)
+    if not entries:
+        filter_msg = f" with status '{args.status}'" if args.status else ""
+        print(f"No reflection entries{filter_msg}.")
         return 0
     if args.as_json:
         import json
 
-        for event in events:
-            print(json.dumps(event.to_record(), sort_keys=True, ensure_ascii=True))
+        for entry in entries:
+            print(json.dumps(entry.to_wire(), sort_keys=True, ensure_ascii=True))
         return 0
-    for idx, event in enumerate(events):
-        print(f"[{idx:3d}] {render_reflection_summary(event)}")
+    for idx, entry in enumerate(entries):
+        print(f"[{idx:3d}] {render_reflection_entry_summary(entry)}")
     return 0
 
 
 def handle_reflection_show(args: argparse.Namespace) -> int:
-    from nuself.tui.render import render_reflection_detail
+    from nuself.reflection.repository import ReflectionEntryNotFound, ReflectionRepository
+    from nuself.tui.render import render_reflection_entry_detail
 
-    all_events = _reflection_events_for_display(
-        project_root=args.project_root,
-        tail=getattr(args, "tail", 20),
-        include_all=getattr(args, "include_all", False),
-    )
-    if not all_events:
-        print("No reflection events.", file=sys.stderr)
+    entry_id = _resolve_reflection_entry_id(args)
+    if entry_id is None:
         return 1
-    if args.event_index < 0 or args.event_index >= len(all_events):
-        print(f"Invalid index {args.event_index}. Valid range: 0-{len(all_events) - 1}", file=sys.stderr)
+    try:
+        entry = ReflectionRepository(args.project_root).get(entry_id)
+    except ReflectionEntryNotFound:
+        print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
         return 1
-    selected = all_events[args.event_index]
     if args.as_json:
         import json
 
-        print(json.dumps(selected.to_record(), sort_keys=True, ensure_ascii=True))  # pyright: ignore[reportUnknownMemberType]
+        print(json.dumps(entry.to_wire(), sort_keys=True, ensure_ascii=True))
         return 0
-    print(render_reflection_detail(selected))  # pyright: ignore[reportUnknownArgumentType]
+    print(render_reflection_entry_detail(entry))
     return 0
 
 
-def _reflection_events_for_display(
-    *,
-    project_root: Path | None,
-    tail: int | None = None,
-    include_all: bool = False,
-) -> list["LogEvent"]:
-    from nuself.logs import LogEvent
+def handle_reflection_dismiss(args: argparse.Namespace) -> int:
+    from nuself.reflection.repository import ReflectionEntryNotFound, ReflectionRepository
 
-    events = read_log_events(project_root=project_root, component="reflection", tail=tail)
-    if not include_all:
-        events = [event for event in events if event.event == "persona_discussion"]
-    return events
+    entry_id = _resolve_reflection_entry_id(args)
+    if entry_id is None:
+        return 1
+    try:
+        ReflectionRepository(args.project_root).dismiss(entry_id)
+        print(f"Dismissed: {entry_id}")
+        return 0
+    except ReflectionEntryNotFound:
+        print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
+        return 1
+
+
+def handle_reflection_archive(args: argparse.Namespace) -> int:
+    from nuself.reflection.repository import ReflectionEntryNotFound, ReflectionRepository
+
+    entry_id = _resolve_reflection_entry_id(args)
+    if entry_id is None:
+        return 1
+    try:
+        ReflectionRepository(args.project_root).archive(entry_id)
+        print(f"Archived: {entry_id}")
+        return 0
+    except ReflectionEntryNotFound:
+        print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
+        return 1
 
 
 def handle_memory_update(args: argparse.Namespace) -> int:
@@ -1618,6 +1687,7 @@ _INTERACTIVE_COMMANDS = [
     ":logs",
     ":memory",
     ":mem",
+    ":reflection",
     ":notify",
     ":watch",
     ":threads",
@@ -1828,6 +1898,27 @@ def _handle_interactive_command(command: str, project_root: Path | None, current
         print(_handle_interactive_whoami_command(project_root))
         print()
         return ("", current_thread_id)
+    if command == ":reflection":
+        print()
+        print(_handle_interactive_reflection_command(project_root))
+        print()
+        return ("", current_thread_id)
+    if command.startswith(":reflection "):
+        print()
+        parts = command[12:].strip().split(maxsplit=1)
+        if not parts:
+            print(_interactive_help(":reflection"))
+        elif parts[0] == "list":
+            print(_handle_interactive_reflection_list_command(project_root))
+        elif parts[0] == "show" and len(parts) == 2:
+            print(_handle_interactive_reflection_show_command(project_root, parts[1]))
+        elif len(parts) == 2:
+            subcmd, entry_id = parts[0], parts[1]
+            print(_handle_interactive_reflection_subcommand(project_root, subcmd, entry_id))
+        else:
+            print(_interactive_help(":reflection"))
+        print()
+        return ("", current_thread_id)
     if command == ":notify":
         print()
         print(_handle_interactive_notify_command(project_root))
@@ -2010,9 +2101,14 @@ def _interactive_help(command: str | None = None) -> str:
             "  :history   show recent thread messages",
             "  :sources   list imported source documents",
             "  :whoami    show core profile",
+            "  :reflection               list pending reflection ideas",
+            "  :reflection list          list reflection ideas",
+            "  :reflection show <id>     show one reflection idea (or :reflection show -i <index>)",
+            "  :reflection dismiss <id>  dismiss a reflection idea",
+            "  :reflection archive <id>  archive a reflection idea",
             "  :notify         list pending notifications",
             "  :notify list    list all notifications",
-            "  :notify show <id>  show one notification",
+            "  :notify show <id>      show one notification (or :notify show -i <index>)",
             "  :notify send <id>  send a notification",
             "  :notify dismiss <id>  dismiss a notification",
             "  :watch                   watch outbox for new entries",
@@ -2196,6 +2292,60 @@ def _handle_interactive_whoami_command(project_root: Path | None) -> str:
     if len(items) > 6:
         lines.append(f"  ... and {len(items) - 6} more")
     return "\n".join(lines)
+
+
+def _handle_interactive_reflection_command(project_root: Path | None) -> str:
+    from nuself.reflection.repository import ReflectionRepository
+    from nuself.tui.render import render_reflection_entry_summary
+
+    entries = ReflectionRepository(project_root).list(status="pending")
+    if not entries:
+        return "No pending reflection ideas."
+    lines = ["Pending reflection ideas:"]
+    for entry in entries:
+        lines.append("  " + render_reflection_entry_summary(entry))
+    return "\n".join(lines)
+
+
+def _handle_interactive_reflection_list_command(project_root: Path | None) -> str:
+    from nuself.reflection.repository import ReflectionRepository
+    from nuself.tui.render import render_reflection_entry_summary
+
+    entries = ReflectionRepository(project_root).list()
+    if not entries:
+        return "No reflection ideas."
+    lines = ["All reflection ideas:"]
+    for entry in entries:
+        lines.append("  " + render_reflection_entry_summary(entry))
+    return "\n".join(lines)
+
+
+def _handle_interactive_reflection_show_command(project_root: Path | None, entry_id: str) -> str:
+    from nuself.reflection.repository import ReflectionEntryNotFound, ReflectionRepository
+    from nuself.tui.render import render_reflection_entry_detail
+
+    try:
+        entry = ReflectionRepository(project_root).get(entry_id)
+    except ReflectionEntryNotFound:
+        return f"Reflection entry not found: {entry_id}"
+    return render_reflection_entry_detail(entry)
+
+
+def _handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
+    from nuself.reflection.repository import ReflectionEntryNotFound, ReflectionRepository
+
+    repo = ReflectionRepository(project_root)
+    try:
+        repo.get(entry_id)
+    except ReflectionEntryNotFound:
+        return f"Reflection entry not found: {entry_id}"
+    if subcmd == "dismiss":
+        repo.dismiss(entry_id)
+        return f"Dismissed: {entry_id}"
+    if subcmd == "archive":
+        repo.archive(entry_id)
+        return f"Archived: {entry_id}"
+    return f"Unknown :reflection subcommand: {subcmd}"
 
 
 def _handle_interactive_notify_command(project_root: Path | None) -> str:

@@ -1,35 +1,58 @@
 # Reflection Spec
 
-## Event Taxonomy
+## Architecture
 
-The reflection scheduler emits these events into `reflection.log`:
+The reflection subsystem has two layers:
 
-| Event | Status | Audience | Visibility |
-|---|---|---|---|
-| `cycle_started` | `started` | Internal audit | `logs --component reflection` only |
-| `candidate_generation_skipped` | `skipped` | Internal audit | `logs --component reflection` only |
-| `candidate_generation_failed` | `error` | Internal audit | `logs --component reflection` only |
-| `cycle_no_candidates` | `completed` | Internal audit | `logs --component reflection` only |
-| `cycle_filtered` | `completed` | Internal audit | `logs --component reflection` only |
-| `persona_discussion` | `approved` / `rejected` | User outcome | **`reflection list`** AND logs |
-| `cycle_discussion_rejected` | `completed` | Internal audit | `logs --component reflection` only |
-| `cycle_completed` | `completed` | Internal audit | `logs --component reflection` only |
+1. **ReflectionRepository** (`private/reflections/`) — durable store for reflection ideas
+2. ** reflection.log** — audit trail of scheduler events
 
-**`reflection list` displays only `persona_discussion` events by default.** All other events are scheduler internals and belong in `nuself logs --component reflection`.
+Reflection ideas are first-class domain objects. They are **not** notification intents.
+
+## ReflectionEntry
+
+Stored as one JSON file per entry in `private/reflections/{id}.json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | `reflection-candidate-{timestamp}-{microsecond}` |
+| `title` | string | Idea title (max 80 chars) |
+| `body` | string | 2-4 sentences describing the idea |
+| `candidate_type` | string | `question` \| `connection` \| `contradiction` \| `action` \| `profile_update` |
+| `confidence` | float | 0.0–1.0 |
+| `novelty` | float | 0.0–1.0 |
+| `urgency` | float | 0.0–1.0 |
+| `interruption_cost` | float | 0.0–1.0 |
+| `composite_score` | float | Final gate score |
+| `status` | string | `pending` \| `dismissed` \| `archived` |
+| `discussion_approved` | bool \| null | `null` if no discussion happened |
+| `discussion_trace` | list[str] | Raw persona discussion lines |
+| `deep_link` | string | `nuself://thread/reflections` |
+| `created_at` | string | ISO timestamp |
+| `reviewed_at` | string \| null | Set when dismissed or archived |
+
+### Status Semantics
+
+| Status | Meaning |
+|---|---|
+| `pending` | Produced by scheduler; user has not acted on it |
+| `dismissed` | User explicitly dismissed (`nuself reflection dismiss`) |
+| `archived` | User explicitly archived (`nuself reflection archive`) |
 
 ## Pipeline Flow
 
 ```
 reflect()
-  ├─ cycle_started
+  ├─ cycle_started                 (audit log)
   ├─ candidate_generation_skipped  (if no context)
   ├─ candidate_generation_failed   (if LLM errors)
-  ├─ cycle_no_candidates           (if LLM returns valid but empty candidates)
+  ├─ cycle_no_candidates           (if LLM returns empty)
   ├─ RelevanceGate.score(best)
   │   └─ cycle_filtered            (if !passes)
   ├─ persona_discussion            (if score ≥ persona_discussion_threshold)
   │   └─ cycle_discussion_rejected (if !approved)
-  └─ cycle_completed               (outbox entry created)
+  └─ ReflectionRepository.add()    ( ReflectionEntry created )
+       └─ auto_notify? → NotificationOutbox.add(brief notify)
 ```
 
 ## RelevanceGate Scoring
@@ -49,22 +72,40 @@ Composite = novelty×0.25 + confidence×0.20 + urgency×0.25 − interruption_co
 | `blocking_threshold` | `0.35` | Score below this triggers a blocking veto |
 | `override_threshold` | `0.7` | Score above this counts as strong support |
 
-Candidates below `persona_discussion_threshold` but passing the gate proceed directly to outbox without discussion.
+Candidates below `persona_discussion_threshold` but passing the gate proceed directly to `ReflectionRepository` without discussion.
 
-## Outbox Creation
+## Optional Notify Bridge
 
-- `id`: `reflection-{YYYYMMDD-HHMMSS}-{microsecond:06d}`
-- `idempotency_key`: `reflection-{date.isoformat()}`
-- `deep_link`: `nuself://thread/{thread_id}` (defaults to `"reflections"`)
-- Deduplication: `NotificationOutbox.add()` returns existing entry if idempotency key already present.
+If `reflection.auto_notify` is `true`, a brief `OutboxEntry` is created **pointing to** the reflection:
+
+- `title`: `"New reflection: {reflection.title}"`
+- `body`: `"A new reflection idea is available. View it with: nuself reflection show {id}"`
+- `idempotency_key`: `"notify-{reflection.id}"`
+
+Default is `false` — no outbox entry created.
+
+## Audit Log Events
+
+The scheduler still emits these events into `reflection.log`:
+
+| Event | Status | Visibility |
+|---|---|---|
+| `cycle_started` | `started` | `nuself logs --component reflection` |
+| `persona_discussion` | `approved` / `rejected` | `nuself logs --component reflection` |
+| `cycle_discussion_rejected` | `completed` | `nuself logs --component reflection` |
+| `cycle_completed` | `completed` | `nuself logs --component reflection` |
 
 ## CLI Contracts
 
 ```
-nuself reflection list [--tail N] [--include-all] [--json]
-nuself reflection show <event_index> [--tail N] [--include-all] [--json]
+nuself reflection list [--status pending|dismissed|archived] [--json]
+nuself reflection show <id_or_index> [--by-index] [--json]
+nuself reflection dismiss <id_or_index> [--by-index]
+nuself reflection archive <id_or_index> [--by-index]
 ```
 
-- `list` default: only `persona_discussion` events.
-- `--include-all`: reveals all scheduler events.
-- `show` indexes into the same filtered list as `list`.
+- `list` default: shows **all** statuses.
+- `--status`: filters to one status.
+- `show` / `dismiss` / `archive` accept either an entry ID or a `--by-index` flag (0-based from `list`).
+
+REPL `:reflection` lists **only pending** entries. `:reflection list` lists **all** entries.

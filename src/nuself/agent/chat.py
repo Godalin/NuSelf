@@ -28,7 +28,6 @@ from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.notification import NotificationOutbox
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
@@ -491,19 +490,19 @@ class ConversationGraphRuntime:
         )
         from nuself.agent.tools import DismissReflectionTool, ListPendingReflectionsTool
 
-        outbox = NotificationOutbox(project_root)
         from nuself.agent.tools import (
             ArchiveMemoryTool,
             DismissReflectionTool,
             ListPendingReflectionsTool,
             UpdateMemoryImportanceTool,
         )
+        from nuself.reflection.repository import ReflectionRepository
 
-        outbox = NotificationOutbox(project_root)
+        reflection_repo = ReflectionRepository(project_root)
         self._tools: dict[str, Any] = {
             "search_memory": MemorySearchTool(query_service=self._memory_query_service),
-            "list_pending_reflections": ListPendingReflectionsTool(outbox=outbox),
-            "dismiss_reflection": DismissReflectionTool(outbox=outbox),
+            "list_pending_reflections": ListPendingReflectionsTool(repository=reflection_repo),
+            "dismiss_reflection": DismissReflectionTool(repository=reflection_repo),
             "archive_memory": ArchiveMemoryTool(project_root=project_root),
             "update_memory_importance": UpdateMemoryImportanceTool(project_root=project_root),
         }

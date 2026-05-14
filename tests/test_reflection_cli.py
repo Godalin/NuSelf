@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.logs import write_log_event
+from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
 
 @pytest.fixture
@@ -16,188 +16,128 @@ def project_root(tmp_path: Path) -> Path:
     (tmp_path / "private" / "runtime").mkdir(parents=True)
     (tmp_path / "private" / "logs").mkdir(parents=True)
     (tmp_path / "private" / "outbox").mkdir(parents=True)
+    (tmp_path / "private" / "reflections").mkdir(parents=True)
     return tmp_path
 
 
-def _seed_reflection_events(project_root: Path, count: int = 3) -> None:
+def _seed_reflection_entries(project_root: Path, count: int = 3) -> list[ReflectionEntry]:
+    repo = ReflectionRepository(project_root)
+    entries: list[ReflectionEntry] = []
     for i in range(count):
-        write_log_event(
-            "reflection",
-            "persona_discussion",
-            f"Test idea {i}",
-            project_root=project_root,
-            status="approved" if i % 2 == 0 else "rejected",
-            metadata={
-                "candidate_id": f"candidate-{i}",
-                "candidate_title": f"Test idea {i}",
-                "candidate_type": "question",
-                "composite": 0.6 + i * 0.1,
-                "approved": i % 2 == 0,
-                "scores": {"analyst": 0.8, "skeptic": 0.6},
-                "blocking_vetos": [],
-                "winner_persona_ids": ["analyst"] if i % 2 == 0 else [],
-                "emergent_persona_ids": [],
-                "discussion_trace": [
-                    f"candidate: Test idea {i}",
-                    "turn-1: analyst scores 0.8",
-                    "turn-1: skeptic scores 0.6",
-                ],
-                "revised_title": f"Revised idea {i}",
-                "revised_body": f"Body for idea {i}",
-            },
+        entry = ReflectionEntry(
+            id=f"reflection-test-{i:03d}",
+            title=f"Test idea {i}",
+            body=f"Body for idea {i}",
+            candidate_type="question" if i % 2 == 0 else "connection",
+            confidence=0.7 + i * 0.05,
+            novelty=0.8,
+            urgency=0.3,
+            interruption_cost=0.1,
+            composite_score=0.6 + i * 0.1,
+            status="pending" if i < 2 else "dismissed",
+            discussion_approved=i % 2 == 0,
+            discussion_trace=(f"turn-1: analyst scores 0.{8 + i}",),
+            deep_link="nuself://thread/reflections",
+            created_at=f"2024-01-0{i + 1}T12:00:00+00:00",
+            reviewed_at=None,
         )
+        repo.add(entry)
+        entries.append(entry)
+    return entries
 
 
 def test_reflection_list_empty(project_root: Path) -> None:
     from nuself.cli import handle_reflection_list
     import argparse
 
-    args = argparse.Namespace(project_root=project_root, tail=20, as_json=False)
+    args = argparse.Namespace(project_root=project_root, status=None, as_json=False)
     assert handle_reflection_list(args) == 0
 
 
-def test_reflection_list_with_events(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_reflection_list_with_entries(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from nuself.cli import handle_reflection_list
     import argparse
 
-    _seed_reflection_events(project_root, 3)
-    args = argparse.Namespace(project_root=project_root, tail=20, as_json=False)
+    _seed_reflection_entries(project_root, 3)
+    args = argparse.Namespace(project_root=project_root, status=None, as_json=False)
     assert handle_reflection_list(args) == 0
     output = capsys.readouterr().out
-    assert "[approved]" in output
-    assert "[rejected]" in output
+    assert "Test idea 0" in output
+    assert "Test idea 1" in output
+    assert "[pending]" in output
+    assert "[dismissed]" in output
 
 
-def test_reflection_list_hides_started_by_default(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_reflection_list_filters_by_status(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from nuself.cli import handle_reflection_list
     import argparse
 
-    write_log_event(
-        "reflection",
-        "cycle_started",
-        "reflection cycle triggered",
-        project_root=project_root,
-        status="started",
-    )
-    _seed_reflection_events(project_root, 1)
-
-    args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_all=False)
+    _seed_reflection_entries(project_root, 3)
+    args = argparse.Namespace(project_root=project_root, status="pending", as_json=False)
     assert handle_reflection_list(args) == 0
     output = capsys.readouterr().out
-    assert "triggered" not in output
-    assert "[approved]" in output
-
-
-def test_reflection_list_can_include_all(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_list
-    import argparse
-
-    write_log_event(
-        "reflection",
-        "cycle_started",
-        "reflection cycle triggered",
-        project_root=project_root,
-        status="started",
-    )
-    _seed_reflection_events(project_root, 1)
-
-    args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_all=True)
-    assert handle_reflection_list(args) == 0
-    output = capsys.readouterr().out
-    assert "triggered" in output
+    assert "Test idea 0" in output
+    assert "Test idea 1" in output
+    assert "Test idea 2" not in output  # dismissed
 
 
 def test_reflection_list_json(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from nuself.cli import handle_reflection_list
     import argparse
 
-    _seed_reflection_events(project_root, 2)
-    args = argparse.Namespace(project_root=project_root, tail=20, as_json=True)
+    _seed_reflection_entries(project_root, 2)
+    args = argparse.Namespace(project_root=project_root, status=None, as_json=True)
     assert handle_reflection_list(args) == 0
     output = capsys.readouterr().out
     lines = [line for line in output.strip().splitlines() if line]
     assert len(lines) == 2
     for line in lines:
         parsed = json.loads(line)
-        assert "component" in parsed
-        assert parsed["component"] == "reflection"
+        assert "id" in parsed
+        assert "title" in parsed
 
 
-def test_reflection_show(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_reflection_show_by_id(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from nuself.cli import handle_reflection_show
     import argparse
 
-    _seed_reflection_events(project_root, 3)
-    args = argparse.Namespace(project_root=project_root, event_index=0, as_json=False)
+    entries = _seed_reflection_entries(project_root, 3)
+    args = argparse.Namespace(project_root=project_root, entry_id=entries[0].id, by_index=False, as_json=False)
     assert handle_reflection_show(args) == 0
     output = capsys.readouterr().out
-    assert "Test idea 0" in output
-    assert "discussion trace:" in output
+    assert entries[0].title in output
+    assert "discussion_trace:" in output
 
 
-def test_reflection_show_uses_same_indexing_as_list(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_list, handle_reflection_show
+def test_reflection_show_by_index(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from nuself.cli import handle_reflection_show
     import argparse
 
-    write_log_event(
-        "reflection",
-        "cycle_started",
-        "reflection cycle triggered",
-        project_root=project_root,
-        status="started",
-    )
-    _seed_reflection_events(project_root, 2)
-
-    list_args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_all=False)
-    assert handle_reflection_list(list_args) == 0
-    list_output = capsys.readouterr().out
-    assert "Test idea 0" in list_output
-    assert "triggered" not in list_output
-
-    show_args = argparse.Namespace(project_root=project_root, event_index=0, as_json=False, include_all=False)
-    assert handle_reflection_show(show_args) == 0
-    show_output = capsys.readouterr().out
-    assert "Test idea 0" in show_output
-    assert "triggered" not in show_output
-
-
-def test_reflection_show_respects_default_tail_window(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_list, handle_reflection_show
-    import argparse
-
-    _seed_reflection_events(project_root, 25)
-
-    list_args = argparse.Namespace(project_root=project_root, tail=20, as_json=False, include_all=False)
-    assert handle_reflection_list(list_args) == 0
-    list_output = capsys.readouterr().out
-    assert "Test idea 5" in list_output
-    assert "Test idea 4" not in list_output
-
-    show_args = argparse.Namespace(project_root=project_root, event_index=0, tail=20, as_json=False, include_all=False)
-    assert handle_reflection_show(show_args) == 0
-    show_output = capsys.readouterr().out
-    assert "Test idea 5" in show_output
-    assert "Test idea 4" not in show_output
+    _seed_reflection_entries(project_root, 3)
+    args = argparse.Namespace(project_root=project_root, entry_id="0", by_index=True, as_json=False)
+    assert handle_reflection_show(args) == 0
+    output = capsys.readouterr().out
+    assert "Test idea 2" in output  # most recent (reverse order)
 
 
 def test_reflection_show_json(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from nuself.cli import handle_reflection_show
     import argparse
 
-    _seed_reflection_events(project_root, 1)
-    args = argparse.Namespace(project_root=project_root, event_index=0, as_json=True)
+    entries = _seed_reflection_entries(project_root, 1)
+    args = argparse.Namespace(project_root=project_root, entry_id=entries[0].id, by_index=False, as_json=True)
     assert handle_reflection_show(args) == 0
     output = capsys.readouterr().out
     parsed = json.loads(output.strip())
-    assert parsed["metadata"]["candidate_id"] == "candidate-0"
+    assert parsed["id"] == entries[0].id
 
 
 def test_reflection_show_invalid_index(project_root: Path) -> None:
     from nuself.cli import handle_reflection_show
     import argparse
 
-    _seed_reflection_events(project_root, 2)
-    args = argparse.Namespace(project_root=project_root, event_index=99, as_json=False)
+    _seed_reflection_entries(project_root, 2)
+    args = argparse.Namespace(project_root=project_root, entry_id="99", by_index=True, as_json=False)
     assert handle_reflection_show(args) == 1
 
 
@@ -205,5 +145,58 @@ def test_reflection_show_empty(project_root: Path) -> None:
     from nuself.cli import handle_reflection_show
     import argparse
 
-    args = argparse.Namespace(project_root=project_root, event_index=0, as_json=False)
+    args = argparse.Namespace(project_root=project_root, entry_id="0", by_index=True, as_json=False)
     assert handle_reflection_show(args) == 1
+
+
+def test_reflection_dismiss(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from nuself.cli import handle_reflection_dismiss
+    import argparse
+
+    entries = _seed_reflection_entries(project_root, 2)
+    args = argparse.Namespace(project_root=project_root, entry_id=entries[0].id, by_index=False)
+    assert handle_reflection_dismiss(args) == 0
+    output = capsys.readouterr().out
+    assert f"Dismissed: {entries[0].id}" in output
+    repo = ReflectionRepository(project_root)
+    assert repo.get(entries[0].id).status == "dismissed"
+
+
+def test_reflection_dismiss_by_index(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from nuself.cli import handle_reflection_dismiss
+    import argparse
+
+    _seed_reflection_entries(project_root, 2)
+    args = argparse.Namespace(project_root=project_root, entry_id="0", by_index=True)
+    assert handle_reflection_dismiss(args) == 0
+    output = capsys.readouterr().out
+    assert "Dismissed:" in output
+
+
+def test_reflection_archive(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from nuself.cli import handle_reflection_archive
+    import argparse
+
+    entries = _seed_reflection_entries(project_root, 2)
+    args = argparse.Namespace(project_root=project_root, entry_id=entries[0].id, by_index=False)
+    assert handle_reflection_archive(args) == 0
+    output = capsys.readouterr().out
+    assert f"Archived: {entries[0].id}" in output
+    repo = ReflectionRepository(project_root)
+    assert repo.get(entries[0].id).status == "archived"
+
+
+def test_reflection_dismiss_missing(project_root: Path) -> None:
+    from nuself.cli import handle_reflection_dismiss
+    import argparse
+
+    args = argparse.Namespace(project_root=project_root, entry_id="missing", by_index=False)
+    assert handle_reflection_dismiss(args) == 1
+
+
+def test_reflection_archive_missing(project_root: Path) -> None:
+    from nuself.cli import handle_reflection_archive
+    import argparse
+
+    args = argparse.Namespace(project_root=project_root, entry_id="missing", by_index=False)
+    assert handle_reflection_archive(args) == 1

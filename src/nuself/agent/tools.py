@@ -7,7 +7,7 @@ from typing import Any, Protocol
 
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.notification import NotificationOutbox
+from nuself.reflection.repository import ReflectionRepository
 
 
 class Tool(Protocol):
@@ -81,9 +81,9 @@ class MemorySearchTool:
 
 @dataclass(frozen=True)
 class ListPendingReflectionsTool:
-    """Tool for listing pending reflection ideas from the outbox."""
+    """Tool for listing pending reflection ideas from the reflection repository."""
 
-    outbox: NotificationOutbox
+    repository: ReflectionRepository
     name: str = "list_pending_reflections"
     description: str = (
         "List pending proactive reflection ideas (questions, connections, contradictions) "
@@ -108,13 +108,13 @@ class ListPendingReflectionsTool:
         if limit_int < 1:
             return "Error: limit must be a positive integer"
 
-        entries = self.outbox.list(status="pending")
+        entries = self.repository.list(status="pending")
         if not entries:
             return "No pending reflection ideas at the moment."
 
         lines: list[str] = ["Pending reflection ideas:"]
         for i, entry in enumerate(entries[:limit_int], start=1):
-            lines.append(f"[{i}] {entry.title}")
+            lines.append(f"[{i}] {entry.title} ({entry.candidate_type}, score={entry.composite_score:.2f})")
         return "\n".join(lines)
 
 
@@ -122,7 +122,7 @@ class ListPendingReflectionsTool:
 class DismissReflectionTool:
     """Tool for dismissing a pending reflection idea."""
 
-    outbox: NotificationOutbox
+    repository: ReflectionRepository
     name: str = "dismiss_reflection"
     description: str = (
         "Dismiss a pending reflection idea so it will no longer be suggested. "
@@ -146,12 +146,12 @@ class DismissReflectionTool:
         if idx < 1:
             return "Error: index must be a positive integer"
 
-        entries = self.outbox.list(status="pending")
+        entries = self.repository.list(status="pending")
         if idx > len(entries):
             return f"Error: index {idx} is out of range (only {len(entries)} pending ideas)"
 
         entry = entries[idx - 1]
-        self.outbox.dismiss(entry.id)
+        self.repository.dismiss(entry.id)
         return f'Dismissed "{entry.title}".'
 
 
