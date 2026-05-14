@@ -87,9 +87,9 @@ All interactive commands start with `:`.
 
 After each chat turn, the REPL prints all new log events that occurred during that turn using `render_log_event()`.
 
-All human-readable logs use one metadata style: `[component] event message key=value ...`. Standard event fields and displayable metadata fields must use this same `key=value` style; they must not mix colon labels, raw JSON blocks, or ad hoc Markdown fields.
+All human-readable logs use one metadata style: `[component] event key=value ...`. Standard event fields and displayable metadata fields must use this same `key=value` style; they must not mix colon labels, raw JSON blocks, or ad hoc Markdown fields. If a log has body text, render that text starting on the next indented line instead of mixing it into the key/value header.
 
-`persona_summary` activity is rendered as a multi-line block. The header follows the same `[component] event message key=value ...` rule and names the event once, then each persona contribution is printed on its own indented line in contribution order, followed by the synthesizer line if present. It must not collapse multiple persona thoughts into one pipe-delimited line.
+`persona_summary` activity is rendered as a multi-line block. The header follows the same `[component] event key=value ...` rule and names the event once, then each persona contribution is printed on its own indented line in contribution order, followed by the synthesizer line if present. It must not collapse multiple persona thoughts into one pipe-delimited line.
 
 Logs with `discussion_trace` metadata, including chat and reflection `persona_discussion` events, render the header as one compact log line and then print the trace underneath using the discussion trace block format. The trace block is indented relative to the log header so each self contribution reads like a chat message instead of a single serialized metadata list.
 

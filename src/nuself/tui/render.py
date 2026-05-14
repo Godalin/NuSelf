@@ -46,18 +46,16 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
 
     theme = TerminalTheme(color=color)
     tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
-    pieces = [tag, event.event, event.message]
-    pieces.extend(_render_log_fields(event, theme))
-    return " ".join(pieces)
+    lines = [_render_log_header(tag, event.event, event, theme)]
+    lines.extend(_render_log_message_body(event.message))
+    return "\n".join(lines)
 
 
 def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None) -> str:
     """Render internal persona thoughts as an ordered multi-line block."""
     theme = TerminalTheme(color=color)
     tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
-    header = [tag, "persona_summary"]
-    header.extend(_render_log_fields(event, theme))
-    lines = [" ".join(header)]
+    lines = [_render_log_header(tag, "persona_summary", event, theme)]
     body_lines = [line for line in event.message.splitlines() if line.strip()]
     if not body_lines:
         body_lines = ["(no persona contributions)"]
@@ -68,13 +66,23 @@ def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None)
 def _render_discussion_log_event(event: LogEvent, *, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
     tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
-    header = [tag, event.event, event.message]
-    header.extend(_render_log_fields(event, theme))
-    lines = [" ".join(header)]
+    lines = [_render_log_header(tag, event.event, event, theme)]
+    lines.extend(_render_log_message_body(event.message))
     trace = _discussion_trace_metadata(event)
     for line in render_discussion_trace(trace, title="discussion"):
         lines.append(f"  {line}" if line else "")
     return "\n".join(lines)
+
+
+def _render_log_header(tag: str, event_name: str, event: LogEvent, theme: TerminalTheme) -> str:
+    pieces = [tag, event_name]
+    pieces.extend(_render_log_fields(event, theme))
+    return " ".join(pieces)
+
+
+def _render_log_message_body(message: str) -> list[str]:
+    lines = [line for line in message.splitlines() if line.strip()]
+    return [f"  {line}" for line in lines]
 
 
 def _discussion_trace_metadata(event: LogEvent) -> list[object]:
@@ -325,6 +333,6 @@ def render_host_decision(event: LogEvent, *, color: bool | None = None) -> list[
     """Render a structured host discussion decision event for REPL display."""
     theme = TerminalTheme(color=color)
     header = theme.tag("[host decision]", "persona")
-    pieces = [header, event.event, event.message]
-    pieces.extend(_render_log_fields(event, theme))
-    return [" ".join(pieces)]
+    lines = [_render_log_header(header, event.event, event, theme)]
+    lines.extend(_render_log_message_body(event.message))
+    return lines

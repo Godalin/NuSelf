@@ -32,7 +32,8 @@ def test_render_host_decision_formats_block() -> None:
     lines = render_host_decision(event)
 
     assert lines == [
-        '[host decision] host_discussion_decision user asked for multi-perspective discussion status=approved thread=default escalation_reason="multi-perspective request" should_escalate=true',
+        '[host decision] host_discussion_decision status=approved thread=default escalation_reason="multi-perspective request" should_escalate=true',
+        "  user asked for multi-perspective discussion",
     ]
 
 
@@ -104,7 +105,8 @@ def test_render_discussion_log_expands_trace_metadata() -> None:
     )
 
     assert render_log_event(event, color=False).splitlines() == [
-        "[reflection] persona_discussion New idea - approved after discussion status=approved thread=default candidate_id=candidate-1",
+        "[reflection] persona_discussion status=approved thread=default candidate_id=candidate-1",
+        "  New idea - approved after discussion",
         "  discussion:",
         "    ── candidate ──",
         "      [candidate]        New idea",

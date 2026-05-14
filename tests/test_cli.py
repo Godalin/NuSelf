@@ -269,7 +269,8 @@ def test_interactive_logs_command_shows_recent_activity(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "[chat] turn_completed chat turn completed" in captured.out
+    assert "[chat] turn_completed" in captured.out
+    assert "  chat turn completed" in captured.out
 
 
 def test_interactive_turn_prints_activity_events(
@@ -283,9 +284,9 @@ def test_interactive_turn_prints_activity_events(
     assert result == 0
     assert "NuSelf:\nLLM API is not configured yet." in captured.out
     assert "\n\nLogs:\n[chat] one_shot_chat_completed" in captured.out
-    assert "[chat] one_shot_chat_completed one-shot chat turn completed" in captured.out
-    assert "[chat] one_shot_chat_completed one-shot chat turn completed status=ok thread=default\nsession thread=default daemon=one-shot" in captured.out
-    assert "[chat] one_shot_chat_completed one-shot chat turn completed status=ok thread=default\n\nsession thread=default daemon=one-shot" not in captured.out
+    assert "[chat] one_shot_chat_completed status=ok thread=default\n  one-shot chat turn completed" in captured.out
+    assert "  one-shot chat turn completed\nsession thread=default daemon=one-shot" in captured.out
+    assert "  one-shot chat turn completed\n\nsession thread=default daemon=one-shot" not in captured.out
 
 
 def test_interactive_daemon_timeout_retries_and_preserves_logs(
@@ -426,7 +427,7 @@ def test_interactive_export_all_includes_all_logs(
     content = exports[0].read_text(encoding="utf-8")
     assert "- Logs: all" in content
     assert "## Internal Process Logs" in content
-    assert "```text\n[chat] one_shot_chat_completed one-shot chat turn completed status=ok thread=default\n```" in content
+    assert "```text\n[chat] one_shot_chat_completed status=ok thread=default\n  one-shot chat turn completed\n```" in content
     assert "```json" not in content
 
 
@@ -732,7 +733,8 @@ def test_logs_command_renders_structured_events(tmp_path: Path, capsys: CaptureF
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "[chat] turn_completed chat turn completed" in captured.out
+    assert "[chat] turn_completed" in captured.out
+    assert "  chat turn completed" in captured.out
     assert "thread=default" in captured.out
     assert "[memory]" not in captured.out
 
