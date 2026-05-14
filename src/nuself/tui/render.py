@@ -39,6 +39,9 @@ class TerminalTheme:
 def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
     """Render one log event as a compact terminal line."""
 
+    if event.component == "persona" and event.event == "persona_summary":
+        return _render_persona_summary_event(event, color=color)
+
     theme = TerminalTheme(color=color)
     tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
     pieces = [tag, event.message]
@@ -53,6 +56,23 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
     if event.error:
         pieces.append(theme.error(f"error={event.error}"))
     return " ".join(pieces)
+
+
+def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None) -> str:
+    """Render internal persona thoughts as an ordered multi-line block."""
+    theme = TerminalTheme(color=color)
+    tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
+    header = [tag, "persona_summary"]
+    if event.status:
+        header.append(theme.muted(f"status={event.status}"))
+    if event.thread_id:
+        header.append(theme.muted(f"thread={event.thread_id}"))
+    lines = [" ".join(header)]
+    body_lines = [line for line in event.message.splitlines() if line.strip()]
+    if not body_lines:
+        body_lines = ["(no persona contributions)"]
+    lines.extend(f"  {line}" for line in body_lines)
+    return "\n".join(lines)
 
 
 def render_log_event_json(event: LogEvent) -> str:

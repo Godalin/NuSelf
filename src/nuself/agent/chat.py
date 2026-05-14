@@ -1014,7 +1014,7 @@ def _compact_persona_summary(turn_state: "PersonaTurnState") -> str:
         parts.append(f"synthesizer_self: {synthesis_snippet}")
     if not parts:
         return "(no persona contributions)"
-    return " | ".join(parts)
+    return "\n".join(parts)
 
 
 def _drop_local_fallback_replies(messages: list[ThreadMessage]) -> list[ThreadMessage]:
