@@ -82,6 +82,7 @@ def test_synthesis_is_injected_into_initial_response_prompt(tmp_path: Path) -> N
     assert "Summary:" in system_prompt
     assert persona_turn_state.synthesis.summary in system_prompt
     assert "skeptic_self" in system_prompt or "builder_self" in system_prompt
+    assert "Do not narrate internal persona composition" in system_prompt
 
 
 def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
@@ -279,6 +280,7 @@ def test_activated_turn_uses_synthesizer_for_initial_response(tmp_path: Path) ->
     system_prompt = synthesizer_call[0].content
     assert "synthesizer self" in system_prompt
     assert "Persona contributions:" in system_prompt
+    assert "Do not narrate internal persona composition" in system_prompt
 
 
 def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
@@ -320,3 +322,4 @@ def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
     system_prompt = llm.calls[0][0].content
     assert "You are NuSelf" in system_prompt
     assert "synthesizer self" not in system_prompt
+    assert "Do not narrate internal persona composition" in system_prompt

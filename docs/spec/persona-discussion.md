@@ -29,6 +29,12 @@ When no LLM is configured, the system falls back to **MinimalPersonaNode** / **M
 
 `persona_summary` logs are ordinary activated self passes. They are not proof that competitive discussion ran. Competitive chat discussion only runs when `LLMBackedActivationPolicy.should_escalate` is true; otherwise the host decision log is `status=skipped`.
 
+## User-Facing Boundary
+
+Persona contributions and synthesis are internal context for answer generation. User-facing assistant replies should present the synthesized answer directly as NuSelf. They should not narrate internal persona composition, such as "synthesizer_self combined analyst_self and builder_self", unless the user explicitly asks about the internal persona mechanism itself.
+
+This boundary is enforced as a prompt-level instruction, not by output sanitization. Persona traces remain visible through logs and transcript exports when those logs are included.
+
 ## Parameters
 
 | Parameter | Default | Description |

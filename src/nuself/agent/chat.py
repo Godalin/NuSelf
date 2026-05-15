@@ -47,6 +47,11 @@ ConversationNodeName = Literal[
     "compression",
 ]
 UpdateResult = TypeVar("UpdateResult")
+USER_FACING_PERSONA_BOUNDARY = (
+    "Use internal persona synthesis as private context only. "
+    "Do not narrate internal persona composition or say which self contributed what in the user-facing answer, "
+    "unless the user explicitly asks about the internal persona mechanism."
+)
 
 
 @dataclass(frozen=True)
@@ -833,6 +838,7 @@ class ConversationGraphRuntime:
             "You are the synthesizer self of NuSelf. Fuse the following internal persona perspectives into a single, coherent user-facing response.",
             "Return a JSON object with answer, evidence_references, confidence, and epistemic_status.",
             "answer must be the user-facing text. evidence_references must cite relevant memory ids or source refs when available.",
+            USER_FACING_PERSONA_BOUNDARY,
             "If you make a claim about the user's preferences, history, or other personal facts without evidence, set epistemic_status to unsupported.",
             "confidence should be a number between 0 and 1 when you can estimate it; otherwise omit it.",
             "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
@@ -886,6 +892,7 @@ class ConversationGraphRuntime:
             "Use the user's memory entries and source chunks as durable context. Do not invent memories.",
             "Return a JSON object with answer, evidence_references, confidence, and epistemic_status.",
             "answer must be the user-facing text. evidence_references must cite relevant memory ids or source refs when available.",
+            USER_FACING_PERSONA_BOUNDARY,
             "If you make a claim about the user's preferences, history, or other personal facts without evidence, set epistemic_status to unsupported.",
             "confidence should be a number between 0 and 1 when you can estimate it; otherwise omit it.",
             "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
