@@ -238,6 +238,14 @@ def test_chat_agent_retries_when_protocol_leaks_into_answer(tmp_path: Path) -> N
         [
             json.dumps(
                 {
+                    "answer": "先给一个内部草稿。",
+                    "evidence_references": [],
+                    "confidence": 0.4,
+                    "epistemic_status": "inferred",
+                }
+            ),
+            json.dumps(
+                {
                     "answer": leaked_answer,
                     "evidence_references": [],
                     "confidence": 0.4,
@@ -259,8 +267,8 @@ def test_chat_agent_retries_when_protocol_leaks_into_answer(tmp_path: Path) -> N
     result = agent.respond("可以简单一点吗")
 
     assert result.answer == "好的，我简单一点。"
-    assert len(llm.calls) == 2
-    assert "previous response leaked the internal response protocol" in llm.calls[1][-1].content
+    assert len(llm.calls) == 3
+    assert "previous response leaked the internal response protocol" in llm.calls[2][-1].content
 
 
 def test_chat_agent_flags_unsupported_personal_claims_without_evidence(tmp_path: Path) -> None:
@@ -614,7 +622,7 @@ def test_conversation_graph_runtime_routes_tool_calls_through_tool_node(tmp_path
         "compression",
     )
     assert result.state.messages[1].content.startswith("[Tool call: search_memory]")
-    assert llm.call_count == 2
+    assert llm.call_count == 3
 
 
 def test_conversation_graph_runtime_keeps_unsupported_tools_on_no_tool_route(tmp_path: Path) -> None:
@@ -640,7 +648,7 @@ def test_conversation_graph_runtime_keeps_unsupported_tools_on_no_tool_route(tmp
         "state_update",
         "compression",
     )
-    assert len(llm.calls) == 1
+    assert len(llm.calls) == 2
     detected = runtime.detect_tool_request_node(
         ConversationTurnState(
             thread_id="unsupported",
@@ -722,7 +730,7 @@ def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
 
     assert result.answer == "You value clarity and explicit assumptions."
     assert result.evidence_references == ("mem_123",)
-    assert llm.call_count == 2
+    assert llm.call_count == 3
     # First call: initial prompt with tool documentation
     assert "Available tools:" in llm.calls[0][0].content
     assert "search_memory" in llm.calls[0][0].content
@@ -1127,6 +1135,6 @@ def test_chat_agent_end_to_end_archive_memory_via_tool(tmp_path: Path) -> None:
     result = agent.respond("archive that old belief")
 
     assert "archived" in result.answer.lower() or "Done" in result.answer
-    assert llm.call_count == 2
+    assert llm.call_count == 3
     entry = repo.get("m1")
     assert entry.review_state == "archived"

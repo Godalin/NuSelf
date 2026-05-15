@@ -25,8 +25,8 @@ Previous work (reflection decoupling, language preference, env-var removal, chat
 - [x] **Design**: Drafted [`docs/presentation-agent-design.md`](presentation-agent-design.md)
 - [x] **Spec**: Drafted [`docs/spec/presentation-agent.md`](spec/presentation-agent.md)
 - [ ] **Approval**: Confirm the split between thinking/tool/persona stages and final user-facing presentation
-- [ ] **Impl**: Introduce internal draft response and final presentation response types
-- [ ] **Test**: Verify protocol/persona leakage triggers one LLM regeneration, not string rewriting
+- [x] **Impl**: Introduced internal draft response and final presentation response types
+- [x] **Test**: Verify protocol/persona leakage triggers one LLM regeneration, not string rewriting
 
 Intent: separate "what NuSelf thinks should be said" from "how NuSelf says it beautifully and appropriately." This keeps presentation as an L2 judgment task and avoids mechanical output surgery.
 

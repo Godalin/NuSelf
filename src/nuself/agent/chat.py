@@ -8,7 +8,7 @@ import fcntl
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, Protocol, TypeVar, cast
+from typing import Any, Literal, Protocol, TypeAlias, TypeVar, cast
 
 from nuself.agent.tools import MemorySearchTool
 from nuself.agent.persona import (
@@ -196,6 +196,32 @@ class ChatResult:
 
 
 @dataclass(frozen=True)
+class DraftResponse:
+    """Internal substantive response before final presentation."""
+
+    answer: str
+    evidence_references: tuple[str, ...] = ()
+    confidence: float | None = None
+    epistemic_status: str = "inferred"
+    tool: str | None = None
+    tool_args: dict[str, Any] | None = None
+
+    @property
+    def draft_answer(self) -> str:
+        return self.answer
+
+
+@dataclass(frozen=True)
+class PresentedResponse:
+    """Final user-facing response after presentation."""
+
+    answer: str
+    evidence_references: tuple[str, ...] = ()
+    confidence: float | None = None
+    epistemic_status: str = "inferred"
+
+
+@dataclass(frozen=True)
 class ConversationRuntimeResult:
     """Output from one conversation runtime turn."""
 
@@ -226,10 +252,10 @@ class ConversationTurnState:
     active_messages: tuple[ThreadMessage, ...] = ()
     persona_activation: PersonaActivation | None = None
     persona_turn_state: PersonaTurnState | None = None
-    initial_response: ParsedChatResponse | None = None
+    initial_response: DraftResponse | None = None
     tool_call: ConversationToolCall | None = None
     tool_result: str | None = None
-    final_response: ParsedChatResponse | None = None
+    final_response: PresentedResponse | None = None
     saved_messages: tuple[ThreadMessage, ...] = ()
     updated_thread_state: ThreadState | None = None
     node_trace: tuple[ConversationNodeName, ...] = ()
@@ -476,6 +502,120 @@ class ChatAgent:
         return self._thread_store.update(thread_id, update)
 
 
+class PresentationAgent:
+    """LLM-backed final expression stage for user-facing chat replies."""
+
+    def __init__(self, llm: ChatLLM, *, language_preference: str = "en") -> None:
+        self._llm = llm
+        self._language_preference = language_preference
+
+    def present(
+        self,
+        draft: ParsedChatResponse,
+        *,
+        context_messages: tuple[ThreadMessage, ...],
+        current_user_message: str,
+        conversation_summary: str,
+        presentation_hints: tuple[str, ...] = (),
+        thread_id: str = "default",
+    ) -> PresentedResponse:
+        write_log_event("chat", "presentation_started", "presentation stage started", thread_id=thread_id, status="started")
+        prompt = self._build_prompt(
+            draft,
+            context_messages=context_messages,
+            current_user_message=current_user_message,
+            conversation_summary=conversation_summary,
+            presentation_hints=presentation_hints,
+        )
+        response = _to_presented_response(_parse_chat_response(self._llm.complete(prompt)))
+        if not _leaks_response_protocol(response.answer):
+            write_log_event(
+                "chat",
+                "presentation_completed",
+                "presentation stage completed",
+                thread_id=thread_id,
+                status="completed",
+                metadata={"epistemic_status": response.epistemic_status},
+            )
+            return response
+
+        write_log_event(
+            "chat",
+            "presentation_retry",
+            "presentation leaked response protocol; retrying",
+            thread_id=thread_id,
+            status="retry",
+            metadata={"retry_reason": "protocol_leak"},
+        )
+        retry_prompt = [*prompt, ChatMessage(role="user", content=REGENERATE_USER_FACING_RESPONSE_PROMPT)]
+        retry_response = _to_presented_response(_parse_chat_response(self._llm.complete(retry_prompt)))
+        if not _leaks_response_protocol(retry_response.answer):
+            write_log_event(
+                "chat",
+                "presentation_completed",
+                "presentation stage completed after retry",
+                thread_id=thread_id,
+                status="completed",
+                metadata={"epistemic_status": retry_response.epistemic_status, "retried": True},
+            )
+            return retry_response
+
+        write_log_event(
+            "chat",
+            "presentation_failed",
+            "presentation remained invalid after retry; using draft answer",
+            thread_id=thread_id,
+            status="failed",
+            metadata={"reason": "protocol_leak"},
+        )
+        return _to_presented_response(draft)
+
+    def _build_prompt(
+        self,
+        draft: ParsedChatResponse,
+        *,
+        context_messages: tuple[ThreadMessage, ...],
+        current_user_message: str,
+        conversation_summary: str,
+        presentation_hints: tuple[str, ...],
+    ) -> list[ChatMessage]:
+        parts = [
+            "You are the NuSelf Presentation Agent.",
+            "Your job is to express an internal draft as the final user-facing answer.",
+            "Return a JSON object with answer, evidence_references, confidence, and epistemic_status.",
+            USER_FACING_PROTOCOL_BOUNDARY,
+            USER_FACING_PERSONA_BOUNDARY,
+            "Preserve the draft's factual content. Do not add new facts, memories, citations, or tool results.",
+            "You may shorten, reorganize, and format the answer as readable Markdown.",
+            "Keep uncertainty and epistemic status no stronger than the draft.",
+        ]
+        if self._language_preference != "en":
+            parts.append(f"Respond to the user in {self._language_preference}.")
+        if presentation_hints:
+            parts.extend(["", "Presentation hints:", *[f"- {hint}" for hint in presentation_hints]])
+        if conversation_summary != "":
+            parts.extend(["", "Compressed conversation so far:", conversation_summary])
+        parts.extend(
+            [
+                "",
+                "Current user message:",
+                current_user_message,
+                "",
+                "Internal draft:",
+                draft.answer,
+                "",
+                "Draft metadata:",
+                f"- evidence_references: {list(draft.evidence_references)}",
+                f"- confidence: {draft.confidence}",
+                f"- epistemic_status: {draft.epistemic_status}",
+            ]
+        )
+        prompt = [ChatMessage(role="system", content="\n".join(parts))]
+        for message in context_messages[-5:]:
+            prompt.append(ChatMessage(role=message.role, content=message.content))
+        return prompt
+
+
 class ConversationGraphRuntime:
     """Graph-ready linear conversation runtime.
 
@@ -498,6 +638,7 @@ class ConversationGraphRuntime:
         self._language_preference = system_config.chat.language_preference
         persona_definitions = load_persona_definitions(project_root)
         self._activation_policy = LLMBackedActivationPolicy(persona_definitions, llm=self._llm)
+        self._presentation_agent = PresentationAgent(self._llm, language_preference=self._language_preference)
         self._persona_driver = PersonaGraphDriver(
             persona_node=LLMBackedPersonaNode(llm=self._llm),
             synthesizer_node=LLMBackedSynthesizerNode(llm=self._llm),
@@ -535,7 +676,7 @@ class ConversationGraphRuntime:
     def run_turn(self, state: ThreadState, message: str, thread_id: str) -> ConversationRuntimeResult:
         turn_state = self._graph_driver.run(ConversationTurnState.start(state, message, thread_id))
         updated = _require_thread_state(turn_state.updated_thread_state)
-        final_response = _require_chat_response(turn_state.final_response)
+        final_response = _require_presented_response(turn_state.final_response)
         return ConversationRuntimeResult(
             state=updated,
             result=ChatResult(
@@ -722,7 +863,7 @@ class ConversationGraphRuntime:
             response = self._synthesize_response(state)
         else:
             prompt = self._build_prompt(state)
-            response = self._complete_user_facing_response(prompt)
+            response = _parse_chat_response(self._llm.complete(prompt))
         return ConversationNodeResult(
             node="initial_response",
             state=replace(
@@ -773,11 +914,30 @@ class ConversationGraphRuntime:
                 ),
                 tool_result,
             )
-            final_response = _apply_unsupported_claim_guard(self._complete_user_facing_response(follow_up_prompt))
+            draft_response = _parse_chat_response(self._llm.complete(follow_up_prompt))
+            final_response = _apply_unsupported_claim_guard(
+                self._presentation_agent.present(
+                    draft_response,
+                    context_messages=state.saved_messages,
+                    current_user_message=state.user_message,
+                    conversation_summary=state.persisted_state.summary,
+                    presentation_hints=_presentation_hints(state.user_message),
+                    thread_id=state.thread_id,
+                )
+            )
             saved_messages = (*state.saved_messages, ThreadMessage(role="assistant", content=final_response.answer))
         else:
             response = _require_chat_response(state.initial_response)
-            final_response = _apply_unsupported_claim_guard(response)
+            final_response = _apply_unsupported_claim_guard(
+                self._presentation_agent.present(
+                    response,
+                    context_messages=state.active_messages,
+                    current_user_message=state.user_message,
+                    conversation_summary=state.persisted_state.summary,
+                    presentation_hints=_presentation_hints(state.user_message),
+                    thread_id=state.thread_id,
+                )
+            )
             saved_messages = (*state.active_messages, ThreadMessage(role="assistant", content=final_response.answer))
         return ConversationNodeResult(
             node="finalize_response",
@@ -841,16 +1001,6 @@ class ConversationGraphRuntime:
             prompt.append(ChatMessage(role=message.role, content=message.content))
         return prompt
 
-    def _complete_user_facing_response(self, prompt: list[ChatMessage]) -> ParsedChatResponse:
-        response = _parse_chat_response(self._llm.complete(prompt))
-        if not _leaks_response_protocol(response.answer):
-            return response
-        retry_prompt = [
-            *prompt,
-            ChatMessage(role="user", content=REGENERATE_USER_FACING_RESPONSE_PROMPT),
-        ]
-        return _parse_chat_response(self._llm.complete(retry_prompt))
-
     def _synthesize_response(self, state: ConversationTurnState) -> ParsedChatResponse:
         """Generate the user-facing response from persona contributions."""
         synthesis = _require_synthesis(state.persona_turn_state)
@@ -883,7 +1033,7 @@ class ConversationGraphRuntime:
         prompt: list[ChatMessage] = [ChatMessage(role="system", content="\n".join(parts))]
         for message in state.active_messages[-self._settings.recent_messages :]:
             prompt.append(ChatMessage(role=message.role, content=message.content))
-        return self._complete_user_facing_response(prompt)
+        return _parse_chat_response(self._llm.complete(prompt))
 
     def _build_follow_up_prompt(self, state: ThreadState, tool_result: str) -> list[ChatMessage]:
         """Build a prompt for the follow-up after tool invocation."""
@@ -1071,6 +1221,13 @@ def _require_thread_state(state: ThreadState | None) -> ThreadState:
         raise RuntimeError("conversation runtime thread state is missing")
     return state
 
+
+def _require_presented_response(response: PresentedResponse | None) -> PresentedResponse:
+    if response is None:
+        raise RuntimeError("conversation runtime presented response is missing")
+    return response
+
+
 def _require_persona_turn_state(state: PersonaTurnState | None) -> PersonaTurnState:
     if state is None:
         raise RuntimeError("conversation runtime persona turn state is missing")
@@ -1093,14 +1250,7 @@ def _is_supported_tool_call(tool_call: ConversationToolCall | None) -> bool:
     return tool_call is not None and tool_call.supported
 
 
-@dataclass(frozen=True)
-class ParsedChatResponse:
-    answer: str
-    evidence_references: tuple[str, ...] = ()
-    confidence: float | None = None
-    epistemic_status: str = "inferred"
-    tool: str | None = None
-    tool_args: dict[str, Any] | None = None
+ParsedChatResponse: TypeAlias = DraftResponse
 
 
 def _parse_chat_response(raw: str) -> ParsedChatResponse:
@@ -1135,14 +1285,42 @@ def _parse_chat_response(raw: str) -> ParsedChatResponse:
     return ParsedChatResponse(answer=raw)
 
 
+def _to_presented_response(response: ParsedChatResponse) -> PresentedResponse:
+    return PresentedResponse(
+        answer=response.answer,
+        evidence_references=response.evidence_references,
+        confidence=response.confidence,
+        epistemic_status=response.epistemic_status,
+    )
+
+
 def _leaks_response_protocol(answer: str) -> bool:
     stripped = answer.strip()
     if stripped.startswith("```"):
         return True
     if stripped.startswith("{") and '"answer"' in stripped:
         return True
+    if _starts_with_persona_attribution(stripped):
+        return True
     lowered = stripped[:500].casefold()
     return "evidence_references" in lowered and "epistemic_status" in lowered
+
+
+def _starts_with_persona_attribution(text: str) -> bool:
+    prefixes = ("(", "（")
+    stripped = text.strip()
+    if not stripped.startswith(prefixes):
+        return False
+    head = stripped[:240]
+    return "_self" in head and (")" in head or "）" in head)
+
+
+def _presentation_hints(user_message: str) -> tuple[str, ...]:
+    normalized = user_message.casefold()
+    hints: list[str] = []
+    if any(marker in normalized for marker in ("简单", "短", "太多", "想不过来", "simple", "short", "too much")):
+        hints.append("The user is asking for a shorter, simpler answer. Prefer compression and one concrete next step.")
+    return tuple(hints)
 
 
 def _parse_markdown_chat_response(raw: str) -> ParsedChatResponse | None:
@@ -1203,19 +1381,17 @@ def _parse_markdown_evidence_references(value: str) -> tuple[str, ...]:
     return tuple(part.strip().strip("\"'") for part in stripped.split(",") if part.strip())
 
 
-def _apply_unsupported_claim_guard(response: ParsedChatResponse) -> ParsedChatResponse:
+def _apply_unsupported_claim_guard(response: PresentedResponse) -> PresentedResponse:
     if response.evidence_references:
         return response
     if not _looks_like_personal_claim(response.answer):
         return response
     confidence = response.confidence if response.confidence is not None else 0.25
-    return ParsedChatResponse(
+    return PresentedResponse(
         answer=response.answer,
         evidence_references=response.evidence_references,
         confidence=min(confidence, 0.25),
         epistemic_status="unsupported",
-        tool=response.tool,
-        tool_args=response.tool_args,
     )
 
 
