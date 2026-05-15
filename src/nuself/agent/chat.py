@@ -52,6 +52,16 @@ USER_FACING_PERSONA_BOUNDARY = (
     "Do not narrate internal persona composition or say which self contributed what in the user-facing answer, "
     "unless the user explicitly asks about the internal persona mechanism."
 )
+USER_FACING_PROTOCOL_BOUNDARY = (
+    "The JSON object is only an internal transport protocol. "
+    "The answer field must contain only the text to show to the user; "
+    "do not include raw JSON, fenced code blocks, or protocol field names inside answer."
+)
+REGENERATE_USER_FACING_RESPONSE_PROMPT = (
+    "Your previous response leaked the internal response protocol into the user-visible answer. "
+    "Regenerate the response using the same context. Return only the required JSON object for the runtime, "
+    "and make the answer field plain user-facing text without JSON, code fences, or protocol field names."
+)
 
 
 @dataclass(frozen=True)
@@ -712,7 +722,7 @@ class ConversationGraphRuntime:
             response = self._synthesize_response(state)
         else:
             prompt = self._build_prompt(state)
-            response = _parse_chat_response(self._llm.complete(prompt))
+            response = self._complete_user_facing_response(prompt)
         return ConversationNodeResult(
             node="initial_response",
             state=replace(
@@ -763,7 +773,7 @@ class ConversationGraphRuntime:
                 ),
                 tool_result,
             )
-            final_response = _apply_unsupported_claim_guard(_parse_chat_response(self._llm.complete(follow_up_prompt)))
+            final_response = _apply_unsupported_claim_guard(self._complete_user_facing_response(follow_up_prompt))
             saved_messages = (*state.saved_messages, ThreadMessage(role="assistant", content=final_response.answer))
         else:
             response = _require_chat_response(state.initial_response)
@@ -831,6 +841,16 @@ class ConversationGraphRuntime:
             prompt.append(ChatMessage(role=message.role, content=message.content))
         return prompt
 
+    def _complete_user_facing_response(self, prompt: list[ChatMessage]) -> ParsedChatResponse:
+        response = _parse_chat_response(self._llm.complete(prompt))
+        if not _leaks_response_protocol(response.answer):
+            return response
+        retry_prompt = [
+            *prompt,
+            ChatMessage(role="user", content=REGENERATE_USER_FACING_RESPONSE_PROMPT),
+        ]
+        return _parse_chat_response(self._llm.complete(retry_prompt))
+
     def _synthesize_response(self, state: ConversationTurnState) -> ParsedChatResponse:
         """Generate the user-facing response from persona contributions."""
         synthesis = _require_synthesis(state.persona_turn_state)
@@ -839,6 +859,7 @@ class ConversationGraphRuntime:
             "Return a JSON object with answer, evidence_references, confidence, and epistemic_status.",
             "answer must be the user-facing text. evidence_references must cite relevant memory ids or source refs when available.",
             USER_FACING_PERSONA_BOUNDARY,
+            USER_FACING_PROTOCOL_BOUNDARY,
             "If you make a claim about the user's preferences, history, or other personal facts without evidence, set epistemic_status to unsupported.",
             "confidence should be a number between 0 and 1 when you can estimate it; otherwise omit it.",
             "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
@@ -862,14 +883,15 @@ class ConversationGraphRuntime:
         prompt: list[ChatMessage] = [ChatMessage(role="system", content="\n".join(parts))]
         for message in state.active_messages[-self._settings.recent_messages :]:
             prompt.append(ChatMessage(role=message.role, content=message.content))
-        return _parse_chat_response(self._llm.complete(prompt))
+        return self._complete_user_facing_response(prompt)
 
     def _build_follow_up_prompt(self, state: ThreadState, tool_result: str) -> list[ChatMessage]:
         """Build a prompt for the follow-up after tool invocation."""
         follow_up_system = (
             "You are NuSelf. The previous tool call returned the following results. "
             "Use these results to generate your final answer. "
-            "Return a JSON object with answer, evidence_references, confidence, and epistemic_status."
+            "Return a JSON object with answer, evidence_references, confidence, and epistemic_status. "
+            f"{USER_FACING_PROTOCOL_BOUNDARY}"
         )
         if self._language_preference != "en":
             follow_up_system += f"\n\nRespond to the user in {self._language_preference}."
@@ -893,6 +915,7 @@ class ConversationGraphRuntime:
             "Return a JSON object with answer, evidence_references, confidence, and epistemic_status.",
             "answer must be the user-facing text. evidence_references must cite relevant memory ids or source refs when available.",
             USER_FACING_PERSONA_BOUNDARY,
+            USER_FACING_PROTOCOL_BOUNDARY,
             "If you make a claim about the user's preferences, history, or other personal facts without evidence, set epistemic_status to unsupported.",
             "confidence should be a number between 0 and 1 when you can estimate it; otherwise omit it.",
             "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
@@ -1110,6 +1133,16 @@ def _parse_chat_response(raw: str) -> ParsedChatResponse:
     if markdown_response is not None:
         return markdown_response
     return ParsedChatResponse(answer=raw)
+
+
+def _leaks_response_protocol(answer: str) -> bool:
+    stripped = answer.strip()
+    if stripped.startswith("```"):
+        return True
+    if stripped.startswith("{") and '"answer"' in stripped:
+        return True
+    lowered = stripped[:500].casefold()
+    return "evidence_references" in lowered and "epistemic_status" in lowered
 
 
 def _parse_markdown_chat_response(raw: str) -> ParsedChatResponse | None:

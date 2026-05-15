@@ -78,6 +78,25 @@ class StructuredFakeLLM:
         return self.response
 
 
+class SequencedStructuredFakeLLM(StructuredFakeLLM):
+    def __init__(self, responses: list[str], activation_response: dict[str, object] | None = None) -> None:
+        super().__init__(responses[-1] if responses else "", activation_response=activation_response)
+        self._responses = list(responses)
+
+    def complete(self, messages: list[ChatMessage]) -> str:
+        content = messages[0].content
+        if "Persona Activation Gate" in content:
+            return json.dumps(self._activation_response)
+        if "private reflection council" in content:
+            return "analyst_self gives a concrete LLM-backed perspective."
+        if "You are the synthesizer. Distill" in content:
+            return "LLM-backed synthesis of internal perspectives."
+        self.calls.append(messages)
+        if self._responses:
+            return self._responses.pop(0)
+        return self.response
+
+
 class FailingLLM:
     def complete(self, messages: list[ChatMessage]) -> str:
         raise RuntimeError("llm unavailable")
@@ -208,6 +227,40 @@ def test_chat_agent_parses_markdown_structured_response(tmp_path: Path) -> None:
     assert result.evidence_references == ("mem_123",)
     assert result.epistemic_status == "grounded"
     assert "evidence_references" not in result.reply
+
+
+def test_chat_agent_retries_when_protocol_leaks_into_answer(tmp_path: Path) -> None:
+    leaked_answer = (
+        '{"answer":"好的，我简单一点。","evidence_references":[],'
+        '"confidence":0.8,"epistemic_status":"inferred"}'
+    )
+    llm = SequencedStructuredFakeLLM(
+        [
+            json.dumps(
+                {
+                    "answer": leaked_answer,
+                    "evidence_references": [],
+                    "confidence": 0.4,
+                    "epistemic_status": "inferred",
+                }
+            ),
+            json.dumps(
+                {
+                    "answer": "好的，我简单一点。",
+                    "evidence_references": [],
+                    "confidence": 0.8,
+                    "epistemic_status": "inferred",
+                }
+            ),
+        ]
+    )
+    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
+
+    result = agent.respond("可以简单一点吗")
+
+    assert result.answer == "好的，我简单一点。"
+    assert len(llm.calls) == 2
+    assert "previous response leaked the internal response protocol" in llm.calls[1][-1].content
 
 
 def test_chat_agent_flags_unsupported_personal_claims_without_evidence(tmp_path: Path) -> None:

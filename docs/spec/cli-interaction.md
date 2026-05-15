@@ -94,6 +94,7 @@ All interactive commands start with `:`.
   ```
 - NuSelf assistant replies printed to an interactive terminal are rendered as Markdown.
 - Terminal assistant replies are streamed with a small typewriter effect so the reply appears progressively. The plain stored transcript remains unchanged.
+- Structured response JSON is an internal transport protocol. The user-facing assistant reply must contain only the `answer` text, never the raw JSON object, fenced protocol block, or protocol field names. If a generated reply leaks the response protocol into the user-visible answer, the chat agent should ask the model to regenerate once with the same context and stricter user-facing-output instruction, rather than mechanically editing the bad answer.
 
 ### Activity Printing
 
