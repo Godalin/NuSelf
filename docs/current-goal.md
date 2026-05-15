@@ -20,6 +20,16 @@ Previous work (reflection decoupling, language preference, env-var removal, chat
 
 ## Next Steps (design → spec → impl)
 
+### Proposed: P3 — Presentation Agent Split
+
+- [x] **Design**: Drafted [`docs/presentation-agent-design.md`](presentation-agent-design.md)
+- [x] **Spec**: Drafted [`docs/spec/presentation-agent.md`](spec/presentation-agent.md)
+- [ ] **Approval**: Confirm the split between thinking/tool/persona stages and final user-facing presentation
+- [ ] **Impl**: Introduce internal draft response and final presentation response types
+- [ ] **Test**: Verify protocol/persona leakage triggers one LLM regeneration, not string rewriting
+
+Intent: separate "what NuSelf thinks should be said" from "how NuSelf says it beautifully and appropriately." This keeps presentation as an L2 judgment task and avoids mechanical output surgery.
+
 ### Done: P0 — LLMRelevanceGate
 
 - [x] **Design**: Three-layer stack + ten-principle manifesto written to `docs/architecture.md`

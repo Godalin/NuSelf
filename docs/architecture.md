@@ -210,6 +210,8 @@ Responsibilities:
 - Enforce output schemas for answer text, cited evidence, uncertainty, and follow-up questions.
 - Run post-generation checks for unsupported claims and missing citations.
 - Keep provider-specific model code behind a narrow adapter boundary.
+- Separate thinking from presentation: internal chat/tool/persona stages decide what should be said, and a dedicated presentation stage decides how to express the final answer to the user.
+- Treat presentation as an L2 judgment task. The system may detect boundary failures such as protocol leakage, but should ask the model to regenerate rather than mechanically rewriting user-facing text.
 
 ### Persona Subgraphs
 
