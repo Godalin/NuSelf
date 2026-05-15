@@ -1817,7 +1817,7 @@ def test_notify_show_renders_detail(tmp_path: Path, capsys: CaptureFixture) -> N
     assert "Test Body" in output
     assert "pending" in output
     assert "nuself://thread/default" in output
-    assert "idempotency:  k1" in output
+    assert "idempotency_key=k1" in output
 
 
 def test_notify_stats_counts(tmp_path: Path, capsys: CaptureFixture) -> None:

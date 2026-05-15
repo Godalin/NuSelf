@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 import json
 import os
 import sys
@@ -46,9 +47,8 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
 
     theme = TerminalTheme(color=color)
     tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
-    lines = [_render_log_header(tag, event.event, event, theme)]
-    lines.extend(_render_log_message_body(event.message))
-    return "\n".join(lines)
+    header = _render_log_header(tag, event.event, event, theme)
+    return render_record_block(header, body=event.message)
 
 
 def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None) -> str:
@@ -67,7 +67,7 @@ def _render_discussion_log_event(event: LogEvent, *, color: bool | None = None) 
     theme = TerminalTheme(color=color)
     tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
     lines = [_render_log_header(tag, event.event, event, theme)]
-    lines.extend(_render_log_message_body(event.message))
+    lines.extend(render_record_body(event.message))
     trace = _discussion_trace_metadata(event)
     for line in render_discussion_trace(trace, title="discussion"):
         lines.append(f"  {line}" if line else "")
@@ -75,14 +75,27 @@ def _render_discussion_log_event(event: LogEvent, *, color: bool | None = None) 
 
 
 def _render_log_header(tag: str, event_name: str, event: LogEvent, theme: TerminalTheme) -> str:
-    pieces = [tag, event_name]
-    pieces.extend(_render_log_fields(event, theme))
-    return " ".join(pieces)
+    return render_record_header(f"{tag} {event_name}", _render_log_fields(event, theme))
 
 
-def _render_log_message_body(message: str) -> list[str]:
+def render_record_header(label: str, fields: Sequence[str] = ()) -> str:
+    """Render one compact record header with key=value metadata."""
+    pieces = [label]
+    pieces.extend(fields)
+    return " ".join(piece for piece in pieces if piece)
+
+
+def render_record_body(message: str) -> list[str]:
+    """Render body text as indented lines under a record header."""
     lines = [line for line in message.splitlines() if line.strip()]
     return [f"  {line}" for line in lines]
+
+
+def render_record_block(label: str, fields: Sequence[str] = (), *, body: str = "") -> str:
+    """Render a header plus optional indented body text."""
+    lines = [render_record_header(label, fields)]
+    lines.extend(render_record_body(body))
+    return "\n".join(lines)
 
 
 def _discussion_trace_metadata(event: LogEvent) -> list[object]:
@@ -120,6 +133,15 @@ def _render_log_fields(event: LogEvent, theme: TerminalTheme) -> list[str]:
 
 def _format_log_field(key: str, value: object) -> str:
     return f"{key}={_format_log_value(value)}"
+
+
+def render_key_value_field(key: str, value: object) -> str:
+    """Render a stable key=value field for human-readable terminal records."""
+    return _format_log_field(key, value)
+
+
+def _render_key_value_fields(items: Sequence[tuple[str, object]]) -> list[str]:
+    return [render_key_value_field(key, value) for key, value in items]
 
 
 def _format_log_value(value: object) -> str:
@@ -225,66 +247,88 @@ def render_outbox_summary(entry: OutboxEntry, *, color: bool | None = None) -> s
     """Render one outbox entry as a compact terminal line."""
     theme = TerminalTheme(color=color)
     status_tag = theme.paint(f"[{entry.status}]", _status_color(entry.status))
-    link_indicator = "link" if entry.deep_link else "-"
     created = entry.created_at[:19] if entry.created_at else "-"
-    return f"{entry.id} {status_tag} {entry.title}  created={created}  attempts={entry.attempts}  {link_indicator}"
+    return render_record_header(
+        f"{entry.id} {status_tag} {entry.title}",
+        _render_key_value_fields(
+            [
+                ("created", created),
+                ("attempts", entry.attempts),
+                ("link", entry.deep_link is not None),
+            ]
+        ),
+    )
 
 
 def render_outbox_detail(entry: OutboxEntry, *, color: bool | None = None) -> str:
     """Render one outbox entry as a multi-line detail view."""
     theme = TerminalTheme(color=color)
-    status_tag = theme.paint(entry.status, _status_color(entry.status))
-    lines: list[str] = [
-        f"id:           {entry.id}",
-        f"status:       {status_tag}",
-        f"title:        {entry.title}",
-        f"idempotency:  {entry.idempotency_key}",
-        f"attempts:     {entry.attempts}",
-        f"created_at:   {entry.created_at}",
-    ]
-    if entry.sent_at is not None:
-        lines.append(f"sent_at:      {entry.sent_at}")
-    if entry.deep_link is not None:
-        lines.append(f"deep_link:    {entry.deep_link}")
-    lines.append("")
-    lines.append(entry.body)
-    return "\n".join(lines)
-
-
-def render_reflection_entry_summary(entry: ReflectionEntry, *, color: bool | None = None) -> str:
-    """Render one reflection entry as a compact terminal line."""
-    theme = TerminalTheme(color=color)
     status_tag = theme.paint(f"[{entry.status}]", _status_color(entry.status))
+    fields = _render_key_value_fields(
+        [
+            ("idempotency_key", entry.idempotency_key),
+            ("attempts", entry.attempts),
+            ("created_at", entry.created_at),
+        ]
+    )
+    if entry.sent_at is not None:
+        fields.append(render_key_value_field("sent_at", entry.sent_at))
+    if entry.deep_link is not None:
+        fields.append(render_key_value_field("deep_link", entry.deep_link))
+    return render_record_block(
+        f"{entry.id} {status_tag} {entry.title}",
+        fields,
+        body=entry.body,
+    )
+
+
+def render_reflection_entry_summary(entry: ReflectionEntry, *, index: int | None = None, color: bool | None = None) -> str:
+    """Render one reflection entry as a compact record plus title body."""
+    theme = TerminalTheme(color=color)
     created = entry.created_at[:19] if entry.created_at else "-"
-    return f"{status_tag} {entry.title}  created={created}  type={entry.candidate_type}  score={entry.composite_score:.2f}"
+    tag = theme.tag("[reflection]", "reflection")
+    label = f"[{index}] {tag}" if index is not None else tag
+    fields: list[str] = []
+    status_tag = theme.paint(f"[{entry.status}]", _status_color(entry.status))
+    fields.extend(
+        [
+            render_key_value_field("status", status_tag),
+            render_key_value_field("created", created),
+            render_key_value_field("type", entry.candidate_type),
+            render_key_value_field("score", f"{entry.composite_score:.2f}"),
+        ]
+    )
+    return render_record_block(label, fields, body=entry.title)
 
 
 def render_reflection_entry_detail(entry: ReflectionEntry, *, color: bool | None = None) -> str:
     """Render one reflection entry as a multi-line detail view."""
     theme = TerminalTheme(color=color)
-    status_tag = theme.paint(entry.status, _status_color(entry.status))
+    status_tag = theme.paint(f"[{entry.status}]", _status_color(entry.status))
     discussion = "approved" if entry.discussion_approved is True else ("rejected" if entry.discussion_approved is False else "N/A")
-    lines: list[str] = [
-        f"id:             {entry.id}",
-        f"title:          {entry.title}",
-        f"type:           {entry.candidate_type}",
-        f"score:          {entry.composite_score:.2f} (confidence={entry.confidence:.2f} novelty={entry.novelty:.2f} urgency={entry.urgency:.2f} interruption={entry.interruption_cost:.2f})",
-        f"status:         {status_tag}",
-        f"discussion:     {discussion}",
-        f"deep_link:      {entry.deep_link}",
-        f"created_at:     {entry.created_at}",
-    ]
+    fields = _render_key_value_fields(
+        [
+            ("id", entry.id),
+            ("type", entry.candidate_type),
+            ("score", f"{entry.composite_score:.2f}"),
+            ("confidence", f"{entry.confidence:.2f}"),
+            ("novelty", f"{entry.novelty:.2f}"),
+            ("urgency", f"{entry.urgency:.2f}"),
+            ("interruption", f"{entry.interruption_cost:.2f}"),
+            ("discussion", discussion),
+            ("deep_link", entry.deep_link),
+            ("created_at", entry.created_at),
+        ]
+    )
     if entry.reviewed_at is not None:
-        lines.append(f"reviewed_at:    {entry.reviewed_at}")
-    if entry.discussion_trace:
-        lines.append("")
-        lines.append("discussion_trace:")
-        for line in entry.discussion_trace:
-            lines.append(f"  {line}")
-    lines.append("")
-    lines.append(entry.body)
-    return "\n".join(lines)
+        fields.append(render_key_value_field("reviewed_at", entry.reviewed_at))
 
+    lines = [render_record_header(f"{status_tag} {entry.title}", fields)]
+    lines.extend(render_record_body(entry.body))
+    if entry.discussion_trace:
+        for line in render_discussion_trace(list(entry.discussion_trace), title="discussion"):
+            lines.append(f"  {line}" if line else "")
+    return "\n".join(lines)
 
 
 def _parse_trace_entry(text: str) -> tuple[str | None, str | None, str]:
@@ -334,5 +378,5 @@ def render_host_decision(event: LogEvent, *, color: bool | None = None) -> list[
     theme = TerminalTheme(color=color)
     header = theme.tag("[host decision]", "persona")
     lines = [_render_log_header(header, event.event, event, theme)]
-    lines.extend(_render_log_message_body(event.message))
+    lines.extend(render_record_body(event.message))
     return lines

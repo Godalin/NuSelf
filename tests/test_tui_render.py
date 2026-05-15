@@ -1,7 +1,26 @@
 from __future__ import annotations
 
 from nuself.logs import LogEvent
-from nuself.tui.render import render_discussion_trace, render_host_decision, render_log_event
+from nuself.notification import OutboxEntry
+from nuself.reflection.repository import ReflectionEntry
+from nuself.tui.render import (
+    render_discussion_trace,
+    render_host_decision,
+    render_log_event,
+    render_outbox_detail,
+    render_outbox_summary,
+    render_record_block,
+    render_reflection_entry_detail,
+    render_reflection_entry_summary,
+)
+
+
+def test_render_record_block_splits_header_and_body() -> None:
+    assert render_record_block("[test] event", ["status=ok", "thread=default"], body="first\nsecond") == (
+        "[test] event status=ok thread=default\n"
+        "  first\n"
+        "  second"
+    )
 
 
 def test_render_discussion_trace_formats_block() -> None:
@@ -115,4 +134,62 @@ def test_render_discussion_log_expands_trace_metadata() -> None:
         "      [analyst_self]     this is worth pursuing",
         "      [skeptic_self]     check timing first",
         "      [synthesis]        proceed carefully",
+    ]
+
+
+def test_render_outbox_records_use_shared_key_value_style() -> None:
+    entry = OutboxEntry(
+        id="e1",
+        title="Test Title",
+        body="Test Body",
+        status="pending",
+        idempotency_key="k1",
+        deep_link="nuself://thread/default",
+        created_at="2026-05-12T10:00:00Z",
+    )
+
+    assert render_outbox_summary(entry, color=False) == (
+        "e1 [pending] Test Title created=2026-05-12T10:00:00 attempts=0 link=true"
+    )
+    assert render_outbox_detail(entry, color=False).splitlines() == [
+        "e1 [pending] Test Title idempotency_key=k1 attempts=0 created_at=2026-05-12T10:00:00Z deep_link=nuself://thread/default",
+        "  Test Body",
+    ]
+
+
+def test_render_reflection_records_use_shared_key_value_style() -> None:
+    entry = ReflectionEntry(
+        id="reflection-candidate-1",
+        title="Test idea",
+        body="Body line",
+        candidate_type="question",
+        confidence=0.7,
+        novelty=0.6,
+        urgency=0.5,
+        interruption_cost=0.2,
+        composite_score=0.65,
+        status="pending",
+        discussion_approved=True,
+        discussion_trace=("candidate: Test idea", "turn-1:builder_self: build it"),
+        deep_link="nuself://thread/reflections",
+        created_at="2026-05-12T10:00:00Z",
+        reviewed_at=None,
+    )
+
+    assert render_reflection_entry_summary(entry, index=2, color=False).splitlines() == [
+        "[2] [reflection] status=[pending] created=2026-05-12T10:00:00 type=question score=0.65",
+        "  Test idea",
+    ]
+    assert render_reflection_entry_summary(entry, index=2, color=True).splitlines()[0].startswith(
+        "[2] \033[33m[reflection]\033[0m status=\033[33m[pending]\033[0m"
+    )
+    assert render_reflection_entry_detail(entry, color=False).splitlines() == [
+        "[pending] Test idea id=reflection-candidate-1 type=question score=0.65 confidence=0.70 novelty=0.60 urgency=0.50 interruption=0.20 discussion=approved deep_link=nuself://thread/reflections created_at=2026-05-12T10:00:00Z",
+        "  Body line",
+        "  discussion:",
+        "    ── candidate ──",
+        "      [candidate]        Test idea",
+        "",
+        "    ── turn-1 ──",
+        "      [builder_self]     build it",
     ]

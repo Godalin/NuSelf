@@ -64,8 +64,10 @@ def test_reflection_list_with_entries(project_root: Path, capsys: pytest.Capture
     output = capsys.readouterr().out
     assert "Test idea 0" in output
     assert "Test idea 1" in output
-    assert "[pending]" in output
-    assert "[dismissed]" in output
+    assert "status=[pending]" in output
+    assert "status=[dismissed]" in output
+    assert "[0] [reflection]" in output
+    assert "\n  Test idea 0\n" in output
     assert entries[0].id not in output
     assert entries[1].id not in output
 
@@ -108,7 +110,7 @@ def test_reflection_show_by_id(project_root: Path, capsys: pytest.CaptureFixture
     assert handle_reflection_show(args) == 0
     output = capsys.readouterr().out
     assert entries[0].title in output
-    assert "discussion_trace:" in output
+    assert "discussion:" in output
 
 
 def test_reflection_show_by_index(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:

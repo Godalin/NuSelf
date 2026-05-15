@@ -92,4 +92,6 @@ any     ──► deleted   [clear(status)]  triggered by: CLI notify clear
 | `notify clear` | `0` | Removes all `dismissed` entries |
 | `notify stats` | `0` | Count table: Total, Pending, Sent, Failed, Dismissed |
 
+Plain-text `notify list` and `notify show` output follows the shared CLI record renderer: one header line with `key=value` metadata, then body text on subsequent indented lines. `notify show` must not use a separate colon-aligned field table.
+
 REPL `:notify` lists **only pending** entries. `:notify list` lists **all** entries.

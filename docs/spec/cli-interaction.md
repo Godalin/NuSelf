@@ -37,15 +37,27 @@ Controlled by `TerminalTheme`. Default ON when `sys.stdout.isatty()` and `NO_COL
 ## List View Contract
 
 - One line per item.
-- Left-to-right: primary identifier → colored status tag → human title → muted metadata.
+- Left-to-right: primary identifier when useful → colored status tag → human title → `key=value` metadata.
 - Indexed only when `show` accepts a numeric index.
 
 ## Detail View Contract
 
-- Labeled fields aligned on the first colon: `label: value`.
-- Status fields use colored text.
-- Body or long text appears after a blank line.
-- Sub-structures grouped under section headers with a blank line before the header.
+- Detail views use the same record shape as lists and logs: one compact header followed by optional indented body text.
+- Header shape: `<label> key=value ...`. The label may include the identifier, colored status tag, and title.
+- Body or long text starts on the next line with two-space indentation. It must not be mixed into the header.
+- Nested sub-structures, such as discussion traces, render under an indented section header using the same body indentation.
+- Status fields use colored text in the label when color is enabled.
+
+## Record Rendering Contract
+
+Shared terminal renderers must use the reusable record helpers in `nuself.tui.render`:
+
+- `render_record_header(label, fields)` joins the label and `key=value` metadata on one line.
+- `render_record_body(text)` prints non-empty body lines with two-space indentation.
+- `render_record_block(label, fields, body=...)` combines the two.
+- `render_key_value_field(key, value)` is the common formatter for booleans, numbers, strings, lists, and structured fallback values.
+
+Logs, `reflection list/show`, `notify list/show`, and REPL versions of those views must use this shared style. They must not reintroduce colon-aligned detail tables, raw JSON blobs, or one-off key/value renderers for human-readable output.
 
 ## Empty State Contract
 
@@ -119,7 +131,7 @@ nuself reflection list [--status pending|dismissed|archived] [--json]
 
 - **Default view**: All reflection entries.
 - **`--status`**: Filter to one entry status.
-- **Output**: Indexed compact lines `[  N] [<status>] <title>  created=<timestamp>  type=<candidate_type>  score=<composite>`.
+- **Output**: Indexed record blocks. First line contains metadata only, e.g. `[<N>] [reflection] status=[<status>] created=<timestamp> type=<candidate_type> score=<composite>`; second line contains the reflection title as indented body text. The component tag and status tag are colored when color is enabled.
 - **ID display**: Plain-text list output does not print long `reflection-candidate-*` entry IDs. Use the visible index with `--by-index`, or use `--json` when the full ID is needed.
 - **Empty**: `No reflection entries.`
 
@@ -128,7 +140,7 @@ nuself reflection show <id_or_index> [--by-index] [--json]
 ```
 
 - Indexes into the same filtered list used by `reflection list`.
-- **Detail view**: ID, title, status, candidate metadata, deep link, timestamps, body, and raw discussion trace.
+- **Detail view**: One record header containing ID, status, candidate metadata, deep link, and timestamps; body text starts on the next indented line; discussion trace uses the indented discussion trace block.
 
 ### Logs
 
@@ -137,7 +149,7 @@ nuself logs [--component <c>] [--tail N] [--json] [--no-color]
 ```
 
 - **Purpose**: Raw audit trail. No semantic filtering.
-- **Output**: `[component_tag] message status=... duration=...ms thread=... request=... error=...`
+- **Output**: `[component] event status=... duration_ms=... thread=... request=... error=...`, with body text on following indented lines when present.
 
 ### Notifications
 
@@ -145,14 +157,14 @@ nuself logs [--component <c>] [--tail N] [--json] [--no-color]
 nuself notify list [--status <state>]
 ```
 
-- **Output**: `<id> [<status>] title created=... attempts=... link|-`
+- **Output**: `<id> [<status>] <title> created=... attempts=... link=<true|false>`
 - `--status` filters at the outbox level.
 
 ```
 nuself notify show <id>
 ```
 
-- **Output**: Labeled multi-line block with body.
+- **Output**: One record header with ID, status, title, delivery metadata, and deep link; body text starts on the next indented line.
 
 ### Daemon
 

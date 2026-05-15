@@ -128,6 +128,7 @@ nuself reflection archive <id_or_index> [--by-index]
 
 - `list` default: shows **all** statuses.
 - Plain-text `list` output uses the visible `[index]` as the operational handle and does **not** print long `reflection-candidate-*` entry IDs. `show`, `--json`, and id-based actions still expose/accept the full entry ID.
+- Plain-text `list` and `show` output follows the shared CLI record renderer: one header line with `key=value` metadata, then body text and discussion trace on subsequent indented lines. `list` treats the reflection title as the body text, keeps status/type/score/timestamps in the metadata header, puts the square-bracket index first, and preserves colored square-bracket tags such as `[reflection]` and `status=[pending]` for scanability.
 - `--status`: filters to one status.
 - `show` / `dismiss` / `archive` accept either an entry ID or a `--by-index` flag (0-based from `list`).
 

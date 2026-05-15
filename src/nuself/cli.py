@@ -1310,7 +1310,7 @@ def handle_reflection_list(args: argparse.Namespace) -> int:
             print(json.dumps(entry.to_wire(), sort_keys=True, ensure_ascii=True))
         return 0
     for idx, entry in enumerate(entries):
-        print(f"[{idx:3d}] {render_reflection_entry_summary(entry)}")
+        print(render_reflection_entry_summary(entry, index=idx))
     return 0
 
 
@@ -2322,6 +2322,10 @@ def _print_interactive_activity_events(events: list[LogEvent]) -> None:
         print(render_log_event(event))
 
 
+def _indent_lines(lines: list[str], prefix: str) -> list[str]:
+    return [f"{prefix}{line}" if line else "" for line in lines]
+
+
 def _handle_interactive_export_command(
     command: str,
     project_root: Path | None,
@@ -2643,8 +2647,8 @@ def _handle_interactive_reflection_command(project_root: Path | None) -> str:
     if not entries:
         return "No pending reflection ideas."
     lines = ["Pending reflection ideas:"]
-    for entry in entries:
-        lines.append("  " + render_reflection_entry_summary(entry))
+    for idx, entry in enumerate(entries):
+        lines.extend(_indent_lines(render_reflection_entry_summary(entry, index=idx).splitlines(), "  "))
     return "\n".join(lines)
 
 
@@ -2656,8 +2660,8 @@ def _handle_interactive_reflection_list_command(project_root: Path | None) -> st
     if not entries:
         return "No reflection ideas."
     lines = ["All reflection ideas:"]
-    for entry in entries:
-        lines.append("  " + render_reflection_entry_summary(entry))
+    for idx, entry in enumerate(entries):
+        lines.extend(_indent_lines(render_reflection_entry_summary(entry, index=idx).splitlines(), "  "))
     return "\n".join(lines)
 
 
