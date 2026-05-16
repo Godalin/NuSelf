@@ -84,3 +84,30 @@ def test_failover_llm_dispatches_anthropic_endpoint(
 
     assert result == "ok:claude"
     assert calls == ["claude"]
+
+
+def test_failover_llm_uses_endpoint_timeout(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    captured_timeout = 0.0
+
+    def fake_complete(self: object, messages: list[ChatMessage]) -> str:
+        settings = getattr(self, "_settings")
+        nonlocal captured_timeout
+        captured_timeout = getattr(settings, "timeout_seconds")
+        return "ok"
+
+    monkeypatch.setattr("nuself.llm.OpenAICompatibleLLM.complete", fake_complete)  # type: ignore[attr-defined]
+    endpoint = LLMEndpoint(
+        index=0,
+        settings=LLMSettings(
+            base_url="http://localhost:11434/v1",
+            api_key="ollama",
+            model="deepseek-r1",
+            timeout_seconds=300,
+        ),
+    )
+    llm = FailoverLLM((endpoint,), project_root=tmp_path)
+
+    assert llm.complete([ChatMessage(role="user", content="hello")]) == "ok"
+    assert captured_timeout == 300

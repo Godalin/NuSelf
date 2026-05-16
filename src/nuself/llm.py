@@ -160,7 +160,7 @@ class FailoverLLM:
                     write_log_event(
                         "chat",
                         "llm_endpoint_failed_over",
-                        "LLM endpoint failed; trying next configured endpoint",
+                        "",
                         project_root=self._project_root,
                         status="failed_over",
                         error=_redact_llm_error(str(exc)),
@@ -221,6 +221,7 @@ def configured_llm_endpoints(project_root: Path | None = None) -> tuple[LLMEndpo
             api_key=endpoint_config.api_key,
             model=endpoint_config.model,
             provider="anthropic" if endpoint_config.anthropic else "openai",
+            timeout_seconds=endpoint_config.timeout_seconds,
         )
         if settings.api_key.strip() != "":
             endpoints.append(LLMEndpoint(index=index, settings=settings))

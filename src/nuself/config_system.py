@@ -50,7 +50,26 @@ def _llm_endpoint_config_from_raw(raw: dict[object, object]) -> "LlmEndpointConf
         base_url = "https://api.anthropic.com/v1"
     if not isinstance(base_url, str) or not isinstance(api_key, str) or not isinstance(model, str):
         return None
-    return LlmEndpointConfig(base_url=base_url, api_key=api_key, model=model, anthropic=anthropic)
+    timeout_seconds = _positive_float(raw.get("timeout_seconds"), 60.0)
+    return LlmEndpointConfig(
+        base_url=base_url,
+        api_key=api_key,
+        model=model,
+        anthropic=anthropic,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def _positive_float(raw: object, default: float) -> float:
+    if isinstance(raw, (int, float)) and raw > 0:
+        return float(raw)
+    if isinstance(raw, str):
+        try:
+            value = float(raw)
+        except ValueError:
+            return default
+        return value if value > 0 else default
+    return default
 
 
 @dataclass(frozen=True)
@@ -60,6 +79,7 @@ class LlmEndpointConfig:
     api_key: str
     model: str
     anthropic: bool = False
+    timeout_seconds: float = 60.0
 
 
 @dataclass(frozen=True)
@@ -81,6 +101,7 @@ class ChatConfig:
     """Chat agent configuration."""
     context: ChatContextConfig
     language_preference: str = "en"
+    request_timeout_seconds: float = 120.0
 
 
 @dataclass(frozen=True)
@@ -227,6 +248,7 @@ class ConfigSystem:
                     summary_target_chars=2400,
                 ),
                 language_preference="en",
+                request_timeout_seconds=120.0,
             ),
             daemon=DaemonConfig(
                 memory_curator=DaemonMemoryCuratorConfig(interval_seconds=300),
@@ -419,6 +441,10 @@ class ConfigSystem:
         summary_trigger = max(recent_messages + 2, get_int(yaml_data, "chat.context.summary_trigger_messages", defaults.chat.context.summary_trigger_messages))
         summary_target = max(100, get_int(yaml_data, "chat.context.summary_target_chars", defaults.chat.context.summary_target_chars))
         chat_language = get_str(yaml_data, "chat.language_preference", defaults.chat.language_preference)
+        chat_request_timeout = max(
+            1.0,
+            get_float(yaml_data, "chat.request_timeout_seconds", defaults.chat.request_timeout_seconds),
+        )
 
         # Daemon Config
         curator_interval = max(1, get_int(yaml_data, "daemon.memory_curator.interval_seconds", defaults.daemon.memory_curator.interval_seconds))
@@ -472,6 +498,7 @@ class ConfigSystem:
                     summary_target_chars=summary_target,
                 ),
                 language_preference=chat_language,
+                request_timeout_seconds=chat_request_timeout,
             ),
             daemon=DaemonConfig(
                 memory_curator=DaemonMemoryCuratorConfig(interval_seconds=curator_interval),
@@ -536,6 +563,7 @@ class ConfigSystem:
             "chat.context.summary_trigger_messages": config.chat.context.summary_trigger_messages,
             "chat.context.summary_target_chars": config.chat.context.summary_target_chars,
             "chat.language_preference": config.chat.language_preference,
+            "chat.request_timeout_seconds": config.chat.request_timeout_seconds,
             "daemon.memory_curator.interval_seconds": config.daemon.memory_curator.interval_seconds,
             "daemon.reflection_scheduler.check_interval_seconds": config.daemon.reflection_scheduler.check_interval_seconds,
             "daemon.notification_delivery.interval_seconds": config.daemon.notification_delivery.interval_seconds,

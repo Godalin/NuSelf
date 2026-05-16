@@ -81,6 +81,29 @@ llm:
     assert ConfigSystem().as_flat_dict(config)["llm.count"] == 2
 
 
+def test_llm_endpoint_timeout_and_chat_request_timeout_from_yaml(tmp_path: Path) -> None:
+    private_dir = tmp_path / "private"
+    private_dir.mkdir(parents=True)
+    (private_dir / "config.yaml").write_text(
+        """
+llm:
+  - base_url: http://localhost:11434/v1
+    api_key: ollama
+    model: deepseek-r1
+    timeout_seconds: 300
+chat:
+  request_timeout_seconds: 600
+""",
+        encoding="utf-8",
+    )
+
+    config = ConfigSystem.load(project_root=tmp_path)
+
+    assert config.llm.endpoints[0].timeout_seconds == 300
+    assert config.chat.request_timeout_seconds == 600
+    assert ConfigSystem().as_flat_dict(config)["chat.request_timeout_seconds"] == 600
+
+
 def test_llm_nested_openai_object_is_ignored(tmp_path: Path) -> None:
     private_dir = tmp_path / "private"
     private_dir.mkdir(parents=True)

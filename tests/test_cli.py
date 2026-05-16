@@ -813,6 +813,52 @@ def test_daemon_chat_uses_long_timeout(
     assert captured_timeout == cli.CHAT_REQUEST_TIMEOUT_SECONDS
 
 
+def test_daemon_chat_uses_configured_request_timeout(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    private_dir = tmp_path / "private"
+    private_dir.mkdir(parents=True)
+    (private_dir / "config.yaml").write_text(
+        "chat:\n  request_timeout_seconds: 600\n",
+        encoding="utf-8",
+    )
+    captured_timeout = 0.0
+    daemon_status = DaemonStatus(
+        running=True,
+        pid=123,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+
+    def fake_request(
+        request_type: object,
+        payload: object | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        nonlocal captured_timeout
+        captured_timeout = timeout
+        return DaemonResponse(
+            request_id="r1",
+            status="ok",
+            payload={"reply": "daemon reply"},
+        )
+
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        return daemon_status
+
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.cli.client.request", fake_request)
+
+    result = main(["--project-root", str(tmp_path), "attach", "--message", "hello"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "daemon reply" in captured.out
+    assert captured_timeout == 600
+
+
 def test_daemon_chat_prints_memory_update(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:

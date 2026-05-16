@@ -1731,12 +1731,13 @@ def _send_chat(message: str, project_root: Path | None, thread_id: str = "defaul
 
 
 def _send_chat_interactive(message: str, project_root: Path | None, thread_id: str = "default") -> InteractiveChatResult:
+    timeout_seconds = _chat_request_timeout_seconds(project_root)
     try:
         response = client.request(
             "chat",
             {"message": message, "thread_id": thread_id},
             project_root=project_root,
-            timeout=CHAT_REQUEST_TIMEOUT_SECONDS,
+            timeout=timeout_seconds,
         )
     except client.DaemonConnectionError as exc:
         error = f"daemon request failed: {exc}"
@@ -1771,6 +1772,13 @@ def _send_chat_interactive(message: str, project_root: Path | None, thread_id: s
         )
     print("daemon response did not include a reply", file=sys.stderr)
     return InteractiveChatResult(code=1)
+
+
+def _chat_request_timeout_seconds(project_root: Path | None) -> float:
+    try:
+        return ConfigSystem.load(project_root=project_root).chat.request_timeout_seconds
+    except Exception:
+        return CHAT_REQUEST_TIMEOUT_SECONDS
 
 
 def _interactive_loop(
