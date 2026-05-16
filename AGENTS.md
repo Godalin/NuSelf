@@ -17,6 +17,7 @@ An AI mirror for deep personal discussion — someone with similar life experien
 - [`docs/spec/memory.md`](docs/spec/memory.md) — memory system behavioral contracts
 - [`docs/spec/reflection.md`](docs/spec/reflection.md) — reflection event taxonomy and pipeline
 - [`docs/spec/long-reasoning.md`](docs/spec/long-reasoning.md) — TODO long-run reasoning thread contracts
+- [`docs/spec/trace.md`](docs/spec/trace.md) — TODO thought provenance contracts
 - [`docs/spec/notification.md`](docs/spec/notification.md) — outbox state machine and delivery
 - [`docs/spec/persona-discussion.md`](docs/spec/persona-discussion.md) — competitive discussion flow
 - [`docs/spec/logging.md`](docs/spec/logging.md) — log write/read contracts

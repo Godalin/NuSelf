@@ -13,6 +13,8 @@ It is separate from reflection:
 
 The system should feel like a continuing research notebook: each step records what changed, which hypotheses are still alive, what remains uncertain, and whether the user needs to be involved.
 
+For v0.2.0, reason is designed together with trace. Reason owns durable question state; trace owns the provenance for how each reasoning step was derived.
+
 ## Design Principles
 
 1. **Few threads, high continuity**: long-run reasoning is for a small set of active questions, not a general inspiration feed.
@@ -161,6 +163,7 @@ TODO:
 - Add CLI list/show/start/pause/resume/resolve/archive.
 - Add manual `advance`.
 - Add shared TUI record renderers.
+- Write `ThoughtTrace` records for thread creation and non-trivial advances.
 
 ### Phase 2: Chat Tools
 

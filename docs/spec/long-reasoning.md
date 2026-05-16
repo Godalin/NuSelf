@@ -8,6 +8,8 @@ Long-run reasoning maintains durable, incremental reasoning around a small numbe
 
 It must not replace reflection. Reflection discovers candidate ideas; long-run reasoning sustains work on selected questions.
 
+Reason must integrate with trace. Reason owns durable long-run question state; trace records provenance for thread creation, advances, and reflection promotion.
+
 ## Non-Goals For First Implementation
 
 - No autonomous creation of reasoning threads from ordinary chat.
@@ -144,6 +146,16 @@ TODO: add chat tools after manual CLI support exists:
 - `archive_reasoning_thread`
 
 The chat agent may suggest a new reasoning thread, but must not create one without user confirmation.
+
+## Trace Contract
+
+TODO: every reason thread creation and non-trivial advance should write a `ThoughtTrace`.
+
+- Thread creation writes `kind=reason_thread`.
+- Advance writes `kind=reason_step`.
+- Reflection promotion writes `kind=promotion`.
+- Trace outputs include the created or updated reason artifact ids.
+- Reason records store trace ids for steps once implemented.
 
 ## Reflection Bridge
 

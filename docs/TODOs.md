@@ -4,6 +4,18 @@ This checklist is the user-facing progress board for the project. It summarizes 
 
 Short-term implementation focus lives in [docs/current-goal.md](docs/current-goal.md). Use it as the active development target before pulling work from the broader backlog below.
 
+## Next Release: v0.2.0
+
+- [x] Decide v0.2.0 theme: clean command model, reason, and trace.
+- [x] Draft v0.2.0 design plan.
+- [x] Draft trace design and TODO spec.
+- [ ] Implement breaking CLI command cleanup.
+- [ ] Implement trace repository, list/show/search, and REPL commands.
+- [ ] Implement reason repository, manual commands, and trace recording.
+- [ ] Wire reflection promotion into reason and trace.
+- [ ] Let chat read active reason summaries without silently creating threads.
+- [ ] Update README, CHANGELOG, and release metadata.
+
 ## Current Goal
 
 - [x] Complete REPL-shaped TUI, structured logging, and memory inspect polish.
@@ -183,6 +195,16 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [ ] Add chat tools for user-approved reasoning thread access.
 - [ ] Add reflection promotion into reasoning threads.
 - [ ] Add scheduled advance and notification policy.
+
+## Thought Trace
+
+- [x] Choose `trace` as the user-facing name for thought provenance.
+- [x] Draft initial trace design.
+- [x] Draft TODO trace spec.
+- [ ] Add `ThoughtTrace`, `TraceLink`, repository, and renderer.
+- [ ] Add `nuself trace list/show/search` and `:trace`.
+- [ ] Record traces for reason thread creation and advance.
+- [ ] Record traces for reflection promotion into reason.
 
 ## Evaluation And Quality
 

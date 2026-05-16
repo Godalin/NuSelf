@@ -20,7 +20,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Docs
 
-- Nothing yet.
+- Planned v0.2.0 around a breaking command cleanup, long-run reasoning, and traceable thought provenance.
 
 ## 0.1.0 - 2026-05-16
 
