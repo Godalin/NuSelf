@@ -2459,7 +2459,7 @@ def test_config_command_shows_paths(tmp_path: Path, capsys: CaptureFixture) -> N
     assert "config_path:" in captured.out
     assert "config_file:" in captured.out
     assert "config_effective:" in captured.out
-    assert "llm.openai.api_key:" in captured.out
+    assert "llm.0.api_key:" in captured.out
 
 
 def test_memory_list_shows_entries(tmp_path: Path, capsys: CaptureFixture) -> None:

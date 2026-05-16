@@ -53,3 +53,49 @@ def test_language_preference_from_yaml(tmp_path: Path) -> None:
 
     config = ConfigSystem.load(project_root=tmp_path)
     assert config.chat.language_preference == "zh-CN"
+
+
+def test_llm_endpoint_list_from_yaml(tmp_path: Path) -> None:
+    private_dir = tmp_path / "private"
+    private_dir.mkdir(parents=True)
+    (private_dir / "config.yaml").write_text(
+        """
+llm:
+  - base_url: https://primary.example/v1
+    api_key: primary-key
+    model: primary-model
+  - anthropic: true
+    api_key: anthropic-key
+    model: claude-model
+""",
+        encoding="utf-8",
+    )
+
+    config = ConfigSystem.load(project_root=tmp_path)
+
+    assert len(config.llm.endpoints) == 2
+    assert config.llm.endpoints[0].base_url == "https://primary.example/v1"
+    assert config.llm.endpoints[1].model == "claude-model"
+    assert config.llm.endpoints[1].anthropic is True
+    assert config.llm.endpoints[1].base_url == "https://api.anthropic.com/v1"
+    assert ConfigSystem().as_flat_dict(config)["llm.count"] == 2
+
+
+def test_llm_nested_openai_object_is_ignored(tmp_path: Path) -> None:
+    private_dir = tmp_path / "private"
+    private_dir.mkdir(parents=True)
+    (private_dir / "config.yaml").write_text(
+        """
+llm:
+  openai:
+    base_url: https://primary.example/v1
+    api_key: primary-key
+    model: primary-model
+""",
+        encoding="utf-8",
+    )
+
+    config = ConfigSystem.load(project_root=tmp_path)
+
+    assert len(config.llm.endpoints) == 1
+    assert config.llm.endpoints[0].model == "gpt-4.1-mini"

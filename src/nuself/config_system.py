@@ -19,18 +19,53 @@ import yaml
 # ============================================================================
 
 
+def _llm_endpoints_from_yaml(
+    yaml_data: dict[str, Any], default: tuple["LlmEndpointConfig", ...]
+) -> tuple["LlmEndpointConfig", ...]:
+    llm_raw = cast(object, yaml_data.get("llm"))
+    if isinstance(llm_raw, list):
+        return _llm_endpoint_list_from_raw(cast(list[object], llm_raw), default)
+    return default
+
+
+def _llm_endpoint_list_from_raw(
+    raw_list: list[object], default: tuple["LlmEndpointConfig", ...]
+) -> tuple["LlmEndpointConfig", ...]:
+    endpoints: list[LlmEndpointConfig] = []
+    for item in raw_list:
+        if not isinstance(item, dict):
+            continue
+        endpoint = _llm_endpoint_config_from_raw(cast(dict[object, object], item))
+        if endpoint is not None:
+            endpoints.append(endpoint)
+    return tuple(endpoints) if endpoints else default
+
+
+def _llm_endpoint_config_from_raw(raw: dict[object, object]) -> "LlmEndpointConfig | None":
+    anthropic = raw.get("anthropic") is True
+    base_url = raw.get("base_url")
+    api_key = raw.get("api_key")
+    model = raw.get("model")
+    if anthropic and base_url is None:
+        base_url = "https://api.anthropic.com/v1"
+    if not isinstance(base_url, str) or not isinstance(api_key, str) or not isinstance(model, str):
+        return None
+    return LlmEndpointConfig(base_url=base_url, api_key=api_key, model=model, anthropic=anthropic)
+
+
 @dataclass(frozen=True)
-class LlmOpenAiConfig:
-    """OpenAI-compatible LLM configuration."""
+class LlmEndpointConfig:
+    """LLM endpoint configuration."""
     base_url: str
     api_key: str
     model: str
+    anthropic: bool = False
 
 
 @dataclass(frozen=True)
 class LlmConfig:
     """LLM provider configuration."""
-    openai: LlmOpenAiConfig
+    endpoints: tuple[LlmEndpointConfig, ...]
 
 
 @dataclass(frozen=True)
@@ -177,11 +212,13 @@ class ConfigSystem:
         """Return safe default configuration."""
         return SystemConfig(
             llm=LlmConfig(
-                openai=LlmOpenAiConfig(
-                    base_url="https://api.openai.com/v1",
-                    api_key="",
-                    model="gpt-4.1-mini",
-                )
+                endpoints=(
+                    LlmEndpointConfig(
+                        base_url="https://api.openai.com/v1",
+                        api_key="",
+                        model="gpt-4.1-mini",
+                    ),
+                ),
             ),
             chat=ChatConfig(
                 context=ChatContextConfig(
@@ -375,9 +412,7 @@ class ConfigSystem:
             return default
 
         # LLM Config
-        openai_base_url = get_str(yaml_data, "llm.openai.base_url", defaults.llm.openai.base_url)
-        openai_api_key = get_str(yaml_data, "llm.openai.api_key", defaults.llm.openai.api_key)
-        openai_model = get_str(yaml_data, "llm.openai.model", defaults.llm.openai.model)
+        llm_endpoints = _llm_endpoints_from_yaml(yaml_data, defaults.llm.endpoints)
 
         # Chat Config
         recent_messages = max(1, get_int(yaml_data, "chat.context.recent_messages", defaults.chat.context.recent_messages))
@@ -428,11 +463,7 @@ class ConfigSystem:
 
         return SystemConfig(
             llm=LlmConfig(
-                openai=LlmOpenAiConfig(
-                    base_url=openai_base_url,
-                    api_key=openai_api_key,
-                    model=openai_model,
-                )
+                endpoints=llm_endpoints,
             ),
             chat=ChatConfig(
                 context=ChatContextConfig(
@@ -496,9 +527,11 @@ class ConfigSystem:
     def as_flat_dict(self, config: SystemConfig) -> dict[str, Any]:
         """Return configuration as flat key/value pairs for CLI inspection."""
         return {
-            "llm.openai.base_url": config.llm.openai.base_url,
-            "llm.openai.api_key": "***" if config.llm.openai.api_key else "(not set)",
-            "llm.openai.model": config.llm.openai.model,
+            "llm.count": len(config.llm.endpoints),
+            "llm.0.provider": "anthropic" if config.llm.endpoints and config.llm.endpoints[0].anthropic else "openai",
+            "llm.0.base_url": config.llm.endpoints[0].base_url if config.llm.endpoints else "(not set)",
+            "llm.0.api_key": "***" if config.llm.endpoints and config.llm.endpoints[0].api_key else "(not set)",
+            "llm.0.model": config.llm.endpoints[0].model if config.llm.endpoints else "(not set)",
             "chat.context.recent_messages": config.chat.context.recent_messages,
             "chat.context.summary_trigger_messages": config.chat.context.summary_trigger_messages,
             "chat.context.summary_target_chars": config.chat.context.summary_target_chars,
