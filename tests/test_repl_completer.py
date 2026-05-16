@@ -63,7 +63,7 @@ def test_completer_suggests_commands(tmp_path: Path, fake_readline: FakeReadline
                 break
             results.append(result)
         assert ":thread" in results
-        assert ":threads" in results
+        assert ":threads" not in results
 
 
 def test_completer_suggests_thread_ids(tmp_path: Path, fake_readline: FakeReadline) -> None:
@@ -93,7 +93,7 @@ def test_completer_multiple_command_matches(tmp_path: Path, fake_readline: FakeR
             if result is None:
                 break
             results.append(result)
-        assert ":memory" in results
+        assert ":memory" not in results
         assert ":mem" in results
 
 

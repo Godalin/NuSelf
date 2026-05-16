@@ -228,76 +228,6 @@ def build_parser() -> argparse.ArgumentParser:
     attach_parser.add_argument("--message", "-m", default=None)
     _add_handler(attach_parser, handle_attach)
 
-    status_parser = subparsers.add_parser("status")
-    _add_handler(status_parser, handle_status)
-
-    health_parser = subparsers.add_parser("health")
-    _add_handler(health_parser, handle_health)
-
-    config_parser = subparsers.add_parser("config")
-    _add_handler(config_parser, handle_config)
-
-    open_parser = subparsers.add_parser("open")
-    open_parser.add_argument("thread_id", nargs="?", default=None)
-    open_parser.add_argument("--message", "-m", default=None)
-    open_parser.add_argument("--create", action="store_true")
-    open_parser.add_argument("--deep-link", default=None)
-    _add_handler(open_parser, handle_open)
-
-    logs_parser = subparsers.add_parser("logs")
-    _add_log_arguments(logs_parser)
-
-    eval_parser = subparsers.add_parser("eval")
-    eval_parser.add_argument("--fixtures", type=Path, default=None)
-    eval_parser.add_argument("--component", choices=["conversations", "notifications", "all"], default="all")
-    _add_handler(eval_parser, handle_eval)
-
-    notify_parser = subparsers.add_parser("notify")
-    notify_parser.set_defaults(handler=None, help_parser=notify_parser)
-    notify_subparsers = notify_parser.add_subparsers(dest="notify_command")
-    notify_list_parser = notify_subparsers.add_parser("list")
-    notify_list_parser.add_argument("--status", choices=["pending", "sent", "failed", "dismissed"], default=None)
-    _add_handler(notify_list_parser, handle_notify_list)
-    notify_show_parser = notify_subparsers.add_parser("show")
-    notify_show_parser.add_argument("entry_id")
-    notify_show_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'notify list'")
-    _add_handler(notify_show_parser, handle_notify_show)
-    notify_send_parser = notify_subparsers.add_parser("send")
-    notify_send_parser.add_argument("entry_id")
-    notify_send_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'notify list'")
-    _add_handler(notify_send_parser, handle_notify_send)
-    notify_dismiss_parser = notify_subparsers.add_parser("dismiss")
-    notify_dismiss_parser.add_argument("entry_id")
-    notify_dismiss_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'notify list'")
-    _add_handler(notify_dismiss_parser, handle_notify_dismiss)
-    _add_handler(notify_subparsers.add_parser("stats"), handle_notify_stats)
-    notify_watch_parser = notify_subparsers.add_parser("watch")
-    notify_watch_parser.add_argument("--interval", type=int, default=5, help="Poll interval in seconds")
-    _add_handler(notify_watch_parser, handle_notify_watch)
-    _add_handler(notify_subparsers.add_parser("clear"), handle_notify_clear)
-
-    reflection_parser = subparsers.add_parser("reflection")
-    reflection_parser.set_defaults(handler=None, help_parser=reflection_parser)
-    reflection_subparsers = reflection_parser.add_subparsers(dest="reflection_command")
-    reflection_list_parser = reflection_subparsers.add_parser("list")
-    reflection_list_parser.add_argument("--tail", type=int, default=20)
-    reflection_list_parser.add_argument("--status", choices=["pending", "dismissed", "archived"], default=None)
-    reflection_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
-    _add_handler(reflection_list_parser, handle_reflection_list)
-    reflection_show_parser = reflection_subparsers.add_parser("show")
-    reflection_show_parser.add_argument("entry_id")
-    reflection_show_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
-    reflection_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
-    _add_handler(reflection_show_parser, handle_reflection_show)
-    reflection_dismiss_parser = reflection_subparsers.add_parser("dismiss")
-    reflection_dismiss_parser.add_argument("entry_id")
-    reflection_dismiss_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
-    _add_handler(reflection_dismiss_parser, handle_reflection_dismiss)
-    reflection_archive_parser = reflection_subparsers.add_parser("archive")
-    reflection_archive_parser.add_argument("entry_id")
-    reflection_archive_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
-    _add_handler(reflection_archive_parser, handle_reflection_archive)
-
     memory_parser = subparsers.add_parser("memory")
     memory_parser.set_defaults(handler=None, help_parser=memory_parser)
     memory_subparsers = memory_parser.add_subparsers(dest="memory_command")
@@ -403,7 +333,32 @@ def build_parser() -> argparse.ArgumentParser:
     profile_delete_parser.add_argument("profile_id")
     _add_handler(profile_delete_parser, handle_memory_profile_delete)
     _add_handler(profile_subparsers.add_parser("reindex"), handle_memory_profile_reindex)
-    candidate_parser = memory_subparsers.add_parser("candidate")
+    source_parser = memory_subparsers.add_parser("source")
+    source_parser.set_defaults(handler=None, help_parser=source_parser)
+    source_subparsers = source_parser.add_subparsers(dest="source_command")
+    source_ingest_parser = source_subparsers.add_parser("ingest")
+    source_ingest_parser.add_argument("path", type=Path)
+    source_ingest_parser.add_argument("--tag", action="append", default=[])
+    source_ingest_parser.add_argument("--privacy", choices=["private", "shareable"], default="private")
+    _add_handler(source_ingest_parser, handle_memory_source_ingest)
+    _add_handler(source_subparsers.add_parser("list"), handle_memory_source_list)
+    source_show_parser = source_subparsers.add_parser("show")
+    source_show_parser.add_argument("source_id")
+    _add_handler(source_show_parser, handle_memory_source_show)
+    source_delete_parser = source_subparsers.add_parser("delete")
+    source_delete_parser.add_argument("source_id")
+    _add_handler(source_delete_parser, handle_memory_source_delete)
+    source_chunks_parser = source_subparsers.add_parser("chunks")
+    source_chunks_parser.add_argument("source_id", nargs="?")
+    _add_handler(source_chunks_parser, handle_memory_source_chunks)
+    source_search_parser = source_subparsers.add_parser("search")
+    source_search_parser.add_argument("query")
+    source_search_parser.add_argument("--limit", type=int, default=8)
+    _add_handler(source_search_parser, handle_memory_source_search)
+    source_extract_parser = source_subparsers.add_parser("extract")
+    source_extract_parser.add_argument("source_id")
+    _add_handler(source_extract_parser, handle_memory_source_extract)
+    candidate_parser = memory_subparsers.add_parser("review")
     candidate_parser.set_defaults(handler=None, help_parser=candidate_parser)
     candidate_subparsers = candidate_parser.add_subparsers(dest="candidate_command")
     candidate_list_parser = candidate_subparsers.add_parser("list")
@@ -443,32 +398,6 @@ def build_parser() -> argparse.ArgumentParser:
     unquarantine_parser.add_argument("entry_id")
     _add_handler(unquarantine_parser, handle_memory_unquarantine)
 
-    source_parser = subparsers.add_parser("source")
-    source_parser.set_defaults(handler=None, help_parser=source_parser)
-    source_subparsers = source_parser.add_subparsers(dest="source_command")
-    source_ingest_parser = source_subparsers.add_parser("ingest")
-    source_ingest_parser.add_argument("path", type=Path)
-    source_ingest_parser.add_argument("--tag", action="append", default=[])
-    source_ingest_parser.add_argument("--privacy", choices=["private", "shareable"], default="private")
-    _add_handler(source_ingest_parser, handle_memory_source_ingest)
-    _add_handler(source_subparsers.add_parser("list"), handle_memory_source_list)
-    source_show_parser = source_subparsers.add_parser("show")
-    source_show_parser.add_argument("source_id")
-    _add_handler(source_show_parser, handle_memory_source_show)
-    source_delete_parser = source_subparsers.add_parser("delete")
-    source_delete_parser.add_argument("source_id")
-    _add_handler(source_delete_parser, handle_memory_source_delete)
-    source_chunks_parser = source_subparsers.add_parser("chunks")
-    source_chunks_parser.add_argument("source_id", nargs="?")
-    _add_handler(source_chunks_parser, handle_memory_source_chunks)
-    source_search_parser = source_subparsers.add_parser("search")
-    source_search_parser.add_argument("query")
-    source_search_parser.add_argument("--limit", type=int, default=8)
-    _add_handler(source_search_parser, handle_memory_source_search)
-    source_extract_parser = source_subparsers.add_parser("extract")
-    source_extract_parser.add_argument("source_id")
-    _add_handler(source_extract_parser, handle_memory_source_extract)
-
     thread_parser = subparsers.add_parser("thread")
     thread_parser.set_defaults(handler=None, help_parser=thread_parser)
     thread_subparsers = thread_parser.add_subparsers(dest="thread_command")
@@ -476,9 +405,15 @@ def build_parser() -> argparse.ArgumentParser:
     thread_show_parser = thread_subparsers.add_parser("show")
     thread_show_parser.add_argument("thread_id")
     _add_handler(thread_show_parser, handle_thread_show)
-    thread_create_parser = thread_subparsers.add_parser("create")
+    thread_create_parser = thread_subparsers.add_parser("new")
     thread_create_parser.add_argument("thread_id")
     _add_handler(thread_create_parser, handle_thread_create)
+    thread_open_parser = thread_subparsers.add_parser("open")
+    thread_open_parser.add_argument("thread_id", nargs="?", default=None)
+    thread_open_parser.add_argument("--message", "-m", default=None)
+    thread_open_parser.add_argument("--create", action="store_true")
+    thread_open_parser.add_argument("--deep-link", default=None)
+    _add_handler(thread_open_parser, handle_open)
     thread_rename_parser = thread_subparsers.add_parser("rename")
     thread_rename_parser.add_argument("old_thread_id")
     thread_rename_parser.add_argument("new_thread_id")
@@ -498,6 +433,74 @@ def build_parser() -> argparse.ArgumentParser:
     thread_unarchive_parser.add_argument("thread_id")
     _add_handler(thread_unarchive_parser, handle_thread_unarchive)
     _add_handler(thread_subparsers.add_parser("archived"), handle_thread_archived)
+
+    inbox_parser = subparsers.add_parser("inbox")
+    inbox_parser.set_defaults(handler=None, help_parser=inbox_parser)
+    inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
+    reflection_parser = inbox_subparsers.add_parser("reflection")
+    reflection_parser.set_defaults(handler=None, help_parser=reflection_parser)
+    reflection_subparsers = reflection_parser.add_subparsers(dest="reflection_command")
+    reflection_list_parser = reflection_subparsers.add_parser("list")
+    reflection_list_parser.add_argument("--tail", type=int, default=20)
+    reflection_list_parser.add_argument("--status", choices=["pending", "dismissed", "archived"], default=None)
+    reflection_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
+    _add_handler(reflection_list_parser, handle_reflection_list)
+    reflection_show_parser = reflection_subparsers.add_parser("show")
+    reflection_show_parser.add_argument("entry_id")
+    reflection_show_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
+    reflection_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
+    _add_handler(reflection_show_parser, handle_reflection_show)
+    reflection_dismiss_parser = reflection_subparsers.add_parser("dismiss")
+    reflection_dismiss_parser.add_argument("entry_id")
+    reflection_dismiss_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
+    _add_handler(reflection_dismiss_parser, handle_reflection_dismiss)
+    reflection_archive_parser = reflection_subparsers.add_parser("archive")
+    reflection_archive_parser.add_argument("entry_id")
+    reflection_archive_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
+    _add_handler(reflection_archive_parser, handle_reflection_archive)
+
+    notify_parser = inbox_subparsers.add_parser("notify")
+    notify_parser.set_defaults(handler=None, help_parser=notify_parser)
+    notify_subparsers = notify_parser.add_subparsers(dest="notify_command")
+    notify_list_parser = notify_subparsers.add_parser("list")
+    notify_list_parser.add_argument("--status", choices=["pending", "sent", "failed", "dismissed"], default=None)
+    _add_handler(notify_list_parser, handle_notify_list)
+    notify_show_parser = notify_subparsers.add_parser("show")
+    notify_show_parser.add_argument("entry_id")
+    notify_show_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'notify list'")
+    _add_handler(notify_show_parser, handle_notify_show)
+    notify_send_parser = notify_subparsers.add_parser("send")
+    notify_send_parser.add_argument("entry_id")
+    notify_send_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'notify list'")
+    _add_handler(notify_send_parser, handle_notify_send)
+    notify_dismiss_parser = notify_subparsers.add_parser("dismiss")
+    notify_dismiss_parser.add_argument("entry_id")
+    notify_dismiss_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'notify list'")
+    _add_handler(notify_dismiss_parser, handle_notify_dismiss)
+    _add_handler(notify_subparsers.add_parser("stats"), handle_notify_stats)
+    notify_watch_parser = notify_subparsers.add_parser("watch")
+    notify_watch_parser.add_argument("--interval", type=int, default=5, help="Poll interval in seconds")
+    _add_handler(notify_watch_parser, handle_notify_watch)
+    _add_handler(notify_subparsers.add_parser("clear"), handle_notify_clear)
+
+    reason_parser = subparsers.add_parser("reason")
+    reason_parser.set_defaults(handler=None, help_parser=reason_parser)
+    trace_parser = subparsers.add_parser("trace")
+    trace_parser.set_defaults(handler=None, help_parser=trace_parser)
+
+    dev_parser = subparsers.add_parser("dev")
+    dev_parser.set_defaults(handler=None, help_parser=dev_parser)
+    dev_subparsers = dev_parser.add_subparsers(dest="dev_command")
+    _add_handler(dev_subparsers.add_parser("status"), handle_status)
+    _add_handler(dev_subparsers.add_parser("health"), handle_health)
+    _add_handler(dev_subparsers.add_parser("config"), handle_config)
+    dev_logs_parser = dev_subparsers.add_parser("logs")
+    _add_log_arguments(dev_logs_parser)
+    _add_handler(dev_logs_parser, handle_logs)
+    dev_eval_parser = dev_subparsers.add_parser("eval")
+    dev_eval_parser.add_argument("--fixtures", type=Path, default=None)
+    dev_eval_parser.add_argument("--component", choices=["conversations", "notifications", "all"], default="all")
+    _add_handler(dev_eval_parser, handle_eval)
 
     return parser
 
@@ -1466,7 +1469,7 @@ def handle_memory_candidate_list(args: argparse.Namespace) -> int:
     pending = [c for c in candidates if c.review_state == "pending"]
     if pending:
         print()
-        print(f"{len(pending)} pending candidate(s). Accept: nuself memory candidate accept <id>")
+        print(f"{len(pending)} pending candidate(s). Accept: nuself memory review accept <id>")
     return 0
 
 
@@ -1835,21 +1838,19 @@ _INTERACTIVE_COMMANDS = [
     ":quit",
     ":exit",
     ":history",
-    ":sources",
-    ":search",
     ":whoami",
     ":help",
-    ":status",
-    ":logs",
     ":export",
     ":e",
-    ":memory",
     ":mem",
-    ":reflection",
-    ":notify",
-    ":watch",
-    ":threads",
+    ":m",
+    ":inbox",
+    ":i",
     ":thread",
+    ":t",
+    ":reason",
+    ":trace",
+    ":dev",
     ":rename",
     ":branch",
     ":archive",
@@ -1884,7 +1885,7 @@ class _InteractiveCompleter:
 
     def _candidates(self, line: str, text: str) -> list[str]:
         stripped = line.lstrip()
-        if stripped.startswith(":thread ") and text and not text.startswith(":"):
+        if (stripped.startswith(":thread ") or stripped.startswith(":t ")) and text and not text.startswith(":"):
             return self._thread_candidates(text)
         if stripped.startswith(":unarchive ") and text and not text.startswith(":"):
             return self._archived_thread_candidates(text)
@@ -2051,23 +2052,20 @@ def _handle_interactive_command(
         print()
         print(_handle_interactive_history_command(project_root, current_thread_id))
         return ("", current_thread_id)
-    if command == ":sources":
-        print()
-        print(_handle_interactive_sources_command(project_root))
-        return ("", current_thread_id)
     if command == ":whoami":
         print()
         print(_handle_interactive_whoami_command(project_root))
         return ("", current_thread_id)
-    if command == ":reflection":
+    if command in {":inbox", ":i"}:
         print()
-        print(_handle_interactive_reflection_command(project_root))
+        print(_handle_interactive_inbox_command(project_root))
         return ("", current_thread_id)
-    if command.startswith(":reflection "):
+    if command.startswith(":inbox reflection ") or command.startswith(":i reflection "):
         print()
-        parts = command[12:].strip().split(maxsplit=1)
+        body = command.removeprefix(":inbox reflection").removeprefix(":i reflection").strip()
+        parts = body.split(maxsplit=1)
         if not parts:
-            print(_interactive_help(":reflection"))
+            print(_interactive_help(":inbox reflection"))
         elif parts[0] == "list":
             print(_handle_interactive_reflection_list_command(project_root))
         elif parts[0] == "show" and len(parts) == 2:
@@ -2076,21 +2074,18 @@ def _handle_interactive_command(
             subcmd, entry_id = parts[0], parts[1]
             print(_handle_interactive_reflection_subcommand(project_root, subcmd, entry_id))
         else:
-            print(_interactive_help(":reflection"))
+            print(_interactive_help(":inbox reflection"))
         return ("", current_thread_id)
-    if command == ":notify":
+    if command in {":inbox reflection", ":i reflection"}:
         print()
-        print(_handle_interactive_notify_command(project_root))
+        print(_handle_interactive_reflection_command(project_root))
         return ("", current_thread_id)
-    if command == ":watch":
+    if command.startswith(":inbox notify ") or command.startswith(":i notify "):
         print()
-        _handle_interactive_watch_command(project_root)
-        return ("", current_thread_id)
-    if command.startswith(":notify "):
-        print()
-        parts = command[8:].strip().split(maxsplit=1)
+        body = command.removeprefix(":inbox notify").removeprefix(":i notify").strip()
+        parts = body.split(maxsplit=1)
         if not parts:
-            print(_interactive_help(":notify"))
+            print(_interactive_help(":inbox notify"))
         elif parts[0] == "list":
             print(_handle_interactive_notify_list_command(project_root))
         elif parts[0] == "show" and len(parts) == 2:
@@ -2101,47 +2096,48 @@ def _handle_interactive_command(
             subcmd, entry_id = parts[0], parts[1]
             print(_handle_interactive_notify_subcommand(project_root, subcmd, entry_id))
         else:
-            print(_interactive_help(":notify"))
+            print(_interactive_help(":inbox notify"))
+        return ("", current_thread_id)
+    if command in {":inbox notify", ":i notify"}:
+        print()
+        print(_handle_interactive_notify_command(project_root))
         return ("", current_thread_id)
     if command == ":help":
         print()
         print(_interactive_help())
         return ("", current_thread_id)
-    if command == ":status":
+    if command == ":dev status":
         print()
         print(_format_status(lifecycle.status(project_root)))
         return ("", current_thread_id)
-    if command == ":logs":
+    if command == ":dev logs":
         print()
         _print_recent_logs(project_root, limit=8)
+        return ("", current_thread_id)
+    if command == ":dev":
+        print()
+        print(_interactive_help(":dev"))
         return ("", current_thread_id)
     if command in {":export", ":e"} or command.startswith(":export ") or command.startswith(":e "):
         print()
         print(_handle_interactive_export_command(command, project_root, current_thread_id, session))
         return ("", current_thread_id)
-    if command in {":memory", ":mem"}:
+    if command in {":mem", ":m"}:
         print()
         print(_format_memory_preview(project_root))
         return ("", current_thread_id)
-    if command.startswith(":mem "):
+    if command.startswith(":mem ") or command.startswith(":m "):
         print()
-        print(_handle_interactive_memory_command(command[5:].strip(), project_root))
+        body = command.removeprefix(":mem").removeprefix(":m").strip()
+        print(_handle_interactive_memory_command(body, project_root))
         return ("", current_thread_id)
-    if command.startswith(":search "):
-        print()
-        query = command[8:].strip()
-        if query == "":
-            print(_interactive_help(":search"))
-        else:
-            print(_handle_interactive_memory_search(query, project_root))
-        return ("", current_thread_id)
-    if command == ":threads":
+    if command in {":thread", ":t"}:
         print()
         print(_handle_interactive_threads_command(project_root))
         return ("", current_thread_id)
-    if command.startswith(":thread "):
+    if command.startswith(":thread ") or command.startswith(":t "):
         print()
-        new_id = command[8:].strip()
+        new_id = command.removeprefix(":thread").removeprefix(":t").strip()
         if new_id == "":
             print(_interactive_help(":thread"))
         else:
@@ -2150,6 +2146,14 @@ def _handle_interactive_command(
                 store.save(ThreadState.empty(new_id))
             print(f"Switched to thread: {new_id}")
         return ("redraw_header", new_id if new_id != "" else current_thread_id)
+    if command.startswith(":reason"):
+        print()
+        print("Reason commands are planned for v0.2.0 and are not implemented yet.")
+        return ("", current_thread_id)
+    if command.startswith(":trace"):
+        print()
+        print("Trace commands are planned for v0.2.0 and are not implemented yet.")
+        return ("", current_thread_id)
     if command.startswith(":rename "):
         print()
         new_id = command[8:].strip()
@@ -2243,36 +2247,36 @@ def _interactive_help(command: str | None = None) -> str:
             "  :quit      exit",
             "  :exit      exit",
             "  :history   show recent thread messages",
-            "  :sources   list imported source documents",
             "  :whoami    show core profile",
-            "  :reflection               list pending reflection ideas",
-            "  :reflection list          list reflection ideas",
-            "  :reflection show <id>     show one reflection idea (or :reflection show -i <index>)",
-            "  :reflection dismiss <id>  dismiss a reflection idea",
-            "  :reflection archive <id>  archive a reflection idea",
-            "  :notify         list pending notifications",
-            "  :notify list    list all notifications",
-            "  :notify show <id>      show one notification (or :notify show -i <index>)",
-            "  :notify send <id>  send a notification",
-            "  :notify dismiss <id>  dismiss a notification",
-            "  :watch                   watch outbox for new entries",
+            "  :inbox, :i                    list pending reflections and notifications",
+            "  :inbox reflection             list pending reflection ideas",
+            "  :inbox reflection list        list reflection ideas",
+            "  :inbox reflection show <id>   show one reflection idea",
+            "  :inbox reflection dismiss <id> dismiss a reflection idea",
+            "  :inbox reflection archive <id> archive a reflection idea",
+            "  :inbox notify                 list pending notifications",
+            "  :inbox notify list            list all notifications",
+            "  :inbox notify show <id>       show one notification",
+            "  :inbox notify send <id>       send a notification",
+            "  :inbox notify dismiss <id>    dismiss a notification",
+            "  :inbox notify watch           watch outbox for new entries",
             "  :help      show this help",
-            "  :status show daemon and thread status",
-            "  :logs   show recent activity logs",
+            "  :dev status                   show daemon and thread status",
+            "  :dev logs                     show recent activity logs",
             "  :export [all] [noclip]    save and copy this connection's transcript",
             "  :e [all] [noclip]         shorthand for :export",
-            "  :memory preview memory entries",
-            "  :mem    preview memory entries",
-            "  :search <query>           quick memory search",
+            "  :mem, :m                  preview memory entries",
             "  :mem search <query>       search memory entries",
             "  :mem show <entry-id>      show one memory entry",
-            "  :mem candidates           list pending candidates",
-            "  :mem candidate <id>       show one candidate",
+            "  :mem review               list pending memory review items",
+            "  :mem review <id>          show one memory review item",
             "  :mem profile <query>      search profile items",
             "  :mem sources              list imported sources",
             "  :mem source <source-id>   show one source",
-            "  :threads                  list active threads",
-            "  :thread <id>              switch to or create a thread",
+            "  :thread, :t               list active threads",
+            "  :thread <id>, :t <id>     switch to or create a thread",
+            "  :reason                   long-run reasoning commands (planned)",
+            "  :trace                    thought trace commands (planned)",
             "  :rename <new-id>          rename the current thread",
             "  :branch <new-id> [index]  branch current thread at index",
             "  :archive                  archive the current thread",
@@ -2596,13 +2600,13 @@ def _handle_interactive_memory_command(command: str, project_root: Path | None) 
         except MemoryEntryNotFound:
             return f"Memory entry not found: {entry_id}"
         return render_memory_entry_detail(entry)
-    if command == "candidates":
+    if command == "review":
         candidates = MemoryCandidateRepository(project_root).list()
         if not candidates:
             return "No memory candidates."
         return "\n".join(render_candidate_row(candidate) for candidate in candidates)
-    if command.startswith("candidate "):
-        candidate_id = command.removeprefix("candidate ").strip()
+    if command.startswith("review "):
+        candidate_id = command.removeprefix("review ").strip()
         try:
             candidate = MemoryCandidateRepository(project_root).get(candidate_id)
         except MemoryCandidateNotFound:
@@ -2642,27 +2646,14 @@ def _interactive_memory_help(command: str | None = None) -> str:
             "Memory commands:",
             "  :mem search <query>",
             "  :mem show <entry-id>",
-            "  :mem candidates",
-            "  :mem candidate <candidate-id>",
+            "  :mem review",
+            "  :mem review <candidate-id>",
             "  :mem profile <query>",
             "  :mem sources",
             "  :mem source <source-id>",
             "  :mem why",
         ]
     )
-    return "\n".join(lines)
-
-
-def _handle_interactive_sources_command(project_root: Path | None) -> str:
-    from nuself.memory.source_repository import SourceRepository
-
-    repo = SourceRepository(project_root)
-    documents = repo.list_documents()
-    if not documents:
-        return "No imported source documents."
-    lines = ["Imported sources:"]
-    for doc in documents:
-        lines.append(f"  {doc.id}: {doc.title}")
     return "\n".join(lines)
 
 
@@ -2711,6 +2702,14 @@ def _handle_interactive_reflection_command(project_root: Path | None) -> str:
     return "\n".join(lines)
 
 
+def _handle_interactive_inbox_command(project_root: Path | None) -> str:
+    sections = [
+        _handle_interactive_reflection_command(project_root),
+        _handle_interactive_notify_command(project_root),
+    ]
+    return "\n\n".join(sections)
+
+
 def _handle_interactive_reflection_list_command(project_root: Path | None) -> str:
     from nuself.reflection.repository import ReflectionRepository
     from nuself.tui.render import render_reflection_entry_summary
@@ -2749,7 +2748,7 @@ def _handle_interactive_reflection_subcommand(project_root: Path | None, subcmd:
     if subcmd == "archive":
         repo.archive(entry_id)
         return f"Archived: {entry_id}"
-    return f"Unknown :reflection subcommand: {subcmd}"
+    return f"Unknown :inbox reflection subcommand: {subcmd}"
 
 
 def _handle_interactive_notify_command(project_root: Path | None) -> str:
@@ -2807,7 +2806,7 @@ def _handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str
     if subcmd == "dismiss":
         outbox.dismiss(entry_id)
         return f"Dismissed: {entry_id}"
-    return f"Unknown :notify subcommand: {subcmd}"
+    return f"Unknown :inbox notify subcommand: {subcmd}"
 
 
 def _handle_interactive_watch_command(project_root: Path | None) -> None:
