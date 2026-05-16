@@ -4,6 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 import subprocess
 import sys
+import threading
 import tomllib
 from typing import Protocol, cast
 
@@ -25,7 +26,7 @@ def _mock_status(project_root: Path) -> DaemonStatus:
 from nuself.domain.profile import ProfileItem
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
-from nuself.logs import read_log_events, write_log_event
+from nuself.logs import LogEvent, read_log_events, write_log_event
 
 
 class CaptureResult(Protocol):
@@ -283,11 +284,58 @@ def test_interactive_turn_prints_activity_events(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "NuSelf:\nLLM API is not configured yet." in captured.out
-    assert "\n\nLogs:\n[chat] one_shot_chat_completed" in captured.out
+    assert "Logs:\n[chat] one_shot_chat_completed" in captured.out
+    assert "\nNuSelf:\nLLM API is not configured yet." in captured.out
+    assert captured.out.index("Logs:\n[chat] one_shot_chat_completed") < captured.out.index(
+        "NuSelf:\nLLM API is not configured yet."
+    )
     assert "[chat] one_shot_chat_completed status=ok thread=default\n  one-shot chat turn completed" in captured.out
-    assert "  one-shot chat turn completed\n[daemon] session status=one-shot thread=default" in captured.out
-    assert "  one-shot chat turn completed\n\n[daemon] session status=one-shot thread=default" not in captured.out
+    assert "LLM API is not configured yet" in captured.out
+    assert "Last message: hello\n[daemon] session status=one-shot thread=default" in captured.out
+    assert "Last message: hello\n\n[daemon] session status=one-shot thread=default" not in captured.out
+
+
+def test_interactive_turn_prints_activity_events_while_waiting(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("default"))
+    printed = threading.Event()
+    original_print_events = cast(Callable[[list[LogEvent]], None], getattr(cli, "_print_interactive_activity_events"))
+
+    def fake_print_events(events: list[LogEvent]) -> None:
+        printed.set()
+        original_print_events(events)
+
+    def fake_send(message: str, thread_id: str) -> cli.InteractiveChatResult:
+        write_log_event(
+            "chat",
+            "live_progress",
+            "live progress before reply",
+            project_root=tmp_path,
+            thread_id=thread_id,
+            status="started",
+        )
+        if not printed.wait(1.0):
+            return cli.InteractiveChatResult(code=1, reply="log was not printed live")
+        return cli.InteractiveChatResult(code=0, reply="final reply")
+
+    monkeypatch.setattr("nuself.cli._print_interactive_activity_events", fake_print_events)
+    monkeypatch.setattr("nuself.cli.INTERACTIVE_LOG_POLL_INTERVAL_SECONDS", 0.01)
+
+    send_turn = cast(Callable[..., int], getattr(cli, "_send_interactive_chat_turn"))
+    result = send_turn(
+        fake_send,
+        tmp_path,
+        "default",
+        "hello",
+        cli.InteractiveSession(connected_at=cli.datetime.now(cli.UTC)),
+    )
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Logs:\n[chat] live_progress" in captured.out
+    assert "NuSelf:\nfinal reply" in captured.out
+    assert captured.out.index("[chat] live_progress") < captured.out.index("NuSelf:\nfinal reply")
 
 
 def test_interactive_daemon_timeout_retries_and_preserves_logs(
@@ -338,6 +386,56 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
     assert "Retrying message after failed attempt (2/2)..." in captured.out
     assert "builder_self: first attempt reached persona discussion" in captured.out
     assert "daemon reply" in captured.out
+
+
+def test_interactive_daemon_application_error_does_not_retry(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    daemon_status = DaemonStatus(
+        running=True,
+        pid=123,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+    calls = 0
+
+    def fake_request(
+        request_type: object,
+        payload: object | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        nonlocal calls
+        calls += 1
+        write_log_event(
+            "chat",
+            "turn_failed",
+            "daemon chat turn failed",
+            project_root=project_root,
+            thread_id="default",
+            status="error",
+            error="graph failed <- root cause",
+        )
+        return DaemonResponse.fail("r1", "graph failed <- root cause")
+
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        return daemon_status
+
+    monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.cli.client.request", fake_request)
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert calls == 1
+    assert "graph failed <- root cause" not in captured.err
+    assert "error=\"graph failed <- root cause\"" in captured.out
+    assert "Retrying message after failed attempt" not in captured.out
+    assert "Message failed after retry" not in captured.err
+    assert captured.out.count("[chat] turn_failed") == 1
 
 
 def test_interactive_export_saves_connection_transcript(
@@ -428,12 +526,30 @@ def test_interactive_export_all_includes_all_logs(
     content = exports[-1].read_text(encoding="utf-8")
     assert "- Logs: all" in content
     assert "### Logs" in content
-    assert "```text\n[chat] one_shot_chat_completed status=ok thread=default\n  one-shot chat turn completed\n```" in content
+    assert "> [chat] one_shot_chat_completed status=ok thread=default\n>   one-shot chat turn completed" in content
     assert "```json" not in content
+    assert "```text" not in content
     first_reply_index = content.index("## 1. NuSelf")
     first_logs_index = content.index("### Logs")
     second_reply_index = content.index("## 2. NuSelf")
     assert first_reply_index < first_logs_index < second_reply_index
+
+
+def test_interactive_export_normalizes_markdown_body_fences() -> None:
+    render_transcript = cast(Callable[..., str], getattr(cli, "_render_chat_transcript"))
+    content = render_transcript(
+        thread_id="default",
+        connected_at=cli.datetime.now(cli.UTC),
+        exported_at=cli.datetime.now(cli.UTC),
+        messages=[(0, "user", "show fence"), (1, "assistant", "```python\nprint('ok')\n```")],
+        log_events=[],
+        log_events_by_message={},
+        include_all_logs=False,
+    )
+
+    assert "````python\nprint('ok')\n````" in content
+    assert content.endswith("\n")
+    assert not content.endswith("\n\n")
 
 
 def test_interactive_quit_auto_saves_unexported_transcript(

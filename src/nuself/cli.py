@@ -10,6 +10,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import warnings
 
@@ -87,6 +88,7 @@ finally:
 CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
 INTERACTIVE_CHAT_ATTEMPTS = 2
+INTERACTIVE_LOG_POLL_INTERVAL_SECONDS = 0.1
 
 
 def empty_thread_start_indexes() -> dict[str, int]:
@@ -183,6 +185,15 @@ class InteractiveSession:
             if self.has_unexported_messages(project_root, thread_id):
                 result.append(thread_id)
         return result
+
+
+@dataclass(frozen=True)
+class InteractiveChatResult:
+    code: int
+    reply: str | None = None
+    memory_update: str | None = None
+    retryable: bool = False
+    error: str | None = None
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -594,7 +605,10 @@ def handle_default_entrypoint(args: argparse.Namespace) -> int:
         print(f"Daemon started: {_format_status(result)}")
     if args.message is not None:
         return _send_chat(args.message, args.project_root)
-    return _interactive_loop(lambda message, thread_id: _send_chat(message, args.project_root, thread_id), args.project_root)
+    return _interactive_loop(
+        lambda message, thread_id: _send_chat_interactive(message, args.project_root, thread_id),
+        args.project_root,
+    )
 
 
 def handle_status(args: argparse.Namespace) -> int:
@@ -671,13 +685,19 @@ def handle_chat(args: argparse.Namespace) -> int:
     if lifecycle.status(args.project_root).running:
         if args.message is not None:
             return _send_chat(args.message, args.project_root)
-        return _interactive_loop(lambda message, thread_id: _send_chat(message, args.project_root, thread_id), args.project_root)
+        return _interactive_loop(
+            lambda message, thread_id: _send_chat_interactive(message, args.project_root, thread_id),
+            args.project_root,
+        )
     if args.require_daemon:
         print("NuSelf daemon is not running.", file=sys.stderr)
         return 1
     if args.message is not None:
         return _send_one_shot_chat(args.message, args.project_root)
-    return _interactive_loop(lambda message, thread_id: _send_one_shot_chat(message, args.project_root, thread_id), args.project_root)
+    return _interactive_loop(
+        lambda message, thread_id: _send_one_shot_chat_interactive(message, args.project_root, thread_id),
+        args.project_root,
+    )
 
 
 def handle_attach(args: argparse.Namespace) -> int:
@@ -686,7 +706,10 @@ def handle_attach(args: argparse.Namespace) -> int:
         return 1
     if args.message is not None:
         return _send_chat(args.message, args.project_root)
-    return _interactive_loop(lambda message, thread_id: _send_chat(message, args.project_root, thread_id), args.project_root)
+    return _interactive_loop(
+        lambda message, thread_id: _send_chat_interactive(message, args.project_root, thread_id),
+        args.project_root,
+    )
 
 
 def handle_open(args: argparse.Namespace) -> int:
@@ -729,7 +752,7 @@ def handle_open(args: argparse.Namespace) -> int:
             if result != 0:
                 return result
         return _interactive_loop(
-            lambda message, tid: _send_chat(message, args.project_root, tid),
+            lambda message, tid: _send_chat_interactive(message, args.project_root, tid),
             args.project_root,
             initial_thread_id=thread_id,
         )
@@ -738,7 +761,7 @@ def handle_open(args: argparse.Namespace) -> int:
         if result != 0:
             return result
     return _interactive_loop(
-        lambda message, tid: _send_one_shot_chat(message, args.project_root, tid),
+        lambda message, tid: _send_one_shot_chat_interactive(message, args.project_root, tid),
         args.project_root,
         initial_thread_id=thread_id,
     )
@@ -1697,6 +1720,17 @@ def handle_memory_profile_reindex(args: argparse.Namespace) -> int:
 
 
 def _send_chat(message: str, project_root: Path | None, thread_id: str = "default") -> int:
+    result = _send_chat_interactive(message, project_root, thread_id)
+    if result.reply is not None:
+        _print_assistant_reply(result.reply)
+    if result.memory_update is not None:
+        print(f"[memory] {result.memory_update}")
+    if result.error is not None:
+        print(result.error, file=sys.stderr)
+    return result.code
+
+
+def _send_chat_interactive(message: str, project_root: Path | None, thread_id: str = "default") -> InteractiveChatResult:
     try:
         response = client.request(
             "chat",
@@ -1705,8 +1739,9 @@ def _send_chat(message: str, project_root: Path | None, thread_id: str = "defaul
             timeout=CHAT_REQUEST_TIMEOUT_SECONDS,
         )
     except client.DaemonConnectionError as exc:
-        print(f"daemon request failed: {exc}", file=sys.stderr)
-        return 1
+        error = f"daemon request failed: {exc}"
+        print(error, file=sys.stderr)
+        return InteractiveChatResult(code=1, retryable=True, error=error)
     if response.status == "error":
         write_log_event(
             "chat",
@@ -1717,14 +1752,10 @@ def _send_chat(message: str, project_root: Path | None, thread_id: str = "defaul
             status="error",
             error=response.error or "daemon returned an error",
         )
-        print(response.error or "daemon returned an error", file=sys.stderr)
-        return 1
+        return InteractiveChatResult(code=1, error=response.error or "daemon returned an error")
     reply = response.payload.get("reply")
     if isinstance(reply, str):
-        _print_assistant_reply(reply)
         memory_update = response.payload.get("memory_update")
-        if isinstance(memory_update, str) and memory_update != "":
-            print(f"[memory] {memory_update}")
         write_log_event(
             "chat",
             "daemon_chat_completed",
@@ -1733,13 +1764,17 @@ def _send_chat(message: str, project_root: Path | None, thread_id: str = "defaul
             thread_id=_optional_payload_str(response.payload.get("thread_id")),
             status="ok",
         )
-        return 0
+        return InteractiveChatResult(
+            code=0,
+            reply=reply,
+            memory_update=memory_update if isinstance(memory_update, str) and memory_update != "" else None,
+        )
     print("daemon response did not include a reply", file=sys.stderr)
-    return 1
+    return InteractiveChatResult(code=1)
 
 
 def _interactive_loop(
-    send_message: Callable[[str, str], int],
+    send_message: Callable[[str, str], InteractiveChatResult],
     project_root: Path | None,
     *,
     initial_thread_id: str = "default",
@@ -1778,8 +1813,6 @@ def _interactive_loop(
                 if command_result == "redraw_header":
                     print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
                 continue
-            print()
-            print("NuSelf:")
             result = _send_interactive_chat_turn(
                 send_message,
                 project_root,
@@ -1798,39 +1831,106 @@ def _interactive_loop(
 
 
 def _send_interactive_chat_turn(
-    send_message: Callable[[str, str], int],
+    send_message: Callable[[str, str], InteractiveChatResult],
     project_root: Path | None,
     thread_id: str,
     message: str,
     session: InteractiveSession,
 ) -> int:
     event_offset = len(read_log_events(project_root=project_root))
-    result = 1
+    result = InteractiveChatResult(code=1)
     printed_logs = False
     for attempt in range(1, INTERACTIVE_CHAT_ATTEMPTS + 1):
         if attempt > 1:
             print()
             print(f"Retrying message after failed attempt ({attempt}/{INTERACTIVE_CHAT_ATTEMPTS})...")
-        result = send_message(message, thread_id)
+        result, event_offset, events, printed_logs = _run_interactive_send_with_live_logs(
+            send_message,
+            message,
+            thread_id,
+            project_root,
+            event_offset,
+            printed_logs=printed_logs,
+        )
         previous_next_index = session.captured_next_indexes.get(
             thread_id, session.start_index_for(project_root, thread_id)
         )
         session.capture_new_messages(project_root, thread_id)
         current_next_index = session.captured_next_indexes.get(thread_id, previous_next_index)
         message_index = current_next_index - 1 if current_next_index > previous_next_index else None
-        events = _interactive_activity_events(project_root, event_offset)
-        event_offset += len(events)
         session.capture_log_events(thread_id, events, message_index=message_index)
-        if events:
+        if result.memory_update is not None:
             if not printed_logs:
                 print()
                 print("Logs:")
                 printed_logs = True
-            _print_interactive_activity_events(events)
-        if result == 0:
+            print(f"[memory] {result.memory_update}")
+        if result.reply is not None:
+            print()
+            print("NuSelf:")
+            _print_assistant_reply(result.reply)
+        if result.code == 0:
             return 0
-    print("Message failed after retry; REPL remains open.", file=sys.stderr)
-    return result
+        if not result.retryable:
+            if result.error is not None and not _events_include_error(events, result.error):
+                print(result.error, file=sys.stderr)
+            break
+    if result.retryable:
+        print("Message failed after retry; REPL remains open.", file=sys.stderr)
+    return result.code
+
+
+def _run_interactive_send_with_live_logs(
+    send_message: Callable[[str, str], InteractiveChatResult],
+    message: str,
+    thread_id: str,
+    project_root: Path | None,
+    event_offset: int,
+    *,
+    printed_logs: bool,
+) -> tuple[InteractiveChatResult, int, list[LogEvent], bool]:
+    result_box: list[InteractiveChatResult] = []
+    error_box: list[BaseException] = []
+
+    def _target() -> None:
+        try:
+            result_box.append(send_message(message, thread_id))
+        except BaseException as exc:  # pragma: no cover - defensive thread boundary
+            error_box.append(exc)
+
+    send_thread = threading.Thread(target=_target, daemon=True)
+    send_thread.start()
+    captured_events: list[LogEvent] = []
+    while send_thread.is_alive():
+        time.sleep(INTERACTIVE_LOG_POLL_INTERVAL_SECONDS)
+        new_events = _interactive_activity_events(project_root, event_offset)
+        event_offset += len(new_events)
+        if new_events:
+            captured_events.extend(new_events)
+            printed_logs = _print_live_interactive_activity_events(new_events, printed_logs=printed_logs)
+    send_thread.join()
+    new_events = _interactive_activity_events(project_root, event_offset)
+    event_offset += len(new_events)
+    if new_events:
+        captured_events.extend(new_events)
+        printed_logs = _print_live_interactive_activity_events(new_events, printed_logs=printed_logs)
+    if error_box:
+        print(f"chat turn failed: {error_box[0]}", file=sys.stderr)
+        return InteractiveChatResult(code=1), event_offset, captured_events, printed_logs
+    return result_box[0] if result_box else InteractiveChatResult(code=1), event_offset, captured_events, printed_logs
+
+
+def _print_live_interactive_activity_events(events: list[LogEvent], *, printed_logs: bool) -> bool:
+    if not printed_logs:
+        print()
+        print("Logs:")
+        printed_logs = True
+    _print_interactive_activity_events(events)
+    return printed_logs
+
+
+def _events_include_error(events: list[LogEvent], error: str) -> bool:
+    return any(event.error == error for event in events)
 
 
 _INTERACTIVE_COMMANDS = [
@@ -1972,8 +2072,17 @@ def _dedupe_interactive_history() -> None:
 
 
 def _send_one_shot_chat(message: str, project_root: Path | None, thread_id: str = "default") -> int:
+    result = _send_one_shot_chat_interactive(message, project_root, thread_id)
+    if result.reply is not None:
+        _print_assistant_reply(result.reply)
+    return result.code
+
+
+def _send_one_shot_chat_interactive(
+    message: str, project_root: Path | None, thread_id: str = "default"
+) -> InteractiveChatResult:
     try:
-        _print_assistant_reply(_one_shot_reply(message, project_root, thread_id))
+        reply = _one_shot_reply(message, project_root, thread_id)
         write_log_event(
             "chat",
             "one_shot_chat_completed",
@@ -1983,7 +2092,7 @@ def _send_one_shot_chat(message: str, project_root: Path | None, thread_id: str 
             status="ok",
         )
         _run_memory_curator(project_root)
-        return 0
+        return InteractiveChatResult(code=0, reply=reply)
     except RuntimeError as exc:
         write_log_event(
             "chat",
@@ -1996,7 +2105,7 @@ def _send_one_shot_chat(message: str, project_root: Path | None, thread_id: str 
             error=str(exc),
         )
         print(str(exc), file=sys.stderr)
-        return 1
+        return InteractiveChatResult(code=1)
 
 
 def _run_memory_curator(project_root: Path | None) -> None:
@@ -2519,7 +2628,7 @@ def _render_chat_transcript(
         lines.extend([
             f"## {index}. {label}",
             "",
-            content.strip(),
+            _normalize_transcript_body(content),
             "",
         ])
         message_log_events = log_events_by_message.get(index, [])
@@ -2537,7 +2646,38 @@ def _render_chat_transcript(
 
 
 def _render_transcript_log_event(event: LogEvent) -> list[str]:
-    return ["```text", render_log_event(event, color=False), "```"]
+    return [f"> {line}" if line else ">" for line in render_log_event(event, color=False).splitlines()]
+
+
+def _normalize_transcript_body(content: str) -> str:
+    body = content.strip()
+    if body == "":
+        return "_(empty)_"
+    return _escape_markdown_fences(body)
+
+
+def _escape_markdown_fences(text: str) -> str:
+    lines = text.splitlines()
+    longest_backtick_run = 0
+    for line in lines:
+        stripped = line.lstrip()
+        if not stripped.startswith("```"):
+            continue
+        run = len(stripped) - len(stripped.lstrip("`"))
+        longest_backtick_run = max(longest_backtick_run, run)
+    if longest_backtick_run == 0:
+        return text
+    fence = "`" * (longest_backtick_run + 1)
+    normalized_lines: list[str] = []
+    for line in lines:
+        leading_width = len(line) - len(line.lstrip())
+        leading = line[:leading_width]
+        stripped = line[leading_width:]
+        if stripped.startswith("`" * longest_backtick_run):
+            normalized_lines.append(f"{leading}{fence}{stripped[longest_backtick_run:]}")
+        else:
+            normalized_lines.append(line)
+    return "\n".join(normalized_lines)
 
 
 def _is_shareable_transcript_log(event: LogEvent) -> bool:

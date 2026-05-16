@@ -23,6 +23,11 @@ class StructuredFakeLLM:
         )
 
 
+class FailingLLM:
+    def complete(self, messages: list[ChatMessage]) -> str:
+        raise RuntimeError("llm unavailable")
+
+
 def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     state.chat_agent = ChatAgent(tmp_path, llm=StructuredFakeLLM())
@@ -52,6 +57,19 @@ def test_daemon_chat_uses_explicit_thread_id(tmp_path: Path) -> None:
     assert response.status == "ok"
     assert response.payload["thread_id"] == "custom"
     assert (tmp_path / "private" / "threads" / "custom.json").is_file()
+
+
+def test_daemon_chat_error_includes_root_cause(tmp_path: Path) -> None:
+    state = DaemonState(tmp_path)
+    state.chat_agent = ChatAgent(tmp_path, llm=FailingLLM())
+    request = DaemonRequest(type="chat", payload={"message": "hello"}, request_id="chat-fail")
+
+    response = handle_request(request, state)
+
+    assert response.status == "error"
+    assert response.error is not None
+    assert "conversation graph node 'initial_response' failed" in response.error
+    assert "llm unavailable" in response.error
 
 
 class FakeChangedCurator:

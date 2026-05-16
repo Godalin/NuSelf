@@ -24,6 +24,17 @@ from nuself.reflection import ReflectionScheduler
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
 
 
+def _format_exception_chain(exc: BaseException) -> str:
+    messages: list[str] = []
+    current: BaseException | None = exc
+    while current is not None:
+        message = str(current)
+        if message and message not in messages:
+            messages.append(message)
+        current = current.__cause__ or current.__context__
+    return " <- ".join(messages) if messages else exc.__class__.__name__
+
+
 class DaemonState:
     """Mutable daemon state shared by request handlers."""
 
@@ -223,6 +234,7 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
             result = state.chat_agent.respond(message, thread_id=thread_id)
             memory_update = _run_memory_curator_once(state.memory_curator)
         except RuntimeError as exc:
+            error_detail = _format_exception_chain(exc)
             write_log_event(
                 "chat",
                 "turn_failed",
@@ -232,9 +244,9 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
                 request_id=request.request_id,
                 thread_id=thread_id,
                 status="error",
-                error=str(exc),
+                error=error_detail,
             )
-            return DaemonResponse.fail(request.request_id, str(exc))
+            return DaemonResponse.fail(request.request_id, error_detail)
         duration_ms = int((time.monotonic() - started_at) * 1000)
         payload: dict[str, JsonValue] = {
             "answer": result.answer,
