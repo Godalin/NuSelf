@@ -24,6 +24,7 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 - [x] Create a standard `uv` Python project with typed package layout.
 - [x] Add `uv run pytest` and `uvx pyright` as baseline validation.
+- [x] Add versioning, changelog, and release checklist discipline.
 - [x] Keep real personal data under ignored root `private/`.
 - [x] Commit safe sample private memory under `examples/private/`.
 - [x] Keep English and Chinese README files synchronized for user-visible changes.

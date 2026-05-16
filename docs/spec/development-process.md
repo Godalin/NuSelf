@@ -8,12 +8,31 @@
 - User-facing changes must update both `README.md` and `README.zh-CN.md`.
 - Track progress in [`docs/TODOs.md`](docs/TODOs.md); short-term focus in `docs/current-goal.md`.
 
-## Commit Policy
+## Commit And Push Policy
 
 - Separate commits:
   1. **Functional commit**: code + tests.
   2. **Progress commit**: `docs/current-goal.md`, README TODOs, and spec updates.
 - Before non-trivial work, check `docs/current-goal.md`. Mention conflicts before proceeding.
+- Push normal development commits only when the user asks to publish or sync the branch.
+- Before pushing, confirm the working tree is clean and the intended commits are on the current branch.
+- Normal branch push command: `git push`.
+- If a release tag was created, push the release commit and tag together: `git push && git push origin v<version>`.
+
+## Release And Tag Policy
+
+Versioning and changelog rules live in [`versioning.md`](versioning.md). Release work must follow that spec plus this concrete flow:
+
+1. Finish and verify all intended functional commits.
+2. Move relevant `CHANGELOG.md` `Unreleased` entries into a dated version section and create a fresh empty `Unreleased` section.
+3. Bump `pyproject.toml` to the release version. Runtime `nuself.__version__` must continue to resolve to the package metadata version.
+4. Run `uv run pytest`, `uvx pyright`, and `git diff --check`.
+5. Confirm `uv run nuself --version` prints the intended version.
+6. Commit the release metadata with message `release: <version>`.
+7. Create an annotated git tag: `git tag -a v<version> -m "Release <version>"`.
+8. Push the release commit and tag together when the user asks to publish: `git push && git push origin v<version>`.
+
+Do not tag unreleased feature commits directly. Tags mark release commits only.
 
 ## Development Style
 

@@ -16,6 +16,7 @@ This directory contains the authoritative behavioral specifications for NuSelf. 
 | [`presentation-agent.md`](presentation-agent.md) | Final user-facing answer presentation stage and retry boundary |
 | [`logging.md`](logging.md) | Log components, write/read contracts, event structure |
 | [`configuration.md`](configuration.md) | Config hierarchy, env overrides, runtime paths |
+| [`versioning.md`](versioning.md) | Package versioning, changelog, and release checklist |
 
 ## Change Policy
 

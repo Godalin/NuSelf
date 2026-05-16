@@ -4,6 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 import subprocess
 import sys
+import tomllib
 from typing import Protocol, cast
 
 import pytest
@@ -3064,6 +3065,18 @@ def test_help_does_not_emit_langgraph_warning() -> None:
     assert result.returncode == 0
     assert "usage: nuself" in result.stdout
     assert "LangChainPendingDeprecationWarning" not in result.stderr
+
+
+def test_cli_version_matches_project_metadata(capsys: CaptureFixture) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--version"])
+    captured = capsys.readouterr()
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    project = cast(dict[str, object], pyproject["project"])
+
+    assert exc_info.value.code == 0
+    assert captured.out == f"nuself {project['version']}\n"
+    assert captured.err == ""
 
 
 

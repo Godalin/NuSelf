@@ -21,3 +21,4 @@ An AI mirror for deep personal discussion — someone with similar life experien
 - [`docs/spec/persona-discussion.md`](docs/spec/persona-discussion.md) — competitive discussion flow
 - [`docs/spec/logging.md`](docs/spec/logging.md) — log write/read contracts
 - [`docs/spec/configuration.md`](docs/spec/configuration.md) — config hierarchy and runtime paths
+- [`docs/spec/versioning.md`](docs/spec/versioning.md) — version, changelog, and release rules

@@ -37,6 +37,7 @@ def _suppress_startup_warning(
 
 warnings.warn = _suppress_startup_warning
 try:
+    from nuself import __version__
     from nuself.config import ensure_runtime_dirs, runtime_paths
     from nuself.agent.chat import ChatAgent, ThreadState, ThreadStore
     from nuself.daemon import client, lifecycle
@@ -197,6 +198,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nuself")
+    parser.add_argument("--version", action="version", version=f"nuself {__version__}")
     parser.add_argument("--project-root", type=Path, default=None)
     parser.add_argument("--message", "-m", default=None)
     _add_handler(parser, handle_default_entrypoint)
