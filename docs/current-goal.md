@@ -24,20 +24,20 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 
 ### P0 — Specs Before Code
 
-- [ ] Update [`docs/spec/cli-interaction.md`](spec/cli-interaction.md) with the new command tree and breaking-removal policy.
+- [x] Update [`docs/spec/cli-interaction.md`](spec/cli-interaction.md) with the new command tree and breaking-removal policy.
 - [ ] Finalize [`docs/spec/trace.md`](spec/trace.md) enough for first implementation.
 - [ ] Finalize [`docs/spec/long-reasoning.md`](spec/long-reasoning.md) enough for first implementation.
 - [ ] Update [`docs/spec/chat-agent-tools.md`](spec/chat-agent-tools.md) for read-only reason awareness and future trace tools.
 
 ### P1 — Command Cleanup
 
-- [ ] Restructure parser construction around `daemon`, `thread`, `memory`, `inbox`, `reason`, `trace`, and `dev`.
-- [ ] Move `source` under `memory source`.
-- [ ] Move `reflection` and `notify` under `inbox`.
-- [ ] Move `logs`, `status`, `health`, `config`, and `eval` under `dev`.
-- [ ] Rename `memory candidate` to `memory review`.
-- [ ] Rename `thread create` to `thread new`.
-- [ ] Update REPL command groups to match.
+- [x] Restructure parser construction around `daemon`, `thread`, `memory`, `inbox`, `reason`, `trace`, and `dev`.
+- [x] Move `source` under `memory source`.
+- [x] Move `reflection` and `notify` under `inbox`.
+- [x] Move `logs`, `status`, `health`, `config`, and `eval` under `dev`.
+- [x] Rename `memory candidate` to `memory review`.
+- [x] Rename `thread create` to `thread new`.
+- [x] Update REPL command groups to match.
 
 ### P2 — Trace Foundation
 

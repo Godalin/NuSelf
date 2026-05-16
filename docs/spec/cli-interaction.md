@@ -131,6 +131,60 @@ When color is enabled, each known self label in a `persona_summary` block uses a
 - Filename: includes the connection start time and export command time, e.g. `chat-default-20260514T120000123456Z-20260514T121500654321Z.md`.
 - Output: after saving, print the file path and clipboard copy result. If `noclip` is used, do not attempt clipboard copying.
 
+## Command Model
+
+v0.2.0 reorganizes the command tree around user-facing concepts. This is a breaking cleanup; old command paths are removed instead of kept as compatibility aliases.
+
+Top-level commands:
+
+| Command | Purpose |
+|---|---|
+| `nuself` | Open interactive chat by default |
+| `nuself chat` | Explicit chat entry |
+| `nuself attach` | Attach to a running daemon |
+| `nuself daemon` | Background process lifecycle |
+| `nuself thread` | Conversation thread management |
+| `nuself memory` | Memory, sources, profile, review queue, graph |
+| `nuself inbox` | User-facing proactive items: reflection and notifications |
+| `nuself reason` | Long-run reasoning threads |
+| `nuself trace` | Thought provenance records |
+| `nuself dev` | Diagnostics, logs, config, health, eval, status |
+
+Breaking moves:
+
+| Removed path | New path |
+|---|---|
+| `nuself source ...` | `nuself memory source ...` |
+| `nuself reflection ...` | `nuself inbox reflection ...` |
+| `nuself notify ...` | `nuself inbox notify ...` |
+| `nuself logs ...` | `nuself dev logs ...` |
+| `nuself status` | `nuself dev status` or `nuself daemon status` |
+| `nuself health` | `nuself dev health` |
+| `nuself config` | `nuself dev config` |
+| `nuself eval` | `nuself dev eval` |
+| `nuself memory candidate ...` | `nuself memory review ...` |
+| `nuself thread create ...` | `nuself thread new ...` |
+
+Top-level help should group commands as:
+
+- Daily: default chat, `chat`, `attach`
+- Objects: `thread`, `memory`, `inbox`, `reason`, `trace`
+- System: `daemon`, `dev`
+
+REPL commands mirror the same model:
+
+| Command | Purpose |
+|---|---|
+| `:inbox`, `:i` | List pending proactive items |
+| `:inbox reflection ...` | Reflection commands |
+| `:inbox notify ...` | Notification commands |
+| `:mem`, `:m` | Memory preview |
+| `:thread`, `:t` | Thread switching/listing |
+| `:reason` | Long-run reasoning commands |
+| `:trace` | Thought provenance commands |
+| `:dev status` | Session/system status |
+| `:export`, `:e` | Transcript export |
+
 ## Command Group Reference
 
 ### Reflection
