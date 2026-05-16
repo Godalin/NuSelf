@@ -6,32 +6,61 @@
   "additionalProperties": false,
   "properties": {
     "llm": {
-      "type": "object",
-      "description": "LLM backend configuration",
-      "additionalProperties": false,
-      "properties": {
-        "openai": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "base_url": {
-              "type": "string",
-              "default": "https://api.openai.com/v1",
-              "description": "OpenAI-compatible API endpoint"
-            },
-            "api_key": {
-              "type": "string",
-              "default": "",
-              "description": "API key (leave empty for local fallback)"
-            },
-            "model": {
-              "type": "string",
-              "default": "gpt-4.1-mini",
-              "description": "Model name for completions"
-            }
+      "type": "array",
+      "description": "Ordered LLM endpoints. Endpoints default to OpenAI-compatible behavior; set anthropic=true for Anthropic Messages API endpoints.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "default": "https://api.openai.com/v1",
+            "description": "API endpoint. Anthropic endpoints default to https://api.anthropic.com/v1 when omitted."
+          },
+          "api_key": {
+            "type": "string",
+            "default": "",
+            "description": "API key (leave empty for local fallback)"
+          },
+          "model": {
+            "type": "string",
+            "default": "gpt-4.1-mini",
+            "description": "Model name for completions"
+          },
+          "anthropic": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use Anthropic Messages API semantics for this endpoint"
+          },
+          "timeout_seconds": {
+            "type": "number",
+            "minimum": 1,
+            "default": 60,
+            "description": "Provider HTTP request timeout for this endpoint"
           }
         }
-      }
+      },
+      "default": [
+        {
+          "base_url": "https://api.openai.com/v1",
+          "api_key": "",
+          "model": "gpt-4.1-mini"
+        }
+      ],
+      "examples": [
+        [
+          {
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "",
+            "model": "gpt-4.1-mini"
+          },
+          {
+            "anthropic": true,
+            "api_key": "",
+            "model": "claude-sonnet-4-5"
+          }
+        ]
+      ]
     },
     "chat": {
       "type": "object",
@@ -66,6 +95,12 @@
           "type": "string",
           "default": "en",
           "description": "Preferred language for user-facing LLM outputs (e.g. en, zh-CN, zh-TW)"
+        },
+        "request_timeout_seconds": {
+          "type": "number",
+          "minimum": 1,
+          "default": 120,
+          "description": "Client-side timeout while waiting for daemon chat responses"
         }
       }
     },

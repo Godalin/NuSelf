@@ -58,6 +58,7 @@ llm:
   - base_url: https://api.openai.com/v1
     api_key: ""        # 留空使用本地 fallback
     model: gpt-4.1-mini
+    timeout_seconds: 60
   # 可选 Anthropic endpoint：
   # - anthropic: true
   #   api_key: ""
@@ -68,6 +69,7 @@ llm:
 
 ```text
 chat:
+  request_timeout_seconds: 120
   context:
     recent_messages: 12
     summary_trigger_messages: 18

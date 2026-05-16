@@ -10,6 +10,8 @@ llm:
     api_key: ""
     # Model name for completions
     model: gpt-4.1-mini
+    # Provider HTTP request timeout
+    timeout_seconds: 60
   # Optional Anthropic endpoint
   # - anthropic: true
   #   api_key: ""
@@ -17,6 +19,8 @@ llm:
 
 # Chat Agent Settings
 chat:
+  # Client-side timeout while waiting for daemon chat responses
+  request_timeout_seconds: 120
   context:
     # Recent messages to keep in full context
     recent_messages: 12

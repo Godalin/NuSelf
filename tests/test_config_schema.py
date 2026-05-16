@@ -1,0 +1,31 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any, cast
+
+
+def test_config_json_schema_uses_direct_llm_endpoint_list() -> None:
+    schema_path = Path(__file__).resolve().parents[1] / "docs" / "nuself-config.schema.json"
+    schema = cast(dict[str, Any], json.loads(schema_path.read_text(encoding="utf-8")))
+    properties = cast(dict[str, Any], schema["properties"])
+    llm_schema = cast(dict[str, Any], properties["llm"])
+    endpoint_schema = cast(dict[str, Any], llm_schema["items"])
+    endpoint_properties = cast(dict[str, Any], endpoint_schema["properties"])
+
+    assert llm_schema["type"] == "array"
+    assert "openai" not in llm_schema
+    assert "openai" not in endpoint_properties
+    assert endpoint_properties["anthropic"]["type"] == "boolean"
+    assert endpoint_properties["timeout_seconds"]["default"] == 60
+    assert endpoint_properties["base_url"]["default"] == "https://api.openai.com/v1"
+
+
+def test_config_json_schema_exposes_chat_request_timeout() -> None:
+    schema_path = Path(__file__).resolve().parents[1] / "docs" / "nuself-config.schema.json"
+    schema = cast(dict[str, Any], json.loads(schema_path.read_text(encoding="utf-8")))
+    properties = cast(dict[str, Any], schema["properties"])
+    chat_schema = cast(dict[str, Any], properties["chat"])
+    chat_properties = cast(dict[str, Any], chat_schema["properties"])
+
+    assert chat_properties["request_timeout_seconds"]["default"] == 120

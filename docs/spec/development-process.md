@@ -41,6 +41,7 @@ Do not tag unreleased feature commits directly. Tags mark release commits only.
 - **No spec drift**: If code behavior diverges from its spec, either fix the code or update the spec. The spec must always describe the actual system.
 - Early development: prefer direct, clean implementation over compatibility shims.
 - Interface changes must update all callers, tests, examples, and docs in the same commit.
+- Configuration shape changes must update `docs/spec/configuration.md`, `docs/nuself-config.schema.json`, `examples/private/config.yaml`, and relevant config tests in the same change.
 - Do not preserve obsolete CLI commands, protocols, schemas, or APIs unless a document explicitly requires them.
 - Refactors are welcome when they clarify architecture; always pair them with doc and test updates.
 - Keep `docs/current-goal.md` concise (active focus, next steps, out-of-scope, completion criteria). Move completed history to README TODOs.

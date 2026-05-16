@@ -24,6 +24,7 @@ llm:
   - base_url: https://api.openai.com/v1
     api_key: ""  # Empty = deterministic fallback
     model: gpt-4.1-mini
+    timeout_seconds: 60
   # Optional Anthropic endpoint:
   # - anthropic: true
   #   api_key: ""
@@ -32,6 +33,7 @@ llm:
 # Chat Agent Settings (context compression and language preference)
 chat:
   language_preference: en
+  request_timeout_seconds: 120
   context:
     recent_messages: 12         # Recent messages to keep in context
     summary_trigger_messages: 18 # When to compress context
