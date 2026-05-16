@@ -10,6 +10,7 @@ This directory contains the authoritative behavioral specifications for NuSelf. 
 | [`cli-interaction.md`](cli-interaction.md) | CLI commands, REPL commands, output formats, color conventions |
 | [`memory.md`](memory.md) | Memory intake, curation, optimization, query, type system, symbolic graph |
 | [`reflection.md`](reflection.md) | Reflection scheduler event taxonomy, pipeline flow, discussion outcomes |
+| [`long-reasoning.md`](long-reasoning.md) | TODO long-run reasoning threads for sustained work on explicit questions |
 | [`notification.md`](notification.md) | Outbox state machine, delivery pipeline, adapters, deep links |
 | [`persona-discussion.md`](persona-discussion.md) | Competitive discussion flow, scoring, consensus, trace format |
 | [`presentation-agent.md`](presentation-agent.md) | Final user-facing answer presentation stage and retry boundary |

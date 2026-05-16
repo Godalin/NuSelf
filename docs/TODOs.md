@@ -172,6 +172,17 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Let interactive chat reuse the same competitive discussion strategy as background reflection.
 - [x] Make shared-discussion results visible in the REPL and structured logs.
 
+## Long-Run Reasoning
+
+- [x] Draft initial design for durable long-run reasoning threads.
+- [x] Draft TODO spec for long-run reasoning contracts.
+- [ ] Implement file-backed reasoning thread and step repositories.
+- [ ] Add manual `reason` CLI and REPL commands.
+- [ ] Add manual reasoning advance.
+- [ ] Add chat tools for user-approved reasoning thread access.
+- [ ] Add reflection promotion into reasoning threads.
+- [ ] Add scheduled advance and notification policy.
+
 ## Evaluation And Quality
 
 - [x] Add golden conversation fixtures.
