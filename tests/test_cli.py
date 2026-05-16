@@ -447,6 +447,40 @@ def test_interactive_quit_auto_saves_unexported_transcript(
     assert "autosave this" in exports[0].read_text(encoding="utf-8")
 
 
+def test_interactive_eof_auto_saves_unexported_transcript(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput("autosave eof\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Saved transcript:" in captured.out
+    exports = sorted((tmp_path / "private" / "transcripts").glob("chat-default-*.md"))
+    assert len(exports) == 1
+    assert "autosave eof" in exports[0].read_text(encoding="utf-8")
+
+
+def test_interactive_quit_auto_saves_all_threads(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("sys.stdin", _TextInput("first thread\n:thread beta\nsecond thread\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert captured.out.count("Saved transcript:") == 2
+    exports = sorted((tmp_path / "private" / "transcripts").glob("chat-*.md"))
+    assert len(exports) == 2
+    contents = "\n".join(path.read_text(encoding="utf-8") for path in exports)
+    assert "first thread" in contents
+    assert "second thread" in contents
+    assert "Thread: `default`" in contents
+    assert "Thread: `beta`" in contents
+
+
 def test_interactive_history_skips_consecutive_duplicates(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:

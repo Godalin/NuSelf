@@ -155,6 +155,15 @@ class InteractiveSession:
             thread_id, self.start_index_for(project_root, thread_id)
         )
 
+    def thread_ids_with_unexported_messages(self, project_root: Path | None) -> list[str]:
+        thread_ids = set(self.thread_start_indexes)
+        thread_ids.update(self.captured_messages)
+        result: list[str] = []
+        for thread_id in sorted(thread_ids):
+            if self.has_unexported_messages(project_root, thread_id):
+                result.append(thread_id)
+        return result
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
@@ -1725,6 +1734,7 @@ def _interactive_loop(
                 line = input("NuSelf> ")
             except EOFError:
                 print()
+                _auto_save_interactive_transcripts(project_root, session)
                 return 0
             message = line.strip()
             if message == "":
@@ -1753,6 +1763,7 @@ def _interactive_loop(
             if result != 0:
                 continue
     finally:
+        _auto_save_interactive_transcripts(project_root, session)
         if history_path is not None:
             _write_interactive_history(history_path)
         _run_memory_curator(project_root)
@@ -2004,18 +2015,7 @@ def _handle_interactive_command(
     session: InteractiveSession,
 ) -> tuple[str, str]:
     if command in {":q", ":quit", ":exit"}:
-        if session.has_unexported_messages(project_root, current_thread_id):
-            print()
-            print(
-                _save_interactive_transcript(
-                    project_root,
-                    current_thread_id,
-                    session,
-                    include_all_logs=False,
-                    copy_requested=False,
-                    exported_at=datetime.now(UTC),
-                )
-            )
+        _auto_save_interactive_transcripts(project_root, session)
         return ("exit", current_thread_id)
     if command == ":history":
         print()
@@ -2356,6 +2356,25 @@ def _handle_interactive_export_command(
         copy_requested=copy_requested,
         exported_at=exported_at,
     )
+
+
+def _auto_save_interactive_transcripts(project_root: Path | None, session: InteractiveSession) -> None:
+    thread_ids = session.thread_ids_with_unexported_messages(project_root)
+    if not thread_ids:
+        return
+    print()
+    exported_at = datetime.now(UTC)
+    for thread_id in thread_ids:
+        print(
+            _save_interactive_transcript(
+                project_root,
+                thread_id,
+                session,
+                include_all_logs=False,
+                copy_requested=False,
+                exported_at=exported_at,
+            )
+        )
 
 
 def _save_interactive_transcript(

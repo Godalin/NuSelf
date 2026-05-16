@@ -117,7 +117,7 @@ When color is enabled, each known self label in a `persona_summary` block uses a
 - Default log scope: chat transcript plus shareable internal logs (`persona_summary`, `host_discussion_decision`, `persona_discussion`, and high-level reflection outcomes). Low-level daemon, memory, and chat completion logs are omitted unless `all` is used.
 - Logs in transcript Markdown use the same human-readable rendering as interactive activity logs. Transcript logs must not expose raw JSON blocks.
 - Scope: transcript export starts at the current interactive connection time. Re-running export later in the same connection includes the full conversation and captured logs from that same connection start, not only messages/logs since the previous export.
-- Exit commands (`:q`, `:quit`, `:exit`) automatically save one transcript for the current thread when there are chat messages that have not already been covered by a manual export. This automatic save does not copy to the clipboard.
+- Exit commands (`:q`, `:quit`, `:exit`) and EOF automatically save transcripts for every thread in the current interactive connection that has chat messages not already covered by a manual export. This automatic save does not copy to the clipboard.
 - Storage: files are written under `private/transcripts/`.
 - Filename: includes the connection start time and export command time, e.g. `chat-default-20260514T120000123456Z-20260514T121500654321Z.md`.
 - Output: after saving, print the file path and clipboard copy result. If `noclip` is used, do not attempt clipboard copying.
