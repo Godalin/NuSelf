@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 import json
 import os
 import sys
@@ -137,6 +138,8 @@ def _format_log_field(key: str, value: object) -> str:
 
 def render_key_value_field(key: str, value: object) -> str:
     """Render a stable key=value field for human-readable terminal records."""
+    if isinstance(value, str) and _is_timestamp_field(key):
+        value = format_display_timestamp(value)
     return _format_log_field(key, value)
 
 
@@ -199,10 +202,49 @@ def render_log_event_json(event: LogEvent) -> str:
     return json.dumps(event.to_record(), sort_keys=True, ensure_ascii=True)
 
 
+def format_display_timestamp(value: str | datetime) -> str:
+    """Render a timestamp in the current system timezone for humans."""
+
+    parsed = _parse_display_timestamp(value)
+    if parsed is None:
+        return value if isinstance(value, str) else value.isoformat()
+    return parsed.astimezone().isoformat(timespec="seconds")
+
+
+def _parse_display_timestamp(value: str | datetime) -> datetime | None:
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = value.strip()
+        if not text:
+            return None
+        if text.endswith("Z"):
+            text = f"{text[:-1]}+00:00"
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+def _is_timestamp_field(key: str) -> bool:
+    return key in {"created", "created_at", "updated_at", "reviewed_at", "sent_at", "connected", "exported"}
+
+
 def render_session_header(*, daemon_status: str, thread_id: str) -> str:
     """Render a compact REPL session header."""
 
-    return f"session thread={thread_id} daemon={daemon_status}"
+    theme = TerminalTheme()
+    tag = theme.tag("[daemon]", "daemon")
+    return render_record_header(
+        f"{tag} session",
+        [
+            render_key_value_field("status", daemon_status),
+            render_key_value_field("thread", thread_id),
+        ],
+    )
 
 
 def _should_color() -> bool:
@@ -247,7 +289,7 @@ def render_outbox_summary(entry: OutboxEntry, *, color: bool | None = None) -> s
     """Render one outbox entry as a compact terminal line."""
     theme = TerminalTheme(color=color)
     status_tag = theme.paint(f"[{entry.status}]", _status_color(entry.status))
-    created = entry.created_at[:19] if entry.created_at else "-"
+    created = format_display_timestamp(entry.created_at) if entry.created_at else "-"
     return render_record_header(
         f"{entry.id} {status_tag} {entry.title}",
         _render_key_value_fields(
@@ -285,7 +327,7 @@ def render_outbox_detail(entry: OutboxEntry, *, color: bool | None = None) -> st
 def render_reflection_entry_summary(entry: ReflectionEntry, *, index: int | None = None, color: bool | None = None) -> str:
     """Render one reflection entry as a compact record plus title body."""
     theme = TerminalTheme(color=color)
-    created = entry.created_at[:19] if entry.created_at else "-"
+    created = format_display_timestamp(entry.created_at) if entry.created_at else "-"
     tag = theme.tag("[reflection]", "reflection")
     label = f"[{index}] {tag}" if index is not None else tag
     fields: list[str] = []

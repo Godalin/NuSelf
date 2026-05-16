@@ -4,6 +4,7 @@ from nuself.logs import LogEvent
 from nuself.notification import OutboxEntry
 from nuself.reflection.repository import ReflectionEntry
 from nuself.tui.render import (
+    format_display_timestamp,
     render_discussion_trace,
     render_host_decision,
     render_log_event,
@@ -12,6 +13,7 @@ from nuself.tui.render import (
     render_record_block,
     render_reflection_entry_detail,
     render_reflection_entry_summary,
+    render_session_header,
 )
 
 
@@ -20,6 +22,12 @@ def test_render_record_block_splits_header_and_body() -> None:
         "[test] event status=ok thread=default\n"
         "  first\n"
         "  second"
+    )
+
+
+def test_render_session_header_uses_daemon_record_style() -> None:
+    assert render_session_header(daemon_status="running", thread_id="default") == (
+        "[daemon] session status=running thread=default"
     )
 
 
@@ -138,6 +146,7 @@ def test_render_discussion_log_expands_trace_metadata() -> None:
 
 
 def test_render_outbox_records_use_shared_key_value_style() -> None:
+    created = format_display_timestamp("2026-05-12T10:00:00Z")
     entry = OutboxEntry(
         id="e1",
         title="Test Title",
@@ -149,15 +158,16 @@ def test_render_outbox_records_use_shared_key_value_style() -> None:
     )
 
     assert render_outbox_summary(entry, color=False) == (
-        "e1 [pending] Test Title created=2026-05-12T10:00:00 attempts=0 link=true"
+        f"e1 [pending] Test Title created={created} attempts=0 link=true"
     )
     assert render_outbox_detail(entry, color=False).splitlines() == [
-        "e1 [pending] Test Title idempotency_key=k1 attempts=0 created_at=2026-05-12T10:00:00Z deep_link=nuself://thread/default",
+        f"e1 [pending] Test Title idempotency_key=k1 attempts=0 created_at={created} deep_link=nuself://thread/default",
         "  Test Body",
     ]
 
 
 def test_render_reflection_records_use_shared_key_value_style() -> None:
+    created = format_display_timestamp("2026-05-12T10:00:00Z")
     entry = ReflectionEntry(
         id="reflection-candidate-1",
         title="Test idea",
@@ -177,14 +187,14 @@ def test_render_reflection_records_use_shared_key_value_style() -> None:
     )
 
     assert render_reflection_entry_summary(entry, index=2, color=False).splitlines() == [
-        "[2] [reflection] status=[pending] created=2026-05-12T10:00:00 type=question score=0.65",
+        f"[2] [reflection] status=[pending] created={created} type=question score=0.65",
         "  Test idea",
     ]
     assert render_reflection_entry_summary(entry, index=2, color=True).splitlines()[0].startswith(
         "[2] \033[33m[reflection]\033[0m status=\033[33m[pending]\033[0m"
     )
     assert render_reflection_entry_detail(entry, color=False).splitlines() == [
-        "[pending] Test idea id=reflection-candidate-1 type=question score=0.65 confidence=0.70 novelty=0.60 urgency=0.50 interruption=0.20 discussion=approved deep_link=nuself://thread/reflections created_at=2026-05-12T10:00:00Z",
+        f"[pending] Test idea id=reflection-candidate-1 type=question score=0.65 confidence=0.70 novelty=0.60 urgency=0.50 interruption=0.20 discussion=approved deep_link=nuself://thread/reflections created_at={created}",
         "  Body line",
         "  discussion:",
         "    ── candidate ──",

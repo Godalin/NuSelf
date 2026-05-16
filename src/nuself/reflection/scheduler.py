@@ -53,14 +53,10 @@ class ReflectionScheduler:
         self._event_queue.append(event)
 
     def should_reflect(self, now: datetime | None = None) -> bool:
-        """Allow reflection to run without time-based restrictions.
-
-        This intentionally removes quiet hours, cooldown, interval, and daily
-        cap checks so the scheduler may run whenever the daemon's check loop
-        invokes it. The daemon still controls frequency via its
-        `reflection_check_interval_seconds` setting.
-        """
-        return True
+        """Return whether deterministic scheduling gates allow a reflection cycle."""
+        if now is None:
+            now = datetime.now(UTC)
+        return self._schedule_block_reason(now) is None
 
     def reflect(self, now: datetime | None = None) -> bool:
         """Run one reflection cycle if conditions pass."""
@@ -69,7 +65,17 @@ class ReflectionScheduler:
         if now is None:
             now = datetime.now(UTC)
         
-        if not self.should_reflect(now):
+        block_reason = self._schedule_block_reason(now)
+        if block_reason is not None:
+            write_log_event(
+                "reflection",
+                "schedule_blocked",
+                "reflection cycle skipped by schedule limits",
+                project_root=self._project_root,
+                level="info",
+                status="skipped",
+                metadata={"reason": block_reason},
+            )
             return False
         
         write_log_event(
@@ -170,18 +176,33 @@ class ReflectionScheduler:
         return True
 
     def _in_quiet_hours(self, now: datetime) -> bool:
-        current_hour = now.hour
+        current_hour = now.astimezone().hour
         start = self._config.scheduler.quiet_start_hour
         end = self._config.scheduler.quiet_end_hour
+        if start == end:
+            return False
         if start < end:
             return start <= current_hour < end
         # Wraps around midnight, e.g. 22:00–07:00
         return current_hour >= start or current_hour < end
 
+    def _schedule_block_reason(self, now: datetime) -> str | None:
+        if self._in_quiet_hours(now):
+            return "quiet_hours"
+        if not self._daily_cap_not_reached(now):
+            return "daily_cap"
+        if self._in_cooldown(now):
+            return "cooldown"
+        if self._interval_not_elapsed(now):
+            return "interval"
+        return None
+
     def _in_cooldown(self, now: datetime) -> bool:
         last = self._read_last_reflection()
         if last is None:
             return False
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=UTC)
         elapsed = (now - last).total_seconds()
         return elapsed < self._config.scheduler.cooldown_seconds
 
@@ -189,6 +210,8 @@ class ReflectionScheduler:
         last = self._read_last_reflection()
         if last is None:
             return False
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=UTC)
         jittered = self._jittered_interval()
         elapsed = (now - last).total_seconds()
         return elapsed < jittered
@@ -220,7 +243,7 @@ class ReflectionScheduler:
         date = data.get("daily_date")
         if not isinstance(count, int) or not isinstance(date, str):
             return 0
-        if date == now.date().isoformat():
+        if date == now.astimezone().date().isoformat():
             return count
         return 0
 
@@ -248,7 +271,7 @@ class ReflectionScheduler:
         payload: dict[str, object] = {
             "timestamp": now.isoformat(),
             "daily_count": count,
-            "daily_date": now.date().isoformat(),
+            "daily_date": now.astimezone().date().isoformat(),
         }
         if title is not None:
             payload["title"] = title

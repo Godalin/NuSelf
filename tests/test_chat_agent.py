@@ -274,6 +274,54 @@ def test_chat_agent_retries_when_protocol_leaks_into_answer(tmp_path: Path) -> N
     assert "previous response leaked the internal response protocol" in llm.calls[2][-1].content
 
 
+def test_chat_agent_retries_when_pretty_protocol_leaks_into_answer(tmp_path: Path) -> None:
+    leaked_answer = "\n".join(
+        [
+            "{",
+            '  "answer": "有的。这里是正常回复内容。",',
+            '  "evidence_references": [],',
+            '  "confidence": null,',
+            '  "epistemic_status": "inferred"',
+            "}",
+        ]
+    )
+    llm = SequencedStructuredFakeLLM(
+        [
+            json.dumps(
+                {
+                    "answer": "内部草稿。",
+                    "evidence_references": [],
+                    "confidence": 0.4,
+                    "epistemic_status": "inferred",
+                }
+            ),
+            json.dumps(
+                {
+                    "answer": leaked_answer,
+                    "evidence_references": [],
+                    "confidence": None,
+                    "epistemic_status": "inferred",
+                }
+            ),
+            json.dumps(
+                {
+                    "answer": "有的。这里是正常回复内容。",
+                    "evidence_references": [],
+                    "confidence": 0.8,
+                    "epistemic_status": "inferred",
+                }
+            ),
+        ]
+    )
+    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
+
+    result = agent.respond("你有什么新想法吗")
+
+    assert result.answer == "有的。这里是正常回复内容。"
+    assert "evidence_references" not in result.reply
+    assert len(llm.calls) == 3
+
+
 def test_chat_agent_parses_fenced_json_protocol_response(tmp_path: Path) -> None:
     llm = StructuredFakeLLM(
         '```json\n'

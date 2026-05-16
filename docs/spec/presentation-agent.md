@@ -89,9 +89,9 @@ If `PresentedResponse.answer` violates the user-facing boundary, the runtime sho
 
 Boundary checks may detect:
 
-- `answer` starts with `{` and contains `"answer"`;
+- `answer` starts with `{` and contains protocol-looking fields such as `answer`, `evidence_references`, `confidence`, or `epistemic_status`, even when the object is pretty-printed or not valid JSON;
 - `answer` starts with a Markdown code fence;
-- `answer` contains multiple response protocol field names near the beginning;
+- `answer` contains multiple response protocol field names near the beginning or in the first visible protocol-shaped block;
 - `answer` starts with internal persona attribution.
 
 These checks only decide whether to retry. They must not rewrite the answer.

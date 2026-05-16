@@ -17,6 +17,11 @@ from nuself.reflection import IdeaCandidateGenerator, ReflectionScheduler
 from nuself.reflection.repository import ReflectionEntry
 
 
+def _local_datetime(year: int, month: int, day: int, hour: int, minute: int = 0) -> datetime:
+    tz = datetime.now().astimezone().tzinfo
+    return datetime(year, month, day, hour, minute, 0, tzinfo=tz)
+
+
 def _reflection_settings(
     *,
     interval_seconds: int = 3600,
@@ -163,11 +168,11 @@ def test_should_reflect_first_time(scheduler: ReflectionScheduler) -> None:
 def test_should_reflect_respects_cooldown(scheduler: ReflectionScheduler) -> None:
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     scheduler._write_last_reflection(now)
-    assert scheduler.should_reflect(now) is True
+    assert scheduler.should_reflect(now) is False
 
 
 def test_should_reflect_respects_interval(scheduler: ReflectionScheduler) -> None:
-    now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+    now = _local_datetime(2024, 1, 1, 12)
     scheduler._write_last_reflection(now)
     later = now.replace(minute=6)
     scheduler._config = _reflection_settings(
@@ -182,7 +187,8 @@ def test_should_reflect_respects_interval(scheduler: ReflectionScheduler) -> Non
         max_discussion_rounds=10,
         moderator_convergence_patience=5,
     )
-    assert scheduler.should_reflect(later) is True
+    assert scheduler.should_reflect(later) is False
+    assert scheduler.should_reflect(now.replace(hour=14)) is True
 
 
 def test_should_reflect_respects_quiet_hours(scheduler: ReflectionScheduler) -> None:
@@ -198,8 +204,8 @@ def test_should_reflect_respects_quiet_hours(scheduler: ReflectionScheduler) -> 
         max_discussion_rounds=2,
         moderator_convergence_patience=1,
     )
-    night = datetime(2024, 1, 1, 23, 0, 0, tzinfo=UTC)
-    assert scheduler.should_reflect(night) is True
+    night = _local_datetime(2024, 1, 1, 23)
+    assert scheduler.should_reflect(night) is False
 
 
 def test_should_reflect_outside_quiet_hours(scheduler: ReflectionScheduler) -> None:
@@ -220,10 +226,25 @@ def test_should_reflect_wraparound_quiet_hours(scheduler: ReflectionScheduler) -
         max_discussion_rounds=10,
         moderator_convergence_patience=5,
     )
-    early = datetime(2024, 1, 1, 6, 59, 0, tzinfo=UTC)
-    assert scheduler.should_reflect(early) is True
-    boundary = datetime(2024, 1, 1, 7, 0, 0, tzinfo=UTC)
+    early = _local_datetime(2024, 1, 1, 6, 59)
+    assert scheduler.should_reflect(early) is False
+    boundary = _local_datetime(2024, 1, 1, 7)
     assert scheduler.should_reflect(boundary) is True
+
+
+def test_should_reflect_respects_daily_cap(scheduler: ReflectionScheduler) -> None:
+    now = _local_datetime(2024, 1, 1, 12)
+    scheduler._config = _reflection_settings(
+        interval_seconds=1,
+        cooldown_seconds=0,
+        quiet_start_hour=22,
+        quiet_end_hour=7,
+        daily_cap=1,
+        jitter_percent=0,
+    )
+    scheduler._write_last_reflection(now)
+
+    assert scheduler.should_reflect(now.replace(hour=13)) is False
 
 
 # --- reflection pipeline tests ---
@@ -293,7 +314,7 @@ def test_reflect_auto_notify_creates_outbox_entry(scheduler: ReflectionScheduler
     assert refl_entries[0].id in outbox_entries[0].body
 
 
-def test_reflect_returns_false_when_blocked(scheduler: ReflectionScheduler) -> None:
+def test_reflect_returns_false_when_schedule_blocked(scheduler: ReflectionScheduler) -> None:
     scheduler._config = _reflection_settings(
         interval_seconds=10,
         cooldown_seconds=0,
@@ -306,10 +327,14 @@ def test_reflect_returns_false_when_blocked(scheduler: ReflectionScheduler) -> N
         max_discussion_rounds=2,
         moderator_convergence_patience=1,
     )
-    now = datetime(2024, 1, 1, 23, 0, 0, tzinfo=UTC)
+    now = _local_datetime(2024, 1, 1, 23)
     result = scheduler.reflect(now)
-    assert result is True
-    assert len(scheduler._reflection_repo.list()) == 1
+    assert result is False
+    assert len(scheduler._reflection_repo.list()) == 0
+    events = read_log_events(project_root=scheduler._project_root, component="reflection")
+    assert events[-1].event == "schedule_blocked"
+    assert events[-1].status == "skipped"
+    assert events[-1].metadata == {"reason": "quiet_hours"}
 
 
 # --- last reflection persistence ---
@@ -355,9 +380,9 @@ def test_quiet_hours_non_wrapping_range() -> None:
     )
     scheduler = ReflectionScheduler.__new__(ReflectionScheduler)
     scheduler._config = config
-    assert scheduler._in_quiet_hours(datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)) is True
-    assert scheduler._in_quiet_hours(datetime(2024, 1, 1, 8, 0, 0, tzinfo=UTC)) is False
-    assert scheduler._in_quiet_hours(datetime(2024, 1, 1, 18, 0, 0, tzinfo=UTC)) is False
+    assert scheduler._in_quiet_hours(_local_datetime(2024, 1, 1, 12)) is True
+    assert scheduler._in_quiet_hours(_local_datetime(2024, 1, 1, 8)) is False
+    assert scheduler._in_quiet_hours(_local_datetime(2024, 1, 1, 18)) is False
 
 
 # --- IdeaCandidateGenerator tests ---

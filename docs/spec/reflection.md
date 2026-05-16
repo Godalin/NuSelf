@@ -43,6 +43,7 @@ Stored as one JSON file per entry in `private/reflections/{id}.json`.
 
 ```
 reflect()
+  ├─ schedule_blocked              (if quiet hours, cooldown, interval, or daily cap blocks)
   ├─ cycle_started                 (audit log)
   ├─ cycle_pending_limit_reached   (if pending entries ≥ max_pending_entries)
   ├─ candidate_generation_skipped  (if no context)
@@ -95,6 +96,23 @@ Candidates below `persona_discussion_threshold` but passing the gate proceed dir
 
 Default is `20`.
 
+## Schedule Limits
+
+The scheduler must enforce the configured deterministic schedule gates before candidate generation:
+
+| Setting | Default | Behavior |
+|---|---:|---|
+| `reflection.scheduler.interval_seconds` | `3600` | Minimum elapsed time since the last published reflection before another cycle may run. Jitter may adjust the effective interval. |
+| `reflection.scheduler.cooldown_seconds` | `300` | Hard minimum elapsed time since the last published reflection. |
+| `reflection.scheduler.quiet_start_hour` | `22` | Start hour for local-system-time quiet hours. |
+| `reflection.scheduler.quiet_end_hour` | `7` | End hour for local-system-time quiet hours. |
+| `reflection.scheduler.daily_cap` | `5` | Maximum published reflections per local-system-date. |
+| `reflection.scheduler.jitter_percent` | `20` | Percent jitter applied to the interval gate. |
+
+Quiet hours and daily caps are interpreted in the current system timezone. Internal persisted timestamps remain timezone-aware ISO timestamps.
+
+If any schedule gate blocks a cycle, `reflect()` returns `false` before candidate generation and writes `schedule_blocked` with `status=skipped` and a short `reason` metadata value.
+
 ## Optional Notify Bridge
 
 If `reflection.auto_notify` is `true`, a brief `OutboxEntry` is created **pointing to** the reflection:
@@ -111,6 +129,7 @@ The scheduler still emits these events into `reflection.log`:
 
 | Event | Status | Visibility |
 |---|---|---|
+| `schedule_blocked` | `skipped` | `nuself logs --component reflection` |
 | `cycle_started` | `started` | `nuself logs --component reflection` |
 | `cycle_pending_limit_reached` | `skipped` | `nuself logs --component reflection` |
 | `persona_discussion` | `approved` / `rejected` | `nuself logs --component reflection` |

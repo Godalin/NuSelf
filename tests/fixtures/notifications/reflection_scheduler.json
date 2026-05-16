@@ -24,7 +24,7 @@
     {
       "name": "in-quiet-hours",
       "last_reflection": null,
-      "now": "2024-01-01T23:00:00+00:00",
+      "now": "2024-01-01T23:00:00",
       "expected_should_reflect": false
     },
     {

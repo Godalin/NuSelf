@@ -79,7 +79,7 @@ try:
         render_source_detail,
         render_source_row,
     )
-    from nuself.tui.render import render_log_event, render_log_event_json, render_session_header
+    from nuself.tui.render import format_display_timestamp, render_log_event, render_log_event_json, render_session_header
 finally:
     warnings.warn = _original_warn
 
@@ -100,6 +100,10 @@ def empty_captured_log_events() -> dict[str, list[LogEvent]]:
     return {}
 
 
+def empty_captured_log_events_by_message() -> dict[str, dict[int, list[LogEvent]]]:
+    return {}
+
+
 @dataclass
 class InteractiveSession:
     """State that belongs to one interactive CLI connection."""
@@ -109,6 +113,9 @@ class InteractiveSession:
     captured_messages: dict[str, list[tuple[int, str, str]]] = field(default_factory=empty_captured_thread_messages)
     captured_next_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
     captured_log_events: dict[str, list[LogEvent]] = field(default_factory=empty_captured_log_events)
+    captured_log_events_by_message: dict[str, dict[int, list[LogEvent]]] = field(
+        default_factory=empty_captured_log_events_by_message
+    )
     exported_next_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
 
     def start_index_for(self, project_root: Path | None, thread_id: str) -> int:
@@ -132,8 +139,12 @@ class InteractiveSession:
         self.capture_new_messages(project_root, thread_id)
         return list(self.captured_messages.get(thread_id, []))
 
-    def capture_log_events(self, thread_id: str, events: list[LogEvent]) -> None:
+    def capture_log_events(self, thread_id: str, events: list[LogEvent], *, message_index: int | None = None) -> None:
         if not events:
+            return
+        if message_index is not None:
+            events_by_message = self.captured_log_events_by_message.setdefault(thread_id, {})
+            events_by_message.setdefault(message_index, []).extend(events)
             return
         self.captured_log_events.setdefault(thread_id, []).extend(events)
 
@@ -142,6 +153,14 @@ class InteractiveSession:
         if include_all:
             return events
         return [event for event in events if _is_shareable_transcript_log(event)]
+
+    def transcript_log_events_by_message(self, thread_id: str, *, include_all: bool) -> dict[int, list[LogEvent]]:
+        result: dict[int, list[LogEvent]] = {}
+        for message_index, events in self.captured_log_events_by_message.get(thread_id, {}).items():
+            filtered_events = events if include_all else [event for event in events if _is_shareable_transcript_log(event)]
+            if filtered_events:
+                result[message_index] = list(filtered_events)
+        return result
 
     def has_unexported_messages(self, project_root: Path | None, thread_id: str) -> bool:
         self.capture_new_messages(project_root, thread_id)
@@ -1736,6 +1755,10 @@ def _interactive_loop(
                 print()
                 _auto_save_interactive_transcripts(project_root, session)
                 return 0
+            except KeyboardInterrupt:
+                print()
+                _auto_save_interactive_transcripts(project_root, session)
+                return 130
             message = line.strip()
             if message == "":
                 continue
@@ -1784,10 +1807,15 @@ def _send_interactive_chat_turn(
             print()
             print(f"Retrying message after failed attempt ({attempt}/{INTERACTIVE_CHAT_ATTEMPTS})...")
         result = send_message(message, thread_id)
+        previous_next_index = session.captured_next_indexes.get(
+            thread_id, session.start_index_for(project_root, thread_id)
+        )
         session.capture_new_messages(project_root, thread_id)
+        current_next_index = session.captured_next_indexes.get(thread_id, previous_next_index)
+        message_index = current_next_index - 1 if current_next_index > previous_next_index else None
         events = _interactive_activity_events(project_root, event_offset)
         event_offset += len(events)
-        session.capture_log_events(thread_id, events)
+        session.capture_log_events(thread_id, events, message_index=message_index)
         if events:
             if not printed_logs:
                 print()
@@ -2396,6 +2424,7 @@ def _save_interactive_transcript(
             exported_at=exported_at,
             messages=session.transcript_messages(project_root, thread_id),
             log_events=session.transcript_log_events(thread_id, include_all=include_all_logs),
+            log_events_by_message=session.transcript_log_events_by_message(thread_id, include_all=include_all_logs),
             include_all_logs=include_all_logs,
         )
     except ValueError as exc:
@@ -2421,6 +2450,7 @@ def _export_interactive_transcript(
     exported_at: datetime,
     messages: list[tuple[int, str, str]] | None = None,
     log_events: list[LogEvent] | None = None,
+    log_events_by_message: dict[int, list[LogEvent]] | None = None,
     include_all_logs: bool = False,
 ) -> tuple[Path, str]:
     paths = runtime_paths(project_root)
@@ -2443,6 +2473,7 @@ def _export_interactive_transcript(
         exported_at=exported_at,
         messages=messages,
         log_events=log_events or [],
+        log_events_by_message=log_events_by_message or {},
         include_all_logs=include_all_logs,
     )
     path.write_text(content, encoding="utf-8")
@@ -2465,14 +2496,15 @@ def _render_chat_transcript(
     exported_at: datetime,
     messages: list[tuple[int, str, str]],
     log_events: list[LogEvent],
+    log_events_by_message: dict[int, list[LogEvent]],
     include_all_logs: bool,
 ) -> str:
     lines = [
         "# NuSelf Chat Transcript",
         "",
         f"- Thread: `{thread_id}`",
-        f"- Connected: {connected_at.isoformat()}",
-        f"- Exported: {exported_at.isoformat()}",
+        f"- Connected: {format_display_timestamp(connected_at)}",
+        f"- Exported: {format_display_timestamp(exported_at)}",
         f"- Logs: {'all' if include_all_logs else 'share'}",
         "",
     ]
@@ -2484,6 +2516,12 @@ def _render_chat_transcript(
             content.strip(),
             "",
         ])
+        message_log_events = log_events_by_message.get(index, [])
+        if message_log_events:
+            lines.extend(["### Logs", ""])
+            for event in message_log_events:
+                lines.extend(_render_transcript_log_event(event))
+                lines.append("")
     if log_events:
         lines.extend(["## Internal Process Logs", ""])
         for event in log_events:

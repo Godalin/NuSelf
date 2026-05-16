@@ -285,8 +285,8 @@ def test_interactive_turn_prints_activity_events(
     assert "NuSelf:\nLLM API is not configured yet." in captured.out
     assert "\n\nLogs:\n[chat] one_shot_chat_completed" in captured.out
     assert "[chat] one_shot_chat_completed status=ok thread=default\n  one-shot chat turn completed" in captured.out
-    assert "  one-shot chat turn completed\nsession thread=default daemon=one-shot" in captured.out
-    assert "  one-shot chat turn completed\n\nsession thread=default daemon=one-shot" not in captured.out
+    assert "  one-shot chat turn completed\n[daemon] session status=one-shot thread=default" in captured.out
+    assert "  one-shot chat turn completed\n\n[daemon] session status=one-shot thread=default" not in captured.out
 
 
 def test_interactive_daemon_timeout_retries_and_preserves_logs(
@@ -416,19 +416,23 @@ def test_interactive_export_noclip_skips_clipboard(
 def test_interactive_export_all_includes_all_logs(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    monkeypatch.setattr("sys.stdin", _TextInput("include logs\n:e all noclip\n:q\n"))
+    monkeypatch.setattr("sys.stdin", _TextInput("include logs\n:e all noclip\nsecond turn\n:e all noclip\n:q\n"))
 
     result = main(["--project-root", str(tmp_path), "chat"])
     capsys.readouterr()
 
     assert result == 0
     exports = sorted((tmp_path / "private" / "transcripts").glob("chat-default-*.md"))
-    assert len(exports) == 1
-    content = exports[0].read_text(encoding="utf-8")
+    assert len(exports) == 2
+    content = exports[-1].read_text(encoding="utf-8")
     assert "- Logs: all" in content
-    assert "## Internal Process Logs" in content
+    assert "### Logs" in content
     assert "```text\n[chat] one_shot_chat_completed status=ok thread=default\n  one-shot chat turn completed\n```" in content
     assert "```json" not in content
+    first_reply_index = content.index("## 1. NuSelf")
+    first_logs_index = content.index("### Logs")
+    second_reply_index = content.index("## 2. NuSelf")
+    assert first_reply_index < first_logs_index < second_reply_index
 
 
 def test_interactive_quit_auto_saves_unexported_transcript(
@@ -460,6 +464,28 @@ def test_interactive_eof_auto_saves_unexported_transcript(
     exports = sorted((tmp_path / "private" / "transcripts").glob("chat-default-*.md"))
     assert len(exports) == 1
     assert "autosave eof" in exports[0].read_text(encoding="utf-8")
+
+
+def test_interactive_keyboard_interrupt_auto_saves_unexported_transcript(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    inputs = ["autosave interrupt"]
+
+    def fake_input(_prompt: str) -> str:
+        if inputs:
+            return inputs.pop(0)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("builtins.input", fake_input)
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 130
+    assert "Saved transcript:" in captured.out
+    exports = sorted((tmp_path / "private" / "transcripts").glob("chat-default-*.md"))
+    assert len(exports) == 1
+    assert "autosave interrupt" in exports[0].read_text(encoding="utf-8")
 
 
 def test_interactive_quit_auto_saves_all_threads(
@@ -587,7 +613,7 @@ def test_default_entrypoint_interactive_omits_redundant_startup_preamble(
     assert "Using current daemon:" not in captured.out
     assert "Tip:" not in captured.out
     assert "νSelf interactive mode. Type :help for commands, :q to quit." in captured.out
-    assert "session thread=default daemon=running" in captured.out
+    assert "[daemon] session status=running thread=default" in captured.out
 
 
 def test_default_entrypoint_creates_daemon_when_missing(

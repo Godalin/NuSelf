@@ -59,6 +59,13 @@ Shared terminal renderers must use the reusable record helpers in `nuself.tui.re
 
 Logs, `reflection list/show`, `notify list/show`, and REPL versions of those views must use this shared style. They must not reintroduce colon-aligned detail tables, raw JSON blobs, or one-off key/value renderers for human-readable output.
 
+## Time Display Contract
+
+- Internal timestamps are stored as timezone-aware ISO timestamps, normally UTC.
+- Filenames and machine-readable JSON output keep stable internal timestamps.
+- Human-readable CLI, REPL, and transcript output renders timestamps in the current system timezone using second precision and an explicit UTC offset.
+- Invalid or legacy timestamp strings are printed unchanged rather than failing the command.
+
 ## Empty State Contract
 
 | Context | Output | Stream | Exit Code |
@@ -90,7 +97,7 @@ All interactive commands start with `:`.
 - Interactive chat transport failures, including daemon timeouts, do not exit the REPL. The REPL captures and prints any logs produced before the failure, retries the same user message once, and then returns to the prompt if the retry also fails.
 - Session header reprinted after non-command turns and thread-switching commands:
   ```
-  session thread=<id> daemon=<running|one-shot>
+  [daemon] session status=<running|one-shot> thread=<id>
   ```
 - NuSelf assistant replies printed to an interactive terminal are rendered as Markdown.
 - Terminal assistant replies are streamed with a small typewriter effect so the reply appears progressively. The plain stored transcript remains unchanged.
@@ -116,8 +123,10 @@ When color is enabled, each known self label in a `persona_summary` block uses a
   - `noclip`: save the file without copying to clipboard.
 - Default log scope: chat transcript plus shareable internal logs (`persona_summary`, `host_discussion_decision`, `persona_discussion`, and high-level reflection outcomes). Low-level daemon, memory, and chat completion logs are omitted unless `all` is used.
 - Logs in transcript Markdown use the same human-readable rendering as interactive activity logs. Transcript logs must not expose raw JSON blocks.
+- Logs captured during a chat turn are inserted directly after the assistant message for that turn under a compact `### Logs` subheading. Export must preserve the observed interaction order instead of rendering all chat messages first and all logs later.
+- Logs that cannot be associated with a specific chat turn are rendered at the end under `## Internal Process Logs`.
 - Scope: transcript export starts at the current interactive connection time. Re-running export later in the same connection includes the full conversation and captured logs from that same connection start, not only messages/logs since the previous export.
-- Exit commands (`:q`, `:quit`, `:exit`) and EOF automatically save transcripts for every thread in the current interactive connection that has chat messages not already covered by a manual export. This automatic save does not copy to the clipboard.
+- Exit commands (`:q`, `:quit`, `:exit`), EOF, and keyboard interrupt automatically save transcripts for every thread in the current interactive connection that has chat messages not already covered by a manual export. This automatic save does not copy to the clipboard.
 - Storage: files are written under `private/transcripts/`.
 - Filename: includes the connection start time and export command time, e.g. `chat-default-20260514T120000123456Z-20260514T121500654321Z.md`.
 - Output: after saving, print the file path and clipboard copy result. If `noclip` is used, do not attempt clipboard copying.

@@ -1267,6 +1267,7 @@ def _is_supported_tool_call(tool_call: ConversationToolCall | None) -> bool:
 
 
 ParsedChatResponse: TypeAlias = DraftResponse
+_PROTOCOL_FIELD_NAMES = ("answer", "evidence_references", "confidence", "epistemic_status")
 
 
 def _parse_chat_response(raw: str) -> ParsedChatResponse:
@@ -1342,12 +1343,20 @@ def _leaks_response_protocol(answer: str) -> bool:
     stripped = answer.strip()
     if stripped.startswith("```"):
         return True
-    if stripped.startswith("{") and '"answer"' in stripped:
+    if stripped.startswith("{") and _contains_protocol_field(stripped):
         return True
     if _starts_with_persona_attribution(stripped):
         return True
-    lowered = stripped[:500].casefold()
-    return "evidence_references" in lowered and "epistemic_status" in lowered
+    lowered = stripped[:4000].casefold()
+    return sum(1 for field_name in _PROTOCOL_FIELD_NAMES if field_name in lowered) >= 2
+
+
+def _contains_protocol_field(text: str) -> bool:
+    lowered = text[:4000].casefold()
+    for field_name in _PROTOCOL_FIELD_NAMES:
+        if f'"{field_name}"' in lowered or f"{field_name}:" in lowered:
+            return True
+    return False
 
 
 def _is_user_facing_safe(answer: str) -> bool:
