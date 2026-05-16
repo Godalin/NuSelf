@@ -8,7 +8,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Added
 
-- Nothing yet.
+- Added LLM endpoint failover so NuSelf can switch between configured LLM endpoints when an account/subscription endpoint becomes unavailable, with OpenAI-compatible endpoints as the default and `anthropic: true` for Anthropic endpoints.
 
 ### Changed
 

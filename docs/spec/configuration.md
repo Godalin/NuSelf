@@ -13,7 +13,7 @@
 
 | Section | Dataclass | Purpose |
 |---|---|---|
-| `llm` | `LlmOpenAiConfig` | OpenAI-compatible endpoint |
+| `llm` | `LlmConfig` | Ordered LLM endpoints and failover policy |
 | `chat` | `ChatConfig` | Context compression thresholds and language preference |
 | `daemon` | `DaemonConfig` | Background task intervals |
 | `reflection` | `ReflectionSettings` | Scheduling, gates, moderator |
@@ -57,3 +57,35 @@ Supported values: any IETF language tag string (e.g. `en`, `zh-CN`, `zh-TW`). De
 ## Missing Config File Behavior
 
 If `private/config.yaml` is missing, `ConfigSystem.load()` proceeds with hardcoded defaults. No error is raised.
+
+## LLM Endpoint List And Failover
+
+NuSelf supports multiple configured LLM endpoints for the same runtime.
+
+Config shape:
+
+```yaml
+llm:
+  - base_url: https://api.openai.com/v1
+    api_key: ...
+    model: gpt-4.1-mini
+  - anthropic: true
+    api_key: ...
+    model: claude-sonnet-4-5
+```
+
+Rules:
+
+- `llm` is an ordered list of endpoints. The first item is the default endpoint.
+- Endpoints default to OpenAI-compatible behavior.
+- If an endpoint has `anthropic: true`, NuSelf uses Anthropic Messages API semantics for that endpoint. `base_url` defaults to `https://api.anthropic.com/v1` when omitted.
+- The old nested `llm.openai` shape is not part of v0.2.0. Configuration should use the direct `llm` list shape.
+- If every configured endpoint has an empty API key, NuSelf uses the local fallback LLM.
+- Runtime LLM state is stored under `private/runtime/llm_state.json`.
+- State records the last successful configured endpoint index in the `llm` list.
+- On the next process use, NuSelf starts from the saved successful index, then wraps around through the configured endpoints.
+- The saved index is updated only after a successful request.
+- When an endpoint fails with a provider-account availability error, NuSelf tries the next configured endpoint in the same request.
+- Provider-account availability errors include HTTP 401, 402, 403, 429, and response bodies containing subscription, quota, billing, credit, or insufficient-balance indicators.
+- Non-account errors, malformed responses, and prompt/protocol errors are not endpoint failover triggers unless explicitly classified later.
+- Failover attempts are logged without exposing API keys.

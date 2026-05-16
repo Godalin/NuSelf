@@ -55,10 +55,13 @@ Configuration priority (highest to lowest):
 
 ```text
 llm:
-  openai:
-    base_url: https://api.openai.com/v1
+  - base_url: https://api.openai.com/v1
     api_key: ""        # Leave empty for local fallback
     model: gpt-4.1-mini
+  # Optional Anthropic endpoint:
+  # - anthropic: true
+  #   api_key: ""
+  #   model: claude-sonnet-4-5
 ```
 
 ### Chat Settings

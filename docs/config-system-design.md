@@ -21,10 +21,13 @@ Priority order (highest to lowest):
 ```yaml
 # LLM Configuration
 llm:
-  openai:
-    base_url: https://api.openai.com/v1
+  - base_url: https://api.openai.com/v1
     api_key: ""  # Empty = deterministic fallback
     model: gpt-4.1-mini
+  # Optional Anthropic endpoint:
+  # - anthropic: true
+  #   api_key: ""
+  #   model: claude-sonnet-4-5
 
 # Chat Agent Settings (context compression and language preference)
 chat:

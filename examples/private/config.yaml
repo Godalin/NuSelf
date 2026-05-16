@@ -4,13 +4,16 @@
 
 # LLM Configuration
 llm:
-  openai:
-    # OpenAI-compatible API endpoint
-    base_url: https://api.openai.com/v1
+  # OpenAI-compatible API endpoint
+  - base_url: https://api.openai.com/v1
     # Leave empty for local fallback (non-reasoning mode)
     api_key: ""
     # Model name for completions
     model: gpt-4.1-mini
+  # Optional Anthropic endpoint
+  # - anthropic: true
+  #   api_key: ""
+  #   model: claude-sonnet-4-5
 
 # Chat Agent Settings
 chat:

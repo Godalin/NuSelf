@@ -7,8 +7,9 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 Build v0.2.0 around three stabilizing pillars:
 
 1. **Clean command model**: reorganize CLI and REPL commands around user-facing concepts, with no old-command compatibility aliases.
-2. **Trace**: add a thought provenance database for tracing how important thoughts, answers, memories, reflections, and reason steps were derived.
-3. **Reason**: add durable long-run reasoning threads for explicit user-approved questions, with trace records for creation and advances.
+2. **LLM endpoint failover**: allow multiple configured LLM endpoints and remember the last working endpoint across runs.
+3. **Trace**: add a thought provenance database for tracing how important thoughts, answers, memories, reflections, and reason steps were derived.
+4. **Reason**: add durable long-run reasoning threads for explicit user-approved questions, with trace records for creation and advances.
 
 The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace design is in [`docs/trace-design.md`](trace-design.md). Reason design is in [`docs/long-reasoning-design.md`](long-reasoning-design.md).
 
@@ -19,6 +20,7 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 - The next release is intentionally breaking for command cleanup.
 - `trace` is the chosen user-facing name for thought provenance.
 - `reason` should integrate with `trace`: reason owns durable state; trace owns provenance.
+- LLM endpoint failover should use a direct `llm` endpoint list. Endpoints default to OpenAI-compatible behavior; `anthropic: true` marks Anthropic endpoints. Do not introduce a broad provider plugin layer yet.
 
 ## Next Steps
 
@@ -39,13 +41,21 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 - [x] Rename `thread create` to `thread new`.
 - [x] Update REPL command groups to match.
 
-### P2 — Trace Foundation
+### P2 — LLM Endpoint Failover
+
+- [x] Add direct `llm` endpoint-list config support.
+- [x] Support OpenAI-compatible endpoints by default and Anthropic endpoints via `anthropic: true`.
+- [x] Add runtime state for the last successful LLM endpoint.
+- [x] Fail over on subscription/quota/auth/account availability errors.
+- [x] Log endpoint switches without exposing API keys.
+
+### P3 — Trace Foundation
 
 - [ ] Add `ThoughtTrace`, `TraceLink`, `TraceRepository`, and renderers.
 - [ ] Add `nuself trace list/show/search`.
 - [ ] Add `:trace` commands.
 
-### P3 — Reason Foundation
+### P4 — Reason Foundation
 
 - [ ] Add `ReasoningThread`, `ReasoningStep`, and repositories.
 - [ ] Add `nuself reason list/show/start/advance/pause/resume/resolve/archive`.

@@ -55,10 +55,13 @@ private/config.yaml
 
 ```text
 llm:
-  openai:
-    base_url: https://api.openai.com/v1
+  - base_url: https://api.openai.com/v1
     api_key: ""        # 留空使用本地 fallback
     model: gpt-4.1-mini
+  # 可选 Anthropic endpoint：
+  # - anthropic: true
+  #   api_key: ""
+  #   model: claude-sonnet-4-5
 ```
 
 ### 聊天设置
