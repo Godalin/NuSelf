@@ -213,17 +213,20 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
 
 
 def test_chat_agent_parses_markdown_structured_response(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM(
-        "(synthesizer_self keeps context)\n\n"
-        "**answer**: Use the profile context.\n\n"
-        "**evidence_references**: [mem_123]\n"
-        "**epistemic_status**: grounded\n"
+    llm = SequencedStructuredFakeLLM(
+        [
+            "(synthesizer_self keeps context)\n\n"
+            "**answer**: Use the profile context.\n\n"
+            "**evidence_references**: [mem_123]\n"
+            "**epistemic_status**: grounded\n",
+            '{"answer":"Use the profile context.","evidence_references":["mem_123"],"epistemic_status":"grounded"}',
+        ]
     )
     agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
 
     result = agent.respond("profile context")
 
-    assert result.answer == "(synthesizer_self keeps context)\n\nUse the profile context."
+    assert result.answer == "Use the profile context."
     assert result.evidence_references == ("mem_123",)
     assert result.epistemic_status == "grounded"
     assert "evidence_references" not in result.reply
@@ -269,6 +272,64 @@ def test_chat_agent_retries_when_protocol_leaks_into_answer(tmp_path: Path) -> N
     assert result.answer == "好的，我简单一点。"
     assert len(llm.calls) == 3
     assert "previous response leaked the internal response protocol" in llm.calls[2][-1].content
+
+
+def test_chat_agent_parses_fenced_json_protocol_response(tmp_path: Path) -> None:
+    llm = StructuredFakeLLM(
+        '```json\n'
+        '{"answer":"Use the profile context.","evidence_references":["mem_123"],"epistemic_status":"grounded"}\n'
+        '```'
+    )
+    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
+
+    result = agent.respond("profile context")
+
+    assert result.answer == "Use the profile context."
+    assert result.evidence_references == ("mem_123",)
+    assert "```" not in result.reply
+    assert "evidence_references" not in result.reply
+
+
+def test_chat_agent_does_not_fallback_to_protocol_leaking_draft(tmp_path: Path) -> None:
+    leaked_answer = (
+        '{"answer":"好的，我简单一点。","evidence_references":[],'
+        '"confidence":0.8,"epistemic_status":"inferred"}'
+    )
+    llm = SequencedStructuredFakeLLM(
+        [
+            json.dumps(
+                {
+                    "answer": leaked_answer,
+                    "evidence_references": [],
+                    "confidence": 0.4,
+                    "epistemic_status": "inferred",
+                }
+            ),
+            json.dumps(
+                {
+                    "answer": leaked_answer,
+                    "evidence_references": [],
+                    "confidence": 0.4,
+                    "epistemic_status": "inferred",
+                }
+            ),
+            json.dumps(
+                {
+                    "answer": leaked_answer,
+                    "evidence_references": [],
+                    "confidence": 0.4,
+                    "epistemic_status": "inferred",
+                }
+            ),
+        ]
+    )
+    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
+
+    result = agent.respond("可以简单一点吗")
+
+    assert "evidence_references" not in result.answer
+    assert '"answer"' not in result.answer
+    assert result.epistemic_status == "unsupported"
 
 
 def test_chat_agent_flags_unsupported_personal_claims_without_evidence(tmp_path: Path) -> None:

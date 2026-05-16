@@ -4,7 +4,7 @@
 
 The presentation agent is the final LLM-backed user-facing expression stage for chat answers. It separates "what NuSelf has decided to say" from "how NuSelf says it to the user right now."
 
-The presentation agent is not a sanitizer. It does not mechanically edit leaked protocol text. It receives a structured internal draft and generates a fresh final answer under a strict presentation contract.
+The presentation agent is not a sanitizer. It does not mechanically edit leaked protocol text. It receives a structured internal draft and generates a fresh final answer under a strict presentation contract. The runtime may still robustly parse protocol-shaped model responses, including fenced JSON protocol blocks, because protocol parsing is transport handling rather than answer rewriting.
 
 ## Pipeline Position
 
@@ -96,7 +96,7 @@ Boundary checks may detect:
 
 These checks only decide whether to retry. They must not rewrite the answer.
 
-If the retry fails, the runtime may fall back to the original draft answer and must log `presentation_failed`.
+If the retry fails, the runtime may fall back to the original draft answer only when that draft itself satisfies the user-facing boundary. If both presentation and draft are invalid, the runtime returns a short boundary-failure message and logs `presentation_failed`; it must not save or display raw protocol JSON as the assistant answer.
 
 ## Logging
 
@@ -132,6 +132,7 @@ Do not use the presentation agent for:
 The presentation stage should fail soft:
 
 1. invalid presentation output → retry once;
-2. retry invalid or LLM unavailable → use draft answer;
-3. log the failure;
-4. never crash an otherwise successful chat turn solely because presentation failed.
+2. retry invalid or LLM unavailable → use draft answer only if the draft is user-facing safe;
+3. invalid draft fallback → return a short boundary-failure message;
+4. log the failure;
+5. never crash an otherwise successful chat turn solely because presentation failed.

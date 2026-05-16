@@ -62,6 +62,7 @@ REGENERATE_USER_FACING_RESPONSE_PROMPT = (
     "Regenerate the response using the same context. Return only the required JSON object for the runtime, "
     "and make the answer field plain user-facing text without JSON, code fences, or protocol field names."
 )
+PRESENTATION_BOUNDARY_FAILURE_ANSWER = "我刚刚的输出格式出了问题。请你再说一遍，我会直接用正常聊天的方式回答。"
 
 
 @dataclass(frozen=True)
@@ -563,12 +564,27 @@ class PresentationAgent:
         write_log_event(
             "chat",
             "presentation_failed",
-            "presentation remained invalid after retry; using draft answer",
+            "presentation remained invalid after retry",
             thread_id=thread_id,
             status="failed",
             metadata={"reason": "protocol_leak"},
         )
-        return _to_presented_response(draft)
+        if _is_user_facing_safe(draft.answer):
+            return _to_presented_response(draft)
+        write_log_event(
+            "chat",
+            "presentation_failed",
+            "draft fallback also violated user-facing boundary",
+            thread_id=thread_id,
+            status="failed",
+            metadata={"reason": "draft_protocol_leak"},
+        )
+        return PresentedResponse(
+            answer=PRESENTATION_BOUNDARY_FAILURE_ANSWER,
+            evidence_references=(),
+            confidence=0.0,
+            epistemic_status="unsupported",
+        )
 
     def _build_prompt(
         self,
@@ -1255,9 +1271,10 @@ ParsedChatResponse: TypeAlias = DraftResponse
 
 def _parse_chat_response(raw: str) -> ParsedChatResponse:
     stripped = raw.strip()
-    if stripped.startswith("{"):
+    protocol_json = _extract_protocol_json(stripped)
+    if protocol_json is not None:
         try:
-            parsed: object = json.loads(stripped)
+            parsed: object = json.loads(protocol_json)
         except json.JSONDecodeError:
             return ParsedChatResponse(answer=raw)
         if isinstance(parsed, dict):
@@ -1285,6 +1302,33 @@ def _parse_chat_response(raw: str) -> ParsedChatResponse:
     return ParsedChatResponse(answer=raw)
 
 
+def _extract_protocol_json(text: str) -> str | None:
+    if text.startswith("{"):
+        return text
+    if not text.startswith("```"):
+        return None
+    lines = text.splitlines()
+    if len(lines) < 3:
+        return None
+    fence = lines[0].strip().casefold()
+    if fence not in {"```", "```json"}:
+        return None
+    closing_index = _closing_fence_index(lines)
+    if closing_index is None:
+        return None
+    body = "\n".join(lines[1:closing_index]).strip()
+    if not body.startswith("{"):
+        return None
+    return body
+
+
+def _closing_fence_index(lines: list[str]) -> int | None:
+    for index in range(len(lines) - 1, 0, -1):
+        if lines[index].strip() == "```":
+            return index
+    return None
+
+
 def _to_presented_response(response: ParsedChatResponse) -> PresentedResponse:
     return PresentedResponse(
         answer=response.answer,
@@ -1304,6 +1348,10 @@ def _leaks_response_protocol(answer: str) -> bool:
         return True
     lowered = stripped[:500].casefold()
     return "evidence_references" in lowered and "epistemic_status" in lowered
+
+
+def _is_user_facing_safe(answer: str) -> bool:
+    return not _leaks_response_protocol(answer)
 
 
 def _starts_with_persona_attribution(text: str) -> bool:
