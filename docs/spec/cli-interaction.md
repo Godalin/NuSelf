@@ -93,7 +93,7 @@ All interactive commands start with `:`.
 
 - Default interactive startup prints only the banner, one concise help line, and the session header. It must not also print daemon preamble or a separate tip line.
 - Commands print one leading blank line before their output and do not add a trailing blank line before the next prompt or session header.
-- Chat turns print one leading blank line, then a `NuSelf:` label before the assistant reply. Activity logs are separated from the reply by one blank line plus a compact `Logs:` label, and the session header follows the logs without extra blank spacer lines.
+- Chat turns print one leading blank line, then activity logs in chronological order, then one blank line and a `NuSelf:` label before the assistant reply. This keeps the final user-facing reply at the end of the turn so users can skip internal process output when they are not interested. The session header follows the reply without extra blank spacer lines.
 - Interactive chat transport failures, including daemon timeouts, do not exit the REPL. The REPL captures and prints any logs produced before the failure, retries the same user message once, and then returns to the prompt if the retry also fails.
 - Session header reprinted after non-command turns and thread-switching commands:
   ```
@@ -105,7 +105,7 @@ All interactive commands start with `:`.
 
 ### Activity Printing
 
-After each chat turn, the REPL prints all new log events that occurred during that turn using `render_log_event()`.
+During each chat turn, before printing the assistant reply, the REPL polls for and prints new log events as they are written using `render_log_event()`. It does not wait for the final assistant reply before showing internal progress logs.
 
 All human-readable logs use one metadata style: `[component] event key=value ...`. Standard event fields and displayable metadata fields must use this same `key=value` style; they must not mix colon labels, raw JSON blocks, or ad hoc Markdown fields. If a log has body text, render that text starting on the next indented line instead of mixing it into the key/value header.
 
@@ -123,6 +123,7 @@ When color is enabled, each known self label in a `persona_summary` block uses a
   - `noclip`: save the file without copying to clipboard.
 - Default log scope: chat transcript plus shareable internal logs (`persona_summary`, `host_discussion_decision`, `persona_discussion`, and high-level reflection outcomes). Low-level daemon, memory, and chat completion logs are omitted unless `all` is used.
 - Logs in transcript Markdown use the same human-readable rendering as interactive activity logs. Transcript logs must not expose raw JSON blocks.
+- Transcript Markdown should be CommonMark-friendly: message bodies are fence-safe, log blocks render as Markdown blockquotes instead of consecutive raw code fences, headings are separated by blank lines, and the file ends with exactly one newline.
 - Logs captured during a chat turn are inserted directly after the assistant message for that turn under a compact `### Logs` subheading. Export must preserve the observed interaction order instead of rendering all chat messages first and all logs later.
 - Logs that cannot be associated with a specific chat turn are rendered at the end under `## Internal Process Logs`.
 - Scope: transcript export starts at the current interactive connection time. Re-running export later in the same connection includes the full conversation and captured logs from that same connection start, not only messages/logs since the previous export.

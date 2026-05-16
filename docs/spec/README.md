@@ -15,6 +15,7 @@ This directory contains the authoritative behavioral specifications for NuSelf. 
 | [`notification.md`](notification.md) | Outbox state machine, delivery pipeline, adapters, deep links |
 | [`persona-discussion.md`](persona-discussion.md) | Competitive discussion flow, scoring, consensus, trace format |
 | [`presentation-agent.md`](presentation-agent.md) | Final user-facing answer presentation stage and retry boundary |
+| [`error-handling.md`](error-handling.md) | Error classes, retry policy, exception-chain preservation |
 | [`logging.md`](logging.md) | Log components, write/read contracts, event structure |
 | [`configuration.md`](configuration.md) | Config hierarchy, env overrides, runtime paths |
 | [`versioning.md`](versioning.md) | Package versioning, changelog, and release checklist |
