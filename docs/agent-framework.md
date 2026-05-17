@@ -11,6 +11,33 @@ NuSelf should use the LangChain ecosystem as its default agent stack. The core p
 - Treat LlamaIndex as an optional retrieval component later, not as the main runtime.
 - Defer CrewAI, AutoGen, Temporal, and Inngest unless a concrete milestone needs their specific strengths.
 
+## Subsystem Service Network
+
+NuSelf should be organized as a network of cooperating subsystem services.
+
+Core subsystems:
+
+- memory
+- reflection
+- notification
+- trace
+- reason
+- chat/thread runtime
+
+Each non-trivial subsystem should expose a service interface and a small tool-facing adapter. Agent graphs should call those interfaces instead of reaching into another subsystem's repository or private files.
+
+This keeps the system complex but clear:
+
+```text
+chat agent -> memory tools -> MemoryService
+chat agent -> reason tools -> ReasonService
+reason service -> trace recorder -> TraceRepository
+reflection service -> inbox/outbox services
+reflection promotion -> reason service + trace recorder
+```
+
+The repository layer remains local and file-backed, but it is not the agent boundary. The service/tool layer is the agent boundary.
+
 ## Why LangGraph Fits
 
 LangGraph is the right center of gravity because NuSelf needs:

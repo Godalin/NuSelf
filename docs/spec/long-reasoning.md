@@ -28,6 +28,48 @@ private/reasoning/steps/{thread_id}/{step_id}.json
 
 Machine-readable records store timezone-aware ISO timestamps. Human-readable CLI output renders timestamps in the current system timezone per `cli-interaction.md`.
 
+## Service And Tool-Facing Interface
+
+Reason is a subsystem service. It should not be implemented as CLI code that directly edits files.
+
+Layers:
+
+- `ReasoningThread` / `ReasoningStep`: domain models and validation.
+- `ReasonRepository`: file-backed persistence for threads and steps.
+- `ReasonService`: user-intent operations and state transitions.
+- Reason renderers: human-readable CLI/REPL output.
+- Tool-facing adapter: explicit, typed operations suitable for chat and future agents.
+
+Rules:
+
+- CLI and REPL commands call `ReasonService`.
+- Chat tools call the tool-facing adapter, which delegates to `ReasonService`.
+- Reason writes trace records through `TraceRecorder`; it must not write trace files directly.
+- Reason reads memory/reflection/trace through service interfaces, not private file paths.
+- Chat may inspect active reason summaries through tools, but must not create or advance a reason thread without explicit user confirmation.
+
+Required first service methods:
+
+```text
+list_threads(status_filter)
+show_thread(id_or_index)
+start_thread(question, evidence_refs=(), source_trace_ids=())
+advance_thread(id_or_index)
+pause_thread(id_or_index)
+resume_thread(id_or_index)
+resolve_thread(id_or_index)
+archive_thread(id_or_index)
+```
+
+Required first tool-facing methods:
+
+```text
+list_active_reasoning_threads()
+show_reasoning_thread(thread_id)
+start_reasoning_thread_after_confirmation(question)
+advance_reasoning_thread_after_confirmation(thread_id)
+```
+
 ## ReasoningThread
 
 TODO: define a typed domain model with these fields:

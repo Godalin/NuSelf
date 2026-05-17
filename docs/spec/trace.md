@@ -209,6 +209,45 @@ Search:
 - Searchable fields: `title`, `summary`, `inputs`, `evidence_refs`, `derived_from`, `outputs`, `participants`, and `decision_points`.
 - Vector search and graph search are out of scope for v0.2.0.
 
+## Service And Tool-Facing Interface
+
+Trace is a subsystem service, not only a repository.
+
+Layers:
+
+- `ThoughtTrace` / `TraceLink`: domain models and validation.
+- `TraceRepository`: file-backed persistence and index rebuild.
+- `TraceRecorder`: service interface used by other subsystems to create traces and links.
+- `TraceQueryService`: service interface for list/show/search.
+- Trace renderers: human-readable CLI/REPL output.
+- Tool-facing adapter: read-only search/show/list tools for agents in v0.2.0.
+
+Rules:
+
+- Other subsystems must create traces through `TraceRecorder`, not by writing trace files directly.
+- Agents should call tool-facing trace interfaces, not `TraceRepository`.
+- `TraceRecorder` decides deterministic create/skip policy from structured runtime facts. LLMs may later help polish titles or summaries, but the first implementation should not rely on an LLM to decide whether infrastructure records are written.
+- Tool-facing trace results must be concise, privacy-aware, and safe to include in LLM prompts.
+
+Required first service methods:
+
+```text
+record_reason_thread_created(...)
+record_reason_step(...)
+record_reflection_promoted(...)
+record_chat_turn(...)
+link(source_id, target_id, relation, summary)
+```
+
+Required first read/query methods:
+
+```text
+list_traces(...)
+show_trace(...)
+search_traces(...)
+links_for(...)
+```
+
 ## Recording Requirements
 
 v0.2.0 must record traces for:
@@ -216,12 +255,14 @@ v0.2.0 must record traces for:
 - reason thread creation: `kind=reason_thread`;
 - reason advance: `kind=reason_step`;
 - reflection promotion into reason: `kind=promotion`;
-- important chat answers when the answer used memory, source, reflection, or reason context: `kind=chat_answer`.
+- important chat turns when the answer used memory, source, reflection, or reason context: `kind=chat_turn`.
 
-Important chat answer rule:
+Important chat turn rule:
 
 - Do not trace every chat turn.
-- Trace a chat answer when retrieved context materially influenced the reply or when the answer creates/changes a durable artifact.
+- Trace a chat turn when retrieved context materially influenced the reply or when the turn creates/changes a durable artifact.
+- The trace must include a user input ref or sanitized user input summary in `inputs`.
+- The trace must include an assistant output ref or sanitized answer summary in `outputs`.
 - The trace should reference the chat thread and relevant evidence refs, not duplicate the whole turn.
 
 Reason integration:

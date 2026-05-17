@@ -47,6 +47,26 @@ Do not tag unreleased feature commits directly. Tags mark release commits only.
 - Keep `docs/current-goal.md` concise (active focus, next steps, out-of-scope, completion criteria). Move completed history to README TODOs.
 - Keep scoped implementation constraints in local `AGENTS.md` files near the code, not the root README.
 
+## Subsystem Service Architecture
+
+NuSelf is a multi-subservice system. Major domains such as memory, reflection, notification, trace, and reason should be implemented as clear subsystems rather than as incidental CLI helpers.
+
+Each subsystem should expose these layers when the domain is non-trivial:
+
+1. **Domain models**: typed records and validation rules.
+2. **Repository**: file-backed persistence and rebuildable indexes.
+3. **Service**: user-intent operations and policy decisions.
+4. **Renderer**: human-readable CLI/REPL presentation.
+5. **Tool-facing adapter**: a small interface suitable for use by chat, reason, reflection, or future agents.
+
+Rules:
+
+- Agents should call service/tool-facing interfaces, not read or write subsystem storage files directly.
+- CLI and REPL commands should be thin wrappers over service methods when behavior is non-trivial.
+- Cross-subsystem effects should be explicit. For example, reason may call trace recording through `TraceRecorder`, not by constructing private trace files itself.
+- Tool-facing interfaces must use small typed inputs and outputs, avoid leaking raw file paths unless intentionally requested, and be safe to expose to LLM-driven agents.
+- Shared renderers should be reused so CLI, REPL, transcripts, and logs stay consistent.
+
 ## Memory Architecture Direction
 
 - Prefer open typed memory (`MemoryObject + MemoryTypeDescriptor`) over closed enums.
