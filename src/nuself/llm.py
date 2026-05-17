@@ -88,6 +88,7 @@ class OpenAICompatibleLLM:
             headers={
                 "Authorization": f"Bearer {self._settings.api_key}",
                 "Content-Type": "application/json",
+                "User-Agent": "NuSelf/0.1.0",
             },
             method="POST",
         )
