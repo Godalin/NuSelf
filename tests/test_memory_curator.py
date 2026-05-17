@@ -56,8 +56,10 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
     assert candidates[0].type == "episode"
     assert candidates[0].review_state == "pending"
     assert candidates[0].source_refs == ["thread:default:0-2"]
+    assert candidates[0].observed_at is not None
     assert candidates[0].evidence[0].source_type == "thread"
     assert candidates[0].evidence[0].source_ref == "thread:default:0-2"
+    assert candidates[0].evidence[0].observed_at == candidates[0].observed_at
     assert candidates[0].evidence[0].summary == "important memory model decision"
     assert "candidate=" in result.log_path.read_text(encoding="utf-8")
 
@@ -98,6 +100,7 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
     assert candidates[0].action == "update"
     assert candidates[0].target_entry_id == existing.id
     assert candidates[0].source_refs == ["thread:default:0-2"]
+    assert candidates[0].observed_at is not None
     assert repo.get(existing.id).body == "The user likes memory previews."
 
 

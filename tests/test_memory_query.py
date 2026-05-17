@@ -47,6 +47,9 @@ def test_memory_query_packs_context_with_metadata(tmp_path: Path) -> None:
             title="Direct style",
             body="Prefer direct answers.",
             tags=["style"],
+            observed_at="2026-05-07T10:00:00+00:00",
+            valid_from="2026-05-07",
+            temporal_note="Observed during CLI output discussion.",
         )
     )
     service = MemoryQueryService(repo)
@@ -57,6 +60,10 @@ def test_memory_query_packs_context_with_metadata(tmp_path: Path) -> None:
     assert entry.id in packed.text
     assert "Memory entries:" in packed.text
     assert "type=style_trait" in packed.text
+    assert "observed_at=2026-05-07T10:00:00+00:00" in packed.text
+    assert "valid_from=2026-05-07" in packed.text
+    assert "updated_at=" in packed.text
+    assert "temporal_note=Observed during CLI output discussion." in packed.text
     assert "match=" in packed.text
 
 
@@ -68,6 +75,7 @@ def test_memory_query_packs_source_chunks_with_references(tmp_path: Path) -> Non
                 "---",
                 "title: Source Context",
                 "tags: [retrieval]",
+                "date: 2026-05-08",
                 "---",
                 "Source chunks provide durable evidence.",
             ]
@@ -86,6 +94,8 @@ def test_memory_query_packs_source_chunks_with_references(tmp_path: Path) -> Non
     assert "Source chunks:" in packed.text
     assert "Source Context" in packed.text
     assert "ref=source:" in packed.text
+    assert "source_date=2026-05-08" in packed.text
+    assert "updated_at=" in packed.text
     assert "Source chunks provide durable evidence." in packed.text
 
 
@@ -111,6 +121,7 @@ def test_memory_query_packs_profile_items_with_references(tmp_path: Path) -> Non
     assert "Profile items:" in packed.text
     assert "Concise output" in packed.text
     assert "source:profile:0" in packed.text
+    assert "observed_at=2026-05-07" in packed.text
 
 
 def test_memory_query_returns_empty_context_for_irrelevant_query(tmp_path: Path) -> None:

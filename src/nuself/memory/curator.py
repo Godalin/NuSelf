@@ -236,6 +236,7 @@ class MemoryCurator:
         return "\n".join(lines)
 
     def _create_candidate(self, action: MemoryAction, source_ref: str) -> MemoryActionType:
+        observed_at = _source_observed_at(source_ref)
         incoming = MemoryObject(
             type=action.type,
             payload={"title": action.title, "body": action.body},
@@ -256,14 +257,14 @@ class MemoryCurator:
                             source_type="thread",
                             source_ref=source_ref,
                             summary=action.reason,
-                            observed_at=_source_observed_at(source_ref),
+                            observed_at=observed_at,
                         )
                     ],
                     confidence=_clamp_confidence(action.confidence),
                     privacy=existing.privacy,
                     reason=action.reason,
                     target_entry_id=existing.id,
-                    observed_at=existing.observed_at,
+                    observed_at=existing.observed_at or observed_at,
                     valid_from=existing.valid_from,
                     valid_until=existing.valid_until,
                     temporal_note=existing.temporal_note,
@@ -286,11 +287,12 @@ class MemoryCurator:
                     source_type="thread",
                     source_ref=source_ref,
                     summary=action.reason,
-                    observed_at=_source_observed_at(source_ref),
+                    observed_at=observed_at,
                 )
             ],
             confidence=_clamp_confidence(action.confidence),
             reason=action.reason,
+            observed_at=observed_at,
         )
         self._candidate_repository.save(candidate)
         self._auto_accept(candidate)
@@ -300,6 +302,7 @@ class MemoryCurator:
         return "create"
 
     def _update_candidate(self, action: MemoryAction, source_ref: str) -> bool:
+        observed_at = _source_observed_at(source_ref)
         if action.entry_id is None:
             return False
         try:
@@ -318,14 +321,14 @@ class MemoryCurator:
                     source_type="thread",
                     source_ref=source_ref,
                     summary=action.reason,
-                    observed_at=_source_observed_at(source_ref),
+                    observed_at=observed_at,
                 )
             ],
             confidence=_clamp_confidence(action.confidence),
             privacy=existing.privacy,
             reason=action.reason,
             target_entry_id=existing.id,
-            observed_at=existing.observed_at,
+            observed_at=existing.observed_at or observed_at,
             valid_from=existing.valid_from,
             valid_until=existing.valid_until,
             temporal_note=existing.temporal_note,

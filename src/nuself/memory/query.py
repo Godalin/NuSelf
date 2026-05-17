@@ -130,9 +130,17 @@ class MemoryQueryService:
             reasons = ",".join(match.reasons)
             relations = _relation_context(entry)
             relation_text = f" relations={relations}" if relations else ""
+            temporal_text = _memory_temporal_context(
+                observed_at=entry.observed_at,
+                updated_at=entry.updated_at,
+                valid_from=entry.valid_from,
+                valid_until=entry.valid_until,
+                temporal_note=entry.temporal_note,
+            )
             lines.append(
                 f"- {entry.title} "
-                f"[id={entry.id} type={entry.type} confidence={entry.confidence:.2f}{tags}{relation_text} match={reasons}]: "
+                f"[id={entry.id} type={entry.type} confidence={entry.confidence:.2f}{tags}"
+                f"{temporal_text}{relation_text} match={reasons}]: "
                 f"{entry.body}"
             )
         if profile_matches:
@@ -144,9 +152,17 @@ class MemoryQueryService:
             tags = f" tags={','.join(item.tags)}" if item.tags else ""
             sources = f" sources={','.join(item.source_refs)}" if item.source_refs else ""
             reasons = ",".join(match.reasons)
+            temporal_text = _memory_temporal_context(
+                observed_at=item.observed_at,
+                updated_at=item.updated_at,
+                valid_from=item.valid_from,
+                valid_until=item.valid_until,
+                temporal_note=item.temporal_note,
+            )
             lines.append(
                 f"- {item.title} "
-                f"[id={item.id} type={item.type} confidence={item.confidence:.2f}{tags}{sources} match={reasons}]: "
+                f"[id={item.id} type={item.type} confidence={item.confidence:.2f}{tags}{sources}"
+                f"{temporal_text} match={reasons}]: "
                 f"{item.body}"
             )
         if source_matches:
@@ -158,9 +174,12 @@ class MemoryQueryService:
             document = match.document
             tags = f" tags={','.join(document.tags)}" if document.tags else ""
             reasons = ",".join(match.reasons)
+            source_date = f" source_date={document.source_date}" if document.source_date else ""
+            updated_at = f" updated_at={document.updated_at}" if document.updated_at else ""
             lines.append(
                 f"- {document.title} "
-                f"[ref={chunk.source_ref} source_id={document.id} kind={document.kind}{tags} match={reasons}]: "
+                f"[ref={chunk.source_ref} source_id={document.id} kind={document.kind}{tags}"
+                f"{source_date}{updated_at} match={reasons}]: "
                 f"{chunk.text}"
             )
         return PackedMemoryContext(
@@ -217,6 +236,34 @@ def _score_entry(entry: MemoryEntry, raw_query: str, tokens: tuple[str, ...]) ->
         score += min(entry.importance, 1.0) * 0.5
         reasons.append("importance")
     return MemoryMatch(entry=entry, score=score, reasons=tuple(reasons))
+
+
+def _memory_temporal_context(
+    *,
+    observed_at: str | None,
+    updated_at: str,
+    valid_from: str | None,
+    valid_until: str | None,
+    temporal_note: str,
+) -> str:
+    fields: list[str] = []
+    if observed_at:
+        fields.append(f"observed_at={observed_at}")
+    if valid_from:
+        fields.append(f"valid_from={valid_from}")
+    if valid_until:
+        fields.append(f"valid_until={valid_until}")
+    if temporal_note:
+        fields.append(f"temporal_note={_compact_temporal_note(temporal_note)}")
+    fields.append(f"updated_at={updated_at}")
+    return " " + " ".join(fields)
+
+
+def _compact_temporal_note(note: str, limit: int = 120) -> str:
+    compact = " ".join(note.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3].rstrip() + "..."
 
 
 def _expand_related_matches(

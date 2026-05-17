@@ -12,6 +12,25 @@
 6. The agent must include up to 5 matching profile items in the LLM prompt.
 7. Result is written directly to `MemoryEntryRepository` (bypasses candidate queue), then `reindex()` is called.
 
+## Temporal Memory Contract
+
+Memory records carry two different kinds of time:
+
+- `created_at`: when NuSelf wrote the memory record.
+- `updated_at`: when NuSelf last changed the memory record.
+- `observed_at`: when the remembered fact, preference, question, or episode was observed in conversation or source material.
+- `valid_from` / `valid_until`: the semantic validity window of the remembered content when known.
+- `temporal_note`: a short human-readable note explaining temporal uncertainty or evolution.
+
+Rules:
+
+- Runtime storage keeps timestamps as timezone-aware ISO strings.
+- `created_at` and `updated_at` are storage metadata; they do not necessarily describe when the remembered thing happened.
+- `observed_at` should be filled when the source has an event/date or when a chat-derived memory is created from a thread turn.
+- For chat-derived memories, `observed_at` should use the curation source time and evidence should carry the same observation time.
+- Retrieval context shown to chat must include available temporal fields so NuSelf can reason about whether a memory is old, recent, current, or historically bounded.
+- Missing temporal fields must be omitted from compact prompts rather than rendered as `None`.
+
 ### Source Ingestion (`source ingest`)
 
 1. Accept single `.md`/`.txt` files or recurse into directories.
