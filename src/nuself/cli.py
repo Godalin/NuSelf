@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+from typing import cast
 import warnings
 
 try:
@@ -69,6 +70,9 @@ try:
     )
     from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
     from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
+    from nuself.trace.domain import TRACE_KINDS, TraceKind
+    from nuself.trace.repository import TraceNotFound, TraceRepository, TraceVisibilityFilter
+    from nuself.trace.service import TraceQueryService
     from nuself.logs import LOG_COMPONENTS, LogComponent, LogEvent, read_log_events, write_log_event
     from nuself.config_system import ConfigSystem
     from nuself.tui.memory import (
@@ -82,6 +86,7 @@ try:
         render_source_row,
     )
     from nuself.tui.render import format_display_timestamp, render_log_event, render_log_event_json, render_session_header
+    from nuself.tui.trace import render_trace_detail, render_trace_row
 finally:
     warnings.warn = _original_warn
 
@@ -498,6 +503,24 @@ def build_parser() -> argparse.ArgumentParser:
     reason_parser.set_defaults(handler=None, help_parser=reason_parser)
     trace_parser = subparsers.add_parser("trace")
     trace_parser.set_defaults(handler=None, help_parser=trace_parser)
+    trace_subparsers = trace_parser.add_subparsers(dest="trace_command")
+    trace_list_parser = trace_subparsers.add_parser("list")
+    trace_list_parser.add_argument("--kind", choices=TRACE_KINDS, default=None)
+    trace_list_parser.add_argument("--visibility", choices=("private", "shareable", "internal", "all"), default=None)
+    trace_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
+    _add_handler(trace_list_parser, handle_trace_list)
+    trace_show_parser = trace_subparsers.add_parser("show")
+    trace_show_parser.add_argument("trace_id")
+    trace_show_parser.add_argument("--by-index", "-i", action="store_true", default=False)
+    trace_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
+    _add_handler(trace_show_parser, handle_trace_show)
+    trace_search_parser = trace_subparsers.add_parser("search")
+    trace_search_parser.add_argument("query")
+    trace_search_parser.add_argument("--kind", choices=TRACE_KINDS, default=None)
+    trace_search_parser.add_argument("--visibility", choices=("private", "shareable", "internal", "all"), default=None)
+    trace_search_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
+    _add_handler(trace_search_parser, handle_trace_search)
+    _add_handler(trace_subparsers.add_parser("reindex"), handle_trace_reindex)
 
     dev_parser = subparsers.add_parser("dev")
     dev_parser.set_defaults(handler=None, help_parser=dev_parser)
@@ -1328,6 +1351,83 @@ def handle_notify_clear(args: argparse.Namespace) -> int:
     count = NotificationOutbox(args.project_root).clear("dismissed")
     print(f"Cleared {count} dismissed notification(s).")
     return 0
+
+
+def handle_trace_list(args: argparse.Namespace) -> int:
+    service = TraceQueryService(args.project_root)
+    traces = service.list_traces(
+        kind=_optional_trace_kind(args.kind),
+        visibility=_trace_visibility_filter(args.visibility),
+    )
+    if not traces:
+        print("No trace records.")
+        return 0
+    if args.as_json:
+        import json
+
+        for trace in traces:
+            print(json.dumps(trace.to_wire(), sort_keys=True, ensure_ascii=True))
+        return 0
+    for index, trace in enumerate(traces, start=1):
+        print(render_trace_row(trace, index=index))
+    return 0
+
+
+def handle_trace_show(args: argparse.Namespace) -> int:
+    repository = TraceRepository(args.project_root)
+    try:
+        trace = repository.resolve_trace(args.trace_id, by_index=args.by_index)
+    except TraceNotFound:
+        print(f"Trace not found: {args.trace_id}", file=sys.stderr)
+        return 1
+    if args.as_json:
+        import json
+
+        payload = trace.to_wire()
+        payload["links"] = [link.to_wire() for link in repository.links_for(trace.id)]
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=True))
+        return 0
+    print(render_trace_detail(trace, repository.links_for(trace.id)))
+    return 0
+
+
+def handle_trace_search(args: argparse.Namespace) -> int:
+    service = TraceQueryService(args.project_root)
+    traces = service.search_traces(
+        args.query,
+        kind=_optional_trace_kind(args.kind),
+        visibility=_trace_visibility_filter(args.visibility),
+    )
+    if not traces:
+        print("No matching trace records.")
+        return 0
+    if args.as_json:
+        import json
+
+        for trace in traces:
+            print(json.dumps(trace.to_wire(), sort_keys=True, ensure_ascii=True))
+        return 0
+    for index, trace in enumerate(traces, start=1):
+        print(render_trace_row(trace, index=index))
+    return 0
+
+
+def handle_trace_reindex(args: argparse.Namespace) -> int:
+    path = TraceRepository(args.project_root).reindex()
+    print(f"Rebuilt trace index: {path}")
+    return 0
+
+
+def _optional_trace_kind(value: str | None) -> TraceKind | None:
+    if value is None:
+        return None
+    return value if value in TRACE_KINDS else None
+
+
+def _trace_visibility_filter(value: str | None) -> TraceVisibilityFilter:
+    if value in {"private", "shareable", "internal", "all"}:
+        return cast(TraceVisibilityFilter, value)
+    return "default"
 
 
 def _resolve_reflection_entry_id(args: argparse.Namespace) -> str | None:
@@ -2269,7 +2369,8 @@ def _handle_interactive_command(
         return ("", current_thread_id)
     if command.startswith(":trace"):
         print()
-        print("Trace commands are planned for v0.2.0 and are not implemented yet.")
+        body = command.removeprefix(":trace").strip()
+        print(_handle_interactive_trace_command(body, project_root))
         return ("", current_thread_id)
     if command.startswith(":rename "):
         print()
@@ -2393,7 +2494,9 @@ def _interactive_help(command: str | None = None) -> str:
             "  :thread, :t               list active threads",
             "  :thread <id>, :t <id>     switch to or create a thread",
             "  :reason                   long-run reasoning commands (planned)",
-            "  :trace                    thought trace commands (planned)",
+            "  :trace                    list thought trace records",
+            "  :trace show <id|index>    show one thought trace",
+            "  :trace search <query>     search thought trace records",
             "  :rename <new-id>          rename the current thread",
             "  :branch <new-id> [index]  branch current thread at index",
             "  :archive                  archive the current thread",
@@ -2783,6 +2886,45 @@ def _handle_interactive_memory_command(command: str, project_root: Path | None) 
             return f"Source document not found: {source_id}"
         return render_source_detail(document, chunk_count=len(repo.list_chunks(document.id)))
     return _interactive_memory_help(command)
+
+
+def _handle_interactive_trace_command(command: str, project_root: Path | None) -> str:
+    service = TraceQueryService(project_root)
+    if command in {"", "list"}:
+        traces = service.list_traces()
+        if not traces:
+            return "No trace records."
+        return "\n".join(render_trace_row(trace, index=index) for index, trace in enumerate(traces, start=1))
+    if command.startswith("show "):
+        trace_id = command.removeprefix("show ").strip()
+        try:
+            trace = service.show_trace(trace_id)
+        except TraceNotFound:
+            return f"Trace not found: {trace_id}"
+        return render_trace_detail(trace, service.links_for(trace.id))
+    if command.startswith("search "):
+        query = command.removeprefix("search ").strip()
+        traces = service.search_traces(query)
+        if not traces:
+            return "No matching trace records."
+        return "\n".join(render_trace_row(trace, index=index) for index, trace in enumerate(traces, start=1))
+    return _interactive_trace_help(command)
+
+
+def _interactive_trace_help(command: str | None = None) -> str:
+    lines: list[str] = []
+    if command is not None:
+        lines.append(f"Unknown trace command: :trace {command}")
+    lines.extend(
+        [
+            "Trace commands:",
+            "  :trace",
+            "  :trace list",
+            "  :trace show <id|index>",
+            "  :trace search <query>",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _interactive_memory_help(command: str | None = None) -> str:

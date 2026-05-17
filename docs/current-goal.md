@@ -51,9 +51,9 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 
 ### P3 — Trace Foundation
 
-- [ ] Add `ThoughtTrace`, `TraceLink`, `TraceRepository`, and renderers.
-- [ ] Add `nuself trace list/show/search`.
-- [ ] Add `:trace` commands.
+- [x] Add `ThoughtTrace`, `TraceLink`, `TraceRepository`, and renderers.
+- [x] Add `nuself trace list/show/search`.
+- [x] Add `:trace` commands.
 
 ### P4 — Reason Foundation
 

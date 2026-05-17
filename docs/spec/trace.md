@@ -71,7 +71,7 @@ Required JSON shape:
 ```json
 {
   "id": "trace-...",
-  "kind": "chat_answer",
+  "kind": "chat_turn",
   "title": "...",
   "summary": "...",
   "inputs": [],
@@ -108,7 +108,7 @@ Fields:
 
 Allowed `kind` values for v0.2.0:
 
-- `chat_answer`
+- `chat_turn`
 - `memory_update`
 - `reflection`
 - `reason_thread`

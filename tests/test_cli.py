@@ -3428,3 +3428,75 @@ def test_repl_notify_watch_subcommand(
     assert "Watching outbox" in captured.out
     assert "Second" in captured.out
     assert "Stopped watching" in captured.out
+
+
+def test_trace_cli_lists_shows_and_searches_records(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.trace import ThoughtTrace, TraceRepository
+
+    trace = TraceRepository(tmp_path).save_trace(
+        ThoughtTrace(
+            kind="chat_turn",
+            title="Temporal memory answer",
+            summary="NuSelf answered with observed_at context.",
+            inputs=["thread:default:1:user"],
+            outputs=["thread:default:2:assistant"],
+            evidence_refs=["mem_123"],
+            thread_id="default",
+        )
+    )
+
+    list_result = main(["--project-root", str(tmp_path), "trace", "list"])
+    list_output = capsys.readouterr().out
+    show_result = main(["--project-root", str(tmp_path), "trace", "show", "1", "--by-index"])
+    show_output = capsys.readouterr().out
+    search_result = main(["--project-root", str(tmp_path), "trace", "search", "observed_at"])
+    search_output = capsys.readouterr().out
+
+    assert list_result == 0
+    assert show_result == 0
+    assert search_result == 0
+    assert "Temporal memory answer" in list_output
+    assert "kind=chat_turn" in list_output
+    assert trace.id in show_output
+    assert "mem_123" in show_output
+    assert "Temporal memory answer" in search_output
+
+
+def test_trace_cli_hides_internal_records_by_default(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.trace import ThoughtTrace, TraceRepository
+
+    repo = TraceRepository(tmp_path)
+    repo.save_trace(ThoughtTrace(kind="decision", title="Visible trace", summary="Visible."))
+    repo.save_trace(
+        ThoughtTrace(kind="decision", title="Internal trace", summary="Hidden.", visibility="internal")
+    )
+
+    main(["--project-root", str(tmp_path), "trace", "list"])
+    default_output = capsys.readouterr().out
+    main(["--project-root", str(tmp_path), "trace", "list", "--visibility", "all"])
+    all_output = capsys.readouterr().out
+
+    assert "Visible trace" in default_output
+    assert "Internal trace" not in default_output
+    assert "Internal trace" in all_output
+
+
+def test_repl_trace_lists_records(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    from nuself.trace import ThoughtTrace, TraceRepository
+
+    TraceRepository(tmp_path).save_trace(
+        ThoughtTrace(kind="decision", title="REPL trace", summary="Shown from interactive trace command.")
+    )
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":trace\n:q\n"))
+    monkeypatch.setattr(
+        "nuself.cli.lifecycle.status",
+        _mock_status,
+    )
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "REPL trace" in captured.out
