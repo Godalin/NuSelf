@@ -27,7 +27,7 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 ### P0 — Specs Before Code
 
 - [x] Update [`docs/spec/cli-interaction.md`](spec/cli-interaction.md) with the new command tree and breaking-removal policy.
-- [ ] Finalize [`docs/spec/trace.md`](spec/trace.md) enough for first implementation.
+- [x] Finalize [`docs/spec/trace.md`](spec/trace.md) enough for first implementation.
 - [ ] Finalize [`docs/spec/long-reasoning.md`](spec/long-reasoning.md) enough for first implementation.
 - [ ] Update [`docs/spec/chat-agent-tools.md`](spec/chat-agent-tools.md) for read-only reason awareness and future trace tools.
 

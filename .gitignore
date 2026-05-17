@@ -1,16 +1,27 @@
-# Local private memory and personal configuration.
+# Private runtime data and local secrets.
 /private/
 /.env
 
-# Python build and tool output.
+# Local IDE and agent configuration.
+.vscode/
+.claude/
+.opencode/
+
+# Python caches and virtual environments.
 __pycache__/
 *.py[cod]
+*.pyo
+.venv/
+
+# Test, lint, and type-checker output.
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 .pyright/
-.venv/
-.vscode/
+.coverage
+.coverage.*
+
+# Build artifacts.
 dist/
 build/
-.coverage
+*.egg-info/

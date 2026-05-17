@@ -1,83 +1,261 @@
 # Trace Spec
 
-Status: TODO. Planned for v0.2.0.
+Status: ready for first v0.2.0 implementation.
 
 ## Purpose
 
-Trace is NuSelf's thought provenance database. It records how important thoughts, answers, memories, reflections, reason steps, and decisions were derived.
+Trace is NuSelf's thought provenance database. It records how important thoughts, answers, memories, reflections, reason steps, and decisions were derived after chat history is compressed and memory is curated.
 
-Trace must not store hidden raw model chain-of-thought. It stores system-level provenance: inputs, evidence, public summaries, participants, decision points, outputs, and links.
+Trace is not hidden raw model chain-of-thought. It stores inspectable system-level provenance:
+
+- user-visible or summarized inputs;
+- evidence references;
+- retrieved memories, sources, reflections, and reason records;
+- participant agents, selves, or subsystems;
+- durable decision summaries;
+- outputs and changed artifacts;
+- links between traces and artifacts.
+
+## Design Principles
+
+- **Provenance, not transcript duplication**: a trace summarizes why an artifact exists; it does not copy a whole chat transcript.
+- **Structured enough to query**: records are JSON files with stable typed fields.
+- **Human-readable by default**: CLI and REPL output must use the shared record renderer style from `cli-interaction.md`.
+- **Privacy first**: default visibility is `private`; `internal` traces are hidden from default list/search/export.
+- **Append-friendly**: traces are durable records. Later traces can revise or link to earlier traces instead of mutating history casually.
+- **No hidden reasoning capture**: decision points are public summaries of system decisions, not private token-level reasoning.
 
 ## Storage Contract
 
-TODO: implement file-backed storage under:
+Trace storage lives under:
 
 ```text
-private/traces/traces/{trace_id}.json
-private/traces/links/{link_id}.json
+private/traces/
+  traces/{trace_id}.json
+  links/{link_id}.json
+  index.json
 ```
 
-Machine-readable records store timezone-aware ISO timestamps. Human-readable CLI output renders timestamps in the current system timezone per `cli-interaction.md`.
+Rules:
+
+- `traces/` contains one `ThoughtTrace` JSON object per file.
+- `links/` contains one `TraceLink` JSON object per file.
+- `index.json` is derived and rebuildable from `traces/` and `links/`.
+- Record timestamps are timezone-aware ISO strings.
+- Human-readable output renders timestamps in the current system timezone per `cli-interaction.md`.
+- Repository writes must be atomic enough for local CLI use: write to a temporary sibling file, then replace the target file.
+- Invalid JSON files are skipped by list/search but surfaced by a dev diagnostic later. First implementation may ignore invalid files silently in normal commands.
+
+## IDs
+
+Trace ids should be stable, readable enough for CLI use, and collision-resistant.
+
+Recommended format:
+
+```text
+trace-YYYYMMDDTHHMMSSffffffZ-<shorthex>
+tracelink-YYYYMMDDTHHMMSSffffffZ-<shorthex>
+```
+
+Rules:
+
+- Full ids are stored in JSON.
+- CLI list output assigns temporary 1-based display indexes sorted by `created_at`.
+- Commands accepting `<id_or_index>` resolve an exact id first, then a visible list index.
+- Index resolution must respect the same filters as the command view when filters are supplied.
 
 ## ThoughtTrace
 
-TODO: define a typed domain model with these fields:
+Required JSON shape:
+
+```json
+{
+  "id": "trace-...",
+  "kind": "chat_answer",
+  "title": "...",
+  "summary": "...",
+  "inputs": [],
+  "evidence_refs": [],
+  "derived_from": [],
+  "outputs": [],
+  "participants": [],
+  "decision_points": [],
+  "thread_id": "default",
+  "visibility": "private",
+  "created_at": "2026-05-18T12:34:56.000000+08:00",
+  "metadata": {}
+}
+```
+
+Fields:
 
 | Field | Type | Meaning |
 |---|---|---|
 | `id` | string | Stable trace id |
-| `kind` | string | `chat_answer`, `memory_update`, `reflection`, `reason_thread`, `reason_step`, `promotion`, or `decision` |
+| `kind` | enum | Trace kind |
 | `title` | string | Short human-readable title |
 | `summary` | string | What this trace explains |
-| `inputs` | list[string] | Input artifact refs or short descriptions |
+| `inputs` | list[string] | Input artifact refs or short sanitized descriptions |
 | `evidence_refs` | list[string] | Memory/source/thread/reflection/reason refs used as evidence |
 | `derived_from` | list[string] | Prior trace or artifact ids this trace depends on |
 | `outputs` | list[string] | Artifacts produced or changed |
 | `participants` | list[string] | Agents, selves, or subsystems involved |
 | `decision_points` | list[string] | Durable decision summaries, not hidden chain-of-thought |
 | `thread_id` | string \| null | Related chat thread when applicable |
-| `visibility` | string | `private`, `shareable`, or `internal` |
-| `created_at` | string | Creation timestamp |
+| `visibility` | enum | `private`, `shareable`, or `internal` |
+| `created_at` | string | Timezone-aware creation timestamp |
+| `metadata` | object | Small extension field for future typed details |
+
+Allowed `kind` values for v0.2.0:
+
+- `chat_answer`
+- `memory_update`
+- `reflection`
+- `reason_thread`
+- `reason_step`
+- `promotion`
+- `decision`
+
+Allowed `visibility` values:
+
+- `private`: default, visible in normal local commands.
+- `shareable`: safe to include in future share/export flows.
+- `internal`: hidden from default list/search/export unless explicitly requested.
+
+Validation rules:
+
+- `id`, `kind`, `title`, `summary`, `visibility`, and `created_at` are required.
+- `title` and `summary` must be non-empty after stripping.
+- List fields default to empty lists.
+- `metadata` defaults to `{}`.
+- Unknown `kind` or `visibility` values are rejected by write APIs.
 
 ## TraceLink
 
-TODO: define a typed relation model with these fields:
+Required JSON shape:
+
+```json
+{
+  "id": "tracelink-...",
+  "source_id": "trace-...",
+  "target_id": "trace-...",
+  "relation": "derived",
+  "summary": "...",
+  "created_at": "2026-05-18T12:34:56.000000+08:00",
+  "metadata": {}
+}
+```
+
+Fields:
 
 | Field | Type | Meaning |
 |---|---|---|
 | `id` | string | Stable link id |
 | `source_id` | string | Source trace or artifact id |
 | `target_id` | string | Target trace or artifact id |
-| `relation` | string | `supports`, `derived`, `contradicts`, `revises`, `summarizes`, `triggered`, or `cites` |
+| `relation` | enum | Relationship type |
 | `summary` | string | Short relation explanation |
-| `created_at` | string | Creation timestamp |
+| `created_at` | string | Timezone-aware creation timestamp |
+| `metadata` | object | Small extension field for future typed details |
+
+Allowed `relation` values for v0.2.0:
+
+- `supports`
+- `derived`
+- `contradicts`
+- `revises`
+- `summarizes`
+- `triggered`
+- `cites`
+
+Validation rules:
+
+- `id`, `source_id`, `target_id`, `relation`, `summary`, and `created_at` are required.
+- `summary` must be non-empty after stripping.
+- First implementation does not need to enforce that `source_id` and `target_id` both exist locally because one side may be an external artifact id.
+
+## Repository Contract
+
+`TraceRepository` owns local persistence.
+
+Required operations:
+
+```text
+save_trace(trace) -> ThoughtTrace
+get_trace(id_or_index, filters) -> ThoughtTrace
+list_traces(kind=None, visibility=default) -> list[ThoughtTrace]
+search_traces(query, kind=None, visibility=default) -> list[ThoughtTrace]
+save_link(link) -> TraceLink
+links_for(trace_id) -> list[TraceLink]
+reindex() -> Path
+```
+
+Default visibility filter:
+
+```text
+private, shareable
+```
+
+`internal` records appear only when `visibility=internal` or `visibility=all`.
+
+Sorting:
+
+- Lists sort by `created_at` ascending for stable index assignment unless a command explicitly requests another order later.
+- Search results sort by deterministic score descending, then `created_at` ascending.
+
+Search:
+
+- First implementation uses deterministic case-insensitive substring search.
+- Searchable fields: `title`, `summary`, `inputs`, `evidence_refs`, `derived_from`, `outputs`, `participants`, and `decision_points`.
+- Vector search and graph search are out of scope for v0.2.0.
 
 ## Recording Requirements
 
-v0.2.0 TODO:
+v0.2.0 must record traces for:
 
-- Reason thread creation creates `kind=reason_thread`.
-- Reason advance creates `kind=reason_step`.
-- Reflection promotion into reason creates `kind=promotion`.
-- Important chat answers create `kind=chat_answer` when the answer uses memory, source, reflection, or reason context.
+- reason thread creation: `kind=reason_thread`;
+- reason advance: `kind=reason_step`;
+- reflection promotion into reason: `kind=promotion`;
+- important chat answers when the answer used memory, source, reflection, or reason context: `kind=chat_answer`.
+
+Important chat answer rule:
+
+- Do not trace every chat turn.
+- Trace a chat answer when retrieved context materially influenced the reply or when the answer creates/changes a durable artifact.
+- The trace should reference the chat thread and relevant evidence refs, not duplicate the whole turn.
+
+Reason integration:
+
+- Reason owns durable long-run state.
+- Trace owns provenance.
+- Every non-trivial `ReasoningStep` writes a `ThoughtTrace` with `outputs` containing the step id and updated thread id.
+
+Reflection integration:
+
+- Promoting a reflection into a reason thread writes a `promotion` trace.
+- The promotion trace links the reflection candidate/entry to the new reason thread.
 
 ## CLI Contract
 
-TODO: add commands:
+Required commands:
 
 ```text
 nuself trace list [--kind <kind>] [--visibility private|shareable|internal|all] [--json]
 nuself trace show <id_or_index> [--by-index] [--json]
-nuself trace search <query> [--kind <kind>] [--json]
+nuself trace search <query> [--kind <kind>] [--visibility private|shareable|internal|all] [--json]
 ```
 
-Human-readable output must use the shared record renderer style from `cli-interaction.md`.
+Output rules:
 
-Default list output includes `private` and `shareable` traces, excluding `internal` unless requested.
+- Human-readable output uses the shared record renderer style from `cli-interaction.md`.
+- List rows show index, kind tag, visibility, title, and local display timestamp.
+- Show output includes summary, inputs, evidence refs, derived_from, outputs, participants, decision points, and related links.
+- JSON output returns stable machine-readable objects using stored field names.
+- Empty lists/searches print a concise empty-state line.
 
 ## REPL Contract
 
-TODO: add interactive commands:
+Required interactive commands:
 
 ```text
 :trace
@@ -86,19 +264,29 @@ TODO: add interactive commands:
 :trace search <query>
 ```
 
-REPL output must match CLI formatting as closely as possible.
+Rules:
 
-## Search Contract
-
-TODO: first implementation may use deterministic substring search over title, summary, inputs, evidence refs, outputs, and decision points.
-
-Vector or graph search is out of scope for v0.2.0.
+- `:trace` defaults to `:trace list`.
+- REPL output should match CLI formatting as closely as possible.
+- REPL commands do not mutate trace records in v0.2.0 except through future reason/reflection flows.
 
 ## Privacy Contract
 
 - Default visibility is `private`.
 - `internal` traces are excluded from default list/search/export.
-- `shareable` traces must avoid exposing private raw context beyond intentionally summarized provenance.
+- `shareable` traces must avoid raw private context beyond intentionally summarized provenance.
+- Trace records may contain sensitive summaries; they stay under `private/` and are not committed.
+- Future transcript export may include trace summaries only when explicitly requested.
+
+## Logging Contract
+
+Trace writes should emit structured logs:
+
+- component: `memory` or a future `trace` component only if `logs.py` is expanded;
+- event examples: `trace_saved`, `trace_link_saved`, `trace_reindexed`;
+- logs must not duplicate large trace summaries or raw inputs.
+
+First implementation may use the existing `memory` log component to avoid widening the log component enum.
 
 ## Non-Goals
 
@@ -106,3 +294,5 @@ Vector or graph search is out of scope for v0.2.0.
 - No full transcript duplication.
 - No graph visualization in v0.2.0.
 - No requirement that every log event becomes a trace.
+- No background trace extraction scheduler.
+- No vector or graph search in the first implementation.
