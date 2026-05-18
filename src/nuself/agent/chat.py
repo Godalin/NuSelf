@@ -33,7 +33,6 @@ from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
 from nuself.trace.service import TraceRecorder
-from nuself.tui.render import render_discussion_trace, render_host_decision
 
 ThreadRole = Literal["user", "assistant"]
 ConversationNodeName = Literal[
@@ -802,24 +801,11 @@ class ConversationGraphRuntime:
             )
         except Exception:
             pass
-        # Immediate REPL/console visibility for interactive debugging and UX:
-        try:
-            print(f"--- Persona Trigger: {trigger} (selected={len(updated_persona_turn_state.selected_personas)}) ---")
-            for contrib in updated_persona_turn_state.contributions:
-                note = contrib.notes[0] if contrib.notes else "(no note)"
-                print(f"{contrib.persona_id}: {note}")
-            if updated_persona_turn_state.synthesis is not None:
-                print("--- Persona Synthesis ---")
-                print(updated_persona_turn_state.synthesis.summary)
-                print("--- End Persona Synthesis ---")
-        except Exception:
-            pass
         activation = state.persona_activation
         should_escalate = activation.should_escalate if activation is not None else False
         escalation_reason = activation.escalation_reason if activation is not None else "no activation"
-        host_decision_event = None
         try:
-            host_decision_event = write_log_event(
+            write_log_event(
                 "persona",
                 "host_discussion_decision",
                 escalation_reason,
@@ -831,14 +817,6 @@ class ConversationGraphRuntime:
                     "escalation_reason": escalation_reason,
                 },
             )
-        except Exception:
-            host_decision_event = None
-        try:
-            if host_decision_event is not None:
-                for line in render_host_decision(host_decision_event):
-                    print(line)
-            else:
-                print(f"--- Host Decision: {'escalate' if should_escalate else 'skip'} ({escalation_reason}) ---")
         except Exception:
             pass
         # Host decision is the only gate for entering competitive discussion.
@@ -869,15 +847,9 @@ class ConversationGraphRuntime:
                             "emergent_persona_ids": list(result.emergent_persona_ids),
                             "blocking_vetos": list(result.blocking_vetos),
                             "reason": result.reason,
+                            "discussion_trace": list(result.discussion_trace),
                         },
                     )
-                except Exception:
-                    pass
-                try:
-                    print("=== Chat-triggered Persona Discussion ===")
-                    for line in render_discussion_trace(list(result.discussion_trace), title="discussion trace"):
-                        print(line)
-                    print("=== End Discussion ===")
                 except Exception:
                     pass
         except Exception:

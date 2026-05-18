@@ -3046,7 +3046,9 @@ def _handle_interactive_memory_command(command: str, project_root: Path | None) 
 
 def _handle_interactive_reason_command(command: str, project_root: Path | None) -> str:
     service = ReasonService(project_root)
-    if command in {"", "list"}:
+    if command == "":
+        return _interactive_reason_help()
+    if command == "list":
         threads = service.list_threads()
         if not threads:
             return "No reason threads."

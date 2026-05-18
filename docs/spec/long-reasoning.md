@@ -123,15 +123,15 @@ Archived threads are hidden from default list output but remain addressable by i
 
 ## Advance Contract
 
-Manual advance only for first implementation.
+Manual advance uses a deterministic placeholder step for the first foundation implementation. LLM-backed advance is the next implementation stage.
 
 ```text
 advance(thread)
   ├─ load thread
   ├─ reject unless status=active
   ├─ retrieve thread context (working_summary, hypotheses, open_questions, evidence_refs)
-  ├─ generate a structured ReasoningStep via LLM
-  ├─ update working_summary, hypotheses, open_questions, evidence_refs
+  ├─ create a structured ReasoningStep
+  ├─ update working_summary, hypotheses, open_questions, evidence_refs when the step contains changes
   ├─ update last_advanced_at (next_review_after remains null)
   └─ persist atomically
 ```
@@ -201,7 +201,7 @@ The chat agent may suggest a new reasoning thread, but must not create one witho
 
 ## Trace Contract
 
-Every reason thread creation and non-trivial advance writes a `ThoughtTrace`.
+TODO: every reason thread creation and non-trivial advance writes a `ThoughtTrace`.
 
 - Thread creation writes `kind=reason_thread`.
 - Advance writes `kind=reason_step`.

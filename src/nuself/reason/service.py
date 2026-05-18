@@ -16,6 +16,7 @@ class ReasonService:
     """User-intent operations and state transitions for reasoning threads."""
 
     def __init__(self, project_root: Path | None = None, repository: ReasonRepository | None = None) -> None:
+        self._project_root = project_root
         self._repository = repository or ReasonRepository(project_root)
 
     # ── Read ───────────────────────────────────────────────────────
@@ -58,7 +59,7 @@ class ReasonService:
             "reasoning",
             "thread_started",
             f"Started reasoning thread: {thread.question[:80]}",
-            project_root=self._find_project_root(),
+            project_root=self._project_root,
             status="created",
             metadata={"thread_id": thread.id, "question": thread.question},
         )
@@ -74,7 +75,7 @@ class ReasonService:
             "reasoning",
             "advance_started",
             f"Advancing reasoning thread: {thread.question[:80]}",
-            project_root=self._find_project_root(),
+            project_root=self._project_root,
             status="started",
             metadata={"thread_id": thread.id},
         )
@@ -109,7 +110,7 @@ class ReasonService:
             "reasoning",
             "advance_completed",
             f"Advance completed for thread: {thread.question[:80]}",
-            project_root=self._find_project_root(),
+            project_root=self._project_root,
             status="completed",
             metadata={"thread_id": thread.id, "step_id": step.id, "step_kind": step.kind},
         )
@@ -151,11 +152,8 @@ class ReasonService:
             "reasoning",
             event_name,
             f"Thread {thread.id} status changed: {thread.status} -> {new_status}",
-            project_root=self._find_project_root(),
+            project_root=self._project_root,
             status="updated",
             metadata={"thread_id": thread.id, "from_status": thread.status, "to_status": new_status},
         )
         return updated
-
-    def _find_project_root(self) -> Path | None:
-        return None  # let write_log_event resolve from cwd

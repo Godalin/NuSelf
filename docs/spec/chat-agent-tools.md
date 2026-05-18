@@ -97,7 +97,7 @@ The LLM outputs a JSON object. If it contains `"tool": "<name>"` and `"tool_args
 #### `list_active_reasoning_threads`
 
 - **Args**: none
-- **Behavior**: Reads `ReasonService.list_threads(status_filter="active")` and formats active/paused threads for the LLM.
+- **Behavior**: Reads `ReasonService.list_threads(status="active")` and formats active/paused threads for the LLM.
 - **Returns**: Numbered list of threads with question, status, step count, and last-advanced time. Empty message if none.
 - **When to use**: The agent may call this when the user asks about "what I'm thinking about", "open questions", "reasoning threads", or when contextually relevant.
 

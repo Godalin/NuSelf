@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from nuself.logs import read_log_events
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 
@@ -13,6 +14,17 @@ def test_start_thread(tmp_path: Path) -> None:
     thread = service.start_thread("What should I do?")
     assert thread.question == "What should I do?"
     assert thread.status == "active"
+
+
+def test_start_thread_writes_logs_under_project_root(tmp_path: Path) -> None:
+    service = ReasonService(project_root=tmp_path)
+
+    service.start_thread("Where should reason logs live?")
+
+    events = read_log_events(project_root=tmp_path, component="reasoning")
+    assert events
+    assert events[-1].event == "thread_started"
+    assert (tmp_path / "private" / "logs" / "reasoning.log").is_file()
 
 
 def test_start_and_list(tmp_path: Path) -> None:

@@ -3211,6 +3211,47 @@ def test_top_level_subcommand_help(argv: list[str]) -> None:
     assert exc_info.value.code == 0
 
 
+def test_reason_cli_start_list_show_and_advance(tmp_path: Path, capsys: CaptureFixture) -> None:
+    start_result = main(["--project-root", str(tmp_path), "reason", "start", "How should I keep thinking?"])
+    start_output = capsys.readouterr().out
+    assert start_result == 0
+    assert "Started reasoning thread:" in start_output
+
+    list_result = main(["--project-root", str(tmp_path), "reason", "list"])
+    list_output = capsys.readouterr().out
+    assert list_result == 0
+    assert "[1] [reason] status=active priority=normal" in list_output
+    assert "How should I keep thinking?" in list_output
+
+    show_result = main(["--project-root", str(tmp_path), "reason", "show", "1", "--by-index"])
+    show_output = capsys.readouterr().out
+    assert show_result == 0
+    assert "[reason] How should I keep thinking?" in show_output
+
+    advance_result = main(["--project-root", str(tmp_path), "reason", "advance", "1", "--by-index"])
+    advance_output = capsys.readouterr().out
+    assert advance_result == 0
+    assert "Advanced reason thread:" in advance_output
+    assert "last_advanced_at=" in advance_output
+
+
+def test_interactive_reason_without_args_shows_help(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        return _mock_status(tmp_path)
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":reason\n:q\n"))
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Reason commands:" in captured.out
+    assert "No reason threads." not in captured.out
+
+
 
 @pytest.mark.parametrize(
     "argv",

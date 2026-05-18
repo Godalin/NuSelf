@@ -474,7 +474,8 @@ def test_chat_agent_writes_host_discussion_decision_log(tmp_path: Path, capsys: 
     assert events[-1].metadata is not None
     assert events[-1].metadata.get("should_escalate") is True
     captured = capsys.readouterr().out
-    assert "[host decision]" in captured
+    assert "[host decision]" not in captured
+    assert "Persona Trigger" not in captured
 
 
 def test_thread_store_update_writes_under_transaction(tmp_path: Path) -> None:
