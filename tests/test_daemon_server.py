@@ -59,6 +59,22 @@ def test_daemon_chat_uses_explicit_thread_id(tmp_path: Path) -> None:
     assert (tmp_path / "private" / "threads" / "custom.json").is_file()
 
 
+def test_daemon_chat_persists_turn_id_for_retry_idempotency(tmp_path: Path) -> None:
+    state = DaemonState(tmp_path)
+    state.chat_agent = ChatAgent(tmp_path, llm=StructuredFakeLLM())
+    request = DaemonRequest(
+        type="chat",
+        payload={"message": "hello", "thread_id": "default", "turn_id": "turn-retry"},
+        request_id="chat-turn-id",
+    )
+
+    response = handle_request(request, state)
+
+    assert response.status == "ok"
+    stored = (tmp_path / "private" / "threads" / "default.json").read_text(encoding="utf-8")
+    assert '"turn_id": "turn-retry"' in stored
+
+
 def test_daemon_chat_error_includes_root_cause(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     state.chat_agent = ChatAgent(tmp_path, llm=FailingLLM())

@@ -70,8 +70,14 @@ For retryable failures, the REPL must:
 
 1. Print/capture any logs produced before the failure.
 2. Print a retry notice.
-3. Retry the same user message once.
+3. Retry the same logical turn once, reusing the original `turn_id`.
 4. If the retry fails, print `Message failed after retry; REPL remains open.`
+
+Retry idempotency:
+
+- The retry must not persist the same user input twice.
+- If the daemon completed the first attempt after the client timed out, the retry must return the already-persisted assistant reply for that `turn_id`.
+- Already-produced logs, including persona activation and persona discussion logs, remain the record of the logical turn. A retry that resolves from an already-completed `turn_id` must not rerun persona work just to recreate those logs.
 
 For non-retryable failures, the REPL must:
 
@@ -105,6 +111,7 @@ Error-handling changes should include tests for:
 
 - root cause survives daemon response boundaries;
 - REPL retries transport failures once;
+- retry attempts reuse one `turn_id` and do not duplicate persisted user input;
 - REPL does not retry daemon/application errors;
 - logs produced before failure are still printed/captured;
 - transcript export remains valid Markdown when failure logs are included.

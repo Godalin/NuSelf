@@ -503,15 +503,22 @@ def test_chat_agent_delegates_turns_to_conversation_runtime(tmp_path: Path) -> N
         def __init__(self) -> None:
             self.seen: list[tuple[ThreadState, str, str]] = []
 
-        def run_turn(self, state: ThreadState, message: str, thread_id: str) -> ConversationRuntimeResult:
+        def run_turn(
+            self,
+            state: ThreadState,
+            message: str,
+            thread_id: str,
+            *,
+            turn_id: str | None = None,
+        ) -> ConversationRuntimeResult:
             self.seen.append((state, message, thread_id))
             updated = ThreadState(
                 thread_id=thread_id,
                 summary=state.summary,
                 messages=[
                     *state.messages,
-                    ThreadMessage(role="user", content=message),
-                    ThreadMessage(role="assistant", content="runtime reply"),
+                    ThreadMessage(role="user", content=message, turn_id=turn_id),
+                    ThreadMessage(role="assistant", content="runtime reply", turn_id=turn_id),
                 ],
                 next_message_index=state.next_message_index + 2,
             )
@@ -538,6 +545,48 @@ def test_chat_agent_delegates_turns_to_conversation_runtime(tmp_path: Path) -> N
     assert state.messages == [
         ThreadMessage(role="user", content="hello runtime"),
         ThreadMessage(role="assistant", content="runtime reply"),
+    ]
+
+
+def test_chat_agent_reuses_completed_turn_id_without_rerunning_runtime(tmp_path: Path) -> None:
+    class FakeRuntime:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run_turn(
+            self,
+            state: ThreadState,
+            message: str,
+            thread_id: str,
+            *,
+            turn_id: str | None = None,
+        ) -> ConversationRuntimeResult:
+            self.calls += 1
+            updated = ThreadState(
+                thread_id=thread_id,
+                summary=state.summary,
+                messages=[
+                    *state.messages,
+                    ThreadMessage(role="user", content=message, turn_id=turn_id),
+                    ThreadMessage(role="assistant", content=f"reply {self.calls}", turn_id=turn_id),
+                ],
+                next_message_index=state.next_message_index + 2,
+            )
+            return ConversationRuntimeResult(state=updated, result=ChatResult(answer=f"reply {self.calls}", thread_id=thread_id))
+
+    runtime = FakeRuntime()
+    agent = ChatAgent(tmp_path, runtime=runtime)
+
+    first = agent.respond("retry me", turn_id="turn-retry")
+    second = agent.respond("retry me", turn_id="turn-retry")
+
+    assert first.answer == "reply 1"
+    assert second.answer == "reply 1"
+    assert runtime.calls == 1
+    state = ThreadStore(tmp_path).load("default")
+    assert state.messages == [
+        ThreadMessage(role="user", content="retry me", turn_id="turn-retry"),
+        ThreadMessage(role="assistant", content="reply 1", turn_id="turn-retry"),
     ]
 
 

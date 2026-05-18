@@ -23,6 +23,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Fixed REPL chat retry idempotency so daemon timeouts retry the same logical turn, avoid duplicate persisted user inputs, and reuse already-completed turn results instead of rerunning persona work.
 - Clarified LLM endpoint logs so exhausted endpoints are distinguished from actual failover attempts.
 - Fixed reason logs to use the configured project root.
 - Fixed `:reason` with no arguments to show reason command help instead of listing threads.

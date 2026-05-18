@@ -306,7 +306,8 @@ def test_interactive_turn_prints_activity_events_while_waiting(
         printed.set()
         original_print_events(events)
 
-    def fake_send(message: str, thread_id: str) -> cli.InteractiveChatResult:
+    def fake_send(message: str, thread_id: str, turn_id: str | None) -> cli.InteractiveChatResult:
+        assert turn_id is not None
         write_log_event(
             "chat",
             "live_progress",
@@ -348,6 +349,7 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
     )
     calls = 0
+    turn_ids: list[object] = []
 
     def fake_status(project_root: Path | None) -> DaemonStatus:
         return daemon_status
@@ -361,6 +363,8 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
     ) -> DaemonResponse:
         nonlocal calls
         calls += 1
+        payload_dict = cast(dict[str, object], payload)
+        turn_ids.append(payload_dict.get("turn_id"))
         if calls == 1:
             write_log_event(
                 "persona",
@@ -382,6 +386,8 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
 
     assert result == 0
     assert calls == 2
+    assert len(set(turn_ids)) == 1
+    assert isinstance(turn_ids[0], str)
     assert "daemon request failed: timed out" in captured.err
     assert "Retrying message after failed attempt (2/2)..." in captured.out
     assert "builder_self: first attempt reached persona discussion" in captured.out

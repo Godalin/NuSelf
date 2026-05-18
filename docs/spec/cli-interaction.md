@@ -95,6 +95,7 @@ All interactive commands start with `:`.
 - Commands print one leading blank line before their output and do not add a trailing blank line before the next prompt or session header.
 - Chat turns print one leading blank line, then activity logs in chronological order, then one blank line and a `NuSelf:` label before the assistant reply. This keeps the final user-facing reply at the end of the turn so users can skip internal process output when they are not interested. The session header follows the reply without extra blank spacer lines.
 - Interactive chat transport failures, including daemon timeouts, do not exit the REPL. The REPL captures and prints any logs produced before the failure, retries the same user message once, and then returns to the prompt if the retry also fails.
+- A REPL retry is the same logical chat turn, not a second user turn. The client must reuse the same `turn_id` for every attempt of one user input. The daemon/chat layer must treat a completed `turn_id` as idempotent: if the first attempt completed after the client timed out, a retry returns the already-saved assistant reply instead of appending the same user message again or rerunning persona work.
 - `:restart` and `:r` restart the daemon from inside the current REPL, then reconnect future requests to the restarted daemon. The command preserves the current thread and interactive transcript session. Restart failures print a concise error and keep the REPL open.
 - Session header reprinted after non-command turns and thread-switching commands:
   ```

@@ -89,19 +89,26 @@ class ThreadMessage:
 
     role: ThreadRole
     content: str
+    turn_id: str | None = None
 
     def to_wire(self) -> dict[str, str]:
-        return {"role": self.role, "content": self.content}
+        wire = {"role": self.role, "content": self.content}
+        if self.turn_id is not None:
+            wire["turn_id"] = self.turn_id
+        return wire
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> "ThreadMessage":
         role = data.get("role")
         content = data.get("content")
+        turn_id = data.get("turn_id")
         if role not in {"user", "assistant"}:
             raise ValueError("thread message role must be user or assistant")
         if not isinstance(content, str):
             raise ValueError("thread message content must be a string")
-        return cls(role=cast(ThreadRole, role), content=content)
+        if turn_id is not None and not isinstance(turn_id, str):
+            raise ValueError("thread message turn_id must be a string when present")
+        return cls(role=cast(ThreadRole, role), content=content, turn_id=turn_id)
 
 
 def empty_thread_messages() -> list[ThreadMessage]:
@@ -248,6 +255,7 @@ class ConversationTurnState:
     thread_id: str
     persisted_state: ThreadState
     user_message: str
+    turn_id: str | None = None
     memory_context: str = ""
     base_messages: tuple[ThreadMessage, ...] = ()
     active_messages: tuple[ThreadMessage, ...] = ()
@@ -262,8 +270,15 @@ class ConversationTurnState:
     node_trace: tuple[ConversationNodeName, ...] = ()
 
     @classmethod
-    def start(cls, state: ThreadState, message: str, thread_id: str) -> "ConversationTurnState":
-        return cls(thread_id=thread_id, persisted_state=state, user_message=message)
+    def start(
+        cls,
+        state: ThreadState,
+        message: str,
+        thread_id: str,
+        *,
+        turn_id: str | None = None,
+    ) -> "ConversationTurnState":
+        return cls(thread_id=thread_id, persisted_state=state, user_message=message, turn_id=turn_id)
 
 
 @dataclass(frozen=True)
@@ -277,7 +292,14 @@ class ConversationNodeResult:
 class ConversationRuntime(Protocol):
     """Runtime boundary for one conversation turn."""
 
-    def run_turn(self, state: ThreadState, message: str, thread_id: str) -> ConversationRuntimeResult:
+    def run_turn(
+        self,
+        state: ThreadState,
+        message: str,
+        thread_id: str,
+        *,
+        turn_id: str | None = None,
+    ) -> ConversationRuntimeResult:
         """Run one user turn and return the persisted state plus user-facing result."""
         ...
 
@@ -495,9 +517,12 @@ class ChatAgent:
             memory_query_service=memory_query_service,
         )
 
-    def respond(self, message: str, thread_id: str = "default") -> ChatResult:
+    def respond(self, message: str, thread_id: str = "default", *, turn_id: str | None = None) -> ChatResult:
         def update(state: ThreadState) -> tuple[ThreadState, ChatResult]:
-            runtime_result = self._runtime.run_turn(state, message, thread_id)
+            completed = _completed_turn_result(state, message=message, thread_id=thread_id, turn_id=turn_id)
+            if completed is not None:
+                return state, completed
+            runtime_result = self._runtime.run_turn(state, message, thread_id, turn_id=turn_id)
             return runtime_result.state, runtime_result.result
 
         return self._thread_store.update(thread_id, update)
@@ -690,8 +715,15 @@ class ConversationGraphRuntime:
 
         self._graph_driver = ConversationGraphDriver(self)
 
-    def run_turn(self, state: ThreadState, message: str, thread_id: str) -> ConversationRuntimeResult:
-        turn_state = self._graph_driver.run(ConversationTurnState.start(state, message, thread_id))
+    def run_turn(
+        self,
+        state: ThreadState,
+        message: str,
+        thread_id: str,
+        *,
+        turn_id: str | None = None,
+    ) -> ConversationRuntimeResult:
+        turn_state = self._graph_driver.run(ConversationTurnState.start(state, message, thread_id, turn_id=turn_id))
         updated = _require_thread_state(turn_state.updated_thread_state)
         final_response = _require_presented_response(turn_state.final_response)
         self._record_chat_turn_trace(
@@ -748,7 +780,7 @@ class ConversationGraphRuntime:
 
     def prepare_context_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         base_messages = tuple(_drop_local_fallback_replies(state.persisted_state.messages))
-        active_messages = (*base_messages, ThreadMessage(role="user", content=state.user_message))
+        active_messages = (*base_messages, ThreadMessage(role="user", content=state.user_message, turn_id=state.turn_id))
         packed_memory = self._memory_query_service.pack(MemoryQuery(text=state.user_message))
         return ConversationNodeResult(
             node="prepare_context",
@@ -955,7 +987,10 @@ class ConversationGraphRuntime:
                     thread_id=state.thread_id,
                 )
             )
-            saved_messages = (*state.saved_messages, ThreadMessage(role="assistant", content=final_response.answer))
+            saved_messages = (
+                *state.saved_messages,
+                ThreadMessage(role="assistant", content=final_response.answer, turn_id=state.turn_id),
+            )
         else:
             response = _require_chat_response(state.initial_response)
             final_response = _apply_unsupported_claim_guard(
@@ -968,7 +1003,10 @@ class ConversationGraphRuntime:
                     thread_id=state.thread_id,
                 )
             )
-            saved_messages = (*state.active_messages, ThreadMessage(role="assistant", content=final_response.answer))
+            saved_messages = (
+                *state.active_messages,
+                ThreadMessage(role="assistant", content=final_response.answer, turn_id=state.turn_id),
+            )
         return ConversationNodeResult(
             node="finalize_response",
             state=replace(
@@ -1257,6 +1295,30 @@ def _require_thread_state(state: ThreadState | None) -> ThreadState:
     if state is None:
         raise RuntimeError("conversation runtime thread state is missing")
     return state
+
+
+def _completed_turn_result(
+    state: ThreadState,
+    *,
+    message: str,
+    thread_id: str,
+    turn_id: str | None,
+) -> ChatResult | None:
+    if turn_id is None or len(state.messages) < 2:
+        return None
+    assistant_message: ThreadMessage | None = None
+    for item in reversed(state.messages):
+        if item.turn_id == turn_id and item.role == "assistant":
+            assistant_message = item
+            break
+    if assistant_message is None:
+        return None
+    for item in reversed(state.messages):
+        if item.turn_id == turn_id and item.role == "user":
+            if item.content == message:
+                return ChatResult(answer=assistant_message.content, thread_id=thread_id)
+            return None
+    return None
 
 
 def _require_presented_response(response: PresentedResponse | None) -> PresentedResponse:

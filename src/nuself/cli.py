@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 from typing import cast
+from uuid import uuid4
 import warnings
 
 try:
@@ -43,6 +44,7 @@ try:
     from nuself.config import ensure_runtime_dirs, runtime_paths
     from nuself.agent.chat import ChatAgent, ThreadState, ThreadStore
     from nuself.daemon import client, lifecycle
+    from nuself.daemon.protocol import JsonValue
     from nuself.domain.memory import (
         MemoryEntry,
         PrivacyLevel,
@@ -667,7 +669,9 @@ def handle_default_entrypoint(args: argparse.Namespace) -> int:
     if args.message is not None:
         return _send_chat(args.message, args.project_root)
     return _interactive_loop(
-        lambda message, thread_id: _send_chat_interactive(message, args.project_root, thread_id),
+        lambda message, thread_id, turn_id: _send_chat_interactive(
+            message, args.project_root, thread_id, turn_id=turn_id
+        ),
         args.project_root,
     )
 
@@ -747,7 +751,9 @@ def handle_chat(args: argparse.Namespace) -> int:
         if args.message is not None:
             return _send_chat(args.message, args.project_root)
         return _interactive_loop(
-            lambda message, thread_id: _send_chat_interactive(message, args.project_root, thread_id),
+            lambda message, thread_id, turn_id: _send_chat_interactive(
+                message, args.project_root, thread_id, turn_id=turn_id
+            ),
             args.project_root,
         )
     if args.require_daemon:
@@ -756,7 +762,9 @@ def handle_chat(args: argparse.Namespace) -> int:
     if args.message is not None:
         return _send_one_shot_chat(args.message, args.project_root)
     return _interactive_loop(
-        lambda message, thread_id: _send_one_shot_chat_interactive(message, args.project_root, thread_id),
+        lambda message, thread_id, turn_id: _send_one_shot_chat_interactive(
+            message, args.project_root, thread_id, turn_id=turn_id
+        ),
         args.project_root,
     )
 
@@ -768,7 +776,9 @@ def handle_attach(args: argparse.Namespace) -> int:
     if args.message is not None:
         return _send_chat(args.message, args.project_root)
     return _interactive_loop(
-        lambda message, thread_id: _send_chat_interactive(message, args.project_root, thread_id),
+        lambda message, thread_id, turn_id: _send_chat_interactive(
+            message, args.project_root, thread_id, turn_id=turn_id
+        ),
         args.project_root,
     )
 
@@ -813,7 +823,7 @@ def handle_open(args: argparse.Namespace) -> int:
             if result != 0:
                 return result
         return _interactive_loop(
-            lambda message, tid: _send_chat_interactive(message, args.project_root, tid),
+            lambda message, tid, turn_id: _send_chat_interactive(message, args.project_root, tid, turn_id=turn_id),
             args.project_root,
             initial_thread_id=thread_id,
         )
@@ -822,7 +832,9 @@ def handle_open(args: argparse.Namespace) -> int:
         if result != 0:
             return result
     return _interactive_loop(
-        lambda message, tid: _send_one_shot_chat_interactive(message, args.project_root, tid),
+        lambda message, tid, turn_id: _send_one_shot_chat_interactive(
+            message, args.project_root, tid, turn_id=turn_id
+        ),
         args.project_root,
         initial_thread_id=thread_id,
     )
@@ -1990,12 +2002,21 @@ def _send_chat(message: str, project_root: Path | None, thread_id: str = "defaul
     return result.code
 
 
-def _send_chat_interactive(message: str, project_root: Path | None, thread_id: str = "default") -> InteractiveChatResult:
+def _send_chat_interactive(
+    message: str,
+    project_root: Path | None,
+    thread_id: str = "default",
+    *,
+    turn_id: str | None = None,
+) -> InteractiveChatResult:
     timeout_seconds = _chat_request_timeout_seconds(project_root)
+    payload: dict[str, JsonValue] = {"message": message, "thread_id": thread_id}
+    if turn_id is not None:
+        payload["turn_id"] = turn_id
     try:
         response = client.request(
             "chat",
-            {"message": message, "thread_id": thread_id},
+            payload,
             project_root=project_root,
             timeout=timeout_seconds,
         )
@@ -2042,7 +2063,7 @@ def _chat_request_timeout_seconds(project_root: Path | None) -> float:
 
 
 def _interactive_loop(
-    send_message: Callable[[str, str], InteractiveChatResult],
+    send_message: Callable[[str, str, str | None], InteractiveChatResult],
     project_root: Path | None,
     *,
     initial_thread_id: str = "default",
@@ -2099,7 +2120,7 @@ def _interactive_loop(
 
 
 def _send_interactive_chat_turn(
-    send_message: Callable[[str, str], InteractiveChatResult],
+    send_message: Callable[[str, str, str | None], InteractiveChatResult],
     project_root: Path | None,
     thread_id: str,
     message: str,
@@ -2108,6 +2129,7 @@ def _send_interactive_chat_turn(
     event_offset = len(read_log_events(project_root=project_root))
     result = InteractiveChatResult(code=1)
     printed_logs = False
+    turn_id = f"turn-{uuid4().hex}"
     for attempt in range(1, INTERACTIVE_CHAT_ATTEMPTS + 1):
         if attempt > 1:
             print()
@@ -2116,6 +2138,7 @@ def _send_interactive_chat_turn(
             send_message,
             message,
             thread_id,
+            turn_id,
             project_root,
             event_offset,
             printed_logs=printed_logs,
@@ -2149,9 +2172,10 @@ def _send_interactive_chat_turn(
 
 
 def _run_interactive_send_with_live_logs(
-    send_message: Callable[[str, str], InteractiveChatResult],
+    send_message: Callable[[str, str, str | None], InteractiveChatResult],
     message: str,
     thread_id: str,
+    turn_id: str | None,
     project_root: Path | None,
     event_offset: int,
     *,
@@ -2162,7 +2186,7 @@ def _run_interactive_send_with_live_logs(
 
     def _target() -> None:
         try:
-            result_box.append(send_message(message, thread_id))
+            result_box.append(send_message(message, thread_id, turn_id))
         except BaseException as exc:  # pragma: no cover - defensive thread boundary
             error_box.append(exc)
 
@@ -2349,10 +2373,14 @@ def _send_one_shot_chat(message: str, project_root: Path | None, thread_id: str 
 
 
 def _send_one_shot_chat_interactive(
-    message: str, project_root: Path | None, thread_id: str = "default"
+    message: str,
+    project_root: Path | None,
+    thread_id: str = "default",
+    *,
+    turn_id: str | None = None,
 ) -> InteractiveChatResult:
     try:
-        reply = _one_shot_reply(message, project_root, thread_id)
+        reply = _one_shot_reply(message, project_root, thread_id, turn_id=turn_id)
         write_log_event(
             "chat",
             "one_shot_chat_completed",
@@ -2676,8 +2704,14 @@ def _interactive_help(command: str | None = None) -> str:
     return "\n".join(lines)
 
 
-def _one_shot_reply(message: str, project_root: Path | None, thread_id: str = "default") -> str:
-    return ChatAgent(project_root).respond(message, thread_id=thread_id).reply
+def _one_shot_reply(
+    message: str,
+    project_root: Path | None,
+    thread_id: str = "default",
+    *,
+    turn_id: str | None = None,
+) -> str:
+    return ChatAgent(project_root).respond(message, thread_id=thread_id, turn_id=turn_id).reply
 
 
 def _print_assistant_reply(text: str) -> None:
