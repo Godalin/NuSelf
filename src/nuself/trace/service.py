@@ -57,6 +57,7 @@ class TraceRecorder:
         evidence_refs: list[str] | None = None,
         participants: list[str] | None = None,
         decision_points: list[str] | None = None,
+        metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
         return self.record(
             kind="chat_turn",
@@ -68,6 +69,7 @@ class TraceRecorder:
             participants=participants or [],
             decision_points=decision_points or [],
             thread_id=thread_id,
+            metadata=metadata or {},
         )
 
     def link(self, source_id: str, target_id: str, relation: TraceRelation, summary: str) -> TraceLink:

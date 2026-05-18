@@ -2387,6 +2387,53 @@ def test_daemon_restart_stops_then_starts(
     assert "pid=789" in captured.out
 
 
+def test_interactive_restart_restarts_daemon_and_keeps_session(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    stopped = DaemonStatus(
+        running=False,
+        pid=None,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+    running = DaemonStatus(
+        running=True,
+        pid=789,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+    current_status = running
+    calls: list[str] = []
+
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        return current_status
+
+    def fake_stop(project_root: Path | None) -> DaemonStatus:
+        nonlocal current_status
+        calls.append("stop")
+        current_status = stopped
+        return current_status
+
+    def fake_start(project_root: Path | None) -> DaemonStatus:
+        nonlocal current_status
+        calls.append("start")
+        current_status = running
+        return current_status
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":r\n:q\n"))
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.cli.lifecycle.stop", fake_stop)
+    monkeypatch.setattr("nuself.cli.lifecycle.start", fake_start)
+
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert calls == ["stop", "start"]
+    assert "Restarted daemon:" in captured.out
+    assert "pid=789" in captured.out
+    assert "[daemon] session status=running thread=default" in captured.out
+
+
 def test_daemon_start_with_mocked_lifecycle(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:

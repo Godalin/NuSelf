@@ -32,6 +32,7 @@ from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
+from nuself.trace.service import TraceRecorder
 from nuself.tui.render import render_discussion_trace, render_host_decision
 
 ThreadRole = Literal["user", "assistant"]
@@ -660,6 +661,7 @@ class ConversationGraphRuntime:
             synthesizer_node=LLMBackedSynthesizerNode(llm=self._llm),
         )
         self._persona_discussion_service = SharedPersonaDiscussionService(project_root=project_root, llm=self._llm)
+        self._trace_recorder = TraceRecorder(project_root)
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),
             SourceRepository(project_root),
@@ -693,6 +695,12 @@ class ConversationGraphRuntime:
         turn_state = self._graph_driver.run(ConversationTurnState.start(state, message, thread_id))
         updated = _require_thread_state(turn_state.updated_thread_state)
         final_response = _require_presented_response(turn_state.final_response)
+        self._record_chat_turn_trace(
+            user_message=message,
+            final_response=final_response,
+            thread_id=thread_id,
+            node_trace=turn_state.node_trace,
+        )
         return ConversationRuntimeResult(
             state=updated,
             result=ChatResult(
@@ -704,6 +712,40 @@ class ConversationGraphRuntime:
             ),
             node_trace=turn_state.node_trace,
         )
+
+    def _record_chat_turn_trace(
+        self,
+        *,
+        user_message: str,
+        final_response: PresentedResponse,
+        thread_id: str,
+        node_trace: tuple[ConversationNodeName, ...],
+    ) -> None:
+        if not final_response.evidence_references:
+            return
+        evidence_refs = list(final_response.evidence_references)
+        try:
+            self._trace_recorder.record_chat_turn(
+                title=f"Chat turn cited {evidence_refs[0]}",
+                summary="Assistant reply used retrieved context cited by the final response.",
+                user_input=_trace_summary(user_message),
+                assistant_output=_trace_summary(final_response.answer),
+                thread_id=thread_id,
+                evidence_refs=evidence_refs,
+                participants=["chat_agent", "presentation_agent"],
+                decision_points=["Recorded because the final response cited evidence references."],
+                metadata={"node_trace": list(node_trace), "epistemic_status": final_response.epistemic_status},
+            )
+        except Exception as exc:
+            write_log_event(
+                "memory",
+                "trace_write_failed",
+                "chat trace write failed",
+                project_root=self._project_root,
+                thread_id=thread_id,
+                status="error",
+                metadata={"error": str(exc)},
+            )
 
     def prepare_context_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         base_messages = tuple(_drop_local_fallback_replies(state.persisted_state.messages))
@@ -1216,6 +1258,13 @@ def _compact_persona_summary(turn_state: "PersonaTurnState") -> str:
     if not parts:
         return "(no persona contributions)"
     return "\n".join(parts)
+
+
+def _trace_summary(text: str, limit: int = 240) -> str:
+    normalized = " ".join(text.split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3].rstrip() + "..."
 
 
 def _drop_local_fallback_replies(messages: list[ThreadMessage]) -> list[ThreadMessage]:

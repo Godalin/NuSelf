@@ -95,6 +95,7 @@ All interactive commands start with `:`.
 - Commands print one leading blank line before their output and do not add a trailing blank line before the next prompt or session header.
 - Chat turns print one leading blank line, then activity logs in chronological order, then one blank line and a `NuSelf:` label before the assistant reply. This keeps the final user-facing reply at the end of the turn so users can skip internal process output when they are not interested. The session header follows the reply without extra blank spacer lines.
 - Interactive chat transport failures, including daemon timeouts, do not exit the REPL. The REPL captures and prints any logs produced before the failure, retries the same user message once, and then returns to the prompt if the retry also fails.
+- `:restart` and `:r` restart the daemon from inside the current REPL, then reconnect future requests to the restarted daemon. The command preserves the current thread and interactive transcript session. Restart failures print a concise error and keep the REPL open.
 - Session header reprinted after non-command turns and thread-switching commands:
   ```
   [daemon] session status=<running|one-shot> thread=<id>
@@ -184,6 +185,7 @@ REPL commands mirror the same model:
 | `:reason` | Long-run reasoning commands |
 | `:trace` | Thought provenance commands |
 | `:dev status` | Session/system status |
+| `:restart`, `:r` | Restart daemon and reconnect |
 | `:export`, `:e` | Transcript export |
 
 ## Command Group Reference

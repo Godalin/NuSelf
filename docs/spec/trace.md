@@ -261,9 +261,11 @@ Important chat turn rule:
 
 - Do not trace every chat turn.
 - Trace a chat turn when retrieved context materially influenced the reply or when the turn creates/changes a durable artifact.
+- First implementation treats non-empty final `evidence_references` as the deterministic signal that retrieved context materially influenced the reply.
 - The trace must include a user input ref or sanitized user input summary in `inputs`.
 - The trace must include an assistant output ref or sanitized answer summary in `outputs`.
 - The trace should reference the chat thread and relevant evidence refs, not duplicate the whole turn.
+- Chat trace creation is best-effort infrastructure work. A trace write failure must emit a concise log and must not fail the chat turn.
 
 Reason integration:
 

@@ -27,6 +27,7 @@ from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
+from nuself.trace.repository import TraceRepository
 
 
 class FakeLLM:
@@ -597,6 +598,7 @@ def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path
         "state_update",
         "compression",
     )
+    assert TraceRepository(tmp_path).list_traces(kind="chat_turn") == []
 
 
 def test_conversation_runtime_runs_llm_backed_personas_when_activated(tmp_path: Path) -> None:
@@ -687,6 +689,15 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
         ThreadMessage(role="user", content="graph runtime"),
         ThreadMessage(role="assistant", content="Graph driver reply."),
     ]
+    traces = TraceRepository(tmp_path).list_traces(kind="chat_turn")
+    assert len(traces) == 1
+    trace = traces[0]
+    assert trace.thread_id == "graph"
+    assert trace.evidence_refs == ["mem_graph"]
+    assert trace.inputs == ["graph runtime"]
+    assert trace.outputs == ["Graph driver reply."]
+    assert trace.participants == ["chat_agent", "presentation_agent"]
+    assert trace.metadata["node_trace"] == list(result.node_trace)
 
 
 def test_conversation_graph_runtime_routes_tool_calls_through_tool_node(tmp_path: Path) -> None:

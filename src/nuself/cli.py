@@ -2058,6 +2058,8 @@ _INTERACTIVE_COMMANDS = [
     ":t",
     ":reason",
     ":trace",
+    ":restart",
+    ":r",
     ":dev",
     ":rename",
     ":branch",
@@ -2372,6 +2374,10 @@ def _handle_interactive_command(
         body = command.removeprefix(":trace").strip()
         print(_handle_interactive_trace_command(body, project_root))
         return ("", current_thread_id)
+    if command in {":restart", ":r"}:
+        print()
+        print(_handle_interactive_restart_command(project_root))
+        return ("redraw_header", current_thread_id)
     if command.startswith(":rename "):
         print()
         new_id = command[8:].strip()
@@ -2497,6 +2503,7 @@ def _interactive_help(command: str | None = None) -> str:
             "  :trace                    list thought trace records",
             "  :trace show <id|index>    show one thought trace",
             "  :trace search <query>     search thought trace records",
+            "  :restart, :r              restart daemon and reconnect",
             "  :rename <new-id>          rename the current thread",
             "  :branch <new-id> [index]  branch current thread at index",
             "  :archive                  archive the current thread",
@@ -2909,6 +2916,25 @@ def _handle_interactive_trace_command(command: str, project_root: Path | None) -
             return "No matching trace records."
         return "\n".join(render_trace_row(trace, index=index) for index, trace in enumerate(traces, start=1))
     return _interactive_trace_help(command)
+
+
+def _handle_interactive_restart_command(project_root: Path | None) -> str:
+    write_log_event("daemon", "restart_requested", "daemon restart requested", project_root=project_root)
+    stop_result = lifecycle.stop(project_root)
+    if stop_result.running:
+        return f"Failed to stop daemon: {_format_status(stop_result)}"
+    start_result = lifecycle.start(project_root)
+    write_log_event(
+        "daemon",
+        "restart_completed",
+        f"daemon restart {'completed' if start_result.running else 'failed'}",
+        project_root=project_root,
+        status="running" if start_result.running else "stopped",
+        metadata={"pid": start_result.pid, "socket": str(start_result.socket_path)},
+    )
+    if not start_result.running:
+        return f"Failed to restart daemon: {_format_status(start_result)}"
+    return f"Restarted daemon: {_format_status(start_result)}"
 
 
 def _interactive_trace_help(command: str | None = None) -> str:
