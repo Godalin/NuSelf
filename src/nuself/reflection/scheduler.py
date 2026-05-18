@@ -13,6 +13,7 @@ from nuself.config_system import ConfigSystem, ReflectionSettings
 from nuself.domain.memory import now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
 from nuself.notification import NotificationOutbox, OutboxEntry
+from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.llm import default_llm
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
@@ -87,22 +88,8 @@ class ReflectionScheduler:
             status="started"
         )
 
-        pending_count = len(self._reflection_repo.list(status="pending"))
-        if pending_count >= self._config.scheduler.max_pending_entries:
-            write_log_event(
-                "reflection",
-                "cycle_pending_limit_reached",
-                "reflection cycle skipped because pending candidate limit was reached",
-                project_root=self._project_root,
-                level="info",
-                status="skipped",
-                metadata={
-                    "pending_count": pending_count,
-                    "max_pending_entries": self._config.scheduler.max_pending_entries,
-                },
-            )
-            return False
-        
+        self._organize_pending_reflections()
+
         # Consume any queued events before generating candidates
         self._event_queue.clear()
         candidates = IdeaCandidateGenerator(self._project_root, config=self._config).generate()
@@ -158,6 +145,7 @@ class ReflectionScheduler:
             discussion_trace=discussion_trace,
         )
         self._reflection_repo.add(entry)
+        self._organize_pending_reflections()
         self._write_last_reflection(now, title=title, body=body)
 
         if self._config.auto_notify:
@@ -174,6 +162,22 @@ class ReflectionScheduler:
             metadata={"reason": "published", "score": float(score.composite), "idea_type": best.candidate_type}
         )
         return True
+
+    def _organize_pending_reflections(self) -> None:
+        from nuself.logs import write_log_event
+
+        try:
+            ReflectionOrganizer(self._project_root, repository=self._reflection_repo).organize_pending()
+        except Exception as exc:
+            write_log_event(
+                "reflection",
+                "organizer_failed",
+                "reflection organizer failed",
+                project_root=self._project_root,
+                level="error",
+                status="failed",
+                error=str(exc),
+            )
 
     def _in_quiet_hours(self, now: datetime) -> bool:
         current_hour = now.astimezone().hour

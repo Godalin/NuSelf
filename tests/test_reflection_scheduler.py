@@ -30,7 +30,6 @@ def _reflection_settings(
     quiet_end_hour: int = 7,
     daily_cap: int = 5,
     jitter_percent: int = 20,
-    max_pending_entries: int = 20,
     relevance_threshold: float = 0.5,
     persona_discussion_threshold: float = 0.7,
     max_discussion_rounds: int = 10,
@@ -44,7 +43,6 @@ def _reflection_settings(
             quiet_end_hour=quiet_end_hour,
             daily_cap=daily_cap,
             jitter_percent=jitter_percent,
-            max_pending_entries=max_pending_entries,
         ),
         gate=ReflectionGateConfig(
             relevance_threshold=relevance_threshold,
@@ -274,22 +272,19 @@ def test_reflect_creates_multiple_reflection_entries(scheduler: ReflectionSchedu
     assert len(entries) == 2
 
 
-def test_reflect_skips_when_pending_reflection_limit_reached(scheduler: ReflectionScheduler) -> None:
+def test_reflect_does_not_skip_when_pending_reflections_exist(scheduler: ReflectionScheduler) -> None:
     scheduler._config = _reflection_settings(
         relevance_threshold=0.0,
         persona_discussion_threshold=1.0,
-        max_pending_entries=1,
     )
     scheduler._reflection_repo.add(_sample_reflection_entry())
 
     result = scheduler.reflect(datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC))
 
-    assert result is False
-    assert len(scheduler._reflection_repo.list(status="pending")) == 1
+    assert result is True
+    assert len(scheduler._reflection_repo.list(status="pending")) >= 1
     events = read_log_events(project_root=scheduler._project_root, component="reflection")
-    assert events[-1].event == "cycle_pending_limit_reached"
-    assert events[-1].status == "skipped"
-    assert events[-1].metadata == {"max_pending_entries": 1, "pending_count": 1}
+    assert not any(event.event == "cycle_pending_limit_reached" for event in events)
 
 
 def test_reflect_auto_notify_creates_outbox_entry(scheduler: ReflectionScheduler) -> None:

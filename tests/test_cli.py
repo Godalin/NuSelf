@@ -3268,6 +3268,7 @@ def test_interactive_reason_without_args_shows_help(
         ["inbox", "reflection", "show", "--help"],
         ["inbox", "reflection", "dismiss", "--help"],
         ["inbox", "reflection", "archive", "--help"],
+        ["inbox", "reflection", "organize", "--help"],
         ["inbox", "notify", "--help"],
         ["inbox", "notify", "list", "--help"],
         ["inbox", "notify", "show", "--help"],

@@ -477,6 +477,7 @@ def build_parser() -> argparse.ArgumentParser:
     reflection_archive_parser.add_argument("entry_id")
     reflection_archive_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
     _add_handler(reflection_archive_parser, handle_reflection_archive)
+    _add_handler(reflection_subparsers.add_parser("organize"), handle_reflection_organize)
 
     notify_parser = inbox_subparsers.add_parser("notify")
     notify_parser.set_defaults(handler=None, help_parser=notify_parser)
@@ -1667,6 +1668,17 @@ def handle_reflection_archive(args: argparse.Namespace) -> int:
     except ReflectionEntryNotFound:
         print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
         return 1
+
+
+def handle_reflection_organize(args: argparse.Namespace) -> int:
+    from nuself.reflection.organizer import ReflectionOrganizer
+
+    result = ReflectionOrganizer(args.project_root).organize_pending()
+    print(
+        "Organized reflections: "
+        f"merged_groups={result.merged_groups} archived_entries={result.archived_entries}"
+    )
+    return 0
 
 
 def handle_memory_update(args: argparse.Namespace) -> int:

@@ -45,7 +45,7 @@ Stored as one JSON file per entry in `private/reflections/{id}.json`.
 reflect()
   ├─ schedule_blocked              (if quiet hours, cooldown, interval, or daily cap blocks)
   ├─ cycle_started                 (audit log)
-  ├─ cycle_pending_limit_reached   (if pending entries ≥ max_pending_entries)
+  ├─ organizer_started             (best-effort pending reflection cleanup)
   ├─ candidate_generation_skipped  (if no context)
   ├─ candidate_generation_failed   (if LLM errors)
   ├─ cycle_no_candidates           (if LLM returns empty)
@@ -90,11 +90,13 @@ The gate is LLM-driven (L2 judgment). The LLM receives the candidate, recent ref
 
 Candidates below `persona_discussion_threshold` but passing the gate proceed directly to `ReflectionRepository` without discussion.
 
-## Pending Candidate Limit
+## Pending Organization
 
-`reflection.scheduler.max_pending_entries` caps how many pending reflection ideas may exist at once. If the number of `pending` entries is greater than or equal to this value, the scheduler skips candidate generation for that cycle and writes `cycle_pending_limit_reached`.
+There is no pending reflection count limit. Pending reflection growth is controlled by organization, not by blocking new reflection cycles.
 
-Default is `20`.
+`ReflectionOrganizer` periodically scans pending entries, groups similar ideas, keeps the highest-scoring representative pending, folds short duplicate summaries into its body, and archives duplicate entries. Organization is best-effort: failure to organize must log an error and must not block the reflection cycle.
+
+First implementation uses deterministic text similarity over title/body tokens. LLM-assisted cleanup can be added later, but the scheduler must not depend on an LLM to avoid unbounded duplicate growth.
 
 ## Schedule Limits
 
@@ -131,7 +133,7 @@ The scheduler still emits these events into `reflection.log`:
 |---|---|---|
 | `schedule_blocked` | `skipped` | `nuself logs --component reflection` |
 | `cycle_started` | `started` | `nuself logs --component reflection` |
-| `cycle_pending_limit_reached` | `skipped` | `nuself logs --component reflection` |
+| `organizer_completed` | `completed` | `nuself logs --component reflection` |
 | `persona_discussion` | `approved` / `rejected` | `nuself logs --component reflection` |
 | `cycle_discussion_rejected` | `completed` | `nuself logs --component reflection` |
 | `cycle_completed` | `completed` | `nuself logs --component reflection` |
@@ -143,6 +145,7 @@ nuself reflection list [--status pending|dismissed|archived] [--json]
 nuself reflection show <id_or_index> [--by-index] [--json]
 nuself reflection dismiss <id_or_index> [--by-index]
 nuself reflection archive <id_or_index> [--by-index]
+nuself reflection organize
 ```
 
 - `list` default: shows **all** statuses.
@@ -150,5 +153,6 @@ nuself reflection archive <id_or_index> [--by-index]
 - Plain-text `list` and `show` output follows the shared CLI record renderer: one header line with `key=value` metadata, then body text and discussion trace on subsequent indented lines. `list` treats the reflection title as the body text, keeps status/type/score/timestamps in the metadata header, puts the square-bracket index first, and preserves colored square-bracket tags such as `[reflection]` and `status=[pending]` for scanability.
 - `--status`: filters to one status.
 - `show` / `dismiss` / `archive` accept either an entry ID or a `--by-index` flag (0-based from `list`).
+- `organize`: runs pending reflection organization once and prints how many groups and entries were merged.
 
 REPL `:reflection` lists **only pending** entries. `:reflection list` lists **all** entries.

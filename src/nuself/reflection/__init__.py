@@ -11,6 +11,7 @@ from nuself.reflection.repository import (
     ReflectionEntryNotFound,
     ReflectionRepository,
 )
+from nuself.reflection.organizer import ReflectionOrganizationResult, ReflectionOrganizer
 
 __all__ = [
     "IdeaCandidateGenerator",
@@ -19,5 +20,7 @@ __all__ = [
     "LLMRelevanceGate",
     "ReflectionEntry",
     "ReflectionEntryNotFound",
+    "ReflectionOrganizationResult",
+    "ReflectionOrganizer",
     "ReflectionRepository",
 ]
