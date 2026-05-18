@@ -230,7 +230,7 @@ def _parse_display_timestamp(value: str | datetime) -> datetime | None:
 
 
 def _is_timestamp_field(key: str) -> bool:
-    return key in {"created", "created_at", "updated_at", "reviewed_at", "sent_at", "connected", "exported"}
+    return key in {"created", "created_at", "updated_at", "reviewed_at", "sent_at", "connected", "exported", "last_advanced_at"}
 
 
 def render_session_header(*, daemon_status: str, thread_id: str) -> str:
@@ -270,6 +270,8 @@ def _component_color(component: str) -> str:
         return "36"
     if component == "reflection":
         return "33"
+    if component == "reasoning":
+        return "35"
     return "0"
 
 

@@ -85,6 +85,9 @@ try:
         render_source_detail,
         render_source_row,
     )
+    from nuself.reason.service import ReasonService
+    from nuself.reason.repository import ReasonNotFound
+    from nuself.tui.reason import render_reason_detail, render_reason_row
     from nuself.tui.render import format_display_timestamp, render_log_event, render_log_event_json, render_session_header
     from nuself.tui.trace import render_trace_detail, render_trace_row
 finally:
@@ -501,6 +504,40 @@ def build_parser() -> argparse.ArgumentParser:
 
     reason_parser = subparsers.add_parser("reason")
     reason_parser.set_defaults(handler=None, help_parser=reason_parser)
+    reason_subparsers = reason_parser.add_subparsers(dest="reason_command")
+    reason_list_parser = reason_subparsers.add_parser("list")
+    reason_list_parser.add_argument("--status", choices=("active", "paused", "resolved", "archived", "all"), default=None)
+    reason_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
+    _add_handler(reason_list_parser, handle_reason_list)
+    reason_show_parser = reason_subparsers.add_parser("show")
+    reason_show_parser.add_argument("thread_id")
+    reason_show_parser.add_argument("--by-index", "-i", action="store_true", default=False)
+    reason_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
+    _add_handler(reason_show_parser, handle_reason_show)
+    reason_start_parser = reason_subparsers.add_parser("start")
+    reason_start_parser.add_argument("question")
+    reason_start_parser.add_argument("--priority", choices=("normal", "high"), default="normal")
+    _add_handler(reason_start_parser, handle_reason_start)
+    reason_advance_parser = reason_subparsers.add_parser("advance")
+    reason_advance_parser.add_argument("thread_id")
+    reason_advance_parser.add_argument("--by-index", "-i", action="store_true", default=False)
+    _add_handler(reason_advance_parser, handle_reason_advance)
+    reason_pause_parser = reason_subparsers.add_parser("pause")
+    reason_pause_parser.add_argument("thread_id")
+    reason_pause_parser.add_argument("--by-index", "-i", action="store_true", default=False)
+    _add_handler(reason_pause_parser, handle_reason_pause)
+    reason_resume_parser = reason_subparsers.add_parser("resume")
+    reason_resume_parser.add_argument("thread_id")
+    reason_resume_parser.add_argument("--by-index", "-i", action="store_true", default=False)
+    _add_handler(reason_resume_parser, handle_reason_resume)
+    reason_resolve_parser = reason_subparsers.add_parser("resolve")
+    reason_resolve_parser.add_argument("thread_id")
+    reason_resolve_parser.add_argument("--by-index", "-i", action="store_true", default=False)
+    _add_handler(reason_resolve_parser, handle_reason_resolve)
+    reason_archive_parser = reason_subparsers.add_parser("archive")
+    reason_archive_parser.add_argument("thread_id")
+    reason_archive_parser.add_argument("--by-index", "-i", action="store_true", default=False)
+    _add_handler(reason_archive_parser, handle_reason_archive)
     trace_parser = subparsers.add_parser("trace")
     trace_parser.set_defaults(handler=None, help_parser=trace_parser)
     trace_subparsers = trace_parser.add_subparsers(dest="trace_command")
@@ -1350,6 +1387,117 @@ def handle_notify_clear(args: argparse.Namespace) -> int:
 
     count = NotificationOutbox(args.project_root).clear("dismissed")
     print(f"Cleared {count} dismissed notification(s).")
+    return 0
+
+
+# ── Reason handlers ───────────────────────────────────────────────────
+
+
+def handle_reason_list(args: argparse.Namespace) -> int:
+    service = ReasonService(args.project_root)
+    threads = service.list_threads(status=args.status)
+    if not threads:
+        print("No reason threads.")
+        return 0
+    if args.as_json:
+        import json
+
+        for thread in threads:
+            print(json.dumps(thread.to_wire(), sort_keys=True, ensure_ascii=True))
+        return 0
+    for index, thread in enumerate(threads, start=1):
+        print(render_reason_row(thread, index=index))
+    return 0
+
+
+def handle_reason_show(args: argparse.Namespace) -> int:
+    service = ReasonService(args.project_root)
+    try:
+        thread = service.show_thread(args.thread_id, by_index=args.by_index)
+    except ReasonNotFound:
+        print(f"Reason thread not found: {args.thread_id}", file=sys.stderr)
+        return 1
+    steps = service.list_steps(thread.id)
+    if args.as_json:
+        import json
+
+        payload = thread.to_wire()
+        payload["steps"] = [step.to_wire() for step in steps]
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=True))
+        return 0
+    print(render_reason_detail(thread, steps))
+    return 0
+
+
+def handle_reason_start(args: argparse.Namespace) -> int:
+    service = ReasonService(args.project_root)
+    try:
+        thread = service.start_thread(args.question, priority=args.priority)
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Started reasoning thread: {thread.id}")
+    print(render_reason_detail(thread))
+    return 0
+
+
+def handle_reason_advance(args: argparse.Namespace) -> int:
+    service = ReasonService(args.project_root)
+    try:
+        thread = service.advance_thread(args.thread_id, by_index=args.by_index)
+    except (ReasonNotFound, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Advanced reason thread: {thread.id}")
+    print(render_reason_detail(thread))
+    return 0
+
+
+def handle_reason_pause(args: argparse.Namespace) -> int:
+    service = ReasonService(args.project_root)
+    try:
+        thread = service.pause_thread(args.thread_id, by_index=args.by_index)
+    except (ReasonNotFound, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Paused reason thread: {thread.id}")
+    print(render_reason_detail(thread))
+    return 0
+
+
+def handle_reason_resume(args: argparse.Namespace) -> int:
+    service = ReasonService(args.project_root)
+    try:
+        thread = service.resume_thread(args.thread_id, by_index=args.by_index)
+    except (ReasonNotFound, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Resumed reason thread: {thread.id}")
+    print(render_reason_detail(thread))
+    return 0
+
+
+def handle_reason_resolve(args: argparse.Namespace) -> int:
+    service = ReasonService(args.project_root)
+    try:
+        thread = service.resolve_thread(args.thread_id, by_index=args.by_index)
+    except (ReasonNotFound, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Resolved reason thread: {thread.id}")
+    print(render_reason_detail(thread))
+    return 0
+
+
+def handle_reason_archive(args: argparse.Namespace) -> int:
+    service = ReasonService(args.project_root)
+    try:
+        thread = service.archive_thread(args.thread_id, by_index=args.by_index)
+    except (ReasonNotFound, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Archived reason thread: {thread.id}")
+    print(render_reason_detail(thread))
     return 0
 
 
@@ -2367,7 +2515,8 @@ def _handle_interactive_command(
         return ("redraw_header", new_id if new_id != "" else current_thread_id)
     if command.startswith(":reason"):
         print()
-        print("Reason commands are planned for v0.2.0 and are not implemented yet.")
+        body = command.removeprefix(":reason").strip()
+        print(_handle_interactive_reason_command(body, project_root))
         return ("", current_thread_id)
     if command.startswith(":trace"):
         print()
@@ -2499,7 +2648,7 @@ def _interactive_help(command: str | None = None) -> str:
             "  :mem source <source-id>   show one source",
             "  :thread, :t               list active threads",
             "  :thread <id>, :t <id>     switch to or create a thread",
-            "  :reason                   long-run reasoning commands (planned)",
+            "  :reason                   long-run reasoning commands",
             "  :trace                    list thought trace records",
             "  :trace show <id|index>    show one thought trace",
             "  :trace search <query>     search thought trace records",
@@ -2893,6 +3042,87 @@ def _handle_interactive_memory_command(command: str, project_root: Path | None) 
             return f"Source document not found: {source_id}"
         return render_source_detail(document, chunk_count=len(repo.list_chunks(document.id)))
     return _interactive_memory_help(command)
+
+
+def _handle_interactive_reason_command(command: str, project_root: Path | None) -> str:
+    service = ReasonService(project_root)
+    if command in {"", "list"}:
+        threads = service.list_threads()
+        if not threads:
+            return "No reason threads."
+        return "\n".join(render_reason_row(thread, index=index) for index, thread in enumerate(threads, start=1))
+    if command.startswith("show "):
+        thread_id = command.removeprefix("show ").strip()
+        try:
+            thread = service.show_thread(thread_id)
+        except ReasonNotFound:
+            return f"Reason thread not found: {thread_id}"
+        steps = service.list_steps(thread.id)
+        return render_reason_detail(thread, steps)
+    if command.startswith("start "):
+        question = command.removeprefix("start ").strip()
+        try:
+            thread = service.start_thread(question)
+        except RuntimeError as exc:
+            return f"Error: {exc}"
+        return f"Started reason thread: {thread.id}\n{render_reason_detail(thread)}"
+    if command.startswith("advance "):
+        thread_id = command.removeprefix("advance ").strip()
+        try:
+            thread = service.advance_thread(thread_id)
+        except (ReasonNotFound, RuntimeError) as exc:
+            return f"Error: {exc}"
+        return f"Advanced reason thread: {thread.id}\n{render_reason_detail(thread)}"
+    if command.startswith("pause "):
+        thread_id = command.removeprefix("pause ").strip()
+        try:
+            thread = service.pause_thread(thread_id)
+        except (ReasonNotFound, RuntimeError) as exc:
+            return f"Error: {exc}"
+        return f"Paused reason thread: {thread.id}\n{render_reason_detail(thread)}"
+    if command.startswith("resume "):
+        thread_id = command.removeprefix("resume ").strip()
+        try:
+            thread = service.resume_thread(thread_id)
+        except (ReasonNotFound, RuntimeError) as exc:
+            return f"Error: {exc}"
+        return f"Resumed reason thread: {thread.id}\n{render_reason_detail(thread)}"
+    if command.startswith("resolve "):
+        thread_id = command.removeprefix("resolve ").strip()
+        try:
+            thread = service.resolve_thread(thread_id)
+        except (ReasonNotFound, RuntimeError) as exc:
+            return f"Error: {exc}"
+        return f"Resolved reason thread: {thread.id}\n{render_reason_detail(thread)}"
+    if command.startswith("archive "):
+        thread_id = command.removeprefix("archive ").strip()
+        try:
+            thread = service.archive_thread(thread_id)
+        except (ReasonNotFound, RuntimeError) as exc:
+            return f"Error: {exc}"
+        return f"Archived reason thread: {thread.id}\n{render_reason_detail(thread)}"
+    return _interactive_reason_help(command)
+
+
+def _interactive_reason_help(command: str | None = None) -> str:
+    lines: list[str] = []
+    if command is not None:
+        lines.append(f"Unknown reason command: :reason {command}")
+    lines.extend(
+        [
+            "Reason commands:",
+            "  :reason",
+            "  :reason list",
+            "  :reason show <id|index>",
+            "  :reason start <question>",
+            "  :reason advance <id|index>",
+            "  :reason pause <id|index>",
+            "  :reason resume <id|index>",
+            "  :reason resolve <id|index>",
+            "  :reason archive <id|index>",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _handle_interactive_trace_command(command: str, project_root: Path | None) -> str:

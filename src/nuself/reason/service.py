@@ -1,0 +1,161 @@
+"""Reason subsystem service."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from pathlib import Path
+
+from nuself.logs import write_log_event
+from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonStatus
+from nuself.reason.repository import ReasonRepository
+
+MAX_ACTIVE_THREADS = 5
+
+
+class ReasonService:
+    """User-intent operations and state transitions for reasoning threads."""
+
+    def __init__(self, project_root: Path | None = None, repository: ReasonRepository | None = None) -> None:
+        self._repository = repository or ReasonRepository(project_root)
+
+    # ── Read ───────────────────────────────────────────────────────
+
+    def list_threads(self, status: str | None = None) -> list[ReasoningThread]:
+        return self._repository.list_threads(status=status)
+
+    def show_thread(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
+        return self._repository.resolve_thread(id_or_index, by_index=by_index)
+
+    def list_steps(self, thread_id: str) -> list[ReasoningStep]:
+        return self._repository.list_steps(thread_id)
+
+    # ── Write ──────────────────────────────────────────────────────
+
+    def start_thread(
+        self,
+        question: str,
+        *,
+        evidence_refs: tuple[str, ...] = (),
+        priority: str = "normal",
+    ) -> ReasoningThread:
+        active = self._repository.list_threads(status="active")
+        if len(active) >= MAX_ACTIVE_THREADS:
+            active_names = "\n".join(f"  - {t.id}: {t.question[:60]}" for t in active)
+            raise RuntimeError(
+                f"Cannot start new thread: already {len(active)} active threads "
+                f"(max {MAX_ACTIVE_THREADS}). Please pause, resolve, or archive one first.\n"
+                f"Active threads:\n{active_names}"
+            )
+
+        thread = ReasoningThread(
+            question=question.strip(),
+            priority="normal" if priority not in ("normal", "high") else priority,  # type: ignore[arg-type]
+            evidence_refs=list(evidence_refs),
+        )
+        saved = self._repository.save_thread(thread)
+
+        write_log_event(
+            "reasoning",
+            "thread_started",
+            f"Started reasoning thread: {thread.question[:80]}",
+            project_root=self._find_project_root(),
+            status="created",
+            metadata={"thread_id": thread.id, "question": thread.question},
+        )
+        return saved
+
+    def advance_thread(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
+        thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
+
+        if thread.status != "active":
+            raise RuntimeError(f"Cannot advance thread {thread.id}: status is '{thread.status}', expected 'active'")
+
+        write_log_event(
+            "reasoning",
+            "advance_started",
+            f"Advancing reasoning thread: {thread.question[:80]}",
+            project_root=self._find_project_root(),
+            status="started",
+            metadata={"thread_id": thread.id},
+        )
+
+        step = ReasoningStep(
+            thread_id=thread.id,
+            kind="progress",
+            summary=f"Manual advance requested for: {thread.question[:80]}",
+            delta="Manual advance placeholder — LLM integration deferred.",
+            evidence_refs=list(thread.evidence_refs),
+        )
+        self._repository.save_step(step)
+
+        now = datetime.now(UTC).isoformat()
+        updated = ReasoningThread(
+            id=thread.id,
+            question=thread.question,
+            status=thread.status,
+            working_summary=thread.working_summary,
+            hypotheses=list(thread.hypotheses),
+            open_questions=list(thread.open_questions),
+            evidence_refs=list(thread.evidence_refs),
+            priority=thread.priority,
+            last_advanced_at=now,
+            next_review_after=thread.next_review_after,
+            created_at=thread.created_at,
+            updated_at=now,
+        )
+        self._repository.save_thread(updated)
+
+        write_log_event(
+            "reasoning",
+            "advance_completed",
+            f"Advance completed for thread: {thread.question[:80]}",
+            project_root=self._find_project_root(),
+            status="completed",
+            metadata={"thread_id": thread.id, "step_id": step.id, "step_kind": step.kind},
+        )
+        return updated
+
+    def pause_thread(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
+        thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
+        return self._transition(thread, "paused")
+
+    def resume_thread(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
+        thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
+        return self._transition(thread, "active")
+
+    def resolve_thread(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
+        thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
+        return self._transition(thread, "resolved")
+
+    def archive_thread(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
+        thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
+        return self._transition(thread, "archived")
+
+    # ── Internal ───────────────────────────────────────────────────
+
+    def _transition(self, thread: ReasoningThread, new_status: ReasonStatus) -> ReasoningThread:
+        allowed: dict[ReasonStatus, tuple[ReasonStatus, ...]] = {
+            "active": ("paused", "resolved", "archived"),
+            "paused": ("active", "resolved", "archived"),
+            "resolved": ("archived",),
+            "archived": (),
+        }
+        if thread.status not in allowed or new_status not in allowed[thread.status]:
+            raise RuntimeError(f"Cannot transition thread {thread.id} from '{thread.status}' to '{new_status}'")
+
+        updated = thread.with_status(new_status)
+        self._repository.save_thread(updated)
+
+        event_name = "thread_status_changed"
+        write_log_event(
+            "reasoning",
+            event_name,
+            f"Thread {thread.id} status changed: {thread.status} -> {new_status}",
+            project_root=self._find_project_root(),
+            status="updated",
+            metadata={"thread_id": thread.id, "from_status": thread.status, "to_status": new_status},
+        )
+        return updated
+
+    def _find_project_root(self) -> Path | None:
+        return None  # let write_log_event resolve from cwd
