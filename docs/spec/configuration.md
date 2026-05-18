@@ -101,6 +101,7 @@ Rules:
 - Provider-account availability errors include HTTP 401, 402, 403, 429, and response bodies containing subscription, quota, billing, credit, or insufficient-balance indicators.
 - Non-account errors, malformed responses, and prompt/protocol errors are not endpoint failover triggers unless explicitly classified later.
 - Failover attempts are logged without exposing API keys.
+- The `llm_endpoint_failed_over` log is emitted only when a later configured endpoint will actually be tried. If the failed endpoint is the last available endpoint, NuSelf logs `llm_endpoint_unavailable` with `status=exhausted` instead.
 
 ## Chat Daemon Request Timeout
 

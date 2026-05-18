@@ -152,24 +152,34 @@ class FailoverLLM:
         if not self._endpoints:
             raise RuntimeError("LLM API key is not configured")
         last_error: RuntimeError | None = None
-        for endpoint in self._ordered_endpoints():
+        ordered_endpoints = self._ordered_endpoints()
+        for position, endpoint in enumerate(ordered_endpoints):
             try:
                 result = _endpoint_llm(endpoint.settings).complete(messages)
             except RuntimeError as exc:
                 last_error = exc
                 if _is_endpoint_availability_error(str(exc)):
+                    remaining = ordered_endpoints[position + 1 :]
+                    event = "llm_endpoint_failed_over" if remaining else "llm_endpoint_unavailable"
+                    status = "failed_over" if remaining else "exhausted"
+                    message = "LLM endpoint failed; trying next configured endpoint" if remaining else (
+                        "LLM endpoint failed and no fallback endpoint remains"
+                    )
+                    metadata: dict[str, object] = {
+                        "endpoint_index": endpoint.index,
+                        "base_url": endpoint.settings.base_url,
+                        "model": endpoint.settings.model,
+                    }
+                    if remaining:
+                        metadata["next_endpoint_index"] = remaining[0].index
                     write_log_event(
                         "chat",
-                        "llm_endpoint_failed_over",
-                        "",
+                        event,
+                        message,
                         project_root=self._project_root,
-                        status="failed_over",
+                        status=status,
                         error=_redact_llm_error(str(exc)),
-                        metadata={
-                            "endpoint_index": endpoint.index,
-                            "base_url": endpoint.settings.base_url,
-                            "model": endpoint.settings.model,
-                        },
+                        metadata=metadata,
                     )
                     continue
                 raise

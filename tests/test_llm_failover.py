@@ -3,7 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+import pytest
+
 from nuself.llm import ChatMessage, FailoverLLM, LLMEndpoint, LLMSettings
+from nuself.logs import read_log_events
 
 
 def _endpoint(index: int, model: str, *, provider: Literal["openai", "anthropic"] = "openai") -> LLMEndpoint:
@@ -41,6 +44,34 @@ def test_failover_llm_switches_and_remembers_success(
     assert (tmp_path / "private" / "runtime" / "llm_state.json").read_text(encoding="utf-8") == (
         '{"active_endpoint_index": 1}\n'
     )
+    logs = read_log_events(project_root=tmp_path, component="chat")
+    assert logs[-1].event == "llm_endpoint_failed_over"
+    assert logs[-1].status == "failed_over"
+    assert logs[-1].metadata is not None
+    assert logs[-1].metadata["next_endpoint_index"] == 1
+
+
+def test_failover_llm_logs_unavailable_when_no_fallback_remains(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    def fake_complete(self: object, messages: list[ChatMessage]) -> str:
+        raise RuntimeError(
+            'LLM request failed with HTTP 429: {"type":"error","error":{"type":"FreeUsageLimitError"}}'
+        )
+
+    monkeypatch.setattr("nuself.llm.OpenAICompatibleLLM.complete", fake_complete)  # type: ignore[attr-defined]
+    llm = FailoverLLM((_endpoint(0, "free-model"),), project_root=tmp_path)
+
+    with pytest.raises(RuntimeError, match="all configured LLM endpoints failed"):
+        llm.complete([ChatMessage(role="user", content="hello")])
+
+    logs = read_log_events(project_root=tmp_path, component="chat")
+    assert len(logs) == 1
+    assert logs[0].event == "llm_endpoint_unavailable"
+    assert logs[0].status == "exhausted"
+    assert logs[0].metadata is not None
+    assert logs[0].metadata["endpoint_index"] == 0
+    assert "next_endpoint_index" not in logs[0].metadata
 
 
 def test_failover_llm_starts_from_remembered_success(
