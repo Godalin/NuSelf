@@ -10,18 +10,27 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 - Added LLM endpoint failover so NuSelf can switch between configured LLM endpoints when an account/subscription endpoint becomes unavailable, with OpenAI-compatible endpoints as the default and `anthropic: true` for Anthropic endpoints.
 - Added the trace foundation with `ThoughtTrace`, `TraceLink`, file-backed trace storage, trace search, CLI `trace list/show/search`, and REPL `:trace` commands.
+- Added automatic `chat_turn` trace recording when final chat replies cite evidence references.
+- Added REPL `:restart` / `:r` for restarting the daemon and reconnecting without leaving the interactive session.
+- Added the long-run reason foundation with file-backed reasoning threads, reasoning steps, `nuself reason ...` commands, and REPL `:reason` commands.
+- Added reflection organization for merging similar pending reflection ideas, including `nuself inbox reflection organize`.
 
 ### Changed
 
 - Reorganized CLI and REPL commands around the v0.2.0 command model, moving sources under `memory source`, proactive items under `inbox`, diagnostics under `dev`, and removing old command-path compatibility aliases.
+- Reflection no longer blocks new cycles based on pending reflection count; duplicate pressure is handled by organization instead.
+- Persona/self activity output now uses structured logs only, so REPL rendering keeps log headers and body text in the same format as other activity logs.
 
 ### Fixed
 
-- Nothing yet.
+- Clarified LLM endpoint logs so exhausted endpoints are distinguished from actual failover attempts.
+- Fixed reason logs to use the configured project root.
+- Fixed `:reason` with no arguments to show reason command help instead of listing threads.
 
 ### Docs
 
 - Planned v0.2.0 around a breaking command cleanup, long-run reasoning, and traceable thought provenance.
+- Finalized the first long-run reasoning spec slice and documented reflection organization behavior.
 
 ## 0.1.0 - 2026-05-16
 
