@@ -1,6 +1,6 @@
 # Long-Run Reasoning Spec
 
-Status: TODO. This spec describes the intended subsystem. It is not implemented yet.
+Status: ready for first v0.2.0 implementation.
 
 ## Purpose
 
@@ -19,7 +19,7 @@ Reason must integrate with trace. Reason owns durable long-run question state; t
 
 ## Storage Contract
 
-TODO: implement a file-backed repository under:
+File-backed repository under:
 
 ```text
 private/reasoning/threads/{thread_id}.json
@@ -27,6 +27,8 @@ private/reasoning/steps/{thread_id}/{step_id}.json
 ```
 
 Machine-readable records store timezone-aware ISO timestamps. Human-readable CLI output renders timestamps in the current system timezone per `cli-interaction.md`.
+
+Repository writes must be atomic: write to a temporary sibling file, then replace the target file.
 
 ## Service And Tool-Facing Interface
 
@@ -72,30 +74,30 @@ advance_reasoning_thread_after_confirmation(thread_id)
 
 ## ReasoningThread
 
-TODO: define a typed domain model with these fields:
+Typed domain model:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `id` | string | Stable thread id |
+| `id` | string | Stable thread id (uuid4 hex) |
 | `question` | string | User-approved long-run question |
 | `status` | string | `active`, `paused`, `resolved`, or `archived` |
 | `working_summary` | string | Current compact state of the reasoning |
 | `hypotheses` | list[string] | Current live hypotheses |
 | `open_questions` | list[string] | Subquestions still unresolved |
 | `evidence_refs` | list[string] | Memory, source, thread, reflection, or step refs |
-| `priority` | string | `normal` or `high` for first implementation |
+| `priority` | string | `normal` or `high` |
 | `last_advanced_at` | string \| null | Last successful advance timestamp |
-| `next_review_after` | string \| null | Earliest scheduler review time |
+| `next_review_after` | string \| null | Earliest scheduler review time (null for first impl) |
 | `created_at` | string | Creation timestamp |
 | `updated_at` | string | Last state update timestamp |
 
 ## ReasoningStep
 
-TODO: define a typed domain model with these fields:
+Typed domain model:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `id` | string | Stable step id |
+| `id` | string | Stable step id (uuid4 hex) |
 | `thread_id` | string | Parent reasoning thread |
 | `kind` | string | `progress`, `no_change`, `question`, `synthesis`, `contradiction`, or `resolution` |
 | `summary` | string | User-readable step summary |
@@ -109,8 +111,6 @@ TODO: define a typed domain model with these fields:
 
 ## State Transitions
 
-TODO: implement these transitions:
-
 | From | Action | To |
 |---|---|---|
 | none | `start` | `active` |
@@ -123,29 +123,37 @@ Archived threads are hidden from default list output but remain addressable by i
 
 ## Advance Contract
 
-TODO: implement manual advance first.
+Manual advance only for first implementation.
 
 ```text
 advance(thread)
   ├─ load thread
   ├─ reject unless status=active
-  ├─ retrieve linked and relevant context
-  ├─ generate a structured ReasoningStep
+  ├─ retrieve thread context (working_summary, hypotheses, open_questions, evidence_refs)
+  ├─ generate a structured ReasoningStep via LLM
   ├─ update working_summary, hypotheses, open_questions, evidence_refs
-  ├─ update last_advanced_at and next_review_after
+  ├─ update last_advanced_at (next_review_after remains null)
   └─ persist atomically
 ```
 
 Each non-`no_change` step must explain the `delta` from the prior state. A step that cannot identify meaningful movement should use `kind=no_change` and should not notify by default.
 
+First-pass context retrieval scope: thread's own `working_summary`, `hypotheses`, `open_questions`, and `evidence_refs`. No external retrieval from memory/reflection/trace in first implementation.
+
+## Active Thread Cap
+
+Default cap: 5 active threads. If the user tries to start a new thread when already 5 are active, the service must reject with a message listing active threads and asking the user to pause, resolve, or archive one first.
+
+Default priority: `normal`. The `--priority high` flag is accepted at start time but does not change cap behavior in first implementation.
+
 ## CLI Contract
 
-TODO: add commands:
+Commands:
 
 ```text
 nuself reason list [--status active|paused|resolved|archived|all] [--json]
 nuself reason show <id_or_index> [--by-index] [--json]
-nuself reason start "<question>"
+nuself reason start "<question>" [--priority normal|high]
 nuself reason advance <id_or_index> [--by-index]
 nuself reason pause <id_or_index> [--by-index]
 nuself reason resume <id_or_index> [--by-index]
@@ -159,7 +167,7 @@ Default list output shows active and paused threads. `--status all` includes res
 
 ## REPL Contract
 
-TODO: add interactive commands:
+Interactive commands:
 
 ```text
 :reason
@@ -173,11 +181,13 @@ TODO: add interactive commands:
 :reason archive <id_or_index>
 ```
 
+`:reason` with no arguments prints reason subcommand help.
+
 REPL output must match CLI formatting as closely as possible.
 
 ## Chat Tool Contract
 
-TODO: add chat tools after manual CLI support exists:
+Add chat tools after manual CLI support exists:
 
 - `list_reasoning_threads`
 - `show_reasoning_thread`
@@ -191,7 +201,7 @@ The chat agent may suggest a new reasoning thread, but must not create one witho
 
 ## Trace Contract
 
-TODO: every reason thread creation and non-trivial advance should write a `ThoughtTrace`.
+Every reason thread creation and non-trivial advance writes a `ThoughtTrace`.
 
 - Thread creation writes `kind=reason_thread`.
 - Advance writes `kind=reason_step`.
@@ -201,17 +211,17 @@ TODO: every reason thread creation and non-trivial advance should write a `Thoug
 
 ## Reflection Bridge
 
-TODO: add an explicit promotion command after the base repository exists:
+Add an explicit promotion command after the base repository exists:
 
 ```text
 nuself reflection promote <id_or_index> [--by-index]
 ```
 
-Promotion creates a reasoning thread from the reflection title/body and records the reflection id in `evidence_refs`. The original reflection should remain pending until the user dismisses, archives, or explicitly chooses a promotion policy.
+Promotion creates a reasoning thread from the reflection title/body and records the reflection id in `evidence_refs`. The original reflection must remain pending — promotion does not automatically archive or dismiss the source reflection.
 
 ## Notification Policy
 
-TODO: integrate with notification outbox only after manual advance is stable.
+Integrate with notification outbox only after manual advance is stable.
 
 Notify only when a step is user-worthy:
 
@@ -224,7 +234,7 @@ No-change steps must not notify by default.
 
 ## Logging
 
-TODO: add a `reasoning` log component or reuse `memory`/`chat` only if a later design chooses not to add a component.
+Add a `reasoning` log component.
 
 Expected events:
 
@@ -237,11 +247,9 @@ Expected events:
 | `advance_no_change` | `skipped` | No meaningful update |
 | `advance_failed` | `failed` | Advance failed safely |
 
-## Open Decisions
+## Decisions
 
-TODO before implementation:
-
-- Decide whether to add a new `reasoning` log component.
-- Decide active-thread cap and default priority behavior.
-- Decide whether promotion archives the source reflection automatically.
-- Decide the first-pass context retrieval scope.
+- A new `reasoning` log component is used (as defined above).
+- Active thread cap: 5 by default. Priority does not change the cap.
+- Promotion does not archive the source reflection automatically.
+- First-pass context retrieval: thread-local only (working_summary, hypotheses, open_questions, evidence_refs).

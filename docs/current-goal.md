@@ -21,6 +21,8 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 - `trace` is the chosen user-facing name for thought provenance.
 - `reason` should integrate with `trace`: reason owns durable state; trace owns provenance.
 - LLM endpoint failover should use a direct `llm` endpoint list. Endpoints default to OpenAI-compatible behavior; `anthropic: true` marks Anthropic endpoints. Do not introduce a broad provider plugin layer yet.
+- **Go endpoint unblocked**: `minimax-m2.5` returns 400, superseded by `minimax-m2.7`. Config updated and connectivity verified.
+- **Reason subsystem implemented**: `src/nuself/reason/` with domain models, repository, service, CLI commands, REPL commands, and TUI renderers. 31 tests passing.
 
 ## Next Steps
 
@@ -28,8 +30,8 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 
 - [x] Update [`docs/spec/cli-interaction.md`](spec/cli-interaction.md) with the new command tree and breaking-removal policy.
 - [x] Finalize [`docs/spec/trace.md`](spec/trace.md) enough for first implementation.
-- [ ] Finalize [`docs/spec/long-reasoning.md`](spec/long-reasoning.md) enough for first implementation.
-- [ ] Update [`docs/spec/chat-agent-tools.md`](spec/chat-agent-tools.md) for read-only reason awareness and future trace tools.
+- [x] Finalize [`docs/spec/long-reasoning.md`](spec/long-reasoning.md) enough for first implementation.
+- [x] Update [`docs/spec/chat-agent-tools.md`](spec/chat-agent-tools.md) for read-only reason awareness and future trace tools.
 
 ### P1 — Command Cleanup
 
@@ -57,9 +59,9 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 
 ### P4 — Reason Foundation
 
-- [ ] Add `ReasoningThread`, `ReasoningStep`, and repositories.
-- [ ] Add `nuself reason list/show/start/advance/pause/resume/resolve/archive`.
-- [ ] Add `:reason` commands.
+- [x] Add `ReasoningThread`, `ReasoningStep`, and repositories.
+- [x] Add `nuself reason list/show/start/advance/pause/resume/resolve/archive`.
+- [x] Add `:reason` commands.
 - [ ] Make reason thread creation and advance write trace records.
 - [ ] Add reflection promotion into reason and trace.
 

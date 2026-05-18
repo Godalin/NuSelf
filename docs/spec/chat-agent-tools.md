@@ -87,6 +87,40 @@ The LLM outputs a JSON object. If it contains `"tool": "<name>"` and `"tool_args
 - **Returns**: Confirmation with new importance value, or error if not found.
 - **When to use**: When the user emphasizes or downplays the significance of a memory during conversation.
 
+### New: Reason Awareness Tools (Read-Only)
+
+| Tool | Purpose |
+|---|---|
+| `list_active_reasoning_threads` | Return active/paused reasoning threads. |
+| `show_reasoning_thread` | Show details of a specific reasoning thread. |
+
+#### `list_active_reasoning_threads`
+
+- **Args**: none
+- **Behavior**: Reads `ReasonService.list_threads(status_filter="active")` and formats active/paused threads for the LLM.
+- **Returns**: Numbered list of threads with question, status, step count, and last-advanced time. Empty message if none.
+- **When to use**: The agent may call this when the user asks about "what I'm thinking about", "open questions", "reasoning threads", or when contextually relevant.
+
+#### `show_reasoning_thread`
+
+- **Args**: `thread_id: str`
+- **Behavior**: Reads the full thread via `ReasonService.show_thread(thread_id)` including hypotheses, open questions, and recent steps.
+- **Returns**: Formatted thread details, or error if not found.
+- **When to use**: When the user asks about a specific reasoning thread in detail.
+
+### Future: Trace Awareness Tools
+
+Trace tools (e.g. `search_trace`, `show_trace`) are deferred until trace has enough real data to be useful for the chat agent. At that point, add:
+
+| Tool | Purpose |
+|---|---|
+| `search_trace` | Query thought provenance records. |
+| `show_trace` | Show a specific trace record with its links. |
+
+### Behavioral Guidelines for Reason Awareness (Prompt-Level)
+
+> "You can also read active reasoning threads—durable long-run questions the user is working through. If the user asks about their open questions or threads, summarize the active reasoning threads. You may suggest advancing a thread if the conversation relates, but never create a new reasoning thread without asking the user to do it themselves via the `:reason start` command or `nuself reason start`."
+
 ### Behavioral Guidelines for Memory Curation (Prompt-Level)
 
 > "You can also help the user curate their memory. If they say something like 'that doesn't matter anymore' or 'this is very important', you may archive the entry or adjust its importance. Always confirm the action with the user before invoking the tool."
@@ -100,7 +134,7 @@ The `_system_prompt` method in `ConversationGraphRuntime` must include a dynamic
 - Argument schema
 - When the agent should consider using it
 
-Example addition:
+Example additions:
 
 ```
 - list_pending_reflections(limit: int = 5): View pending proactive ideas.
@@ -108,6 +142,11 @@ Example addition:
   or when the conversation naturally pauses.
 - dismiss_reflection(index: int): Remove an idea from the active pool.
   Use when the user explicitly says they are not interested in a topic.
+- list_active_reasoning_threads(): View active reasoning threads.
+  Use when the user asks about open questions or what they are
+  thinking about.
+- show_reasoning_thread(thread_id: str): Show details of a specific
+  reasoning thread. Use when the user asks about a particular thread.
 ```
 
 ## Behavioral Guidelines (Prompt-Level)
@@ -126,4 +165,5 @@ The system prompt should include:
 
 - Unit test each new tool in isolation.
 - Integration test: verify the agent can invoke `list_pending_reflections` and `dismiss_reflection` through the graph runtime.
-- Test edge cases: empty repository, invalid index, duplicate dismiss.
+- Integration test: verify the agent can invoke `list_active_reasoning_threads` and `show_reasoning_thread` through the graph runtime.
+- Test edge cases: empty repository, invalid index, duplicate dismiss, empty reason repository.
