@@ -1257,6 +1257,23 @@ def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -
     assert "dismiss_reflection" in system_prompt
 
 
+def test_chat_agent_includes_reason_and_trace_tools_and_skills(tmp_path: Path) -> None:
+    llm = FakeLLM()
+    agent = ChatAgent(tmp_path, llm=llm)
+
+    agent.respond("what are you still thinking about?")
+
+    system_prompt = llm.calls[0][0].content
+    assert "list_active_reasoning_threads" in system_prompt
+    assert "show_reasoning_thread" in system_prompt
+    assert "search_trace" in system_prompt
+    assert "show_trace" in system_prompt
+    assert "- reason:" in system_prompt
+    assert "Reason is NuSelf's durable long-run thinking space." in system_prompt
+    assert "- trace:" in system_prompt
+    assert "Trace is NuSelf's thought provenance database." in system_prompt
+
+
 # --- Memory management tools ---
 
 def test_archive_memory_tool_success(tmp_path: Path) -> None:
@@ -1303,6 +1320,64 @@ def test_update_memory_importance_tool_not_found(tmp_path: Path) -> None:
     tool = _chat_tool(tmp_path, "update_memory_importance")
     result = _invoke_chat_tool(tool, {"entry_id": "nonexistent", "importance": 0.5})
     assert "Error" in result
+
+
+def test_list_active_reasoning_threads_tool(tmp_path: Path) -> None:
+    from nuself.reason.service import ReasonService
+
+    service = ReasonService(tmp_path)
+    service.start_thread("How should this be remembered?")
+    tool = _chat_tool(tmp_path, "list_active_reasoning_threads")
+
+    result = _invoke_chat_tool(tool)
+
+    assert "Active and paused reasoning threads:" in result
+    assert "How should this be remembered?" in result
+    assert "steps=0" in result
+
+
+def test_show_reasoning_thread_tool(tmp_path: Path) -> None:
+    from nuself.reason.service import ReasonService
+
+    thread = ReasonService(tmp_path).start_thread("Inspect this reason thread")
+    tool = _chat_tool(tmp_path, "show_reasoning_thread")
+
+    result = _invoke_chat_tool(tool, {"thread_id": thread.id})
+
+    assert "[reason] Inspect this reason thread" in result
+    assert thread.id in result
+
+
+def test_search_trace_tool(tmp_path: Path) -> None:
+    from nuself.trace.service import TraceRecorder
+
+    trace = TraceRecorder(tmp_path).record(
+        kind="decision",
+        title="Trace search target",
+        summary="A searchable provenance item.",
+    )
+    tool = _chat_tool(tmp_path, "search_trace")
+
+    result = _invoke_chat_tool(tool, {"query": "searchable"})
+
+    assert "Matching trace records:" in result
+    assert trace.title in result
+
+
+def test_show_trace_tool(tmp_path: Path) -> None:
+    from nuself.trace.service import TraceRecorder
+
+    trace = TraceRecorder(tmp_path).record(
+        kind="decision",
+        title="Trace detail target",
+        summary="A detailed provenance item.",
+    )
+    tool = _chat_tool(tmp_path, "show_trace")
+
+    result = _invoke_chat_tool(tool, {"trace_id": trace.id})
+
+    assert "[trace] Trace detail target" in result
+    assert "A detailed provenance item." in result
 
 
 def test_chat_agent_includes_memory_tools_in_system_prompt(tmp_path: Path) -> None:

@@ -10,8 +10,12 @@ def test_load_agent_skills_from_skill_md_files() -> None:
 
     assert "memory" in skills
     assert "reflection" in skills
+    assert "reason" in skills
+    assert "trace" in skills
     assert "search_memory" in skills["memory"].allowed_tools
     assert "list_pending_reflections" in skills["reflection"].allowed_tools
+    assert "list_active_reasoning_threads" in skills["reason"].allowed_tools
+    assert "search_trace" in skills["trace"].allowed_tools
     assert "Durable memory is not ambient context" in skills["memory"].instructions
 
 

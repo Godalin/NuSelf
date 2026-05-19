@@ -10,7 +10,13 @@ from langchain_core.tools import BaseTool, StructuredTool
 
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
+from nuself.reason.repository import ReasonNotFound
+from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
+from nuself.trace.repository import TraceNotFound
+from nuself.trace.service import TraceQueryService
+from nuself.tui.reason import render_reason_detail, render_reason_row
+from nuself.tui.trace import render_trace_detail, render_trace_row
 
 
 def build_langchain_chat_tools(
@@ -141,6 +147,65 @@ def build_langchain_chat_tools(
         repo.reindex()
         return f'Updated importance of "{updated.title}" to {importance_float:.2f}.'
 
+    def list_active_reasoning_threads() -> str:
+        """List active and paused long-run reasoning threads."""
+
+        service = ReasonService(project_root)
+        threads = service.list_threads()
+        if not threads:
+            return "No active or paused reasoning threads."
+        lines = ["Active and paused reasoning threads:"]
+        for index, thread in enumerate(threads, start=1):
+            steps = service.list_steps(thread.id)
+            row = render_reason_row(thread, index=index)
+            lines.append(f"{row}\n  steps={len(steps)}")
+        return "\n".join(lines)
+
+    def show_reasoning_thread(thread_id: str) -> str:
+        """Show one long-run reasoning thread."""
+
+        if not thread_id.strip():
+            return "Error: thread_id must be a non-empty string"
+        service = ReasonService(project_root)
+        try:
+            thread = service.show_thread(thread_id.strip())
+        except ReasonNotFound as exc:
+            return f"Error: {exc}"
+        return render_reason_detail(thread, service.list_steps(thread.id))
+
+    def search_trace(query: str, limit: int = 5) -> str:
+        """Search thought provenance trace records."""
+
+        query_str = str(query) if query else ""
+        if not query_str.strip():
+            return "Error: query must be a non-empty string"
+        try:
+            limit_int = int(limit)
+        except (ValueError, TypeError):
+            return "Error: limit must be an integer"
+        if limit_int < 1:
+            return "Error: limit must be a positive integer"
+
+        traces = TraceQueryService(project_root).search_traces(query_str.strip())[:limit_int]
+        if not traces:
+            return f"No trace records matched: {query_str}"
+        lines = ["Matching trace records:"]
+        for index, trace in enumerate(traces, start=1):
+            lines.append(render_trace_row(trace, index=index))
+        return "\n".join(lines)
+
+    def show_trace(trace_id: str) -> str:
+        """Show one thought provenance trace record."""
+
+        if not trace_id.strip():
+            return "Error: trace_id must be a non-empty string"
+        service = TraceQueryService(project_root)
+        try:
+            trace = service.show_trace(trace_id.strip())
+        except TraceNotFound as exc:
+            return f"Error: {exc}"
+        return render_trace_detail(trace, service.links_for(trace.id))
+
     structured_tool = cast(Callable[..., StructuredTool], getattr(StructuredTool, "from_function"))
     return (
         structured_tool(
@@ -196,6 +261,37 @@ def build_langchain_chat_tools(
                 "Adjust the importance score (0.0-1.0) of a memory entry. "
                 "Use when the user emphasizes or downplays the significance of a memory. "
                 "Requires the memory entry_id and a new importance value."
+            ),
+        ),
+        structured_tool(
+            list_active_reasoning_threads,
+            name="list_active_reasoning_threads",
+            description=(
+                "List active and paused long-run reasoning threads. Use when the user asks about "
+                "open questions, ongoing thinking, active reason threads, or what NuSelf is still considering."
+            ),
+        ),
+        structured_tool(
+            show_reasoning_thread,
+            name="show_reasoning_thread",
+            description=(
+                "Show details for a specific long-run reasoning thread, including summary, hypotheses, "
+                "open questions, evidence refs, and recent steps. Requires a thread_id."
+            ),
+        ),
+        structured_tool(
+            search_trace,
+            name="search_trace",
+            description=(
+                "Search NuSelf thought provenance records. Use when the user asks where an idea came from, "
+                "how a belief or answer formed, or what prior records support a conclusion."
+            ),
+        ),
+        structured_tool(
+            show_trace,
+            name="show_trace",
+            description=(
+                "Show a specific thought provenance trace record with related links. Requires a trace_id."
             ),
         ),
     )

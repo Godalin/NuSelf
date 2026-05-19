@@ -41,6 +41,10 @@ skills/
     SKILL.md
   reflection/
     SKILL.md
+  reason/
+    SKILL.md
+  trace/
+    SKILL.md
 ```
 
 Each `SKILL.md` starts with YAML frontmatter containing at least `name` and `description`, followed by Markdown instructions. NuSelf also uses `allowed-tools` to name the LangChain tools the skill may call.
@@ -139,9 +143,9 @@ When the LLM adapter is migrated to a native LangChain chat model, the same regi
 - **Returns**: Formatted thread details, or error if not found.
 - **When to use**: When the user asks about a specific reasoning thread in detail.
 
-### Future: Trace Awareness Tools
+### New: Trace Awareness Tools (Read-Only)
 
-Trace tools (e.g. `search_trace`, `show_trace`) are deferred until trace has enough real data to be useful for the chat agent. At that point, add:
+Trace tools let the chat agent inspect thought provenance without mutating it.
 
 | Tool | Purpose |
 |---|---|
@@ -204,12 +208,17 @@ The reflection skill lives in `src/nuself/agent/skills/reflection/SKILL.md` and 
 
 > "Reflection ideas are proactive suggestions, not facts about the user. Use `list_pending_reflections` only when the user asks for ideas/thoughts/reflections, the conversation naturally pauses, or a topic strongly matches proactive exploration. Introduce at most one idea in natural language. Use `dismiss_reflection` when the user declines a topic, and `archive_reflection` when the user engages and the discussion feels complete."
 
-### Future Reason And Trace Skills
+### Reason Skill
 
-When reason and trace tools become chat-visible, they must follow the same service pattern:
+The reason skill lives in `src/nuself/agent/skills/reason/SKILL.md` and must include this behavioral contract:
 
-- Reason skill: call reason tools when the user asks about active long-running questions, open threads, or what NuSelf is continuing to think about.
-- Trace skill: call trace tools when the user asks where an idea came from, how a belief formed, or what prior steps support a conclusion.
+> "Reason is NuSelf's durable long-run thinking space. If the user asks about active long-running questions, open threads, or what NuSelf is continuing to think about, use `list_active_reasoning_threads` or `show_reasoning_thread` before answering unless the answer is fully present in visible context. You may suggest creating or advancing a thread, but must not create, advance, resolve, or archive one without explicit user confirmation."
+
+### Trace Skill
+
+The trace skill lives in `src/nuself/agent/skills/trace/SKILL.md` and must include this behavioral contract:
+
+> "Trace is NuSelf's thought provenance database. If the user asks where an idea came from, how a memory/belief/answer formed, or what prior records support a conclusion, use `search_trace` or `show_trace` before answering unless the provenance is fully visible in the current conversation."
 
 ## Dismissed Reflection Lifecycle
 
