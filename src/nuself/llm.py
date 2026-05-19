@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import re
 from pathlib import Path
 from typing import Literal, Protocol, TypeAlias, cast
 from urllib.error import HTTPError, URLError
@@ -15,6 +16,7 @@ from nuself.logs import write_log_event
 
 ChatRole: TypeAlias = Literal["system", "user", "assistant"]
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+HTTP_AVAILABILITY_STATUS_RE = re.compile(r"\bhttp\s+(401|402|403|429)\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -262,7 +264,7 @@ def _save_llm_state(project_root: Path | None, endpoint_index: int) -> None:
 
 def _is_endpoint_availability_error(message: str) -> bool:
     lowered = message.lower()
-    if any(f"http {code}" in lowered for code in ("401", "402", "403", "429")):
+    if HTTP_AVAILABILITY_STATUS_RE.search(message):
         return True
     indicators = (
         "invalidsubscription",

@@ -74,6 +74,26 @@ def test_failover_llm_logs_unavailable_when_no_fallback_remains(
     assert "next_endpoint_index" not in logs[0].metadata
 
 
+def test_failover_llm_does_not_treat_longer_http_code_as_availability_error(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    calls: list[str] = []
+
+    def fake_complete(self: object, messages: list[ChatMessage]) -> str:
+        settings = getattr(self, "_settings")
+        calls.append(getattr(settings, "model"))
+        raise RuntimeError("LLM request failed with HTTP 4013: upstream bug")
+
+    monkeypatch.setattr("nuself.llm.OpenAICompatibleLLM.complete", fake_complete)  # type: ignore[attr-defined]
+    llm = FailoverLLM((_endpoint(0, "primary"), _endpoint(1, "backup")), project_root=tmp_path)
+
+    with pytest.raises(RuntimeError, match="HTTP 4013"):
+        llm.complete([ChatMessage(role="user", content="hello")])
+
+    assert calls == ["primary"]
+    assert read_log_events(project_root=tmp_path, component="chat") == []
+
+
 def test_failover_llm_starts_from_remembered_success(
     tmp_path: Path, monkeypatch: object
 ) -> None:
