@@ -43,6 +43,8 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
 
     if event.component == "persona" and event.event == "persona_summary":
         return _render_persona_summary_event(event, color=color)
+    if event.event == "persona_discussion_step":
+        return _render_persona_discussion_step(event, color=color)
     if _discussion_trace_metadata(event):
         return _render_discussion_log_event(event, color=color)
 
@@ -81,6 +83,30 @@ def _render_discussion_log_event(event: LogEvent, *, color: bool | None = None) 
     trace = _discussion_trace_metadata(event)
     for line in render_discussion_trace(trace, title="discussion", color=color):
         lines.append(f"  {line}" if line else "")
+    return "\n".join(lines)
+
+
+def _render_persona_discussion_step(event: LogEvent, *, color: bool | None = None) -> str:
+    """Compact single-line rendering for streaming discussion steps."""
+    trace = _discussion_trace_metadata(event)
+    if not trace:
+        return ""
+    theme = TerminalTheme(color=color)
+    lines: list[str] = []
+    for entry in trace:
+        text = str(entry)
+        turn_label, speaker, content = _parse_trace_entry(text)
+        if speaker is not None and speaker == turn_label:
+            tag = theme.paint(f"[{speaker}]", _persona_color(speaker))
+            lines.append(f"  {tag} {content}")
+        elif speaker is not None:
+            tag = _color_persona_trace_tag(f"[{speaker}]", speaker, theme)
+            lines.append(f"    {tag} {content}")
+        elif turn_label is not None:
+            tag = theme.paint(f"[{turn_label}]", _discussion_group_color(turn_label))
+            lines.append(f"  {tag} {content}")
+        else:
+            lines.append(f"    {text}")
     return "\n".join(lines)
 
 
