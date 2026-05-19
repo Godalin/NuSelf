@@ -70,7 +70,7 @@ def _render_discussion_log_event(event: LogEvent, *, color: bool | None = None) 
     lines = [_render_log_header(tag, event.event, event, theme)]
     lines.extend(render_record_body(event.message))
     trace = _discussion_trace_metadata(event)
-    for line in render_discussion_trace(trace, title="discussion"):
+    for line in render_discussion_trace(trace, title="discussion", color=color):
         lines.append(f"  {line}" if line else "")
     return "\n".join(lines)
 
@@ -370,7 +370,7 @@ def render_reflection_entry_detail(entry: ReflectionEntry, *, color: bool | None
     lines = [render_record_header(f"{status_tag} {entry.title}", fields)]
     lines.extend(render_record_body(entry.body))
     if entry.discussion_trace:
-        for line in render_discussion_trace(list(entry.discussion_trace), title="discussion"):
+        for line in render_discussion_trace(list(entry.discussion_trace), title="discussion", color=color):
             lines.append(f"  {line}" if line else "")
     return "\n".join(lines)
 
@@ -390,8 +390,9 @@ def _parse_trace_entry(text: str) -> tuple[str | None, str | None, str]:
     return None, None, text
 
 
-def render_discussion_trace(trace: list[object], *, title: str = "discussion trace") -> list[str]:
+def render_discussion_trace(trace: list[object], *, title: str = "discussion trace", color: bool | None = None) -> list[str]:
     """Render a discussion trace grouped by turn with per-speaker labels."""
+    theme = TerminalTheme(color=color)
     lines: list[str] = [f"{title}:"]
     current_turn: str | None = None
 
@@ -406,8 +407,8 @@ def render_discussion_trace(trace: list[object], *, title: str = "discussion tra
             current_turn = turn_label
 
         if speaker is not None:
-            tag = f"[{speaker}]"
-            lines.append(f"    {tag:<18} {content}")
+            tag = _color_persona_trace_tag(f"[{speaker}]", speaker, theme)
+            lines.append(f"    {tag} {content}")
         elif turn_label is not None:
             lines.append(f"    {'':18} {content}")
         else:
@@ -415,6 +416,13 @@ def render_discussion_trace(trace: list[object], *, title: str = "discussion tra
             lines.append(f"{indent}{text}")
 
     return lines
+
+
+def _color_persona_trace_tag(tag: str, speaker: str, theme: TerminalTheme) -> str:
+    padded = f"{tag:<18}"
+    if speaker.endswith("_self") or speaker in {"host", "synthesis"}:
+        return theme.paint(padded, _persona_color(speaker))
+    return padded
 
 
 def render_host_decision(event: LogEvent, *, color: bool | None = None) -> list[str]:

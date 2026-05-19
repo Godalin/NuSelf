@@ -681,10 +681,14 @@ class ConversationGraphRuntime:
         self._activation_policy = LLMBackedActivationPolicy(persona_definitions, llm=self._llm)
         self._presentation_agent = PresentationAgent(self._llm, language_preference=self._language_preference)
         self._persona_driver = PersonaGraphDriver(
-            persona_node=LLMBackedPersonaNode(llm=self._llm),
-            synthesizer_node=LLMBackedSynthesizerNode(llm=self._llm),
+            persona_node=LLMBackedPersonaNode(llm=self._llm, language_preference=self._language_preference),
+            synthesizer_node=LLMBackedSynthesizerNode(llm=self._llm, language_preference=self._language_preference),
         )
-        self._persona_discussion_service = SharedPersonaDiscussionService(project_root=project_root, llm=self._llm)
+        self._persona_discussion_service = SharedPersonaDiscussionService(
+            project_root=project_root,
+            llm=self._llm,
+            language_preference=self._language_preference,
+        )
         self._trace_recorder = TraceRecorder(project_root)
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),

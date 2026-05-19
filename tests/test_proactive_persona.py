@@ -332,6 +332,32 @@ def test_proactive_persona_discussion_uses_llm_when_provided(monkeypatch: pytest
     assert any("analyst_self" in entry for entry in trace)
 
 
+def test_proactive_persona_discussion_injects_language_preference() -> None:
+    personas = (
+        PersonaDefinition(id="skeptic_self", description="Challenges assumptions."),
+        PersonaDefinition(id="builder_self", description="Proposes steps."),
+        PersonaDefinition(id="analyst_self", description="Decomposes questions."),
+    )
+    llm = _FakeLLM({
+        "select": '{"selected_persona_ids": ["skeptic_self", "builder_self", "analyst_self"], "reason": "test"}',
+        "score": '{"note": "中文观点", "score": 0.7}',
+        "moderator": '{"converged": true, "emergent_persona": "none", "reason": "test"}',
+    })
+    discussion = ProactivePersonaDiscussion(
+        personas=personas,
+        llm=llm,
+        min_participants=3,
+        max_participants=3,
+        language_preference="zh-CN",
+    )
+
+    discussion.discuss(_make_candidate())
+
+    prompts = "\n".join(call[0].content for call in llm.calls)
+    assert "Write the note in zh-CN" in prompts
+    assert "Write the summary in zh-CN" in prompts
+
+
 # --- Legacy persona node tests (unaffected by proactive scoring changes) ---
 
 

@@ -39,8 +39,9 @@ class PersonaCompetitionResult:
 class LLMBackedScoringPersonaNode:
     """LLM-driven persona node that generates both a note and a 0-1 score."""
 
-    def __init__(self, llm: ChatLLM) -> None:
+    def __init__(self, llm: ChatLLM, *, language_preference: str = "en") -> None:
         self._llm = llm
+        self._language_preference = language_preference
 
     def __call__(self, persona: PersonaDefinition, persona_input: PersonaInput) -> PersonaContribution:
         prior = persona_input.memory_context.strip()
@@ -49,11 +50,16 @@ class LLMBackedScoringPersonaNode:
         else:
             prior_block = ""
 
+        response_language = ""
+        if self._language_preference != "en":
+            response_language = f" Write the note in {self._language_preference}."
+
         system = (
             f"You are {persona.id} in a competitive discussion about a proactive reflection idea.\n"
             f"Your role: {persona.description}\n\n"
             f"Candidate:\n{persona_input.user_message}{prior_block}\n\n"
-            "Give your perspective (1-2 sentences) AND a score (0.0-1.0) for how strongly you support this idea.\n\n"
+            "Give your perspective (1-2 sentences) AND a score (0.0-1.0) for how strongly you support this idea."
+            f"{response_language}\n\n"
             'Return ONLY JSON: {"note": "your perspective", "score": 0.7}\n'
             "No markdown fences."
         )
@@ -110,6 +116,7 @@ class ProactivePersonaDiscussion:
         consensus_spread_threshold: float = 0.15,
         config: ReflectionSettings | None = None,
         llm: ChatLLM | None = None,
+        language_preference: str = "en",
     ) -> None:
         if config is not None:
             max_turns = config.moderator.max_discussion_rounds
@@ -129,11 +136,12 @@ class ProactivePersonaDiscussion:
         self._composite_threshold = composite_threshold
         self._consensus_spread_threshold = consensus_spread_threshold
         self._llm = llm
+        self._language_preference = language_preference
 
         if llm is not None:
             self._driver = PersonaGraphDriver(
-                persona_node=LLMBackedScoringPersonaNode(llm),
-                synthesizer_node=LLMBackedSynthesizerNode(llm),
+                persona_node=LLMBackedScoringPersonaNode(llm, language_preference=language_preference),
+                synthesizer_node=LLMBackedSynthesizerNode(llm, language_preference=language_preference),
             )
         else:
             self._driver = PersonaGraphDriver()

@@ -356,7 +356,7 @@ class ReflectionScheduler:
         }
         status = "approved" if result.approved else "rejected"
         write_log_event(
-            "reflection",
+            "persona",
             "persona_discussion",
             f"{candidate.title} — {result.reason}",
             project_root=self._project_root,

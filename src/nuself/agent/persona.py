@@ -153,8 +153,9 @@ class MinimalSynthesizerNode:
 class LLMBackedPersonaNode:
     """LLM-driven persona node that generates genuinely distinct perspectives."""
 
-    def __init__(self, llm: ChatLLM) -> None:
+    def __init__(self, llm: ChatLLM, *, language_preference: str = "en") -> None:
         self._llm = llm
+        self._language_preference = language_preference
 
     def __call__(self, persona: PersonaDefinition, persona_input: PersonaInput) -> PersonaContribution:
         prior = persona_input.memory_context.strip()
@@ -162,6 +163,10 @@ class LLMBackedPersonaNode:
             prior_block = f"\nPrior discussion:\n{prior}"
         else:
             prior_block = ""
+
+        response_language = ""
+        if self._language_preference != "en":
+            response_language = f" Write your response in {self._language_preference}."
 
         messages = [
             ChatMessage(
@@ -171,6 +176,7 @@ class LLMBackedPersonaNode:
                     f"Your role: {persona.description}\n"
                     "Respond in 1-2 sentences from your unique perspective. "
                     "Do not repeat what others said. If others have spoken, build on or challenge their points."
+                    f"{response_language}"
                 ),
             ),
             ChatMessage(
@@ -189,8 +195,9 @@ class LLMBackedPersonaNode:
 class LLMBackedSynthesizerNode:
     """LLM-driven synthesizer that produces a crisp summary of contributions."""
 
-    def __init__(self, llm: ChatLLM) -> None:
+    def __init__(self, llm: ChatLLM, *, language_preference: str = "en") -> None:
         self._llm = llm
+        self._language_preference = language_preference
 
     def __call__(self, turn_state: PersonaTurnState) -> PersonaSynthesis | None:
         if not turn_state.contributions:
@@ -200,10 +207,16 @@ class LLMBackedSynthesizerNode:
             note = contrib.notes[0] if contrib.notes else "(no note)"
             lines.append(f"- {contrib.persona_id}: {note}")
         discussion = "\n".join(lines)
+        response_language = ""
+        if self._language_preference != "en":
+            response_language = f" Write the summary in {self._language_preference}."
         messages = [
             ChatMessage(
                 role="system",
-                content="You are the synthesizer. Distill the discussion into 1-2 crisp sentences that capture the consensus or key tension.",
+                content=(
+                    "You are the synthesizer. Distill the discussion into 1-2 crisp sentences "
+                    f"that capture the consensus or key tension.{response_language}"
+                ),
             ),
             ChatMessage(role="user", content=discussion),
         ]

@@ -26,7 +26,7 @@ Serialization (`to_record()`) omits `None`-valued optional fields.
 | `daemon` | `daemon.log` | Daemon lifecycle |
 | `chat` | `chat.log` | Conversation turns |
 | `memory` | `memory.log` | Memory operations |
-| `persona` | `persona.log` | Persona activations, host decisions |
+| `persona` | `persona.log` | Persona activations, host decisions, competitive persona discussions |
 | `outbox` | `outbox.log` | Notification delivery attempts |
 | `reflection` | `reflection.log` | Reflection scheduling |
 

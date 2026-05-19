@@ -19,6 +19,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 - Reorganized CLI and REPL commands around the v0.2.0 command model, moving sources under `memory source`, proactive items under `inbox`, diagnostics under `dev`, and removing old command-path compatibility aliases.
 - Reflection no longer blocks new cycles based on pending reflection count; duplicate pressure is handled by organization instead.
+- Competitive persona discussion logs now render as `[selves]` activity, and visible discussion notes follow the configured chat language preference.
 - Persona/self activity output now uses structured logs only, so REPL rendering keeps log headers and body text in the same format as other activity logs.
 
 ### Fixed

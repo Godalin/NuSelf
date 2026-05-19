@@ -35,6 +35,10 @@ Persona contributions and synthesis are internal context for answer generation. 
 
 This boundary is enforced as a prompt-level instruction, not by output sanitization. Persona traces remain visible through logs and transcript exports when those logs are included.
 
+## Language
+
+Competitive discussion traces are user-inspectable logs. LLM-backed participant notes, moderator notes, and synthesis summaries should follow `chat.language_preference` when it is not English, while keeping stable internal identifiers such as `analyst_self` and `turn-1` unchanged.
+
 ## Parameters
 
 | Parameter | Default | Description |

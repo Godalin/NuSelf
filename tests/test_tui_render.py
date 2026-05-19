@@ -115,7 +115,7 @@ def test_render_discussion_log_expands_trace_metadata() -> None:
     event = LogEvent(
         time="2026-05-12T10:00:00Z",
         level="info",
-        component="reflection",
+        component="persona",
         event="persona_discussion",
         message="New idea - approved after discussion",
         thread_id="default",
@@ -132,7 +132,7 @@ def test_render_discussion_log_expands_trace_metadata() -> None:
     )
 
     assert render_log_event(event, color=False).splitlines() == [
-        "[reflection] persona_discussion status=approved thread=default candidate_id=candidate-1",
+        "[selves] persona_discussion status=approved thread=default candidate_id=candidate-1",
         "  New idea - approved after discussion",
         "  discussion:",
         "    ── candidate ──",
