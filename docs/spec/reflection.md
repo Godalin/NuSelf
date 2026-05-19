@@ -36,8 +36,8 @@ Stored as one JSON file per entry in `private/reflections/{id}.json`.
 | Status | Meaning |
 |---|---|
 | `pending` | Produced by scheduler; user has not acted on it |
-| `dismissed` | User explicitly dismissed (`nuself reflection dismiss`) |
-| `archived` | User explicitly archived (`nuself reflection archive`) |
+| `dismissed` | User explicitly dismissed (`nuself inbox reflection dismiss`) |
+| `archived` | User explicitly archived (`nuself inbox reflection archive`) |
 
 ## Pipeline Flow
 
@@ -120,7 +120,7 @@ If any schedule gate blocks a cycle, `reflect()` returns `false` before candidat
 If `reflection.auto_notify` is `true`, a brief `OutboxEntry` is created **pointing to** the reflection:
 
 - `title`: `"New reflection: {reflection.title}"`
-- `body`: `"A new reflection idea is available. View it with: nuself reflection show {id}"`
+- `body`: `"A new reflection idea is available. View it with: nuself inbox reflection show {id}"`
 - `idempotency_key`: `"notify-{reflection.id}"`
 
 Default is `false` — no outbox entry created.
@@ -131,28 +131,30 @@ The scheduler still emits these events into `reflection.log`:
 
 | Event | Status | Visibility |
 |---|---|---|
-| `schedule_blocked` | `skipped` | `nuself logs --component reflection` |
-| `cycle_started` | `started` | `nuself logs --component reflection` |
-| `organizer_completed` | `completed` | `nuself logs --component reflection` |
-| `persona_discussion` | `approved` / `rejected` | `nuself logs --component reflection` |
-| `cycle_discussion_rejected` | `completed` | `nuself logs --component reflection` |
-| `cycle_completed` | `completed` | `nuself logs --component reflection` |
+| `schedule_blocked` | `skipped` | `nuself dev logs --component reflection` |
+| `cycle_started` | `started` | `nuself dev logs --component reflection` |
+| `organizer_completed` | `completed` | `nuself dev logs --component reflection` |
+| `persona_discussion` | `approved` / `rejected` | `nuself dev logs --component reflection` |
+| `cycle_discussion_rejected` | `completed` | `nuself dev logs --component reflection` |
+| `cycle_completed` | `completed` | `nuself dev logs --component reflection` |
 
 ## CLI Contracts
 
 ```
-nuself reflection list [--status pending|dismissed|archived] [--json]
-nuself reflection show <id_or_index> [--by-index] [--json]
-nuself reflection dismiss <id_or_index> [--by-index]
-nuself reflection archive <id_or_index> [--by-index]
-nuself reflection organize
+nuself inbox reflection list [--status pending|dismissed|archived] [--json]
+nuself inbox reflection show <id_or_index> [--by-index] [--json]
+nuself inbox reflection dismiss <id_or_index> [--by-index]
+nuself inbox reflection archive <id_or_index> [--by-index]
+nuself inbox reflection promote <id_or_index> [--by-index]
+nuself inbox reflection organize
 ```
 
 - `list` default: shows **all** statuses.
 - Plain-text `list` output uses the visible `[index]` as the operational handle and does **not** print long `reflection-candidate-*` entry IDs. `show`, `--json`, and id-based actions still expose/accept the full entry ID.
 - Plain-text `list` and `show` output follows the shared CLI record renderer: one header line with `key=value` metadata, then body text and discussion trace on subsequent indented lines. `list` treats the reflection title as the body text, keeps status/type/score/timestamps in the metadata header, puts the square-bracket index first, and preserves colored square-bracket tags such as `[reflection]` and `status=[pending]` for scanability.
 - `--status`: filters to one status.
-- `show` / `dismiss` / `archive` accept either an entry ID or a `--by-index` flag (0-based from `list`).
+- `show` / `dismiss` / `archive` / `promote` accept either an entry ID or a `--by-index` flag (0-based from `list`).
+- `promote`: creates a reason thread from the selected pending reflection, writes reason and promotion trace records, and leaves the source reflection pending.
 - `organize`: runs pending reflection organization once and prints how many groups and entries were merged.
 
-REPL `:reflection` lists **only pending** entries. `:reflection list` lists **all** entries.
+REPL `:inbox reflection` lists **only pending** entries. `:inbox reflection list` lists **all** entries.

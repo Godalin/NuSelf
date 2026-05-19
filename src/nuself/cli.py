@@ -479,6 +479,10 @@ def build_parser() -> argparse.ArgumentParser:
     reflection_archive_parser.add_argument("entry_id")
     reflection_archive_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
     _add_handler(reflection_archive_parser, handle_reflection_archive)
+    reflection_promote_parser = reflection_subparsers.add_parser("promote")
+    reflection_promote_parser.add_argument("entry_id")
+    reflection_promote_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
+    _add_handler(reflection_promote_parser, handle_reflection_promote)
     _add_handler(reflection_subparsers.add_parser("organize"), handle_reflection_organize)
 
     notify_parser = inbox_subparsers.add_parser("notify")
@@ -1682,6 +1686,20 @@ def handle_reflection_archive(args: argparse.Namespace) -> int:
         return 1
 
 
+def handle_reflection_promote(args: argparse.Namespace) -> int:
+    from nuself.reflection.repository import ReflectionEntryNotFound
+    from nuself.reflection.service import ReflectionService
+
+    try:
+        thread = ReflectionService(args.project_root).promote_to_reason(args.entry_id, by_index=args.by_index)
+    except (ReflectionEntryNotFound, ValueError, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Promoted reflection to reason thread: {thread.id}")
+    print(render_reason_detail(thread))
+    return 0
+
+
 def handle_reflection_organize(args: argparse.Namespace) -> int:
     from nuself.reflection.organizer import ReflectionOrganizer
 
@@ -2667,6 +2685,7 @@ def _interactive_help(command: str | None = None) -> str:
             "  :inbox reflection show <id>   show one reflection idea",
             "  :inbox reflection dismiss <id> dismiss a reflection idea",
             "  :inbox reflection archive <id> archive a reflection idea",
+            "  :inbox reflection promote <id> promote a reflection into reason",
             "  :inbox notify                 list pending notifications",
             "  :inbox notify list            list all notifications",
             "  :inbox notify show <id>       show one notification",
@@ -3342,6 +3361,14 @@ def _handle_interactive_reflection_subcommand(project_root: Path | None, subcmd:
     if subcmd == "archive":
         repo.archive(entry_id)
         return f"Archived: {entry_id}"
+    if subcmd == "promote":
+        from nuself.reflection.service import ReflectionService
+
+        try:
+            thread = ReflectionService(project_root, repository=repo).promote_to_reason(entry_id)
+        except RuntimeError as exc:
+            return f"Error: {exc}"
+        return f"Promoted reflection to reason thread: {thread.id}\n{render_reason_detail(thread)}"
     return f"Unknown :inbox reflection subcommand: {subcmd}"
 
 

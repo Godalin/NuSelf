@@ -8,6 +8,7 @@ from pathlib import Path
 from nuself.logs import write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonStatus
 from nuself.reason.repository import ReasonRepository
+from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 
 MAX_ACTIVE_THREADS = 5
@@ -21,10 +22,14 @@ class ReasonService:
         project_root: Path | None = None,
         repository: ReasonRepository | None = None,
         workspace_store: PrivateWorkspaceStore | None = None,
+        trace_recorder: TraceRecorder | None = None,
     ) -> None:
         self._project_root = project_root
         self._repository = repository or ReasonRepository(project_root)
         self._workspace_store = workspace_store or PrivateWorkspaceStore(project_root, scope="reason")
+        self._trace_recorder = trace_recorder if trace_recorder is not None else (
+            TraceRecorder(project_root) if repository is None else None
+        )
 
     # ── Read ───────────────────────────────────────────────────────
 
@@ -47,7 +52,9 @@ class ReasonService:
         self,
         question: str,
         *,
+        working_summary: str = "",
         evidence_refs: tuple[str, ...] = (),
+        source_trace_ids: tuple[str, ...] = (),
         priority: str = "normal",
     ) -> ReasoningThread:
         active = self._repository.list_threads(status="active")
@@ -61,11 +68,18 @@ class ReasonService:
 
         thread = ReasoningThread(
             question=question.strip(),
+            working_summary=working_summary.strip(),
             priority="normal" if priority not in ("normal", "high") else priority,  # type: ignore[arg-type]
             evidence_refs=list(evidence_refs),
         )
         saved = self._repository.save_thread(thread)
         workspace = self._workspace_store.ensure(thread.id)
+        if self._trace_recorder is not None:
+            self._trace_recorder.record_reason_thread_created(
+                thread=saved,
+                source_trace_ids=list(source_trace_ids),
+                metadata={"workspace": str(workspace.root)},
+            )
 
         write_log_event(
             "reasoning",
@@ -117,6 +131,8 @@ class ReasonService:
             updated_at=now,
         )
         self._repository.save_thread(updated)
+        if self._trace_recorder is not None:
+            self._trace_recorder.record_reason_step(thread=updated, step=step)
 
         write_log_event(
             "reasoning",

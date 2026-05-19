@@ -8,6 +8,7 @@ import sqlite3
 from nuself.logs import read_log_events
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
+from nuself.trace.service import TraceQueryService
 
 
 def test_start_thread(tmp_path: Path) -> None:
@@ -58,6 +59,17 @@ def test_start_with_evidence(tmp_path: Path) -> None:
     assert thread.evidence_refs == ["ref-1", "ref-2"]
 
 
+def test_start_thread_records_trace(tmp_path: Path) -> None:
+    service = ReasonService(project_root=tmp_path)
+
+    thread = service.start_thread("What should be traced?", evidence_refs=("memory:abc",))
+
+    traces = TraceQueryService(tmp_path).list_traces(kind="reason_thread")
+    assert len(traces) == 1
+    assert traces[0].outputs == [f"reason:{thread.id}"]
+    assert traces[0].evidence_refs == ["memory:abc"]
+
+
 def test_show_thread_by_id(tmp_path: Path) -> None:
     service = ReasonService(repository=ReasonRepository(tmp_path))
     created = service.start_thread("Show me")
@@ -106,6 +118,19 @@ def test_advance_thread(tmp_path: Path) -> None:
     assert advanced.last_advanced_at is not None
     steps = service.list_steps(t.id)
     assert len(steps) == 1
+
+
+def test_advance_thread_records_trace(tmp_path: Path) -> None:
+    service = ReasonService(project_root=tmp_path)
+    thread = service.start_thread("Trace advances")
+
+    advanced = service.advance_thread(thread.id)
+
+    steps = service.list_steps(thread.id)
+    traces = TraceQueryService(tmp_path).list_traces(kind="reason_step")
+    assert len(traces) == 1
+    assert traces[0].outputs == [f"reason:{advanced.id}", f"reason_step:{steps[0].id}"]
+    assert traces[0].metadata["step_kind"] == "progress"
 
 
 def test_advance_paused_thread_raises(tmp_path: Path) -> None:

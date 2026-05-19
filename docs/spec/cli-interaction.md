@@ -196,7 +196,7 @@ REPL commands mirror the same model:
 ### Reflection
 
 ```
-nuself reflection list [--status pending|dismissed|archived] [--json]
+nuself inbox reflection list [--status pending|dismissed|archived] [--json]
 ```
 
 - **Default view**: All reflection entries.
@@ -206,16 +206,24 @@ nuself reflection list [--status pending|dismissed|archived] [--json]
 - **Empty**: `No reflection entries.`
 
 ```
-nuself reflection show <id_or_index> [--by-index] [--json]
+nuself inbox reflection show <id_or_index> [--by-index] [--json]
 ```
 
 - Indexes into the same filtered list used by `reflection list`.
 - **Detail view**: One record header containing ID, status, candidate metadata, deep link, and timestamps; body text starts on the next indented line; discussion trace uses the indented discussion trace block.
 
+```
+nuself inbox reflection promote <id_or_index> [--by-index]
+```
+
+- Creates a reason thread from the selected reflection without dismissing or archiving the reflection.
+- Writes trace provenance through the reason/reflection services.
+- Output prints the created reason thread id and renders the reason detail view.
+
 ### Logs
 
 ```
-nuself logs [--component <c>] [--tail N] [--json] [--no-color]
+nuself dev logs [--component <c>] [--tail N] [--json] [--no-color]
 ```
 
 - **Purpose**: Raw audit trail. No semantic filtering.
@@ -224,14 +232,14 @@ nuself logs [--component <c>] [--tail N] [--json] [--no-color]
 ### Notifications
 
 ```
-nuself notify list [--status <state>]
+nuself inbox notify list [--status <state>]
 ```
 
 - **Output**: `<id> [<status>] <title> created=... attempts=... link=<true|false>`
 - `--status` filters at the outbox level.
 
 ```
-nuself notify show <id>
+nuself inbox notify show <id>
 ```
 
 - **Output**: One record header with ID, status, title, delivery metadata, and deep link; body text starts on the next indented line.

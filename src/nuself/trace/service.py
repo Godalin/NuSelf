@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceRelation, TraceVisibility
 from nuself.trace.repository import TraceRepository, TraceVisibilityFilter
 
@@ -72,6 +73,80 @@ class TraceRecorder:
             metadata=metadata or {},
         )
 
+    def record_reason_thread_created(
+        self,
+        *,
+        thread: ReasoningThread,
+        source_trace_ids: list[str] | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> ThoughtTrace:
+        return self.record(
+            kind="reason_thread",
+            title=f"Reason thread created: {_short(thread.question)}",
+            summary=f"Created a durable reasoning thread for: {thread.question}",
+            inputs=[thread.question],
+            evidence_refs=list(thread.evidence_refs),
+            derived_from=source_trace_ids or [],
+            outputs=[f"reason:{thread.id}"],
+            participants=["reason"],
+            decision_points=["User-approved long-run reasoning thread creation."],
+            visibility="private",
+            metadata={"thread_id": thread.id, "status": thread.status, **(metadata or {})},
+        )
+
+    def record_reason_step(
+        self,
+        *,
+        thread: ReasoningThread,
+        step: ReasoningStep,
+        metadata: dict[str, object] | None = None,
+    ) -> ThoughtTrace:
+        return self.record(
+            kind="reason_step",
+            title=f"Reason step: {_short(thread.question)}",
+            summary=step.summary,
+            inputs=[f"reason:{thread.id}"],
+            evidence_refs=list(step.evidence_refs),
+            outputs=[f"reason:{thread.id}", f"reason_step:{step.id}"],
+            participants=["reason"],
+            decision_points=[step.delta] if step.delta else [],
+            visibility="private",
+            metadata={
+                "thread_id": thread.id,
+                "step_id": step.id,
+                "step_kind": step.kind,
+                **(metadata or {}),
+            },
+        )
+
+    def record_reflection_promoted(
+        self,
+        *,
+        reflection_id: str,
+        reflection_title: str,
+        thread: ReasoningThread,
+        metadata: dict[str, object] | None = None,
+    ) -> ThoughtTrace:
+        trace = self.record(
+            kind="promotion",
+            title=f"Reflection promoted: {_short(reflection_title)}",
+            summary=f"Promoted reflection into reason thread: {thread.question}",
+            inputs=[f"reflection:{reflection_id}"],
+            evidence_refs=[f"reflection:{reflection_id}", *thread.evidence_refs],
+            outputs=[f"reason:{thread.id}"],
+            participants=["reflection", "reason"],
+            decision_points=["Reflection selected for durable long-run reasoning."],
+            visibility="private",
+            metadata={"reflection_id": reflection_id, "thread_id": thread.id, **(metadata or {})},
+        )
+        self.link(
+            f"reflection:{reflection_id}",
+            f"reason:{thread.id}",
+            "triggered",
+            "Reflection promotion created this reason thread.",
+        )
+        return trace
+
     def link(self, source_id: str, target_id: str, relation: TraceRelation, summary: str) -> TraceLink:
         return self._repository.save_link(
             TraceLink(source_id=source_id, target_id=target_id, relation=relation, summary=summary)
@@ -106,3 +181,10 @@ class TraceQueryService:
 
     def links_for(self, trace_id: str) -> list[TraceLink]:
         return self._repository.links_for(trace_id)
+
+
+def _short(value: str, limit: int = 80) -> str:
+    normalized = " ".join(value.split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 1].rstrip() + "..."

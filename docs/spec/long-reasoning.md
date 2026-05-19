@@ -105,12 +105,13 @@ Required first service methods:
 ```text
 list_threads(status_filter)
 show_thread(id_or_index)
-start_thread(question, evidence_refs=(), source_trace_ids=())
+start_thread(question, working_summary="", evidence_refs=(), source_trace_ids=())
 advance_thread(id_or_index)
 pause_thread(id_or_index)
 resume_thread(id_or_index)
 resolve_thread(id_or_index)
 archive_thread(id_or_index)
+promote_reflection(entry_id_or_index)
 ```
 
 Required first tool-facing methods:
@@ -268,13 +269,14 @@ The chat prompt must include a Reason skill once reason tools are registered:
 
 ## Trace Contract
 
-TODO: every reason thread creation and non-trivial advance writes a `ThoughtTrace`.
+Every reason thread creation and non-trivial advance writes a `ThoughtTrace`.
 
 - Thread creation writes `kind=reason_thread`.
 - Advance writes `kind=reason_step`.
 - Reflection promotion writes `kind=promotion`.
 - Trace outputs include the created or updated reason artifact ids.
-- Reason records store trace ids for steps once implemented.
+- Reason service owns this recording through `TraceRecorder`. CLI, REPL, and future tools must not write trace files directly.
+- If trace recording fails, the user-visible reason operation should fail in the first implementation rather than silently creating untraceable long-run state. Best-effort trace writes are reserved for chat turns.
 
 Trace is the audit layer for Reason. Reason may be dynamic, revisable, branching, and allowed to fail; Trace records what happened and why a state changed. Reason must not treat trace as its mutable working memory.
 
@@ -283,10 +285,15 @@ Trace is the audit layer for Reason. Reason may be dynamic, revisable, branching
 Add an explicit promotion command after the base repository exists:
 
 ```text
-nuself reflection promote <id_or_index> [--by-index]
+nuself inbox reflection promote <id_or_index> [--by-index]
 ```
 
 Promotion creates a reasoning thread from the reflection title/body and records the reflection id in `evidence_refs`. The original reflection must remain pending — promotion does not automatically archive or dismiss the source reflection.
+
+The promotion flow writes two trace records:
+
+- the normal `reason_thread` trace from `ReasonService.start_thread`;
+- a `promotion` trace linking `reflection:<entry_id>` to `reason:<thread_id>`.
 
 ## Notification Policy
 

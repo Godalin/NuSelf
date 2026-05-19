@@ -27,6 +27,8 @@ from nuself.domain.profile import ProfileItem
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.logs import LogEvent, read_log_events, write_log_event
+from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+from nuself.trace.service import TraceQueryService
 
 
 class CaptureResult(Protocol):
@@ -3241,6 +3243,35 @@ def test_reason_cli_start_list_show_and_advance(tmp_path: Path, capsys: CaptureF
     assert "last_advanced_at=" in advance_output
 
 
+def test_reflection_cli_promote_creates_reason_and_trace(tmp_path: Path, capsys: CaptureFixture) -> None:
+    entry = ReflectionEntry(
+        id="reflection-cli",
+        title="Follow a long idea",
+        body="This idea should move into reason.",
+        candidate_type="question",
+        confidence=0.8,
+        novelty=0.7,
+        urgency=0.4,
+        interruption_cost=0.2,
+        composite_score=0.6,
+        status="pending",
+        discussion_approved=True,
+        discussion_trace=(),
+        deep_link="nuself://thread/reflections",
+        created_at="2026-05-19T00:00:00+00:00",
+        reviewed_at=None,
+    )
+    ReflectionRepository(tmp_path).add(entry)
+
+    result = main(["--project-root", str(tmp_path), "inbox", "reflection", "promote", entry.id])
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "Promoted reflection to reason thread:" in output
+    assert "Follow a long idea" in output
+    assert len(TraceQueryService(tmp_path).list_traces(kind="promotion")) == 1
+
+
 def test_interactive_reason_without_args_shows_help(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
@@ -3274,6 +3305,7 @@ def test_interactive_reason_without_args_shows_help(
         ["inbox", "reflection", "show", "--help"],
         ["inbox", "reflection", "dismiss", "--help"],
         ["inbox", "reflection", "archive", "--help"],
+        ["inbox", "reflection", "promote", "--help"],
         ["inbox", "reflection", "organize", "--help"],
         ["inbox", "notify", "--help"],
         ["inbox", "notify", "list", "--help"],

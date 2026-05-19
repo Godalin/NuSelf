@@ -12,6 +12,7 @@ from nuself.reflection.repository import (
     ReflectionRepository,
 )
 from nuself.reflection.organizer import ReflectionOrganizationResult, ReflectionOrganizer
+from nuself.reflection.service import ReflectionService
 
 __all__ = [
     "IdeaCandidateGenerator",
@@ -23,4 +24,5 @@ __all__ = [
     "ReflectionOrganizationResult",
     "ReflectionOrganizer",
     "ReflectionRepository",
+    "ReflectionService",
 ]
