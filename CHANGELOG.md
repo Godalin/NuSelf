@@ -17,6 +17,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Docs
 
+- Added post-0.2 stabilization backlog for review-driven refactors that should wait until after local v0.2 testing.
+
 ## 0.2.0 - 2026-05-19
 
 ### Added

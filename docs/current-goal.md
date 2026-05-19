@@ -91,3 +91,4 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 - Chat can read active reason summaries without silently creating reason threads.
 - README, specs, TODOs, and CHANGELOG are synchronized.
 - `uv run pytest`, `uvx pyright`, and `git diff --check` pass.
+- `v0.2.0` tag is held until manual testing is complete.

@@ -14,7 +14,18 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Implement reason repository, manual commands, and trace recording.
 - [x] Wire reflection promotion into reason and trace.
 - [x] Let chat read active reason summaries without silently creating threads.
-- [ ] Update release metadata.
+- [x] Update release metadata.
+
+## Post-0.2 Stabilization Backlog
+
+These are review-driven refactors that should not block local v0.2 testing. They are good candidates for v0.2.x if they stay mechanical, or v0.3.0 if they reshape subsystem boundaries.
+
+- [ ] Split `src/nuself/cli.py` into parser construction, command handlers, REPL session control, and render/export helpers.
+- [ ] Split `ConversationGraphRuntime` into smaller collaborators for context preparation, persona orchestration, tool execution, response synthesis, and state persistence.
+- [ ] Move generic timestamp helpers out of the memory domain so memory, trace, reason, logs, and daemon code share a neutral time module.
+- [ ] Replace repeated REPL command string literals with a central command registry that can drive parsing, help text, and aliases.
+- [ ] Standardize local import policy for optional/heavy modules and make that policy explicit in the development spec.
+- [ ] Replace rough eval fixture counts with structured fixture result parsing across all dev eval commands.
 
 ## Current Goal
 
