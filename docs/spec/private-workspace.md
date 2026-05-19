@@ -1,0 +1,73 @@
+# Private Workspace Spec
+
+## Purpose
+
+Private workspaces provide isolated, task-local scratch storage for agent-facing services.
+
+They are meant for internal working state that is useful while a subsystem is operating but not yet stable enough to become memory, trace, source material, or user-facing output.
+
+## Storage Contract
+
+Generic workspace path:
+
+```text
+private/workspaces/{scope}/{owner_id}/
+  workspace.sqlite
+  artifacts/
+  notes/
+```
+
+- `scope`: service namespace, e.g. `reason`.
+- `owner_id`: service-owned object id, e.g. a reason thread id.
+- `workspace.sqlite`: service-local structured scratch database.
+- `artifacts/`: files produced during work.
+- `notes/`: optional human-readable scratch notes.
+
+## Isolation Rules
+
+- A workspace belongs to one service scope and one owner id.
+- Services must not directly read or write another service's workspace.
+- Agents and subsystems should access workspace state through the owning service or tool-facing adapter.
+- Workspace contents are not authoritative global state.
+- Workspace data must not bypass promotion rules for memory, trace, source ingestion, or reason steps.
+- Archiving a service object must not silently delete its workspace; cleanup should be explicit.
+
+## SQLite Contract
+
+`workspace.sqlite` must include a `workspace_meta` table:
+
+| Key | Meaning |
+|---|---|
+| `schema` | Workspace schema version |
+| `scope` | Owning service scope |
+| `owner_id` | Owning object id |
+| `created_at` | First initialization time |
+
+Services may create additional tables inside their own workspace database.
+
+## Reason Usage
+
+Reason uses:
+
+```text
+private/workspaces/reason/{thread_id}/workspace.sqlite
+```
+
+The reason workspace can hold branch tables, temporary hypotheses, local evidence indexes, tool results, scratch rankings, intermediate plans, and failed-path records.
+
+Stable data leaves the workspace only through explicit promotion:
+
+- reason steps for user-readable reasoning updates;
+- trace records for provenance;
+- memory candidates or source ingestion for durable reusable knowledge.
+
+## Future Service Usage
+
+Private workspaces are generic. Reason is the first user, but future service scopes may include:
+
+- `reflection`: candidate organization, clustering, or merge-analysis scratch state.
+- `trace`: temporary graph exploration and provenance query caches.
+- `tool`: long-running tool worker state for complex tasks.
+- `nusolang`: future cognitive workflow runtime state.
+
+Each scope must define its owner id, service-facing API, cleanup policy, and promotion rules before writing workspace data.

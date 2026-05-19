@@ -6,9 +6,24 @@ Status: ready for first v0.2.0 implementation.
 
 Long-run reasoning maintains durable, incremental reasoning around a small number of explicit user-approved questions.
 
+Reason is infrastructure, not chain-of-thought. It manages persistent cognitive state and must not expose or rely on hidden token-level reasoning transcripts.
+
 It must not replace reflection. Reflection discovers candidate ideas; long-run reasoning sustains work on selected questions.
 
 Reason must integrate with trace. Reason owns durable long-run question state; trace records provenance for thread creation, advances, and reflection promotion.
+
+## Conceptual Model
+
+The long-term target is a dynamic reason graph:
+
+- threads are durable reasoning spaces;
+- steps are state updates inside those spaces;
+- hypotheses and open questions are live graph state;
+- future branches and links may represent competing paths, revisions, tool calls, and failed explorations.
+
+The first v0.2.0 implementation stores this as `ReasoningThread` plus ordered `ReasoningStep` records. This is an implementation slice of the graph model, not a claim that reasoning is linear.
+
+Reason steps may be exploratory, uncertain, speculative, or failed. Such steps can be useful cognitive assets. User-facing presentation must summarize them without pretending they are proven conclusions.
 
 ## Non-Goals For First Implementation
 
@@ -16,6 +31,8 @@ Reason must integrate with trace. Reason owns durable long-run question state; t
 - No always-on high-frequency background thinking.
 - No automatic notification for every reasoning step.
 - No replacement of memory curation or reflection.
+- No raw hidden model chain-of-thought storage.
+- No explicit branch graph schema in the first storage slice.
 
 ## Storage Contract
 
@@ -29,6 +46,38 @@ private/reasoning/steps/{thread_id}/{step_id}.json
 Machine-readable records store timezone-aware ISO timestamps. Human-readable CLI output renders timestamps in the current system timezone per `cli-interaction.md`.
 
 Repository writes must be atomic: write to a temporary sibling file, then replace the target file.
+
+### Per-Thread Workspace Contract
+
+Each reasoning thread owns an isolated generic private workspace:
+
+```text
+private/workspaces/reason/{thread_id}/
+```
+
+The workspace is task-local storage for the reasoning process. It follows `private-workspace.md`. It is not global memory, not trace, and not a shared cross-thread database.
+
+Rules:
+
+- Workspace ids must match reason thread ids.
+- A reason worker may read and write only the workspace for the thread it is advancing.
+- Other subsystems may access workspace contents only through Reason service/tool-facing methods.
+- Workspace storage must not be used to bypass Memory, Trace, or Source promotion rules.
+- Deleting or archiving a thread must not silently delete its workspace in the first implementation; cleanup should be explicit.
+
+The first workspace storage mechanism is the generic per-owner SQLite database:
+
+```text
+workspace.sqlite
+```
+
+The SQLite database may store arbitrary task-local structured state, including branch records, temporary hypotheses, local evidence indexes, tool results, scratch rankings, intermediate plans, and failed-path records.
+
+Stable data leaves the workspace only through explicit promotion:
+
+- reason steps for user-readable reasoning updates;
+- trace records for provenance;
+- memory candidates or source ingestion for durable reusable knowledge.
 
 ## Service And Tool-Facing Interface
 
@@ -48,6 +97,7 @@ Rules:
 - Chat tools call the tool-facing adapter, which delegates to `ReasonService`.
 - Reason writes trace records through `TraceRecorder`; it must not write trace files directly.
 - Reason reads memory/reflection/trace through service interfaces, not private file paths.
+- Reason treats tool use as part of reasoning. Tool calls and tool results should become evidence refs, step metadata, or trace links when they materially change the reasoning state.
 - Chat may inspect active reason summaries through tools, but must not create or advance a reason thread without explicit user confirmation.
 
 Required first service methods:
@@ -140,6 +190,19 @@ Each non-`no_change` step must explain the `delta` from the prior state. A step 
 
 First-pass context retrieval scope: thread's own `working_summary`, `hypotheses`, `open_questions`, and `evidence_refs`. No external retrieval from memory/reflection/trace in first implementation.
 
+### Future Graph-Oriented Advance Contract
+
+LLM-backed advance must eventually preserve the graph nature of reasoning:
+
+- it may add, retire, or revise hypotheses without forcing a final answer;
+- it may identify contradictions and create `kind=contradiction` steps;
+- it may create `kind=question` steps when user input is needed;
+- it may preserve failed paths as no-change or contradiction steps when they remain informative;
+- it must mark speculative or creative movement clearly through summary, confidence, and future epistemic fields;
+- it must not collapse multiple plausible branches into one premature conclusion.
+
+Reason reflection is internal to the reason process. It audits existing reasoning state for contradictions, hallucination risk, weak evidence, or premature convergence. This differs from the reflection subsystem, which discovers new candidate topics.
+
 ## Active Thread Cap
 
 Default cap: 5 active threads. If the user tries to start a new thread when already 5 are active, the service must reject with a message listing active threads and asking the user to pause, resolve, or archive one first.
@@ -199,6 +262,10 @@ Add chat tools after manual CLI support exists:
 
 The chat agent may suggest a new reasoning thread, but must not create one without user confirmation.
 
+The chat prompt must include a Reason skill once reason tools are registered:
+
+> "Reason is NuSelf's durable long-run thinking space. If the user asks about active long-running questions, what NuSelf is still thinking about, or the state of a specific reasoning thread, use reason tools before answering unless the answer is fully present in visible context. You may suggest creating or advancing a reasoning thread, but must not create, advance, resolve, or archive one without explicit user confirmation."
+
 ## Trace Contract
 
 TODO: every reason thread creation and non-trivial advance writes a `ThoughtTrace`.
@@ -208,6 +275,8 @@ TODO: every reason thread creation and non-trivial advance writes a `ThoughtTrac
 - Reflection promotion writes `kind=promotion`.
 - Trace outputs include the created or updated reason artifact ids.
 - Reason records store trace ids for steps once implemented.
+
+Trace is the audit layer for Reason. Reason may be dynamic, revisable, branching, and allowed to fail; Trace records what happened and why a state changed. Reason must not treat trace as its mutable working memory.
 
 ## Reflection Bridge
 
@@ -253,3 +322,5 @@ Expected events:
 - Active thread cap: 5 by default. Priority does not change the cap.
 - Promotion does not archive the source reflection automatically.
 - First-pass context retrieval: thread-local only (working_summary, hypotheses, open_questions, evidence_refs).
+- Reason is infrastructure for cognitive state evolution, not a stored chain-of-thought transcript.
+- The current thread/step model is the first implementation slice of a future dynamic reason graph.
