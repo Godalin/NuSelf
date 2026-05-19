@@ -950,6 +950,54 @@ def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
     assert logs[-1].metadata == {"service_component": "memory", "tool": "search_memory"}
 
 
+def test_chat_agent_tool_invocation_with_reflection_logs_service_call(tmp_path: Path) -> None:
+    from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+
+    repo = ReflectionRepository(tmp_path)
+    repo.add(
+        ReflectionEntry(
+            id="reflection-test",
+            title="Try a smaller next step",
+            body="A pending idea.",
+            candidate_type="question",
+            confidence=0.8,
+            novelty=0.7,
+            urgency=0.4,
+            interruption_cost=0.2,
+            composite_score=0.65,
+            status="pending",
+            discussion_approved=None,
+            discussion_trace=(),
+            deep_link="nuself://thread/reflections",
+            created_at="2026-05-19T00:00:00Z",
+            reviewed_at=None,
+        )
+    )
+
+    class ReflectionToolRequestLLM:
+        def __init__(self) -> None:
+            self.call_count = 0
+
+        def complete(self, messages: list[ChatMessage]) -> str:
+            content = messages[0].content
+            if "Persona Activation Gate" in content:
+                return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
+            self.call_count += 1
+            if self.call_count == 1:
+                return '{"answer":"I will check pending reflections.","tool":"list_pending_reflections","tool_args":{"limit":3}}'
+            return '{"answer":"There is a pending idea about taking a smaller next step."}'
+
+    agent = ChatAgent(tmp_path, llm=ReflectionToolRequestLLM())
+
+    result = agent.respond("do you have any reflections?")
+
+    assert result.answer == "There is a pending idea about taking a smaller next step."
+    logs = [event for event in read_log_events(project_root=tmp_path, component="chat") if event.event == "service_tool_called"]
+    assert logs
+    assert logs[-1].status == "completed"
+    assert logs[-1].metadata == {"service_component": "reflection", "tool": "list_pending_reflections"}
+
+
 def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) -> None:
     llm = FakeLLM()
     agent = ChatAgent(tmp_path, llm=llm)

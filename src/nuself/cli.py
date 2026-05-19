@@ -3014,8 +3014,15 @@ def _escape_markdown_fences(text: str) -> str:
 
 
 def _is_shareable_transcript_log(event: LogEvent) -> bool:
+    if event.component == "chat" and event.event == "service_tool_called":
+        return True
     if event.component == "persona":
-        return event.event in {"persona_summary", "host_discussion_decision", "persona_discussion"}
+        return event.event in {
+            "persona_summary",
+            "host_discussion_decision",
+            "persona_discussion",
+            "persona_discussion_step",
+        }
     if event.component == "reflection":
         return event.event in {"persona_discussion", "cycle_completed", "cycle_discussion_rejected"}
     return False

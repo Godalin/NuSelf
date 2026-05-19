@@ -1198,7 +1198,7 @@ class ConversationGraphRuntime:
     def _write_service_tool_log(
         self,
         tool_name: str,
-        service_component: LogComponent,
+        service_component: ToolServiceComponent,
         status: str,
         *,
         error: str | None = None,
@@ -1212,6 +1212,20 @@ class ConversationGraphRuntime:
             error=error,
             metadata={"service_component": service_component, "tool": tool_name},
         )
+
+    def _write_persona_discussion_step_log(self, thread_id: str, trigger: str, entry: str) -> None:
+        try:
+            write_log_event(
+                "persona",
+                "persona_discussion_step",
+                "",
+                project_root=self._project_root,
+                thread_id=thread_id,
+                status=trigger,
+                metadata={"discussion_trace": [entry]},
+            )
+        except Exception:
+            LOGGER.exception("failed to write persona discussion step log")
 
     def _summarize(self, previous_summary: str, messages: list[ThreadMessage]) -> str:
         transcript = "\n".join(f"{message.role}: {message.content}" for message in messages)
@@ -1337,13 +1351,15 @@ def _is_supported_tool_call(tool_call: ConversationToolCall | None) -> bool:
     return tool_call is not None and tool_call.supported
 
 
-def _tool_service_component(tool_name: str) -> LogComponent | None:
+def _tool_service_component(tool_name: str) -> ToolServiceComponent | None:
     if tool_name in {"search_memory", "archive_memory", "update_memory_importance"}:
         return "memory"
     if tool_name in {"list_pending_reflections", "dismiss_reflection", "archive_reflection"}:
         return "reflection"
-    if tool_name in {"list_reasoning_threads", "show_reasoning_thread"}:
+    if tool_name in {"list_active_reasoning_threads", "show_reasoning_thread"}:
         return "reasoning"
+    if tool_name in {"search_trace", "show_trace"}:
+        return "trace"
     return None
 
 

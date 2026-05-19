@@ -11,7 +11,9 @@ allowed-tools:
 
 Reflection ideas are proactive suggestions, not facts about the user.
 
-Use `list_pending_reflections` only when the user asks for ideas, thoughts, or reflections, when the conversation naturally pauses, or when the topic strongly matches proactive exploration.
+If the user explicitly asks to query, check, list, or inspect pending reflection ideas, call `list_pending_reflections` before answering.
+
+Use `list_pending_reflections` when the user asks for ideas, thoughts, or reflections, when the conversation naturally pauses, or when the topic strongly matches proactive exploration.
 
 Introduce at most one idea in natural language.
 

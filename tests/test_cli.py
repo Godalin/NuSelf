@@ -543,6 +543,32 @@ def test_interactive_export_all_includes_all_logs(
     assert first_reply_index < first_logs_index < second_reply_index
 
 
+def test_render_transcript_share_includes_service_tool_logs() -> None:
+    render_transcript = cast(Callable[..., str], getattr(cli, "_render_chat_transcript"))
+    service_log = LogEvent(
+        time="2026-05-19T10:00:00Z",
+        level="info",
+        component="chat",
+        event="service_tool_called",
+        message="chat called reflection service tool list_pending_reflections",
+        thread_id="default",
+        status="completed",
+        metadata={"service_component": "reflection", "tool": "list_pending_reflections"},
+    )
+
+    content = render_transcript(
+        thread_id="default",
+        connected_at=cli.datetime.now(cli.UTC),
+        exported_at=cli.datetime.now(cli.UTC),
+        messages=[(0, "user", "any reflections?"), (1, "assistant", "One idea.")],
+        log_events=[],
+        log_events_by_message={1: [service_log]},
+        include_all_logs=False,
+    )
+
+    assert "> [chat] [reflection] service_tool_called status=completed thread=default tool=list_pending_reflections" in content
+
+
 def test_interactive_export_normalizes_markdown_body_fences() -> None:
     render_transcript = cast(Callable[..., str], getattr(cli, "_render_chat_transcript"))
     content = render_transcript(

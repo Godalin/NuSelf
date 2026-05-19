@@ -315,6 +315,8 @@ def _component_color(component: str) -> str:
         return "33"
     if component == "reasoning":
         return "35"
+    if component == "trace":
+        return "36"
     return "0"
 
 
