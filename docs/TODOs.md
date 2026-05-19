@@ -9,12 +9,12 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Decide v0.2.0 theme: clean command model, reason, and trace.
 - [x] Draft v0.2.0 design plan.
 - [x] Draft trace design and TODO spec.
-- [ ] Implement breaking CLI command cleanup.
-- [ ] Implement trace repository, list/show/search, and REPL commands.
-- [ ] Implement reason repository, manual commands, and trace recording.
-- [ ] Wire reflection promotion into reason and trace.
-- [ ] Let chat read active reason summaries without silently creating threads.
-- [ ] Update README, CHANGELOG, and release metadata.
+- [x] Implement breaking CLI command cleanup.
+- [x] Implement trace repository, list/show/search, and REPL commands.
+- [x] Implement reason repository, manual commands, and trace recording.
+- [x] Wire reflection promotion into reason and trace.
+- [x] Let chat read active reason summaries without silently creating threads.
+- [ ] Update release metadata.
 
 ## Current Goal
 
@@ -189,11 +189,11 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 - [x] Draft initial design for durable long-run reasoning threads.
 - [x] Draft TODO spec for long-run reasoning contracts.
-- [ ] Implement file-backed reasoning thread and step repositories.
-- [ ] Add manual `reason` CLI and REPL commands.
-- [ ] Add manual reasoning advance.
-- [ ] Add chat tools for user-approved reasoning thread access.
-- [ ] Add reflection promotion into reasoning threads.
+- [x] Implement file-backed reasoning thread and step repositories.
+- [x] Add manual `reason` CLI and REPL commands.
+- [x] Add manual reasoning advance.
+- [x] Add chat tools for user-approved reasoning thread access.
+- [x] Add reflection promotion into reasoning threads.
 - [ ] Add scheduled advance and notification policy.
 
 ## Thought Trace
@@ -201,10 +201,10 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Choose `trace` as the user-facing name for thought provenance.
 - [x] Draft initial trace design.
 - [x] Draft TODO trace spec.
-- [ ] Add `ThoughtTrace`, `TraceLink`, repository, and renderer.
-- [ ] Add `nuself trace list/show/search` and `:trace`.
-- [ ] Record traces for reason thread creation and advance.
-- [ ] Record traces for reflection promotion into reason.
+- [x] Add `ThoughtTrace`, `TraceLink`, repository, and renderer.
+- [x] Add `nuself trace list/show/search` and `:trace`.
+- [x] Record traces for reason thread creation and advance.
+- [x] Record traces for reflection promotion into reason.
 
 ## Evaluation And Quality
 

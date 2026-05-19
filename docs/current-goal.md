@@ -22,7 +22,8 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 - `reason` should integrate with `trace`: reason owns durable state; trace owns provenance.
 - LLM endpoint failover should use a direct `llm` endpoint list. Endpoints default to OpenAI-compatible behavior; `anthropic: true` marks Anthropic endpoints. Do not introduce a broad provider plugin layer yet.
 - **Go endpoint unblocked**: `minimax-m2.5` returns 400, superseded by `minimax-m2.7`. Config updated and connectivity verified.
-- **Reason subsystem implemented**: `src/nuself/reason/` with domain models, repository, service, CLI commands, REPL commands, and TUI renderers. 31 tests passing.
+- **Reason subsystem implemented**: `src/nuself/reason/` with domain models, repository, service, CLI commands, REPL commands, TUI renderers, trace recording for creation/advance, and reflection promotion into reason.
+- **Chat service tools expanded**: memory, reflection, reason, and trace are all exposed through LangChain tools plus Agent Skills `SKILL.md` files.
 
 ## Next Steps
 
@@ -31,7 +32,7 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 - [x] Update [`docs/spec/cli-interaction.md`](spec/cli-interaction.md) with the new command tree and breaking-removal policy.
 - [x] Finalize [`docs/spec/trace.md`](spec/trace.md) enough for first implementation.
 - [x] Finalize [`docs/spec/long-reasoning.md`](spec/long-reasoning.md) enough for first implementation.
-- [x] Update [`docs/spec/chat-agent-tools.md`](spec/chat-agent-tools.md) for read-only reason awareness and future trace tools.
+- [x] Update [`docs/spec/chat-agent-tools.md`](spec/chat-agent-tools.md) for read-only reason and trace tools.
 
 ### P1 — Command Cleanup
 
@@ -62,8 +63,14 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 - [x] Add `ReasoningThread`, `ReasoningStep`, and repositories.
 - [x] Add `nuself reason list/show/start/advance/pause/resume/resolve/archive`.
 - [x] Add `:reason` commands.
-- [ ] Make reason thread creation and advance write trace records.
-- [ ] Add reflection promotion into reason and trace.
+- [x] Make reason thread creation and advance write trace records.
+- [x] Add reflection promotion into reason and trace.
+
+### P5 — Chat Service Awareness
+
+- [x] Expose read-only reason tools to chat.
+- [x] Expose read-only trace tools to chat.
+- [x] Add reason and trace Agent Skills.
 
 ## Not Now
 

@@ -15,6 +15,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Added the long-run reason foundation with file-backed reasoning threads, reasoning steps, `nuself reason ...` commands, and REPL `:reason` commands.
 - Added generic private workspaces with per-owner SQLite scratch storage, first used by reason threads.
 - Added reflection organization for merging similar pending reflection ideas, including `nuself inbox reflection organize`.
+- Added reflection promotion into long-run reason threads with trace provenance.
+- Added read-only reason and trace tools for chat, with Agent Skills that tell the agent when to consult them.
 
 ### Changed
 

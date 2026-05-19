@@ -8,12 +8,13 @@ The current implementation is an early CLI-first system:
 
 - Local `nuself` command.
 - Optional local background daemon over a Unix socket.
-- A LangGraph-backed memory-aware chat agent that can run one-shot or through the daemon, with tool use for memory search, reflection inspection, and memory curation.
+- A LangGraph-backed memory-aware chat agent that can run one-shot or through the daemon, with tool use for memory search, reflection inspection, memory curation, active reasoning threads, and trace provenance lookup.
 - File-backed memory entries and profile items that can be listed, viewed, added, edited, deleted, searched, and re-indexed.
 - File-backed source ingestion for Markdown and plain text under ignored `private/sources/`, plus reviewable candidates extracted from imported chunks.
+- File-backed trace records and long-run reasoning threads for durable thought provenance.
 - Persisted chat threads with compressed conversation context.
 
-LangGraph now backs the conversation runtime. The chat agent can invoke tools to search memory, list and dismiss pending reflection ideas, archive outdated memories, and adjust importance scores. The internal persona system uses a shared competitive discussion flow for both chat and background reflection, with LLM-backed persona nodes generating distinct voices. Email and macOS notifications are supported when configured.
+LangGraph now backs the conversation runtime. The chat agent can invoke tools to search memory, list and dismiss pending reflection ideas, archive outdated memories, adjust importance scores, inspect active reasoning threads, and search thought traces. The internal persona system uses a shared competitive discussion flow for both chat and background reflection, with LLM-backed persona nodes generating distinct voices. Email and macOS notifications are supported when configured.
 
 ## Project TODOs
 
@@ -113,7 +114,7 @@ See `examples/private/config.yaml` for a complete annotated example and addition
 Inspect effective configuration:
 
 ```bash
-uv run nuself config
+uv run nuself dev config
 ```
 
 ## Private Directory
@@ -173,9 +174,9 @@ uv run nuself daemon attach
 uv run nuself daemon attach --message "continue"
 ```
 
-Without `--message`, `chat` and `attach` enter interactive mode. When terminal support is available, line editing and arrow-key history are backed by `private/runtime/interactive_history`. Input starting with `:` is treated as an interactive command. Type `:status` for daemon/thread status, `:logs` for recent activity events, and `:memory` or `:mem` to preview current memory entries. Read-only memory inspection shortcuts include `:mem search <query>`, `:mem show <entry-id>`, `:mem candidates`, `:mem candidate <candidate-id>`, `:mem profile <query>`, `:mem sources`, and `:mem source <source-id>`. Type `:q`, `:quit`, `:exit`, or send EOF to leave; unknown commands print interactive help and keep the session open.
+Without `--message`, `chat` and `attach` enter interactive mode. When terminal support is available, line editing and arrow-key history are backed by `private/runtime/interactive_history`. Input starting with `:` is treated as an interactive command. Use `:dev status` for daemon/thread status, `:dev logs` for recent activity events, and `:mem` to preview current memory entries. Read-only memory inspection shortcuts include `:mem search <query>`, `:mem show <entry-id>`, `:mem review`, `:mem review <candidate-id>`, `:mem profile <query>`, `:mem sources`, and `:mem source <source-id>`. Use `:reason` for long-run reasoning threads, `:trace` for thought provenance records, and `:inbox` for reflection/notification items. Type `:q`, `:quit`, `:exit`, or send EOF to leave; unknown commands print interactive help and keep the session open.
 
-Current chat uses a LangGraph-backed conversation runtime that searches memory entries, derived profile items, and imported source chunks, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The agent can also invoke tools during conversation: `search_memory` for targeted retrieval, `list_pending_reflections` / `dismiss_reflection` to inspect and manage proactive ideas, and `archive_memory` / `update_memory_importance` to curate durable memory. The memory search is deterministic lexical retrieval with descriptor-aware type hints, type/tag filters, relation expansion over existing memory links, and ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
+Current chat uses a LangGraph-backed conversation runtime that searches memory entries, derived profile items, and imported source chunks, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The agent can also invoke tools during conversation: `search_memory` for targeted retrieval, `list_pending_reflections` / `dismiss_reflection` to inspect and manage proactive ideas, `archive_memory` / `update_memory_importance` to curate durable memory, `list_active_reasoning_threads` / `show_reasoning_thread` to inspect durable reasoning state, and `search_trace` / `show_trace` to inspect thought provenance. The memory search is deterministic lexical retrieval with descriptor-aware type hints, type/tag filters, relation expansion over existing memory links, and ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
 
 `private/threads/default.json` is shared working memory for the current NuSelf mind. Multiple terminal attachments to the same daemon share it. The thread store serializes writes with a lock so concurrent turns do not overwrite each other.
 
@@ -200,22 +201,22 @@ uv run nuself daemon restart
 Structured local logs can also be inspected with:
 
 ```bash
-uv run nuself logs
-uv run nuself logs --component chat --tail 20
-uv run nuself logs --component memory --json
-uv run nuself logs --component reflection --tail 10
+uv run nuself dev logs
+uv run nuself dev logs --component chat --tail 20
+uv run nuself dev logs --component memory --json
+uv run nuself dev logs --component reflection --tail 10
 ```
 
 Check system health:
 
 ```bash
-uv run nuself health
+uv run nuself dev health
 ```
 
 Quick status overview:
 
 ```bash
-uv run nuself status
+uv run nuself dev status
 ```
 
 Without a subcommand, `daemon` shows daemon subcommand help.
@@ -234,20 +235,20 @@ The first protocol is JSON lines over a Unix domain socket at `private/runtime/n
 The notification outbox is a generic event bus for "something happened" alerts. It can be used by any background job (reflection with `auto_notify`, memory curator, etc.).
 
 ```bash
-uv run nuself notify list
-uv run nuself notify show <entry-id>
-uv run nuself notify show -i <index>
-uv run nuself notify send <entry-id>
-uv run nuself notify dismiss <entry-id>
-uv run nuself notify dismiss -i <index>
-uv run nuself notify clear
-uv run nuself notify watch          # poll for new entries
+uv run nuself inbox notify list
+uv run nuself inbox notify show <entry-id>
+uv run nuself inbox notify show -i <index>
+uv run nuself inbox notify send <entry-id>
+uv run nuself inbox notify dismiss <entry-id>
+uv run nuself inbox notify dismiss -i <index>
+uv run nuself inbox notify clear
+uv run nuself inbox notify watch          # poll for new entries
 ```
 
 Notifications include a deep link. Open one directly:
 
 ```bash
-uv run nuself open --deep-link "nuself://thread/reflections"
+uv run nuself thread open --deep-link "nuself://thread/reflections"
 ```
 
 The macOS adapter delivers pending entries as system notifications via `osascript`. The email adapter reads SMTP credentials from `private/email.toml` and sends via SMTP. Both support dry-run mode for testing.
@@ -259,16 +260,44 @@ The daemon runs a proactive reflection scheduler that generates ideas from recen
 Reflection ideas can be inspected and managed with:
 
 ```bash
-uv run nuself reflection list
-uv run nuself reflection list --status pending
-uv run nuself reflection list --status dismissed
-uv run nuself reflection show <id>
-uv run nuself reflection show -i <index>
-nuself reflection dismiss <id>
-nuself reflection archive <id>
+uv run nuself inbox reflection list
+uv run nuself inbox reflection list --status pending
+uv run nuself inbox reflection list --status dismissed
+uv run nuself inbox reflection show <id>
+uv run nuself inbox reflection show -i <index>
+uv run nuself inbox reflection dismiss <id>
+uv run nuself inbox reflection archive <id>
+uv run nuself inbox reflection promote <id>
 ```
 
 When `reflection.auto_notify` is enabled in config, a brief notification is also created in the outbox pointing to the new reflection idea.
+
+## Reason And Trace
+
+Reason stores explicit long-run questions as durable threads. Trace stores provenance records for important chat turns, reason thread creation, reason advances, and reflection promotion.
+
+```bash
+uv run nuself reason list
+uv run nuself reason start "What should I keep thinking about?"
+uv run nuself reason show <id-or-index> --by-index
+uv run nuself reason advance <id-or-index> --by-index
+uv run nuself reason pause <id-or-index> --by-index
+uv run nuself reason resume <id-or-index> --by-index
+uv run nuself reason resolve <id-or-index> --by-index
+uv run nuself reason archive <id-or-index> --by-index
+```
+
+```bash
+uv run nuself trace list
+uv run nuself trace show <id-or-index> --by-index
+uv run nuself trace search "reason thread"
+```
+
+Promote a pending reflection into a reason thread:
+
+```bash
+uv run nuself inbox reflection promote <id-or-index> --by-index
+```
 
 ## Threads
 
@@ -277,7 +306,7 @@ List, inspect, and manage conversation threads:
 ```bash
 uv run nuself thread list
 uv run nuself thread show <thread-id>
-uv run nuself thread create <thread-id>
+uv run nuself thread new <thread-id>
 uv run nuself thread rename <old-id> <new-id>
 uv run nuself thread branch <source-id> <new-id> [--index <n>]
 uv run nuself thread archive <thread-id>
@@ -289,11 +318,11 @@ uv run nuself thread delete <thread-id>
 Open a thread in interactive mode:
 
 ```bash
-uv run nuself open <thread-id>
-uv run nuself open <thread-id> --message "hello"
+uv run nuself thread open <thread-id>
+uv run nuself thread open <thread-id> --message "hello"
 ```
 
-In the REPL, switch threads with `:thread <id>`, view recent messages with `:history`, list imported sources with `:sources`, search memory with `:search <query>`, archive the current thread with `:archive`, restore an archived thread with `:unarchive <id>`, list archived threads with `:archived`, and delete the current thread with `:delete`.
+In the REPL, switch threads with `:thread <id>`, view recent messages with `:history`, inspect sources with `:mem sources`, search memory with `:mem search <query>`, archive the current thread with `:archive`, restore an archived thread with `:unarchive <id>`, list archived threads with `:archived`, and delete the current thread with `:delete`.
 
 ## Memory Entries
 
@@ -422,8 +451,8 @@ private/derived/symbolic_graph.json
 Import Markdown or plain-text source material into ignored local storage:
 
 ```bash
-uv run nuself source ingest private/sources/my-note.md --tag notes
-uv run nuself source ingest private/sources/ --tag archive
+uv run nuself memory source ingest private/sources/my-note.md --tag notes
+uv run nuself memory source ingest private/sources/ --tag archive
 ```
 
 Imported document metadata is stored under `private/sources/documents/`, and stable chunks are stored under `private/sources/chunks/`.
@@ -431,16 +460,16 @@ Imported document metadata is stored under `private/sources/documents/`, and sta
 Inspect imported sources:
 
 ```bash
-uv run nuself source list
-uv run nuself source show <source-id>
-uv run nuself source chunks <source-id>
-uv run nuself source search "durable citation"
+uv run nuself memory source list
+uv run nuself memory source show <source-id>
+uv run nuself memory source chunks <source-id>
+uv run nuself memory source search "durable citation"
 ```
 
 Extract reviewable profile candidates from an imported source:
 
 ```bash
-uv run nuself source extract <source-id>
+uv run nuself memory source extract <source-id>
 ```
 
 The extraction step creates `profile_fact` candidates in the review queue with structured source evidence. Accepted profile candidates are stored under `private/profile/items/`, and you can inspect them with:
@@ -460,7 +489,7 @@ Supported front matter fields are `title`, `date`, `tags`, `origin`, and `privac
 Delete an imported source and its derived review artifacts:
 
 ```bash
-uv run nuself source delete <source-id>
+uv run nuself memory source delete <source-id>
 ```
 
 Delete a derived profile item directly:

@@ -8,12 +8,13 @@ NuSelf 是一个本地 AI 镜像项目。它的目标是逐步成长为一个带
 
 - 本地 `nuself` 命令。
 - 可选的本地后台守护进程，通过 Unix socket 通信。
-- 一个基于 LangGraph 的带记忆聊天 agent，支持 one-shot 和守护进程模式，可在对话中使用工具进行记忆搜索、反思检视和记忆整理。
+- 一个基于 LangGraph 的带记忆聊天 agent，支持 one-shot 和守护进程模式，可在对话中使用工具进行记忆搜索、反思检视、记忆整理、长线推理查询和 trace 溯源。
 - 基于文件的记忆条目和 profile items，可列出、查看、新增、编辑、删除、搜索和重建索引。
 - 在 ignored `private/sources/` 下支持 Markdown 和纯文本 source ingestion，并可从导入的 chunks 提取可审阅候选项。
+- 基于文件的 trace 记录和长线 reason 线程，用于保存可追溯的思考来源。
 - 持久化聊天线程，并能压缩较早的对话上下文。
 
-LangGraph 现已支撑 conversation runtime。聊天 agent 可在对话中调用工具搜索记忆、列出和搁置待讨论反思主题、归档过时记忆、调整重要性分数。内部 persona 系统对聊天和后台反思共用一套竞争式讨论流程，LLM 驱动的人格节点可生成独立观点。邮件和 macOS 通知在配置后可用。
+LangGraph 现已支撑 conversation runtime。聊天 agent 可在对话中调用工具搜索记忆、列出和搁置待讨论反思主题、归档过时记忆、调整重要性分数、查看活跃 reason 线程，并搜索 thought trace。内部 persona 系统对聊天和后台反思共用一套竞争式讨论流程，LLM 驱动的人格节点可生成独立观点。邮件和 macOS 通知在配置后可用。
 
 ## 项目 TODOs
 
@@ -113,7 +114,7 @@ reflection:
 查看生效配置：
 
 ```bash
-uv run nuself config
+uv run nuself dev config
 ```
 
 ## 私人目录
@@ -173,9 +174,9 @@ uv run nuself daemon attach
 uv run nuself daemon attach --message "continue"
 ```
 
-不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。以 `:` 开头的输入会被识别为交互指令。输入 `:status` 可以查看 daemon/thread 状态，输入 `:logs` 可以查看最近 activity events，输入 `:memory` 或 `:mem` 可以预览当前记忆条目。只读记忆 inspect 快捷命令包括 `:mem search <query>`、`:mem show <entry-id>`、`:mem candidates`、`:mem candidate <candidate-id>`、`:mem profile <query>`、`:mem sources` 和 `:mem source <source-id>`。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
+不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。以 `:` 开头的输入会被识别为交互指令。输入 `:dev status` 可以查看 daemon/thread 状态，输入 `:dev logs` 可以查看最近 activity events，输入 `:mem` 可以预览当前记忆条目。只读记忆 inspect 快捷命令包括 `:mem search <query>`、`:mem show <entry-id>`、`:mem review`、`:mem review <candidate-id>`、`:mem profile <query>`、`:mem sources` 和 `:mem source <source-id>`。输入 `:reason` 可查看长线推理线程，输入 `:trace` 可查看思维溯源记录，输入 `:inbox` 可查看反思和通知。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
 
-当前聊天使用一个基于 LangGraph 的 conversation runtime。它会检索 memory entries、derived profile items 和 imported source chunks，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。Agent 还可以在对话中调用工具：`search_memory` 进行定向检索，`list_pending_reflections` / `dismiss_reflection` 检视和管理主动想法，`archive_memory` / `update_memory_importance` 整理长期记忆。当前记忆检索是确定性的词法检索，带有 descriptor-aware 类型提示、type/tag filters、基于现有 memory links 的 relation expansion 和排序原因；向量索引和图索引会作为后续派生检索层加入。
+当前聊天使用一个基于 LangGraph 的 conversation runtime。它会检索 memory entries、derived profile items 和 imported source chunks，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。Agent 还可以在对话中调用工具：`search_memory` 进行定向检索，`list_pending_reflections` / `dismiss_reflection` 检视和管理主动想法，`archive_memory` / `update_memory_importance` 整理长期记忆，`list_active_reasoning_threads` / `show_reasoning_thread` 查看长期 reason 状态，`search_trace` / `show_trace` 查看 thought provenance。当前记忆检索是确定性的词法检索，带有 descriptor-aware 类型提示、type/tag filters、基于现有 memory links 的 relation expansion 和排序原因；向量索引和图索引会作为后续派生检索层加入。
 
 `private/threads/default.json` 是当前 NuSelf mind 的共享 working memory。多个终端连接同一个 daemon 时会共享它。thread store 会用锁串行化写入，避免并发对话互相覆盖。
 
@@ -200,22 +201,22 @@ uv run nuself daemon restart
 也可以用通用日志查看器检查结构化本地日志：
 
 ```bash
-uv run nuself logs
-uv run nuself logs --component chat --tail 20
-uv run nuself logs --component memory --json
-uv run nuself logs --component reflection --tail 10
+uv run nuself dev logs
+uv run nuself dev logs --component chat --tail 20
+uv run nuself dev logs --component memory --json
+uv run nuself dev logs --component reflection --tail 10
 ```
 
 检查系统健康：
 
 ```bash
-uv run nuself health
+uv run nuself dev health
 ```
 
 快速状态概览：
 
 ```bash
-uv run nuself status
+uv run nuself dev status
 ```
 
 不带子命令时，`daemon` 会显示守护进程子命令帮助。
@@ -234,20 +235,20 @@ private/logs/
 通知 outbox 是一个通用事件总线，用于存放"发生了某事"的提醒。任何后台任务都可以使用它（如 reflection 在 `auto_notify` 开启时、memory curator 等）。
 
 ```bash
-uv run nuself notify list
-uv run nuself notify show <entry-id>
-uv run nuself notify show -i <index>
-uv run nuself notify send <entry-id>
-uv run nuself notify dismiss <entry-id>
-uv run nuself notify dismiss -i <index>
-uv run nuself notify clear
-uv run nuself notify watch          # 轮询新条目
+uv run nuself inbox notify list
+uv run nuself inbox notify show <entry-id>
+uv run nuself inbox notify show -i <index>
+uv run nuself inbox notify send <entry-id>
+uv run nuself inbox notify dismiss <entry-id>
+uv run nuself inbox notify dismiss -i <index>
+uv run nuself inbox notify clear
+uv run nuself inbox notify watch          # 轮询新条目
 ```
 
 通知包含 deep link，可以直接打开：
 
 ```bash
-uv run nuself open --deep-link "nuself://thread/reflections"
+uv run nuself thread open --deep-link "nuself://thread/reflections"
 ```
 
 macOS adapter 通过 `osascript` 将 pending 条目投递为系统通知。email adapter 从 `private/email.toml` 读取 SMTP 凭证并通过 SMTP 发送。两者都支持 dry-run 模式用于测试。
@@ -259,16 +260,44 @@ macOS adapter 通过 `osascript` 将 pending 条目投递为系统通知。email
 反思想法可以通过以下命令查看和管理：
 
 ```bash
-uv run nuself reflection list
-uv run nuself reflection list --status pending
-uv run nuself reflection list --status dismissed
-uv run nuself reflection show <id>
-uv run nuself reflection show -i <index>
-nuself reflection dismiss <id>
-nuself reflection archive <id>
+uv run nuself inbox reflection list
+uv run nuself inbox reflection list --status pending
+uv run nuself inbox reflection list --status dismissed
+uv run nuself inbox reflection show <id>
+uv run nuself inbox reflection show -i <index>
+uv run nuself inbox reflection dismiss <id>
+uv run nuself inbox reflection archive <id>
+uv run nuself inbox reflection promote <id>
 ```
 
 当配置中 `reflection.auto_notify` 开启时，每次产生反思想法还会同时在 notify outbox 中创建一条简短提醒。
+
+## Reason 与 Trace
+
+Reason 将明确的长线问题保存成持久线程。Trace 保存重要聊天轮次、reason 线程创建、reason 推进和反思提升的来源记录。
+
+```bash
+uv run nuself reason list
+uv run nuself reason start "我应该持续思考什么？"
+uv run nuself reason show <id-or-index> --by-index
+uv run nuself reason advance <id-or-index> --by-index
+uv run nuself reason pause <id-or-index> --by-index
+uv run nuself reason resume <id-or-index> --by-index
+uv run nuself reason resolve <id-or-index> --by-index
+uv run nuself reason archive <id-or-index> --by-index
+```
+
+```bash
+uv run nuself trace list
+uv run nuself trace show <id-or-index> --by-index
+uv run nuself trace search "reason thread"
+```
+
+将一个 pending reflection 提升为 reason 线程：
+
+```bash
+uv run nuself inbox reflection promote <id-or-index> --by-index
+```
 
 ## Threads
 
@@ -277,7 +306,7 @@ nuself reflection archive <id>
 ```bash
 uv run nuself thread list
 uv run nuself thread show <thread-id>
-uv run nuself thread create <thread-id>
+uv run nuself thread new <thread-id>
 uv run nuself thread rename <old-id> <new-id>
 uv run nuself thread branch <source-id> <new-id> [--index <n>]
 uv run nuself thread archive <thread-id>
@@ -289,11 +318,11 @@ uv run nuself thread delete <thread-id>
 以交互模式打开 thread：
 
 ```bash
-uv run nuself open <thread-id>
-uv run nuself open <thread-id> --message "hello"
+uv run nuself thread open <thread-id>
+uv run nuself thread open <thread-id> --message "hello"
 ```
 
-在 REPL 中，使用 `:thread <id>` 切换 thread，`:history` 查看近期消息，`:sources` 列出导入的 sources，`:search <query>` 搜索 memory，`:archive` 归档当前 thread，`:unarchive <id>` 恢复已归档 thread，`:archived` 列出已归档 threads，`:delete` 删除当前 thread。
+在 REPL 中，使用 `:thread <id>` 切换 thread，`:history` 查看近期消息，`:mem sources` 列出导入的 sources，`:mem search <query>` 搜索 memory，`:archive` 归档当前 thread，`:unarchive <id>` 恢复已归档 thread，`:archived` 列出已归档 threads，`:delete` 删除当前 thread。
 
 ## 记忆条目
 
@@ -422,8 +451,8 @@ private/derived/symbolic_graph.json
 将 Markdown 或纯文本 source material 导入 ignored 本地存储：
 
 ```bash
-uv run nuself source ingest private/sources/my-note.md --tag notes
-uv run nuself source ingest private/sources/ --tag archive
+uv run nuself memory source ingest private/sources/my-note.md --tag notes
+uv run nuself memory source ingest private/sources/ --tag archive
 ```
 
 导入后的 document metadata 存储在 `private/sources/documents/`，稳定 chunks 存储在 `private/sources/chunks/`。
@@ -431,16 +460,16 @@ uv run nuself source ingest private/sources/ --tag archive
 查看已导入 sources：
 
 ```bash
-uv run nuself source list
-uv run nuself source show <source-id>
-uv run nuself source chunks <source-id>
-uv run nuself source search "durable citation"
+uv run nuself memory source list
+uv run nuself memory source show <source-id>
+uv run nuself memory source chunks <source-id>
+uv run nuself memory source search "durable citation"
 ```
 
 从已导入的 source 中提取可审阅的 profile candidates：
 
 ```bash
-uv run nuself source extract <source-id>
+uv run nuself memory source extract <source-id>
 ```
 
 这一步会把 `profile_fact` 候选项放入 review queue，并保留结构化 source evidence。已接受的 profile candidates 会存放在 `private/profile/items/`，可以用下面的命令查看：
@@ -460,7 +489,7 @@ Profile search 支持 `--type`、`--tag`、`--observed-from`、`--observed-to` �
 删除一个导入的 source 以及它派生出的 review artifacts：
 
 ```bash
-uv run nuself source delete <source-id>
+uv run nuself memory source delete <source-id>
 ```
 
 直接删除一个 derived profile item：
