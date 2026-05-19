@@ -448,6 +448,10 @@ def render_discussion_trace(trace: list[object], *, title: str = "discussion tra
         if turn_label is not None and turn_label != current_turn:
             if current_turn is not None:
                 lines.append("")
+            if speaker == turn_label:
+                lines.append(f"  {_render_discussion_group_tag(turn_label, theme)} {content}")
+                current_turn = turn_label
+                continue
             lines.append(f"  {_render_discussion_group_tag(turn_label, theme)}")
             current_turn = turn_label
 

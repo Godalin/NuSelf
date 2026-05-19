@@ -115,7 +115,7 @@ When a log records one subsystem calling another subsystem's service/tool bounda
 
 `persona_summary` activity is rendered as a multi-line block. The header follows the same `[component] event key=value ...` rule and names the event once, then each persona contribution is printed on its own indented line in contribution order, followed by the synthesizer line if present. It must not collapse multiple persona thoughts into one pipe-delimited line. Because self activation `status` and host `escalation_reason` values can be long natural-language text, `[selves]` logs render these values as indented body text instead of placing them in the header. Indented lines under `[selves]` logs are prose/body lines, not additional `key=value` metadata. If the log message already contains the escalation reason, the renderer must not repeat it as a separate `escalation_reason=...` field.
 
-Competitive persona discussion logs, including chat-triggered and reflection-triggered discussions, are `persona` component logs and render with the display tag `[selves]`. Logs with `discussion_trace` metadata render the header as one compact log line and then print the trace underneath using the discussion trace block format. The trace block is indented relative to the log header so each self contribution reads like a chat message instead of a single serialized metadata list.
+Competitive persona discussion logs, including chat-triggered and reflection-triggered discussions, are `persona` component logs and render with the display tag `[selves]`. Logs with `discussion_trace` metadata render the header as one compact log line and then print the trace underneath using the discussion trace block format. The trace block is indented relative to the log header so each self contribution reads like a chat message instead of a single serialized metadata list. Chat-triggered competitive discussions also emit `persona_discussion_step` logs as each trace entry is produced, then emit a final `persona_discussion` summary without re-dumping the full trace.
 
 When color is enabled, each known self label in a `persona_summary` or `discussion_trace` block uses a stable distinct color. Color applies only to the speaker label, not the thought text, and no-color mode preserves the same plain text without ANSI escapes.
 
@@ -125,7 +125,7 @@ When color is enabled, each known self label in a `persona_summary` or `discussi
 - Options may be combined in any order:
   - `all`: include all logs captured during this interactive connection.
   - `noclip`: save the file without copying to clipboard.
-- Default log scope: chat transcript plus shareable internal logs (`persona_summary`, `host_discussion_decision`, `persona_discussion`, and high-level reflection outcomes). Low-level daemon, memory, and chat completion logs are omitted unless `all` is used.
+- Default log scope: chat transcript plus shareable internal logs (`chat/service_tool_called`, `persona_summary`, `host_discussion_decision`, `persona_discussion_step`, `persona_discussion`, and high-level reflection outcomes). Low-level daemon, memory, and chat completion logs are omitted unless `all` is used.
 - Logs in transcript Markdown use the same human-readable rendering as interactive activity logs. Transcript logs must not expose raw JSON blocks.
 - Transcript Markdown should be CommonMark-friendly: message bodies are fence-safe, log blocks render as Markdown blockquotes instead of consecutive raw code fences, headings are separated by blank lines, and the file ends with exactly one newline.
 - Logs captured during a chat turn are inserted directly after the assistant message for that turn under a compact `### Logs` subheading. Export must preserve the observed interaction order instead of rendering all chat messages first and all logs later.
@@ -269,3 +269,4 @@ Discussion traces rendered by `render_discussion_trace()` must:
 3. Separate turns with a blank line.
 4. Render the trace section title as a square-bracket tag, such as `[discussion]`.
 5. Render each group header as a square-bracket tag, such as `[host]`, `[candidate]`, or `[turn-1]`.
+6. If the group header and speaker are the same, render one tag followed by the content instead of repeating `[host] [host]` or `[candidate] [candidate]`.
