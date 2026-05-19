@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
 import fcntl
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol, TypeAlias, TypeVar, cast
@@ -60,6 +61,7 @@ USER_FACING_PROTOCOL_BOUNDARY = (
     "The answer field must contain only the text to show to the user; "
     "do not include raw JSON, fenced code blocks, or protocol field names inside answer."
 )
+LOGGER = logging.getLogger(__name__)
 REGENERATE_USER_FACING_RESPONSE_PROMPT = (
     "Your previous response leaked the internal response protocol into the user-visible answer. "
     "Regenerate the response using the same context. Return only the required JSON object for the runtime, "
@@ -829,7 +831,7 @@ class ConversationGraphRuntime:
                 },
             )
         except Exception:
-            pass
+            LOGGER.exception("failed to write persona summary log")
         activation = state.persona_activation
         should_escalate = activation.should_escalate if activation is not None else False
         escalation_reason = activation.escalation_reason if activation is not None else "no activation"
@@ -847,7 +849,7 @@ class ConversationGraphRuntime:
                 },
             )
         except Exception:
-            pass
+            LOGGER.exception("failed to write host discussion decision log")
         # Host decision is the only gate for entering competitive discussion.
         try:
             if should_escalate:
@@ -880,10 +882,10 @@ class ConversationGraphRuntime:
                         },
                     )
                 except Exception:
-                    pass
+                    LOGGER.exception("failed to write persona discussion log")
         except Exception:
             # Keep chat robust: failures in discussion should not break response
-            pass
+            LOGGER.exception("persona discussion failed during chat turn")
         return ConversationNodeResult(
             node="run_personas",
             state=replace(

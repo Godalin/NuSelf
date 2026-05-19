@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Protocol, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
 
+from nuself.llm_json import parse_llm_json_object
 from nuself.llm import ChatLLM, ChatMessage
 
 
@@ -249,7 +249,7 @@ class LLMBackedActivationPolicy:
             return PersonaActivation(trigger="no_llm")
         try:
             return self._decide_with_llm(persona_input)
-        except (RuntimeError, ValueError, json.JSONDecodeError, KeyError) as e:
+        except (RuntimeError, ValueError, KeyError) as e:
             return PersonaActivation(
                 trigger="llm_fallback",
                 selected_personas=(),
@@ -297,14 +297,7 @@ class LLMBackedActivationPolicy:
         ]
 
     def _parse_response(self, raw: str) -> PersonaActivation:
-        stripped = raw.strip()
-        if stripped.startswith("```"):
-            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
-            stripped = "\n".join(lines).strip()
-        parsed: object = json.loads(stripped)
-        if not isinstance(parsed, dict):
-            raise ValueError("LLM response is not a JSON object")
-        data = cast(dict[str, object], parsed)
+        data = parse_llm_json_object(raw)
 
         activated = data.get("activated")
         if isinstance(activated, bool):

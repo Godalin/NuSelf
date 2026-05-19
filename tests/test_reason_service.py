@@ -70,6 +70,16 @@ def test_start_thread_records_trace(tmp_path: Path) -> None:
     assert traces[0].evidence_refs == ["memory:abc"]
 
 
+def test_start_thread_records_trace_when_repository_is_injected(tmp_path: Path) -> None:
+    service = ReasonService(project_root=tmp_path, repository=ReasonRepository(tmp_path))
+
+    thread = service.start_thread("Injected repository should still trace")
+
+    traces = TraceQueryService(tmp_path).list_traces(kind="reason_thread")
+    assert len(traces) == 1
+    assert traces[0].outputs == [f"reason:{thread.id}"]
+
+
 def test_show_thread_by_id(tmp_path: Path) -> None:
     service = ReasonService(repository=ReasonRepository(tmp_path))
     created = service.start_thread("Show me")

@@ -12,6 +12,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Fixed reason trace recording when callers inject a custom reason repository.
+
 ### Docs
 
 ## 0.2.0 - 2026-05-19

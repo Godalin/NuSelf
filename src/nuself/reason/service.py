@@ -28,7 +28,7 @@ class ReasonService:
         self._repository = repository or ReasonRepository(project_root)
         self._workspace_store = workspace_store or PrivateWorkspaceStore(project_root, scope="reason")
         self._trace_recorder = trace_recorder if trace_recorder is not None else (
-            TraceRecorder(project_root) if repository is None else None
+            TraceRecorder(project_root) if project_root is not None else None
         )
 
     # ── Read ───────────────────────────────────────────────────────

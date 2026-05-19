@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import cast
 
@@ -19,6 +18,7 @@ from nuself.agent.persona import (
 from nuself.config_system import ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatLLM, ChatMessage
+from nuself.llm_json import parse_llm_json_object
 
 
 @dataclass(frozen=True)
@@ -71,21 +71,14 @@ class LLMBackedScoringPersonaNode:
         try:
             raw = self._llm.complete(messages).strip()
             note, score = self._parse_response(raw)
-        except (RuntimeError, ValueError, json.JSONDecodeError, KeyError):
+        except (RuntimeError, ValueError, KeyError):
             note = f"{persona.id} considered the topic."
             score = 0.5
 
         return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=score)
 
     def _parse_response(self, raw: str) -> tuple[str, float]:
-        stripped = raw.strip()
-        if stripped.startswith("```"):
-            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
-            stripped = "\n".join(lines).strip()
-        parsed: object = json.loads(stripped)
-        if not isinstance(parsed, dict):
-            raise ValueError("LLM response is not a JSON object")
-        data = cast(dict[str, object], parsed)
+        data = parse_llm_json_object(raw)
 
         note = data.get("note")
         if not isinstance(note, str):
@@ -281,7 +274,7 @@ class ProactivePersonaDiscussion:
         try:
             raw = self._llm.complete(messages).strip()
             selected_ids = self._parse_selected_personas(raw)
-        except (RuntimeError, ValueError, json.JSONDecodeError, KeyError):
+        except (RuntimeError, ValueError, KeyError):
             selected_ids = []
 
         selected: list[PersonaDefinition] = []
@@ -297,14 +290,7 @@ class ProactivePersonaDiscussion:
         return tuple(selected)
 
     def _parse_selected_personas(self, raw: str) -> list[str]:
-        stripped = raw.strip()
-        if stripped.startswith("```"):
-            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
-            stripped = "\n".join(lines).strip()
-        parsed: object = json.loads(stripped)
-        if not isinstance(parsed, dict):
-            raise ValueError("LLM response is not a JSON object")
-        data = cast(dict[str, object], parsed)
+        data = parse_llm_json_object(raw)
 
         selected_ids = data.get("selected_persona_ids")
         if not isinstance(selected_ids, list):
@@ -392,18 +378,11 @@ class ProactivePersonaDiscussion:
         try:
             raw = self._llm.complete(messages).strip()
             return self._parse_moderator_judgment(raw)
-        except (RuntimeError, ValueError, json.JSONDecodeError, KeyError):
+        except (RuntimeError, ValueError, KeyError):
             return {"converged": False, "emergent_persona": "none", "reason": "fallback"}
 
     def _parse_moderator_judgment(self, raw: str) -> dict[str, object]:
-        stripped = raw.strip()
-        if stripped.startswith("```"):
-            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
-            stripped = "\n".join(lines).strip()
-        parsed: object = json.loads(stripped)
-        if not isinstance(parsed, dict):
-            raise ValueError("LLM response is not a JSON object")
-        data = cast(dict[str, object], parsed)
+        data = parse_llm_json_object(raw)
 
         converged = data.get("converged")
         if isinstance(converged, bool):
