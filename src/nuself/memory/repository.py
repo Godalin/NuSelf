@@ -141,6 +141,9 @@ class SymbolicGraphSearchResult:
     edges: tuple[SymbolicGraphEdge, ...]
 
 
+GraphAdjacency = dict[str, list[tuple[str, SymbolicGraphEdge]]]
+
+
 class MemoryEntryNotFound(KeyError):
     """Raised when a memory entry does not exist."""
 
@@ -320,15 +323,7 @@ class MemoryEntryRepository:
         if depth <= 0:
             return SymbolicGraphSearchResult(nodes=tuple(matched_nodes), edges=())
 
-        # Build bidirectional adjacency (respect symmetry via descriptor metadata)
-        adjacency: dict[str, list[tuple[str, SymbolicGraphEdge]]] = {}
-        for edge in edges:
-            adjacency.setdefault(edge.source, []).append((edge.target, edge))
-            descriptor = self._relation_registry.get(edge.relation)
-            if descriptor is not None and descriptor.symmetric:
-                adjacency.setdefault(edge.target, []).append((edge.source, edge))
-            else:
-                adjacency.setdefault(edge.target, []).append((edge.source, edge))
+        adjacency = _build_graph_adjacency(edges, self._relation_registry, bidirectional=True)
 
         frontier = {node.id for node in matched_nodes}
         visited = set(frontier)
@@ -363,15 +358,7 @@ class MemoryEntryRepository:
             for item in _expect_object_list(graph, "edges")
         ]
 
-        # Build adjacency respecting symmetry
-        adjacency: dict[str, list[tuple[str, SymbolicGraphEdge]]] = {}
-        for edge in edges:
-            adjacency.setdefault(edge.source, []).append((edge.target, edge))
-            descriptor = self._relation_registry.get(edge.relation)
-            if descriptor is not None and descriptor.symmetric:
-                adjacency.setdefault(edge.target, []).append((edge.source, edge))
-            else:
-                adjacency.setdefault(edge.target, []).append((edge.source, edge))
+        adjacency = _build_graph_adjacency(edges, self._relation_registry, bidirectional=True)
 
         if from_id not in adjacency:
             return []
@@ -403,17 +390,12 @@ class MemoryEntryRepository:
             for item in _expect_object_list(graph, "edges")
         ]
 
-        descriptor = self._relation_registry.get(relation)
-        is_symmetric = descriptor is not None and descriptor.symmetric
-
-        # Build adjacency filtered to the requested relation
-        adjacency: dict[str, list[tuple[str, SymbolicGraphEdge]]] = {}
-        for edge in edges:
-            if edge.relation != relation:
-                continue
-            adjacency.setdefault(edge.source, []).append((edge.target, edge))
-            if is_symmetric:
-                adjacency.setdefault(edge.target, []).append((edge.source, edge))
+        adjacency = _build_graph_adjacency(
+            edges,
+            self._relation_registry,
+            relation=relation,
+            bidirectional=False,
+        )
 
         frontier = {node_id}
         visited = set(frontier)
@@ -868,6 +850,24 @@ def _matches_graph_text(node: SymbolicGraphNode, query: str) -> bool:
         or normalized in node.body.casefold()
         or any(normalized in tag.casefold() for tag in node.tags)
     )
+
+
+def _build_graph_adjacency(
+    edges: Iterable[SymbolicGraphEdge],
+    relation_registry: RelationDescriptorRegistry,
+    *,
+    relation: str | None = None,
+    bidirectional: bool,
+) -> GraphAdjacency:
+    adjacency: GraphAdjacency = {}
+    for edge in edges:
+        if relation is not None and edge.relation != relation:
+            continue
+        adjacency.setdefault(edge.source, []).append((edge.target, edge))
+        descriptor = relation_registry.get(edge.relation)
+        if bidirectional or (descriptor is not None and descriptor.symmetric):
+            adjacency.setdefault(edge.target, []).append((edge.source, edge))
+    return adjacency
 
 
 def _matches_graph_edge_filters(

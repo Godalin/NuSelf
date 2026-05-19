@@ -28,6 +28,14 @@ class FailingLLM:
         raise RuntimeError("llm unavailable")
 
 
+class RepeatedChainFailingLLM:
+    def complete(self, messages: list[ChatMessage]) -> str:
+        try:
+            raise RuntimeError("same")
+        except RuntimeError as exc:
+            raise RuntimeError("same") from exc
+
+
 def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     state.chat_agent = ChatAgent(tmp_path, llm=StructuredFakeLLM())
@@ -86,6 +94,18 @@ def test_daemon_chat_error_includes_root_cause(tmp_path: Path) -> None:
     assert response.error is not None
     assert "conversation graph node 'initial_response' failed" in response.error
     assert "llm unavailable" in response.error
+
+
+def test_daemon_chat_error_preserves_repeated_exception_messages(tmp_path: Path) -> None:
+    state = DaemonState(tmp_path)
+    state.chat_agent = ChatAgent(tmp_path, llm=RepeatedChainFailingLLM())
+    request = DaemonRequest(type="chat", payload={"message": "hello"}, request_id="chat-repeat-fail")
+
+    response = handle_request(request, state)
+
+    assert response.status == "error"
+    assert response.error is not None
+    assert response.error.count("same") == 2
 
 
 class FakeChangedCurator:

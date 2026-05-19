@@ -25,6 +25,7 @@ _original_warn = warnings.warn
 
 TYPEWRITER_DELAY_SECONDS = 0.01
 TYPEWRITER_REFRESH_PER_SECOND = 30
+NOTIFICATION_EVAL_FIXTURE_COUNT = 3
 
 
 def _suppress_startup_warning(
@@ -1257,10 +1258,10 @@ def handle_eval(args: argparse.Namespace) -> int:
         print("== notifications ==")
         print(result.stdout)
         if result.returncode == 0:
-            all_passed += 3  # rough count; actual count from pytest output
-            all_total += 3
+            all_passed += NOTIFICATION_EVAL_FIXTURE_COUNT
+            all_total += NOTIFICATION_EVAL_FIXTURE_COUNT
         else:
-            all_total += 3
+            all_total += NOTIFICATION_EVAL_FIXTURE_COUNT
             print(result.stderr, file=sys.stderr)
 
     print(f"\n{all_passed}/{all_total} passed")

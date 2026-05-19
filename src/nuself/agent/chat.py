@@ -488,7 +488,7 @@ class _ThreadLock:
         self._file = None
 
     def __enter__(self) -> None:
-        self._file = self._path.open("a+b")
+        self._file = self._path.open("ab")
         fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
 
     def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:

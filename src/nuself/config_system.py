@@ -72,6 +72,49 @@ def _positive_float(raw: object, default: float) -> float:
     return default
 
 
+def _nested_config_value(data: dict[str, Any], path: str) -> Any:
+    value: Any = data
+    for key in path.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = cast(dict[str, Any], value).get(key)
+    return value
+
+
+def _config_str(data: dict[str, Any], path: str, default: str) -> str:
+    value = _nested_config_value(data, path)
+    return value if isinstance(value, str) else default
+
+
+def _config_int(data: dict[str, Any], path: str, default: int) -> int:
+    value = _nested_config_value(data, path)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
+
+
+def _config_float(data: dict[str, Any], path: str, default: float) -> float:
+    value = _nested_config_value(data, path)
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    return default
+
+
+def _config_bool(data: dict[str, Any], path: str, default: bool) -> bool:
+    value = _nested_config_value(data, path)
+    return value if isinstance(value, bool) else default
+
+
 @dataclass(frozen=True)
 class LlmEndpointConfig:
     """LLM endpoint configuration."""
@@ -365,124 +408,58 @@ class ConfigSystem:
     def _merge_yaml_with_defaults(defaults: SystemConfig, yaml_data: dict[str, Any]) -> SystemConfig:
         """Merge YAML config over hardcoded defaults."""
 
-        def get_str(d: dict[str, Any], path: str, default: str) -> str:
-            """Get string value from nested dict or default."""
-            keys = path.split(".")
-            val: Any = d
-            for key in keys:
-                if isinstance(val, dict):
-                    val = val.get(key)  # type: ignore[union-attr]
-                else:
-                    val = None
-                    break
-            if isinstance(val, str):
-                return val
-            return default
-
-        def get_int(d: dict[str, Any], path: str, default: int) -> int:
-            """Get int value from nested dict or default."""
-            keys = path.split(".")
-            val: Any = d
-            for key in keys:
-                if isinstance(val, dict):
-                    val = val.get(key)  # type: ignore[union-attr]
-                else:
-                    val = None
-                    break
-            if isinstance(val, int):
-                return val
-            if isinstance(val, str):
-                try:
-                    return int(val)
-                except ValueError:
-                    pass
-            return default
-
-        def get_float(d: dict[str, Any], path: str, default: float) -> float:
-            """Get float value from nested dict or default."""
-            keys = path.split(".")
-            val: Any = d
-            for key in keys:
-                if isinstance(val, dict):
-                    val = val.get(key)  # type: ignore[union-attr]
-                else:
-                    val = None
-                    break
-            if isinstance(val, (int, float)):
-                return float(val)
-            if isinstance(val, str):
-                try:
-                    return float(val)
-                except ValueError:
-                    pass
-            return default
-
-        def get_bool(d: dict[str, Any], path: str, default: bool) -> bool:
-            """Get bool value from nested dict or default."""
-            keys = path.split(".")
-            val: Any = d
-            for key in keys:
-                if isinstance(val, dict):
-                    val = val.get(key)  # type: ignore[union-attr]
-                else:
-                    val = None
-                    break
-            if isinstance(val, bool):
-                return val
-            return default
-
         # LLM Config
         llm_endpoints = _llm_endpoints_from_yaml(yaml_data, defaults.llm.endpoints)
 
         # Chat Config
-        recent_messages = max(1, get_int(yaml_data, "chat.context.recent_messages", defaults.chat.context.recent_messages))
-        summary_trigger = max(recent_messages + 2, get_int(yaml_data, "chat.context.summary_trigger_messages", defaults.chat.context.summary_trigger_messages))
-        summary_target = max(100, get_int(yaml_data, "chat.context.summary_target_chars", defaults.chat.context.summary_target_chars))
-        chat_language = get_str(yaml_data, "chat.language_preference", defaults.chat.language_preference)
+        recent_messages = max(1, _config_int(yaml_data, "chat.context.recent_messages", defaults.chat.context.recent_messages))
+        summary_trigger = max(recent_messages + 2, _config_int(yaml_data, "chat.context.summary_trigger_messages", defaults.chat.context.summary_trigger_messages))
+        summary_target = max(100, _config_int(yaml_data, "chat.context.summary_target_chars", defaults.chat.context.summary_target_chars))
+        chat_language = _config_str(yaml_data, "chat.language_preference", defaults.chat.language_preference)
         chat_request_timeout = max(
             1.0,
-            get_float(yaml_data, "chat.request_timeout_seconds", defaults.chat.request_timeout_seconds),
+            _config_float(yaml_data, "chat.request_timeout_seconds", defaults.chat.request_timeout_seconds),
         )
 
         # Daemon Config
-        curator_interval = max(1, get_int(yaml_data, "daemon.memory_curator.interval_seconds", defaults.daemon.memory_curator.interval_seconds))
-        reflection_check = max(1, get_int(yaml_data, "daemon.reflection_scheduler.check_interval_seconds", defaults.daemon.reflection_scheduler.check_interval_seconds))
-        notification_interval = max(1, get_int(yaml_data, "daemon.notification_delivery.interval_seconds", defaults.daemon.notification_delivery.interval_seconds))
+        curator_interval = max(1, _config_int(yaml_data, "daemon.memory_curator.interval_seconds", defaults.daemon.memory_curator.interval_seconds))
+        reflection_check = max(1, _config_int(yaml_data, "daemon.reflection_scheduler.check_interval_seconds", defaults.daemon.reflection_scheduler.check_interval_seconds))
+        notification_interval = max(1, _config_int(yaml_data, "daemon.notification_delivery.interval_seconds", defaults.daemon.notification_delivery.interval_seconds))
 
         # Reflection Config
-        refl_interval = max(60, get_int(yaml_data, "reflection.scheduler.interval_seconds", defaults.reflection.scheduler.interval_seconds))
-        refl_cooldown = max(0, get_int(yaml_data, "reflection.scheduler.cooldown_seconds", defaults.reflection.scheduler.cooldown_seconds))
-        refl_quiet_start = max(0, min(get_int(yaml_data, "reflection.scheduler.quiet_start_hour", defaults.reflection.scheduler.quiet_start_hour), 23))
-        refl_quiet_end = max(0, min(get_int(yaml_data, "reflection.scheduler.quiet_end_hour", defaults.reflection.scheduler.quiet_end_hour), 23))
-        refl_daily_cap = max(1, get_int(yaml_data, "reflection.scheduler.daily_cap", defaults.reflection.scheduler.daily_cap))
-        refl_jitter = max(0, min(get_int(yaml_data, "reflection.scheduler.jitter_percent", defaults.reflection.scheduler.jitter_percent), 50))
-        refl_relevance = max(0.0, min(get_float(yaml_data, "reflection.gate.relevance_threshold", defaults.reflection.gate.relevance_threshold), 1.0))
-        refl_discussion = max(0.0, min(get_float(yaml_data, "reflection.gate.persona_discussion_threshold", defaults.reflection.gate.persona_discussion_threshold), 1.0))
-        refl_max_rounds = max(1, get_int(yaml_data, "reflection.moderator.max_discussion_rounds", defaults.reflection.moderator.max_discussion_rounds))
-        refl_patience = max(1, get_int(yaml_data, "reflection.moderator.moderator_convergence_patience", defaults.reflection.moderator.moderator_convergence_patience))
-        refl_blocking = max(0.0, min(get_float(yaml_data, "reflection.discussion.blocking_threshold", defaults.reflection.discussion.blocking_threshold), 1.0))
-        refl_override = max(0.0, min(get_float(yaml_data, "reflection.discussion.override_threshold", defaults.reflection.discussion.override_threshold), 1.0))
-        refl_composite = max(0.0, min(get_float(yaml_data, "reflection.discussion.composite_threshold", defaults.reflection.discussion.composite_threshold), 1.0))
-        refl_spread = max(0.0, min(get_float(yaml_data, "reflection.discussion.consensus_spread_threshold", defaults.reflection.discussion.consensus_spread_threshold), 1.0))
-        refl_min_participants = max(1, get_int(yaml_data, "reflection.discussion.min_participants", defaults.reflection.discussion.min_participants))
-        refl_max_participants = max(1, get_int(yaml_data, "reflection.discussion.max_participants", defaults.reflection.discussion.max_participants))
-        refl_auto_notify = get_bool(yaml_data, "reflection.auto_notify", defaults.reflection.auto_notify)
+        refl_interval = max(60, _config_int(yaml_data, "reflection.scheduler.interval_seconds", defaults.reflection.scheduler.interval_seconds))
+        refl_cooldown = max(0, _config_int(yaml_data, "reflection.scheduler.cooldown_seconds", defaults.reflection.scheduler.cooldown_seconds))
+        refl_quiet_start = max(0, min(_config_int(yaml_data, "reflection.scheduler.quiet_start_hour", defaults.reflection.scheduler.quiet_start_hour), 23))
+        refl_quiet_end = max(0, min(_config_int(yaml_data, "reflection.scheduler.quiet_end_hour", defaults.reflection.scheduler.quiet_end_hour), 23))
+        refl_daily_cap = max(1, _config_int(yaml_data, "reflection.scheduler.daily_cap", defaults.reflection.scheduler.daily_cap))
+        refl_jitter = max(0, min(_config_int(yaml_data, "reflection.scheduler.jitter_percent", defaults.reflection.scheduler.jitter_percent), 50))
+        refl_relevance = max(0.0, min(_config_float(yaml_data, "reflection.gate.relevance_threshold", defaults.reflection.gate.relevance_threshold), 1.0))
+        refl_discussion = max(0.0, min(_config_float(yaml_data, "reflection.gate.persona_discussion_threshold", defaults.reflection.gate.persona_discussion_threshold), 1.0))
+        refl_max_rounds = max(1, _config_int(yaml_data, "reflection.moderator.max_discussion_rounds", defaults.reflection.moderator.max_discussion_rounds))
+        refl_patience = max(1, _config_int(yaml_data, "reflection.moderator.moderator_convergence_patience", defaults.reflection.moderator.moderator_convergence_patience))
+        refl_blocking = max(0.0, min(_config_float(yaml_data, "reflection.discussion.blocking_threshold", defaults.reflection.discussion.blocking_threshold), 1.0))
+        refl_override = max(0.0, min(_config_float(yaml_data, "reflection.discussion.override_threshold", defaults.reflection.discussion.override_threshold), 1.0))
+        refl_composite = max(0.0, min(_config_float(yaml_data, "reflection.discussion.composite_threshold", defaults.reflection.discussion.composite_threshold), 1.0))
+        refl_spread = max(0.0, min(_config_float(yaml_data, "reflection.discussion.consensus_spread_threshold", defaults.reflection.discussion.consensus_spread_threshold), 1.0))
+        refl_min_participants = max(1, _config_int(yaml_data, "reflection.discussion.min_participants", defaults.reflection.discussion.min_participants))
+        refl_max_participants = max(1, _config_int(yaml_data, "reflection.discussion.max_participants", defaults.reflection.discussion.max_participants))
+        refl_auto_notify = _config_bool(yaml_data, "reflection.auto_notify", defaults.reflection.auto_notify)
 
         # Email Config
-        email_enabled = get_bool(yaml_data, "email.enabled", defaults.email.enabled)
-        email_host = get_str(yaml_data, "email.smtp.host", defaults.email.smtp.host)
-        email_port = max(1, get_int(yaml_data, "email.smtp.port", defaults.email.smtp.port))
-        email_tls = get_bool(yaml_data, "email.smtp.use_tls", defaults.email.smtp.use_tls)
-        email_user = get_str(yaml_data, "email.smtp.username", defaults.email.smtp.username)
-        email_pass = get_str(yaml_data, "email.smtp.password", defaults.email.smtp.password)
-        email_from = get_str(yaml_data, "email.from_address", defaults.email.from_address)
+        email_enabled = _config_bool(yaml_data, "email.enabled", defaults.email.enabled)
+        email_host = _config_str(yaml_data, "email.smtp.host", defaults.email.smtp.host)
+        email_port = max(1, _config_int(yaml_data, "email.smtp.port", defaults.email.smtp.port))
+        email_tls = _config_bool(yaml_data, "email.smtp.use_tls", defaults.email.smtp.use_tls)
+        email_user = _config_str(yaml_data, "email.smtp.username", defaults.email.smtp.username)
+        email_pass = _config_str(yaml_data, "email.smtp.password", defaults.email.smtp.password)
+        email_from = _config_str(yaml_data, "email.from_address", defaults.email.from_address)
 
         # macOS Notification Config
-        macos_enabled = get_bool(yaml_data, "macos_notification.enabled", defaults.macos_notification.enabled)
+        macos_enabled = _config_bool(yaml_data, "macos_notification.enabled", defaults.macos_notification.enabled)
 
         # Experimental Config
-        exp_langmem = get_bool(yaml_data, "experimental.langmem_adapter", defaults.experimental.langmem_adapter)
-        exp_vector = get_bool(yaml_data, "experimental.vector_index", defaults.experimental.vector_index)
+        exp_langmem = _config_bool(yaml_data, "experimental.langmem_adapter", defaults.experimental.langmem_adapter)
+        exp_vector = _config_bool(yaml_data, "experimental.vector_index", defaults.experimental.vector_index)
 
         return SystemConfig(
             llm=LlmConfig(

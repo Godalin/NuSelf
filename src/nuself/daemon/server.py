@@ -29,7 +29,7 @@ def _format_exception_chain(exc: BaseException) -> str:
     current: BaseException | None = exc
     while current is not None:
         message = str(current)
-        if message and message not in messages:
+        if message:
             messages.append(message)
         current = current.__cause__ or current.__context__
     return " <- ".join(messages) if messages else exc.__class__.__name__
