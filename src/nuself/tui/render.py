@@ -436,7 +436,7 @@ def _parse_trace_entry(text: str) -> tuple[str | None, str | None, str]:
 def render_discussion_trace(trace: list[object], *, title: str = "discussion trace", color: bool | None = None) -> list[str]:
     """Render a discussion trace grouped by turn with per-speaker labels."""
     theme = TerminalTheme(color=color)
-    lines: list[str] = [f"{title}:"]
+    lines: list[str] = [_render_discussion_group_tag(title, theme)]
     current_turn: str | None = None
 
     for entry in trace:
@@ -446,7 +446,7 @@ def render_discussion_trace(trace: list[object], *, title: str = "discussion tra
         if turn_label is not None and turn_label != current_turn:
             if current_turn is not None:
                 lines.append("")
-            lines.append(f"  ── {turn_label} ──")
+            lines.append(f"  {_render_discussion_group_tag(turn_label, theme)}")
             current_turn = turn_label
 
         if speaker is not None:
@@ -459,6 +459,20 @@ def render_discussion_trace(trace: list[object], *, title: str = "discussion tra
             lines.append(f"{indent}{text}")
 
     return lines
+
+
+def _render_discussion_group_tag(label: str, theme: TerminalTheme) -> str:
+    return theme.paint(f"[{label}]", _discussion_group_color(label))
+
+
+def _discussion_group_color(label: str) -> str:
+    if label == "host":
+        return _persona_color("host")
+    if label == "candidate":
+        return "33"
+    if label.startswith("turn-"):
+        return "90"
+    return "35"
 
 
 def _color_persona_trace_tag(tag: str, speaker: str, theme: TerminalTheme) -> str:

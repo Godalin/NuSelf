@@ -110,7 +110,7 @@ def test_reflection_show_by_id(project_root: Path, capsys: pytest.CaptureFixture
     assert handle_reflection_show(args) == 0
     output = capsys.readouterr().out
     assert entries[0].title in output
-    assert "discussion:" in output
+    assert "[discussion]" in output
 
 
 def test_reflection_show_by_index(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:

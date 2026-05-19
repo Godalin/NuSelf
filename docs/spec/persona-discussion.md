@@ -79,7 +79,7 @@ Trace entries are strings with these prefixes:
 | `turn-N:synthesis:` | `turn-1:synthesis: <summary>` | Synthesizer summary |
 | `turn-N:` | `turn-1: reached convergence` | Turn-level system message |
 
-Renderers must parse these prefixes and group by turn. See [`cli-interaction.md`](cli-interaction.md) for trace rendering contract.
+Renderers must parse these prefixes and group by turn. User-facing discussion trace rendering uses square-bracket tags for the trace title, group headers, and speaker labels, such as `[discussion]`, `[turn-1]`, and `[analyst_self]`. See [`cli-interaction.md`](cli-interaction.md) for trace rendering contract.
 
 ## Result Structure
 

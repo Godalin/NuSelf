@@ -267,4 +267,5 @@ Discussion traces rendered by `render_discussion_trace()` must:
 1. Group entries by turn (`candidate`, `host`, `turn-N`).
 2. Prefix each speaker utterance with `[speaker]` aligned to 18 columns.
 3. Separate turns with a blank line.
-4. Use `── turn-label ──` as turn headers.
+4. Render the trace section title as a square-bracket tag, such as `[discussion]`.
+5. Render each group header as a square-bracket tag, such as `[host]`, `[candidate]`, or `[turn-1]`.

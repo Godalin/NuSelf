@@ -52,11 +52,11 @@ def test_render_discussion_trace_formats_block() -> None:
     lines = render_discussion_trace(["host: start", "turn-1:analyst: considered the idea"], title="discussion trace")
 
     assert lines == [
-        "discussion trace:",
-        "  ── host ──",
+        "[discussion trace]",
+        "  [host]",
         "    [host]             start",
         "",
-        "  ── turn-1 ──",
+        "  [turn-1]",
         "    [analyst]          considered the idea",
     ]
 
@@ -173,11 +173,11 @@ def test_render_discussion_log_expands_trace_metadata() -> None:
         "[selves] persona_discussion thread=default candidate_id=candidate-1",
         "  approved",
         "  New idea - approved after discussion",
-        "  discussion:",
-        "    ── candidate ──",
+        "  [discussion]",
+        "    [candidate]",
         "      [candidate]        New idea",
         "",
-        "    ── turn-1 ──",
+        "    [turn-1]",
         "      [analyst_self]     this is worth pursuing",
         "      [skeptic_self]     check timing first",
         "      [synthesis]        proceed carefully",
@@ -235,10 +235,10 @@ def test_render_reflection_records_use_shared_key_value_style() -> None:
     assert render_reflection_entry_detail(entry, color=False).splitlines() == [
         f"[pending] Test idea id=reflection-candidate-1 type=question score=0.65 confidence=0.70 novelty=0.60 urgency=0.50 interruption=0.20 discussion=approved deep_link=nuself://thread/reflections created_at={created}",
         "  Body line",
-        "  discussion:",
-        "    ── candidate ──",
+        "  [discussion]",
+        "    [candidate]",
         "      [candidate]        Test idea",
         "",
-        "    ── turn-1 ──",
+        "    [turn-1]",
         "      [builder_self]     build it",
     ]
