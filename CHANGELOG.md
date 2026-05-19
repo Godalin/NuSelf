@@ -8,6 +8,16 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Docs
+
+## 0.2.0 - 2026-05-19
+
+### Added
+
 - Added LLM endpoint failover so NuSelf can switch between configured LLM endpoints when an account/subscription endpoint becomes unavailable, with OpenAI-compatible endpoints as the default and `anthropic: true` for Anthropic endpoints.
 - Added the trace foundation with `ThoughtTrace`, `TraceLink`, file-backed trace storage, trace search, CLI `trace list/show/search`, and REPL `:trace` commands.
 - Added automatic `chat_turn` trace recording when final chat replies cite evidence references.
