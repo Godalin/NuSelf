@@ -6,6 +6,7 @@
 .vscode/
 .claude/
 .opencode/
+.codex/
 
 # Python caches and virtual environments.
 __pycache__/
