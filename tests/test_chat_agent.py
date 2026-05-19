@@ -961,9 +961,11 @@ def test_chat_agent_includes_service_skills_in_system_prompt(tmp_path: Path) -> 
 
     system_prompt = llm.calls[0][0].content
     assert "Service skills:" in system_prompt
-    assert "Memory skill: durable memory is not ambient context" in system_prompt
-    assert "use search_memory before answering" in system_prompt
-    assert "Reflection skill:" in system_prompt
+    assert "The following service skills are loaded from Agent Skills SKILL.md files." in system_prompt
+    assert "- memory:" in system_prompt
+    assert "Durable memory is not ambient context" in system_prompt
+    assert "Use `search_memory` before answering" in system_prompt
+    assert "- reflection:" in system_prompt
 
 
 def test_conversation_runtime_registers_langchain_tools(tmp_path: Path) -> None:

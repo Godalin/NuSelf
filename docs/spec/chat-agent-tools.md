@@ -33,6 +33,20 @@ Every agent-facing service should be described by two prompt layers:
 
 Tools alone are not enough. A model may treat tools as optional buttons unless the prompt explains that a service is not ambient context. Skills tell the agent how the subsystem should participate in reasoning.
 
+Skills must follow the Agent Skills `SKILL.md` directory convention used by LangChain Deep Agents:
+
+```text
+skills/
+  memory/
+    SKILL.md
+  reflection/
+    SKILL.md
+```
+
+Each `SKILL.md` starts with YAML frontmatter containing at least `name` and `description`, followed by Markdown instructions. NuSelf also uses `allowed-tools` to name the LangChain tools the skill may call.
+
+Current chat runtime loads these `SKILL.md` files and injects their instructions into response-generation prompts. When NuSelf migrates chat to Deep Agents, the same skill directories should be passed to `create_deep_agent(..., skills=[...])` rather than converted back into hard-coded prompt strings.
+
 Rules:
 
 - A skill may require a tool call before answering a class of questions.
@@ -40,6 +54,7 @@ Rules:
 - A skill should name the exact tools it depends on.
 - A skill should be reusable across ordinary response generation and persona-synthesized responses.
 - Skills must not invent hidden access. If the service data is not in visible context, the agent must call the relevant tool or state uncertainty.
+- Skill instructions must live in `SKILL.md`; do not hard-code service skill prose in `chat.py`.
 
 ### Tool Invocation Flow
 
@@ -154,7 +169,7 @@ Each tool is described with:
 
 The prompt must also state that these tools are loaded in the current NuSelf runtime. If the user asks whether memory tools are available, the agent should answer from this runtime tool list rather than from generic model limitations.
 
-Every chat response-generation prompt must also include a `Service skills` section. The section is the usage policy for service-backed tools, not a second tool registry.
+Every chat response-generation prompt must also include a `Service skills` section rendered from loaded Agent Skills. The section is the usage policy for service-backed tools, not a second tool registry.
 
 Example additions:
 
@@ -179,13 +194,13 @@ The system prompt should include:
 
 ### Memory Skill
 
-The system prompt must include a memory skill:
+The memory skill lives in `src/nuself/agent/skills/memory/SKILL.md` and must include this behavioral contract:
 
 > "Durable memory is not ambient context. If the user asks about past preferences, decisions, recurring patterns, previous discussions, stored memories, or what NuSelf remembers, use `search_memory` before answering unless the answer is fully present in the current visible conversation or already provided in `Relevant memory context`. Do not say you lack memory tools when `search_memory` is listed. If you do not call `search_memory`, do not claim that no memory exists."
 
 ### Reflection Skill
 
-The system prompt must include a reflection skill:
+The reflection skill lives in `src/nuself/agent/skills/reflection/SKILL.md` and must include this behavioral contract:
 
 > "Reflection ideas are proactive suggestions, not facts about the user. Use `list_pending_reflections` only when the user asks for ideas/thoughts/reflections, the conversation naturally pauses, or a topic strongly matches proactive exploration. Introduce at most one idea in natural language. Use `dismiss_reflection` when the user declines a topic, and `archive_reflection` when the user engages and the discussion feels complete."
 

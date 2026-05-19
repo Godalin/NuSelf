@@ -12,6 +12,7 @@ from typing import Any, Literal, Protocol, TypeAlias, TypeVar, cast
 
 from langchain_core.tools import BaseTool
 
+from nuself.agent.skills import AgentSkill, load_agent_skills, render_agent_skill_sections
 from nuself.agent.tools import build_langchain_chat_tools
 from nuself.agent.persona import (
     PersonaActivation,
@@ -706,6 +707,7 @@ class ConversationGraphRuntime:
             project_root=project_root,
         )
         self._tools: dict[str, BaseTool] = {tool.name: tool for tool in tools}
+        self._skills: tuple[AgentSkill, ...] = load_agent_skills()
         from nuself.agent.graph_driver import ConversationGraphDriver
 
         self._graph_driver = ConversationGraphDriver(self)
@@ -1093,7 +1095,7 @@ class ConversationGraphRuntime:
             f"Summary: {synthesis.summary}",
             f"Perspectives involved: {', '.join(synthesis.source_personas)}",
         ])
-        parts.extend(_tool_prompt_sections(self._tools.values()))
+        parts.extend(_tool_prompt_sections(self._tools.values(), self._skills))
         prompt: list[ChatMessage] = [ChatMessage(role="system", content="\n".join(parts))]
         for message in state.active_messages[-self._settings.recent_messages :]:
             prompt.append(ChatMessage(role=message.role, content=message.content))
@@ -1144,7 +1146,7 @@ class ConversationGraphRuntime:
         if synthesis is not None:
             parts.extend(["", "Internal perspective fusion:", f"Summary: {synthesis.summary}", f"Perspectives involved: {', '.join(synthesis.source_personas)}"])
 
-        parts.extend(_tool_prompt_sections(self._tools.values()))
+        parts.extend(_tool_prompt_sections(self._tools.values(), self._skills))
         return "\n".join(parts)
 
     def _compress_if_needed(self, state: ThreadState) -> ThreadState:
@@ -1337,7 +1339,7 @@ def _tool_service_component(tool_name: str) -> LogComponent | None:
     return None
 
 
-def _tool_prompt_sections(tools: "Iterable[BaseTool]") -> list[str]:
+def _tool_prompt_sections(tools: "Iterable[BaseTool]", skills: tuple[AgentSkill, ...]) -> list[str]:
     lines = [
         "",
         "Available tools:",
@@ -1351,34 +1353,8 @@ def _tool_prompt_sections(tools: "Iterable[BaseTool]") -> list[str]:
     for tool in tools:
         args = _tool_args_signature(tool)
         lines.append(f"- {tool.name}({args}): {tool.description}")
-    lines.extend(_service_skill_sections())
+    lines.extend(render_agent_skill_sections(skills))
     return lines
-
-
-def _service_skill_sections() -> list[str]:
-    return [
-        "",
-        "Service skills:",
-        (
-            "- Memory skill: durable memory is not ambient context. If the user asks about past preferences, "
-            "decisions, recurring patterns, previous discussions, stored memories, or what NuSelf remembers, "
-            "use search_memory before answering unless the answer is fully present in the current visible "
-            "conversation or already provided in Relevant memory context. Do not say you lack memory tools "
-            "when search_memory is listed. If you do not call search_memory, do not claim that no memory exists."
-        ),
-        (
-            "- Memory curation skill: you can help curate memory. If the user says something is outdated, "
-            "no longer relevant, hidden, more important, or less important, confirm the intended change "
-            "before using archive_memory or update_memory_importance."
-        ),
-        (
-            "- Reflection skill: reflection ideas are proactive suggestions, not facts about the user. "
-            "Use list_pending_reflections only when the user asks for ideas, thoughts, or reflections, "
-            "when the conversation naturally pauses, or when the topic strongly matches proactive exploration. "
-            "Introduce at most one idea in natural language. Use dismiss_reflection when the user declines a topic, "
-            "and archive_reflection when the user engages and the discussion feels complete."
-        ),
-    ]
 
 
 def _tool_args_signature(tool: BaseTool) -> str:
