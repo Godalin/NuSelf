@@ -58,6 +58,7 @@ Each subsystem should expose these layers when the domain is non-trivial:
 3. **Service**: user-intent operations and policy decisions.
 4. **Renderer**: human-readable CLI/REPL presentation.
 5. **Tool-facing adapter**: a small interface suitable for use by chat, reason, reflection, or future agents.
+6. **Agent skill**: prompt-level policy that tells agents when and why to use the subsystem's tools.
 
 Rules:
 
@@ -65,6 +66,8 @@ Rules:
 - CLI and REPL commands should be thin wrappers over service methods when behavior is non-trivial.
 - Cross-subsystem effects should be explicit. For example, reason may call trace recording through `TraceRecorder`, not by constructing private trace files itself.
 - Tool-facing interfaces must use small typed inputs and outputs, avoid leaking raw file paths unless intentionally requested, and be safe to expose to LLM-driven agents.
+- Tool-facing interfaces define capability; agent skills define usage policy. A service exposed to agents should usually provide both.
+- Agent skills must be explicit about when tool use is expected, when it is optional, and what claims are invalid without a tool result.
 - Shared renderers should be reused so CLI, REPL, transcripts, and logs stay consistent.
 
 ## Memory Architecture Direction

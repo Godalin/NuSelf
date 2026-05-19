@@ -48,15 +48,21 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
 
     theme = TerminalTheme(color=color)
     tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
-    header = _render_log_header(tag, event.event, event, theme)
-    return render_record_block(header, body=event.message)
+    inline_status = event.component != "persona"
+    header = _render_log_header(tag, event.event, event, theme, inline_status=inline_status)
+    lines = [header]
+    if not inline_status:
+        lines.extend(_render_status_body(event, theme))
+    lines.extend(render_record_body(event.message))
+    return "\n".join(lines)
 
 
 def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None) -> str:
     """Render internal persona thoughts as an ordered multi-line block."""
     theme = TerminalTheme(color=color)
     tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
-    lines = [_render_log_header(tag, "persona_summary", event, theme)]
+    lines = [_render_log_header(tag, "persona_summary", event, theme, inline_status=False)]
+    lines.extend(_render_status_body(event, theme))
     body_lines = [line for line in event.message.splitlines() if line.strip()]
     if not body_lines:
         body_lines = ["(no persona contributions)"]
@@ -67,7 +73,10 @@ def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None)
 def _render_discussion_log_event(event: LogEvent, *, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
     tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
-    lines = [_render_log_header(tag, event.event, event, theme)]
+    inline_status = event.component != "persona"
+    lines = [_render_log_header(tag, event.event, event, theme, inline_status=inline_status)]
+    if not inline_status:
+        lines.extend(_render_status_body(event, theme))
     lines.extend(render_record_body(event.message))
     trace = _discussion_trace_metadata(event)
     for line in render_discussion_trace(trace, title="discussion", color=color):
@@ -75,8 +84,15 @@ def _render_discussion_log_event(event: LogEvent, *, color: bool | None = None) 
     return "\n".join(lines)
 
 
-def _render_log_header(tag: str, event_name: str, event: LogEvent, theme: TerminalTheme) -> str:
-    return render_record_header(f"{tag} {event_name}", _render_log_fields(event, theme))
+def _render_log_header(
+    tag: str,
+    event_name: str,
+    event: LogEvent,
+    theme: TerminalTheme,
+    *,
+    inline_status: bool = True,
+) -> str:
+    return render_record_header(f"{tag} {event_name}", _render_log_fields(event, theme, include_status=inline_status))
 
 
 def render_record_header(label: str, fields: Sequence[str] = ()) -> str:
@@ -108,9 +124,9 @@ def _discussion_trace_metadata(event: LogEvent) -> list[object]:
     return cast(list[object], raw)
 
 
-def _render_log_fields(event: LogEvent, theme: TerminalTheme) -> list[str]:
+def _render_log_fields(event: LogEvent, theme: TerminalTheme, *, include_status: bool = True) -> list[str]:
     fields: list[str] = []
-    if event.status:
+    if include_status and event.status:
         fields.append(theme.muted(_format_log_field("status", event.status)))
     if event.duration_ms is not None:
         fields.append(theme.muted(_format_log_field("duration_ms", event.duration_ms)))
@@ -128,8 +144,16 @@ def _render_log_fields(event: LogEvent, theme: TerminalTheme) -> list[str]:
                 continue
             if key == "discussion_trace":
                 continue
+            if event.component == "persona" and key == "escalation_reason":
+                continue
             fields.append(theme.muted(_format_log_field(key, event.metadata[key])))
     return fields
+
+
+def _render_status_body(event: LogEvent, theme: TerminalTheme) -> list[str]:
+    if not event.status:
+        return []
+    return [f"  {theme.muted(event.status)}"]
 
 
 def _format_log_field(key: str, value: object) -> str:
@@ -429,6 +453,7 @@ def render_host_decision(event: LogEvent, *, color: bool | None = None) -> list[
     """Render a structured host discussion decision event for REPL display."""
     theme = TerminalTheme(color=color)
     header = theme.tag("[host decision]", "persona")
-    lines = [_render_log_header(header, event.event, event, theme)]
+    lines = [_render_log_header(header, event.event, event, theme, inline_status=False)]
+    lines.extend(_render_status_body(event, theme))
     lines.extend(render_record_body(event.message))
     return lines

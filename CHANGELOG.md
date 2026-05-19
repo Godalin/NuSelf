@@ -17,9 +17,12 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Chat prompts now treat agent-facing services as tools plus skills, so memory and reflection tools include explicit usage policy instead of appearing only as optional commands.
+- Chat agent tools now register only through LangChain `StructuredTool` objects, with the old NuSelf chat-tool protocol removed and the same loaded tool list visible in ordinary and persona-synthesized response prompts.
 - Reorganized CLI and REPL commands around the v0.2.0 command model, moving sources under `memory source`, proactive items under `inbox`, diagnostics under `dev`, and removing old command-path compatibility aliases.
 - Reflection no longer blocks new cycles based on pending reflection count; duplicate pressure is handled by organization instead.
 - Competitive persona discussion logs now render as `[selves]` activity, and visible discussion notes follow the configured chat language preference.
+- `[selves]` logs now render `status` as indented body text and avoid repeating `escalation_reason` in the header, so long activation text does not stretch the header.
 - Persona/self activity output now uses structured logs only, so REPL rendering keeps log headers and body text in the same format as other activity logs.
 
 ### Fixed

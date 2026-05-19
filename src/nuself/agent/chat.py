@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
 import fcntl
 import json
@@ -10,7 +10,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol, TypeAlias, TypeVar, cast
 
-from nuself.agent.tools import MemorySearchTool
+from langchain_core.tools import BaseTool
+
+from nuself.agent.tools import build_langchain_chat_tools
 from nuself.agent.persona import (
     PersonaActivation,
     LLMBackedActivationPolicy,
@@ -695,26 +697,15 @@ class ConversationGraphRuntime:
             SourceRepository(project_root),
             ProfileItemRepository(project_root),
         )
-        from nuself.agent.tools import DismissReflectionTool, ListPendingReflectionsTool
-
-        from nuself.agent.tools import (
-            ArchiveMemoryTool,
-            ArchiveReflectionTool,
-            DismissReflectionTool,
-            ListPendingReflectionsTool,
-            UpdateMemoryImportanceTool,
-        )
         from nuself.reflection.repository import ReflectionRepository
 
         self._reflection_repo = ReflectionRepository(project_root)
-        self._tools: dict[str, Any] = {
-            "search_memory": MemorySearchTool(query_service=self._memory_query_service),
-            "list_pending_reflections": ListPendingReflectionsTool(repository=self._reflection_repo),
-            "dismiss_reflection": DismissReflectionTool(repository=self._reflection_repo),
-            "archive_reflection": ArchiveReflectionTool(repository=self._reflection_repo),
-            "archive_memory": ArchiveMemoryTool(project_root=project_root),
-            "update_memory_importance": UpdateMemoryImportanceTool(project_root=project_root),
-        }
+        tools = build_langchain_chat_tools(
+            query_service=self._memory_query_service,
+            reflection_repository=self._reflection_repo,
+            project_root=project_root,
+        )
+        self._tools: dict[str, BaseTool] = {tool.name: tool for tool in tools}
         from nuself.agent.graph_driver import ConversationGraphDriver
 
         self._graph_driver = ConversationGraphDriver(self)
@@ -1102,6 +1093,7 @@ class ConversationGraphRuntime:
             f"Summary: {synthesis.summary}",
             f"Perspectives involved: {', '.join(synthesis.source_personas)}",
         ])
+        parts.extend(_tool_prompt_sections(self._tools.values()))
         prompt: list[ChatMessage] = [ChatMessage(role="system", content="\n".join(parts))]
         for message in state.active_messages[-self._settings.recent_messages :]:
             prompt.append(ChatMessage(role=message.role, content=message.content))
@@ -1152,51 +1144,7 @@ class ConversationGraphRuntime:
         if synthesis is not None:
             parts.extend(["", "Internal perspective fusion:", f"Summary: {synthesis.summary}", f"Perspectives involved: {', '.join(synthesis.source_personas)}"])
 
-        parts.extend([
-            "",
-            "Available tools:",
-            'You may invoke a tool by including a "tool" field in your JSON:',
-            '{"answer": "...", "tool": "search_memory", "tool_args": {"query": "search term"}, ...}',
-            'The tool result will be injected back into context before your final answer.',
-            'Tools available:',
-            (
-                "- search_memory(query: str, limit: int = 8, types: list[str] = [], tags: list[str] = []): "
-                "Search durable memory for relevant context, optionally narrowed by memory type or tag."
-            ),
-            (
-                "- list_pending_reflections(limit: int = 5): "
-                "View pending proactive ideas generated from the user's memory and conversations. "
-                "Use when the user seems open to exploring new topics or when the conversation naturally pauses."
-            ),
-            (
-                "- dismiss_reflection(index: int): "
-                "Remove a pending idea from the active pool when the user explicitly declines interest. "
-                "Index corresponds to the numbered list from list_pending_reflections."
-            ),
-            (
-                "- archive_reflection(index: int): "
-                "Archive a pending reflection idea after the discussion is complete. "
-                "Use when the user has engaged with a reflection and the topic feels resolved. "
-                "Index corresponds to the numbered list from list_pending_reflections."
-            ),
-            (
-                "- archive_memory(entry_id: str): "
-                "Archive a memory entry so it is excluded from default search. "
-                "Use when the user says a memory is outdated or no longer relevant."
-            ),
-            (
-                "- update_memory_importance(entry_id: str, importance: float): "
-                "Adjust the importance score (0.0–1.0) of a memory entry. "
-                "Use when the user emphasizes or downplays the significance of a memory."
-            ),
-            "",
-            "Behavioral guidelines:",
-            "- When the user is in a casual or open-ended mood, or when the conversation naturally pauses, you may call list_pending_reflections to discover topics worth discussing.",
-            "- If a reflection topic resonates with the user, discuss it naturally in your own words. Do not dump the raw list.",
-            "- If the user shows no interest in a suggested topic, call dismiss_reflection.",
-            "- If the user engages with a reflection and the discussion feels complete, call archive_reflection. The conversation itself captures the outcome into memory.",
-            "- You can also help curate memory: archive outdated entries or adjust importance when the user signals relevance changes.",
-        ])
+        parts.extend(_tool_prompt_sections(self._tools.values()))
         return "\n".join(parts)
 
     def _compress_if_needed(self, state: ThreadState) -> ThreadState:
@@ -1222,8 +1170,8 @@ class ConversationGraphRuntime:
 
         try:
             tool_obj = self._tools[tool.tool]
-            # Tool invoke handles type conversion internally
-            return tool_obj.invoke(**tool_args_input)
+            invoke = cast(Callable[[dict[str, Any]], object], getattr(tool_obj, "invoke"))
+            return str(invoke(tool_args_input))
         except TypeError as e:
             return f"Error invoking {tool.tool}: {e}"
         except Exception as e:
@@ -1351,6 +1299,73 @@ def _require_tool_result(tool_result: str | None) -> str:
 
 def _is_supported_tool_call(tool_call: ConversationToolCall | None) -> bool:
     return tool_call is not None and tool_call.supported
+
+
+def _tool_prompt_sections(tools: "Iterable[BaseTool]") -> list[str]:
+    lines = [
+        "",
+        "Available tools:",
+        "The following LangChain tools are loaded in the current NuSelf runtime.",
+        'You may invoke a tool by including a "tool" field in your JSON:',
+        '{"answer": "...", "tool": "search_memory", "tool_args": {"query": "search term"}, ...}',
+        "The tool result will be injected back into context before your final answer.",
+        "If the user asks whether memory tools are available, answer from this loaded tool list.",
+        "Tools available:",
+    ]
+    for tool in tools:
+        args = _tool_args_signature(tool)
+        lines.append(f"- {tool.name}({args}): {tool.description}")
+    lines.extend(_service_skill_sections())
+    return lines
+
+
+def _service_skill_sections() -> list[str]:
+    return [
+        "",
+        "Service skills:",
+        (
+            "- Memory skill: durable memory is not ambient context. If the user asks about past preferences, "
+            "decisions, recurring patterns, previous discussions, stored memories, or what NuSelf remembers, "
+            "use search_memory before answering unless the answer is fully present in the current visible "
+            "conversation or already provided in Relevant memory context. Do not say you lack memory tools "
+            "when search_memory is listed. If you do not call search_memory, do not claim that no memory exists."
+        ),
+        (
+            "- Memory curation skill: you can help curate memory. If the user says something is outdated, "
+            "no longer relevant, hidden, more important, or less important, confirm the intended change "
+            "before using archive_memory or update_memory_importance."
+        ),
+        (
+            "- Reflection skill: reflection ideas are proactive suggestions, not facts about the user. "
+            "Use list_pending_reflections only when the user asks for ideas, thoughts, or reflections, "
+            "when the conversation naturally pauses, or when the topic strongly matches proactive exploration. "
+            "Introduce at most one idea in natural language. Use dismiss_reflection when the user declines a topic, "
+            "and archive_reflection when the user engages and the discussion feels complete."
+        ),
+    ]
+
+
+def _tool_args_signature(tool: BaseTool) -> str:
+    args_schema = cast(object, getattr(tool, "args", {}))
+    if not isinstance(args_schema, dict):
+        return ""
+    pieces: list[str] = []
+    for name, schema in cast(dict[object, object], args_schema).items():
+        if not isinstance(name, str):
+            continue
+        type_name = "object"
+        default: object | None = None
+        if isinstance(schema, dict):
+            schema_dict = cast(dict[object, object], schema)
+            type_value = schema_dict.get("type")
+            if isinstance(type_value, str):
+                type_name = type_value
+            default = schema_dict.get("default")
+        if default is None:
+            pieces.append(f"{name}: {type_name}")
+        else:
+            pieces.append(f"{name}: {type_name} = {default!r}")
+    return ", ".join(pieces)
 
 
 ParsedChatResponse: TypeAlias = DraftResponse

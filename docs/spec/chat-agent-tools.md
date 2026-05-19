@@ -6,26 +6,40 @@ Enable the chat agent to perform user-facing actions *during conversation*, turn
 
 ## Architecture
 
-### Tool Protocol
+### LangChain Tool Boundary
 
-Tools implement the existing `Tool` protocol (`src/nuself/agent/tools.py`):
+Chat tools are registered as LangChain tools, following the current LangChain Python tool interface. Tool definitions must be `BaseTool` / `StructuredTool` objects, usually built from typed Python functions via `StructuredTool.from_function(...)` or an equivalent LangChain-supported decorator/factory.
 
-```python
-class Tool(Protocol):
-    name: str
-    description: str
-    def invoke(self, **kwargs: object) -> str: ...
-```
+NuSelf must not keep a parallel chat-tool protocol, class hierarchy, or registry. Service modules may expose normal Python APIs, but anything visible to the chat runtime must enter through the LangChain tool boundary.
 
-Tools are **stateless callables**. They receive primitive arguments and return a string result that is injected back into the conversation context.
+Tools are **stateless callables** at the LangChain boundary. They receive structured primitive arguments and return a string result that is injected back into the conversation context.
 
 ### Tool Registry
 
-`ConversationGraphRuntime` owns a `dict[str, Tool]` registry. Adding a tool requires three steps:
+`ConversationGraphRuntime` owns a `dict[str, BaseTool]` registry. Adding a tool requires three steps:
 
-1. Implement the `Tool` protocol.
-2. Register it in `ConversationGraphRuntime.__init__`.
-3. Describe it in `_system_prompt` so the LLM knows when to invoke it.
+1. Implement a small typed Python function that closes over the relevant service.
+2. Wrap it as a LangChain `StructuredTool`.
+3. Register it in `ConversationGraphRuntime.__init__`.
+
+Prompt text may summarize loaded tools for models that still use NuSelf's JSON response envelope, but prompt text is not the source of truth. The registered LangChain tool objects and their schemas are the source of truth.
+
+### Agent Skills
+
+Every agent-facing service should be described by two prompt layers:
+
+1. **Tool inventory**: the LangChain tools the agent can call.
+2. **Service skill**: the behavioral policy for when the agent should call those tools.
+
+Tools alone are not enough. A model may treat tools as optional buttons unless the prompt explains that a service is not ambient context. Skills tell the agent how the subsystem should participate in reasoning.
+
+Rules:
+
+- A skill may require a tool call before answering a class of questions.
+- A skill may prohibit claims that would require service data unless a tool result or visible context supports them.
+- A skill should name the exact tools it depends on.
+- A skill should be reusable across ordinary response generation and persona-synthesized responses.
+- Skills must not invent hidden access. If the service data is not in visible context, the agent must call the relevant tool or state uncertainty.
 
 ### Tool Invocation Flow
 
@@ -35,7 +49,9 @@ The LangGraph state machine already supports tool execution:
 initial_response → detect_tool_request → [execute_tool]? → finalize_response
 ```
 
-The LLM outputs a JSON object. If it contains `"tool": "<name>"` and `"tool_args": {...}`, the runtime looks up the tool by name, invokes it, and appends the result to the turn context before generating the final answer.
+The current runtime still accepts NuSelf's JSON response envelope. If the response contains `"tool": "<name>"` and `"tool_args": {...}`, the runtime looks up the registered LangChain tool by name, invokes it with the structured args dict, and appends the result to the turn context before generating the final answer.
+
+When the LLM adapter is migrated to a native LangChain chat model, the same registered tools should be passed to the model with LangChain's tool-calling APIs (for example `bind_tools(...)` or agent creation with `tools=[...]`) rather than re-encoding tool schemas by hand.
 
 ## Tool Catalog
 
@@ -128,11 +144,17 @@ Trace tools (e.g. `search_trace`, `show_trace`) are deferred until trace has eno
 
 ## System Prompt Integration
 
-The `_system_prompt` method in `ConversationGraphRuntime` must include a dynamic `Available tools` section. Each tool is described with:
+Every chat response-generation prompt in `ConversationGraphRuntime` must include the same `Available tools` section. This includes both the ordinary `_system_prompt` path and the persona-synthesis response path. Persona activation must not hide tool availability from the final response agent.
+
+Each tool is described with:
 
 - Name
 - Argument schema
 - When the agent should consider using it
+
+The prompt must also state that these tools are loaded in the current NuSelf runtime. If the user asks whether memory tools are available, the agent should answer from this runtime tool list rather than from generic model limitations.
+
+Every chat response-generation prompt must also include a `Service skills` section. The section is the usage policy for service-backed tools, not a second tool registry.
 
 Example additions:
 
@@ -154,6 +176,25 @@ Example additions:
 The system prompt should include:
 
 > "You have access to pending reflection ideas—proactive questions and connections generated from the user's memory and conversations. If the user seems curious or the conversation naturally touches on related topics, you may introduce one idea in your own words. Do not dump the raw list. If the user shows no interest, dismiss it. If the user engages, the conversation itself will naturally capture the outcome into memory."
+
+### Memory Skill
+
+The system prompt must include a memory skill:
+
+> "Durable memory is not ambient context. If the user asks about past preferences, decisions, recurring patterns, previous discussions, stored memories, or what NuSelf remembers, use `search_memory` before answering unless the answer is fully present in the current visible conversation or already provided in `Relevant memory context`. Do not say you lack memory tools when `search_memory` is listed. If you do not call `search_memory`, do not claim that no memory exists."
+
+### Reflection Skill
+
+The system prompt must include a reflection skill:
+
+> "Reflection ideas are proactive suggestions, not facts about the user. Use `list_pending_reflections` only when the user asks for ideas/thoughts/reflections, the conversation naturally pauses, or a topic strongly matches proactive exploration. Introduce at most one idea in natural language. Use `dismiss_reflection` when the user declines a topic, and `archive_reflection` when the user engages and the discussion feels complete."
+
+### Future Reason And Trace Skills
+
+When reason and trace tools become chat-visible, they must follow the same service pattern:
+
+- Reason skill: call reason tools when the user asks about active long-running questions, open threads, or what NuSelf is continuing to think about.
+- Trace skill: call trace tools when the user asks where an idea came from, how a belief formed, or what prior steps support a conclusion.
 
 ## Dismissed Reflection Lifecycle
 

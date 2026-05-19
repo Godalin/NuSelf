@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import pytest
+from langchain_core.tools import BaseTool
 
 from nuself.agent.chat import (
     ChatAgent,
@@ -28,6 +31,32 @@ from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.trace.repository import TraceRepository
+
+
+def _chat_tool(
+    tmp_path: Path,
+    name: str,
+    *,
+    query_service: MemoryQueryService | None = None,
+    reflection_repository: object | None = None,
+) -> BaseTool:
+    from nuself.agent.tools import build_langchain_chat_tools
+    from nuself.reflection.repository import ReflectionRepository
+
+    repo = reflection_repository if reflection_repository is not None else ReflectionRepository(tmp_path)
+    if not isinstance(repo, ReflectionRepository):
+        raise TypeError("reflection_repository must be a ReflectionRepository")
+    tools = build_langchain_chat_tools(
+        query_service=query_service or MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        reflection_repository=repo,
+        project_root=tmp_path,
+    )
+    return {tool.name: tool for tool in tools}[name]
+
+
+def _invoke_chat_tool(tool: BaseTool, args: dict[str, object] | None = None) -> str:
+    invoke = cast(Callable[[dict[str, object]], object], getattr(tool, "invoke"))
+    return str(invoke(args or {}))
 
 
 class FakeLLM:
@@ -920,6 +949,33 @@ def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) 
     assert "Search durable memory" in system_prompt
 
 
+def test_chat_agent_includes_service_skills_in_system_prompt(tmp_path: Path) -> None:
+    llm = FakeLLM()
+    agent = ChatAgent(tmp_path, llm=llm)
+
+    agent.respond("do you remember my earlier preferences?")
+
+    system_prompt = llm.calls[0][0].content
+    assert "Service skills:" in system_prompt
+    assert "Memory skill: durable memory is not ambient context" in system_prompt
+    assert "use search_memory before answering" in system_prompt
+    assert "Reflection skill:" in system_prompt
+
+
+def test_conversation_runtime_registers_langchain_tools(tmp_path: Path) -> None:
+    from langchain_core.tools import BaseTool
+
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=FakeLLM(),
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+    tools = getattr(runtime, "_tools")
+
+    assert "search_memory" in tools
+    assert all(isinstance(tool, BaseTool) for tool in tools.values())
+
+
 def test_chat_agent_injects_language_instruction(tmp_path: Path) -> None:
     private_dir = tmp_path / "private"
     private_dir.mkdir(parents=True)
@@ -937,8 +993,6 @@ def test_chat_agent_injects_language_instruction(tmp_path: Path) -> None:
 
 
 def test_memory_search_tool_invocation_with_limit(tmp_path: Path) -> None:
-    from nuself.agent.tools import MemorySearchTool
-
     repo = MemoryEntryRepository(tmp_path)
     for i in range(5):
         repo.save(
@@ -950,17 +1004,15 @@ def test_memory_search_tool_invocation_with_limit(tmp_path: Path) -> None:
             )
         )
 
-    tool = MemorySearchTool(query_service=MemoryQueryService(repo))
+    tool = _chat_tool(tmp_path, "search_memory", query_service=MemoryQueryService(repo))
 
-    result = tool.invoke(query="belief", limit=2)
+    result = _invoke_chat_tool(tool, {"query": "belief", "limit": 2})
 
     assert "Belief" in result
     assert "matches found" not in result.lower() or result.count("belief") >= 2
 
 
 def test_memory_search_tool_accepts_type_and_tag_filters(tmp_path: Path) -> None:
-    from nuself.agent.tools import MemorySearchTool
-
     repo = MemoryEntryRepository(tmp_path)
     repo.save(
         MemoryEntry(
@@ -978,43 +1030,39 @@ def test_memory_search_tool_accepts_type_and_tag_filters(tmp_path: Path) -> None
             tags=["runtime"],
         )
     )
-    tool = MemorySearchTool(query_service=MemoryQueryService(repo))
+    tool = _chat_tool(tmp_path, "search_memory", query_service=MemoryQueryService(repo))
 
-    result = tool.invoke(query="current goal", types=["goal"], tags=["runtime"])
+    result = _invoke_chat_tool(tool, {"query": "current goal", "types": ["goal"], "tags": ["runtime"]})
 
     assert "Runtime migration" in result
     assert "Direct style" not in result
 
 
 def test_memory_search_tool_with_invalid_inputs(tmp_path: Path) -> None:
-    from nuself.agent.tools import MemorySearchTool
-
     repo = MemoryEntryRepository(tmp_path)
-    tool = MemorySearchTool(query_service=MemoryQueryService(repo))
+    tool = _chat_tool(tmp_path, "search_memory", query_service=MemoryQueryService(repo))
 
     # Empty query
-    result = tool.invoke(query="", limit=8)
+    result = _invoke_chat_tool(tool, {"query": "", "limit": 8})
     assert "Error" in result or "No matches" in result
 
     # Invalid limit
-    result = tool.invoke(query="test", limit=0)
+    result = _invoke_chat_tool(tool, {"query": "test", "limit": 0})
     assert "Error" in result
 
 
 # --- Reflection consumption tools ---
 
 def test_list_pending_reflections_empty(tmp_path: Path) -> None:
-    from nuself.agent.tools import ListPendingReflectionsTool
     from nuself.reflection.repository import ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
-    tool = ListPendingReflectionsTool(repository=repo)
-    result = tool.invoke()
+    tool = _chat_tool(tmp_path, "list_pending_reflections", reflection_repository=repo)
+    result = _invoke_chat_tool(tool)
     assert "No pending reflection ideas" in result
 
 
 def test_list_pending_reflections_with_entries(tmp_path: Path) -> None:
-    from nuself.agent.tools import ListPendingReflectionsTool
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
@@ -1056,15 +1104,14 @@ def test_list_pending_reflections_with_entries(tmp_path: Path) -> None:
             reviewed_at=None,
         )
     )
-    tool = ListPendingReflectionsTool(repository=repo)
-    result = tool.invoke()
+    tool = _chat_tool(tmp_path, "list_pending_reflections", reflection_repository=repo)
+    result = _invoke_chat_tool(tool)
     assert "Pending reflection ideas:" in result
     assert "[1] Explore recursion in habits" in result
     assert "[2] Sleep and creativity link" in result
 
 
 def test_list_pending_reflections_respects_limit(tmp_path: Path) -> None:
-    from nuself.agent.tools import ListPendingReflectionsTool
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
@@ -1088,13 +1135,12 @@ def test_list_pending_reflections_respects_limit(tmp_path: Path) -> None:
                 reviewed_at=None,
             )
         )
-    tool = ListPendingReflectionsTool(repository=repo)
-    result = tool.invoke(limit=2)
+    tool = _chat_tool(tmp_path, "list_pending_reflections", reflection_repository=repo)
+    result = _invoke_chat_tool(tool, {"limit": 2})
     assert result.count("[") == 2  # only two numbered items
 
 
 def test_dismiss_reflection_success(tmp_path: Path) -> None:
-    from nuself.agent.tools import DismissReflectionTool
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
@@ -1117,35 +1163,32 @@ def test_dismiss_reflection_success(tmp_path: Path) -> None:
             reviewed_at=None,
         )
     )
-    tool = DismissReflectionTool(repository=repo)
-    result = tool.invoke(index=1)
+    tool = _chat_tool(tmp_path, "dismiss_reflection", reflection_repository=repo)
+    result = _invoke_chat_tool(tool, {"index": 1})
     assert "Dismissed" in result
     assert "Explore recursion in habits" in result
     assert repo.list(status="pending") == []
 
 
 def test_dismiss_reflection_out_of_range(tmp_path: Path) -> None:
-    from nuself.agent.tools import DismissReflectionTool
     from nuself.reflection.repository import ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
-    tool = DismissReflectionTool(repository=repo)
-    result = tool.invoke(index=1)
+    tool = _chat_tool(tmp_path, "dismiss_reflection", reflection_repository=repo)
+    result = _invoke_chat_tool(tool, {"index": 1})
     assert "out of range" in result
 
 
 def test_dismiss_reflection_invalid_index(tmp_path: Path) -> None:
-    from nuself.agent.tools import DismissReflectionTool
     from nuself.reflection.repository import ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
-    tool = DismissReflectionTool(repository=repo)
-    assert "Error" in tool.invoke(index=0)
-    assert "Error" in tool.invoke(index=-1)
+    tool = _chat_tool(tmp_path, "dismiss_reflection", reflection_repository=repo)
+    assert "Error" in _invoke_chat_tool(tool, {"index": 0})
+    assert "Error" in _invoke_chat_tool(tool, {"index": -1})
 
 
 def test_archive_reflection_success(tmp_path: Path) -> None:
-    from nuself.agent.tools import ArchiveReflectionTool
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
@@ -1168,8 +1211,8 @@ def test_archive_reflection_success(tmp_path: Path) -> None:
             reviewed_at=None,
         )
     )
-    tool = ArchiveReflectionTool(repository=repo)
-    result = tool.invoke(index=1)
+    tool = _chat_tool(tmp_path, "archive_reflection", reflection_repository=repo)
+    result = _invoke_chat_tool(tool, {"index": 1})
     assert "Archived" in result
     assert "Explore recursion in habits" in result
     assert repo.list(status="pending") == []
@@ -1178,23 +1221,21 @@ def test_archive_reflection_success(tmp_path: Path) -> None:
 
 
 def test_archive_reflection_out_of_range(tmp_path: Path) -> None:
-    from nuself.agent.tools import ArchiveReflectionTool
     from nuself.reflection.repository import ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
-    tool = ArchiveReflectionTool(repository=repo)
-    result = tool.invoke(index=1)
+    tool = _chat_tool(tmp_path, "archive_reflection", reflection_repository=repo)
+    result = _invoke_chat_tool(tool, {"index": 1})
     assert "out of range" in result
 
 
 def test_archive_reflection_invalid_index(tmp_path: Path) -> None:
-    from nuself.agent.tools import ArchiveReflectionTool
     from nuself.reflection.repository import ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
-    tool = ArchiveReflectionTool(repository=repo)
-    assert "Error" in tool.invoke(index=0)
-    assert "Error" in tool.invoke(index=-1)
+    tool = _chat_tool(tmp_path, "archive_reflection", reflection_repository=repo)
+    assert "Error" in _invoke_chat_tool(tool, {"index": 0})
+    assert "Error" in _invoke_chat_tool(tool, {"index": -1})
 
 
 def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -> None:
@@ -1213,14 +1254,13 @@ def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -
 # --- Memory management tools ---
 
 def test_archive_memory_tool_success(tmp_path: Path) -> None:
-    from nuself.agent.tools import ArchiveMemoryTool
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
     repo = MemoryEntryRepository(tmp_path)
     repo.save(MemoryEntry(id="m1", type="belief", title="Old belief", body="..."))
-    tool = ArchiveMemoryTool(project_root=tmp_path)
-    result = tool.invoke(entry_id="m1")
+    tool = _chat_tool(tmp_path, "archive_memory")
+    result = _invoke_chat_tool(tool, {"entry_id": "m1"})
     assert "Archived" in result
     assert "Old belief" in result
     entry = repo.get("m1")
@@ -1228,22 +1268,19 @@ def test_archive_memory_tool_success(tmp_path: Path) -> None:
 
 
 def test_archive_memory_tool_not_found(tmp_path: Path) -> None:
-    from nuself.agent.tools import ArchiveMemoryTool
-
-    tool = ArchiveMemoryTool(project_root=tmp_path)
-    result = tool.invoke(entry_id="nonexistent")
+    tool = _chat_tool(tmp_path, "archive_memory")
+    result = _invoke_chat_tool(tool, {"entry_id": "nonexistent"})
     assert "Error" in result
 
 
 def test_update_memory_importance_tool_success(tmp_path: Path) -> None:
-    from nuself.agent.tools import UpdateMemoryImportanceTool
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
     repo = MemoryEntryRepository(tmp_path)
     repo.save(MemoryEntry(id="m1", type="belief", title="Key belief", body="...", importance=0.3))
-    tool = UpdateMemoryImportanceTool(project_root=tmp_path)
-    result = tool.invoke(entry_id="m1", importance=0.9)
+    tool = _chat_tool(tmp_path, "update_memory_importance")
+    result = _invoke_chat_tool(tool, {"entry_id": "m1", "importance": 0.9})
     assert "Updated importance" in result
     assert "0.90" in result
     entry = repo.get("m1")
@@ -1251,18 +1288,14 @@ def test_update_memory_importance_tool_success(tmp_path: Path) -> None:
 
 
 def test_update_memory_importance_tool_out_of_range(tmp_path: Path) -> None:
-    from nuself.agent.tools import UpdateMemoryImportanceTool
-
-    tool = UpdateMemoryImportanceTool(project_root=tmp_path)
-    assert "Error" in tool.invoke(entry_id="m1", importance=1.5)
-    assert "Error" in tool.invoke(entry_id="m1", importance=-0.1)
+    tool = _chat_tool(tmp_path, "update_memory_importance")
+    assert "Error" in _invoke_chat_tool(tool, {"entry_id": "m1", "importance": 1.5})
+    assert "Error" in _invoke_chat_tool(tool, {"entry_id": "m1", "importance": -0.1})
 
 
 def test_update_memory_importance_tool_not_found(tmp_path: Path) -> None:
-    from nuself.agent.tools import UpdateMemoryImportanceTool
-
-    tool = UpdateMemoryImportanceTool(project_root=tmp_path)
-    result = tool.invoke(entry_id="nonexistent", importance=0.5)
+    tool = _chat_tool(tmp_path, "update_memory_importance")
+    result = _invoke_chat_tool(tool, {"entry_id": "nonexistent", "importance": 0.5})
     assert "Error" in result
 
 
