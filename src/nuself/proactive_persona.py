@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 
@@ -19,6 +20,8 @@ from nuself.config_system import ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatLLM, ChatMessage
 from nuself.llm_json import parse_llm_json_object
+
+DiscussionTraceSink = Callable[[str], None]
 
 
 @dataclass(frozen=True)
@@ -139,7 +142,12 @@ class ProactivePersonaDiscussion:
         else:
             self._driver = PersonaGraphDriver()
 
-    def discuss(self, candidate: IdeaCandidate) -> PersonaCompetitionResult:
+    def discuss(
+        self,
+        candidate: IdeaCandidate,
+        *,
+        on_trace_entry: DiscussionTraceSink | None = None,
+    ) -> PersonaCompetitionResult:
         selected = self._select_personas_with_llm(candidate)
         if not selected:
             return PersonaCompetitionResult(
@@ -152,18 +160,21 @@ class ProactivePersonaDiscussion:
                 reason="no personas available",
             )
 
-        discussion_trace: list[str] = [
-            f"candidate: {candidate.title}",
+        discussion_trace: list[str] = []
+        self._append_trace(discussion_trace, f"candidate: {candidate.title}", on_trace_entry)
+        self._append_trace(
+            discussion_trace,
             f"type={candidate.candidate_type} confidence={candidate.confidence:.2f} novelty={candidate.novelty:.2f}",
-            candidate.body,
-        ]
+            on_trace_entry,
+        )
+        self._append_trace(discussion_trace, candidate.body, on_trace_entry)
         round_scores: dict[str, float] = {}
         emergent: PersonaDefinition | None = None
         turn_number = 0
         while turn_number < self._max_turns:
             turn_number += 1
             moderator_note = self._moderator_prompt(candidate, discussion_trace, turn_number)
-            discussion_trace.append(f"host: {moderator_note}")
+            self._append_trace(discussion_trace, f"host: {moderator_note}", on_trace_entry)
             participants = self._participants_for_turn(selected, emergent)
             round_scores = self._score_candidate(
                 candidate,
@@ -171,6 +182,7 @@ class ProactivePersonaDiscussion:
                 discussion_trace,
                 turn_label=f"turn-{turn_number}",
                 turn_number=turn_number,
+                on_trace_entry=on_trace_entry,
             )
             judgment = self._moderator_judgment(round_scores, discussion_trace, turn_number)
             emergent_pid = judgment.get("emergent_persona")
@@ -179,10 +191,14 @@ class ProactivePersonaDiscussion:
                 if new_emergent is not None:
                     emergent = new_emergent
             if judgment.get("converged"):
-                discussion_trace.append(f"turn-{turn_number}: reached convergence")
+                self._append_trace(discussion_trace, f"turn-{turn_number}: reached convergence", on_trace_entry)
                 break
             if turn_number < self._max_turns:
-                discussion_trace.append(f"turn-{turn_number}: moderator invites another pass")
+                self._append_trace(
+                    discussion_trace,
+                    f"turn-{turn_number}: moderator invites another pass",
+                    on_trace_entry,
+                )
         scores = round_scores
         emergent_persona_ids = (emergent.id,) if emergent is not None else ()
         blocking = tuple(
@@ -306,6 +322,7 @@ class ProactivePersonaDiscussion:
         *,
         turn_label: str,
         turn_number: int,
+        on_trace_entry: DiscussionTraceSink | None,
     ) -> dict[str, float]:
         scores: dict[str, float] = {}
         discussion_context = "\n".join(discussion_trace)
@@ -324,10 +341,20 @@ class ProactivePersonaDiscussion:
                 score = 0.5
             scores[contrib.persona_id] = score
             note = contrib.notes[0] if contrib.notes else contrib.persona_id
-            discussion_trace.append(f"{turn_label}:{contrib.persona_id}: {note}")
+            self._append_trace(discussion_trace, f"{turn_label}:{contrib.persona_id}: {note}", on_trace_entry)
         if result.synthesis is not None and result.synthesis.summary:
-            discussion_trace.append(f"{turn_label}:synthesis: {result.synthesis.summary}")
+            self._append_trace(discussion_trace, f"{turn_label}:synthesis: {result.synthesis.summary}", on_trace_entry)
         return scores
+
+    def _append_trace(
+        self,
+        discussion_trace: list[str],
+        entry: str,
+        on_trace_entry: DiscussionTraceSink | None,
+    ) -> None:
+        discussion_trace.append(entry)
+        if on_trace_entry is not None:
+            on_trace_entry(entry)
 
     def _moderator_prompt(
         self,

@@ -30,7 +30,7 @@ from nuself.domain.proactive import IdeaCandidate
 from nuself.config import runtime_paths
 from nuself.config_system import ConfigSystem
 from nuself.llm import ChatLLM, ChatMessage, default_llm
-from nuself.logs import LogComponent, write_log_event
+from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
@@ -39,6 +39,7 @@ from nuself.persona_discussion_service import SharedPersonaDiscussionService
 from nuself.trace.service import TraceRecorder
 
 ThreadRole = Literal["user", "assistant"]
+ToolServiceComponent = Literal["memory", "reflection", "reasoning", "trace"]
 ConversationNodeName = Literal[
     "prepare_context",
     "persona_activation",
@@ -862,7 +863,12 @@ class ConversationGraphRuntime:
                         user_message=state.user_message,
                         title=title,
                         source_summary=updated_persona_turn_state.synthesis.summary if updated_persona_turn_state.synthesis is not None else "",
-                    )
+                    ),
+                    on_trace_entry=lambda entry: self._write_persona_discussion_step_log(
+                        state.thread_id,
+                        trigger,
+                        entry,
+                    ),
                 )
                 # Log and REPL-print discussion outcome
                 try:
@@ -878,7 +884,7 @@ class ConversationGraphRuntime:
                             "emergent_persona_ids": list(result.emergent_persona_ids),
                             "blocking_vetos": list(result.blocking_vetos),
                             "reason": result.reason,
-                            "discussion_trace": list(result.discussion_trace),
+                            "discussion_steps": len(result.discussion_trace),
                         },
                     )
                 except Exception:

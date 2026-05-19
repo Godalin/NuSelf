@@ -81,6 +81,8 @@ Trace entries are strings with these prefixes:
 
 Renderers must parse these prefixes and group by turn. User-facing discussion trace rendering uses square-bracket tags for the trace title, group headers, and speaker labels, such as `[discussion]`, `[turn-1]`, and `[analyst_self]`. See [`cli-interaction.md`](cli-interaction.md) for trace rendering contract.
 
+Chat-triggered discussion must also stream visible trace entries as `persona_discussion_step` logs while the discussion runs. The final chat-triggered `persona_discussion` log is a summary and must not re-emit the full discussion trace in one delayed block.
+
 ## Result Structure
 
 ```

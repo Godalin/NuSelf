@@ -28,7 +28,7 @@ class _FakeDiscussion:
     def __init__(self) -> None:
         self.calls: list[IdeaCandidate] = []
 
-    def discuss(self, candidate: IdeaCandidate) -> _FakeResult:
+    def discuss(self, candidate: IdeaCandidate, *, on_trace_entry: object | None = None) -> _FakeResult:
         self.calls.append(candidate)
         return _FakeResult()
 

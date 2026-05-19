@@ -502,6 +502,15 @@ def test_chat_agent_writes_host_discussion_decision_log(tmp_path: Path, capsys: 
     assert events[-1].status == "approved"
     assert events[-1].metadata is not None
     assert events[-1].metadata.get("should_escalate") is True
+    step_events = [event for event in read_log_events(project_root=tmp_path, component="persona") if event.event == "persona_discussion_step"]
+    assert step_events
+    assert step_events[0].metadata is not None
+    assert "discussion_trace" in step_events[0].metadata
+    outcome_events = [event for event in read_log_events(project_root=tmp_path, component="persona") if event.event == "persona_discussion"]
+    assert outcome_events
+    assert outcome_events[-1].metadata is not None
+    assert "discussion_steps" in outcome_events[-1].metadata
+    assert "discussion_trace" not in outcome_events[-1].metadata
     captured = capsys.readouterr().out
     assert "[host decision]" not in captured
     assert "Persona Trigger" not in captured

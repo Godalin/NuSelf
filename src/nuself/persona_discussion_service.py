@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from nuself.config_system import ConfigSystem, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatLLM
 from nuself.proactive_persona import PersonaCompetitionResult, ProactivePersonaDiscussion
+
+DiscussionTraceSink = Callable[[str], None]
 
 
 class SharedPersonaDiscussionService:
@@ -32,5 +35,10 @@ class SharedPersonaDiscussionService:
             language_preference = system_config.chat.language_preference
         self._discussion = ProactivePersonaDiscussion(config=config, llm=llm, language_preference=language_preference)
 
-    def discuss(self, candidate: IdeaCandidate) -> PersonaCompetitionResult:
-        return self._discussion.discuss(candidate)
+    def discuss(
+        self,
+        candidate: IdeaCandidate,
+        *,
+        on_trace_entry: DiscussionTraceSink | None = None,
+    ) -> PersonaCompetitionResult:
+        return self._discussion.discuss(candidate, on_trace_entry=on_trace_entry)
