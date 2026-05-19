@@ -19,6 +19,31 @@
 
 Serialization (`to_record()`) omits `None`-valued optional fields.
 
+## Service Call Logs
+
+When one subsystem invokes another subsystem through an agent-facing service/tool boundary, write a caller-owned log event with a service tag in metadata.
+
+Example: chat calling a memory service tool writes a `chat` component event:
+
+```json
+{"component":"chat","event":"service_tool_called","metadata":{"service_component":"memory","tool":"archive_memory"}}
+```
+
+Human-readable rendering must show both tags at the front:
+
+```text
+[chat] [memory] service_tool_called status=completed tool=archive_memory
+  chat called memory service tool archive_memory
+```
+
+Rules:
+
+- The first tag is the caller component and determines the log file.
+- The second tag is `metadata.service_component` and names the service being called.
+- `service_component` is a display tag, not a normal `key=value` header field.
+- All other log formatting rules remain unchanged.
+- Tool/service call logs must not include raw tool arguments if those arguments may contain private user text; use tool names, status, and stable ids where possible.
+
 ## Log Components
 
 | Component | File | Responsibility |
@@ -29,6 +54,7 @@ Serialization (`to_record()`) omits `None`-valued optional fields.
 | `persona` | `persona.log` | Persona activations, host decisions, competitive persona discussions |
 | `outbox` | `outbox.log` | Notification delivery attempts |
 | `reflection` | `reflection.log` | Reflection scheduling |
+| `reasoning` | `reasoning.log` | Long-run reasoning threads |
 
 Display name mapping: `persona` → `selves`.
 
@@ -41,7 +67,7 @@ Display name mapping: `persona` → `selves`.
 
 ## Read Contract
 
-- `component=None` reads all 6 files; otherwise reads exactly one.
+- `component=None` reads all component files; otherwise reads exactly one.
 - Missing file → silently skip.
 - All events sorted ascending by `time` (global chronological order).
 - `tail > 0` returns `events[-tail:]`.

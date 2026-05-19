@@ -28,7 +28,7 @@ from nuself.domain.proactive import IdeaCandidate
 from nuself.config import runtime_paths
 from nuself.config_system import ConfigSystem
 from nuself.llm import ChatLLM, ChatMessage, default_llm
-from nuself.logs import write_log_event
+from nuself.logs import LogComponent, write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
@@ -1167,15 +1167,41 @@ class ConversationGraphRuntime:
             return f"Error: unknown tool {tool.tool}"
 
         tool_args_input = tool.tool_args if tool.tool_args is not None else {}
+        service_component = _tool_service_component(tool.tool)
 
         try:
             tool_obj = self._tools[tool.tool]
             invoke = cast(Callable[[dict[str, Any]], object], getattr(tool_obj, "invoke"))
-            return str(invoke(tool_args_input))
+            result = str(invoke(tool_args_input))
+            if service_component is not None:
+                self._write_service_tool_log(tool.tool, service_component, "completed")
+            return result
         except TypeError as e:
+            if service_component is not None:
+                self._write_service_tool_log(tool.tool, service_component, "failed", error=str(e))
             return f"Error invoking {tool.tool}: {e}"
         except Exception as e:
+            if service_component is not None:
+                self._write_service_tool_log(tool.tool, service_component, "failed", error=str(e))
             return f"Error: {e}"
+
+    def _write_service_tool_log(
+        self,
+        tool_name: str,
+        service_component: LogComponent,
+        status: str,
+        *,
+        error: str | None = None,
+    ) -> None:
+        write_log_event(
+            "chat",
+            "service_tool_called",
+            f"chat called {service_component} service tool {tool_name}",
+            project_root=self._project_root,
+            status=status,
+            error=error,
+            metadata={"service_component": service_component, "tool": tool_name},
+        )
 
     def _summarize(self, previous_summary: str, messages: list[ThreadMessage]) -> str:
         transcript = "\n".join(f"{message.role}: {message.content}" for message in messages)
@@ -1299,6 +1325,16 @@ def _require_tool_result(tool_result: str | None) -> str:
 
 def _is_supported_tool_call(tool_call: ConversationToolCall | None) -> bool:
     return tool_call is not None and tool_call.supported
+
+
+def _tool_service_component(tool_name: str) -> LogComponent | None:
+    if tool_name in {"search_memory", "archive_memory", "update_memory_importance"}:
+        return "memory"
+    if tool_name in {"list_pending_reflections", "dismiss_reflection", "archive_reflection"}:
+        return "reflection"
+    if tool_name in {"list_reasoning_threads", "show_reasoning_thread"}:
+        return "reasoning"
+    return None
 
 
 def _tool_prompt_sections(tools: "Iterable[BaseTool]") -> list[str]:

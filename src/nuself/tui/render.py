@@ -47,7 +47,7 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
         return _render_discussion_log_event(event, color=color)
 
     theme = TerminalTheme(color=color)
-    tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
+    tag = _render_log_tags(event, theme)
     inline_status = event.component != "persona"
     header = _render_log_header(tag, event.event, event, theme, inline_status=inline_status)
     lines = [header]
@@ -60,7 +60,7 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
 def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None) -> str:
     """Render internal persona thoughts as an ordered multi-line block."""
     theme = TerminalTheme(color=color)
-    tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
+    tag = _render_log_tags(event, theme)
     lines = [_render_log_header(tag, "persona_summary", event, theme, inline_status=False)]
     lines.extend(_render_status_body(event, theme))
     body_lines = [line for line in event.message.splitlines() if line.strip()]
@@ -72,7 +72,7 @@ def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None)
 
 def _render_discussion_log_event(event: LogEvent, *, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
-    tag = theme.tag(f"[{_display_component(event.component)}]", event.component)
+    tag = _render_log_tags(event, theme)
     inline_status = event.component != "persona"
     lines = [_render_log_header(tag, event.event, event, theme, inline_status=inline_status)]
     if not inline_status:
@@ -144,10 +144,29 @@ def _render_log_fields(event: LogEvent, theme: TerminalTheme, *, include_status:
                 continue
             if key == "discussion_trace":
                 continue
+            if key == "service_component":
+                continue
             if event.component == "persona" and key == "escalation_reason":
                 continue
             fields.append(theme.muted(_format_log_field(key, event.metadata[key])))
     return fields
+
+
+def _render_log_tags(event: LogEvent, theme: TerminalTheme) -> str:
+    tags = [theme.tag(f"[{_display_component(event.component)}]", event.component)]
+    service_component = _service_component(event)
+    if service_component is not None:
+        tags.append(theme.tag(f"[{_display_component(service_component)}]", service_component))
+    return " ".join(tags)
+
+
+def _service_component(event: LogEvent) -> str | None:
+    if not event.metadata:
+        return None
+    value = event.metadata.get("service_component")
+    if isinstance(value, str) and value:
+        return value
+    return None
 
 
 def _render_status_body(event: LogEvent, theme: TerminalTheme) -> list[str]:

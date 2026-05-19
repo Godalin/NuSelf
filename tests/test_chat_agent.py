@@ -935,6 +935,10 @@ def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
     assert "search_memory" in llm.calls[0][0].content
     # Second call: follow-up with tool result
     assert len(llm.calls[1]) > 0
+    logs = [event for event in read_log_events(project_root=tmp_path, component="chat") if event.event == "service_tool_called"]
+    assert logs
+    assert logs[-1].status == "completed"
+    assert logs[-1].metadata == {"service_component": "memory", "tool": "search_memory"}
 
 
 def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) -> None:

@@ -13,11 +13,13 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Added automatic `chat_turn` trace recording when final chat replies cite evidence references.
 - Added REPL `:restart` / `:r` for restarting the daemon and reconnecting without leaving the interactive session.
 - Added the long-run reason foundation with file-backed reasoning threads, reasoning steps, `nuself reason ...` commands, and REPL `:reason` commands.
+- Added generic private workspaces with per-owner SQLite scratch storage, first used by reason threads.
 - Added reflection organization for merging similar pending reflection ideas, including `nuself inbox reflection organize`.
 
 ### Changed
 
 - Chat prompts now treat agent-facing services as tools plus skills, so memory and reflection tools include explicit usage policy instead of appearing only as optional commands.
+- Service/tool calls now log caller and callee tags, such as `[chat] [memory]`, while preserving the existing key/value log format.
 - Chat agent tools now register only through LangChain `StructuredTool` objects, with the old NuSelf chat-tool protocol removed and the same loaded tool list visible in ordinary and persona-synthesized response prompts.
 - Reorganized CLI and REPL commands around the v0.2.0 command model, moving sources under `memory source`, proactive items under `inbox`, diagnostics under `dev`, and removing old command-path compatibility aliases.
 - Reflection no longer blocks new cycles based on pending reflection count; duplicate pressure is handled by organization instead.

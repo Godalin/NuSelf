@@ -31,6 +31,23 @@ def test_render_session_header_uses_daemon_record_style() -> None:
     )
 
 
+def test_render_service_tool_log_uses_caller_and_service_tags() -> None:
+    event = LogEvent(
+        time="2026-05-12T10:00:00Z",
+        level="info",
+        component="chat",
+        event="service_tool_called",
+        message="chat called memory service tool archive_memory",
+        status="completed",
+        metadata={"service_component": "memory", "tool": "archive_memory"},
+    )
+
+    assert render_log_event(event, color=False).splitlines() == [
+        "[chat] [memory] service_tool_called status=completed tool=archive_memory",
+        "  chat called memory service tool archive_memory",
+    ]
+
+
 def test_render_discussion_trace_formats_block() -> None:
     lines = render_discussion_trace(["host: start", "turn-1:analyst: considered the idea"], title="discussion trace")
 
