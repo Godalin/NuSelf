@@ -1377,7 +1377,25 @@ def _tool_prompt_sections(tools: "Iterable[BaseTool]", skills: tuple[AgentSkill,
     for tool in tools:
         args = _tool_args_signature(tool)
         lines.append(f"- {tool.name}({args}): {tool.description}")
-    lines.extend(render_agent_skill_sections(skills))
+
+    tools_by_service: dict[str, list[str]] = {}
+    for tool in tools:
+        sc = _tool_service_component(tool.name)
+        if sc is not None:
+            tools_by_service.setdefault(sc, []).append(tool.name)
+    skill_service_map = {
+        "memory": "memory",
+        "reflection": "reflection",
+        "reason": "reasoning",
+        "trace": "trace",
+    }
+    allowed_tools_by_skill = {
+        skill_name: tuple(tools_by_service.get(service, []))
+        for skill_name, service in skill_service_map.items()
+    }
+    lines.extend(
+        render_agent_skill_sections(skills, allowed_tools_by_skill=allowed_tools_by_skill)
+    )
     return lines
 
 

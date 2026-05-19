@@ -1,10 +1,6 @@
 ---
 name: memory
 description: Use this skill when the user asks about past preferences, decisions, recurring patterns, previous discussions, stored memories, or what NuSelf remembers.
-allowed-tools:
-  - search_memory
-  - archive_memory
-  - update_memory_importance
 ---
 
 # Memory Skill

@@ -35,8 +35,25 @@ def load_agent_skills(root: Path | None = None) -> tuple[AgentSkill, ...]:
     return tuple(skills)
 
 
-def render_agent_skill_sections(skills: tuple[AgentSkill, ...]) -> list[str]:
-    """Render loaded Agent Skills for the current prompt builder."""
+SKILL_SERVICE_MAP: dict[str, str] = {
+    "memory": "memory",
+    "reflection": "reflection",
+    "reason": "reasoning",
+    "trace": "trace",
+}
+
+
+def render_agent_skill_sections(
+    skills: tuple[AgentSkill, ...],
+    *,
+    allowed_tools_by_skill: dict[str, tuple[str, ...]] | None = None,
+) -> list[str]:
+    """Render loaded Agent Skills for the current prompt builder.
+
+    When *allowed_tools_by_skill* is provided, allowed-tool lines are
+    generated from the actual tool registry rather than from SKILL.md YAML
+    frontmatter.
+    """
 
     if not skills:
         return []
@@ -47,8 +64,9 @@ def render_agent_skill_sections(skills: tuple[AgentSkill, ...]) -> list[str]:
     ]
     for skill in skills:
         lines.append(f"- {skill.name}: {skill.description}")
-        if skill.allowed_tools:
-            lines.append(f"  Allowed tools: {', '.join(skill.allowed_tools)}")
+        tools = (allowed_tools_by_skill or {}).get(skill.name, skill.allowed_tools)
+        if tools:
+            lines.append(f"  Allowed tools: {', '.join(tools)}")
         for line in skill.instructions.splitlines():
             if line.strip():
                 lines.append(f"  {line}")

@@ -1,10 +1,6 @@
 ---
 name: reflection
 description: Use this skill when the user asks for ideas, thoughts, reflections, or open-ended exploration that may benefit from pending proactive reflection ideas.
-allowed-tools:
-  - list_pending_reflections
-  - dismiss_reflection
-  - archive_reflection
 ---
 
 # Reflection Skill

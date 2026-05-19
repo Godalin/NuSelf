@@ -83,9 +83,10 @@ When the LLM adapter is migrated to a native LangChain chat model, the same regi
 ### New: Reflection Consumption Tools
 
 | Tool | Purpose |
-|---|---|
+|---|---|---|
 | `list_pending_reflections` | Return pending reflection ideas from the reflection repository. |
 | `dismiss_reflection` | Mark a reflection idea as dismissed. |
+| `archive_reflection` | Archive a reflection idea after the discussion is complete. |
 
 #### `list_pending_reflections`
 
@@ -100,6 +101,13 @@ When the LLM adapter is migrated to a native LangChain chat model, the same regi
 - **Behavior**: Looks up the pending entry at the given index, calls `ReflectionRepository.dismiss(entry.id)`, and returns confirmation.
 - **Returns**: Confirmation or error message.
 - **When to use**: After the user explicitly declines interest in a suggested reflection topic.
+
+#### `archive_reflection`
+
+- **Args**: `index: int` (1-based index from `list_pending_reflections` output)
+- **Behavior**: Looks up the pending entry at the given index, calls `ReflectionRepository.archive(entry.id)`, and returns confirmation.
+- **Returns**: Confirmation with entry title, or error if not found.
+- **When to use**: After the user has engaged with a reflection idea and the discussion feels complete.
 
 ### New: Memory Management Tools
 

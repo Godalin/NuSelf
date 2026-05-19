@@ -1,9 +1,6 @@
 ---
 name: reason
 description: Use this skill when the user asks about active long-running questions, open reasoning threads, or what NuSelf is continuing to think about.
-allowed-tools:
-  - list_active_reasoning_threads
-  - show_reasoning_thread
 ---
 
 # Reason Skill

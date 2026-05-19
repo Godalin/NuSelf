@@ -1,9 +1,6 @@
 ---
 name: trace
 description: Use this skill when the user asks where an idea came from, how a memory, belief, or answer formed, or what prior records support a conclusion.
-allowed-tools:
-  - search_trace
-  - show_trace
 ---
 
 # Trace Skill
