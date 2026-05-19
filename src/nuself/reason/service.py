@@ -8,6 +8,7 @@ from pathlib import Path
 from nuself.logs import write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonStatus
 from nuself.reason.repository import ReasonRepository
+from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 
 MAX_ACTIVE_THREADS = 5
 
@@ -15,9 +16,15 @@ MAX_ACTIVE_THREADS = 5
 class ReasonService:
     """User-intent operations and state transitions for reasoning threads."""
 
-    def __init__(self, project_root: Path | None = None, repository: ReasonRepository | None = None) -> None:
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        repository: ReasonRepository | None = None,
+        workspace_store: PrivateWorkspaceStore | None = None,
+    ) -> None:
         self._project_root = project_root
         self._repository = repository or ReasonRepository(project_root)
+        self._workspace_store = workspace_store or PrivateWorkspaceStore(project_root, scope="reason")
 
     # ── Read ───────────────────────────────────────────────────────
 
@@ -29,6 +36,10 @@ class ReasonService:
 
     def list_steps(self, thread_id: str) -> list[ReasoningStep]:
         return self._repository.list_steps(thread_id)
+
+    def workspace_paths(self, thread_id: str) -> PrivateWorkspacePaths:
+        self._repository.get_thread(thread_id)
+        return self._workspace_store.paths(thread_id)
 
     # ── Write ──────────────────────────────────────────────────────
 
@@ -54,6 +65,7 @@ class ReasonService:
             evidence_refs=list(evidence_refs),
         )
         saved = self._repository.save_thread(thread)
+        workspace = self._workspace_store.ensure(thread.id)
 
         write_log_event(
             "reasoning",
@@ -61,7 +73,7 @@ class ReasonService:
             f"Started reasoning thread: {thread.question[:80]}",
             project_root=self._project_root,
             status="created",
-            metadata={"thread_id": thread.id, "question": thread.question},
+            metadata={"thread_id": thread.id, "question": thread.question, "workspace": str(workspace.root)},
         )
         return saved
 

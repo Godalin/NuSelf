@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sqlite3
 
 from nuself.logs import read_log_events
 from nuself.reason.repository import ReasonRepository
@@ -25,6 +26,22 @@ def test_start_thread_writes_logs_under_project_root(tmp_path: Path) -> None:
     assert events
     assert events[-1].event == "thread_started"
     assert (tmp_path / "private" / "logs" / "reasoning.log").is_file()
+
+
+def test_start_thread_initializes_private_workspace(tmp_path: Path) -> None:
+    service = ReasonService(project_root=tmp_path)
+
+    thread = service.start_thread("Where should scratch state live?")
+
+    workspace = service.workspace_paths(thread.id)
+    assert workspace.root == tmp_path / "private" / "workspaces" / "reason" / thread.id
+    assert workspace.database.is_file()
+    assert workspace.artifacts.is_dir()
+    assert workspace.notes.is_dir()
+    with sqlite3.connect(workspace.database) as conn:
+        rows = dict(conn.execute("SELECT key, value FROM workspace_meta").fetchall())
+    assert rows["scope"] == "reason"
+    assert rows["owner_id"] == thread.id
 
 
 def test_start_and_list(tmp_path: Path) -> None:
