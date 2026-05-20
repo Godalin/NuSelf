@@ -83,6 +83,26 @@ REGENERATE_USER_FACING_RESPONSE_PROMPT = (
 PRESENTATION_BOUNDARY_FAILURE_ANSWER = "我刚刚的输出格式出了问题。请你再说一遍，我会直接用正常聊天的方式回答。"
 
 
+class _ToolBoundChatModel(Protocol):
+    def invoke(self, input: list[BaseMessage]) -> AIMessage: ...
+
+
+class _ToolBindableChatModel(Protocol):
+    def bind_tools(self, tools: list[BaseTool]) -> _ToolBoundChatModel: ...
+
+
+class _StructuredChatModel(Protocol):
+    def invoke(self, input: list[BaseMessage]) -> object: ...
+
+
+class _StructuredOutputChatModel(Protocol):
+    def with_structured_output(self, schema: type[BaseModel]) -> _StructuredChatModel: ...
+
+
+class _InvokableTool(Protocol):
+    def invoke(self, input: object) -> object: ...
+
+
 @dataclass(frozen=True)
 class ChatAgentSettings:
     """Context window settings for the chat agent."""
@@ -1154,7 +1174,7 @@ class ConversationGraphRuntime:
         endpoint: LangChainLLMEndpoint,
         prompt: list[ChatMessage],
     ) -> ParsedChatResponse:
-        model = endpoint.model.bind_tools(list(self._tools.values()))
+        model = cast(_ToolBindableChatModel, endpoint.model).bind_tools(list(self._tools.values()))
         messages = _to_langchain_messages(prompt)
         ai_message = model.invoke(messages)
         tool_iterations = 0
@@ -1188,7 +1208,7 @@ class ConversationGraphRuntime:
                 self._write_service_tool_log(tool_name, service_component, "failed", args=tool_args, error=error)
             return ToolMessage(content=f"Error: {error}", name=tool_name, tool_call_id=tool_call_id)
         try:
-            tool_result = tool_obj.invoke(tool_call)
+            tool_result = cast(_InvokableTool, tool_obj).invoke(tool_call)
             result_text = _langchain_tool_message_text(tool_result)
             if service_component is not None:
                 self._write_service_tool_log(
@@ -1365,7 +1385,7 @@ class ConversationGraphRuntime:
 
         try:
             tool_obj = self._tools[tool.tool]
-            result = str(tool_obj.invoke(tool_args_input))
+            result = str(cast(_InvokableTool, tool_obj).invoke(tool_args_input))
             if service_component is not None:
                 self._write_service_tool_log(
                     tool.tool,
@@ -1602,13 +1622,11 @@ def _to_langchain_messages(messages: list[ChatMessage]) -> list[BaseMessage]:
 
 
 def _langchain_message_text(message: BaseMessage) -> str:
-    content = message.content
+    content = cast(str | list[object], getattr(message, "content"))
     if isinstance(content, str):
         return content
     parts: list[str] = []
-    if not isinstance(content, list):
-        return str(content)
-    for item in cast(list[object], content):
+    for item in content:
         if isinstance(item, str):
             parts.append(item)
         elif isinstance(item, dict):
@@ -1629,7 +1647,7 @@ def _complete_structured_chat_output(
     endpoint: LangChainLLMEndpoint,
     messages: list[BaseMessage],
 ) -> ParsedChatResponse:
-    structured_model = endpoint.model.with_structured_output(ChatStructuredOutput)
+    structured_model = cast(_StructuredOutputChatModel, endpoint.model).with_structured_output(ChatStructuredOutput)
     return _structured_chat_output_to_response(structured_model.invoke(messages))
 
 
@@ -1693,11 +1711,10 @@ def _tool_prompt_sections(tools: "Iterable[BaseTool]", skills: tuple[AgentSkill,
 
 
 def _tool_args_signature(tool: BaseTool) -> str:
-    args_schema = tool.args or {}
-    if not isinstance(args_schema, dict):
-        return ""
+    raw_args_schema = cast(object, getattr(tool, "args"))
+    args_schema = cast(dict[object, object], raw_args_schema) if isinstance(raw_args_schema, dict) else {}
     pieces: list[str] = []
-    for name, schema in cast(dict[object, object], args_schema).items():
+    for name, schema in args_schema.items():
         if not isinstance(name, str):
             continue
         type_name = "object"

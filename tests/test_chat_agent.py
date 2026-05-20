@@ -35,6 +35,12 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.trace.repository import TraceRepository
 
 
+def _event_metadata(event: object) -> dict[str, object]:
+    metadata = getattr(event, "metadata")
+    assert metadata is not None
+    return cast(dict[str, object], metadata)
+
+
 def _chat_tool(
     tmp_path: Path,
     name: str,
@@ -961,9 +967,12 @@ def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
     assert len(logs) == 1
     assert logs[0].status == "completed"
     assert logs[0].message.startswith('args: {"query": "clarity"}\nresult: ')
-    assert "Clarity matters" in logs[0].metadata["message_body"]
-    assert logs[0].metadata["service_component"] == "memory"
-    assert logs[0].metadata["tool"] == "search_memory"
+    metadata = _event_metadata(logs[0])
+    message_body = metadata["message_body"]
+    assert isinstance(message_body, str)
+    assert "Clarity matters" in message_body
+    assert metadata["service_component"] == "memory"
+    assert metadata["tool"] == "search_memory"
 
 
 def test_chat_agent_recovers_raw_tool_marker_without_leaking(tmp_path: Path) -> None:
@@ -1072,8 +1081,9 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
         if event.event == "service_tool_called"
     ]
     assert len(logs) == 1
-    assert logs[0].metadata["service_component"] == "memory"
-    assert logs[0].metadata["tool"] == "search_memory"
+    metadata = _event_metadata(logs[0])
+    assert metadata["service_component"] == "memory"
+    assert metadata["tool"] == "search_memory"
     assert logs[0].message.startswith('args: {"limit": 5, "query": "clarity"}\nresult: ')
 
 
@@ -1202,9 +1212,12 @@ def test_chat_agent_tool_invocation_with_reflection_logs_service_call(tmp_path: 
     assert len(logs) == 1
     assert logs[0].status == "completed"
     assert logs[0].message.startswith('args: {"limit": 3}\nresult: ')
-    assert "Try a smaller next step" in logs[0].metadata["message_body"]
-    assert logs[0].metadata["service_component"] == "reflection"
-    assert logs[0].metadata["tool"] == "list_pending_reflections"
+    metadata = _event_metadata(logs[0])
+    message_body = metadata["message_body"]
+    assert isinstance(message_body, str)
+    assert "Try a smaller next step" in message_body
+    assert metadata["service_component"] == "reflection"
+    assert metadata["tool"] == "list_pending_reflections"
 
 
 def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) -> None:

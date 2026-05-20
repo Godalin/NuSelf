@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from typing import cast
 
 from nuself.agent.persona import (
     ANALYST_PERSONA,
@@ -14,11 +13,8 @@ from nuself.agent.persona import (
     LLMBackedActivationPolicy,
     LLMBackedPersonaNode,
     LLMBackedSynthesizerNode,
-    PersonaActivationOutput,
-    PersonaContributionOutput,
     PersonaGraphDriver,
     PersonaInput,
-    PersonaSynthesisOutput,
     PersonaSynthesis,
     PersonaTurnState,
 )
@@ -43,11 +39,6 @@ class _FakeActivationLLM:
 class _BrokenLLM:
     def complete(self, messages: object) -> str:
         raise RuntimeError("simulated LLM failure")
-
-
-class _FailingTextLLM:
-    def complete(self, messages: object) -> str:
-        raise AssertionError("structured persona path should not use text LLM fallback")
 
 
 def test_persona_graph_runs_minimal_internal_persona() -> None:
