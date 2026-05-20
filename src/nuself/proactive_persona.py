@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
+
+from pydantic import BaseModel, Field, ValidationError
 
 from nuself.agent.persona import (
     BUILTIN_PERSONAS,
@@ -22,6 +26,28 @@ from nuself.llm import ChatLLM, ChatMessage
 from nuself.llm_json import parse_llm_json_object
 
 DiscussionTraceSink = Callable[[str], None]
+
+
+class PersonaScoreOutput(BaseModel):
+    """Structured note and score from a scoring persona node."""
+
+    note: str = Field(description="Persona perspective text (1-2 sentences).")
+    score: float = Field(description="Support score from 0.0 to 1.0.")
+
+
+class PersonaSelectionOutput(BaseModel):
+    """Structured persona selection from the discussion host."""
+
+    selected_persona_ids: list[str] = Field(description="Selected persona IDs.")
+    reason: str = Field(default="", description="Reason for selection.")
+
+
+class ModeratorJudgmentOutput(BaseModel):
+    """Structured moderator judgment from the discussion host."""
+
+    converged: bool = Field(description="Whether the discussion has converged.")
+    emergent_persona: str = Field(default="none", description="Emergent persona ID or 'none'.")
+    reason: str = Field(default="", description="Reason for judgment.")
 
 
 @dataclass(frozen=True)
@@ -81,6 +107,17 @@ class LLMBackedScoringPersonaNode:
         return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=score)
 
     def _parse_response(self, raw: str) -> tuple[str, float]:
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+            stripped = "\n".join(lines).strip()
+
+        try:
+            output = PersonaScoreOutput.model_validate_json(stripped)
+            return output.note, max(0.0, min(1.0, output.score))
+        except (ValidationError, json.JSONDecodeError):
+            pass
+
         data = parse_llm_json_object(raw)
 
         note = data.get("note")
@@ -306,6 +343,17 @@ class ProactivePersonaDiscussion:
         return tuple(selected)
 
     def _parse_selected_personas(self, raw: str) -> list[str]:
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+            stripped = "\n".join(lines).strip()
+
+        try:
+            output = PersonaSelectionOutput.model_validate_json(stripped)
+            return output.selected_persona_ids
+        except (ValidationError, json.JSONDecodeError):
+            pass
+
         data = parse_llm_json_object(raw)
 
         selected_ids = data.get("selected_persona_ids")
@@ -409,6 +457,21 @@ class ProactivePersonaDiscussion:
             return {"converged": False, "emergent_persona": "none", "reason": "fallback"}
 
     def _parse_moderator_judgment(self, raw: str) -> dict[str, object]:
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+            stripped = "\n".join(lines).strip()
+
+        try:
+            output = ModeratorJudgmentOutput.model_validate_json(stripped)
+            return {
+                "converged": output.converged,
+                "emergent_persona": output.emergent_persona,
+                "reason": output.reason,
+            }
+        except (ValidationError, json.JSONDecodeError):
+            pass
+
         data = parse_llm_json_object(raw)
 
         converged = data.get("converged")
