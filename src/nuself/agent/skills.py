@@ -35,14 +35,6 @@ def load_agent_skills(root: Path | None = None) -> tuple[AgentSkill, ...]:
     return tuple(skills)
 
 
-SKILL_SERVICE_MAP: dict[str, str] = {
-    "memory": "memory",
-    "reflection": "reflection",
-    "reason": "reasoning",
-    "trace": "trace",
-}
-
-
 def render_agent_skill_sections(
     skills: tuple[AgentSkill, ...],
     *,

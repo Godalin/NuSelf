@@ -24,6 +24,9 @@ When an LLM is available, both ordinary chat self passes and competitive discuss
 
 - **LLMBackedPersonaNode**: Prompts the LLM with the persona's `id` and `description`, plus the current topic and prior discussion context. Each persona generates a 1–2 sentence response from its unique perspective. Later personas in the same turn see earlier personas' contributions and can build on or challenge them.
 - **LLMBackedSynthesizerNode**: Prompts the LLM to distill the turn's contributions into a 1–2 sentence summary capturing consensus or key tension.
+- **LLMBackedActivationPolicy**: Decides activation and escalation through LangChain structured output when a LangChain chat model is available.
+
+LLM-backed persona activation, persona notes, and synthesis must request structured data through LangChain structured output (`with_structured_output(...)` or equivalent response-format support) when available. Prompted JSON parsing is a compatibility fallback for deterministic tests and non-LangChain local fallback models.
 
 When no LLM is configured, the system falls back to **MinimalPersonaNode** / **MinimalSynthesizerNode**, which produce deterministic placeholder utterances.
 

@@ -4,12 +4,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Protocol, TypedDict, cast
+from typing import Any, Protocol, TypeVar, TypedDict, cast
 
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
+from pydantic import BaseModel, Field
 
 from nuself.llm_json import parse_llm_json_object
-from nuself.llm import ChatLLM, ChatMessage
+from nuself.llm import (
+    ChatLLM,
+    ChatMessage,
+    LangChainLLMEndpoint,
+    is_endpoint_availability_error,
+    record_llm_endpoint_success,
+)
+
+StructuredPersonaT = TypeVar("StructuredPersonaT", bound=BaseModel)
 
 
 @dataclass(frozen=True)
@@ -62,6 +72,31 @@ class PersonaActivation:
     @property
     def activated(self) -> bool:
         return bool(self.selected_personas)
+
+
+class PersonaContributionOutput(BaseModel):
+    """Structured persona note returned by a LangChain model."""
+
+    note: str = Field(description="One or two sentences from the persona perspective.")
+    questions: list[str] = Field(default_factory=list, description="Optional questions this persona would ask.")
+    confidence: float | None = Field(default=None, description="Optional confidence from 0.0 to 1.0.")
+
+
+class PersonaSynthesisOutput(BaseModel):
+    """Structured persona synthesis returned by a LangChain model."""
+
+    summary: str = Field(description="One or two crisp sentences capturing consensus or key tension.")
+    confidence: float | None = Field(default=None, description="Optional confidence from 0.0 to 1.0.")
+
+
+class PersonaActivationOutput(BaseModel):
+    """Structured persona activation decision returned by a LangChain model."""
+
+    activated: bool = Field(description="Whether any personas should respond.")
+    selected_persona_ids: list[str] = Field(default_factory=list, description="Persona ids to activate.")
+    trigger: str = Field(default="structured judgment", description="Brief reason for activation.")
+    should_escalate: bool = Field(default=False, description="Whether competitive discussion should run.")
+    escalation_reason: str = Field(default="", description="Brief reason for escalation.")
 
 
 @dataclass(frozen=True)
@@ -150,12 +185,60 @@ class MinimalSynthesizerNode:
         )
 
 
+def _complete_persona_structured(
+    endpoints: tuple[LangChainLLMEndpoint, ...],
+    messages: list[ChatMessage],
+    schema: type[StructuredPersonaT],
+    *,
+    project_root: Path | None,
+) -> StructuredPersonaT | None:
+    if not endpoints:
+        return None
+    converted = _to_langchain_messages(messages)
+    for position, endpoint in enumerate(endpoints):
+        try:
+            structured_model = endpoint.model.with_structured_output(schema)
+            result = structured_model.invoke(converted)
+            if isinstance(result, schema):
+                record_llm_endpoint_success(project_root, endpoint.index)
+                return result
+            if isinstance(result, dict):
+                record_llm_endpoint_success(project_root, endpoint.index)
+                return schema.model_validate(result)
+            raise TypeError(f"structured persona output must be {schema.__name__}")
+        except Exception as exc:
+            remaining = endpoints[position + 1 :]
+            if remaining and is_endpoint_availability_error(str(exc)):
+                continue
+            return None
+    return None
+
+
+def _to_langchain_messages(messages: list[ChatMessage]) -> list[BaseMessage]:
+    converted: list[BaseMessage] = []
+    for message in messages:
+        if message.role == "system":
+            converted.append(SystemMessage(content=message.content))
+        else:
+            converted.append(HumanMessage(content=message.content))
+    return converted
+
+
 class LLMBackedPersonaNode:
     """LLM-driven persona node that generates genuinely distinct perspectives."""
 
-    def __init__(self, llm: ChatLLM, *, language_preference: str = "en") -> None:
+    def __init__(
+        self,
+        llm: ChatLLM,
+        *,
+        language_preference: str = "en",
+        langchain_models: tuple[LangChainLLMEndpoint, ...] = (),
+        project_root: Path | None = None,
+    ) -> None:
         self._llm = llm
         self._language_preference = language_preference
+        self._langchain_models = langchain_models
+        self._project_root = project_root
 
     def __call__(self, persona: PersonaDefinition, persona_input: PersonaInput) -> PersonaContribution:
         prior = persona_input.memory_context.strip()
@@ -184,6 +267,19 @@ class LLMBackedPersonaNode:
                 content=f"Topic:\n{persona_input.user_message}{prior_block}",
             ),
         ]
+        structured = _complete_persona_structured(
+            self._langchain_models,
+            messages,
+            PersonaContributionOutput,
+            project_root=self._project_root,
+        )
+        if structured is not None:
+            return PersonaContribution(
+                persona_id=persona.id,
+                notes=(structured.note,),
+                questions=tuple(structured.questions),
+                confidence=structured.confidence,
+            )
         try:
             response = self._llm.complete(messages).strip()
         except Exception:
@@ -195,9 +291,18 @@ class LLMBackedPersonaNode:
 class LLMBackedSynthesizerNode:
     """LLM-driven synthesizer that produces a crisp summary of contributions."""
 
-    def __init__(self, llm: ChatLLM, *, language_preference: str = "en") -> None:
+    def __init__(
+        self,
+        llm: ChatLLM,
+        *,
+        language_preference: str = "en",
+        langchain_models: tuple[LangChainLLMEndpoint, ...] = (),
+        project_root: Path | None = None,
+    ) -> None:
         self._llm = llm
         self._language_preference = language_preference
+        self._langchain_models = langchain_models
+        self._project_root = project_root
 
     def __call__(self, turn_state: PersonaTurnState) -> PersonaSynthesis | None:
         if not turn_state.contributions:
@@ -220,6 +325,18 @@ class LLMBackedSynthesizerNode:
             ),
             ChatMessage(role="user", content=discussion),
         ]
+        structured = _complete_persona_structured(
+            self._langchain_models,
+            messages,
+            PersonaSynthesisOutput,
+            project_root=self._project_root,
+        )
+        if structured is not None:
+            return PersonaSynthesis(
+                summary=structured.summary,
+                source_personas=tuple(c.persona_id for c in turn_state.contributions),
+                confidence=structured.confidence,
+            )
         try:
             summary = self._llm.complete(messages).strip()
         except Exception:
@@ -238,10 +355,14 @@ class LLMBackedActivationPolicy:
         self,
         personas: tuple[PersonaDefinition, ...] | None = None,
         llm: ChatLLM | None = None,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] = (),
+        project_root: Path | None = None,
     ) -> None:
         self._personas = personas if personas is not None else BUILTIN_PERSONAS
         self._persona_by_id = {p.id: p for p in self._personas}
         self._llm = llm
+        self._langchain_models = langchain_models
+        self._project_root = project_root
 
     def decide(self, persona_input: PersonaInput) -> PersonaActivation:
         if self._llm is None:
@@ -260,8 +381,25 @@ class LLMBackedActivationPolicy:
     def _decide_with_llm(self, persona_input: PersonaInput) -> PersonaActivation:
         assert self._llm is not None
         messages = self._build_prompt(persona_input)
+        structured = _complete_persona_structured(
+            self._langchain_models,
+            messages,
+            PersonaActivationOutput,
+            project_root=self._project_root,
+        )
+        if structured is not None:
+            return self._activation_from_structured(structured)
         raw = self._llm.complete(messages)
         return self._parse_response(raw)
+
+    def _activation_from_structured(self, output: PersonaActivationOutput) -> PersonaActivation:
+        selected = tuple(self._persona_by_id[pid] for pid in output.selected_persona_ids if pid in self._persona_by_id)
+        return PersonaActivation(
+            trigger=output.trigger,
+            selected_personas=selected if output.activated else (),
+            should_escalate=output.should_escalate,
+            escalation_reason=output.escalation_reason,
+        )
 
     def _build_prompt(self, persona_input: PersonaInput) -> list[ChatMessage]:
         from nuself.llm import ChatMessage

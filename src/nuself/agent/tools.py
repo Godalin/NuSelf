@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
-from typing import cast
 
 from langchain_core.tools import BaseTool, StructuredTool
 
@@ -219,9 +217,8 @@ def build_langchain_chat_tools(
             return f"Error: {exc}"
         return render_trace_detail(trace, service.links_for(trace.id))
 
-    structured_tool = cast(Callable[..., StructuredTool], getattr(StructuredTool, "from_function"))
     return (
-        structured_tool(
+        StructuredTool.from_function(
             search_memory,
             name="search_memory",
             description=(
@@ -230,7 +227,7 @@ def build_langchain_chat_tools(
                 "Returns formatted memory context with matches, scores, and match reasons."
             ),
         ),
-        structured_tool(
+        StructuredTool.from_function(
             count_memory,
             name="count_memory",
             description=(
@@ -239,7 +236,7 @@ def build_langchain_chat_tools(
                 "before deciding whether to search more deeply. Returns a simple count."
             ),
         ),
-        structured_tool(
+        StructuredTool.from_function(
             list_pending_reflections,
             name="list_pending_reflections",
             description=(
@@ -249,7 +246,7 @@ def build_langchain_chat_tools(
                 "Returns a numbered list with title, type, and confidence."
             ),
         ),
-        structured_tool(
+        StructuredTool.from_function(
             dismiss_reflection_by_index,
             name="dismiss_reflection",
             description=(
@@ -258,7 +255,7 @@ def build_langchain_chat_tools(
                 "The index corresponds to the numbered list from list_pending_reflections."
             ),
         ),
-        structured_tool(
+        StructuredTool.from_function(
             archive_reflection_by_index,
             name="archive_reflection",
             description=(
@@ -267,7 +264,7 @@ def build_langchain_chat_tools(
                 "The index corresponds to the numbered list shown in the pending reflections context."
             ),
         ),
-        structured_tool(
+        StructuredTool.from_function(
             archive_memory_by_id,
             name="archive_memory",
             description=(
@@ -276,7 +273,7 @@ def build_langchain_chat_tools(
                 "Requires the memory entry_id."
             ),
         ),
-        structured_tool(
+        StructuredTool.from_function(
             update_memory_importance_by_id,
             name="update_memory_importance",
             description=(
@@ -285,7 +282,7 @@ def build_langchain_chat_tools(
                 "Requires the memory entry_id and a new importance value."
             ),
         ),
-        structured_tool(
+        StructuredTool.from_function(
             list_active_reasoning_threads,
             name="list_active_reasoning_threads",
             description=(
@@ -293,7 +290,7 @@ def build_langchain_chat_tools(
                 "open questions, ongoing thinking, active reason threads, or what NuSelf is still considering."
             ),
         ),
-        structured_tool(
+        StructuredTool.from_function(
             show_reasoning_thread,
             name="show_reasoning_thread",
             description=(
@@ -301,7 +298,7 @@ def build_langchain_chat_tools(
                 "open questions, evidence refs, and recent steps. Requires a thread_id."
             ),
         ),
-        structured_tool(
+        StructuredTool.from_function(
             search_trace,
             name="search_trace",
             description=(
@@ -309,7 +306,7 @@ def build_langchain_chat_tools(
                 "how a belief or answer formed, or what prior records support a conclusion."
             ),
         ),
-        structured_tool(
+        StructuredTool.from_function(
             show_trace,
             name="show_trace",
             description=(

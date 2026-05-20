@@ -1155,11 +1155,9 @@ class ConversationGraphRuntime:
         endpoint: LangChainLLMEndpoint,
         prompt: list[ChatMessage],
     ) -> ParsedChatResponse:
-        bind_tools = cast(Callable[[list[BaseTool]], Any], getattr(endpoint.model, "bind_tools"))
-        model = bind_tools(list(self._tools.values()))
-        invoke_model = cast(Callable[[list[BaseMessage]], AIMessage], getattr(model, "invoke"))
+        model = endpoint.model.bind_tools(list(self._tools.values()))
         messages = _to_langchain_messages(prompt)
-        ai_message = invoke_model(messages)
+        ai_message = model.invoke(messages)
         tool_iterations = 0
         while ai_message.tool_calls:
             if tool_iterations >= 5:
@@ -1167,7 +1165,7 @@ class ConversationGraphRuntime:
             messages.append(ai_message)
             for tool_call in ai_message.tool_calls:
                 messages.append(self._invoke_langchain_tool_call(cast(dict[str, Any], tool_call)))
-            ai_message = invoke_model(messages)
+            ai_message = model.invoke(messages)
             tool_iterations += 1
         messages.append(ai_message)
         try:
@@ -1191,8 +1189,7 @@ class ConversationGraphRuntime:
                 self._write_service_tool_log(tool_name, service_component, "failed", args=tool_args, error=error)
             return ToolMessage(content=f"Error: {error}", name=tool_name, tool_call_id=tool_call_id)
         try:
-            invoke_tool = cast(Callable[[dict[str, Any]], object], getattr(tool_obj, "invoke"))
-            tool_result = invoke_tool(tool_call)
+            tool_result = tool_obj.invoke(tool_call)
             result_text = _langchain_tool_message_text(tool_result)
             if service_component is not None:
                 self._write_service_tool_log(
@@ -1627,10 +1624,8 @@ def _complete_structured_chat_output(
     endpoint: LangChainLLMEndpoint,
     messages: list[BaseMessage],
 ) -> ParsedChatResponse:
-    with_structured_output = cast(Callable[[type[ChatStructuredOutput]], Any], getattr(endpoint.model, "with_structured_output"))
-    structured_model = with_structured_output(ChatStructuredOutput)
-    invoke_structured = cast(Callable[[list[BaseMessage]], object], getattr(structured_model, "invoke"))
-    return _structured_chat_output_to_response(invoke_structured(messages))
+    structured_model = endpoint.model.with_structured_output(ChatStructuredOutput)
+    return _structured_chat_output_to_response(structured_model.invoke(messages))
 
 
 def _structured_chat_output_to_response(output: object) -> ParsedChatResponse:
@@ -1693,7 +1688,7 @@ def _tool_prompt_sections(tools: "Iterable[BaseTool]", skills: tuple[AgentSkill,
 
 
 def _tool_args_signature(tool: BaseTool) -> str:
-    args_schema = cast(object, getattr(tool, "args", {}))
+    args_schema = tool.args or {}
     if not isinstance(args_schema, dict):
         return ""
     pieces: list[str] = []
