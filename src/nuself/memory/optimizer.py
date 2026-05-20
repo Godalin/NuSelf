@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
+from pydantic import BaseModel, Field, ValidationError
+
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry, now_iso
 from nuself.llm import ChatLLM, ChatMessage, default_llm
@@ -65,8 +67,26 @@ class MemoryOptimizeDecision:
     reason: str = ""
 
 
+class OptimizeActionItem(BaseModel):
+    """One structured memory optimization action from the LLM."""
+
+    action: Literal["update", "delete", "ignore"] = Field(description="Optimization action type.")
+    entry_id: str = Field(description="Existing memory entry id.")
+    title: str = Field(default="", description="Updated entry title (required for update).")
+    body: str = Field(default="", description="Updated entry body (required for update).")
+    type: str | None = Field(default=None, description="Optional memory entry type override.")
+    tags: list[str] | None = Field(default=None, description="Optional tag list override.")
+    confidence: float | None = Field(default=None, description="Optional confidence override.")
+    reason: str = Field(default="", description="Reason for the action.")
+
+
+class OptimizeActionsOutput(BaseModel):
+    """Structured optimizer actions response from the LLM."""
+
+    actions: list[OptimizeActionItem] = Field(description="Memory optimization actions.")
+
+
 class MemoryOptimizer:
-    """Consolidate existing long-term memory entries with agent decisions."""
 
     def __init__(
         self,
@@ -293,7 +313,27 @@ def _render_entries(entries: list[MemoryEntry]) -> str:
 
 
 def _parse_optimize_actions(raw: str) -> list[MemoryOptimizeAction]:
-    parsed: object = json.loads(_extract_json_object(raw))
+    extracted = _extract_json_object(raw)
+    try:
+        output = OptimizeActionsOutput.model_validate_json(extracted)
+        actions: list[MemoryOptimizeAction] = []
+        for item in output.actions:
+            if item.action == "update" and (item.title == "" or item.body == "" or _looks_like_raw_transcript(item.body)):
+                continue
+            actions.append(MemoryOptimizeAction(
+                action=item.action,
+                entry_id=item.entry_id,
+                title=item.title,
+                body=item.body,
+                type=_optional_memory_type(item.type) if item.type is not None else None,
+                tags=tuple(item.tags) if item.tags is not None else None,
+                confidence=item.confidence,
+                reason=item.reason,
+            ))
+        return actions
+    except (ValidationError, json.JSONDecodeError):
+        pass
+    parsed: object = json.loads(extracted)
     if not isinstance(parsed, dict):
         return []
     actions_value = cast(dict[str, object], parsed).get("actions")
