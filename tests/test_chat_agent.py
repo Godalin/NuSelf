@@ -980,6 +980,7 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
     from langchain_core.language_models.chat_models import BaseChatModel
     from langchain_core.messages import AIMessage, BaseMessage
 
+    from nuself.agent.chat import ChatStructuredOutput
     from nuself.llm import LLMSettings, LangChainLLMEndpoint
 
     repo = MemoryEntryRepository(tmp_path)
@@ -990,6 +991,9 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
             self.calls: list[list[BaseMessage]] = []
 
         def bind_tools(self, tools: list[BaseTool]) -> "NativeToolModel":
+            return self
+
+        def with_structured_output(self, schema: type[ChatStructuredOutput]) -> "NativeToolModel":
             return self
 
         def invoke(self, messages: list[BaseMessage]) -> AIMessage:
@@ -1009,7 +1013,31 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
             assert messages[-1].type == "tool"
             return AIMessage(content='{"answer":"You value clarity.","evidence_references":["mem_native"],"epistemic_status":"grounded"}')
 
-    native_model = NativeToolModel()
+    class NativeStructuredToolModel(NativeToolModel):
+        def invoke(self, messages: list[BaseMessage]) -> AIMessage | ChatStructuredOutput:  # type: ignore[override]
+            self.calls.append(messages)
+            if len(self.calls) == 1:
+                return AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "search_memory",
+                            "args": {"query": "clarity", "limit": 5},
+                            "id": "call_search_memory",
+                            "type": "tool_call",
+                        }
+                    ],
+                )
+            if len(self.calls) == 2:
+                assert messages[-1].type == "tool"
+                return AIMessage(content="This unstructured final text should not be parsed.")
+            return ChatStructuredOutput(
+                answer="You value clarity.",
+                evidence_references=["mem_native"],
+                epistemic_status="grounded",
+            )
+
+    native_model = NativeStructuredToolModel()
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=StructuredFakeLLM('{"answer":"You value clarity."}'),
@@ -1035,7 +1063,7 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
         "state_update",
         "compression",
     )
-    assert len(native_model.calls) == 2
+    assert len(native_model.calls) == 3
     logs = [
         event
         for event in read_log_events(project_root=tmp_path, component="chat")

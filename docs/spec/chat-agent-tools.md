@@ -78,6 +78,8 @@ NuSelf must not ask the model to print a private tool protocol in the assistant 
 
 Fallback LLMs that do not implement native tool calling may produce a plain answer, but they must not emulate tools by printing tool markers to the user.
 
+After any tool loop completes, the chat runtime must request the final answer through LangChain structured output (`with_structured_output(...)` or `create_agent(..., response_format=...)`) when the active model supports it. Prompted JSON parsing is a compatibility fallback for deterministic local test doubles and non-agent subsystems, not the primary chat-agent response protocol.
+
 ## Tool Catalog
 
 ### Current

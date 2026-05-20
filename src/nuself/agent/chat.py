@@ -14,6 +14,7 @@ from typing import Any, Literal, Protocol, TypeAlias, TypeVar, cast
 
 from langchain_core.tools import BaseTool
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
+from pydantic import BaseModel, Field
 
 from nuself.agent.skills import AgentSkill, load_agent_skills, render_agent_skill_sections
 from nuself.agent.tools import build_langchain_chat_tools
@@ -234,6 +235,15 @@ class DraftResponse:
     @property
     def draft_answer(self) -> str:
         return self.answer
+
+
+class ChatStructuredOutput(BaseModel):
+    """Structured chat response returned by LangChain-native chat models."""
+
+    answer: str = Field(description="Plain user-facing answer text. Do not include internal protocol fields.")
+    evidence_references: list[str] = Field(default_factory=list, description="Memory, source, or trace ids used.")
+    confidence: float | None = Field(default=None, description="Optional confidence from 0.0 to 1.0.")
+    epistemic_status: str = Field(default="inferred", description="One of grounded, inferred, uncertain, unsupported.")
 
 
 @dataclass(frozen=True)
@@ -1091,7 +1101,24 @@ class ConversationGraphRuntime:
                 messages.append(self._invoke_langchain_tool_call(cast(dict[str, Any], tool_call)))
             ai_message = invoke_model(messages)
             tool_iterations += 1
-        return _parse_chat_response(_langchain_message_text(ai_message))
+        messages.append(ai_message)
+        return self._complete_structured_response_with_langchain(endpoint, messages, fallback=ai_message)
+
+    def _complete_structured_response_with_langchain(
+        self,
+        endpoint: LangChainLLMEndpoint,
+        messages: list[BaseMessage],
+        *,
+        fallback: AIMessage,
+    ) -> ParsedChatResponse:
+        try:
+            with_structured_output = cast(Callable[[type[ChatStructuredOutput]], Any], getattr(endpoint.model, "with_structured_output"))
+            structured_model = with_structured_output(ChatStructuredOutput)
+            invoke_structured = cast(Callable[[list[BaseMessage]], object], getattr(structured_model, "invoke"))
+            return _structured_chat_output_to_response(invoke_structured(messages))
+        except Exception:
+            LOGGER.exception("LangChain structured chat output failed; falling back to text protocol parsing")
+            return _parse_chat_response(_langchain_message_text(fallback))
 
     def _invoke_langchain_tool_call(self, tool_call: dict[str, Any]) -> ToolMessage:
         tool_name_raw = tool_call.get("name")
@@ -1538,6 +1565,28 @@ def _langchain_tool_message_text(value: object) -> str:
     if isinstance(value, ToolMessage):
         return _langchain_message_text(value)
     return str(value)
+
+
+def _structured_chat_output_to_response(output: object) -> ParsedChatResponse:
+    if isinstance(output, ChatStructuredOutput):
+        return ParsedChatResponse(
+            answer=output.answer,
+            evidence_references=tuple(output.evidence_references),
+            confidence=output.confidence,
+            epistemic_status=output.epistemic_status,
+        )
+    if isinstance(output, dict):
+        data = cast(dict[object, object], output)
+        answer = data.get("answer")
+        if not isinstance(answer, str):
+            raise ValueError("structured chat output did not include answer")
+        return ParsedChatResponse(
+            answer=answer,
+            evidence_references=_string_tuple(data.get("evidence_references")),
+            confidence=_optional_float(data.get("confidence")),
+            epistemic_status=_string_field(data.get("epistemic_status"), default="inferred") or "inferred",
+        )
+    raise TypeError(f"unsupported structured chat output: {type(output).__name__}")
 
 
 def _tool_prompt_sections(tools: "Iterable[BaseTool]", skills: tuple[AgentSkill, ...]) -> list[str]:
