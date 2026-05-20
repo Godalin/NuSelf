@@ -1366,8 +1366,7 @@ class ConversationGraphRuntime:
 
         try:
             tool_obj = self._tools[tool.tool]
-            invoke = cast(Callable[[dict[str, Any]], object], getattr(tool_obj, "invoke"))
-            result = str(invoke(tool_args_input))
+            result = str(tool_obj.invoke(tool_args_input))
             if service_component is not None:
                 self._write_service_tool_log(
                     tool.tool,
@@ -1597,7 +1596,7 @@ def _to_langchain_messages(messages: list[ChatMessage]) -> list[BaseMessage]:
 
 
 def _langchain_message_text(message: BaseMessage) -> str:
-    content = cast(object, getattr(message, "content"))
+    content = message.content
     if isinstance(content, str):
         return content
     parts: list[str] = []
