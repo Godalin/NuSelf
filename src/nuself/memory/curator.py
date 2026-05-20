@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
+from pydantic import BaseModel, Field, ValidationError
+
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry, now_iso
@@ -70,8 +72,25 @@ class MemoryDecision:
     reason: str = ""
 
 
+class CuratorActionItem(BaseModel):
+    """One structured memory curation action from the LLM."""
+
+    action: Literal["create", "update", "ignore"] = Field(description="Memory action type.")
+    title: str = Field(default="", description="Memory entry title.")
+    body: str = Field(default="", description="Memory entry body.")
+    type: str = Field(default="episode", description="Memory entry type.")
+    entry_id: str | None = Field(default=None, description="Existing entry id to update.")
+    confidence: float = Field(default=0.6, description="Confidence from 0.0 to 1.0.")
+    reason: str = Field(default="", description="Reason for the action.")
+
+
+class CuratorActionsOutput(BaseModel):
+    """Structured curator actions response from the LLM."""
+
+    actions: list[CuratorActionItem] = Field(description="Memory curation actions.")
+
+
 class MemoryCurator:
-    """Summarize new working-memory turns into durable memory entries."""
 
     def __init__(
         self,
@@ -417,7 +436,28 @@ def _has_memory_worthy_signal(messages: list[ThreadMessage], min_quality_chars: 
 
 
 def _parse_actions(raw: str) -> list[MemoryAction]:
-    parsed: object = json.loads(_extract_json_object(raw))
+    extracted = _extract_json_object(raw)
+    try:
+        output = CuratorActionsOutput.model_validate_json(extracted)
+        actions: list[MemoryAction] = []
+        for item in output.actions:
+            if item.action != "ignore" and (item.title == "" or item.body == ""):
+                continue
+            if item.action != "ignore" and _looks_like_raw_transcript(item.body):
+                continue
+            actions.append(MemoryAction(
+                action=item.action,
+                type=_memory_type(item.type),
+                title=item.title,
+                body=item.body,
+                entry_id=item.entry_id,
+                confidence=max(0.0, min(1.0, item.confidence)),
+                reason=item.reason,
+            ))
+        return actions
+    except (ValidationError, json.JSONDecodeError):
+        pass
+    parsed: object = json.loads(extracted)
     if not isinstance(parsed, dict):
         return []
     actions_value = cast(dict[str, object], parsed).get("actions")
