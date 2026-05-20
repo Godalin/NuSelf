@@ -961,8 +961,9 @@ def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
     assert len(logs) == 1
     assert logs[0].status == "completed"
     assert logs[0].message.startswith('args: {"query": "clarity"}\nresult: ')
-    assert "Clarity matters" in logs[0].message
-    assert logs[0].metadata == {"service_component": "memory", "tool": "search_memory"}
+    assert "Clarity matters" in logs[0].metadata["message_body"]
+    assert logs[0].metadata["service_component"] == "memory"
+    assert logs[0].metadata["tool"] == "search_memory"
 
 
 def test_chat_agent_recovers_raw_tool_marker_without_leaking(tmp_path: Path) -> None:
@@ -1071,7 +1072,8 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
         if event.event == "service_tool_called"
     ]
     assert len(logs) == 1
-    assert logs[0].metadata == {"service_component": "memory", "tool": "search_memory"}
+    assert logs[0].metadata["service_component"] == "memory"
+    assert logs[0].metadata["tool"] == "search_memory"
     assert logs[0].message.startswith('args: {"limit": 5, "query": "clarity"}\nresult: ')
 
 
@@ -1200,8 +1202,9 @@ def test_chat_agent_tool_invocation_with_reflection_logs_service_call(tmp_path: 
     assert len(logs) == 1
     assert logs[0].status == "completed"
     assert logs[0].message.startswith('args: {"limit": 3}\nresult: ')
-    assert "Try a smaller next step" in logs[0].message
-    assert logs[0].metadata == {"service_component": "reflection", "tool": "list_pending_reflections"}
+    assert "Try a smaller next step" in logs[0].metadata["message_body"]
+    assert logs[0].metadata["service_component"] == "reflection"
+    assert logs[0].metadata["tool"] == "list_pending_reflections"
 
 
 def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) -> None:

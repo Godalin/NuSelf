@@ -581,7 +581,6 @@ class PresentationAgent:
         presentation_hints: tuple[str, ...] = (),
         thread_id: str = "default",
     ) -> PresentedResponse:
-        write_log_event("chat", "presentation_started", "presentation stage started", thread_id=thread_id, status="started")
         prompt = self._build_prompt(
             draft,
             context_messages=context_messages,
@@ -915,22 +914,22 @@ class ConversationGraphRuntime:
         updated_persona_turn_state = self._persona_driver.run(persona_turn_state)
         activation = state.persona_activation
         trigger = activation.trigger if activation is not None else "activated"
-        try:
-            write_log_event(
-                "persona",
-                "persona_summary",
-                _compact_persona_summary(updated_persona_turn_state),
-                project_root=self._project_root,
-                thread_id=state.thread_id,
-                status=trigger,
-                metadata={
-                    "persona_count": len(updated_persona_turn_state.contributions),
-                    "has_synthesis": updated_persona_turn_state.synthesis is not None,
-                },
-            )
-        except Exception:
-            LOGGER.exception("failed to write persona summary log")
-        activation = state.persona_activation
+        if activation is not None and activation.activated:
+            try:
+                write_log_event(
+                    "persona",
+                    "persona_summary",
+                    _compact_persona_summary(updated_persona_turn_state),
+                    project_root=self._project_root,
+                    thread_id=state.thread_id,
+                    status=trigger,
+                    metadata={
+                        "persona_count": len(updated_persona_turn_state.contributions),
+                        "has_synthesis": updated_persona_turn_state.synthesis is not None,
+                    },
+                )
+            except Exception:
+                LOGGER.exception("failed to write persona summary log")
         should_escalate = activation.should_escalate if activation is not None else False
         escalation_reason = activation.escalation_reason if activation is not None else "no activation"
         try:
@@ -1396,6 +1395,7 @@ class ConversationGraphRuntime:
         error: str | None = None,
     ) -> None:
         message = _format_tool_debug_body(args=args, result=result, error=error)
+        full_body = _format_tool_debug_body(args=args, result=result, error=error, full=True)
         write_log_event(
             "chat",
             "service_tool_called",
@@ -1403,7 +1403,11 @@ class ConversationGraphRuntime:
             project_root=self._project_root,
             status=status,
             error=error,
-            metadata={"service_component": service_component, "tool": tool_name},
+            metadata={
+                "service_component": service_component,
+                "tool": tool_name,
+                "message_body": full_body,
+            },
         )
 
     def _write_persona_discussion_step_log(self, thread_id: str, trigger: str, entry: str) -> None:
@@ -1561,24 +1565,26 @@ def _format_tool_debug_body(
     args: dict[str, Any],
     result: str | None = None,
     error: str | None = None,
+    full: bool = False,
 ) -> str:
-    lines = [f"args: {_format_tool_debug_value(args)}"]
+    limit = 0 if full else 200
+    lines = [f"args: {_format_tool_debug_value(args, limit=limit)}"]
     if result is not None:
-        lines.append(f"result: {_truncate_tool_debug_text(result)}")
+        lines.append(f"result: {_truncate_tool_debug_text(result, limit=limit)}")
     if error is not None:
-        lines.append(f"error: {_truncate_tool_debug_text(error)}")
+        lines.append(f"error: {_truncate_tool_debug_text(error, limit=limit)}")
     return "\n".join(lines)
 
 
-def _format_tool_debug_value(value: object) -> str:
+def _format_tool_debug_value(value: object, limit: int = 200) -> str:
     try:
-        return _truncate_tool_debug_text(json.dumps(value, sort_keys=True, ensure_ascii=False, default=str))
+        return _truncate_tool_debug_text(json.dumps(value, sort_keys=True, ensure_ascii=False, default=str), limit=limit)
     except (TypeError, ValueError):
-        return _truncate_tool_debug_text(str(value))
+        return _truncate_tool_debug_text(str(value), limit=limit)
 
 
-def _truncate_tool_debug_text(text: str, limit: int = 1200) -> str:
-    if len(text) <= limit:
+def _truncate_tool_debug_text(text: str, limit: int = 200) -> str:
+    if limit <= 0 or len(text) <= limit:
         return text
     return text[: limit - 3].rstrip() + "..."
 
