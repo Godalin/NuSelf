@@ -241,7 +241,7 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
     assert "You are NuSelf" in system_prompt
     assert "private AI mirror" in system_prompt
     assert "Available tools:" in system_prompt
-    assert "search_memory" in system_prompt
+    assert "memory_search" in system_prompt
     
     # And synthesis is also present
     assert "Internal perspective fusion:" in system_prompt

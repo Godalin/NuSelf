@@ -313,7 +313,7 @@ def test_interactive_turn_prints_activity_events_while_waiting(
             project_root=tmp_path,
             thread_id=thread_id,
             status="completed",
-            metadata={"service_component": "memory", "tool": "search_memory"},
+            metadata={"service_component": "memory", "tool": "memory_search"},
         )
         if not printed.wait(1.0):
             return cli.InteractiveChatResult(code=1, reply="log was not printed live")
@@ -369,7 +369,7 @@ def test_interactive_turn_hides_background_activity_events(
             project_root=tmp_path,
             thread_id=thread_id,
             status="completed",
-            metadata={"service_component": "memory", "tool": "search_memory"},
+            metadata={"service_component": "memory", "tool": "memory_search"},
         )
         return cli.InteractiveChatResult(code=0, reply="final reply")
 
@@ -606,7 +606,7 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
         message='args: {"limit": 3}\nresult: Pending reflection ideas:\n[1] One idea',
         thread_id="default",
         status="completed",
-        metadata={"service_component": "reflection", "tool": "list_pending_reflections"},
+        metadata={"service_component": "reflection", "tool": "reflection_list_pending"},
     )
 
     content = render_transcript(
@@ -619,7 +619,7 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
         include_all_logs=False,
     )
 
-    assert "> [chat] [reflection] service_tool_called status=completed thread=default tool=list_pending_reflections" in content
+    assert "> [chat] [reflection] service_tool_called status=completed thread=default tool=reflection_list_pending" in content
     assert '>   args: {"limit": 3}' in content
     assert ">   result: Pending reflection ideas:" in content
 

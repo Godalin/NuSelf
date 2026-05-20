@@ -41,7 +41,7 @@ def build_langchain_chat_tools(
             query_str = str(query) if query else ""
             limit_int = int(limit)
         except (ValueError, TypeError):
-            return "Error: invalid arguments for search_memory tool"
+            return "Error: invalid arguments for memory_search tool"
 
         if not query_str.strip():
             return "Error: query must be a non-empty string"
@@ -57,6 +57,11 @@ def build_langchain_chat_tools(
         if not packed.text:
             return f"No matches found for query: {query_str}"
         return packed.text
+
+    def count_pending_reflections() -> str:
+        """Count pending proactive reflection ideas."""
+
+        return f"Pending reflection ideas: {len(reflection_repository.list(status='pending'))} total"
 
     def list_pending_reflections(limit: int = 5) -> str:
         """List pending proactive reflection ideas."""
@@ -176,6 +181,11 @@ def build_langchain_chat_tools(
             lines.append(f"{row}\n  steps={len(steps)}")
         return "\n".join(lines)
 
+    def count_reasoning_threads() -> str:
+        """Count active and paused long-run reasoning threads."""
+
+        return f"Active and paused reasoning threads: {len(ReasonService(project_root).list_threads())} total"
+
     def show_reasoning_thread(thread_id: str) -> str:
         """Show one long-run reasoning thread."""
 
@@ -209,6 +219,15 @@ def build_langchain_chat_tools(
             lines.append(render_trace_row(trace, index=index))
         return "\n".join(lines)
 
+    def count_traces(query: str | None = None) -> str:
+        """Count thought provenance trace records, optionally matching a query."""
+
+        service = TraceQueryService(project_root)
+        query_str = query.strip() if isinstance(query, str) else ""
+        traces = service.search_traces(query_str) if query_str else service.list_traces()
+        suffix = f' matching "{query_str}"' if query_str else ""
+        return f"Trace records{suffix}: {len(traces)} total"
+
     def show_trace(trace_id: str) -> str:
         """Show one thought provenance trace record."""
 
@@ -225,7 +244,7 @@ def build_langchain_chat_tools(
     return (
         tool_from_function(
             search_memory,
-            name="search_memory",
+            name="memory_search",
             description=(
                 "Search durable memory (entries, derived profiles, and source chunks) for relevant context. "
                 "Use natural language queries to find information about preferences, beliefs, episodes, and facts. "
@@ -234,7 +253,7 @@ def build_langchain_chat_tools(
         ),
         tool_from_function(
             count_memory,
-            name="count_memory",
+            name="memory_count",
             description=(
                 "Count durable memory entries with optional type or tag filters. "
                 "Use when the user asks how many memories exist, or to get a quick count "
@@ -243,7 +262,7 @@ def build_langchain_chat_tools(
         ),
         tool_from_function(
             list_pending_reflections,
-            name="list_pending_reflections",
+            name="reflection_list_pending",
             description=(
                 "List pending proactive reflection ideas (questions, connections, contradictions) "
                 "generated from the user's memory and conversations. Use when the user seems open "
@@ -252,17 +271,25 @@ def build_langchain_chat_tools(
             ),
         ),
         tool_from_function(
+            count_pending_reflections,
+            name="reflection_count",
+            description=(
+                "Count pending proactive reflection ideas. Use when the user asks how many ideas, thoughts, "
+                "or pending reflections are currently available."
+            ),
+        ),
+        tool_from_function(
             dismiss_reflection_by_index,
-            name="dismiss_reflection",
+            name="reflection_dismiss",
             description=(
                 "Dismiss a pending reflection idea so it will no longer be suggested. "
                 "Use when the user explicitly says they are not interested in a topic. "
-                "The index corresponds to the numbered list from list_pending_reflections."
+                "The index corresponds to the numbered list from reflection_list_pending."
             ),
         ),
         tool_from_function(
             archive_reflection_by_index,
-            name="archive_reflection",
+            name="reflection_archive",
             description=(
                 "Archive a pending reflection idea after the discussion is complete. "
                 "Use when the user has engaged with a reflection idea and the topic feels resolved. "
@@ -271,7 +298,7 @@ def build_langchain_chat_tools(
         ),
         tool_from_function(
             archive_memory_by_id,
-            name="archive_memory",
+            name="memory_archive",
             description=(
                 "Archive a memory entry so it is excluded from default search and chat context. "
                 "Use when the user says a memory is outdated, no longer relevant, or should be hidden. "
@@ -280,7 +307,7 @@ def build_langchain_chat_tools(
         ),
         tool_from_function(
             update_memory_importance_by_id,
-            name="update_memory_importance",
+            name="memory_update_importance",
             description=(
                 "Adjust the importance score (0.0-1.0) of a memory entry. "
                 "Use when the user emphasizes or downplays the significance of a memory. "
@@ -289,15 +316,23 @@ def build_langchain_chat_tools(
         ),
         tool_from_function(
             list_active_reasoning_threads,
-            name="list_active_reasoning_threads",
+            name="reason_list_active",
             description=(
                 "List active and paused long-run reasoning threads. Use when the user asks about "
                 "open questions, ongoing thinking, active reason threads, or what NuSelf is still considering."
             ),
         ),
         tool_from_function(
+            count_reasoning_threads,
+            name="reason_count",
+            description=(
+                "Count active and paused long-run reasoning threads. Use when the user asks how many open "
+                "questions or reasoning threads NuSelf is tracking."
+            ),
+        ),
+        tool_from_function(
             show_reasoning_thread,
-            name="show_reasoning_thread",
+            name="reason_show",
             description=(
                 "Show details for a specific long-run reasoning thread, including summary, hypotheses, "
                 "open questions, evidence refs, and recent steps. Requires a thread_id."
@@ -305,15 +340,23 @@ def build_langchain_chat_tools(
         ),
         tool_from_function(
             search_trace,
-            name="search_trace",
+            name="trace_search",
             description=(
                 "Search NuSelf thought provenance records. Use when the user asks where an idea came from, "
                 "how a belief or answer formed, or what prior records support a conclusion."
             ),
         ),
         tool_from_function(
+            count_traces,
+            name="trace_count",
+            description=(
+                "Count thought provenance trace records, optionally matching a query. Use when the user asks "
+                "how many provenance records exist or match a topic."
+            ),
+        ),
+        tool_from_function(
             show_trace,
-            name="show_trace",
+            name="trace_show",
             description=(
                 "Show a specific thought provenance trace record with related links. Requires a trace_id."
             ),

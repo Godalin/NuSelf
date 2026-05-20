@@ -117,8 +117,9 @@ promote_reflection(entry_id_or_index)
 Required first tool-facing methods:
 
 ```text
-list_active_reasoning_threads()
-show_reasoning_thread(thread_id)
+reason_list_active()
+reason_count()
+reason_show(thread_id)
 start_reasoning_thread_after_confirmation(question)
 advance_reasoning_thread_after_confirmation(thread_id)
 ```
@@ -253,13 +254,14 @@ REPL output must match CLI formatting as closely as possible.
 
 Add chat tools after manual CLI support exists:
 
-- `list_reasoning_threads`
-- `show_reasoning_thread`
-- `start_reasoning_thread`
-- `advance_reasoning_thread`
-- `pause_reasoning_thread`
-- `resolve_reasoning_thread`
-- `archive_reasoning_thread`
+- `reason_list_active`
+- `reason_count`
+- `reason_show`
+- `reason_start`
+- `reason_advance`
+- `reason_pause`
+- `reason_resolve`
+- `reason_archive`
 
 The chat agent may suggest a new reasoning thread, but must not create one without user confirmation.
 

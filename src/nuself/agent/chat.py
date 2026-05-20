@@ -311,6 +311,7 @@ class ConversationTurnState:
     initial_response: DraftResponse | None = None
     tool_call: ConversationToolCall | None = None
     tool_result: str | None = None
+    tool_results: tuple[str, ...] = ()
     final_response: PresentedResponse | None = None
     saved_messages: tuple[ThreadMessage, ...] = ()
     updated_thread_state: ThreadState | None = None
@@ -910,6 +911,21 @@ class ConversationGraphRuntime:
         )
 
     def persona_activation_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        if _is_direct_service_tool_query(state.user_message):
+            activation = PersonaActivation(
+                trigger="direct service tool query",
+                should_escalate=False,
+                escalation_reason="Direct service/tool query; answer should come from tools before persona discussion.",
+            )
+            return ConversationNodeResult(
+                node="persona_activation",
+                state=replace(
+                    state,
+                    persona_activation=activation,
+                    persona_turn_state=None,
+                    node_trace=(*state.node_trace, "persona_activation"),
+                ),
+            )
         activation = self._activation_policy.decide(
             PersonaInput(user_message=state.user_message, memory_context=state.memory_context)
         )
@@ -1076,23 +1092,16 @@ class ConversationGraphRuntime:
             state=replace(
                 state,
                 tool_result=tool_result,
+                tool_results=(tool_result,),
                 saved_messages=state.active_messages,
                 node_trace=(*state.node_trace, "execute_tool"),
             ),
         )
 
     def finalize_response_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        final_tool_results = state.tool_results
         if _is_supported_tool_call(state.tool_call):
-            tool_result = _require_tool_result(state.tool_result)
-            follow_up_prompt = self._build_follow_up_prompt(
-                ThreadState(
-                    thread_id=state.thread_id,
-                    summary=state.persisted_state.summary,
-                    messages=list(state.active_messages),
-                ),
-                tool_result,
-            )
-            draft_response = self._complete_response(follow_up_prompt)
+            draft_response, final_tool_results = self._complete_after_tool_loop(state)
             final_response = _apply_unsupported_claim_guard(
                 self._presentation_agent.present(
                     draft_response,
@@ -1129,9 +1138,30 @@ class ConversationGraphRuntime:
                 state,
                 final_response=final_response,
                 saved_messages=saved_messages,
+                tool_results=final_tool_results,
                 node_trace=(*state.node_trace, "finalize_response"),
             ),
         )
+
+    def _complete_after_tool_loop(self, state: ConversationTurnState) -> tuple[ParsedChatResponse, tuple[str, ...]]:
+        tool_results = list(state.tool_results)
+        thread_state = ThreadState(
+            thread_id=state.thread_id,
+            summary=state.persisted_state.summary,
+            messages=list(state.active_messages),
+        )
+        draft_response = self._complete_response(self._build_follow_up_prompt(thread_state, tuple(tool_results)))
+        iterations = 0
+        while True:
+            tool_call = self._detect_tool_call(draft_response)
+            if not _is_supported_tool_call(tool_call):
+                return draft_response, tuple(tool_results)
+            if iterations >= 5:
+                raise RuntimeError("fallback tool call loop exceeded 5 iterations")
+            tool_result = self._invoke_tool(draft_response)
+            tool_results.append(tool_result)
+            draft_response = self._complete_response(self._build_follow_up_prompt(thread_state, tuple(tool_results)))
+            iterations += 1
 
     def _complete_response(self, prompt: list[ChatMessage]) -> ParsedChatResponse:
         if self._langchain_models:
@@ -1195,7 +1225,7 @@ class ConversationGraphRuntime:
 
     def _invoke_langchain_tool_call(self, tool_call: dict[str, Any]) -> ToolMessage:
         tool_name_raw = tool_call.get("name")
-        tool_name = tool_name_raw if isinstance(tool_name_raw, str) else ""
+        tool_name = _normalize_tool_name(tool_name_raw if isinstance(tool_name_raw, str) else "")
         tool_args_raw = tool_call.get("args")
         tool_args = cast(dict[str, Any], tool_args_raw) if isinstance(tool_args_raw, dict) else {}
         tool_call_id_raw = tool_call.get("id")
@@ -1229,15 +1259,16 @@ class ConversationGraphRuntime:
     def _detect_tool_call(self, response: ParsedChatResponse) -> ConversationToolCall | None:
         if response.tool is None:
             return None
+        tool_name = _normalize_tool_name(response.tool)
         tool_args = response.tool_args if response.tool_args is not None else {}
-        if response.tool not in self._tools:
+        if tool_name not in self._tools:
             return ConversationToolCall(
-                name=response.tool,
+                name=tool_name,
                 args=tool_args,
                 supported=False,
                 diagnostic=f"unsupported tool request: {response.tool}",
             )
-        return ConversationToolCall(name=response.tool, args=tool_args, supported=True)
+        return ConversationToolCall(name=tool_name, args=tool_args, supported=True)
 
     def state_update_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         updated = ThreadState(
@@ -1313,14 +1344,16 @@ class ConversationGraphRuntime:
             prompt.append(ChatMessage(role=message.role, content=message.content))
         return self._complete_response(prompt)
 
-    def _build_follow_up_prompt(self, state: ThreadState, tool_result: str) -> list[ChatMessage]:
+    def _build_follow_up_prompt(self, state: ThreadState, tool_results: str | tuple[str, ...]) -> list[ChatMessage]:
         """Build a prompt for the follow-up after tool invocation."""
+        results = (tool_results,) if isinstance(tool_results, str) else tool_results
         follow_up_system = (
-            "You are NuSelf. The previous tool call returned the following results. "
-            "Use these results to generate your final answer. "
+            "You are NuSelf. Previous tool calls returned the following results. "
+            "Use these results to either call another needed tool or generate your final answer. "
             "Return a JSON object with answer, evidence_references, confidence, and epistemic_status. "
             f"{USER_FACING_PROTOCOL_BOUNDARY}"
         )
+        follow_up_system += "\nIf more required information is missing and an available tool can retrieve it, request that tool next."
         if self._language_preference != "en":
             follow_up_system += f"\n\nRespond to the user in {self._language_preference}."
         prompt: list[ChatMessage] = [
@@ -1332,8 +1365,9 @@ class ConversationGraphRuntime:
         # Include recent message history
         for message in state.messages[-self._settings.recent_messages :]:
             prompt.append(ChatMessage(role=message.role, content=message.content))
-        # Add tool result
-        prompt.append(ChatMessage(role="user", content=f"Tool result:\n{tool_result}"))
+        # Add tool results
+        rendered_results = "\n\n".join(f"Tool result {index}:\n{result}" for index, result in enumerate(results, start=1))
+        prompt.append(ChatMessage(role="user", content=f"Tool results so far:\n{rendered_results}"))
         return prompt
 
     def _system_prompt(self, state: ConversationTurnState, synthesis: "PersonaSynthesis | None" = None) -> str:
@@ -1377,18 +1411,19 @@ class ConversationGraphRuntime:
 
     def _invoke_tool(self, tool: ParsedChatResponse) -> str:
         """Execute a tool call and return the result."""
-        if tool.tool is None or tool.tool not in self._tools:
+        tool_name = _normalize_tool_name(tool.tool or "")
+        if tool_name == "" or tool_name not in self._tools:
             return f"Error: unknown tool {tool.tool}"
 
         tool_args_input = tool.tool_args if tool.tool_args is not None else {}
-        service_component = _tool_service_component(tool.tool)
+        service_component = _tool_service_component(tool_name)
 
         try:
-            tool_obj = self._tools[tool.tool]
+            tool_obj = self._tools[tool_name]
             result = str(cast(_InvokableTool, tool_obj).invoke(tool_args_input))
             if service_component is not None:
                 self._write_service_tool_log(
-                    tool.tool,
+                    tool_name,
                     service_component,
                     "completed",
                     args=tool_args_input,
@@ -1397,11 +1432,11 @@ class ConversationGraphRuntime:
             return result
         except TypeError as e:
             if service_component is not None:
-                self._write_service_tool_log(tool.tool, service_component, "failed", args=tool_args_input, error=str(e))
-            return f"Error invoking {tool.tool}: {e}"
+                self._write_service_tool_log(tool_name, service_component, "failed", args=tool_args_input, error=str(e))
+            return f"Error invoking {tool_name}: {e}"
         except Exception as e:
             if service_component is not None:
-                self._write_service_tool_log(tool.tool, service_component, "failed", args=tool_args_input, error=str(e))
+                self._write_service_tool_log(tool_name, service_component, "failed", args=tool_args_input, error=str(e))
             return f"Error: {e}"
 
     def _write_service_tool_log(
@@ -1558,26 +1593,70 @@ def _require_synthesis(state: PersonaTurnState | None) -> PersonaSynthesis:
     return state.synthesis
 
 
-def _require_tool_result(tool_result: str | None) -> str:
-    if tool_result is None:
-        raise RuntimeError("conversation runtime tool result is missing")
-    return tool_result
-
-
 def _is_supported_tool_call(tool_call: ConversationToolCall | None) -> bool:
     return tool_call is not None and tool_call.supported
 
 
+def _is_direct_service_tool_query(message: str) -> bool:
+    normalized = message.casefold()
+    service_markers = (
+        "memory",
+        "reflection",
+        "reason",
+        "trace",
+        "记忆",
+        "反思",
+        "推理",
+        "溯源",
+        "工具",
+    )
+    query_markers = (
+        "count",
+        "how many",
+        "status",
+        "tool",
+        "调用工具",
+        "多少",
+        "几条",
+        "数量",
+        "看下",
+        "查看",
+        "查询",
+    )
+    return any(marker in normalized for marker in service_markers) and any(
+        marker in normalized for marker in query_markers
+    )
+
+
 def _tool_service_component(tool_name: str) -> ToolServiceComponent | None:
-    if tool_name in {"search_memory", "count_memory", "archive_memory", "update_memory_importance"}:
+    if tool_name.startswith("memory_"):
         return "memory"
-    if tool_name in {"list_pending_reflections", "dismiss_reflection", "archive_reflection"}:
+    if tool_name.startswith("reflection_"):
         return "reflection"
-    if tool_name in {"list_active_reasoning_threads", "show_reasoning_thread"}:
+    if tool_name.startswith("reason_"):
         return "reasoning"
-    if tool_name in {"search_trace", "show_trace"}:
+    if tool_name.startswith("trace_"):
         return "trace"
     return None
+
+
+LEGACY_TOOL_NAME_MAP: dict[str, str] = {
+    "search_memory": "memory_search",
+    "count_memory": "memory_count",
+    "archive_memory": "memory_archive",
+    "update_memory_importance": "memory_update_importance",
+    "list_pending_reflections": "reflection_list_pending",
+    "dismiss_reflection": "reflection_dismiss",
+    "archive_reflection": "reflection_archive",
+    "list_active_reasoning_threads": "reason_list_active",
+    "show_reasoning_thread": "reason_show",
+    "search_trace": "trace_search",
+    "show_trace": "trace_show",
+}
+
+
+def _normalize_tool_name(tool_name: str) -> str:
+    return LEGACY_TOOL_NAME_MAP.get(tool_name, tool_name)
 
 
 def _format_tool_debug_body(
@@ -1681,7 +1760,7 @@ def _tool_prompt_sections(tools: "Iterable[BaseTool]", skills: tuple[AgentSkill,
         "CRITICAL: When the user asks a question that a tool can answer, you MUST call the tool before generating your final answer.",
         "Do NOT answer from your training data; always use the tool to get the actual current state.",
         "Tools are bound through LangChain's native tool-calling API.",
-        'Do not write visible markers such as "[Tool call: search_memory]" or JSON tool fields in the answer body.',
+        'Do not write visible markers such as "[Tool call: memory_search]" or JSON tool fields in the answer body.',
         "The tool will be executed and its result injected back into context. Only then generate your final answer.",
         "Tools available:",
     ]
@@ -1735,10 +1814,18 @@ def _tool_args_signature(tool: BaseTool) -> str:
 ParsedChatResponse: TypeAlias = DraftResponse
 _PROTOCOL_FIELD_NAMES = ("answer", "evidence_references", "confidence", "epistemic_status")
 _TOOL_MARKER_RE = re.compile(r"^\[Tool call:\s*(?P<tool>[A-Za-z_][A-Za-z0-9_]*)\]\s*(?P<body>.*)$", re.DOTALL)
+_TOOL_BLOCK_RE = re.compile(r"\[TOOL_CALL\](?P<body>.*?)\[/TOOL_CALL\]", re.DOTALL | re.IGNORECASE)
+_TOOL_BLOCK_TOOL_RE = re.compile(r"\btool\s*(?:=>|:)\s*[\"'](?P<tool>[A-Za-z_][A-Za-z0-9_]*)[\"']")
+_TOOL_BLOCK_ARGS_RE = re.compile(r"\bargs\s*(?:=>|:)\s*\{(?P<args>.*?)\}", re.DOTALL)
+_QUERY_ARG_RE = re.compile(r"\bQuery\s*:\s*(?P<query>.*?)(?:\s+\bLimit\s*:|$)", re.DOTALL | re.IGNORECASE)
+_LIMIT_ARG_RE = re.compile(r"\bLimit\s*:\s*(?P<limit>\d+)", re.IGNORECASE)
 
 
 def _parse_chat_response(raw: str) -> ParsedChatResponse:
     stripped = raw.strip()
+    tool_marker_response = _parse_tool_marker_response(stripped)
+    if tool_marker_response is not None:
+        return tool_marker_response
     protocol_json = _extract_protocol_json(stripped)
     if protocol_json is not None:
         try:
@@ -1759,16 +1846,17 @@ def _parse_chat_response(raw: str) -> ParsedChatResponse:
         if isinstance(parsed, dict):
             data = cast(dict[str, object], parsed)
             answer = data.get("answer")
-            if not isinstance(answer, str) or answer.strip() == "":
+            tool = _string_field(data.get("tool"))
+            if (not isinstance(answer, str) or answer.strip() == "") and tool is None:
                 return ParsedChatResponse(answer=raw)
             evidence_references = _string_tuple(data.get("evidence_references"))
             confidence = _optional_float(data.get("confidence"))
             epistemic_status = _string_field(data.get("epistemic_status"), default="inferred") or "inferred"
-            tool = _string_field(data.get("tool"))
             tool_args_raw = data.get("tool_args")
             tool_args = cast(dict[str, Any], tool_args_raw) if isinstance(tool_args_raw, dict) else None
+            answer_text = answer if isinstance(answer, str) else ""
             return ParsedChatResponse(
-                answer=answer,
+                answer=answer_text,
                 evidence_references=evidence_references,
                 confidence=confidence,
                 epistemic_status=epistemic_status,
@@ -1779,6 +1867,54 @@ def _parse_chat_response(raw: str) -> ParsedChatResponse:
     if markdown_response is not None:
         return markdown_response
     return ParsedChatResponse(answer=raw)
+
+
+def _parse_tool_marker_response(text: str) -> ParsedChatResponse | None:
+    legacy_match = _TOOL_MARKER_RE.match(text)
+    if legacy_match is not None:
+        tool_name = _normalize_tool_name(legacy_match.group("tool"))
+        return ParsedChatResponse(
+            answer="",
+            tool=tool_name,
+            tool_args=_parse_tool_marker_args(tool_name, legacy_match.group("body")),
+        )
+    block_match = _TOOL_BLOCK_RE.search(text)
+    if block_match is None:
+        return None
+    body = block_match.group("body")
+    tool_match = _TOOL_BLOCK_TOOL_RE.search(body)
+    if tool_match is None:
+        return None
+    tool_name = _normalize_tool_name(tool_match.group("tool"))
+    return ParsedChatResponse(answer="", tool=tool_name, tool_args=_parse_tool_marker_args(tool_name, body))
+
+
+def _parse_tool_marker_args(tool_name: str, body: str) -> dict[str, Any]:
+    args_match = _TOOL_BLOCK_ARGS_RE.search(body)
+    if args_match is not None:
+        parsed = _parse_tool_block_args(args_match.group("args"))
+        if parsed:
+            return parsed
+    result: dict[str, Any] = {}
+    query_match = _QUERY_ARG_RE.search(body)
+    if query_match is not None and query_match.group("query").strip():
+        result["query"] = query_match.group("query").strip()
+    limit_match = _LIMIT_ARG_RE.search(body)
+    if limit_match is not None:
+        result["limit"] = int(limit_match.group("limit"))
+    if tool_name == "reflection_list_pending" and "limit" not in result:
+        result["limit"] = 5
+    return result
+
+
+def _parse_tool_block_args(args_body: str) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, raw_value in re.findall(r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:=>|:)\s*(\"[^\"]*\"|'[^']*'|\d+)", args_body):
+        if raw_value[:1] in {"\"", "'"}:
+            result[key] = raw_value[1:-1]
+        else:
+            result[key] = int(raw_value)
+    return result
 
 
 def _extract_protocol_json(text: str) -> str | None:
@@ -1819,7 +1955,7 @@ def _to_presented_response(response: ParsedChatResponse) -> PresentedResponse:
 
 def _leaks_response_protocol(answer: str) -> bool:
     stripped = answer.strip()
-    if _TOOL_MARKER_RE.match(stripped) is not None:
+    if _TOOL_MARKER_RE.match(stripped) is not None or _TOOL_BLOCK_RE.search(stripped) is not None:
         return True
     if stripped.startswith("```"):
         return True
@@ -1844,6 +1980,8 @@ def _is_user_facing_safe(answer: str) -> bool:
 
 
 def _is_parsed_user_facing_safe(response: ParsedChatResponse) -> bool:
+    if response.tool is not None and response.answer.strip() == "":
+        return False
     return _is_user_facing_safe(response.answer)
 
 

@@ -78,6 +78,12 @@ NuSelf must not ask the model to print a private tool protocol in the assistant 
 
 Fallback LLMs that do not implement native tool calling may produce a plain answer, but they must not emulate tools by printing tool markers to the user.
 
+If a non-native model still emits a recoverable tool marker such as `[Tool call: ...]` or `[TOOL_CALL] ... [/TOOL_CALL]`, the runtime should convert it into an internal tool request, normalize any legacy pre-prefix tool name to the current subsystem-prefixed name, execute the tool, and log the call through `chat/service_tool_called`. The marker must never be shown as a NuSelf reply.
+
+Fallback tool execution must support short sequential tool loops. If a follow-up response after one tool result requests another available tool, the runtime should execute it, append the new result to the tool-result context, and ask again until the model returns a real final answer or the loop limit is reached.
+
+Direct service-status queries, such as asking how many memory/reflection/reason/trace records exist, should skip persona activation. These are operational tool queries; persona discussion before tool results tends to invent capability limits and adds noise.
+
 After any tool loop completes, the chat runtime must request the final answer through LangChain structured output (`with_structured_output(...)` or `create_agent(..., response_format=...)`) when the active model supports it. Prompted JSON parsing is a compatibility fallback for deterministic local test doubles and non-agent subsystems, not the primary chat-agent response protocol.
 
 ## Tool Catalog
@@ -86,10 +92,12 @@ After any tool loop completes, the chat runtime must request the final answer th
 
 | Tool | Purpose |
 |---|---|
-| `search_memory` | Query durable memory, profiles, and source chunks. |
-| `count_memory` | Count durable memory entries with optional type/tag filters. |
+| `memory_search` | Query durable memory, profiles, and source chunks. |
+| `memory_count` | Count durable memory entries with optional type/tag filters. |
 
-#### `count_memory`
+Tool names must start with the owning subsystem name. This keeps agent-visible tool calls readable in logs and avoids generic names such as `search_*`, `list_*`, or `show_*` becoming ambiguous as more subsystems are exposed.
+
+#### `memory_count`
 
 - **Args**: `types: list[str] | str | None = None`, `tags: list[str] | str | None = None`
 - **Behavior**: Counts memory entries from `MemoryEntryRepository.list()`, optionally filtered by memory `type` or `tags`.
@@ -99,28 +107,36 @@ After any tool loop completes, the chat runtime must request the final answer th
 ### New: Reflection Consumption Tools
 
 | Tool | Purpose |
-|---|---|---|
-| `list_pending_reflections` | Return pending reflection ideas from the reflection repository. |
-| `dismiss_reflection` | Mark a reflection idea as dismissed. |
-| `archive_reflection` | Archive a reflection idea after the discussion is complete. |
+|---|---|
+| `reflection_list_pending` | Return pending reflection ideas from the reflection repository. |
+| `reflection_count` | Count pending reflection ideas. |
+| `reflection_dismiss` | Mark a reflection idea as dismissed. |
+| `reflection_archive` | Archive a reflection idea after the discussion is complete. |
 
-#### `list_pending_reflections`
+#### `reflection_list_pending`
 
 - **Args**: `limit: int = 5`
 - **Behavior**: Reads `ReflectionRepository.list(status="pending")` and formats entries for the LLM.
 - **Returns**: A numbered list of pending ideas with title, type, and score. Empty message if none.
 - **When to use**: The agent may call this when the conversation naturally pauses or when the user asks about "ideas", "thoughts", or "reflections".
 
-#### `dismiss_reflection`
+#### `reflection_count`
 
-- **Args**: `index: int` (1-based index from `list_pending_reflections` output)
+- **Args**: none
+- **Behavior**: Counts `ReflectionRepository.list(status="pending")`.
+- **Returns**: A simple count string.
+- **When to use**: When the user asks how many pending reflections or ideas exist.
+
+#### `reflection_dismiss`
+
+- **Args**: `index: int` (1-based index from `reflection_list_pending` output)
 - **Behavior**: Looks up the pending entry at the given index, calls `ReflectionRepository.dismiss(entry.id)`, and returns confirmation.
 - **Returns**: Confirmation or error message.
 - **When to use**: After the user explicitly declines interest in a suggested reflection topic.
 
-#### `archive_reflection`
+#### `reflection_archive`
 
-- **Args**: `index: int` (1-based index from `list_pending_reflections` output)
+- **Args**: `index: int` (1-based index from `reflection_list_pending` output)
 - **Behavior**: Looks up the pending entry at the given index, calls `ReflectionRepository.archive(entry.id)`, and returns confirmation.
 - **Returns**: Confirmation with entry title, or error if not found.
 - **When to use**: After the user has engaged with a reflection idea and the discussion feels complete.
@@ -129,17 +145,17 @@ After any tool loop completes, the chat runtime must request the final answer th
 
 | Tool | Purpose |
 |---|---|
-| `archive_memory` | Change a memory entry's review state to `archived`. Archived entries are excluded from default search. |
-| `update_memory_importance` | Adjust the importance score (0.0–1.0) of a memory entry. |
+| `memory_archive` | Change a memory entry's review state to `archived`. Archived entries are excluded from default search. |
+| `memory_update_importance` | Adjust the importance score (0.0-1.0) of a memory entry. |
 
-#### `archive_memory`
+#### `memory_archive`
 
 - **Args**: `entry_id: str`
 - **Behavior**: Loads the memory entry, sets `review_state="archived"`, and saves it back.
 - **Returns**: Confirmation with entry title, or error if not found.
 - **When to use**: When the user indicates a memory is outdated, no longer relevant, or should be hidden from active context.
 
-#### `update_memory_importance`
+#### `memory_update_importance`
 
 - **Args**: `entry_id: str`, `importance: float`
 - **Behavior**: Updates the entry's importance score and saves it back.
@@ -150,17 +166,25 @@ After any tool loop completes, the chat runtime must request the final answer th
 
 | Tool | Purpose |
 |---|---|
-| `list_active_reasoning_threads` | Return active/paused reasoning threads. |
-| `show_reasoning_thread` | Show details of a specific reasoning thread. |
+| `reason_list_active` | Return active/paused reasoning threads. |
+| `reason_count` | Count active/paused reasoning threads. |
+| `reason_show` | Show details of a specific reasoning thread. |
 
-#### `list_active_reasoning_threads`
+#### `reason_list_active`
 
 - **Args**: none
 - **Behavior**: Reads `ReasonService.list_threads(status="active")` and formats active/paused threads for the LLM.
 - **Returns**: Numbered list of threads with question, status, step count, and last-advanced time. Empty message if none.
 - **When to use**: The agent may call this when the user asks about "what I'm thinking about", "open questions", "reasoning threads", or when contextually relevant.
 
-#### `show_reasoning_thread`
+#### `reason_count`
+
+- **Args**: none
+- **Behavior**: Counts active/paused reasoning threads from `ReasonService.list_threads()`.
+- **Returns**: A simple count string.
+- **When to use**: When the user asks how many active reasoning threads or open long-running questions exist.
+
+#### `reason_show`
 
 - **Args**: `thread_id: str`
 - **Behavior**: Reads the full thread via `ReasonService.show_thread(thread_id)` including hypotheses, open questions, and recent steps.
@@ -173,8 +197,16 @@ Trace tools let the chat agent inspect thought provenance without mutating it.
 
 | Tool | Purpose |
 |---|---|
-| `search_trace` | Query thought provenance records. |
-| `show_trace` | Show a specific trace record with its links. |
+| `trace_search` | Query thought provenance records. |
+| `trace_count` | Count thought provenance records matched by an optional query. |
+| `trace_show` | Show a specific trace record with its links. |
+
+#### `trace_count`
+
+- **Args**: `query: str | None = None`
+- **Behavior**: Counts default-visible trace records, optionally using the same text query as `trace_search`.
+- **Returns**: A simple count string.
+- **When to use**: When the user asks how many provenance records exist or how many match a topic.
 
 ### Behavioral Guidelines for Reason Awareness (Prompt-Level)
 
@@ -199,18 +231,20 @@ The prompt must also state that these tools are loaded in the current NuSelf run
 
 Every chat response-generation prompt must also include a `Service skills` section rendered from loaded Agent Skills. The section is the usage policy for service-backed tools, not a second tool registry.
 
+Skill files must not hard-code globally registered tool names in their instruction body. They should reference local action placeholders such as `{tool:search}`, `{tool:list_pending}`, or `{tool:show}`. At prompt-render time, `render_agent_skill_sections(...)` replaces those placeholders with the actual tool names generated from the current tool registry, such as `memory_search` or `reflection_list_pending`.
+
 Example additions:
 
 ```
-- list_pending_reflections(limit: int = 5): View pending proactive ideas.
+- reflection_list_pending(limit: int = 5): View pending proactive ideas.
   Use when the user seems open to exploring new connections or questions,
   or when the conversation naturally pauses.
-- dismiss_reflection(index: int): Remove an idea from the active pool.
+- reflection_dismiss(index: int): Remove an idea from the active pool.
   Use when the user explicitly says they are not interested in a topic.
-- list_active_reasoning_threads(): View active reasoning threads.
+- reason_list_active(): View active reasoning threads.
   Use when the user asks about open questions or what they are
   thinking about.
-- show_reasoning_thread(thread_id: str): Show details of a specific
+- reason_show(thread_id: str): Show details of a specific
   reasoning thread. Use when the user asks about a particular thread.
 ```
 
@@ -224,35 +258,35 @@ The system prompt should include:
 
 The memory skill lives in `src/nuself/agent/skills/memory/SKILL.md` and must include this behavioral contract:
 
-> "Durable memory is not ambient context. If the user asks about past preferences, decisions, recurring patterns, previous discussions, stored memories, or what NuSelf remembers, use `search_memory` before answering unless the answer is fully present in the current visible conversation or already provided in `Relevant memory context`. Do not say you lack memory tools when `search_memory` is listed. If you do not call `search_memory`, do not claim that no memory exists."
+> "Durable memory is not ambient context. If the user asks about past preferences, decisions, recurring patterns, previous discussions, stored memories, or what NuSelf remembers, use `{tool:search}` before answering unless the answer is fully present in the current visible conversation or already provided in `Relevant memory context`. Do not say you lack memory tools when `{tool:search}` is listed. If you do not call `{tool:search}`, do not claim that no memory exists."
 
 ### Reflection Skill
 
 The reflection skill lives in `src/nuself/agent/skills/reflection/SKILL.md` and must include this behavioral contract:
 
-> "Reflection ideas are proactive suggestions, not facts about the user. Use `list_pending_reflections` only when the user asks for ideas/thoughts/reflections, the conversation naturally pauses, or a topic strongly matches proactive exploration. Introduce at most one idea in natural language. Use `dismiss_reflection` when the user declines a topic, and `archive_reflection` when the user engages and the discussion feels complete."
+> "Reflection ideas are proactive suggestions, not facts about the user. Use `{tool:list_pending}` only when the user asks for ideas/thoughts/reflections, the conversation naturally pauses, or a topic strongly matches proactive exploration. Introduce at most one idea in natural language. Use `{tool:dismiss}` when the user declines a topic, and `{tool:archive}` when the user engages and the discussion feels complete."
 
 ### Reason Skill
 
 The reason skill lives in `src/nuself/agent/skills/reason/SKILL.md` and must include this behavioral contract:
 
-> "Reason is NuSelf's durable long-run thinking space. If the user asks about active long-running questions, open threads, or what NuSelf is continuing to think about, use `list_active_reasoning_threads` or `show_reasoning_thread` before answering unless the answer is fully present in visible context. You may suggest creating or advancing a thread, but must not create, advance, resolve, or archive one without explicit user confirmation."
+> "Reason is NuSelf's durable long-run thinking space. If the user asks about active long-running questions, open threads, or what NuSelf is continuing to think about, use `{tool:list_active}` or `{tool:show}` before answering unless the answer is fully present in visible context. You may suggest creating or advancing a thread, but must not create, advance, resolve, or archive one without explicit user confirmation."
 
 ### Trace Skill
 
 The trace skill lives in `src/nuself/agent/skills/trace/SKILL.md` and must include this behavioral contract:
 
-> "Trace is NuSelf's thought provenance database. If the user asks where an idea came from, how a memory/belief/answer formed, or what prior records support a conclusion, use `search_trace` or `show_trace` before answering unless the provenance is fully visible in the current conversation."
+> "Trace is NuSelf's thought provenance database. If the user asks where an idea came from, how a memory/belief/answer formed, or what prior records support a conclusion, use `{tool:search}` or `{tool:show}` before answering unless the provenance is fully visible in the current conversation."
 
 ## Dismissed Reflection Lifecycle
 
-1. `dismiss_reflection` calls `ReflectionRepository.dismiss(entry_id)`.
+1. `reflection_dismiss` calls `ReflectionRepository.dismiss(entry_id)`.
 2. Entry status becomes `dismissed`.
-3. `list_pending_reflections` only queries `status="pending"`, so dismissed entries disappear from the agent's view.
+3. `reflection_list_pending` only queries `status="pending"`, so dismissed entries disappear from the agent's view.
 
 ## Testing Strategy
 
 - Unit test each new tool in isolation.
-- Integration test: verify the agent can invoke `list_pending_reflections` and `dismiss_reflection` through the graph runtime.
-- Integration test: verify the agent can invoke `list_active_reasoning_threads` and `show_reasoning_thread` through the graph runtime.
+- Integration test: verify the agent can invoke `reflection_list_pending` and `reflection_dismiss` through the graph runtime.
+- Integration test: verify the agent can invoke `reason_list_active` and `reason_show` through the graph runtime.
 - Test edge cases: empty repository, invalid index, duplicate dismiss, empty reason repository.

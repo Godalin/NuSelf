@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import cast
 
 import yaml
+
+TOOL_PLACEHOLDER_RE = re.compile(r"\{tool:([a-z0-9_]+)\}")
 
 
 @dataclass(frozen=True)
@@ -59,10 +62,31 @@ def render_agent_skill_sections(
         tools = (allowed_tools_by_skill or {}).get(skill.name, skill.allowed_tools)
         if tools:
             lines.append(f"  Allowed tools: {', '.join(tools)}")
-        for line in skill.instructions.splitlines():
+        instructions = _render_tool_placeholders(skill.instructions, skill_name=skill.name, tools=tools)
+        for line in instructions.splitlines():
             if line.strip():
                 lines.append(f"  {line}")
     return lines
+
+
+def _render_tool_placeholders(instructions: str, *, skill_name: str, tools: tuple[str, ...]) -> str:
+    def replace(match: re.Match[str]) -> str:
+        action = match.group(1)
+        tool_name = _resolve_tool_placeholder(skill_name=skill_name, action=action, tools=tools)
+        return f"`{tool_name}`"
+
+    return TOOL_PLACEHOLDER_RE.sub(replace, instructions)
+
+
+def _resolve_tool_placeholder(*, skill_name: str, action: str, tools: tuple[str, ...]) -> str:
+    exact = f"{skill_name}_{action}"
+    if exact in tools:
+        return exact
+    suffix = f"_{action}"
+    for tool in tools:
+        if tool.endswith(suffix):
+            return tool
+    return exact
 
 
 def _load_skill_file(path: Path) -> AgentSkill:

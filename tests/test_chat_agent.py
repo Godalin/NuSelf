@@ -817,7 +817,7 @@ def test_conversation_graph_runtime_routes_tool_calls_through_tool_node(tmp_path
                 return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
             self.call_count += 1
             if self.call_count == 1:
-                return '{"answer":"Searching memory.","tool":"search_memory","tool_args":{"query":"clarity"}}'
+                return '{"answer":"Searching memory.","tool":"memory_search","tool_args":{"query":"clarity"}}'
             return '{"answer":"You value clarity.","evidence_references":["mem_tool"],"epistemic_status":"grounded"}'
 
     llm = ToolRequestLLM()
@@ -914,7 +914,7 @@ def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Pat
     assert state.next_message_index == 1
 
 
-def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
+def test_chat_agent_tool_invocation_with_memory_search(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     repo.save(
         MemoryEntry(
@@ -938,7 +938,7 @@ def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
             self.call_count += 1
             if self.call_count == 1:
                 # First call: agent requests tool
-                return '{"answer":"Let me search for that.","tool":"search_memory","tool_args":{"query":"clarity"}}'
+                return '{"answer":"Let me search for that.","tool":"memory_search","tool_args":{"query":"clarity"}}'
             else:
                 # Second call: agent generates final answer with tool results
                 return '{"answer":"You value clarity and explicit assumptions.","evidence_references":["mem_123"]}'
@@ -956,7 +956,7 @@ def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
     assert llm.call_count == 3
     # First call: initial prompt with tool documentation
     assert "Available tools:" in llm.calls[0][0].content
-    assert "search_memory" in llm.calls[0][0].content
+    assert "memory_search" in llm.calls[0][0].content
     # Second call: follow-up with tool result
     assert len(llm.calls[1]) > 0
     logs = [
@@ -972,12 +972,12 @@ def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
     assert isinstance(message_body, str)
     assert "Clarity matters" in message_body
     assert metadata["service_component"] == "memory"
-    assert metadata["tool"] == "search_memory"
+    assert metadata["tool"] == "memory_search"
 
 
 def test_chat_agent_recovers_raw_tool_marker_without_leaking(tmp_path: Path) -> None:
     llm = SequencedStructuredFakeLLM([
-        "[Tool call: search_memory] Query: 反思 Limit: 10\n\nMemory context not found in search results.",
+        "[Tool call: memory_search] Query: 反思 Limit: 10\n\nMemory context not found in search results.",
         '{"answer":"请你再说一遍，我会用正常回复格式回答。","epistemic_status":"unsupported"}',
     ])
     agent = ChatAgent(tmp_path, llm=llm)
@@ -986,6 +986,101 @@ def test_chat_agent_recovers_raw_tool_marker_without_leaking(tmp_path: Path) -> 
 
     assert "[Tool call:" not in result.reply
     assert result.answer == "请你再说一遍，我会用正常回复格式回答。"
+    logs = [
+        event
+        for event in read_log_events(project_root=tmp_path, component="chat")
+        if event.event == "service_tool_called"
+    ]
+    assert len(logs) == 1
+    metadata = _event_metadata(logs[0])
+    assert metadata["tool"] == "memory_search"
+    assert logs[0].message.startswith('args: {"limit": 10, "query": "反思"}\nresult: ')
+
+
+def test_chat_agent_recovers_tool_call_block_and_normalizes_tool_name(tmp_path: Path) -> None:
+    class ToolBlockLLM:
+        def __init__(self) -> None:
+            self.call_count = 0
+
+        def complete(self, messages: list[ChatMessage]) -> str:
+            content = messages[0].content
+            if "Persona Activation Gate" in content:
+                return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
+            self.call_count += 1
+            if self.call_count == 1:
+                return '[TOOL_CALL] {tool => "list_pending_reflections", args => {}} [/TOOL_CALL]'
+            return '{"answer":"我查过了，目前没有待处理反思。","epistemic_status":"grounded"}'
+
+    agent = ChatAgent(tmp_path, llm=ToolBlockLLM())
+
+    result = agent.respond("现在有反思吗？")
+
+    assert "[TOOL_CALL]" not in result.reply
+    assert result.answer == "我查过了，目前没有待处理反思。"
+    logs = [
+        event
+        for event in read_log_events(project_root=tmp_path, component="chat")
+        if event.event == "service_tool_called"
+    ]
+    assert len(logs) == 1
+    metadata = _event_metadata(logs[0])
+    assert metadata["service_component"] == "reflection"
+    assert metadata["tool"] == "reflection_list_pending"
+    assert logs[0].message.startswith('args: {"limit": 5}\nresult: No pending reflection ideas')
+
+
+def test_chat_agent_chains_multiple_fallback_tool_calls_and_skips_persona(tmp_path: Path) -> None:
+    from nuself.reason.service import ReasonService
+    from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+
+    ReflectionRepository(tmp_path).add(
+        ReflectionEntry(
+            id="r1",
+            title="Countable reflection",
+            body="...",
+            candidate_type="question",
+            confidence=0.8,
+            novelty=0.8,
+            urgency=0.2,
+            interruption_cost=0.1,
+            composite_score=0.7,
+            status="pending",
+            discussion_approved=None,
+            discussion_trace=(),
+            deep_link="nuself://thread/reflections",
+            created_at="2024-01-01T00:00:00+00:00",
+            reviewed_at=None,
+        )
+    )
+    ReasonService(tmp_path).start_thread("Countable reason thread")
+    llm = SequencedStructuredFakeLLM(
+        [
+            '[TOOL_CALL] {tool => "count_memory", args => {}} [/TOOL_CALL]',
+            '[TOOL_CALL] {tool => "list_pending_reflections", args => {}} [/TOOL_CALL]',
+            '{"answer":"","tool":"reason_count","tool_args":{}}',
+            '{"answer":"当前：记忆 0 条；反思 1 条；推理 1 条。","epistemic_status":"grounded"}',
+        ],
+        activation_response={
+            "activated": True,
+            "selected_persona_ids": ["historian_self"],
+            "trigger": "would normally activate",
+            "should_escalate": False,
+            "escalation_reason": "would normally log noisy persona context",
+        },
+    )
+    agent = ChatAgent(tmp_path, llm=llm)
+
+    result = agent.respond("你能调用工具看下现在的记忆、反思、推理各有多少条吗")
+
+    assert result.answer == "当前：记忆 0 条；反思 1 条；推理 1 条。"
+    logs = read_log_events(project_root=tmp_path)
+    tool_logs = [event for event in logs if event.event == "service_tool_called"]
+    assert [_event_metadata(event)["tool"] for event in tool_logs] == [
+        "memory_count",
+        "reflection_list_pending",
+        "reason_count",
+    ]
+    assert not any(event.component == "persona" for event in logs)
 
 
 def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -> None:
@@ -1014,9 +1109,9 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
                     content="",
                     tool_calls=[
                         {
-                            "name": "search_memory",
+                            "name": "memory_search",
                             "args": {"query": "clarity", "limit": 5},
-                            "id": "call_search_memory",
+                            "id": "call_memory_search",
                             "type": "tool_call",
                         }
                     ],
@@ -1032,9 +1127,9 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
                     content="",
                     tool_calls=[
                         {
-                            "name": "search_memory",
+                            "name": "memory_search",
                             "args": {"query": "clarity", "limit": 5},
-                            "id": "call_search_memory",
+                            "id": "call_memory_search",
                             "type": "tool_call",
                         }
                     ],
@@ -1083,7 +1178,7 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
     assert len(logs) == 1
     metadata = _event_metadata(logs[0])
     assert metadata["service_component"] == "memory"
-    assert metadata["tool"] == "search_memory"
+    assert metadata["tool"] == "memory_search"
     assert logs[0].message.startswith('args: {"limit": 5, "query": "clarity"}\nresult: ')
 
 
@@ -1099,7 +1194,7 @@ def test_chat_agent_rejects_raw_tool_marker_from_presentation(tmp_path: Path) ->
             self.call_count += 1
             if self.call_count == 1:
                 return '{"answer":"这是安全的草稿。","epistemic_status":"grounded"}'
-            return "[Tool call: search_memory] Query: 反思 Limit: 10"
+            return "[Tool call: memory_search] Query: 反思 Limit: 10"
 
     agent = ChatAgent(tmp_path, llm=RawToolMarkerPresentationLLM())
 
@@ -1196,7 +1291,7 @@ def test_chat_agent_tool_invocation_with_reflection_logs_service_call(tmp_path: 
                 return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
             self.call_count += 1
             if self.call_count == 1:
-                return '{"answer":"I will check pending reflections.","tool":"list_pending_reflections","tool_args":{"limit":3}}'
+                return '{"answer":"I will check pending reflections.","tool":"reflection_list_pending","tool_args":{"limit":3}}'
             return '{"answer":"There is a pending idea about taking a smaller next step."}'
 
     agent = ChatAgent(tmp_path, llm=ReflectionToolRequestLLM())
@@ -1217,7 +1312,7 @@ def test_chat_agent_tool_invocation_with_reflection_logs_service_call(tmp_path: 
     assert isinstance(message_body, str)
     assert "Try a smaller next step" in message_body
     assert metadata["service_component"] == "reflection"
-    assert metadata["tool"] == "list_pending_reflections"
+    assert metadata["tool"] == "reflection_list_pending"
 
 
 def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) -> None:
@@ -1228,7 +1323,7 @@ def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) 
 
     system_prompt = llm.calls[0][0].content
     assert "Available tools:" in system_prompt
-    assert "search_memory" in system_prompt
+    assert "memory_search" in system_prompt
     assert "Search durable memory" in system_prompt
 
 
@@ -1243,7 +1338,7 @@ def test_chat_agent_includes_service_skills_in_system_prompt(tmp_path: Path) -> 
     assert "The following service skills are loaded from Agent Skills SKILL.md files." in system_prompt
     assert "- memory:" in system_prompt
     assert "Durable memory is not ambient context" in system_prompt
-    assert "Use `search_memory` before answering" in system_prompt
+    assert "Use `memory_search` before answering" in system_prompt
     assert "- reflection:" in system_prompt
 
 
@@ -1257,7 +1352,7 @@ def test_conversation_runtime_registers_langchain_tools(tmp_path: Path) -> None:
     )
     tools = getattr(runtime, "_tools")
 
-    assert "search_memory" in tools
+    assert "memory_search" in tools
     assert all(isinstance(tool, BaseTool) for tool in tools.values())
 
 
@@ -1289,7 +1384,7 @@ def test_memory_search_tool_invocation_with_limit(tmp_path: Path) -> None:
             )
         )
 
-    tool = _chat_tool(tmp_path, "search_memory", query_service=MemoryQueryService(repo))
+    tool = _chat_tool(tmp_path, "memory_search", query_service=MemoryQueryService(repo))
 
     result = _invoke_chat_tool(tool, {"query": "belief", "limit": 2})
 
@@ -1315,7 +1410,7 @@ def test_memory_search_tool_accepts_type_and_tag_filters(tmp_path: Path) -> None
             tags=["runtime"],
         )
     )
-    tool = _chat_tool(tmp_path, "search_memory", query_service=MemoryQueryService(repo))
+    tool = _chat_tool(tmp_path, "memory_search", query_service=MemoryQueryService(repo))
 
     result = _invoke_chat_tool(tool, {"query": "current goal", "types": ["goal"], "tags": ["runtime"]})
 
@@ -1325,7 +1420,7 @@ def test_memory_search_tool_accepts_type_and_tag_filters(tmp_path: Path) -> None
 
 def test_memory_search_tool_with_invalid_inputs(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
-    tool = _chat_tool(tmp_path, "search_memory", query_service=MemoryQueryService(repo))
+    tool = _chat_tool(tmp_path, "memory_search", query_service=MemoryQueryService(repo))
 
     # Empty query
     result = _invoke_chat_tool(tool, {"query": "", "limit": 8})
@@ -1338,16 +1433,16 @@ def test_memory_search_tool_with_invalid_inputs(tmp_path: Path) -> None:
 
 # --- Reflection consumption tools ---
 
-def test_list_pending_reflections_empty(tmp_path: Path) -> None:
+def test_reflection_list_pending_empty(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
-    tool = _chat_tool(tmp_path, "list_pending_reflections", reflection_repository=repo)
+    tool = _chat_tool(tmp_path, "reflection_list_pending", reflection_repository=repo)
     result = _invoke_chat_tool(tool)
     assert "No pending reflection ideas" in result
 
 
-def test_list_pending_reflections_with_entries(tmp_path: Path) -> None:
+def test_reflection_list_pending_with_entries(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
@@ -1389,14 +1484,14 @@ def test_list_pending_reflections_with_entries(tmp_path: Path) -> None:
             reviewed_at=None,
         )
     )
-    tool = _chat_tool(tmp_path, "list_pending_reflections", reflection_repository=repo)
+    tool = _chat_tool(tmp_path, "reflection_list_pending", reflection_repository=repo)
     result = _invoke_chat_tool(tool)
     assert "Pending reflection ideas:" in result
     assert "[1] Explore recursion in habits" in result
     assert "[2] Sleep and creativity link" in result
 
 
-def test_list_pending_reflections_respects_limit(tmp_path: Path) -> None:
+def test_reflection_list_pending_respects_limit(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
@@ -1420,12 +1515,42 @@ def test_list_pending_reflections_respects_limit(tmp_path: Path) -> None:
                 reviewed_at=None,
             )
         )
-    tool = _chat_tool(tmp_path, "list_pending_reflections", reflection_repository=repo)
+    tool = _chat_tool(tmp_path, "reflection_list_pending", reflection_repository=repo)
     result = _invoke_chat_tool(tool, {"limit": 2})
     assert result.count("[") == 2  # only two numbered items
 
 
-def test_dismiss_reflection_success(tmp_path: Path) -> None:
+def test_reflection_count_tool(tmp_path: Path) -> None:
+    from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+
+    repo = ReflectionRepository(tmp_path)
+    repo.add(
+        ReflectionEntry(
+            id="r1",
+            title="Count this reflection",
+            body="...",
+            candidate_type="question",
+            confidence=0.8,
+            novelty=0.9,
+            urgency=0.3,
+            interruption_cost=0.1,
+            composite_score=0.7,
+            status="pending",
+            discussion_approved=None,
+            discussion_trace=(),
+            deep_link="nuself://thread/reflections",
+            created_at="2024-01-01T00:00:00+00:00",
+            reviewed_at=None,
+        )
+    )
+    tool = _chat_tool(tmp_path, "reflection_count", reflection_repository=repo)
+
+    result = _invoke_chat_tool(tool)
+
+    assert "Pending reflection ideas: 1 total" in result
+
+
+def test_reflection_dismiss_success(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
@@ -1448,32 +1573,32 @@ def test_dismiss_reflection_success(tmp_path: Path) -> None:
             reviewed_at=None,
         )
     )
-    tool = _chat_tool(tmp_path, "dismiss_reflection", reflection_repository=repo)
+    tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
     result = _invoke_chat_tool(tool, {"index": 1})
     assert "Dismissed" in result
     assert "Explore recursion in habits" in result
     assert repo.list(status="pending") == []
 
 
-def test_dismiss_reflection_out_of_range(tmp_path: Path) -> None:
+def test_reflection_dismiss_out_of_range(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
-    tool = _chat_tool(tmp_path, "dismiss_reflection", reflection_repository=repo)
+    tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
     result = _invoke_chat_tool(tool, {"index": 1})
     assert "out of range" in result
 
 
-def test_dismiss_reflection_invalid_index(tmp_path: Path) -> None:
+def test_reflection_dismiss_invalid_index(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
-    tool = _chat_tool(tmp_path, "dismiss_reflection", reflection_repository=repo)
+    tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
     assert "Error" in _invoke_chat_tool(tool, {"index": 0})
     assert "Error" in _invoke_chat_tool(tool, {"index": -1})
 
 
-def test_archive_reflection_success(tmp_path: Path) -> None:
+def test_reflection_archive_success(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
@@ -1496,7 +1621,7 @@ def test_archive_reflection_success(tmp_path: Path) -> None:
             reviewed_at=None,
         )
     )
-    tool = _chat_tool(tmp_path, "archive_reflection", reflection_repository=repo)
+    tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
     result = _invoke_chat_tool(tool, {"index": 1})
     assert "Archived" in result
     assert "Explore recursion in habits" in result
@@ -1505,20 +1630,20 @@ def test_archive_reflection_success(tmp_path: Path) -> None:
     assert len(archived) == 1
 
 
-def test_archive_reflection_out_of_range(tmp_path: Path) -> None:
+def test_reflection_archive_out_of_range(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
-    tool = _chat_tool(tmp_path, "archive_reflection", reflection_repository=repo)
+    tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
     result = _invoke_chat_tool(tool, {"index": 1})
     assert "out of range" in result
 
 
-def test_archive_reflection_invalid_index(tmp_path: Path) -> None:
+def test_reflection_archive_invalid_index(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
-    tool = _chat_tool(tmp_path, "archive_reflection", reflection_repository=repo)
+    tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
     assert "Error" in _invoke_chat_tool(tool, {"index": 0})
     assert "Error" in _invoke_chat_tool(tool, {"index": -1})
 
@@ -1531,9 +1656,10 @@ def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -
     agent.respond("test")
 
     system_prompt = llm.calls[0][0].content
-    assert "list_pending_reflections" in system_prompt
-    assert "archive_reflection" in system_prompt
-    assert "dismiss_reflection" in system_prompt
+    assert "reflection_list_pending" in system_prompt
+    assert "reflection_count" in system_prompt
+    assert "reflection_archive" in system_prompt
+    assert "reflection_dismiss" in system_prompt
 
 
 def test_chat_agent_includes_reason_and_trace_tools_and_skills(tmp_path: Path) -> None:
@@ -1543,10 +1669,12 @@ def test_chat_agent_includes_reason_and_trace_tools_and_skills(tmp_path: Path) -
     agent.respond("what are you still thinking about?")
 
     system_prompt = llm.calls[0][0].content
-    assert "list_active_reasoning_threads" in system_prompt
-    assert "show_reasoning_thread" in system_prompt
-    assert "search_trace" in system_prompt
-    assert "show_trace" in system_prompt
+    assert "reason_list_active" in system_prompt
+    assert "reason_count" in system_prompt
+    assert "reason_show" in system_prompt
+    assert "trace_search" in system_prompt
+    assert "trace_count" in system_prompt
+    assert "trace_show" in system_prompt
     assert "- reason:" in system_prompt
     assert "Reason is NuSelf's durable long-run thinking space." in system_prompt
     assert "- trace:" in system_prompt
@@ -1555,13 +1683,13 @@ def test_chat_agent_includes_reason_and_trace_tools_and_skills(tmp_path: Path) -
 
 # --- Memory management tools ---
 
-def test_archive_memory_tool_success(tmp_path: Path) -> None:
+def test_memory_archive_tool_success(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
     repo = MemoryEntryRepository(tmp_path)
     repo.save(MemoryEntry(id="m1", type="belief", title="Old belief", body="..."))
-    tool = _chat_tool(tmp_path, "archive_memory")
+    tool = _chat_tool(tmp_path, "memory_archive")
     result = _invoke_chat_tool(tool, {"entry_id": "m1"})
     assert "Archived" in result
     assert "Old belief" in result
@@ -1569,19 +1697,19 @@ def test_archive_memory_tool_success(tmp_path: Path) -> None:
     assert entry.review_state == "archived"
 
 
-def test_archive_memory_tool_not_found(tmp_path: Path) -> None:
-    tool = _chat_tool(tmp_path, "archive_memory")
+def test_memory_archive_tool_not_found(tmp_path: Path) -> None:
+    tool = _chat_tool(tmp_path, "memory_archive")
     result = _invoke_chat_tool(tool, {"entry_id": "nonexistent"})
     assert "Error" in result
 
 
-def test_update_memory_importance_tool_success(tmp_path: Path) -> None:
+def test_memory_update_importance_tool_success(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
     repo = MemoryEntryRepository(tmp_path)
     repo.save(MemoryEntry(id="m1", type="belief", title="Key belief", body="...", importance=0.3))
-    tool = _chat_tool(tmp_path, "update_memory_importance")
+    tool = _chat_tool(tmp_path, "memory_update_importance")
     result = _invoke_chat_tool(tool, {"entry_id": "m1", "importance": 0.9})
     assert "Updated importance" in result
     assert "0.90" in result
@@ -1589,25 +1717,25 @@ def test_update_memory_importance_tool_success(tmp_path: Path) -> None:
     assert entry.importance == 0.9
 
 
-def test_update_memory_importance_tool_out_of_range(tmp_path: Path) -> None:
-    tool = _chat_tool(tmp_path, "update_memory_importance")
+def test_memory_update_importance_tool_out_of_range(tmp_path: Path) -> None:
+    tool = _chat_tool(tmp_path, "memory_update_importance")
     assert "Error" in _invoke_chat_tool(tool, {"entry_id": "m1", "importance": 1.5})
     assert "Error" in _invoke_chat_tool(tool, {"entry_id": "m1", "importance": -0.1})
 
 
-def test_update_memory_importance_tool_not_found(tmp_path: Path) -> None:
-    tool = _chat_tool(tmp_path, "update_memory_importance")
+def test_memory_update_importance_tool_not_found(tmp_path: Path) -> None:
+    tool = _chat_tool(tmp_path, "memory_update_importance")
     result = _invoke_chat_tool(tool, {"entry_id": "nonexistent", "importance": 0.5})
     assert "Error" in result
 
 
-def test_count_memory_tool_empty(tmp_path: Path) -> None:
-    tool = _chat_tool(tmp_path, "count_memory")
+def test_memory_count_tool_empty(tmp_path: Path) -> None:
+    tool = _chat_tool(tmp_path, "memory_count")
     result = _invoke_chat_tool(tool)
     assert "Memory entries: 0 total" in result
 
 
-def test_count_memory_tool_with_entries(tmp_path: Path) -> None:
+def test_memory_count_tool_with_entries(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
@@ -1615,12 +1743,12 @@ def test_count_memory_tool_with_entries(tmp_path: Path) -> None:
     repo.save(MemoryEntry(type="belief", title="A", body="...", tags=["tag1"]))
     repo.save(MemoryEntry(type="goal", title="B", body="...", tags=["tag2"]))
     repo.save(MemoryEntry(type="belief", title="C", body="...", tags=["tag1", "tag2"]))
-    tool = _chat_tool(tmp_path, "count_memory")
+    tool = _chat_tool(tmp_path, "memory_count")
     result = _invoke_chat_tool(tool)
     assert "Memory entries: 3 total" in result
 
 
-def test_count_memory_tool_with_type_filter(tmp_path: Path) -> None:
+def test_memory_count_tool_with_type_filter(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
@@ -1628,14 +1756,14 @@ def test_count_memory_tool_with_type_filter(tmp_path: Path) -> None:
     repo.save(MemoryEntry(type="belief", title="A", body="..."))
     repo.save(MemoryEntry(type="goal", title="B", body="..."))
     repo.save(MemoryEntry(type="belief", title="C", body="..."))
-    tool = _chat_tool(tmp_path, "count_memory")
+    tool = _chat_tool(tmp_path, "memory_count")
     result = _invoke_chat_tool(tool, {"types": ["belief"]})
     assert "Memory entries: 2 total" in result
     assert "filtered" in result
     assert "belief" in result
 
 
-def test_count_memory_tool_with_tag_filter(tmp_path: Path) -> None:
+def test_memory_count_tool_with_tag_filter(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
@@ -1643,19 +1771,19 @@ def test_count_memory_tool_with_tag_filter(tmp_path: Path) -> None:
     repo.save(MemoryEntry(type="belief", title="A", body="...", tags=["important"]))
     repo.save(MemoryEntry(type="goal", title="B", body="...", tags=["archived"]))
     repo.save(MemoryEntry(type="belief", title="C", body="...", tags=["important"]))
-    tool = _chat_tool(tmp_path, "count_memory")
+    tool = _chat_tool(tmp_path, "memory_count")
     result = _invoke_chat_tool(tool, {"tags": ["important"]})
     assert "Memory entries: 2 total" in result
     assert "filtered" in result
     assert "important" in result
 
 
-def test_list_active_reasoning_threads_tool(tmp_path: Path) -> None:
+def test_reason_list_active_tool(tmp_path: Path) -> None:
     from nuself.reason.service import ReasonService
 
     service = ReasonService(tmp_path)
     service.start_thread("How should this be remembered?")
-    tool = _chat_tool(tmp_path, "list_active_reasoning_threads")
+    tool = _chat_tool(tmp_path, "reason_list_active")
 
     result = _invoke_chat_tool(tool)
 
@@ -1664,11 +1792,23 @@ def test_list_active_reasoning_threads_tool(tmp_path: Path) -> None:
     assert "steps=0" in result
 
 
-def test_show_reasoning_thread_tool(tmp_path: Path) -> None:
+def test_reason_count_tool(tmp_path: Path) -> None:
+    from nuself.reason.service import ReasonService
+
+    service = ReasonService(tmp_path)
+    service.start_thread("Count this reason thread")
+    tool = _chat_tool(tmp_path, "reason_count")
+
+    result = _invoke_chat_tool(tool)
+
+    assert "Active and paused reasoning threads: 1 total" in result
+
+
+def test_reason_show_tool(tmp_path: Path) -> None:
     from nuself.reason.service import ReasonService
 
     thread = ReasonService(tmp_path).start_thread("Inspect this reason thread")
-    tool = _chat_tool(tmp_path, "show_reasoning_thread")
+    tool = _chat_tool(tmp_path, "reason_show")
 
     result = _invoke_chat_tool(tool, {"thread_id": thread.id})
 
@@ -1676,7 +1816,7 @@ def test_show_reasoning_thread_tool(tmp_path: Path) -> None:
     assert thread.id in result
 
 
-def test_search_trace_tool(tmp_path: Path) -> None:
+def test_trace_search_tool(tmp_path: Path) -> None:
     from nuself.trace.service import TraceRecorder
 
     trace = TraceRecorder(tmp_path).record(
@@ -1684,7 +1824,7 @@ def test_search_trace_tool(tmp_path: Path) -> None:
         title="Trace search target",
         summary="A searchable provenance item.",
     )
-    tool = _chat_tool(tmp_path, "search_trace")
+    tool = _chat_tool(tmp_path, "trace_search")
 
     result = _invoke_chat_tool(tool, {"query": "searchable"})
 
@@ -1692,7 +1832,22 @@ def test_search_trace_tool(tmp_path: Path) -> None:
     assert trace.title in result
 
 
-def test_show_trace_tool(tmp_path: Path) -> None:
+def test_trace_count_tool(tmp_path: Path) -> None:
+    from nuself.trace.service import TraceRecorder
+
+    TraceRecorder(tmp_path).record(
+        kind="decision",
+        title="Trace count target",
+        summary="A countable provenance item.",
+    )
+    tool = _chat_tool(tmp_path, "trace_count")
+
+    result = _invoke_chat_tool(tool, {"query": "countable"})
+
+    assert 'Trace records matching "countable": 1 total' in result
+
+
+def test_trace_show_tool(tmp_path: Path) -> None:
     from nuself.trace.service import TraceRecorder
 
     trace = TraceRecorder(tmp_path).record(
@@ -1700,7 +1855,7 @@ def test_show_trace_tool(tmp_path: Path) -> None:
         title="Trace detail target",
         summary="A detailed provenance item.",
     )
-    tool = _chat_tool(tmp_path, "show_trace")
+    tool = _chat_tool(tmp_path, "trace_show")
 
     result = _invoke_chat_tool(tool, {"trace_id": trace.id})
 
@@ -1716,13 +1871,13 @@ def test_chat_agent_includes_memory_tools_in_system_prompt(tmp_path: Path) -> No
     agent.respond("test")
 
     system_prompt = llm.calls[0][0].content
-    assert "archive_memory" in system_prompt
-    assert "update_memory_importance" in system_prompt
-    assert "count_memory" in system_prompt
+    assert "memory_archive" in system_prompt
+    assert "memory_update_importance" in system_prompt
+    assert "memory_count" in system_prompt
 
 
-def test_chat_agent_end_to_end_archive_memory_via_tool(tmp_path: Path) -> None:
-    """Full path: chat → tool request → archive_memory → verify entry archived."""
+def test_chat_agent_end_to_end_memory_archive_via_tool(tmp_path: Path) -> None:
+    """Full path: chat → tool request → memory_archive → verify entry archived."""
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
@@ -1739,7 +1894,7 @@ def test_chat_agent_end_to_end_archive_memory_via_tool(tmp_path: Path) -> None:
                 return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
             self.call_count += 1
             if self.call_count == 1:
-                return '{"answer":"Let me archive that for you.","tool":"archive_memory","tool_args":{"entry_id":"m1"}}'
+                return '{"answer":"Let me archive that for you.","tool":"memory_archive","tool_args":{"entry_id":"m1"}}'
             return '{"answer":"Done. The entry has been archived.","evidence_references":[]}'
 
     llm = ArchiveToolLLM()

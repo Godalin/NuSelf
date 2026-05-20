@@ -26,13 +26,13 @@ When one subsystem invokes another subsystem through an agent-facing service/too
 Example: chat calling a memory service tool writes a `chat` component event:
 
 ```json
-{"component":"chat","event":"service_tool_called","metadata":{"service_component":"memory","tool":"archive_memory"}}
+{"component":"chat","event":"service_tool_called","metadata":{"service_component":"memory","tool":"memory_archive"}}
 ```
 
 Human-readable rendering must show both tags at the front:
 
 ```text
-[chat] [memory] service_tool_called status=completed tool=archive_memory
+[chat] [memory] service_tool_called status=completed tool=memory_archive
   args: {"entry_id": "m1"}
   result: Archived "Old memory".
 ```

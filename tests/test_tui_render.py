@@ -37,14 +37,14 @@ def test_render_service_tool_log_uses_caller_and_service_tags() -> None:
         level="info",
         component="chat",
         event="service_tool_called",
-        message="chat called memory service tool archive_memory",
+        message="chat called memory service tool memory_archive",
         status="completed",
-        metadata={"service_component": "memory", "tool": "archive_memory"},
+        metadata={"service_component": "memory", "tool": "memory_archive"},
     )
 
     assert render_log_event(event, color=False).splitlines() == [
-        "[chat] [memory] service_tool_called status=completed tool=archive_memory",
-        "  chat called memory service tool archive_memory",
+        "[chat] [memory] service_tool_called status=completed tool=memory_archive",
+        "  chat called memory service tool memory_archive",
     ]
 
 

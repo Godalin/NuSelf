@@ -8,11 +8,14 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Added
 
-- New `count_memory` tool: counts durable memory entries with optional type/tag filters. Returns a simple count string.
+- Added subsystem-prefixed chat service tools, including `memory_count`, `reflection_count`, `reason_count`, and `trace_count` for quick service-size queries.
 
 ### Changed
 
 - Chat agent tool invocation is being migrated to LangChain-native tool calling instead of NuSelf-specific prompt JSON tool fields.
+- Chat service tools now use subsystem-prefixed names such as `memory_search`, `reflection_list_pending`, `reason_show`, and `trace_search`; old generic tool names are not retained.
+- Agent Skills now use local tool placeholders that are rendered from the active tool registry, so skill instructions stay aligned with generated service tool names.
+- Direct service-status questions now skip persona activation and fallback tool execution can chain multiple service tool calls before producing the final reply.
 - Chat final responses now prefer LangChain structured output on native LangChain chat models, keeping prompted JSON parsing as a fallback path.
 - Presentation now prefers LangChain structured output on native LangChain chat models before falling back to prompted JSON parsing.
 - Persona activation, persona contribution, and persona synthesis now prefer LangChain structured output on native LangChain chat models.
@@ -29,6 +32,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 ### Fixed
 
 - Fixed raw `[Tool call: ...]` text leaking into NuSelf replies by recovering parseable markers into real tool calls and rejecting tool markers at the presentation boundary.
+- Fixed raw `[TOOL_CALL] ... [/TOOL_CALL]` text leaking into NuSelf replies by recovering it into real tool calls and normalizing legacy tool names before execution and logging.
 - Fixed chat service-tool logging so reflection, reason, and trace tool calls consistently render with caller/service tags and appear in default transcript exports.
 - Tightened LLM endpoint availability status detection so failover only treats exact HTTP 401, 402, 403, and 429 responses as endpoint availability failures.
 - Fixed reason trace recording when callers inject a custom reason repository.
