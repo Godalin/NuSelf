@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
+
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Protocol, TypeVar, TypedDict, cast
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from nuself.llm_json import parse_llm_json_object
 from nuself.llm import (
@@ -435,6 +437,17 @@ class LLMBackedActivationPolicy:
         ]
 
     def _parse_response(self, raw: str) -> PersonaActivation:
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+            stripped = "\n".join(lines).strip()
+
+        try:
+            output = PersonaActivationOutput.model_validate_json(stripped)
+            return self._activation_from_structured(output)
+        except (ValidationError, json.JSONDecodeError):
+            pass
+
         data = parse_llm_json_object(raw)
 
         activated = data.get("activated")
