@@ -8,11 +8,23 @@ import re
 from pathlib import Path
 from typing import cast
 
+from pydantic import BaseModel, Field, ValidationError
+
 from nuself.domain.memory import MemoryEntryType
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.profile.repository import ProfileItemRepository
 
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
+
+
+class IntakeResultOutput(BaseModel):
+    """Structured memory intake result from the LLM."""
+
+    type: str = Field(description="Memory entry type.")
+    title: str = Field(description="Concise memory entry title.")
+    tags: list[str] = Field(default_factory=list, description="0-4 short tags.")
+    confidence: float = Field(default=0.7, description="Confidence from 0.0 to 1.0.")
+    importance: float = Field(default=0.5, description="Importance from 0.0 to 1.0.")
 
 
 @dataclass(frozen=True)
@@ -115,7 +127,23 @@ class MemoryIntakeAgent:
 
 
 def _parse_intake_result(raw: str) -> MemoryIntakeResult:
-    parsed: object = json.loads(_extract_json_object(raw))
+    extracted = _extract_json_object(raw)
+    try:
+        output = IntakeResultOutput.model_validate_json(extracted)
+        memory_type = _memory_type(output.type)
+        if output.title == "":
+            raise ValueError("memory intake response must include a title")
+        return MemoryIntakeResult(
+            type=memory_type,
+            title=output.title,
+            body="",
+            tags=tuple(t for t in output.tags if t.strip() != ""),
+            confidence=max(0.0, min(1.0, output.confidence)),
+            importance=max(0.0, min(1.0, output.importance)),
+        )
+    except (ValidationError, ValueError, json.JSONDecodeError):
+        pass
+    parsed: object = json.loads(extracted)
     if not isinstance(parsed, dict):
         raise ValueError("memory intake response must be an object")
     data = cast(dict[str, object], parsed)
