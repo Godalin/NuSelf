@@ -2218,17 +2218,24 @@ def _run_interactive_send_with_live_logs(
         event_offset += len(new_events)
         if new_events:
             captured_events.extend(new_events)
-            printed_logs = _print_live_interactive_activity_events(new_events, printed_logs=printed_logs)
+            printed_logs = _print_visible_interactive_activity_events(new_events, printed_logs=printed_logs)
     send_thread.join()
     new_events = _interactive_activity_events(project_root, event_offset)
     event_offset += len(new_events)
     if new_events:
         captured_events.extend(new_events)
-        printed_logs = _print_live_interactive_activity_events(new_events, printed_logs=printed_logs)
+        printed_logs = _print_visible_interactive_activity_events(new_events, printed_logs=printed_logs)
     if error_box:
         print(f"chat turn failed: {error_box[0]}", file=sys.stderr)
         return InteractiveChatResult(code=1), event_offset, captured_events, printed_logs
     return result_box[0] if result_box else InteractiveChatResult(code=1), event_offset, captured_events, printed_logs
+
+
+def _print_visible_interactive_activity_events(events: list[LogEvent], *, printed_logs: bool) -> bool:
+    visible_events = _visible_interactive_activity_events(events)
+    if not visible_events:
+        return printed_logs
+    return _print_live_interactive_activity_events(visible_events, printed_logs=printed_logs)
 
 
 def _print_live_interactive_activity_events(events: list[LogEvent], *, printed_logs: bool) -> bool:
@@ -2796,6 +2803,39 @@ def _interactive_activity_events(project_root: Path | None, event_offset: int) -
 def _print_interactive_activity_events(events: list[LogEvent]) -> None:
     for event in events:
         print(render_log_event(event))
+
+
+def _visible_interactive_activity_events(events: list[LogEvent]) -> list[LogEvent]:
+    return [event for event in events if _is_interactive_activity_log(event)]
+
+
+def _is_interactive_activity_log(event: LogEvent) -> bool:
+    if event.component == "persona":
+        return event.event in {
+            "persona_summary",
+            "host_discussion_decision",
+            "persona_discussion",
+            "persona_discussion_step",
+        }
+    if event.component == "chat":
+        if event.event == "service_tool_called":
+            return True
+        return _is_failure_activity_log(event)
+    if event.component == "daemon":
+        return _is_failure_activity_log(event)
+    return False
+
+
+def _is_failure_activity_log(event: LogEvent) -> bool:
+    if event.status in {"error", "failed", "failed_over", "exhausted"}:
+        return True
+    return event.event in {
+        "daemon_chat_failed",
+        "llm_endpoint_failed_over",
+        "llm_endpoint_unavailable",
+        "presentation_failed",
+        "turn_failed",
+    }
 
 
 def _indent_lines(lines: list[str], prefix: str) -> list[str]:

@@ -286,12 +286,8 @@ def test_interactive_turn_prints_activity_events(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Logs:\n[chat] one_shot_chat_completed" in captured.out
     assert "\nNuSelf:\nLLM API is not configured yet." in captured.out
-    assert captured.out.index("Logs:\n[chat] one_shot_chat_completed") < captured.out.index(
-        "NuSelf:\nLLM API is not configured yet."
-    )
-    assert "[chat] one_shot_chat_completed status=ok thread=default\n  one-shot chat turn completed" in captured.out
+    assert "[chat] one_shot_chat_completed" not in captured.out
     assert "LLM API is not configured yet" in captured.out
     assert "Last message: hello\n[daemon] session status=one-shot thread=default" in captured.out
     assert "Last message: hello\n\n[daemon] session status=one-shot thread=default" not in captured.out
@@ -312,11 +308,12 @@ def test_interactive_turn_prints_activity_events_while_waiting(
         assert turn_id is not None
         write_log_event(
             "chat",
-            "live_progress",
-            "live progress before reply",
+            "service_tool_called",
+            "args: {}\nresult: live progress before reply",
             project_root=tmp_path,
             thread_id=thread_id,
-            status="started",
+            status="completed",
+            metadata={"service_component": "memory", "tool": "search_memory"},
         )
         if not printed.wait(1.0):
             return cli.InteractiveChatResult(code=1, reply="log was not printed live")
@@ -325,20 +322,76 @@ def test_interactive_turn_prints_activity_events_while_waiting(
     monkeypatch.setattr("nuself.cli._print_interactive_activity_events", fake_print_events)
     monkeypatch.setattr("nuself.cli.INTERACTIVE_LOG_POLL_INTERVAL_SECONDS", 0.01)
 
+    session = cli.InteractiveSession(connected_at=cli.datetime.now(cli.UTC))
     send_turn = cast(Callable[..., int], getattr(cli, "_send_interactive_chat_turn"))
     result = send_turn(
         fake_send,
         tmp_path,
         "default",
         "hello",
-        cli.InteractiveSession(connected_at=cli.datetime.now(cli.UTC)),
+        session,
     )
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Logs:\n[chat] live_progress" in captured.out
+    assert "Logs:\n[chat] [memory] service_tool_called" in captured.out
     assert "NuSelf:\nfinal reply" in captured.out
-    assert captured.out.index("[chat] live_progress") < captured.out.index("NuSelf:\nfinal reply")
+    assert captured.out.index("[chat] [memory] service_tool_called") < captured.out.index("NuSelf:\nfinal reply")
+
+
+def test_interactive_turn_hides_background_activity_events(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("default"))
+
+    def fake_send(message: str, thread_id: str, turn_id: str | None) -> cli.InteractiveChatResult:
+        assert turn_id is not None
+        write_log_event(
+            "reflection",
+            "cycle_completed",
+            "background reflection finished",
+            project_root=tmp_path,
+            thread_id=thread_id,
+            status="completed",
+        )
+        write_log_event(
+            "reasoning",
+            "step_created",
+            "background reasoning advanced",
+            project_root=tmp_path,
+            thread_id=thread_id,
+            status="completed",
+        )
+        write_log_event(
+            "chat",
+            "service_tool_called",
+            "args: {}\nresult: visible service result",
+            project_root=tmp_path,
+            thread_id=thread_id,
+            status="completed",
+            metadata={"service_component": "memory", "tool": "search_memory"},
+        )
+        return cli.InteractiveChatResult(code=0, reply="final reply")
+
+    session = cli.InteractiveSession(connected_at=cli.datetime.now(cli.UTC))
+    send_turn = cast(Callable[..., int], getattr(cli, "_send_interactive_chat_turn"))
+    result = send_turn(
+        fake_send,
+        tmp_path,
+        "default",
+        "hello",
+        session,
+    )
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "background reflection finished" not in captured.out
+    assert "background reasoning advanced" not in captured.out
+    assert "[chat] [memory] service_tool_called" in captured.out
+    assert "visible service result" in captured.out
+    assert "NuSelf:\nfinal reply" in captured.out
+    captured_events = session.transcript_log_events("default", include_all=True)
+    assert [event.component for event in captured_events] == ["reflection", "reasoning", "chat"]
 
 
 def test_interactive_daemon_timeout_retries_and_preserves_logs(
