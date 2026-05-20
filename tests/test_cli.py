@@ -550,7 +550,7 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
         level="info",
         component="chat",
         event="service_tool_called",
-        message="chat called reflection service tool list_pending_reflections",
+        message='args: {"limit": 3}\nresult: Pending reflection ideas:\n[1] One idea',
         thread_id="default",
         status="completed",
         metadata={"service_component": "reflection", "tool": "list_pending_reflections"},
@@ -567,6 +567,8 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
     )
 
     assert "> [chat] [reflection] service_tool_called status=completed thread=default tool=list_pending_reflections" in content
+    assert '>   args: {"limit": 3}' in content
+    assert ">   result: Pending reflection ideas:" in content
 
 
 def test_interactive_export_normalizes_markdown_body_fences() -> None:

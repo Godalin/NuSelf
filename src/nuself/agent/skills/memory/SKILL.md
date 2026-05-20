@@ -7,6 +7,8 @@ description: Use this skill when the user asks about past preferences, decisions
 
 Durable memory is not ambient context.
 
+CRITICAL: When the user asks about preferences, past discussions, beliefs, stored memories, or personal history, you MUST call `search_memory` before answering. Do not answer from your training data; use the tool to get the actual stored memory.
+
 Use `search_memory` before answering unless the answer is fully present in the current visible conversation or already provided in `Relevant memory context`.
 
 Do not say you lack memory tools when `search_memory` is listed.

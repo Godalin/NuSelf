@@ -47,6 +47,18 @@ Do not tag unreleased feature commits directly. Tags mark release commits only.
 - Keep `docs/current-goal.md` concise (active focus, next steps, out-of-scope, completion criteria). Move completed history to README TODOs.
 - Keep scoped implementation constraints in local `AGENTS.md` files near the code, not the root README.
 
+## Framework-Native Agent Architecture
+
+NuSelf uses LangChain/LangGraph as the agent infrastructure layer. When the framework has a current recommended API for an agent concern, NuSelf must use that API rather than maintain an equivalent private protocol.
+
+Rules:
+
+- Tool calling must use LangChain tool objects and model/agent tool-calling APIs such as `bind_tools(...)` or `create_agent(..., tools=[...])`. Models must not be asked to print ad-hoc visible markers or NuSelf-only tool-call text.
+- Structured agent output should use LangChain structured-output mechanisms where practical, such as `create_agent(..., response_format=...)` or provider/tool strategies. Prompted JSON may remain only as a bounded fallback for non-agent subsystems until they are migrated.
+- Stateful agent workflows should use LangGraph state graphs or LangChain agents/middleware. NuSelf may own domain state and persistence, but should not duplicate framework runtime concepts.
+- Agent skills, middleware, model invocation, retries, tool execution, and message passing should follow current LangChain documentation. Any deliberate deviation must be documented in the relevant spec with a reason and a migration path.
+- Custom code should focus on NuSelf domain semantics: memory, reflection, reason, trace, private storage, rendering, and logs.
+
 ## Subsystem Service Architecture
 
 NuSelf is a multi-subservice system. Major domains such as memory, reflection, notification, trace, and reason should be implemented as clear subsystems rather than as incidental CLI helpers.

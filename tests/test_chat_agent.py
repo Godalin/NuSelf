@@ -829,7 +829,11 @@ def test_conversation_graph_runtime_routes_tool_calls_through_tool_node(tmp_path
         "state_update",
         "compression",
     )
-    assert result.state.messages[1].content.startswith("[Tool call: search_memory]")
+    assert result.state.messages == [
+        ThreadMessage(role="user", content="what about clarity?"),
+        ThreadMessage(role="assistant", content="You value clarity."),
+    ]
+    assert all("[Tool call:" not in message.content for message in result.state.messages)
     assert llm.call_count == 3
 
 
@@ -937,6 +941,9 @@ def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
     result = agent.respond("tell me about clarity")
 
     assert result.answer == "You value clarity and explicit assumptions."
+    assert "[Tool call:" not in result.reply
+    stored = ThreadStore(tmp_path).load("default")
+    assert all("[Tool call:" not in message.content for message in stored.messages)
     assert result.evidence_references == ("mem_123",)
     assert llm.call_count == 3
     # First call: initial prompt with tool documentation
@@ -944,10 +951,121 @@ def test_chat_agent_tool_invocation_with_search_memory(tmp_path: Path) -> None:
     assert "search_memory" in llm.calls[0][0].content
     # Second call: follow-up with tool result
     assert len(llm.calls[1]) > 0
-    logs = [event for event in read_log_events(project_root=tmp_path, component="chat") if event.event == "service_tool_called"]
-    assert logs
-    assert logs[-1].status == "completed"
-    assert logs[-1].metadata == {"service_component": "memory", "tool": "search_memory"}
+    logs = [
+        event
+        for event in read_log_events(project_root=tmp_path, component="chat")
+        if event.event == "service_tool_called"
+    ]
+    assert len(logs) == 1
+    assert logs[0].status == "completed"
+    assert logs[0].message.startswith('args: {"query": "clarity"}\nresult: ')
+    assert "Clarity matters" in logs[0].message
+    assert logs[0].metadata == {"service_component": "memory", "tool": "search_memory"}
+
+
+def test_chat_agent_recovers_raw_tool_marker_without_leaking(tmp_path: Path) -> None:
+    llm = SequencedStructuredFakeLLM([
+        "[Tool call: search_memory] Query: 反思 Limit: 10\n\nMemory context not found in search results.",
+        '{"answer":"请你再说一遍，我会用正常回复格式回答。","epistemic_status":"unsupported"}',
+    ])
+    agent = ChatAgent(tmp_path, llm=llm)
+
+    result = agent.respond("帮我查一下反思")
+
+    assert "[Tool call:" not in result.reply
+    assert result.answer == "请你再说一遍，我会用正常回复格式回答。"
+
+
+def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -> None:
+    from langchain_core.language_models.chat_models import BaseChatModel
+    from langchain_core.messages import AIMessage, BaseMessage
+
+    from nuself.llm import LLMSettings, LangChainLLMEndpoint
+
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(type="belief", title="Clarity matters", body="Prefer explicit assumptions."))
+
+    class NativeToolModel:
+        def __init__(self) -> None:
+            self.calls: list[list[BaseMessage]] = []
+
+        def bind_tools(self, tools: list[BaseTool]) -> "NativeToolModel":
+            return self
+
+        def invoke(self, messages: list[BaseMessage]) -> AIMessage:
+            self.calls.append(messages)
+            if len(self.calls) == 1:
+                return AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "search_memory",
+                            "args": {"query": "clarity", "limit": 5},
+                            "id": "call_search_memory",
+                            "type": "tool_call",
+                        }
+                    ],
+                )
+            assert messages[-1].type == "tool"
+            return AIMessage(content='{"answer":"You value clarity.","evidence_references":["mem_native"],"epistemic_status":"grounded"}')
+
+    native_model = NativeToolModel()
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=StructuredFakeLLM('{"answer":"You value clarity."}'),
+        langchain_models=(
+            LangChainLLMEndpoint(
+                index=0,
+                settings=LLMSettings(base_url="https://example.test/v1", api_key="key", model="native-test"),
+                model=cast(BaseChatModel, native_model),
+            ),
+        ),
+        memory_query_service=MemoryQueryService(repo),
+    )
+
+    result = runtime.run_turn(ThreadState.empty("native"), "what about clarity?", "native")
+
+    assert result.result.answer == "You value clarity."
+    assert result.node_trace == (
+        "prepare_context",
+        "persona_activation",
+        "initial_response",
+        "detect_tool_request",
+        "finalize_response",
+        "state_update",
+        "compression",
+    )
+    assert len(native_model.calls) == 2
+    logs = [
+        event
+        for event in read_log_events(project_root=tmp_path, component="chat")
+        if event.event == "service_tool_called"
+    ]
+    assert len(logs) == 1
+    assert logs[0].metadata == {"service_component": "memory", "tool": "search_memory"}
+    assert logs[0].message.startswith('args: {"limit": 5, "query": "clarity"}\nresult: ')
+
+
+def test_chat_agent_rejects_raw_tool_marker_from_presentation(tmp_path: Path) -> None:
+    class RawToolMarkerPresentationLLM:
+        def __init__(self) -> None:
+            self.call_count = 0
+
+        def complete(self, messages: list[ChatMessage]) -> str:
+            content = messages[0].content
+            if "Persona Activation Gate" in content:
+                return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
+            self.call_count += 1
+            if self.call_count == 1:
+                return '{"answer":"这是安全的草稿。","epistemic_status":"grounded"}'
+            return "[Tool call: search_memory] Query: 反思 Limit: 10"
+
+    agent = ChatAgent(tmp_path, llm=RawToolMarkerPresentationLLM())
+
+    result = agent.respond("简单回答")
+
+    assert result.answer == "这是安全的草稿。"
+    assert "[Tool call:" not in result.reply
 
 
 def test_chat_agent_tool_invocation_with_reflection_logs_service_call(tmp_path: Path) -> None:
@@ -992,10 +1110,16 @@ def test_chat_agent_tool_invocation_with_reflection_logs_service_call(tmp_path: 
     result = agent.respond("do you have any reflections?")
 
     assert result.answer == "There is a pending idea about taking a smaller next step."
-    logs = [event for event in read_log_events(project_root=tmp_path, component="chat") if event.event == "service_tool_called"]
-    assert logs
-    assert logs[-1].status == "completed"
-    assert logs[-1].metadata == {"service_component": "reflection", "tool": "list_pending_reflections"}
+    logs = [
+        event
+        for event in read_log_events(project_root=tmp_path, component="chat")
+        if event.event == "service_tool_called"
+    ]
+    assert len(logs) == 1
+    assert logs[0].status == "completed"
+    assert logs[0].message.startswith('args: {"limit": 3}\nresult: ')
+    assert "Try a smaller next step" in logs[0].message
+    assert logs[0].metadata == {"service_component": "reflection", "tool": "list_pending_reflections"}
 
 
 def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) -> None:
@@ -1379,6 +1503,55 @@ def test_update_memory_importance_tool_not_found(tmp_path: Path) -> None:
     assert "Error" in result
 
 
+def test_count_memory_tool_empty(tmp_path: Path) -> None:
+    tool = _chat_tool(tmp_path, "count_memory")
+    result = _invoke_chat_tool(tool)
+    assert "Memory entries: 0 total" in result
+
+
+def test_count_memory_tool_with_entries(tmp_path: Path) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(type="belief", title="A", body="...", tags=["tag1"]))
+    repo.save(MemoryEntry(type="goal", title="B", body="...", tags=["tag2"]))
+    repo.save(MemoryEntry(type="belief", title="C", body="...", tags=["tag1", "tag2"]))
+    tool = _chat_tool(tmp_path, "count_memory")
+    result = _invoke_chat_tool(tool)
+    assert "Memory entries: 3 total" in result
+
+
+def test_count_memory_tool_with_type_filter(tmp_path: Path) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(type="belief", title="A", body="..."))
+    repo.save(MemoryEntry(type="goal", title="B", body="..."))
+    repo.save(MemoryEntry(type="belief", title="C", body="..."))
+    tool = _chat_tool(tmp_path, "count_memory")
+    result = _invoke_chat_tool(tool, {"types": ["belief"]})
+    assert "Memory entries: 2 total" in result
+    assert "filtered" in result
+    assert "belief" in result
+
+
+def test_count_memory_tool_with_tag_filter(tmp_path: Path) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(MemoryEntry(type="belief", title="A", body="...", tags=["important"]))
+    repo.save(MemoryEntry(type="goal", title="B", body="...", tags=["archived"]))
+    repo.save(MemoryEntry(type="belief", title="C", body="...", tags=["important"]))
+    tool = _chat_tool(tmp_path, "count_memory")
+    result = _invoke_chat_tool(tool, {"tags": ["important"]})
+    assert "Memory entries: 2 total" in result
+    assert "filtered" in result
+    assert "important" in result
+
+
 def test_list_active_reasoning_threads_tool(tmp_path: Path) -> None:
     from nuself.reason.service import ReasonService
 
@@ -1447,6 +1620,7 @@ def test_chat_agent_includes_memory_tools_in_system_prompt(tmp_path: Path) -> No
     system_prompt = llm.calls[0][0].content
     assert "archive_memory" in system_prompt
     assert "update_memory_importance" in system_prompt
+    assert "count_memory" in system_prompt
 
 
 def test_chat_agent_end_to_end_archive_memory_via_tool(tmp_path: Path) -> None:

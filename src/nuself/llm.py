@@ -6,9 +6,13 @@ from dataclasses import dataclass
 import json
 import re
 from pathlib import Path
-from typing import Literal, Protocol, TypeAlias, cast
+from typing import Any, Literal, Protocol, TypeAlias, cast
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 
 from nuself.config_system import ConfigSystem
 from nuself.config import runtime_paths
@@ -67,6 +71,15 @@ class LLMEndpoint:
 
     index: int
     settings: LLMSettings
+
+
+@dataclass(frozen=True)
+class LangChainLLMEndpoint:
+    """One configured LangChain chat model endpoint."""
+
+    index: int
+    settings: LLMSettings
+    model: BaseChatModel
 
 
 class OpenAICompatibleLLM:
@@ -225,6 +238,47 @@ def default_llm(project_root: Path | None = None) -> ChatLLM:
     return FailoverLLM(endpoints, project_root=project_root)
 
 
+def configured_langchain_chat_models(project_root: Path | None = None) -> tuple[LangChainLLMEndpoint, ...]:
+    """Return configured LangChain chat models in failover order."""
+
+    endpoints = configured_llm_endpoints(project_root)
+    if not endpoints:
+        return ()
+    start_index = _load_llm_state(project_root)
+    by_index = {endpoint.index: endpoint for endpoint in endpoints}
+    ordered_indices = [start_index] if start_index in by_index else []
+    ordered_indices.extend(endpoint.index for endpoint in endpoints if endpoint.index not in ordered_indices)
+    result: list[LangChainLLMEndpoint] = []
+    for index in ordered_indices:
+        endpoint = by_index[index]
+        result.append(
+            LangChainLLMEndpoint(
+                index=endpoint.index,
+                settings=endpoint.settings,
+                model=_endpoint_langchain_chat_model(endpoint.settings),
+            )
+        )
+    return tuple(result)
+
+
+def record_llm_endpoint_success(project_root: Path | None, endpoint_index: int) -> None:
+    """Remember the last successful configured LLM endpoint."""
+
+    _save_llm_state(project_root, endpoint_index)
+
+
+def is_endpoint_availability_error(message: str) -> bool:
+    """Return whether an LLM error should trigger endpoint failover."""
+
+    return _is_endpoint_availability_error(message)
+
+
+def redact_llm_error(message: str) -> str:
+    """Redact and truncate an LLM error for logs."""
+
+    return _redact_llm_error(message)
+
+
 def configured_llm_endpoints(project_root: Path | None = None) -> tuple[LLMEndpoint, ...]:
     config = ConfigSystem.load(project_root=project_root)
     endpoints: list[LLMEndpoint] = []
@@ -290,6 +344,28 @@ def _endpoint_llm(settings: LLMSettings) -> ChatLLM:
     if settings.provider == "anthropic":
         return AnthropicLLM(settings)
     return OpenAICompatibleLLM(settings)
+
+
+def _endpoint_langchain_chat_model(settings: LLMSettings) -> BaseChatModel:
+    if settings.provider == "anthropic":
+        anthropic_model = cast(Any, ChatAnthropic)
+        return cast(BaseChatModel, anthropic_model(
+            model_name=settings.model,
+            api_key=settings.api_key,
+            base_url=settings.base_url,
+            timeout=settings.timeout_seconds,
+            max_retries=0,
+            temperature=0.4,
+        ))
+    openai_model = cast(Any, ChatOpenAI)
+    return cast(BaseChatModel, openai_model(
+        model=settings.model,
+        api_key=settings.api_key,
+        base_url=settings.base_url,
+        timeout=settings.timeout_seconds,
+        max_retries=0,
+        temperature=0.4,
+    ))
 
 
 def _anthropic_system_prompt(messages: list[ChatMessage]) -> str:

@@ -8,13 +8,18 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Added
 
+- New `count_memory` tool: counts durable memory entries with optional type/tag filters. Returns a simple count string.
+
 ### Changed
 
+- Chat agent tool invocation is being migrated to LangChain-native tool calling instead of NuSelf-specific prompt JSON tool fields.
+- Chat service tool logs keep the double-tag header and now put compact tool arguments and results in the indented body for debugging.
 - Chat-triggered persona discussions now stream `persona_discussion_step` logs during discussion instead of waiting to dump the full trace at the end.
 - Discussion trace logs now render section and turn headers as square-bracket tags, such as `[discussion]` and `[turn-1]`.
 
 ### Fixed
 
+- Fixed raw `[Tool call: ...]` text leaking into NuSelf replies by recovering parseable markers into real tool calls and rejecting tool markers at the presentation boundary.
 - Fixed chat service-tool logging so reflection, reason, and trace tool calls consistently render with caller/service tags and appear in default transcript exports.
 - Tightened LLM endpoint availability status detection so failover only treats exact HTTP 401, 402, 403, and 429 responses as endpoint availability failures.
 - Fixed reason trace recording when callers inject a custom reason repository.

@@ -111,6 +111,19 @@ def build_langchain_chat_tools(
         reflection_repository.archive(entry.id)
         return f'Archived "{entry.title}". The discussion has been captured into memory through the conversation.'
 
+    def count_memory(types: list[str] | str | None = None, tags: list[str] | str | None = None) -> str:
+        """Count durable memory entries, optionally filtered by type or tag."""
+
+        repo = MemoryEntryRepository(project_root)
+        entries = repo.list()
+        if types:
+            type_set = set(_string_tuple_filter(types))
+            entries = [e for e in entries if e.type in type_set]
+        if tags:
+            tag_set = set(_string_tuple_filter(tags))
+            entries = [e for e in entries if tag_set.intersection(e.tags)]
+        return f"Memory entries: {len(entries)} total" + (f" (filtered by type={types}, tags={tags})" if types or tags else "")
+
     def archive_memory_by_id(entry_id: str) -> str:
         """Archive a memory entry so it is excluded from default search."""
 
@@ -215,6 +228,15 @@ def build_langchain_chat_tools(
                 "Search durable memory (entries, derived profiles, and source chunks) for relevant context. "
                 "Use natural language queries to find information about preferences, beliefs, episodes, and facts. "
                 "Returns formatted memory context with matches, scores, and match reasons."
+            ),
+        ),
+        structured_tool(
+            count_memory,
+            name="count_memory",
+            description=(
+                "Count durable memory entries with optional type or tag filters. "
+                "Use when the user asks how many memories exist, or to get a quick count "
+                "before deciding whether to search more deeply. Returns a simple count."
             ),
         ),
         structured_tool(

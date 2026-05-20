@@ -33,7 +33,8 @@ Human-readable rendering must show both tags at the front:
 
 ```text
 [chat] [memory] service_tool_called status=completed tool=archive_memory
-  chat called memory service tool archive_memory
+  args: {"entry_id": "m1"}
+  result: Archived "Old memory".
 ```
 
 Rules:
@@ -43,7 +44,7 @@ Rules:
 - `service_component` is a display tag, not a normal `key=value` header field.
 - Agent-facing chat tools for memory, reflection, reason, and trace all write `chat/service_tool_called` with the corresponding service tag.
 - All other log formatting rules remain unchanged.
-- Tool/service call logs must not include raw tool arguments if those arguments may contain private user text; use tool names, status, and stable ids where possible.
+- Tool/service call body text is for debugging. It should include compact `args:` plus `result:` or `error:` lines, bounded in length so interactive output remains readable.
 
 ## Log Components
 

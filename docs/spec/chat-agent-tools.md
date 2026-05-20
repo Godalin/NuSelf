@@ -62,15 +62,21 @@ Rules:
 
 ### Tool Invocation Flow
 
-The LangGraph state machine already supports tool execution:
+Chat tool invocation must follow LangChain's current tool-calling contract:
 
+```text
+model.bind_tools(tools) → AIMessage.tool_calls → BaseTool.invoke(tool_call) → ToolMessage → final model response
 ```
-initial_response → detect_tool_request → [execute_tool]? → finalize_response
-```
 
-The current runtime still accepts NuSelf's JSON response envelope. If the response contains `"tool": "<name>"` and `"tool_args": {...}`, the runtime looks up the registered LangChain tool by name, invokes it with the structured args dict, and appends the result to the turn context before generating the final answer.
+NuSelf must not ask the model to print a private tool protocol in the assistant message body. In particular:
 
-When the LLM adapter is migrated to a native LangChain chat model, the same registered tools should be passed to the model with LangChain's tool-calling APIs (for example `bind_tools(...)` or agent creation with `tools=[...]`) rather than re-encoding tool schemas by hand.
+- no visible `[Tool call: ...]` markers;
+- no NuSelf-only `"tool"` / `"tool_args"` JSON envelope as the primary path;
+- no hidden parallel registry outside LangChain `BaseTool` objects.
+
+`ConversationGraphRuntime` may keep its larger LangGraph workflow for NuSelf-specific stages such as context preparation, persona activation, presentation, state update, and compression. Inside the response-generation stage, tool calling is delegated to LangChain chat model tool-calling APIs.
+
+Fallback LLMs that do not implement native tool calling may produce a plain answer, but they must not emulate tools by printing tool markers to the user.
 
 ## Tool Catalog
 
@@ -79,6 +85,14 @@ When the LLM adapter is migrated to a native LangChain chat model, the same regi
 | Tool | Purpose |
 |---|---|
 | `search_memory` | Query durable memory, profiles, and source chunks. |
+| `count_memory` | Count durable memory entries with optional type/tag filters. |
+
+#### `count_memory`
+
+- **Args**: `types: list[str] | str | None = None`, `tags: list[str] | str | None = None`
+- **Behavior**: Counts memory entries from `MemoryEntryRepository.list()`, optionally filtered by memory `type` or `tags`.
+- **Returns**: A simple count string like `"Memory entries: 12 total"` or `"Memory entries: 3 total (filtered by type=['goal'], tags=['runtime'])"`.
+- **When to use**: When the user asks how many memories exist, wants a quick overview, or asks about specific types/tags.
 
 ### New: Reflection Consumption Tools
 

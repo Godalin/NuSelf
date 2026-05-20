@@ -62,7 +62,7 @@ Required fields:
 - Markdown code fences used to show the response protocol;
 - protocol field names such as `evidence_references` or `epistemic_status`;
 - internal persona attribution such as `synthesizer_self combined analyst_self`;
-- raw tool-call payloads.
+- raw tool-call payloads, including `[Tool call: ...]` markers.
 
 ## Prompt Requirements
 

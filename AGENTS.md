@@ -10,6 +10,7 @@ An AI mirror for deep personal discussion — someone with similar life experien
 - **Spec is authoritative**: A feature change is not complete until the spec that governs it is updated in the same change.
 - **No spec drift**: If code behavior diverges from its spec, either fix the code or update the spec. The spec must always describe the actual system.
 - **Changelog for user-visible changes**: Any user-visible feature, fix, command/config change, or behavior change must update [`CHANGELOG.md`](CHANGELOG.md) under `Unreleased` in the same change. Purely internal refactors and tests may skip the changelog only when behavior and docs are unchanged.
+- **Use framework-native agent APIs**: When LangChain/LangGraph provides an official abstraction for agent behavior, tool calling, structured output, middleware, state graphs, or model invocation, NuSelf should use that abstraction instead of inventing a parallel protocol. Custom code should wrap NuSelf domain behavior, not replace the framework's agent runtime contracts.
 
 ## Quick Links
 

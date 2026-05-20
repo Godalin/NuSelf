@@ -7,11 +7,13 @@ from dataclasses import dataclass, field, replace
 import fcntl
 import json
 import logging
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol, TypeAlias, TypeVar, cast
 
 from langchain_core.tools import BaseTool
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 
 from nuself.agent.skills import AgentSkill, load_agent_skills, render_agent_skill_sections
 from nuself.agent.tools import build_langchain_chat_tools
@@ -29,7 +31,16 @@ from nuself.agent.persona import (
 from nuself.domain.proactive import IdeaCandidate
 from nuself.config import runtime_paths
 from nuself.config_system import ConfigSystem
-from nuself.llm import ChatLLM, ChatMessage, default_llm
+from nuself.llm import (
+    ChatLLM,
+    ChatMessage,
+    LangChainLLMEndpoint,
+    configured_langchain_chat_models,
+    default_llm,
+    is_endpoint_availability_error,
+    record_llm_endpoint_success,
+    redact_llm_error,
+)
 from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
@@ -559,8 +570,9 @@ class PresentationAgent:
             conversation_summary=conversation_summary,
             presentation_hints=presentation_hints,
         )
-        response = _to_presented_response(_parse_chat_response(self._llm.complete(prompt)))
-        if not _leaks_response_protocol(response.answer):
+        parsed_response = _parse_chat_response(self._llm.complete(prompt))
+        response = _to_presented_response(parsed_response)
+        if _is_parsed_user_facing_safe(parsed_response):
             write_log_event(
                 "chat",
                 "presentation_completed",
@@ -580,8 +592,9 @@ class PresentationAgent:
             metadata={"retry_reason": "protocol_leak"},
         )
         retry_prompt = [*prompt, ChatMessage(role="user", content=REGENERATE_USER_FACING_RESPONSE_PROMPT)]
-        retry_response = _to_presented_response(_parse_chat_response(self._llm.complete(retry_prompt)))
-        if not _leaks_response_protocol(retry_response.answer):
+        parsed_retry_response = _parse_chat_response(self._llm.complete(retry_prompt))
+        retry_response = _to_presented_response(parsed_retry_response)
+        if _is_parsed_user_facing_safe(parsed_retry_response):
             write_log_event(
                 "chat",
                 "presentation_completed",
@@ -600,7 +613,7 @@ class PresentationAgent:
             status="failed",
             metadata={"reason": "protocol_leak"},
         )
-        if _is_user_facing_safe(draft.answer):
+        if _is_parsed_user_facing_safe(draft):
             return _to_presented_response(draft)
         write_log_event(
             "chat",
@@ -675,10 +688,16 @@ class ConversationGraphRuntime:
         project_root: Path | None = None,
         *,
         llm: ChatLLM | None = None,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
         settings: ChatAgentSettings | None = None,
         memory_query_service: MemoryQueryService | None = None,
     ) -> None:
         self._llm = llm or default_llm(project_root)
+        self._langchain_models: tuple[LangChainLLMEndpoint, ...] = (
+            langchain_models
+            if langchain_models is not None
+            else (() if llm is not None else configured_langchain_chat_models(project_root))
+        )
         self._settings = settings or ChatAgentSettings.from_project(project_root)
         self._project_root = project_root
         system_config = ConfigSystem.load(project_root=project_root)
@@ -930,7 +949,7 @@ class ConversationGraphRuntime:
             response = self._synthesize_response(state)
         else:
             prompt = self._build_prompt(state)
-            response = _parse_chat_response(self._llm.complete(prompt))
+            response = self._complete_response(prompt)
         return ConversationNodeResult(
             node="initial_response",
             state=replace(
@@ -955,17 +974,12 @@ class ConversationGraphRuntime:
     def execute_tool_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         response = _require_chat_response(state.initial_response)
         tool_result = self._invoke_tool(response)
-        tool_message = ThreadMessage(
-            role="assistant",
-            content=f"[Tool call: {response.tool}]\n{tool_result}",
-        )
-        messages_with_tool = (*state.active_messages, tool_message)
         return ConversationNodeResult(
             node="execute_tool",
             state=replace(
                 state,
                 tool_result=tool_result,
-                saved_messages=messages_with_tool,
+                saved_messages=state.active_messages,
                 node_trace=(*state.node_trace, "execute_tool"),
             ),
         )
@@ -977,15 +991,15 @@ class ConversationGraphRuntime:
                 ThreadState(
                     thread_id=state.thread_id,
                     summary=state.persisted_state.summary,
-                    messages=list(state.saved_messages),
+                    messages=list(state.active_messages),
                 ),
                 tool_result,
             )
-            draft_response = _parse_chat_response(self._llm.complete(follow_up_prompt))
+            draft_response = self._complete_response(follow_up_prompt)
             final_response = _apply_unsupported_claim_guard(
                 self._presentation_agent.present(
                     draft_response,
-                    context_messages=state.saved_messages,
+                    context_messages=state.active_messages,
                     current_user_message=state.user_message,
                     conversation_summary=state.persisted_state.summary,
                     presentation_hints=_presentation_hints(state.user_message),
@@ -993,7 +1007,7 @@ class ConversationGraphRuntime:
                 )
             )
             saved_messages = (
-                *state.saved_messages,
+                *state.active_messages,
                 ThreadMessage(role="assistant", content=final_response.answer, turn_id=state.turn_id),
             )
         else:
@@ -1021,6 +1035,97 @@ class ConversationGraphRuntime:
                 node_trace=(*state.node_trace, "finalize_response"),
             ),
         )
+
+    def _complete_response(self, prompt: list[ChatMessage]) -> ParsedChatResponse:
+        if self._langchain_models:
+            return self._complete_response_with_langchain_tools(prompt)
+        return _parse_chat_response(self._llm.complete(prompt))
+
+    def _complete_response_with_langchain_tools(self, prompt: list[ChatMessage]) -> ParsedChatResponse:
+        last_error: Exception | None = None
+        for position, endpoint in enumerate(self._langchain_models):
+            try:
+                response = self._complete_response_with_langchain_endpoint(endpoint, prompt)
+            except Exception as exc:
+                last_error = exc
+                remaining = self._langchain_models[position + 1 :]
+                if remaining and is_endpoint_availability_error(str(exc)):
+                    write_log_event(
+                        "chat",
+                        "llm_endpoint_failed_over",
+                        "LLM endpoint failed; trying next configured endpoint",
+                        project_root=self._project_root,
+                        status="failed_over",
+                        error=redact_llm_error(str(exc)),
+                        metadata={
+                            "endpoint_index": endpoint.index,
+                            "base_url": endpoint.settings.base_url,
+                            "model": endpoint.settings.model,
+                            "next_endpoint_index": remaining[0].index,
+                        },
+                    )
+                    continue
+                raise
+            record_llm_endpoint_success(self._project_root, endpoint.index)
+            return response
+        if last_error is not None:
+            raise RuntimeError(f"all configured LLM endpoints failed: {redact_llm_error(str(last_error))}") from last_error
+        return _parse_chat_response(self._llm.complete(prompt))
+
+    def _complete_response_with_langchain_endpoint(
+        self,
+        endpoint: LangChainLLMEndpoint,
+        prompt: list[ChatMessage],
+    ) -> ParsedChatResponse:
+        bind_tools = cast(Callable[[list[BaseTool]], Any], getattr(endpoint.model, "bind_tools"))
+        model = bind_tools(list(self._tools.values()))
+        invoke_model = cast(Callable[[list[BaseMessage]], AIMessage], getattr(model, "invoke"))
+        messages = _to_langchain_messages(prompt)
+        ai_message = invoke_model(messages)
+        tool_iterations = 0
+        while ai_message.tool_calls:
+            if tool_iterations >= 5:
+                raise RuntimeError("LangChain tool call loop exceeded 5 iterations")
+            messages.append(ai_message)
+            for tool_call in ai_message.tool_calls:
+                messages.append(self._invoke_langchain_tool_call(cast(dict[str, Any], tool_call)))
+            ai_message = invoke_model(messages)
+            tool_iterations += 1
+        return _parse_chat_response(_langchain_message_text(ai_message))
+
+    def _invoke_langchain_tool_call(self, tool_call: dict[str, Any]) -> ToolMessage:
+        tool_name_raw = tool_call.get("name")
+        tool_name = tool_name_raw if isinstance(tool_name_raw, str) else ""
+        tool_args_raw = tool_call.get("args")
+        tool_args = cast(dict[str, Any], tool_args_raw) if isinstance(tool_args_raw, dict) else {}
+        tool_call_id_raw = tool_call.get("id")
+        tool_call_id = tool_call_id_raw if isinstance(tool_call_id_raw, str) else tool_name
+        service_component = _tool_service_component(tool_name)
+        tool_obj = self._tools.get(tool_name)
+        if tool_obj is None:
+            error = f"unknown tool: {tool_name}"
+            if service_component is not None:
+                self._write_service_tool_log(tool_name, service_component, "failed", args=tool_args, error=error)
+            return ToolMessage(content=f"Error: {error}", name=tool_name, tool_call_id=tool_call_id)
+        try:
+            invoke_tool = cast(Callable[[dict[str, Any]], object], getattr(tool_obj, "invoke"))
+            tool_result = invoke_tool(tool_call)
+            result_text = _langchain_tool_message_text(tool_result)
+            if service_component is not None:
+                self._write_service_tool_log(
+                    tool_name,
+                    service_component,
+                    "completed",
+                    args=tool_args,
+                    result=result_text,
+                )
+            if isinstance(tool_result, ToolMessage):
+                return tool_result
+            return ToolMessage(content=result_text, name=tool_name, tool_call_id=tool_call_id)
+        except Exception as exc:
+            if service_component is not None:
+                self._write_service_tool_log(tool_name, service_component, "failed", args=tool_args, error=str(exc))
+            return ToolMessage(content=f"Error: {exc}", name=tool_name, tool_call_id=tool_call_id)
 
     def _detect_tool_call(self, response: ParsedChatResponse) -> ConversationToolCall | None:
         if response.tool is None:
@@ -1107,7 +1212,7 @@ class ConversationGraphRuntime:
         prompt: list[ChatMessage] = [ChatMessage(role="system", content="\n".join(parts))]
         for message in state.active_messages[-self._settings.recent_messages :]:
             prompt.append(ChatMessage(role=message.role, content=message.content))
-        return _parse_chat_response(self._llm.complete(prompt))
+        return self._complete_response(prompt)
 
     def _build_follow_up_prompt(self, state: ThreadState, tool_result: str) -> list[ChatMessage]:
         """Build a prompt for the follow-up after tool invocation."""
@@ -1184,15 +1289,21 @@ class ConversationGraphRuntime:
             invoke = cast(Callable[[dict[str, Any]], object], getattr(tool_obj, "invoke"))
             result = str(invoke(tool_args_input))
             if service_component is not None:
-                self._write_service_tool_log(tool.tool, service_component, "completed")
+                self._write_service_tool_log(
+                    tool.tool,
+                    service_component,
+                    "completed",
+                    args=tool_args_input,
+                    result=result,
+                )
             return result
         except TypeError as e:
             if service_component is not None:
-                self._write_service_tool_log(tool.tool, service_component, "failed", error=str(e))
+                self._write_service_tool_log(tool.tool, service_component, "failed", args=tool_args_input, error=str(e))
             return f"Error invoking {tool.tool}: {e}"
         except Exception as e:
             if service_component is not None:
-                self._write_service_tool_log(tool.tool, service_component, "failed", error=str(e))
+                self._write_service_tool_log(tool.tool, service_component, "failed", args=tool_args_input, error=str(e))
             return f"Error: {e}"
 
     def _write_service_tool_log(
@@ -1201,12 +1312,15 @@ class ConversationGraphRuntime:
         service_component: ToolServiceComponent,
         status: str,
         *,
+        args: dict[str, Any],
+        result: str | None = None,
         error: str | None = None,
     ) -> None:
+        message = _format_tool_debug_body(args=args, result=result, error=error)
         write_log_event(
             "chat",
             "service_tool_called",
-            f"chat called {service_component} service tool {tool_name}",
+            message,
             project_root=self._project_root,
             status=status,
             error=error,
@@ -1352,7 +1466,7 @@ def _is_supported_tool_call(tool_call: ConversationToolCall | None) -> bool:
 
 
 def _tool_service_component(tool_name: str) -> ToolServiceComponent | None:
-    if tool_name in {"search_memory", "archive_memory", "update_memory_importance"}:
+    if tool_name in {"search_memory", "count_memory", "archive_memory", "update_memory_importance"}:
         return "memory"
     if tool_name in {"list_pending_reflections", "dismiss_reflection", "archive_reflection"}:
         return "reflection"
@@ -1363,15 +1477,79 @@ def _tool_service_component(tool_name: str) -> ToolServiceComponent | None:
     return None
 
 
+def _format_tool_debug_body(
+    *,
+    args: dict[str, Any],
+    result: str | None = None,
+    error: str | None = None,
+) -> str:
+    lines = [f"args: {_format_tool_debug_value(args)}"]
+    if result is not None:
+        lines.append(f"result: {_truncate_tool_debug_text(result)}")
+    if error is not None:
+        lines.append(f"error: {_truncate_tool_debug_text(error)}")
+    return "\n".join(lines)
+
+
+def _format_tool_debug_value(value: object) -> str:
+    try:
+        return _truncate_tool_debug_text(json.dumps(value, sort_keys=True, ensure_ascii=False, default=str))
+    except (TypeError, ValueError):
+        return _truncate_tool_debug_text(str(value))
+
+
+def _truncate_tool_debug_text(text: str, limit: int = 1200) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
+
+
+def _to_langchain_messages(messages: list[ChatMessage]) -> list[BaseMessage]:
+    converted: list[BaseMessage] = []
+    for message in messages:
+        if message.role == "system":
+            converted.append(SystemMessage(content=message.content))
+        elif message.role == "assistant":
+            converted.append(AIMessage(content=message.content))
+        else:
+            converted.append(HumanMessage(content=message.content))
+    return converted
+
+
+def _langchain_message_text(message: BaseMessage) -> str:
+    content = cast(object, getattr(message, "content"))
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    if not isinstance(content, list):
+        return str(content)
+    for item in cast(list[object], content):
+        if isinstance(item, str):
+            parts.append(item)
+        elif isinstance(item, dict):
+            item_dict = cast(dict[object, object], item)
+            text = item_dict.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    return "\n".join(parts)
+
+
+def _langchain_tool_message_text(value: object) -> str:
+    if isinstance(value, ToolMessage):
+        return _langchain_message_text(value)
+    return str(value)
+
+
 def _tool_prompt_sections(tools: "Iterable[BaseTool]", skills: tuple[AgentSkill, ...]) -> list[str]:
     lines = [
         "",
         "Available tools:",
         "The following LangChain tools are loaded in the current NuSelf runtime.",
-        'You may invoke a tool by including a "tool" field in your JSON:',
-        '{"answer": "...", "tool": "search_memory", "tool_args": {"query": "search term"}, ...}',
-        "The tool result will be injected back into context before your final answer.",
-        "If the user asks whether memory tools are available, answer from this loaded tool list.",
+        "CRITICAL: When the user asks a question that a tool can answer, you MUST call the tool before generating your final answer.",
+        "Do NOT answer from your training data; always use the tool to get the actual current state.",
+        "Tools are bound through LangChain's native tool-calling API.",
+        'Do not write visible markers such as "[Tool call: search_memory]" or JSON tool fields in the answer body.',
+        "The tool will be executed and its result injected back into context. Only then generate your final answer.",
         "Tools available:",
     ]
     for tool in tools:
@@ -1424,6 +1602,7 @@ def _tool_args_signature(tool: BaseTool) -> str:
 
 ParsedChatResponse: TypeAlias = DraftResponse
 _PROTOCOL_FIELD_NAMES = ("answer", "evidence_references", "confidence", "epistemic_status")
+_TOOL_MARKER_RE = re.compile(r"^\[Tool call:\s*(?P<tool>[A-Za-z_][A-Za-z0-9_]*)\]\s*(?P<body>.*)$", re.DOTALL)
 
 
 def _parse_chat_response(raw: str) -> ParsedChatResponse:
@@ -1497,6 +1676,8 @@ def _to_presented_response(response: ParsedChatResponse) -> PresentedResponse:
 
 def _leaks_response_protocol(answer: str) -> bool:
     stripped = answer.strip()
+    if _TOOL_MARKER_RE.match(stripped) is not None:
+        return True
     if stripped.startswith("```"):
         return True
     if stripped.startswith("{") and _contains_protocol_field(stripped):
@@ -1517,6 +1698,10 @@ def _contains_protocol_field(text: str) -> bool:
 
 def _is_user_facing_safe(answer: str) -> bool:
     return not _leaks_response_protocol(answer)
+
+
+def _is_parsed_user_facing_safe(response: ParsedChatResponse) -> bool:
+    return _is_user_facing_safe(response.answer)
 
 
 def _starts_with_persona_attribution(text: str) -> bool:
