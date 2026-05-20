@@ -19,7 +19,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - All LangChain model/tool calls now use direct method calls (`model.invoke()`, `tool.invoke()`, `with_structured_output()`) instead of `getattr`+`cast` patterns.
 - Chat response parsing, persona activation parsing, and proactive-persona scoring/selection/judgment parsing now try Pydantic `model_validate_json` before falling back to hand-parsed JSON.
 - Reflection relevance scoring, candidate generation, memory curator action parsing, memory intake parsing, and memory optimizer action parsing now try Pydantic `model_validate_json` before falling back to hand-parsed JSON.
-- Chat service tool logs keep the double-tag header and now put compact tool arguments and results in the indented body for debugging.
+- Chat service tool logs keep the double-tag header and now put compact tool arguments and results (truncated at 200 chars) in the indented body for debugging, with the full detail stored in JSON log metadata.
+- Removed redundant `presentation_started` log event to reduce per-turn log noise.
+- Persona summary log is now skipped when the activation gate selects no personas.
 - Chat-triggered persona discussions now stream `persona_discussion_step` logs during discussion instead of waiting to dump the full trace at the end.
 - Discussion trace logs now render section and turn headers as square-bracket tags, such as `[discussion]` and `[turn-1]`.
 
