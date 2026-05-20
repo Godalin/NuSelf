@@ -16,6 +16,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Chat final responses now prefer LangChain structured output on native LangChain chat models, keeping prompted JSON parsing as a fallback path.
 - Presentation now prefers LangChain structured output on native LangChain chat models before falling back to prompted JSON parsing.
 - Persona activation, persona contribution, and persona synthesis now prefer LangChain structured output on native LangChain chat models.
+- All LangChain model/tool calls now use direct method calls (`model.invoke()`, `tool.invoke()`, `with_structured_output()`) instead of `getattr`+`cast` patterns.
+- Chat response parsing, persona activation parsing, and proactive-persona scoring/selection/judgment parsing now try Pydantic `model_validate_json` before falling back to hand-parsed JSON.
+- Reflection relevance scoring, candidate generation, memory curator action parsing, memory intake parsing, and memory optimizer action parsing now try Pydantic `model_validate_json` before falling back to hand-parsed JSON.
 - Chat service tool logs keep the double-tag header and now put compact tool arguments and results in the indented body for debugging.
 - Chat-triggered persona discussions now stream `persona_discussion_step` logs during discussion instead of waiting to dump the full trace at the end.
 - Discussion trace logs now render section and turn headers as square-bracket tags, such as `[discussion]` and `[turn-1]`.
