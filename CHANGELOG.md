@@ -14,6 +14,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 - Chat agent tool invocation is being migrated to LangChain-native tool calling instead of NuSelf-specific prompt JSON tool fields.
 - Chat final responses now prefer LangChain structured output on native LangChain chat models, keeping prompted JSON parsing as a fallback path.
+- Presentation now prefers LangChain structured output on native LangChain chat models before falling back to prompted JSON parsing.
 - Chat service tool logs keep the double-tag header and now put compact tool arguments and results in the indented body for debugging.
 - Chat-triggered persona discussions now stream `persona_discussion_step` logs during discussion instead of waiting to dump the full trace at the end.
 - Discussion trace logs now render section and turn headers as square-bracket tags, such as `[discussion]` and `[turn-1]`.

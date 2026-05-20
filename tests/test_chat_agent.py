@@ -11,11 +11,13 @@ from langchain_core.tools import BaseTool
 from nuself.agent.chat import (
     ChatAgent,
     ChatAgentSettings,
+    ChatStructuredOutput,
     ChatResult,
     ConversationGraphRuntime,
     ConversationTurnState,
     ConversationRuntimeResult,
     ParsedChatResponse,
+    PresentationAgent,
     ThreadMessage,
     ThreadState,
     ThreadStore,
@@ -980,7 +982,6 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
     from langchain_core.language_models.chat_models import BaseChatModel
     from langchain_core.messages import AIMessage, BaseMessage
 
-    from nuself.agent.chat import ChatStructuredOutput
     from nuself.llm import LLMSettings, LangChainLLMEndpoint
 
     repo = MemoryEntryRepository(tmp_path)
@@ -1063,7 +1064,7 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
         "state_update",
         "compression",
     )
-    assert len(native_model.calls) == 3
+    assert len(native_model.calls) == 4
     logs = [
         event
         for event in read_log_events(project_root=tmp_path, component="chat")
@@ -1094,6 +1095,59 @@ def test_chat_agent_rejects_raw_tool_marker_from_presentation(tmp_path: Path) ->
 
     assert result.answer == "这是安全的草稿。"
     assert "[Tool call:" not in result.reply
+
+
+def test_presentation_agent_uses_langchain_structured_output(tmp_path: Path) -> None:
+    from langchain_core.language_models.chat_models import BaseChatModel
+    from langchain_core.messages import BaseMessage
+
+    from nuself.llm import LLMSettings, LangChainLLMEndpoint
+
+    class NativePresentationModel:
+        def __init__(self) -> None:
+            self.calls: list[list[BaseMessage]] = []
+
+        def with_structured_output(self, schema: type[ChatStructuredOutput]) -> "NativePresentationModel":
+            return self
+
+        def invoke(self, messages: list[BaseMessage]) -> ChatStructuredOutput:
+            self.calls.append(messages)
+            return ChatStructuredOutput(answer="整理后的回复。", epistemic_status="grounded")
+
+    class FailingTextLLM:
+        def complete(self, messages: list[ChatMessage]) -> str:
+            raise AssertionError("presentation should use LangChain structured output")
+
+    native_model = NativePresentationModel()
+    agent = PresentationAgent(
+        FailingTextLLM(),
+        language_preference="zh-CN",
+        langchain_models=(
+            LangChainLLMEndpoint(
+                index=0,
+                settings=LLMSettings(base_url="https://example.test/v1", api_key="key", model="presentation-test"),
+                model=cast(BaseChatModel, native_model),
+            ),
+        ),
+        project_root=tmp_path,
+    )
+
+    result = agent.present(
+        ParsedChatResponse(answer="raw draft", epistemic_status="grounded"),
+        context_messages=(),
+        current_user_message="帮我整理一下",
+        conversation_summary="",
+        thread_id="presentation",
+    )
+
+    assert result.answer == "整理后的回复。"
+    assert native_model.calls
+    logs = [
+        event
+        for event in read_log_events(project_root=tmp_path, component="chat")
+        if event.event == "presentation_completed"
+    ]
+    assert logs[-1].metadata == {"epistemic_status": "grounded", "structured_output": True}
 
 
 def test_chat_agent_tool_invocation_with_reflection_logs_service_call(tmp_path: Path) -> None:

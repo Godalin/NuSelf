@@ -558,9 +558,18 @@ class ChatAgent:
 class PresentationAgent:
     """LLM-backed final expression stage for user-facing chat replies."""
 
-    def __init__(self, llm: ChatLLM, *, language_preference: str = "en") -> None:
+    def __init__(
+        self,
+        llm: ChatLLM,
+        *,
+        language_preference: str = "en",
+        langchain_models: tuple[LangChainLLMEndpoint, ...] = (),
+        project_root: Path | None = None,
+    ) -> None:
         self._llm = llm
         self._language_preference = language_preference
+        self._langchain_models = langchain_models
+        self._project_root = project_root
 
     def present(
         self,
@@ -580,6 +589,9 @@ class PresentationAgent:
             conversation_summary=conversation_summary,
             presentation_hints=presentation_hints,
         )
+        langchain_response = self._present_with_langchain(prompt, thread_id=thread_id)
+        if langchain_response is not None:
+            return langchain_response
         parsed_response = _parse_chat_response(self._llm.complete(prompt))
         response = _to_presented_response(parsed_response)
         if _is_parsed_user_facing_safe(parsed_response):
@@ -639,6 +651,57 @@ class PresentationAgent:
             confidence=0.0,
             epistemic_status="unsupported",
         )
+
+    def _present_with_langchain(self, prompt: list[ChatMessage], *, thread_id: str) -> PresentedResponse | None:
+        last_error: Exception | None = None
+        for position, endpoint in enumerate(self._langchain_models):
+            try:
+                structured = _complete_structured_chat_output(endpoint, _to_langchain_messages(prompt))
+                response = _to_presented_response(structured)
+                if _is_parsed_user_facing_safe(structured):
+                    write_log_event(
+                        "chat",
+                        "presentation_completed",
+                        "presentation stage completed with LangChain structured output",
+                        project_root=self._project_root,
+                        thread_id=thread_id,
+                        status="completed",
+                        metadata={"epistemic_status": response.epistemic_status, "structured_output": True},
+                    )
+                    return response
+                write_log_event(
+                    "chat",
+                    "presentation_retry",
+                    "LangChain structured presentation violated user-facing boundary; falling back",
+                    project_root=self._project_root,
+                    thread_id=thread_id,
+                    status="retry",
+                    metadata={"retry_reason": "structured_protocol_leak"},
+                )
+                return None
+            except Exception as exc:
+                last_error = exc
+                remaining = self._langchain_models[position + 1 :]
+                if remaining and is_endpoint_availability_error(str(exc)):
+                    write_log_event(
+                        "chat",
+                        "llm_endpoint_failed_over",
+                        "LLM endpoint failed; trying next configured endpoint",
+                        project_root=self._project_root,
+                        status="failed_over",
+                        error=redact_llm_error(str(exc)),
+                        metadata={
+                            "endpoint_index": endpoint.index,
+                            "base_url": endpoint.settings.base_url,
+                            "model": endpoint.settings.model,
+                            "next_endpoint_index": remaining[0].index,
+                        },
+                    )
+                    continue
+                break
+        if last_error is not None:
+            LOGGER.exception("LangChain structured presentation failed; falling back to text protocol parsing")
+        return None
 
     def _build_prompt(
         self,
@@ -714,7 +777,12 @@ class ConversationGraphRuntime:
         self._language_preference = system_config.chat.language_preference
         persona_definitions = load_persona_definitions(project_root)
         self._activation_policy = LLMBackedActivationPolicy(persona_definitions, llm=self._llm)
-        self._presentation_agent = PresentationAgent(self._llm, language_preference=self._language_preference)
+        self._presentation_agent = PresentationAgent(
+            self._llm,
+            language_preference=self._language_preference,
+            langchain_models=self._langchain_models,
+            project_root=self._project_root,
+        )
         self._persona_driver = PersonaGraphDriver(
             persona_node=LLMBackedPersonaNode(llm=self._llm, language_preference=self._language_preference),
             synthesizer_node=LLMBackedSynthesizerNode(llm=self._llm, language_preference=self._language_preference),
@@ -1102,23 +1170,11 @@ class ConversationGraphRuntime:
             ai_message = invoke_model(messages)
             tool_iterations += 1
         messages.append(ai_message)
-        return self._complete_structured_response_with_langchain(endpoint, messages, fallback=ai_message)
-
-    def _complete_structured_response_with_langchain(
-        self,
-        endpoint: LangChainLLMEndpoint,
-        messages: list[BaseMessage],
-        *,
-        fallback: AIMessage,
-    ) -> ParsedChatResponse:
         try:
-            with_structured_output = cast(Callable[[type[ChatStructuredOutput]], Any], getattr(endpoint.model, "with_structured_output"))
-            structured_model = with_structured_output(ChatStructuredOutput)
-            invoke_structured = cast(Callable[[list[BaseMessage]], object], getattr(structured_model, "invoke"))
-            return _structured_chat_output_to_response(invoke_structured(messages))
+            return _complete_structured_chat_output(endpoint, messages)
         except Exception:
             LOGGER.exception("LangChain structured chat output failed; falling back to text protocol parsing")
-            return _parse_chat_response(_langchain_message_text(fallback))
+            return _parse_chat_response(_langchain_message_text(ai_message))
 
     def _invoke_langchain_tool_call(self, tool_call: dict[str, Any]) -> ToolMessage:
         tool_name_raw = tool_call.get("name")
@@ -1565,6 +1621,16 @@ def _langchain_tool_message_text(value: object) -> str:
     if isinstance(value, ToolMessage):
         return _langchain_message_text(value)
     return str(value)
+
+
+def _complete_structured_chat_output(
+    endpoint: LangChainLLMEndpoint,
+    messages: list[BaseMessage],
+) -> ParsedChatResponse:
+    with_structured_output = cast(Callable[[type[ChatStructuredOutput]], Any], getattr(endpoint.model, "with_structured_output"))
+    structured_model = with_structured_output(ChatStructuredOutput)
+    invoke_structured = cast(Callable[[list[BaseMessage]], object], getattr(structured_model, "invoke"))
+    return _structured_chat_output_to_response(invoke_structured(messages))
 
 
 def _structured_chat_output_to_response(output: object) -> ParsedChatResponse:

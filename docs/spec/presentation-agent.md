@@ -83,6 +83,8 @@ The prompt must instruct the model:
 - output only the required structured response for the runtime;
 - keep `answer` as plain user-facing Markdown.
 
+When the active chat model is available through LangChain, the presentation result must be requested through LangChain structured output (`with_structured_output(...)` or an equivalent `response_format`). Prompted JSON parsing is only a compatibility fallback for deterministic tests and non-LangChain local fallback models.
+
 ## Quality Retry
 
 If `PresentedResponse.answer` violates the user-facing boundary, the runtime should ask the presentation agent to regenerate once with the same draft and a stricter instruction.
