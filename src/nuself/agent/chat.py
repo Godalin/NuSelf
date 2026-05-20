@@ -14,7 +14,7 @@ from typing import Any, Literal, Protocol, TypeAlias, TypeVar, cast
 
 from langchain_core.tools import BaseTool
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from nuself.agent.skills import AgentSkill, load_agent_skills, render_agent_skill_sections
 from nuself.agent.tools import build_langchain_chat_tools
@@ -1723,6 +1723,17 @@ def _parse_chat_response(raw: str) -> ParsedChatResponse:
             parsed: object = json.loads(protocol_json)
         except json.JSONDecodeError:
             return ParsedChatResponse(answer=raw)
+        if isinstance(parsed, dict) and "tool" not in cast(dict[str, object], parsed):
+            try:
+                structured = ChatStructuredOutput.model_validate_json(protocol_json)
+                return ParsedChatResponse(
+                    answer=structured.answer,
+                    evidence_references=tuple(structured.evidence_references),
+                    confidence=structured.confidence,
+                    epistemic_status=structured.epistemic_status or "inferred",
+                )
+            except ValidationError:
+                pass
         if isinstance(parsed, dict):
             data = cast(dict[str, object], parsed)
             answer = data.get("answer")
