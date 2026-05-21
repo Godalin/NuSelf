@@ -351,6 +351,10 @@ def _component_color(component: str) -> str:
         return "35"
     if component == "trace":
         return "36"
+    if component == "selves":
+        return "35"
+    if component == "skill":
+        return "31"
     return "0"
 
 

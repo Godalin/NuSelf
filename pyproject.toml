@@ -23,6 +23,10 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore::langchain_core._api.deprecation.LangChainPendingDeprecationWarning",
+    "ignore:Importing Send from langgraph.constants is deprecated",
+]
 
 [tool.pyright]
 pythonVersion = "3.12"

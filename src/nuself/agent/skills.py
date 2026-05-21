@@ -62,14 +62,14 @@ def render_agent_skill_sections(
         tools = (allowed_tools_by_skill or {}).get(skill.name, skill.allowed_tools)
         if tools:
             lines.append(f"  Allowed tools: {', '.join(tools)}")
-        instructions = _render_tool_placeholders(skill.instructions, skill_name=skill.name, tools=tools)
+        instructions = render_tool_placeholders(skill.instructions, skill_name=skill.name, tools=tools)
         for line in instructions.splitlines():
             if line.strip():
                 lines.append(f"  {line}")
     return lines
 
 
-def _render_tool_placeholders(instructions: str, *, skill_name: str, tools: tuple[str, ...]) -> str:
+def render_tool_placeholders(instructions: str, *, skill_name: str, tools: tuple[str, ...]) -> str:
     def replace(match: re.Match[str]) -> str:
         action = match.group(1)
         tool_name = _resolve_tool_placeholder(skill_name=skill_name, action=action, tools=tools)

@@ -19,8 +19,9 @@ def test_private_workspace_store_initializes_sqlite(tmp_path: Path) -> None:
     assert workspace.database.is_file()
     assert workspace.artifacts.is_dir()
     assert workspace.notes.is_dir()
-    with sqlite3.connect(workspace.database) as conn:
-        rows = dict(conn.execute("SELECT key, value FROM workspace_meta").fetchall())
+    conn = sqlite3.connect(workspace.database)
+    rows = dict(conn.execute("SELECT key, value FROM workspace_meta").fetchall())
+    conn.close()
     assert rows["schema"] == PRIVATE_WORKSPACE_SCHEMA_VERSION
     assert rows["scope"] == "reason"
     assert rows["owner_id"] == "reason-abc"

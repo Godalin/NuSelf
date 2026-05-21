@@ -19,7 +19,7 @@ from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
 from pydantic import BaseModel, Field, PrivateAttr
 
-from nuself.agent.skills import AgentSkill, load_agent_skills, render_agent_skill_sections
+from nuself.agent.skills import AgentSkill, load_agent_skills, render_tool_placeholders
 from nuself.agent.thread import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.tools import build_langchain_chat_tools
 from nuself.agent.persona import (
@@ -52,7 +52,7 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
 from nuself.trace.service import TraceRecorder
 
-ToolServiceComponent = Literal["memory", "reflection", "reasoning", "trace", "selves"]
+ToolServiceComponent = Literal["memory", "reflection", "reasoning", "trace", "selves", "skill"]
 ConversationNodeName = Literal[
     "prepare_context",
     "respond",
@@ -598,6 +598,14 @@ class ConversationGraphRuntime:
         )
         self._tools: dict[str, BaseTool] = {tool.name: tool for tool in tools}
         self._skills: tuple[AgentSkill, ...] = load_agent_skills()
+        self._tools_by_skill: dict[str, tuple[str, ...]] = {
+            skill.name: tuple(
+                name for name in self._tools
+                if _tool_service_component(name) == skill.name
+            )
+            for skill in self._skills
+        }
+        self._tools["load_skill"] = self._build_skill_loader_tool()
         self._graph_driver = _ConversationGraphDriver(self)
 
     def run_turn(
@@ -795,7 +803,7 @@ class ConversationGraphRuntime:
             parts.extend(["", "Relevant memory context:", state.memory_context])
         if state.persisted_state.summary != "":
             parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
-        parts.extend(_tool_prompt_sections(self._tools.values(), self._skills))
+        parts.extend(_tool_prompt_sections(self._tools.values()))
         return "\n".join(parts)
 
     # ------------------------------------------------------------------
@@ -1210,6 +1218,32 @@ class ConversationGraphRuntime:
             },
         )
 
+    # ------------------------------------------------------------------
+    # Skill loader tool
+    # ------------------------------------------------------------------
+
+    def _build_skill_loader_tool(self) -> BaseTool:
+        skill_lines = "\n".join(f"  - {skill.name}: {skill.description}" for skill in self._skills)
+
+        def load_skill(skill_name: str) -> str:
+            for skill in self._skills:
+                if skill.name == skill_name:
+                    tools = self._tools_by_skill.get(skill_name, ())
+                    body = f"Service skill: {skill.name}"
+                    if tools:
+                        body += f"\nAllowed tools: {', '.join(tools)}"
+                    body += f"\n\n{render_tool_placeholders(skill.instructions, skill_name=skill_name, tools=tools)}"
+                    return body
+            return f"Error: unknown skill '{skill_name}'. Available skills:\n{skill_lines}"
+
+        from langchain_core.tools import StructuredTool
+
+        return StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
+            name="load_skill",
+            description=f"Load a service skill's behavioral policy. Skills define when and how the agent should use service tools.\n\nAvailable skills:\n{skill_lines}",
+            func=load_skill,
+        )
+
 
 # ======================================================================
 # LangChain supervisor (inline — wraps create_agent for one chat turn)
@@ -1516,6 +1550,8 @@ def _tool_service_component(tool_name: str) -> ToolServiceComponent | None:
         return "trace"
     if tool_name.startswith("selves_"):
         return "selves"
+    if tool_name == "load_skill":
+        return "skill"
     return None
 
 
@@ -1548,7 +1584,7 @@ def _truncate_tool_debug_text(text: str, limit: int = 200) -> str:
     return text[: limit - 3].rstrip() + "..."
 
 
-def _tool_prompt_sections(tools: "Iterable[BaseTool]", skills: tuple[AgentSkill, ...]) -> list[str]:
+def _tool_prompt_sections(tools: "Iterable[BaseTool]") -> list[str]:
     lines = [
         "",
         "Available tools:",
@@ -1558,31 +1594,12 @@ def _tool_prompt_sections(tools: "Iterable[BaseTool]", skills: tuple[AgentSkill,
         "Tools are bound through LangChain's native tool-calling API.",
         'Do not write visible markers such as "[Tool call: memory_search]" or JSON tool fields in the answer body.',
         "The tool will be executed and its result injected back into context. Only then generate your final answer.",
+        "Service skills define when and how to use tools. Use `load_skill` to load a skill's behavioral policy.",
         "Tools available:",
     ]
     for tool in tools:
         args = _tool_args_signature(tool)
         lines.append(f"- {tool.name}({args}): {tool.description}")
-
-    tools_by_service: dict[str, list[str]] = {}
-    for tool in tools:
-        sc = _tool_service_component(tool.name)
-        if sc is not None:
-            tools_by_service.setdefault(sc, []).append(tool.name)
-    skill_service_map = {
-        "memory": "memory",
-        "reflection": "reflection",
-        "reason": "reasoning",
-        "trace": "trace",
-        "selves": "selves",
-    }
-    allowed_tools_by_skill = {
-        skill_name: tuple(tools_by_service.get(service, []))
-        for skill_name, service in skill_service_map.items()
-    }
-    lines.extend(
-        render_agent_skill_sections(skills, allowed_tools_by_skill=allowed_tools_by_skill)
-    )
     return lines
 
 

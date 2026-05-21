@@ -15,7 +15,6 @@ from nuself.agent.chat import (
     ConversationGraphRuntime,
     ConversationTurnState,
     ConversationRuntimeResult,
-    ParsedChatResponse,
     ThreadMessage,
     ThreadState,
     ThreadStore,
@@ -30,12 +29,6 @@ from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.trace.repository import TraceRepository
-
-
-def _event_metadata(event: object) -> dict[str, object]:
-    metadata = getattr(event, "metadata")
-    assert metadata is not None
-    return cast(dict[str, object], metadata)
 
 
 def _chat_tool(
@@ -804,12 +797,9 @@ def test_chat_agent_includes_service_skills_in_system_prompt(tmp_path: Path) -> 
     agent.respond("do you remember my earlier preferences?")
 
     system_prompt = llm.calls[0][0].content
-    assert "Service skills:" in system_prompt
-    assert "The following service skills are loaded from Agent Skills SKILL.md files." in system_prompt
-    assert "- memory:" in system_prompt
-    assert "Durable memory is not ambient context" in system_prompt
-    assert "Use `memory_search` before answering" in system_prompt
-    assert "- reflection:" in system_prompt
+    assert "load_skill" in system_prompt
+    assert "memory" in system_prompt
+    assert "reflection" in system_prompt
 
 
 def test_conversation_runtime_registers_langchain_tools(tmp_path: Path) -> None:
@@ -1145,10 +1135,7 @@ def test_chat_agent_includes_reason_and_trace_tools_and_skills(tmp_path: Path) -
     assert "trace_search" in system_prompt
     assert "trace_count" in system_prompt
     assert "trace_show" in system_prompt
-    assert "- reason:" in system_prompt
-    assert "Reason is NuSelf's durable long-run thinking space." in system_prompt
-    assert "- trace:" in system_prompt
-    assert "Trace is NuSelf's thought provenance database." in system_prompt
+    assert "load_skill" in system_prompt
 
 
 # --- Memory management tools ---

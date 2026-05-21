@@ -54,7 +54,8 @@ class PrivateWorkspaceStore:
 def _initialize_workspace_database(path: Path, *, scope: str, owner_id: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     created_at = datetime.now(UTC).isoformat()
-    with sqlite3.connect(path) as conn:
+    conn = sqlite3.connect(path)
+    try:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS workspace_meta (
@@ -73,6 +74,9 @@ def _initialize_workspace_database(path: Path, *, scope: str, owner_id: str) -> 
             "INSERT OR IGNORE INTO workspace_meta (key, value) VALUES (?, ?)",
             metadata.items(),
         )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _validate_segment(value: str, label: str) -> None:
