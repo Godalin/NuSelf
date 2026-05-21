@@ -20,7 +20,7 @@ from nuself.agent.chat import (
     ThreadState,
     ThreadStore,
 )
-from nuself.agent.graph_driver import ConversationGraphRuntimeError
+from nuself.agent.chat import ConversationGraphRuntimeError
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
