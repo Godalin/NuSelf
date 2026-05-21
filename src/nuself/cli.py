@@ -6,6 +6,7 @@ import argparse
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -205,6 +206,29 @@ class InteractiveChatResult:
     memory_update: str | None = None
     retryable: bool = False
     error: str | None = None
+
+
+@dataclass
+class _InteractiveLogCursor:
+    seen_event_keys: set[str]
+
+    @classmethod
+    def from_project(cls, project_root: Path | None) -> "_InteractiveLogCursor":
+        return cls({_log_event_key(event) for event in read_log_events(project_root=project_root)})
+
+    def read_new_events(self, project_root: Path | None) -> list[LogEvent]:
+        events = read_log_events(project_root=project_root)
+        new_events: list[LogEvent] = []
+        for event in events:
+            key = _log_event_key(event)
+            if key not in self.seen_event_keys:
+                new_events.append(event)
+            self.seen_event_keys.add(key)
+        return new_events
+
+
+def _log_event_key(event: LogEvent) -> str:
+    return json.dumps(event.to_record(), sort_keys=True, ensure_ascii=True)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -2145,21 +2169,35 @@ def _send_interactive_chat_turn(
     message: str,
     session: InteractiveSession,
 ) -> int:
-    event_offset = len(read_log_events(project_root=project_root))
+    log_cursor = _InteractiveLogCursor.from_project(project_root)
     result = InteractiveChatResult(code=1)
     printed_logs = False
     turn_id = f"turn-{uuid4().hex}"
     for attempt in range(1, INTERACTIVE_CHAT_ATTEMPTS + 1):
         if attempt > 1:
+            write_log_event(
+                "chat",
+                "turn_retry",
+                "retrying chat turn after retryable transport failure",
+                project_root=project_root,
+                thread_id=thread_id,
+                status="retry",
+                metadata={
+                    "attempt": attempt,
+                    "max_attempts": INTERACTIVE_CHAT_ATTEMPTS,
+                    "turn_id": turn_id,
+                    "previous_error": result.error,
+                },
+            )
             print()
             print(f"Retrying message after failed attempt ({attempt}/{INTERACTIVE_CHAT_ATTEMPTS})...")
-        result, event_offset, events, printed_logs = _run_interactive_send_with_live_logs(
+        result, events, printed_logs = _run_interactive_send_with_live_logs(
             send_message,
             message,
             thread_id,
             turn_id,
             project_root,
-            event_offset,
+            log_cursor,
             printed_logs=printed_logs,
         )
         previous_next_index = session.captured_next_indexes.get(
@@ -2196,10 +2234,10 @@ def _run_interactive_send_with_live_logs(
     thread_id: str,
     turn_id: str | None,
     project_root: Path | None,
-    event_offset: int,
+    log_cursor: _InteractiveLogCursor,
     *,
     printed_logs: bool,
-) -> tuple[InteractiveChatResult, int, list[LogEvent], bool]:
+) -> tuple[InteractiveChatResult, list[LogEvent], bool]:
     result_box: list[InteractiveChatResult] = []
     error_box: list[BaseException] = []
 
@@ -2214,21 +2252,19 @@ def _run_interactive_send_with_live_logs(
     captured_events: list[LogEvent] = []
     while send_thread.is_alive():
         time.sleep(INTERACTIVE_LOG_POLL_INTERVAL_SECONDS)
-        new_events = _interactive_activity_events(project_root, event_offset)
-        event_offset += len(new_events)
+        new_events = _interactive_activity_events(project_root, log_cursor)
         if new_events:
             captured_events.extend(new_events)
             printed_logs = _print_visible_interactive_activity_events(new_events, printed_logs=printed_logs)
     send_thread.join()
-    new_events = _interactive_activity_events(project_root, event_offset)
-    event_offset += len(new_events)
+    new_events = _interactive_activity_events(project_root, log_cursor)
     if new_events:
         captured_events.extend(new_events)
         printed_logs = _print_visible_interactive_activity_events(new_events, printed_logs=printed_logs)
     if error_box:
         print(f"chat turn failed: {error_box[0]}", file=sys.stderr)
-        return InteractiveChatResult(code=1), event_offset, captured_events, printed_logs
-    return result_box[0] if result_box else InteractiveChatResult(code=1), event_offset, captured_events, printed_logs
+        return InteractiveChatResult(code=1), captured_events, printed_logs
+    return result_box[0] if result_box else InteractiveChatResult(code=1), captured_events, printed_logs
 
 
 def _print_visible_interactive_activity_events(events: list[LogEvent], *, printed_logs: bool) -> bool:
@@ -2795,9 +2831,8 @@ def _print_recent_logs(project_root: Path | None, *, limit: int) -> None:
         print(render_log_event(event))
 
 
-def _interactive_activity_events(project_root: Path | None, event_offset: int) -> list[LogEvent]:
-    events = read_log_events(project_root=project_root)
-    return events[event_offset:]
+def _interactive_activity_events(project_root: Path | None, log_cursor: _InteractiveLogCursor) -> list[LogEvent]:
+    return log_cursor.read_new_events(project_root)
 
 
 def _print_interactive_activity_events(events: list[LogEvent]) -> None:
@@ -2820,6 +2855,15 @@ def _is_interactive_activity_log(event: LogEvent) -> bool:
     if event.component == "chat":
         if event.event == "service_tool_called":
             return True
+        if event.event in {
+            "turn_started",
+            "turn_completed",
+            "turn_reused",
+            "turn_retry",
+            "final_response_retry",
+            "final_response_completed",
+        }:
+            return True
         return _is_failure_activity_log(event)
     if event.component == "daemon":
         return _is_failure_activity_log(event)
@@ -2830,10 +2874,11 @@ def _is_failure_activity_log(event: LogEvent) -> bool:
     if event.status in {"error", "failed", "failed_over", "exhausted"}:
         return True
     return event.event in {
+        "chat_turn_failed",
         "daemon_chat_failed",
+        "final_response_failed",
         "llm_endpoint_failed_over",
         "llm_endpoint_unavailable",
-        "presentation_failed",
         "turn_failed",
     }
 

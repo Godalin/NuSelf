@@ -18,6 +18,28 @@ for turn in 1..max_turns:
 evaluate(blocking, strong_support, composite)
 ```
 
+## Chat Subagent Boundary
+
+In chat, `selves` is an agent-facing **synchronous subagent service**, not a mandatory fixed stage of every conversation turn.
+
+The main chat agent is the supervisor. It owns the user-visible conversation context, receives user input, decides which tools or subagents to call, and produces the final reply. The selves system is exposed to that supervisor as a LangChain service tool:
+
+```text
+chat supervisor → selves_consult(...) → persona subgraph / competitive discussion → tool result → chat supervisor final reply
+```
+
+This follows the LangChain subagent pattern: a subagent is invoked as a tool, runs in isolated context, returns a result to the main agent, and does not speak directly to the user. The main chat agent decides whether to use the returned perspectives and how to combine them with memory, reflection, reason, trace, or other tool results.
+
+Rules:
+
+- Ordinary chat must not automatically run persona activation before tool use.
+- Direct tool/status questions should usually call the requested service tools directly, not `selves_consult`.
+- `selves_consult` is appropriate for multi-perspective requests, value conflicts, architectural tradeoffs, emotionally loaded reflection, self-model questions, or explicit requests for internal discussion.
+- Persona contributions and competitive discussion traces remain internal context for the final answer. The user may see them through logs/transcript export, but the final NuSelf reply should not dump raw persona internals unless explicitly asked.
+- Chat-triggered selves activity must be logged as `[selves]` activity and the tool call itself must also be logged through the caller/service format as `[chat] [selves] service_tool_called`.
+
+Internally, the `selves_consult` subagent may reuse the existing persona LangGraph subgraph and competitive discussion service. The public boundary is still the LangChain tool/subagent contract; the old fixed chat graph nodes are transitional plumbing and must not be the primary activation path.
+
 ## Persona Node Implementation
 
 When an LLM is available, both ordinary chat self passes and competitive discussions use **LLM-backed nodes**:

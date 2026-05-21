@@ -4,11 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.agent.chat import (
-    ConversationGraphRuntime,
-    ConversationTurnState,
-    ThreadState,
-)
+from nuself.agent.chat import ConversationGraphRuntime, ConversationTurnState, ThreadState
 from nuself.llm import ChatMessage
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
@@ -42,8 +38,8 @@ class StructuredFakeLLM:
         return self.response
 
 
-def test_synthesis_is_injected_into_initial_response_prompt(tmp_path: Path) -> None:
-    """Verify that persona synthesis is included in the LLM prompt for initial response."""
+def test_selves_consult_returns_internal_synthesis(tmp_path: Path) -> None:
+    """Verify that selves synthesis is now exposed through the subagent tool."""
     llm = StructuredFakeLLM('{"answer":"Synthesis-aware reply.","evidence_references":[],"confidence":0.5}')
     runtime = ConversationGraphRuntime(
         tmp_path,
@@ -51,38 +47,13 @@ def test_synthesis_is_injected_into_initial_response_prompt(tmp_path: Path) -> N
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
-    # Manually run through the graph to control synthesis
-    turn_state = ConversationTurnState.start(
-        ThreadState.empty("synthesis-test"),
-        "What are the risks and implementation steps for this decision?",  # Mixed intent
-        "synthesis-test",
+    result = runtime._consult_selves_tool(  # type: ignore[reportPrivateUsage]
+        "What are the risks and implementation steps for this decision?"
     )
-    
-    # Step 1: prepare_context
-    prepared = runtime.prepare_context_node(turn_state)
-    
-    # Step 2: activate personas (LLM returns skeptic + builder + analyst for mixed intent)
-    activated = runtime.persona_activation_node(prepared.state)
-    assert activated.state.persona_activation is not None
-    assert activated.state.persona_activation.activated is True
-    
-    # Step 3: run personas to generate synthesis
-    run_personas = runtime.run_personas_node(activated.state)
-    persona_turn_state = run_personas.state.persona_turn_state
-    assert persona_turn_state is not None
-    assert len(persona_turn_state.contributions) >= 2  # At least skeptic + builder, possibly analyst
-    assert persona_turn_state.synthesis is not None
-    
-    # Step 4: build prompt and verify synthesis is included
-    prompt = runtime._build_prompt(run_personas.state)  # type: ignore[reportPrivateUsage]
-    system_prompt = prompt[0].content
-    
-    # Verify synthesis is in the system prompt
-    assert "Internal perspective fusion:" in system_prompt
-    assert "Summary:" in system_prompt
-    assert persona_turn_state.synthesis.summary in system_prompt
-    assert "skeptic_self" in system_prompt or "builder_self" in system_prompt
-    assert "Do not narrate internal persona composition" in system_prompt
+
+    assert "Selves consultation result:" in result
+    assert "LLM-backed synthesis of internal perspectives." in result
+    assert "skeptic_self" in result or "builder_self" in result
 
 
 def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
@@ -115,8 +86,8 @@ def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
     assert isinstance(payload["epistemic_status"], str)
 
 
-def test_synthesis_empty_when_personas_not_activated(tmp_path: Path) -> None:
-    """Verify that synthesis is None when personas are not activated."""
+def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
+    """Verify that the chat graph no longer auto-runs selves before tools."""
     llm = StructuredFakeLLM(
         '{"answer":"No synthesis reply.","evidence_references":[],"confidence":0.5}',
         activation_response={
@@ -154,8 +125,8 @@ def test_synthesis_empty_when_personas_not_activated(tmp_path: Path) -> None:
     assert "Internal perspective fusion:" not in system_prompt
 
 
-def test_synthesis_included_with_explicit_multi_persona_request(tmp_path: Path) -> None:
-    """Verify synthesis is generated and injected for explicit multi-persona requests."""
+def test_selves_consult_handles_explicit_multi_persona_request(tmp_path: Path) -> None:
+    """Verify synthesis is generated for explicit multi-persona requests through the subagent tool."""
     llm = StructuredFakeLLM(
         '{"answer":"Multi-view reply.","evidence_references":[],"confidence":0.6}',
         activation_response={
@@ -172,35 +143,15 @@ def test_synthesis_included_with_explicit_multi_persona_request(tmp_path: Path) 
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
-    turn_state = ConversationTurnState.start(
-        ThreadState.empty("explicit-multi"),
+    result = runtime._consult_selves_tool(  # type: ignore[reportPrivateUsage]
         "I want multiple perspectives on this: what are the risks, implementation plan, historical context, and emotional impact?",
-        "explicit-multi",
     )
-    
-    prepared = runtime.prepare_context_node(turn_state)
-    activated = runtime.persona_activation_node(prepared.state)
-    
-    assert activated.state.persona_activation is not None
-    assert activated.state.persona_activation.activated is True
-    assert len(activated.state.persona_activation.selected_personas) == 4
-    
-    # Run personas to generate synthesis
-    run_personas = runtime.run_personas_node(activated.state)
-    persona_turn_state = run_personas.state.persona_turn_state
-    assert persona_turn_state is not None
-    assert len(persona_turn_state.contributions) >= 3  # Multiple contributions
-    assert persona_turn_state.synthesis is not None
-    
-    # Verify synthesis summary includes persona ids
-    synthesis = persona_turn_state.synthesis
-    assert len(synthesis.source_personas) >= 3
-    
-    # Build prompt and verify synthesis details
-    prompt = runtime._build_prompt(run_personas.state)  # type: ignore[reportPrivateUsage]
-    system_prompt = prompt[0].content
-    assert "Internal perspective fusion:" in system_prompt
-    assert f"Perspectives involved: {', '.join(synthesis.source_personas)}" in system_prompt or len(synthesis.source_personas) > 0
+
+    assert "skeptic_self" in result
+    assert "builder_self" in result
+    assert "historian_self" in result
+    assert "care_self" in result
+    assert "source_personas:" in result
 
 
 def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path: Path) -> None:
@@ -232,9 +183,7 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
     
     prepared = runtime.prepare_context_node(turn_state)
     activated = runtime.persona_activation_node(prepared.state)
-    run_personas = runtime.run_personas_node(activated.state)
-    
-    prompt = runtime._build_prompt(run_personas.state)  # type: ignore[reportPrivateUsage]
+    prompt = runtime._build_prompt(activated.state)  # type: ignore[reportPrivateUsage]
     system_prompt = prompt[0].content
 
     # Verify essential sections are preserved
@@ -242,13 +191,12 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
     assert "private AI mirror" in system_prompt
     assert "Available tools:" in system_prompt
     assert "memory_search" in system_prompt
-    
-    # And synthesis is also present
-    assert "Internal perspective fusion:" in system_prompt
+    assert "selves_consult" in system_prompt
+    assert "Internal perspective fusion:" not in system_prompt
 
 
-def test_activated_turn_uses_synthesizer_for_initial_response(tmp_path: Path) -> None:
-    """Verify that activated turns use synthesizer prompt instead of main system prompt."""
+def test_initial_response_uses_main_prompt_after_noop_persona_node(tmp_path: Path) -> None:
+    """Verify that ordinary chat uses the main prompt and can call selves as a tool."""
     llm = StructuredFakeLLM('{"answer":"Synthesized reply.","evidence_references":[],"confidence":0.8,"epistemic_status":"grounded"}')
     runtime = ConversationGraphRuntime(
         tmp_path,
@@ -264,22 +212,20 @@ def test_activated_turn_uses_synthesizer_for_initial_response(tmp_path: Path) ->
     
     prepared = runtime.prepare_context_node(turn_state)
     activated = runtime.persona_activation_node(prepared.state)
-    run_personas = runtime.run_personas_node(activated.state)
-    
-    # initial_response_node should use synthesizer prompt
-    initial = runtime.initial_response_node(run_personas.state)
+    initial = runtime.initial_response_node(activated.state)
     
     assert initial.state.initial_response is not None
     assert initial.state.initial_response.answer == "Synthesized reply."
     assert initial.state.initial_response.epistemic_status == "grounded"
     assert initial.state.initial_response.confidence == 0.8
     
-    # Verify synthesizer prompt was used (system prompt should mention "synthesizer self")
+    # Verify main prompt was used; selves is available as a tool.
     assert len(llm.calls) >= 1
-    synthesizer_call = llm.calls[-1]
-    system_prompt = synthesizer_call[0].content
-    assert "synthesizer self" in system_prompt
-    assert "Persona contributions:" in system_prompt
+    system_prompt = llm.calls[-1][0].content
+    assert "You are NuSelf" in system_prompt
+    assert "selves_consult" in system_prompt
+    assert "synthesizer self" not in system_prompt
+    assert "Persona contributions:" not in system_prompt
     assert "Do not narrate internal persona composition" in system_prompt
 
 

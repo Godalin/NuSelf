@@ -12,6 +12,7 @@ def test_load_agent_skills_from_skill_md_files() -> None:
     assert "reflection" in skills
     assert "reason" in skills
     assert "trace" in skills
+    assert "selves" in skills
     assert "Durable memory is not ambient context" in skills["memory"].instructions
     assert "memory_search" not in skills["memory"].instructions
     assert "{tool:search}" in skills["memory"].instructions
@@ -25,6 +26,7 @@ def test_render_agent_skill_sections_with_generated_allowed_tools() -> None:
         "reflection": ("reflection_list_pending", "reflection_count", "reflection_dismiss", "reflection_archive"),
         "reason": ("reason_list_active", "reason_count", "reason_show"),
         "trace": ("trace_search", "trace_count", "trace_show"),
+        "selves": ("selves_consult",),
     }
     lines = render_agent_skill_sections(skills, allowed_tools_by_skill=allowed_tools_by_skill)
 
@@ -33,6 +35,7 @@ def test_render_agent_skill_sections_with_generated_allowed_tools() -> None:
     assert any("Allowed tools: memory_search" in line for line in lines)
     assert any("MUST call `memory_search` before answering" in line for line in lines)
     assert any("Use `reflection_list_pending` when" in line for line in lines)
+    assert any("Use `selves_consult` when" in line for line in lines)
     assert all("{tool:" not in line for line in lines)
     assert any("Durable memory is not ambient context." in line for line in lines)
 

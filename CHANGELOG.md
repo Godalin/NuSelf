@@ -9,6 +9,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 ### Added
 
 - Added subsystem-prefixed chat service tools, including `memory_count`, `reflection_count`, `reason_count`, and `trace_count` for quick service-size queries.
+- Added `selves_consult`, a chat-callable multi-persona subagent tool for perspective synthesis and competitive discussion.
 
 ### Changed
 
@@ -16,6 +17,12 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Chat service tools now use subsystem-prefixed names such as `memory_search`, `reflection_list_pending`, `reason_show`, and `trace_search`; old generic tool names are not retained.
 - Agent Skills now use local tool placeholders that are rendered from the active tool registry, so skill instructions stay aligned with generated service tool names.
 - Direct service-status questions now skip persona activation and fallback tool execution can chain multiple service tool calls before producing the final reply.
+- Selves/persona work now participates through the same agent tool loop as other services instead of running as a fixed pre-tool chat stage.
+- Chat now uses the chat supervisor's structured output directly as the final reply, keeping a boundary retry but removing the extra presentation-agent model call from the normal path.
+- Chat lifecycle and retry logs now show turn start, completion, transport retry, and final-response retry events in interactive activity output.
+- Interactive chat log streaming now tracks seen log-event identities instead of timestamp-sorted offsets, preventing old or delayed events from being replayed into the current turn output.
+- Chat service-tool logs now include the active thread and turn metadata so tool calls can be attributed to the correct logical chat turn.
+- Chat now reuses duplicate same-name/same-argument tool calls within one turn and treats visible `[Tool call: ...]` markers anywhere in the final answer as boundary leaks.
 - Chat final responses now prefer LangChain structured output on native LangChain chat models, keeping prompted JSON parsing as a fallback path.
 - Presentation now prefers LangChain structured output on native LangChain chat models before falling back to prompted JSON parsing.
 - Persona activation, persona contribution, and persona synthesis now prefer LangChain structured output on native LangChain chat models.
@@ -32,6 +39,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 ### Fixed
 
 - Fixed raw `[Tool call: ...]` text leaking into NuSelf replies by recovering parseable markers into real tool calls and rejecting tool markers at the presentation boundary.
+- Fixed older persisted replies with raw `[Tool call: ...]` markers polluting future chat prompts and causing the agent to invent unavailable tools such as `get_recent_memories`.
 - Fixed raw `[TOOL_CALL] ... [/TOOL_CALL]` text leaking into NuSelf replies by recovering it into real tool calls and normalizing legacy tool names before execution and logging.
 - Fixed chat service-tool logging so reflection, reason, and trace tool calls consistently render with caller/service tags and appear in default transcript exports.
 - Tightened LLM endpoint availability status detection so failover only treats exact HTTP 401, 402, 403, and 429 responses as endpoint availability failures.

@@ -38,7 +38,8 @@ NuSelf should fail in a way that preserves root-cause information, avoids repeat
 
 When daemon chat handling fails:
 
-- Write a `chat/turn_failed` log with:
+- The chat runtime writes `chat/turn_failed` when the failure occurs inside the chat graph.
+- The daemon request layer writes `daemon/chat_turn_failed` with:
   - `level=error`
   - `status=error`
   - `thread_id`
@@ -92,8 +93,10 @@ Human-readable error logs follow the shared log style from [`cli-interaction.md`
 
 ```text
 [chat] turn_failed status=error thread=default request=<id> error="outer <- root"
-  daemon chat turn failed
+  chat turn failed
 ```
+
+Daemon request-layer failures render as `[daemon] chat_turn_failed ...` and preserve the same compact exception chain.
 
 The `error` field should stay in the header when short enough for the normal renderer. Longer body text, if introduced later, should be rendered as an indented body rather than raw JSON.
 

@@ -26,6 +26,7 @@ def build_langchain_chat_tools(
     query_service: MemoryQueryService,
     reflection_repository: ReflectionRepository,
     project_root: Path | None,
+    selves_consult: Callable[[str, str, str | None], str] | None = None,
 ) -> tuple[BaseTool, ...]:
     """Build the LangChain tool registry for the chat runtime."""
 
@@ -240,8 +241,20 @@ def build_langchain_chat_tools(
             return f"Error: {exc}"
         return render_trace_detail(trace, service.links_for(trace.id))
 
+    def consult_selves(topic: str, mode: str = "consult", context: str | None = None) -> str:
+        """Invoke NuSelf's internal multi-persona subagent for perspective synthesis."""
+
+        if selves_consult is None:
+            return "Error: selves consultation service is not configured"
+        topic_str = str(topic) if topic else ""
+        if not topic_str.strip():
+            return "Error: topic must be a non-empty string"
+        mode_str = str(mode) if mode else "consult"
+        context_str = str(context) if context is not None else None
+        return selves_consult(topic_str.strip(), mode_str.strip() or "consult", context_str)
+
     tool_from_function = _structured_tool_factory()
-    return (
+    tools: list[BaseTool] = [
         tool_from_function(
             search_memory,
             name="memory_search",
@@ -361,7 +374,21 @@ def build_langchain_chat_tools(
                 "Show a specific thought provenance trace record with related links. Requires a trace_id."
             ),
         ),
-    )
+    ]
+    if selves_consult is not None:
+        tools.append(
+            tool_from_function(
+                consult_selves,
+                name="selves_consult",
+                description=(
+                    "Invoke NuSelf's internal multi-persona subagent for perspective synthesis. "
+                    "Use for explicit multi-perspective requests, complex design tradeoffs, value conflicts, "
+                    "emotionally loaded reflection, self-model questions, or when the user asks for inner discussion. "
+                    "Do not use for direct service status/count/search questions."
+                ),
+            )
+        )
+    return tuple(tools)
 
 
 def _structured_tool_factory() -> StructuredToolFactory:

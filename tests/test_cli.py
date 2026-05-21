@@ -6,7 +6,7 @@ import subprocess
 import sys
 import threading
 import tomllib
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 import pytest
 
@@ -1060,6 +1060,20 @@ def test_logs_command_can_render_json(tmp_path: Path, capsys: CaptureFixture) ->
     assert result == 0
     assert '"component": "daemon"' in captured.out
     assert '"event": "started"' in captured.out
+
+
+def test_interactive_activity_cursor_does_not_replay_seen_events(tmp_path: Path) -> None:
+    write_log_event("chat", "turn_started", "old turn", project_root=tmp_path)
+    cli_module = cast(Any, cli)
+    cursor = cli_module._InteractiveLogCursor.from_project(tmp_path)
+
+    write_log_event("chat", "turn_completed", "new turn", project_root=tmp_path)
+
+    first_read = cli_module._interactive_activity_events(tmp_path, cursor)
+    second_read = cli_module._interactive_activity_events(tmp_path, cursor)
+
+    assert [event.event for event in first_read] == ["turn_completed"]
+    assert second_read == []
 
 
 def test_read_log_events_tolerates_legacy_daemon_lines(tmp_path: Path) -> None:

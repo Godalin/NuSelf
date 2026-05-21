@@ -238,8 +238,8 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
         except RuntimeError as exc:
             error_detail = _format_exception_chain(exc)
             write_log_event(
-                "chat",
-                "turn_failed",
+                "daemon",
+                "chat_turn_failed",
                 "daemon chat turn failed",
                 project_root=state.project_root,
                 level="error",
@@ -262,8 +262,8 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
         if memory_update is not None and memory_update.changed:
             payload["memory_update"] = memory_update.summary()
         write_log_event(
-            "chat",
-            "turn_completed",
+            "daemon",
+            "chat_turn_completed",
             "daemon chat turn completed",
             project_root=state.project_root,
             request_id=request.request_id,

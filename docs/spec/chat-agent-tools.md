@@ -14,6 +14,8 @@ NuSelf must not keep a parallel chat-tool protocol, class hierarchy, or registry
 
 Tools are **stateless callables** at the LangChain boundary. They receive structured primitive arguments and return a string result that is injected back into the conversation context.
 
+Subagents that are visible to the chat supervisor use the same boundary. A subagent is exposed as a tool whose implementation may run an internal LangGraph or LangChain agent and then return a compact result to the supervisor.
+
 ### Tool Registry
 
 `ConversationGraphRuntime` owns a `dict[str, BaseTool]` registry. Adding a tool requires three steps:
@@ -45,6 +47,8 @@ skills/
     SKILL.md
   trace/
     SKILL.md
+  selves/
+    SKILL.md
 ```
 
 Each `SKILL.md` starts with YAML frontmatter containing at least `name` and `description`, followed by Markdown instructions. NuSelf also uses `allowed-tools` to name the LangChain tools the skill may call.
@@ -74,7 +78,7 @@ NuSelf must not ask the model to print a private tool protocol in the assistant 
 - no NuSelf-only `"tool"` / `"tool_args"` JSON envelope as the primary path;
 - no hidden parallel registry outside LangChain `BaseTool` objects.
 
-`ConversationGraphRuntime` may keep its larger LangGraph workflow for NuSelf-specific stages such as context preparation, persona activation, presentation, state update, and compression. Inside the response-generation stage, tool calling is delegated to LangChain chat model tool-calling APIs.
+`ConversationGraphRuntime` may keep its larger LangGraph workflow for NuSelf-specific stages such as context preparation, presentation, state update, and compression. Inside the response-generation stage, tool calling is delegated to LangChain chat model tool-calling APIs. Persona/selves work is not a fixed pre-response stage; it is invoked through the `selves_consult` subagent tool when the main chat agent decides it is useful.
 
 Fallback LLMs that do not implement native tool calling may produce a plain answer, but they must not emulate tools by printing tool markers to the user.
 
@@ -82,7 +86,9 @@ If a non-native model still emits a recoverable tool marker such as `[Tool call:
 
 Fallback tool execution must support short sequential tool loops. If a follow-up response after one tool result requests another available tool, the runtime should execute it, append the new result to the tool-result context, and ask again until the model returns a real final answer or the loop limit is reached.
 
-Direct service-status queries, such as asking how many memory/reflection/reason/trace records exist, should skip persona activation. These are operational tool queries; persona discussion before tool results tends to invent capability limits and adds noise.
+Within one logical chat turn, repeated tool calls with the same normalized tool name and identical arguments should reuse the first result. The runtime should still return a `ToolMessage` for every LangChain tool call id, but it should not execute or log duplicate service calls. This keeps interactive logs readable and prevents repeated status queries such as `memory_count` from looking like retries.
+
+Direct service-status queries, such as asking how many memory/reflection/reason/trace records exist, should call those service tools directly. These are operational tool queries; persona discussion before tool results tends to invent capability limits and adds noise.
 
 After any tool loop completes, the chat runtime must request the final answer through LangChain structured output (`with_structured_output(...)` or `create_agent(..., response_format=...)`) when the active model supports it. Prompted JSON parsing is a compatibility fallback for deterministic local test doubles and non-agent subsystems, not the primary chat-agent response protocol.
 
@@ -94,6 +100,7 @@ After any tool loop completes, the chat runtime must request the final answer th
 |---|---|
 | `memory_search` | Query durable memory, profiles, and source chunks. |
 | `memory_count` | Count durable memory entries with optional type/tag filters. |
+| `selves_consult` | Invoke the internal multi-persona subagent for perspective synthesis. |
 
 Tool names must start with the owning subsystem name. This keeps agent-visible tool calls readable in logs and avoids generic names such as `search_*`, `list_*`, or `show_*` becoming ambiguous as more subsystems are exposed.
 
@@ -103,6 +110,16 @@ Tool names must start with the owning subsystem name. This keeps agent-visible t
 - **Behavior**: Counts memory entries from `MemoryEntryRepository.list()`, optionally filtered by memory `type` or `tags`.
 - **Returns**: A simple count string like `"Memory entries: 12 total"` or `"Memory entries: 3 total (filtered by type=['goal'], tags=['runtime'])"`.
 - **When to use**: When the user asks how many memories exist, wants a quick overview, or asks about specific types/tags.
+
+#### `selves_consult`
+
+- **Args**: `topic: str`, `mode: str = "consult"`, `context: str | None = None`
+- **Behavior**: Runs the internal selves subagent in isolated context. The subagent may activate relevant personas and, when warranted, run competitive discussion. It returns compact persona notes and synthesis to the main chat supervisor.
+- **Returns**: A concise internal-perspective report for the supervisor to use when composing the final user-facing answer.
+- **When to use**: When the user explicitly asks for multiple perspectives, asks for NuSelf's inner discussion, faces a tradeoff, asks an architectural/design question that benefits from internal challenge, or discusses emotionally loaded/self-model topics.
+- **When not to use**: Direct service status/count/search questions should call the relevant memory/reflection/reason/trace tools directly. The selves subagent should not pre-judge tool availability before tool results exist.
+
+`selves_consult` is a synchronous subagent tool. It does not speak directly to the user. The final answer is still produced by the main chat supervisor after receiving the tool result.
 
 ### New: Reflection Consumption Tools
 
@@ -231,7 +248,7 @@ The prompt must also state that these tools are loaded in the current NuSelf run
 
 Every chat response-generation prompt must also include a `Service skills` section rendered from loaded Agent Skills. The section is the usage policy for service-backed tools, not a second tool registry.
 
-Skill files must not hard-code globally registered tool names in their instruction body. They should reference local action placeholders such as `{tool:search}`, `{tool:list_pending}`, or `{tool:show}`. At prompt-render time, `render_agent_skill_sections(...)` replaces those placeholders with the actual tool names generated from the current tool registry, such as `memory_search` or `reflection_list_pending`.
+Skill files must not hard-code globally registered tool names in their instruction body. They should reference local action placeholders such as `{tool:search}`, `{tool:list_pending}`, `{tool:show}`, or `{tool:consult}`. At prompt-render time, `render_agent_skill_sections(...)` replaces those placeholders with the actual tool names generated from the current tool registry, such as `memory_search`, `reflection_list_pending`, or `selves_consult`.
 
 Example additions:
 
