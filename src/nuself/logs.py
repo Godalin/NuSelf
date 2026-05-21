@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Generator, Iterable
+from contextlib import contextmanager
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -18,6 +20,21 @@ LOG_COMPONENTS: tuple[LogComponent, ...] = ("daemon", "chat", "memory", "persona
 
 
 @dataclass(frozen=True)
+class LogContext:
+    """Ephemeral runtime context inherited by log events."""
+
+    thread_id: str | None = None
+    request_id: str | None = None
+    turn_id: str | None = None
+    job_id: str | None = None
+    trace_id: str | None = None
+    source: str | None = None
+
+
+_CURRENT_LOG_CONTEXT: ContextVar[LogContext] = ContextVar("nuself_log_context", default=LogContext())
+
+
+@dataclass(frozen=True)
 class LogEvent:
     """One local NuSelf log event."""
 
@@ -28,6 +45,10 @@ class LogEvent:
     message: str
     thread_id: str | None = None
     request_id: str | None = None
+    turn_id: str | None = None
+    job_id: str | None = None
+    trace_id: str | None = None
+    source: str | None = None
     node: str | None = None
     duration_ms: int | None = None
     status: str | None = None
@@ -45,6 +66,10 @@ class LogEvent:
         for key, value in (
             ("thread_id", self.thread_id),
             ("request_id", self.request_id),
+            ("turn_id", self.turn_id),
+            ("job_id", self.job_id),
+            ("trace_id", self.trace_id),
+            ("source", self.source),
             ("node", self.node),
             ("duration_ms", self.duration_ms),
             ("status", self.status),
@@ -77,6 +102,10 @@ class LogEvent:
             message=message,
             thread_id=_optional_str(record.get("thread_id")),
             request_id=_optional_str(record.get("request_id")),
+            turn_id=_optional_str(record.get("turn_id")),
+            job_id=_optional_str(record.get("job_id")),
+            trace_id=_optional_str(record.get("trace_id")),
+            source=_optional_str(record.get("source")),
             node=_optional_str(record.get("node")),
             duration_ms=_optional_int(record.get("duration_ms")),
             status=_optional_str(record.get("status")),
@@ -94,6 +123,10 @@ def write_log_event(
     level: LogLevel = "info",
     thread_id: str | None = None,
     request_id: str | None = None,
+    turn_id: str | None = None,
+    job_id: str | None = None,
+    trace_id: str | None = None,
+    source: str | None = None,
     node: str | None = None,
     duration_ms: int | None = None,
     status: str | None = None,
@@ -102,14 +135,19 @@ def write_log_event(
 ) -> LogEvent:
     """Append a structured log event and return it."""
 
+    context = current_log_context()
     event_record = LogEvent(
         time=now_iso(),
         level=level,
         component=component,
         event=event,
         message=message,
-        thread_id=thread_id,
-        request_id=request_id,
+        thread_id=thread_id if thread_id is not None else context.thread_id,
+        request_id=request_id if request_id is not None else context.request_id,
+        turn_id=turn_id if turn_id is not None else context.turn_id,
+        job_id=job_id if job_id is not None else context.job_id,
+        trace_id=trace_id if trace_id is not None else context.trace_id,
+        source=source if source is not None else context.source,
         node=node,
         duration_ms=duration_ms,
         status=status,
@@ -122,6 +160,40 @@ def write_log_event(
         log_file.write(json.dumps(event_record.to_record(), sort_keys=True, ensure_ascii=True))
         log_file.write("\n")
     return event_record
+
+
+def current_log_context() -> LogContext:
+    """Return the current runtime log context."""
+
+    return _CURRENT_LOG_CONTEXT.get()
+
+
+@contextmanager
+def log_context(
+    *,
+    thread_id: str | None = None,
+    request_id: str | None = None,
+    turn_id: str | None = None,
+    job_id: str | None = None,
+    trace_id: str | None = None,
+    source: str | None = None,
+) -> Generator[LogContext, None, None]:
+    """Temporarily extend the current runtime log context."""
+
+    previous = current_log_context()
+    merged = LogContext(
+        thread_id=thread_id if thread_id is not None else previous.thread_id,
+        request_id=request_id if request_id is not None else previous.request_id,
+        turn_id=turn_id if turn_id is not None else previous.turn_id,
+        job_id=job_id if job_id is not None else previous.job_id,
+        trace_id=trace_id if trace_id is not None else previous.trace_id,
+        source=source if source is not None else previous.source,
+    )
+    token: Token[LogContext] = _CURRENT_LOG_CONTEXT.set(merged)
+    try:
+        yield merged
+    finally:
+        _CURRENT_LOG_CONTEXT.reset(token)
 
 
 def log_path(component: LogComponent, *, project_root: Path | None = None) -> Path:

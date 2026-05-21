@@ -9,7 +9,6 @@ import json
 import logging
 import re
 import time
-from contextvars import ContextVar
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol, TypeAlias, TypeVar, cast
@@ -45,7 +44,7 @@ from nuself.llm import (
     record_llm_endpoint_success,
     redact_llm_error,
 )
-from nuself.logs import write_log_event
+from nuself.logs import current_log_context, log_context, write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
@@ -55,8 +54,6 @@ from nuself.trace.service import TraceRecorder
 
 ThreadRole = Literal["user", "assistant"]
 ToolServiceComponent = Literal["memory", "reflection", "reasoning", "trace", "selves"]
-_ACTIVE_TOOL_THREAD_ID: ContextVar[str] = ContextVar("nuself_active_tool_thread_id", default="default")
-_ACTIVE_TOOL_TURN_ID: ContextVar[str | None] = ContextVar("nuself_active_tool_turn_id", default=None)
 ConversationNodeName = Literal[
     "prepare_context",
     "persona_activation",
@@ -581,8 +578,9 @@ class ChatAgent:
                     "chat turn reused existing completed result",
                     project_root=self._project_root,
                     thread_id=thread_id,
+                    turn_id=turn_id,
+                    source="chat_runtime",
                     status="completed",
-                    metadata={"turn_id": turn_id} if turn_id is not None else None,
                 )
                 return state, completed
             runtime_result = self._runtime.run_turn(state, message, thread_id, turn_id=turn_id)
@@ -672,37 +670,29 @@ class ConversationGraphRuntime:
         *,
         turn_id: str | None = None,
     ) -> ConversationRuntimeResult:
-        thread_token = _ACTIVE_TOOL_THREAD_ID.set(thread_id)
-        turn_token = _ACTIVE_TOOL_TURN_ID.set(turn_id)
         started_at = time.monotonic()
-        write_log_event(
-            "chat",
-            "turn_started",
-            "chat turn started",
-            project_root=self._project_root,
-            thread_id=thread_id,
-            status="started",
-            metadata={"turn_id": turn_id} if turn_id is not None else None,
-        )
-        try:
-            turn_state = self._graph_driver.run(ConversationTurnState.start(state, message, thread_id, turn_id=turn_id))
-        except Exception as exc:
-            duration_ms = int((time.monotonic() - started_at) * 1000)
+        with log_context(thread_id=thread_id, turn_id=turn_id, source="chat_runtime"):
             write_log_event(
                 "chat",
-                "turn_failed",
-                "chat turn failed",
+                "turn_started",
+                "chat turn started",
                 project_root=self._project_root,
-                thread_id=thread_id,
-                duration_ms=duration_ms,
-                status="error",
-                error=str(exc),
-                metadata={"turn_id": turn_id} if turn_id is not None else None,
+                status="started",
             )
-            raise
-        finally:
-            _ACTIVE_TOOL_TURN_ID.reset(turn_token)
-            _ACTIVE_TOOL_THREAD_ID.reset(thread_token)
+            try:
+                turn_state = self._graph_driver.run(ConversationTurnState.start(state, message, thread_id, turn_id=turn_id))
+            except Exception as exc:
+                duration_ms = int((time.monotonic() - started_at) * 1000)
+                write_log_event(
+                    "chat",
+                    "turn_failed",
+                    "chat turn failed",
+                    project_root=self._project_root,
+                    duration_ms=duration_ms,
+                    status="error",
+                    error=str(exc),
+                )
+                raise
         updated = _require_thread_state(turn_state.updated_thread_state)
         final_response = _require_presented_response(turn_state.final_response)
         duration_ms = int((time.monotonic() - started_at) * 1000)
@@ -710,18 +700,16 @@ class ConversationGraphRuntime:
             "node_trace": list(turn_state.node_trace),
             "tool_call_count": len(turn_state.tool_results),
         }
-        if turn_id is not None:
-            completed_metadata["turn_id"] = turn_id
-        write_log_event(
-            "chat",
-            "turn_completed",
-            "chat turn completed",
-            project_root=self._project_root,
-            thread_id=thread_id,
-            duration_ms=duration_ms,
-            status="completed",
-            metadata=completed_metadata,
-        )
+        with log_context(thread_id=thread_id, turn_id=turn_id, source="chat_runtime"):
+            write_log_event(
+                "chat",
+                "turn_completed",
+                "chat turn completed",
+                project_root=self._project_root,
+                duration_ms=duration_ms,
+                status="completed",
+                metadata=completed_metadata,
+            )
         self._record_chat_turn_trace(
             user_message=message,
             final_response=final_response,
@@ -806,7 +794,7 @@ class ConversationGraphRuntime:
         )
 
     def _consult_selves_tool(self, topic: str, mode: str = "consult", context: str | None = None) -> str:
-        thread_id = _ACTIVE_TOOL_THREAD_ID.get()
+        thread_id = current_log_context().thread_id or "default"
         memory_context = self._memory_query_service.pack(MemoryQuery(text=topic)).text
         extra_context = context.strip() if isinstance(context, str) else ""
         combined_context = "\n\n".join(part for part in (memory_context, extra_context) if part)
@@ -1485,20 +1473,17 @@ class ConversationGraphRuntime:
     ) -> None:
         message = _format_tool_debug_body(args=args, result=result, error=error)
         full_body = _format_tool_debug_body(args=args, result=result, error=error, full=True)
-        turn_id = _ACTIVE_TOOL_TURN_ID.get()
         write_log_event(
             "chat",
             "service_tool_called",
             message,
             project_root=self._project_root,
-            thread_id=_ACTIVE_TOOL_THREAD_ID.get(),
             status=status,
             error=error,
             metadata={
                 "service_component": service_component,
                 "tool": tool_name,
                 "message_body": full_body,
-                **({"turn_id": turn_id} if turn_id is not None else {}),
             },
         )
 

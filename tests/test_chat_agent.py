@@ -621,7 +621,7 @@ def test_chat_agent_reuses_completed_turn_id_without_rerunning_runtime(tmp_path:
         if event.event == "turn_reused"
     ]
     assert reuse_logs
-    assert reuse_logs[-1].metadata == {"turn_id": "turn-retry"}
+    assert reuse_logs[-1].turn_id == "turn-retry"
     state = ThreadStore(tmp_path).load("default")
     assert state.messages == [
         ThreadMessage(role="user", content="retry me", turn_id="turn-retry"),
@@ -1218,7 +1218,7 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
     metadata = _event_metadata(logs[0])
     assert metadata["service_component"] == "memory"
     assert metadata["tool"] == "memory_search"
-    assert metadata["turn_id"] == "turn-native"
+    assert logs[0].turn_id == "turn-native"
     assert logs[0].thread_id == "native"
     assert logs[0].message.startswith('args: {"limit": 5, "query": "clarity"}\nresult: ')
 

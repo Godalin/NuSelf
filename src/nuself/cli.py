@@ -2074,6 +2074,9 @@ def _send_chat_interactive(
             "daemon chat request failed",
             project_root=project_root,
             level="error",
+            thread_id=thread_id,
+            turn_id=turn_id,
+            source="client",
             status="error",
             error=response.error or "daemon returned an error",
         )
@@ -2087,6 +2090,8 @@ def _send_chat_interactive(
             "daemon chat request completed",
             project_root=project_root,
             thread_id=_optional_payload_str(response.payload.get("thread_id")),
+            turn_id=turn_id,
+            source="client",
             status="ok",
         )
         return InteractiveChatResult(
@@ -2181,11 +2186,12 @@ def _send_interactive_chat_turn(
                 "retrying chat turn after retryable transport failure",
                 project_root=project_root,
                 thread_id=thread_id,
+                turn_id=turn_id,
+                source="client",
                 status="retry",
                 metadata={
                     "attempt": attempt,
                     "max_attempts": INTERACTIVE_CHAT_ATTEMPTS,
-                    "turn_id": turn_id,
                     "previous_error": result.error,
                 },
             )
@@ -2252,12 +2258,12 @@ def _run_interactive_send_with_live_logs(
     captured_events: list[LogEvent] = []
     while send_thread.is_alive():
         time.sleep(INTERACTIVE_LOG_POLL_INTERVAL_SECONDS)
-        new_events = _interactive_activity_events(project_root, log_cursor)
+        new_events = _interactive_activity_events(project_root, log_cursor, turn_id=turn_id)
         if new_events:
             captured_events.extend(new_events)
             printed_logs = _print_visible_interactive_activity_events(new_events, printed_logs=printed_logs)
     send_thread.join()
-    new_events = _interactive_activity_events(project_root, log_cursor)
+    new_events = _interactive_activity_events(project_root, log_cursor, turn_id=turn_id)
     if new_events:
         captured_events.extend(new_events)
         printed_logs = _print_visible_interactive_activity_events(new_events, printed_logs=printed_logs)
@@ -2449,6 +2455,8 @@ def _send_one_shot_chat_interactive(
             "one-shot chat turn completed",
             project_root=project_root,
             thread_id=thread_id,
+            turn_id=turn_id,
+            source="client",
             status="ok",
         )
         _run_memory_curator(project_root)
@@ -2461,6 +2469,8 @@ def _send_one_shot_chat_interactive(
             project_root=project_root,
             level="error",
             thread_id=thread_id,
+            turn_id=turn_id,
+            source="client",
             status="error",
             error=str(exc),
         )
@@ -2831,8 +2841,16 @@ def _print_recent_logs(project_root: Path | None, *, limit: int) -> None:
         print(render_log_event(event))
 
 
-def _interactive_activity_events(project_root: Path | None, log_cursor: _InteractiveLogCursor) -> list[LogEvent]:
-    return log_cursor.read_new_events(project_root)
+def _interactive_activity_events(
+    project_root: Path | None,
+    log_cursor: _InteractiveLogCursor,
+    *,
+    turn_id: str | None = None,
+) -> list[LogEvent]:
+    events = log_cursor.read_new_events(project_root)
+    if turn_id is None:
+        return events
+    return [event for event in events if event.turn_id == turn_id]
 
 
 def _print_interactive_activity_events(events: list[LogEvent]) -> None:

@@ -14,7 +14,7 @@ from nuself.agent.chat import ChatAgent
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.config_system import ConfigSystem
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
-from nuself.logs import write_log_event
+from nuself.logs import log_context, write_log_event
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.notification import NotificationAdapter, NotificationDeliveryLoop
 from nuself.notification.email import EmailNotificationAdapter
@@ -232,23 +232,22 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
         turn_id_raw = request.payload.get("turn_id")
         turn_id = turn_id_raw if isinstance(turn_id_raw, str) else None
         started_at = time.monotonic()
-        try:
-            result = state.chat_agent.respond(message, thread_id=thread_id, turn_id=turn_id)
-            memory_update = _run_memory_curator_once(state.memory_curator)
-        except RuntimeError as exc:
-            error_detail = _format_exception_chain(exc)
-            write_log_event(
-                "daemon",
-                "chat_turn_failed",
-                "daemon chat turn failed",
-                project_root=state.project_root,
-                level="error",
-                request_id=request.request_id,
-                thread_id=thread_id,
-                status="error",
-                error=error_detail,
-            )
-            return DaemonResponse.fail(request.request_id, error_detail)
+        with log_context(request_id=request.request_id, thread_id=thread_id, turn_id=turn_id, source="daemon"):
+            try:
+                result = state.chat_agent.respond(message, thread_id=thread_id, turn_id=turn_id)
+                memory_update = _run_memory_curator_once(state.memory_curator)
+            except RuntimeError as exc:
+                error_detail = _format_exception_chain(exc)
+                write_log_event(
+                    "daemon",
+                    "chat_turn_failed",
+                    "daemon chat turn failed",
+                    project_root=state.project_root,
+                    level="error",
+                    status="error",
+                    error=error_detail,
+                )
+                return DaemonResponse.fail(request.request_id, error_detail)
         duration_ms = int((time.monotonic() - started_at) * 1000)
         payload: dict[str, JsonValue] = {
             "answer": result.answer,
@@ -261,20 +260,19 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
             payload["confidence"] = result.confidence
         if memory_update is not None and memory_update.changed:
             payload["memory_update"] = memory_update.summary()
-        write_log_event(
-            "daemon",
-            "chat_turn_completed",
-            "daemon chat turn completed",
-            project_root=state.project_root,
-            request_id=request.request_id,
-            thread_id=result.thread_id,
-            duration_ms=duration_ms,
-            status="ok",
-            metadata={
-                "evidence_references": len(result.evidence_references),
-                "memory_changed": memory_update.changed if memory_update is not None else False,
-            },
-        )
+        with log_context(request_id=request.request_id, thread_id=result.thread_id, turn_id=turn_id, source="daemon"):
+            write_log_event(
+                "daemon",
+                "chat_turn_completed",
+                "daemon chat turn completed",
+                project_root=state.project_root,
+                duration_ms=duration_ms,
+                status="ok",
+                metadata={
+                    "evidence_references": len(result.evidence_references),
+                    "memory_changed": memory_update.changed if memory_update is not None else False,
+                },
+            )
         return DaemonResponse.ok(request, payload)
     if request.type == "shutdown":
         write_log_event(

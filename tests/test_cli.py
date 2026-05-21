@@ -26,7 +26,7 @@ def _mock_status(project_root: Path) -> DaemonStatus:
 from nuself.domain.profile import ProfileItem
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
-from nuself.logs import LogEvent, read_log_events, write_log_event
+from nuself.logs import LogEvent, log_context, read_log_events, write_log_event
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.trace.service import TraceQueryService
 
@@ -312,6 +312,7 @@ def test_interactive_turn_prints_activity_events_while_waiting(
             "args: {}\nresult: live progress before reply",
             project_root=tmp_path,
             thread_id=thread_id,
+            turn_id=turn_id,
             status="completed",
             metadata={"service_component": "memory", "tool": "memory_search"},
         )
@@ -368,6 +369,7 @@ def test_interactive_turn_hides_background_activity_events(
             "args: {}\nresult: visible service result",
             project_root=tmp_path,
             thread_id=thread_id,
+            turn_id=turn_id,
             status="completed",
             metadata={"service_component": "memory", "tool": "memory_search"},
         )
@@ -391,7 +393,7 @@ def test_interactive_turn_hides_background_activity_events(
     assert "visible service result" in captured.out
     assert "NuSelf:\nfinal reply" in captured.out
     captured_events = session.transcript_log_events("default", include_all=True)
-    assert [event.component for event in captured_events] == ["reflection", "reasoning", "chat"]
+    assert [event.component for event in captured_events] == ["chat"]
 
 
 def test_interactive_daemon_timeout_retries_and_preserves_logs(
@@ -419,7 +421,8 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
         nonlocal calls
         calls += 1
         payload_dict = cast(dict[str, object], payload)
-        turn_ids.append(payload_dict.get("turn_id"))
+        turn_id = payload_dict.get("turn_id")
+        turn_ids.append(turn_id)
         if calls == 1:
             write_log_event(
                 "persona",
@@ -427,6 +430,7 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
                 "builder_self: first attempt reached persona discussion",
                 project_root=project_root,
                 thread_id="default",
+                turn_id=turn_id if isinstance(turn_id, str) else None,
                 status="retryable timeout",
             )
             raise DaemonConnectionError("timed out")
@@ -469,12 +473,15 @@ def test_interactive_daemon_application_error_does_not_retry(
     ) -> DaemonResponse:
         nonlocal calls
         calls += 1
+        payload_dict = cast(dict[str, object], payload)
+        turn_id = payload_dict.get("turn_id")
         write_log_event(
             "chat",
             "turn_failed",
             "daemon chat turn failed",
             project_root=project_root,
             thread_id="default",
+            turn_id=turn_id if isinstance(turn_id, str) else None,
             status="error",
             error="graph failed <- root cause",
         )
@@ -587,7 +594,8 @@ def test_interactive_export_all_includes_all_logs(
     content = exports[-1].read_text(encoding="utf-8")
     assert "- Logs: all" in content
     assert "### Logs" in content
-    assert "> [chat] one_shot_chat_completed status=ok thread=default\n>   one-shot chat turn completed" in content
+    assert "> [chat] one_shot_chat_completed status=ok thread=default turn=turn-" in content
+    assert ">   one-shot chat turn completed" in content
     assert "```json" not in content
     assert "```text" not in content
     first_reply_index = content.index("## 1. NuSelf")
@@ -1062,14 +1070,32 @@ def test_logs_command_can_render_json(tmp_path: Path, capsys: CaptureFixture) ->
     assert '"event": "started"' in captured.out
 
 
+def test_log_context_applies_runtime_ownership_fields(tmp_path: Path) -> None:
+    with log_context(thread_id="default", request_id="req-1", turn_id="turn-1", source="test"):
+        event = write_log_event("chat", "turn_started", "chat turn started", project_root=tmp_path)
+        nested = write_log_event("chat", "tool", "tool ran", project_root=tmp_path, turn_id="turn-2")
+
+    events = read_log_events(project_root=tmp_path, component="chat")
+
+    assert event.thread_id == "default"
+    assert event.request_id == "req-1"
+    assert event.turn_id == "turn-1"
+    assert event.source == "test"
+    assert nested.thread_id == "default"
+    assert nested.request_id == "req-1"
+    assert nested.turn_id == "turn-2"
+    assert events[-2].turn_id == "turn-1"
+    assert events[-1].turn_id == "turn-2"
+
+
 def test_interactive_activity_cursor_does_not_replay_seen_events(tmp_path: Path) -> None:
     write_log_event("chat", "turn_started", "old turn", project_root=tmp_path)
     cli_module = cast(Any, cli)
     cursor = cli_module._InteractiveLogCursor.from_project(tmp_path)
 
-    write_log_event("chat", "turn_completed", "new turn", project_root=tmp_path)
+    write_log_event("chat", "turn_completed", "new turn", project_root=tmp_path, turn_id="turn-new")
 
-    first_read = cli_module._interactive_activity_events(tmp_path, cursor)
+    first_read = cli_module._interactive_activity_events(tmp_path, cursor, turn_id="turn-new")
     second_read = cli_module._interactive_activity_events(tmp_path, cursor)
 
     assert [event.event for event in first_read] == ["turn_completed"]

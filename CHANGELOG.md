@@ -21,7 +21,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Chat now uses the chat supervisor's structured output directly as the final reply, keeping a boundary retry but removing the extra presentation-agent model call from the normal path.
 - Chat lifecycle and retry logs now show turn start, completion, transport retry, and final-response retry events in interactive activity output.
 - Interactive chat log streaming now tracks seen log-event identities instead of timestamp-sorted offsets, preventing old or delayed events from being replayed into the current turn output.
-- Chat service-tool logs now include the active thread and turn metadata so tool calls can be attributed to the correct logical chat turn.
+- Log events now have top-level runtime ownership fields including `turn_id`, `job_id`, `trace_id`, and `source`, with an inherited `LogContext` for daemon requests, chat turns, and service/tool calls.
+- Interactive chat log streaming now scopes live activity to the current `turn_id`, preventing visible background or delayed events from being attributed to the active reply.
+- Chat service-tool logs now include active thread and top-level turn ownership so tool calls can be attributed to the correct logical chat turn.
 - Chat now reuses duplicate same-name/same-argument tool calls within one turn and treats visible `[Tool call: ...]` markers anywhere in the final answer as boundary leaks.
 - Chat final responses now prefer LangChain structured output on native LangChain chat models, keeping prompted JSON parsing as a fallback path.
 - Presentation now prefers LangChain structured output on native LangChain chat models before falling back to prompted JSON parsing.

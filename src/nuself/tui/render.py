@@ -160,6 +160,14 @@ def _render_log_fields(event: LogEvent, theme: TerminalTheme, *, include_status:
         fields.append(theme.muted(_format_log_field("thread", event.thread_id)))
     if event.request_id:
         fields.append(theme.muted(_format_log_field("request", event.request_id)))
+    if event.turn_id:
+        fields.append(theme.muted(_format_log_field("turn", event.turn_id)))
+    if event.job_id:
+        fields.append(theme.muted(_format_log_field("job", event.job_id)))
+    if event.trace_id:
+        fields.append(theme.muted(_format_log_field("trace", event.trace_id)))
+    if event.source:
+        fields.append(theme.muted(_format_log_field("source", event.source)))
     if event.node:
         fields.append(theme.muted(_format_log_field("node", event.node)))
     if event.error:

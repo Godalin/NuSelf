@@ -107,7 +107,7 @@ All interactive commands start with `:`.
 
 ### Activity Printing
 
-During each chat turn, before printing the assistant reply, the REPL polls for new log events as they are written and prints only interactive activity logs using `render_log_event()`. It does not wait for the final assistant reply before showing current-turn progress logs.
+During each chat turn, before printing the assistant reply, the REPL polls for new log events as they are written and prints only interactive activity logs using `render_log_event()`. It does not wait for the final assistant reply before showing current-turn progress logs. Live REPL activity must be scoped to the current top-level `turn_id`; timestamp order alone is not enough to decide that a log belongs to the visible turn.
 
 Interactive activity logs are user-relevant events from the current chat path: direct chat service/tool calls, persona/self discussion progress, and chat/daemon failure or failover events. Background subsystem logs from reason, reflection, memory, trace, notification, or other autonomous services must not appear in the live REPL output only because they were written while a chat turn was waiting. They remain available through `nuself dev logs`, subsystem commands, and `:export all`.
 

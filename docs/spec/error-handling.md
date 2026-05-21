@@ -44,6 +44,7 @@ When daemon chat handling fails:
   - `status=error`
   - `thread_id`
   - `request_id`
+  - `turn_id` when the request supplied one
   - compact exception chain in `error`
 - Return a failed daemon response whose `error` field is the same compact exception chain.
 - Do not save a partial assistant message for a failed turn.
