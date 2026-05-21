@@ -65,14 +65,14 @@ def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
-    result = runtime.run_turn(
+    _, result, _ = runtime.run_turn(
         ThreadState.empty("payload-test"),
         "What are the risks and implementation steps for this?",
         "payload-test",
     )
 
     # Verify ChatResult payload doesn't include synthesis info
-    payload = result.result.to_payload()
+    payload = result.to_payload()
     payload_str = str(payload)
     assert "Internal perspective fusion" not in payload_str
     assert "synthesizer_self" not in payload_str

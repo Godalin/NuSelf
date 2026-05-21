@@ -11,10 +11,8 @@ from langchain_core.tools import BaseTool
 from nuself.agent.chat import (
     ChatAgent,
     ChatAgentSettings,
-    ChatResult,
     ConversationGraphRuntime,
     ConversationTurnState,
-    ConversationRuntimeResult,
     ThreadMessage,
     ThreadState,
     ThreadStore,
@@ -240,172 +238,6 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
     assert "Use the profile context." in text
 
 
-def test_chat_agent_parses_markdown_structured_response(tmp_path: Path) -> None:
-    llm = SequencedStructuredFakeLLM(
-        [
-            "(synthesizer_self keeps context)\n\n"
-            "**answer**: Use the profile context.\n\n"
-            "**evidence_references**: [mem_123]\n"
-            "**epistemic_status**: grounded\n",
-            '{"answer":"Use the profile context.","evidence_references":["mem_123"],"epistemic_status":"grounded"}',
-        ]
-    )
-    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
-
-    result = agent.respond("profile context")
-
-    assert result.answer == "Use the profile context."
-    assert result.evidence_references == ("mem_123",)
-    assert result.epistemic_status == "grounded"
-    assert "evidence_references" not in result.reply
-
-
-def test_chat_agent_retries_when_protocol_leaks_into_answer(tmp_path: Path) -> None:
-    leaked_answer = (
-        '{"answer":"好的，我简单一点。","evidence_references":[],'
-        '"confidence":0.8,"epistemic_status":"inferred"}'
-    )
-    llm = SequencedStructuredFakeLLM(
-        [
-            json.dumps(
-                {
-                    "answer": leaked_answer,
-                    "evidence_references": [],
-                    "confidence": 0.4,
-                    "epistemic_status": "inferred",
-                }
-            ),
-            json.dumps(
-                {
-                    "answer": "好的，我简单一点。",
-                    "evidence_references": [],
-                    "confidence": 0.8,
-                    "epistemic_status": "inferred",
-                }
-            ),
-        ]
-    )
-    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
-
-    result = agent.respond("可以简单一点吗")
-
-    assert result.answer == "好的，我简单一点。"
-    assert len(llm.calls) == 2
-    assert "previous response leaked the internal response protocol" in llm.calls[1][-1].content
-
-
-def test_chat_agent_retries_when_pretty_protocol_leaks_into_answer(tmp_path: Path) -> None:
-    leaked_answer = "\n".join(
-        [
-            "{",
-            '  "answer": "有的。这里是正常回复内容。",',
-            '  "evidence_references": [],',
-            '  "confidence": null,',
-            '  "epistemic_status": "inferred"',
-            "}",
-        ]
-    )
-    llm = SequencedStructuredFakeLLM(
-        [
-            json.dumps(
-                {
-                    "answer": leaked_answer,
-                    "evidence_references": [],
-                    "confidence": None,
-                    "epistemic_status": "inferred",
-                }
-            ),
-            json.dumps(
-                {
-                    "answer": "有的。这里是正常回复内容。",
-                    "evidence_references": [],
-                    "confidence": 0.8,
-                    "epistemic_status": "inferred",
-                }
-            ),
-        ]
-    )
-    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
-
-    result = agent.respond("你有什么新想法吗")
-
-    assert result.answer == "有的。这里是正常回复内容。"
-    assert "evidence_references" not in result.reply
-    assert len(llm.calls) == 2
-
-
-def test_chat_agent_parses_fenced_json_protocol_response(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM(
-        '```json\n'
-        '{"answer":"Use the profile context.","evidence_references":["mem_123"],"epistemic_status":"grounded"}\n'
-        '```'
-    )
-    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
-
-    result = agent.respond("profile context")
-
-    assert result.answer == "Use the profile context."
-    assert result.evidence_references == ("mem_123",)
-    assert "```" not in result.reply
-    assert "evidence_references" not in result.reply
-
-
-def test_chat_agent_does_not_fallback_to_protocol_leaking_draft(tmp_path: Path) -> None:
-    leaked_answer = (
-        '{"answer":"好的，我简单一点。","evidence_references":[],'
-        '"confidence":0.8,"epistemic_status":"inferred"}'
-    )
-    llm = SequencedStructuredFakeLLM(
-        [
-            json.dumps(
-                {
-                    "answer": leaked_answer,
-                    "evidence_references": [],
-                    "confidence": 0.4,
-                    "epistemic_status": "inferred",
-                }
-            ),
-            json.dumps(
-                {
-                    "answer": leaked_answer,
-                    "evidence_references": [],
-                    "confidence": 0.4,
-                    "epistemic_status": "inferred",
-                }
-            ),
-            json.dumps(
-                {
-                    "answer": leaked_answer,
-                    "evidence_references": [],
-                    "confidence": 0.4,
-                    "epistemic_status": "inferred",
-                }
-            ),
-        ]
-    )
-    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
-
-    result = agent.respond("可以简单一点吗")
-
-    assert "evidence_references" not in result.answer
-    assert '"answer"' not in result.answer
-    assert result.epistemic_status == "unsupported"
-
-
-def test_chat_agent_flags_unsupported_personal_claims_without_evidence(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM(
-        '{"answer":"You prefer concise output.","evidence_references":[],"confidence":0.81,"epistemic_status":"grounded"}'
-    )
-    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
-
-    result = agent.respond("what do I prefer?")
-
-    assert result.epistemic_status == "unsupported"
-    assert result.confidence == 0.25
-    assert result.evidence_references == ()
-    assert result.reply == "You prefer concise output."
-
-
 def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:
     llm = FakeLLM()
     settings = ChatAgentSettings(recent_messages=2, summary_trigger_messages=4, summary_target_chars=200)
@@ -522,105 +354,6 @@ def test_thread_store_update_writes_under_transaction(tmp_path: Path) -> None:
     assert state.messages == [ThreadMessage(role="user", content="locked write")]
 
 
-def test_chat_agent_delegates_turns_to_conversation_runtime(tmp_path: Path) -> None:
-    class FakeRuntime:
-        def __init__(self) -> None:
-            self.seen: list[tuple[ThreadState, str, str]] = []
-
-        def run_turn(
-            self,
-            state: ThreadState,
-            message: str,
-            thread_id: str,
-            *,
-            turn_id: str | None = None,
-        ) -> ConversationRuntimeResult:
-            self.seen.append((state, message, thread_id))
-            updated = ThreadState(
-                thread_id=thread_id,
-                summary=state.summary,
-                messages=[
-                    *state.messages,
-                    ThreadMessage(role="user", content=message, turn_id=turn_id),
-                    ThreadMessage(role="assistant", content="runtime reply", turn_id=turn_id),
-                ],
-                next_message_index=state.next_message_index + 2,
-            )
-            return ConversationRuntimeResult(
-                state=updated,
-                result=ChatResult(
-                    answer="runtime reply",
-                    thread_id=thread_id,
-                    evidence_references=("mem_runtime",),
-                    confidence=0.7,
-                    epistemic_status="grounded",
-                ),
-            )
-
-    runtime = FakeRuntime()
-    agent = ChatAgent(tmp_path, runtime=runtime)
-
-    result = agent.respond("hello runtime", thread_id="graph")
-
-    assert result.reply == "runtime reply"
-    assert result.evidence_references == ("mem_runtime",)
-    assert runtime.seen[0][1:] == ("hello runtime", "graph")
-    state = ThreadStore(tmp_path).load("graph")
-    assert state.messages == [
-        ThreadMessage(role="user", content="hello runtime"),
-        ThreadMessage(role="assistant", content="runtime reply"),
-    ]
-
-
-def test_chat_agent_reuses_completed_turn_id_without_rerunning_runtime(tmp_path: Path) -> None:
-    class FakeRuntime:
-        def __init__(self) -> None:
-            self.calls = 0
-
-        def run_turn(
-            self,
-            state: ThreadState,
-            message: str,
-            thread_id: str,
-            *,
-            turn_id: str | None = None,
-        ) -> ConversationRuntimeResult:
-            self.calls += 1
-            updated = ThreadState(
-                thread_id=thread_id,
-                summary=state.summary,
-                messages=[
-                    *state.messages,
-                    ThreadMessage(role="user", content=message, turn_id=turn_id),
-                    ThreadMessage(role="assistant", content=f"reply {self.calls}", turn_id=turn_id),
-                ],
-                next_message_index=state.next_message_index + 2,
-            )
-            return ConversationRuntimeResult(state=updated, result=ChatResult(answer=f"reply {self.calls}", thread_id=thread_id))
-
-    runtime = FakeRuntime()
-    agent = ChatAgent(tmp_path, runtime=runtime)
-
-    first = agent.respond("retry me", turn_id="turn-retry")
-    second = agent.respond("retry me", turn_id="turn-retry")
-
-    assert first.answer == "reply 1"
-    assert second.answer == "reply 1"
-    assert runtime.calls == 1
-    reuse_logs = [
-        event
-        for event in read_log_events(project_root=tmp_path, component="chat")
-        if event.event == "turn_reused"
-    ]
-    assert reuse_logs
-    assert reuse_logs[-1].turn_id == "turn-retry"
-    state = ThreadStore(tmp_path).load("default")
-    assert state.messages == [
-        ThreadMessage(role="user", content="retry me", turn_id="turn-retry"),
-        ThreadMessage(role="assistant", content="reply 1", turn_id="turn-retry"),
-    ]
-
-
 def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> None:
     llm = StructuredFakeLLM('{"answer":"Runtime node reply.","evidence_references":["mem_node"],"confidence":0.8}')
     runtime = ConversationGraphRuntime(
@@ -631,23 +364,19 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
     turn_state = ConversationTurnState.start(ThreadState.empty("default"), "node contracts", "default")
 
     prepared = runtime.prepare_context_node(turn_state)
-    assert prepared.node == "prepare_context"
     assert prepared.state.active_messages == (ThreadMessage(role="user", content="node contracts"),)
 
     responded = runtime.respond_node(prepared.state)
-    assert responded.node == "respond"
     assert responded.state.final_response is not None
     assert responded.state.final_response.answer == "Runtime node reply."
-    assert responded.state.final_response.evidence_references == ("mem_node",)
+    assert responded.state.final_response.evidence_references == ["mem_node"]
     assert responded.state.saved_messages[-1] == ThreadMessage(role="assistant", content="Runtime node reply.")
 
     updated = runtime.state_update_node(responded.state)
-    assert updated.node == "state_update"
     assert updated.state.updated_thread_state is not None
     assert updated.state.updated_thread_state.next_message_index == 2
 
     compressed = runtime.compression_node(updated.state)
-    assert compressed.node == "compression"
     assert compressed.state.updated_thread_state == updated.state.updated_thread_state
 
 
@@ -659,10 +388,10 @@ def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
-    result = runtime.run_turn(ThreadState.empty("trivial"), "hello", "trivial")
+    _, result, node_trace = runtime.run_turn(ThreadState.empty("trivial"), "hello", "trivial")
 
-    assert result.result.answer == "Trivial reply."
-    assert result.node_trace == (
+    assert result.answer == "Trivial reply."
+    assert node_trace == (
         "prepare_context",
         "respond",
         "state_update",
@@ -698,9 +427,9 @@ def test_conversation_runtime_runs_llm_backed_personas_through_selves_subagent(t
     assert " | " not in persona_events[-1].message
     assert persona_events[-1].metadata == {"persona_count": 1, "has_synthesis": True}
 
-    graph_turn = runtime.run_turn(ThreadState.empty("persona-graph"), "Should I split this project?", "persona-graph")
-    assert graph_turn.result.answer == "Persona reply."
-    assert graph_turn.node_trace == (
+    _, graph_result, graph_node_trace = runtime.run_turn(ThreadState.empty("persona-graph"), "Should I split this project?", "persona-graph")
+    assert graph_result.answer == "Persona reply."
+    assert graph_node_trace == (
         "prepare_context",
         "respond",
         "state_update",
@@ -720,18 +449,18 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
-    result = runtime.run_turn(ThreadState.empty("graph"), "graph runtime", "graph")
+    state, chat_result, node_trace = runtime.run_turn(ThreadState.empty("graph"), "graph runtime", "graph")
 
-    assert result.result.answer == "Graph driver reply."
-    assert result.result.evidence_references == ("mem_graph",)
-    assert result.result.confidence == 0.9
-    assert result.node_trace == (
+    assert chat_result.answer == "Graph driver reply."
+    assert chat_result.evidence_references == ("mem_graph",)
+    assert chat_result.confidence == 0.9
+    assert node_trace == (
         "prepare_context",
         "respond",
         "state_update",
         "compression",
     )
-    assert result.state.messages == [
+    assert state.messages == [
         ThreadMessage(role="user", content="graph runtime"),
         ThreadMessage(role="assistant", content="Graph driver reply."),
     ]
@@ -743,7 +472,7 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
     assert trace.inputs == ["graph runtime"]
     assert trace.outputs == ["Graph driver reply."]
     assert trace.participants == ["chat_agent"]
-    assert trace.metadata["node_trace"] == list(result.node_trace)
+    assert trace.metadata["node_trace"] == list(node_trace)
 
 
 

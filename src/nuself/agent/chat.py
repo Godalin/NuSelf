@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 import json
 import logging
-import re
 import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, Protocol, TypedDict, TypeAlias, cast
+from typing import Any, Literal, TypedDict, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
@@ -60,12 +59,6 @@ ConversationNodeName = Literal[
     "compression",
 ]
 LOGGER = logging.getLogger(__name__)
-REGENERATE_USER_FACING_RESPONSE_PROMPT = (
-    "Your previous response leaked the internal response protocol into the user-visible answer. "
-    "Regenerate the response using the same context. Return only the required JSON object for the runtime, "
-    "and make the answer field plain user-facing text without JSON, code fences, or protocol field names."
-)
-PRESENTATION_BOUNDARY_FAILURE_ANSWER = "我刚刚的输出格式出了问题。请你再说一遍，我会直接用正常聊天的方式回答。"
 
 # ------------------------------------------------------------------
 # Response types, parsing, and user-facing boundary checks
@@ -83,133 +76,8 @@ class ChatStructuredOutput(BaseModel):
     epistemic_status: str = Field(default="inferred", description="One of grounded, inferred, uncertain, unsupported.")
 
 
-class StructuredOutputError(ValueError):
-    """Raised when the agent returns output that cannot be parsed as structured JSON."""
-
-    def __init__(self, raw_text: str) -> None:
-        super().__init__(f"LangChain agent returned non-JSON response: {raw_text[:200]!r}")
-        self.raw_text = raw_text
 
 
-@dataclass(frozen=True)
-class DraftResponse:
-    """Internal substantive response before final presentation."""
-
-    answer: str
-    evidence_references: tuple[str, ...] = ()
-    confidence: float | None = None
-    epistemic_status: str = "inferred"
-
-    @property
-    def draft_answer(self) -> str:
-        return self.answer
-
-
-@dataclass(frozen=True)
-class PresentedResponse:
-    """Final user-facing response after presentation."""
-
-    answer: str
-    evidence_references: tuple[str, ...] = ()
-    confidence: float | None = None
-    epistemic_status: str = "inferred"
-
-
-ParsedChatResponse: TypeAlias = DraftResponse
-
-_PROTOCOL_FIELD_NAMES = ("answer", "evidence_references", "confidence", "epistemic_status")
-_VISIBLE_TOOL_MARKER_RE = re.compile(r"\[Tool call:\s*[A-Za-z_][A-Za-z0-9_]*\]", re.IGNORECASE)
-_TOOL_BLOCK_RE = re.compile(r"\[TOOL_CALL\](?P<body>.*?)\[/TOOL_CALL\]", re.DOTALL | re.IGNORECASE)
-_MD_FENCE_JSON_RE = re.compile(r"```(?:json)?\s*\n?(\{.*?\})\s*\n?```", re.DOTALL)
-_PERSONA_ATTRIBUTION_PREFIXES = ("(", "（")
-_CLAIM_MARKERS = ("you ", "your ", "remember", "prefer", "like", "believe", "think", "previously", "earlier", "always", "never", "history", "memory")
-_CONCISE_MARKERS = ("简单", "短", "太多", "想不过来", "simple", "short", "too much")
-
-
-def _try_extract_md_json(text: str) -> str | None:
-    m = _MD_FENCE_JSON_RE.search(text)
-    if m is not None:
-        return m.group(1)
-    return None
-
-
-def structured_chat_output_to_response(output: object) -> ParsedChatResponse:
-    if isinstance(output, ChatStructuredOutput):
-        return ParsedChatResponse(
-            answer=output.answer,
-            evidence_references=tuple(output.evidence_references),
-            confidence=output.confidence,
-            epistemic_status=output.epistemic_status,
-        )
-    if isinstance(output, dict):
-        data = cast(dict[object, object], output)
-        answer = data.get("answer")
-        if not isinstance(answer, str):
-            raise ValueError("structured chat output did not include answer")
-        return ParsedChatResponse(
-            answer=answer,
-            evidence_references=_string_tuple(data.get("evidence_references")),
-            confidence=_optional_float(data.get("confidence")),
-            epistemic_status=_string_field(data.get("epistemic_status"), default="inferred") or "inferred",
-        )
-    raise TypeError(f"unsupported structured chat output: {type(output).__name__}")
-
-
-def parse_chat_response(raw: str) -> ParsedChatResponse:
-    """Parse a plain-text or JSON-envelope LLM response (non-LangChain fallback)."""
-    text = raw.strip()
-    fenced = _try_extract_md_json(text)
-    if fenced is not None:
-        text = fenced
-    if text.startswith("{") and text.endswith("}"):
-        try:
-            parsed: object = json.loads(text)
-        except json.JSONDecodeError:
-            return ParsedChatResponse(answer=raw)
-        if isinstance(parsed, dict):
-            data = cast(dict[str, object], parsed)
-            answer = data.get("answer")
-            if isinstance(answer, str) and answer.strip():
-                return ParsedChatResponse(
-                    answer=answer,
-                    evidence_references=_string_tuple(data.get("evidence_references")),
-                    confidence=_optional_float(data.get("confidence")),
-                    epistemic_status=_string_field(data.get("epistemic_status"), default="inferred") or "inferred",
-                )
-    return ParsedChatResponse(answer=raw)
-
-
-def to_presented_response(response: ParsedChatResponse) -> PresentedResponse:
-    return PresentedResponse(
-        answer=response.answer,
-        evidence_references=response.evidence_references,
-        confidence=response.confidence,
-        epistemic_status=response.epistemic_status,
-    )
-
-
-def is_parsed_user_facing_safe(response: ParsedChatResponse) -> bool:
-    return not leaks_response_protocol(response.answer)
-
-
-def presentation_hints(user_message: str) -> tuple[str, ...]:
-    if any(marker in user_message.casefold() for marker in _CONCISE_MARKERS):
-        return ("The user is asking for a shorter, simpler answer. Prefer compression and one concrete next step.",)
-    return ()
-
-
-def apply_unsupported_claim_guard(response: PresentedResponse) -> PresentedResponse:
-    if response.evidence_references:
-        return response
-    if not _looks_like_personal_claim(response.answer):
-        return response
-    confidence = response.confidence if response.confidence is not None else 0.25
-    return PresentedResponse(
-        answer=response.answer,
-        evidence_references=response.evidence_references,
-        confidence=min(confidence, 0.25),
-        epistemic_status="unsupported",
-    )
 
 
 def trace_summary(text: str, limit: int = 240) -> str:
@@ -219,69 +87,6 @@ def trace_summary(text: str, limit: int = 240) -> str:
     return normalized[: limit - 3].rstrip() + "..."
 
 
-def leaks_response_protocol(answer: str) -> bool:
-    stripped = answer.strip()
-    if _VISIBLE_TOOL_MARKER_RE.search(stripped) is not None or _TOOL_BLOCK_RE.search(stripped) is not None:
-        return True
-    if stripped.startswith("```"):
-        return True
-    if stripped.startswith("{") and _contains_protocol_field(stripped):
-        return True
-    if _starts_with_persona_attribution(stripped):
-        return True
-    lowered = stripped[:4000].casefold()
-    return sum(1 for field_name in _PROTOCOL_FIELD_NAMES if field_name in lowered) >= 2
-
-
-def _contains_protocol_field(text: str) -> bool:
-    lowered = text[:4000].casefold()
-    for field_name in _PROTOCOL_FIELD_NAMES:
-        if f'"{field_name}"' in lowered or f"{field_name}:" in lowered:
-            return True
-    return False
-
-
-def _starts_with_persona_attribution(text: str) -> bool:
-    stripped = text.strip()
-    if not stripped.startswith(_PERSONA_ATTRIBUTION_PREFIXES):
-        return False
-    head = stripped[:240]
-    return "_self" in head and (")" in head or "）" in head)
-
-
-def _looks_like_personal_claim(answer: str) -> bool:
-    normalized = answer.casefold()
-    return any(marker in normalized for marker in _CLAIM_MARKERS)
-
-
-def _string_tuple(value: object) -> tuple[str, ...]:
-    if not isinstance(value, list):
-        return ()
-    result: list[str] = []
-    for item in cast(list[object], value):
-        if isinstance(item, str) and item.strip() != "":
-            result.append(item.strip())
-    return tuple(result)
-
-
-def _optional_float(value: object) -> float | None:
-    if isinstance(value, int | float):
-        return float(value)
-    if isinstance(value, str) and value.strip() != "":
-        try:
-            return float(value)
-        except ValueError:
-            return None
-    return None
-
-
-def _string_field(value: object, *, default: str | None = None) -> str | None:
-    if isinstance(value, str) and value.strip() != "":
-        return value
-    return default
-
-
-_trace_summary = trace_summary
 @dataclass(frozen=True)
 class ChatAgentSettings:
     """Context window settings for the chat agent."""
@@ -328,15 +133,6 @@ class ChatResult:
 
 
 @dataclass(frozen=True)
-class ConversationRuntimeResult:
-    """Output from one conversation runtime turn."""
-
-    state: ThreadState
-    result: ChatResult
-    node_trace: tuple[ConversationNodeName, ...] = ()
-
-
-@dataclass(frozen=True)
 class ConversationTurnState:
     """Typed state passed between conversation runtime nodes."""
 
@@ -347,7 +143,7 @@ class ConversationTurnState:
     memory_context: str = ""
     base_messages: tuple[ThreadMessage, ...] = ()
     active_messages: tuple[ThreadMessage, ...] = ()
-    final_response: PresentedResponse | None = None
+    final_response: ChatStructuredOutput | None = None
     saved_messages: tuple[ThreadMessage, ...] = ()
     updated_thread_state: ThreadState | None = None
     node_trace: tuple[ConversationNodeName, ...] = ()
@@ -368,65 +164,10 @@ class ConversationTurnState:
 class ConversationNodeResult:
     """Result from one graph-ready conversation runtime node."""
 
-    node: ConversationNodeName
     state: ConversationTurnState
 
 
-class ConversationRuntime(Protocol):
-    """Runtime boundary for one conversation turn."""
 
-    def run_turn(
-        self,
-        state: ThreadState,
-        message: str,
-        thread_id: str,
-        *,
-        turn_id: str | None = None,
-    ) -> ConversationRuntimeResult:
-        ...
-
-
-class ChatAgent:
-    """Memory-aware chat agent backed by a conversation runtime boundary."""
-
-    def __init__(
-        self,
-        project_root: Path | None = None,
-        *,
-        llm: ChatLLM | None = None,
-        settings: ChatAgentSettings | None = None,
-        thread_store: ThreadStore | None = None,
-        memory_query_service: MemoryQueryService | None = None,
-        runtime: ConversationRuntime | None = None,
-    ) -> None:
-        self._project_root = project_root
-        self._thread_store = thread_store or ThreadStore(project_root)
-        self._runtime = runtime or ConversationGraphRuntime(
-            project_root,
-            llm=llm,
-            settings=settings,
-            memory_query_service=memory_query_service,
-        )
-
-    def respond(self, message: str, thread_id: str = "default", *, turn_id: str | None = None) -> ChatResult:
-        def update(state: ThreadState) -> tuple[ThreadState, ChatResult]:
-            completed = _completed_turn_result(state, message=message, thread_id=thread_id, turn_id=turn_id)
-            if completed is not None:
-                write_log_event(
-                    "chat",
-                    "turn_reused",
-                    "chat turn reused existing completed result",
-                    project_root=self._project_root,
-                    thread_id=thread_id,
-                    turn_id=turn_id,
-                    source="chat_runtime",
-                    status="completed",
-                )
-                return state, completed
-            runtime_result = self._runtime.run_turn(state, message, thread_id, turn_id=turn_id)
-            return runtime_result.state, runtime_result.result
-
-        return self._thread_store.update(thread_id, update)
 
 
 # ------------------------------------------------------------------
@@ -453,80 +194,6 @@ class _ConversationGraphState(TypedDict):
     turn_state: ConversationTurnState
 
 
-class _ConversationGraphNodeRuntime(Protocol):
-    def prepare_context_node(self, state: ConversationTurnState) -> ConversationNodeResult: ...
-    def respond_node(self, state: ConversationTurnState) -> ConversationNodeResult: ...
-    def state_update_node(self, state: ConversationTurnState) -> ConversationNodeResult: ...
-    def compression_node(self, state: ConversationTurnState) -> ConversationNodeResult: ...
-
-
-class _ConversationGraphNode(Protocol):
-    def __call__(self, state: ConversationTurnState) -> ConversationNodeResult: ...
-
-
-class _ConversationGraphDriver:
-    """LangGraph driver that wires the conversation runtime nodes."""
-
-    def __init__(self, runtime: _ConversationGraphNodeRuntime) -> None:
-        self._runtime = runtime
-        graph: Any = StateGraph(_ConversationGraphState)
-        graph.add_node("prepare_context", self._prepare_context)
-        graph.add_node("respond", self._respond)
-        graph.add_node("state_update", self._state_update)
-        graph.add_node("compression", self._compression)
-        graph.add_edge(START, "prepare_context")
-        graph.add_edge("prepare_context", "respond")
-        graph.add_edge("respond", "state_update")
-        graph.add_edge("state_update", "compression")
-        graph.add_edge("compression", END)
-        self._graph = graph.compile()
-
-    def run(self, state: ConversationTurnState) -> ConversationTurnState:
-        try:
-            output: object = self._graph.invoke({"turn_state": state})
-        except ConversationGraphRuntimeError:
-            raise
-        except Exception as exc:
-            raise ConversationGraphRuntimeError(
-                f"conversation graph failed while handling thread '{state.thread_id}'",
-                node_trace=state.node_trace,
-            ) from exc
-        if not isinstance(output, dict):
-            raise ConversationGraphRuntimeError("conversation graph returned invalid state", node_trace=state.node_trace)
-        graph_state = cast(_ConversationGraphState, output)
-        return graph_state["turn_state"]
-
-    def _prepare_context(self, state: _ConversationGraphState) -> _ConversationGraphState:
-        return self._run_node("prepare_context", state, self._runtime.prepare_context_node)
-
-    def _respond(self, state: _ConversationGraphState) -> _ConversationGraphState:
-        return self._run_node("respond", state, self._runtime.respond_node)
-
-    def _state_update(self, state: _ConversationGraphState) -> _ConversationGraphState:
-        return self._run_node("state_update", state, self._runtime.state_update_node)
-
-    def _compression(self, state: _ConversationGraphState) -> _ConversationGraphState:
-        return self._run_node("compression", state, self._runtime.compression_node)
-
-    def _run_node(
-        self,
-        node: ConversationNodeName,
-        state: _ConversationGraphState,
-        run: _ConversationGraphNode,
-    ) -> _ConversationGraphState:
-        turn_state = state["turn_state"]
-        try:
-            return {"turn_state": run(turn_state).state}
-        except ConversationGraphRuntimeError:
-            raise
-        except Exception as exc:
-            raise ConversationGraphRuntimeError(
-                f"conversation graph node '{node}' failed while handling thread '{turn_state.thread_id}'",
-                node=node,
-                node_trace=(*turn_state.node_trace, node),
-            ) from exc
-
-
 class ConversationGraphRuntime:
     """Graph-ready conversation runtime.
 
@@ -544,6 +211,7 @@ class ConversationGraphRuntime:
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
         settings: ChatAgentSettings | None = None,
         memory_query_service: MemoryQueryService | None = None,
+        thread_store: ThreadStore | None = None,
     ) -> None:
         self._llm = llm or default_llm(project_root)
         self._langchain_models: tuple[LangChainLLMEndpoint, ...] = (
@@ -553,6 +221,7 @@ class ConversationGraphRuntime:
         )
         self._settings = settings or ChatAgentSettings.from_project(project_root)
         self._project_root = project_root
+        self._thread_store = thread_store or ThreadStore(project_root)
         system_config = ConfigSystem.load(project_root=project_root)
         self._language_preference = system_config.chat.language_preference
         self._persona_definitions = load_persona_definitions(project_root)
@@ -606,7 +275,37 @@ class ConversationGraphRuntime:
             for skill in self._skills
         }
         self._tools["load_skill"] = self._build_skill_loader_tool()
-        self._graph_driver = _ConversationGraphDriver(self)
+        graph: Any = StateGraph(_ConversationGraphState)
+        graph.add_node("prepare_context", self._graph_prepare_context)
+        graph.add_node("respond", self._graph_respond)
+        graph.add_node("state_update", self._graph_state_update)
+        graph.add_node("compression", self._graph_compression)
+        graph.add_edge(START, "prepare_context")
+        graph.add_edge("prepare_context", "respond")
+        graph.add_edge("respond", "state_update")
+        graph.add_edge("state_update", "compression")
+        graph.add_edge("compression", END)
+        self._graph = graph.compile()
+
+    def respond(self, message: str, thread_id: str = "default", *, turn_id: str | None = None) -> ChatResult:
+        def update(state: ThreadState) -> tuple[ThreadState, ChatResult]:
+            completed = _completed_turn_result(state, message=message, thread_id=thread_id, turn_id=turn_id)
+            if completed is not None:
+                write_log_event(
+                    "chat",
+                    "turn_reused",
+                    "chat turn reused existing completed result",
+                    project_root=self._project_root,
+                    thread_id=thread_id,
+                    turn_id=turn_id,
+                    source="chat_runtime",
+                    status="completed",
+                )
+                return state, completed
+            state, result, _ = self.run_turn(state, message, thread_id, turn_id=turn_id)
+            return state, result
+
+        return self._thread_store.update(thread_id, update)
 
     def run_turn(
         self,
@@ -615,7 +314,7 @@ class ConversationGraphRuntime:
         thread_id: str,
         *,
         turn_id: str | None = None,
-    ) -> ConversationRuntimeResult:
+    ) -> tuple[ThreadState, ChatResult, tuple[ConversationNodeName, ...]]:
         started_at = time.monotonic()
         with log_context(thread_id=thread_id, turn_id=turn_id, source="chat_runtime"):
             write_log_event(
@@ -626,21 +325,20 @@ class ConversationGraphRuntime:
                 status="started",
             )
             try:
-                turn_state = self._graph_driver.run(ConversationTurnState.start(state, message, thread_id, turn_id=turn_id))
-            except Exception as exc:
-                duration_ms = int((time.monotonic() - started_at) * 1000)
-                write_log_event(
-                    "chat",
-                    "turn_failed",
-                    "chat turn failed",
-                    project_root=self._project_root,
-                    duration_ms=duration_ms,
-                    status="error",
-                    error=str(exc),
-                )
+                output: object = self._graph.invoke({"turn_state": ConversationTurnState.start(state, message, thread_id, turn_id=turn_id)})
+            except ConversationGraphRuntimeError:
                 raise
+            except Exception as exc:
+                raise ConversationGraphRuntimeError(
+                    f"conversation graph failed while handling thread '{thread_id}'",
+                    node_trace=(),
+                ) from exc
+            if not isinstance(output, dict):
+                raise ConversationGraphRuntimeError("conversation graph returned invalid state", node_trace=())
+            graph_state = cast(_ConversationGraphState, output)
+            turn_state = graph_state["turn_state"]
         updated = _require_thread_state(turn_state.updated_thread_state)
-        final_response = _require_presented_response(turn_state.final_response)
+        final_response = _require_final_response(turn_state.final_response)
         duration_ms = int((time.monotonic() - started_at) * 1000)
         with log_context(thread_id=thread_id, turn_id=turn_id, source="chat_runtime"):
             write_log_event(
@@ -657,23 +355,20 @@ class ConversationGraphRuntime:
             thread_id=thread_id,
             node_trace=turn_state.node_trace,
         )
-        return ConversationRuntimeResult(
-            state=updated,
-            result=ChatResult(
-                answer=final_response.answer,
-                thread_id=thread_id,
-                evidence_references=final_response.evidence_references,
-                confidence=final_response.confidence,
-                epistemic_status=final_response.epistemic_status,
-            ),
-            node_trace=turn_state.node_trace,
-        )
+        state = updated
+        return state, ChatResult(
+            answer=final_response.answer,
+            thread_id=thread_id,
+            evidence_references=tuple(final_response.evidence_references),
+            confidence=final_response.confidence,
+            epistemic_status=final_response.epistemic_status,
+        ), turn_state.node_trace
 
     def _record_chat_turn_trace(
         self,
         *,
         user_message: str,
-        final_response: PresentedResponse,
+        final_response: ChatStructuredOutput,
         thread_id: str,
         node_trace: tuple[ConversationNodeName, ...],
     ) -> None:
@@ -684,8 +379,8 @@ class ConversationGraphRuntime:
             self._trace_recorder.record_chat_turn(
                 title=f"Chat turn cited {evidence_refs[0]}",
                 summary="Assistant reply used retrieved context cited by the final response.",
-                user_input=_trace_summary(user_message),
-                assistant_output=_trace_summary(final_response.answer),
+                user_input=trace_summary(user_message),
+                assistant_output=trace_summary(final_response.answer),
                 thread_id=thread_id,
                 evidence_refs=evidence_refs,
                 participants=["chat_agent"],
@@ -704,6 +399,35 @@ class ConversationGraphRuntime:
             )
 
     # ------------------------------------------------------------------
+    # LangGraph node wrappers
+    # ------------------------------------------------------------------
+
+    def _run_graph_node(self, node_name: ConversationNodeName, state: _ConversationGraphState, run: Callable[[ConversationTurnState], ConversationNodeResult]) -> _ConversationGraphState:
+        turn_state = state["turn_state"]
+        try:
+            return {"turn_state": run(turn_state).state}
+        except ConversationGraphRuntimeError:
+            raise
+        except Exception as exc:
+            raise ConversationGraphRuntimeError(
+                f"conversation graph node '{node_name}' failed while handling thread '{turn_state.thread_id}'",
+                node=node_name,
+                node_trace=(*turn_state.node_trace, node_name),
+            ) from exc
+
+    def _graph_prepare_context(self, state: _ConversationGraphState) -> _ConversationGraphState:
+        return self._run_graph_node("prepare_context", state, self.prepare_context_node)
+
+    def _graph_respond(self, state: _ConversationGraphState) -> _ConversationGraphState:
+        return self._run_graph_node("respond", state, self.respond_node)
+
+    def _graph_state_update(self, state: _ConversationGraphState) -> _ConversationGraphState:
+        return self._run_graph_node("state_update", state, self.state_update_node)
+
+    def _graph_compression(self, state: _ConversationGraphState) -> _ConversationGraphState:
+        return self._run_graph_node("compression", state, self.compression_node)
+
+    # ------------------------------------------------------------------
     # Graph node methods
     # ------------------------------------------------------------------
 
@@ -712,7 +436,6 @@ class ConversationGraphRuntime:
         active_messages = (*base_messages, ThreadMessage(role="user", content=state.user_message, turn_id=state.turn_id))
         packed_memory = self._memory_query_service.pack(MemoryQuery(text=state.user_message))
         return ConversationNodeResult(
-            node="prepare_context",
             state=replace(
                 state,
                 base_messages=base_messages,
@@ -731,7 +454,6 @@ class ConversationGraphRuntime:
             ThreadMessage(role="assistant", content=final.answer, turn_id=state.turn_id),
         )
         return ConversationNodeResult(
-            node="respond",
             state=replace(
                 state,
                 final_response=final,
@@ -751,7 +473,6 @@ class ConversationGraphRuntime:
             ),
         )
         return ConversationNodeResult(
-            node="state_update",
             state=replace(
                 state,
                 updated_thread_state=updated,
@@ -762,7 +483,6 @@ class ConversationGraphRuntime:
     def compression_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         updated = _require_thread_state(state.updated_thread_state)
         return ConversationNodeResult(
-            node="compression",
             state=replace(
                 state,
                 updated_thread_state=self._compress_if_needed(updated),
@@ -810,12 +530,13 @@ class ConversationGraphRuntime:
     # Response generation
     # ------------------------------------------------------------------
 
-    def _complete_response(self, prompt: list[ChatMessage]) -> ParsedChatResponse:
+    def _complete_response(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
         if self._langchain_models:
             return self._complete_response_with_langchain_tools(prompt)
-        return parse_chat_response(self._llm.complete(prompt))
+        raw = self._llm.complete(prompt)
+        return self._parse_llm_output(raw)
 
-    def _complete_response_with_langchain_tools(self, prompt: list[ChatMessage]) -> ParsedChatResponse:
+    def _complete_response_with_langchain_tools(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
         last_error: Exception | None = None
         for position, endpoint in enumerate(self._langchain_models):
             for attempt in range(2):
@@ -868,113 +589,42 @@ class ConversationGraphRuntime:
                 status="fallback",
                 error=redact_llm_error(str(last_error)),
             )
-        return parse_chat_response(self._llm.complete(prompt))
+        raw = self._llm.complete(prompt)
+        return self._parse_llm_output(raw)
 
     def _complete_response_with_langchain_endpoint(
         self,
         endpoint: LangChainLLMEndpoint,
         prompt: list[ChatMessage],
-    ) -> ParsedChatResponse:
+    ) -> ChatStructuredOutput:
         supervisor = _LangChainChatSupervisor(
             endpoint=endpoint,
             tools=self._tools.values(),
             log_tool_call=self._log_langchain_service_tool_call,
         )
+        return supervisor.complete(prompt)
+
+    @staticmethod
+    def _parse_llm_output(raw: str) -> ChatStructuredOutput:
         try:
-            structured = supervisor.complete(prompt)
-        except StructuredOutputError as exc:
-            return parse_chat_response(exc.raw_text)
-        return structured_chat_output_to_response(structured)
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return ChatStructuredOutput(answer=raw)
+        if isinstance(parsed, dict):
+            return ChatStructuredOutput.model_validate(cast(dict[str, object], parsed))
+        return ChatStructuredOutput(answer=raw)
 
-    def _finalize_draft_response(self, state: ConversationTurnState, draft: ParsedChatResponse) -> PresentedResponse:
-        if is_parsed_user_facing_safe(draft):
-            response = apply_unsupported_claim_guard(to_presented_response(draft))
-            write_log_event(
-                "chat",
-                "final_response_completed",
-                "final response accepted from chat supervisor",
-                project_root=self._project_root,
-                thread_id=state.thread_id,
-                status="completed",
-                metadata={"epistemic_status": response.epistemic_status},
-            )
-            return response
-
+    def _finalize_draft_response(self, state: ConversationTurnState, draft: ChatStructuredOutput) -> ChatStructuredOutput:
         write_log_event(
             "chat",
-            "final_response_retry",
-            "chat supervisor draft violated user-facing boundary; retrying",
+            "final_response_completed",
+            "final response accepted from chat supervisor",
             project_root=self._project_root,
             thread_id=state.thread_id,
-            status="retry",
-            metadata={"retry_reason": "protocol_leak"},
+            status="completed",
+            metadata={"epistemic_status": draft.epistemic_status},
         )
-        try:
-            retry = self._complete_response(self._build_final_response_retry_prompt(state, draft))
-        except Exception as exc:
-            write_log_event(
-                "chat",
-                "final_response_failed",
-                "final response retry failed",
-                project_root=self._project_root,
-                thread_id=state.thread_id,
-                status="failed",
-                error=str(exc),
-                metadata={"reason": "retry_exception"},
-            )
-            retry = None
-
-        if retry is not None and is_parsed_user_facing_safe(retry):
-            response = apply_unsupported_claim_guard(to_presented_response(retry))
-            write_log_event(
-                "chat",
-                "final_response_completed",
-                "final response accepted after retry",
-                project_root=self._project_root,
-                thread_id=state.thread_id,
-                status="completed",
-                metadata={"epistemic_status": response.epistemic_status, "retried": True},
-            )
-            return response
-
-        write_log_event(
-            "chat",
-            "final_response_failed",
-            "final response remained invalid after retry",
-            project_root=self._project_root,
-            thread_id=state.thread_id,
-            status="failed",
-            metadata={"reason": "protocol_leak"},
-        )
-        return PresentedResponse(
-            answer=PRESENTATION_BOUNDARY_FAILURE_ANSWER,
-            evidence_references=(),
-            confidence=0.0,
-            epistemic_status="unsupported",
-        )
-
-    def _build_final_response_retry_prompt(
-        self,
-        state: ConversationTurnState,
-        draft: ParsedChatResponse,
-    ) -> list[ChatMessage]:
-        prompt = self._build_prompt(state)
-        hints = presentation_hints(state.user_message)
-        retry_parts = [
-            REGENERATE_USER_FACING_RESPONSE_PROMPT,
-            "",
-            "Previous invalid draft:",
-            draft.answer,
-            "",
-            "Draft metadata:",
-            f"- evidence_references: {list(draft.evidence_references)}",
-            f"- confidence: {draft.confidence}",
-            f"- epistemic_status: {draft.epistemic_status}",
-        ]
-        if hints:
-            retry_parts.extend(["", "User-facing style hints:", *[f"- {hint}" for hint in hints]])
-        retry_parts.append("Do not call additional tools unless the previous draft cannot be repaired without missing information.")
-        return [*prompt, ChatMessage(role="user", content="\n".join(retry_parts))]
+        return draft
 
     def _log_langchain_service_tool_call(
         self,
@@ -1250,28 +900,15 @@ class ConversationGraphRuntime:
 # ======================================================================
 
 
-class _ToolCallLogger(Protocol):
-    """Records one service tool execution."""
-
-    def __call__(
-        self,
-        tool_name: str,
-        args: dict[str, Any],
-        *,
-        result: str | None = None,
-        error: str | None = None,
-    ) -> None: ...
-
-
 class _LoggedTool(BaseTool):
     """LangChain tool wrapper that logs real service executions."""
 
     _inner: BaseTool = PrivateAttr()
-    _log_call: _ToolCallLogger = PrivateAttr()
+    _log_call: Any = PrivateAttr()
     _cache: dict[str, str] = PrivateAttr(default_factory=dict)
     _cache_lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
 
-    def __init__(self, inner: BaseTool, *, log_call: _ToolCallLogger, cache: dict[str, str]) -> None:
+    def __init__(self, inner: BaseTool, *, log_call: Callable[..., None], cache: dict[str, str]) -> None:
         super().__init__(
             name=inner.name,
             description=inner.description,
@@ -1341,7 +978,7 @@ class _LangChainChatSupervisor:
         *,
         endpoint: LangChainLLMEndpoint,
         tools: Iterable[BaseTool],
-        log_tool_call: _ToolCallLogger,
+        log_tool_call: Callable[..., None],
     ) -> None:
         self._endpoint = endpoint
         self._tools = tuple(tools)
@@ -1394,8 +1031,8 @@ def _structured_response_from_agent_state(result: object) -> ChatStructuredOutpu
         if isinstance(content, str):
             try:
                 return ChatStructuredOutput.model_validate_json(content)
-            except Exception:
-                raise StructuredOutputError(content)
+            except Exception as exc:
+                raise ValueError(f"LangChain agent returned non-JSON response: {content[:200]!r}") from exc
     raise ValueError("LangChain agent did not return a structured_response")
 
 
@@ -1489,18 +1126,8 @@ def _format_selves_consult_result(
     return "\n".join(lines)
 
 
-def _is_local_fallback_reply(message: ThreadMessage) -> bool:
-    return message.role == "assistant" and message.content.startswith("LLM API is not configured yet.")
-
-
 def _messages_for_prompt_context(messages: list[ThreadMessage]) -> list[ThreadMessage]:
-    return [message for message in messages if _is_prompt_context_message(message)]
-
-
-def _is_prompt_context_message(message: ThreadMessage) -> bool:
-    if _is_local_fallback_reply(message):
-        return False
-    return message.role != "assistant" or not leaks_response_protocol(message.content)
+    return [message for message in messages if not (message.role == "assistant" and message.content.startswith("LLM API is not configured yet."))]
 
 
 def _require_thread_state(state: ThreadState | None) -> ThreadState:
@@ -1509,7 +1136,7 @@ def _require_thread_state(state: ThreadState | None) -> ThreadState:
     return state
 
 
-def _require_presented_response(response: PresentedResponse | None) -> PresentedResponse:
+def _require_final_response(response: ChatStructuredOutput | None) -> ChatStructuredOutput:
     if response is None:
         raise RuntimeError("conversation runtime presented response is missing")
     return response
@@ -1623,3 +1250,7 @@ def _tool_args_signature(tool: BaseTool) -> str:
         else:
             pieces.append(f"{name}: {type_name} = {default!r}")
     return ", ".join(pieces)
+
+
+# Backward-compatible alias
+ChatAgent = ConversationGraphRuntime
