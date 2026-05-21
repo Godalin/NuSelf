@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field, replace
-import fcntl
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 import json
 import logging
 import re
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, Protocol, TypeAlias, TypeVar, cast
+from typing import Any, Literal, Protocol, TypeAlias, cast
 
 from langchain_core.tools import BaseTool
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import ValidationError
 
 from nuself.agent.skills import AgentSkill, load_agent_skills, render_agent_skill_sections
+from nuself.agent.supervisor import ChatStructuredOutput, LangChainChatSupervisor
+from nuself.agent.thread import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.tools import build_langchain_chat_tools
 from nuself.agent.persona import (
     PersonaActivation,
@@ -32,7 +32,6 @@ from nuself.agent.persona import (
     load_persona_definitions,
 )
 from nuself.domain.proactive import IdeaCandidate
-from nuself.config import runtime_paths
 from nuself.config_system import ConfigSystem
 from nuself.llm import (
     ChatLLM,
@@ -52,7 +51,6 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
 from nuself.trace.service import TraceRecorder
 
-ThreadRole = Literal["user", "assistant"]
 ToolServiceComponent = Literal["memory", "reflection", "reasoning", "trace", "selves"]
 ConversationNodeName = Literal[
     "prepare_context",
@@ -65,7 +63,6 @@ ConversationNodeName = Literal[
     "state_update",
     "compression",
 ]
-UpdateResult = TypeVar("UpdateResult")
 USER_FACING_PERSONA_BOUNDARY = (
     "Use internal persona synthesis as private context only. "
     "Do not narrate internal persona composition or say which self contributed what in the user-facing answer, "
@@ -83,22 +80,6 @@ REGENERATE_USER_FACING_RESPONSE_PROMPT = (
     "and make the answer field plain user-facing text without JSON, code fences, or protocol field names."
 )
 PRESENTATION_BOUNDARY_FAILURE_ANSWER = "我刚刚的输出格式出了问题。请你再说一遍，我会直接用正常聊天的方式回答。"
-
-
-class _ToolBoundChatModel(Protocol):
-    def invoke(self, input: list[BaseMessage]) -> AIMessage: ...
-
-
-class _ToolBindableChatModel(Protocol):
-    def bind_tools(self, tools: list[BaseTool]) -> _ToolBoundChatModel: ...
-
-
-class _StructuredChatModel(Protocol):
-    def invoke(self, input: list[BaseMessage]) -> object: ...
-
-
-class _StructuredOutputChatModel(Protocol):
-    def with_structured_output(self, schema: type[BaseModel]) -> _StructuredChatModel: ...
 
 
 class _InvokableTool(Protocol):
@@ -120,99 +101,6 @@ class ChatAgentSettings:
             recent_messages=config.chat.context.recent_messages,
             summary_trigger_messages=config.chat.context.summary_trigger_messages,
             summary_target_chars=config.chat.context.summary_target_chars,
-        )
-
-
-@dataclass(frozen=True)
-class ThreadMessage:
-    """A persisted user or assistant message in a NuSelf thread."""
-
-    role: ThreadRole
-    content: str
-    turn_id: str | None = None
-
-    def to_wire(self) -> dict[str, str]:
-        wire = {"role": self.role, "content": self.content}
-        if self.turn_id is not None:
-            wire["turn_id"] = self.turn_id
-        return wire
-
-    @classmethod
-    def from_wire(cls, data: dict[str, object]) -> "ThreadMessage":
-        role = data.get("role")
-        content = data.get("content")
-        turn_id = data.get("turn_id")
-        if role not in {"user", "assistant"}:
-            raise ValueError("thread message role must be user or assistant")
-        if not isinstance(content, str):
-            raise ValueError("thread message content must be a string")
-        if turn_id is not None and not isinstance(turn_id, str):
-            raise ValueError("thread message turn_id must be a string when present")
-        return cls(role=cast(ThreadRole, role), content=content, turn_id=turn_id)
-
-
-def empty_thread_messages() -> list[ThreadMessage]:
-    return []
-
-
-@dataclass(frozen=True)
-class ThreadState:
-    """Persisted state for one chat thread."""
-
-    thread_id: str
-    summary: str = ""
-    messages: list[ThreadMessage] = field(default_factory=empty_thread_messages)
-    message_start_index: int = 0
-    next_message_index: int = 0
-
-    def __post_init__(self) -> None:
-        if self.next_message_index == self.message_start_index and self.messages:
-            object.__setattr__(self, "next_message_index", self.message_start_index + len(self.messages))
-
-    def to_wire(self) -> dict[str, object]:
-        return {
-            "thread_id": self.thread_id,
-            "summary": self.summary,
-            "messages": [message.to_wire() for message in self.messages],
-            "message_start_index": self.message_start_index,
-            "next_message_index": self.next_message_index,
-        }
-
-    @classmethod
-    def empty(cls, thread_id: str) -> "ThreadState":
-        return cls(thread_id=thread_id)
-
-    @classmethod
-    def from_wire(cls, data: dict[str, object]) -> "ThreadState":
-        thread_id = data.get("thread_id")
-        summary = data.get("summary")
-        messages = data.get("messages")
-        message_start_index = data.get("message_start_index", 0)
-        next_message_index = data.get("next_message_index")
-        if not isinstance(thread_id, str):
-            raise ValueError("thread_id must be a string")
-        if not isinstance(summary, str):
-            raise ValueError("summary must be a string")
-        if not isinstance(messages, list):
-            raise ValueError("messages must be a list")
-        if not isinstance(message_start_index, int) or message_start_index < 0:
-            raise ValueError("message_start_index must be a non-negative integer")
-        message_items = cast(list[object], messages)
-        parsed_messages = [
-            ThreadMessage.from_wire(cast(dict[str, object], item))
-            for item in message_items
-            if isinstance(item, dict)
-        ]
-        if next_message_index is None:
-            next_message_index = message_start_index + len(parsed_messages)
-        if not isinstance(next_message_index, int) or next_message_index < message_start_index:
-            raise ValueError("next_message_index must be an integer greater than or equal to message_start_index")
-        return cls(
-            thread_id=thread_id,
-            summary=summary,
-            messages=parsed_messages,
-            message_start_index=message_start_index,
-            next_message_index=next_message_index,
         )
 
 
@@ -257,15 +145,6 @@ class DraftResponse:
     @property
     def draft_answer(self) -> str:
         return self.answer
-
-
-class ChatStructuredOutput(BaseModel):
-    """Structured chat response returned by LangChain-native chat models."""
-
-    answer: str = Field(description="Plain user-facing answer text. Do not include internal protocol fields.")
-    evidence_references: list[str] = Field(default_factory=list, description="Memory, source, or trace ids used.")
-    confidence: float | None = Field(default=None, description="Optional confidence from 0.0 to 1.0.")
-    epistemic_status: str = Field(default="inferred", description="One of grounded, inferred, uncertain, unsupported.")
 
 
 @dataclass(frozen=True)
@@ -352,198 +231,6 @@ class ConversationRuntime(Protocol):
     ) -> ConversationRuntimeResult:
         """Run one user turn and return the persisted state plus user-facing result."""
         ...
-
-
-class ThreadStore:
-    """File-backed chat thread store under private/threads."""
-
-    def __init__(self, project_root: Path | None = None) -> None:
-        paths = runtime_paths(project_root)
-        self._threads_dir = paths.private_root / "threads"
-
-    def load(self, thread_id: str) -> ThreadState:
-        with self._locked(thread_id):
-            return self._load_unlocked(thread_id)
-
-    def save(self, state: ThreadState) -> None:
-        with self._locked(state.thread_id):
-            self._save_unlocked(state)
-
-    def update(
-        self,
-        thread_id: str,
-        update: Callable[[ThreadState], tuple[ThreadState, UpdateResult]],
-    ) -> UpdateResult:
-        """Atomically update one working-memory stream under an exclusive lock."""
-
-        with self._locked(thread_id):
-            state = self._load_unlocked(thread_id)
-            updated, result = update(state)
-            self._save_unlocked(updated)
-            return result
-
-    def _locked(self, thread_id: str) -> "_ThreadLock":
-        self._threads_dir.mkdir(parents=True, exist_ok=True)
-        return _ThreadLock(self._lock_path_for(thread_id))
-
-    def _load_unlocked(self, thread_id: str) -> ThreadState:
-        path = self._path_for(thread_id)
-        if not path.exists():
-            return ThreadState.empty(thread_id)
-        raw: object = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError(f"thread file must contain an object: {path}")
-        return ThreadState.from_wire(cast(dict[str, object], raw))
-
-    def _save_unlocked(self, state: ThreadState) -> None:
-        self._threads_dir.mkdir(parents=True, exist_ok=True)
-        path = self._path_for(state.thread_id)
-        tmp_path = path.with_suffix(f"{path.suffix}.tmp")
-        tmp_path.write_text(json.dumps(state.to_wire(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        tmp_path.replace(path)
-
-    def _path_for(self, thread_id: str) -> Path:
-        if thread_id == "" or "/" in thread_id or thread_id in {".", ".."}:
-            raise ValueError(f"invalid thread id: {thread_id}")
-        return self._threads_dir / f"{thread_id}.json"
-
-    def _lock_path_for(self, thread_id: str) -> Path:
-        if thread_id == "" or "/" in thread_id or thread_id in {".", ".."}:
-            raise ValueError(f"invalid thread id: {thread_id}")
-        return self._threads_dir / f"{thread_id}.lock"
-
-    def list(self) -> list[str]:
-        """List persisted thread IDs, excluding archived threads."""
-        if not self._threads_dir.exists():
-            return []
-        ids: list[str] = []
-        for path in sorted(self._threads_dir.glob("*.json")):
-            ids.append(path.stem)
-        return ids
-
-    def list_archived(self) -> list[str]:
-        """List archived thread IDs."""
-        archived_dir = self._threads_dir / "archived"
-        if not archived_dir.exists():
-            return []
-        ids: list[str] = []
-        for path in sorted(archived_dir.glob("*.json")):
-            ids.append(path.stem)
-        return ids
-
-    def rename(self, old_thread_id: str, new_thread_id: str) -> None:
-        """Rename a thread file and its lock atomically."""
-        if old_thread_id == new_thread_id:
-            return
-        old_path = self._path_for(old_thread_id)
-        new_path = self._path_for(new_thread_id)
-        if not old_path.exists():
-            raise ValueError(f"thread not found: {old_thread_id}")
-        if new_path.exists():
-            raise ValueError(f"thread already exists: {new_thread_id}")
-        state = self._load_unlocked(old_thread_id)
-        renamed = ThreadState(
-            thread_id=new_thread_id,
-            summary=state.summary,
-            messages=state.messages,
-            message_start_index=state.message_start_index,
-            next_message_index=state.next_message_index,
-        )
-        self._save_unlocked(renamed)
-        old_path.unlink()
-        old_lock = self._lock_path_for(old_thread_id)
-        if old_lock.exists():
-            old_lock.unlink()
-
-    def branch(
-        self,
-        source_thread_id: str,
-        new_thread_id: str,
-        message_index: int | None = None,
-    ) -> ThreadState:
-        """Branch a new thread from a source thread up to a message index.
-
-        If message_index is None, branches from the current end.
-        """
-        source_path = self._path_for(source_thread_id)
-        new_path = self._path_for(new_thread_id)
-        if not source_path.exists():
-            raise ValueError(f"source thread not found: {source_thread_id}")
-        if new_path.exists():
-            raise ValueError(f"thread already exists: {new_thread_id}")
-        source = self._load_unlocked(source_thread_id)
-        if message_index is None:
-            message_index = len(source.messages)
-        if message_index < 0 or message_index > len(source.messages):
-            raise ValueError(
-                f"branch index {message_index} out of range (0..{len(source.messages)})"
-            )
-        branched = ThreadState(
-            thread_id=new_thread_id,
-            summary=source.summary,
-            messages=source.messages[:message_index],
-            message_start_index=source.message_start_index,
-            next_message_index=source.message_start_index + message_index,
-        )
-        self._save_unlocked(branched)
-        return branched
-
-    def archive(self, thread_id: str) -> None:
-        """Move a thread file to the archived subdirectory."""
-        source_path = self._path_for(thread_id)
-        if not source_path.exists():
-            raise ValueError(f"thread not found: {thread_id}")
-        archived_dir = self._threads_dir / "archived"
-        archived_dir.mkdir(parents=True, exist_ok=True)
-        target_path = archived_dir / f"{thread_id}.json"
-        if target_path.exists():
-            raise ValueError(f"archived thread already exists: {thread_id}")
-        source_path.rename(target_path)
-        old_lock = self._lock_path_for(thread_id)
-        if old_lock.exists():
-            old_lock.unlink()
-
-    def unarchive(self, thread_id: str) -> None:
-        """Move a thread file from the archived subdirectory back to active."""
-        archived_dir = self._threads_dir / "archived"
-        source_path = archived_dir / f"{thread_id}.json"
-        if not source_path.exists():
-            raise ValueError(f"archived thread not found: {thread_id}")
-        target_path = self._path_for(thread_id)
-        if target_path.exists():
-            raise ValueError(f"thread already exists: {thread_id}")
-        source_path.rename(target_path)
-
-    def delete(self, thread_id: str) -> None:
-        """Permanently delete a thread file and its lock."""
-        path = self._path_for(thread_id)
-        if not path.exists():
-            raise ValueError(f"thread not found: {thread_id}")
-        path.unlink()
-        lock = self._lock_path_for(thread_id)
-        if lock.exists():
-            lock.unlink()
-
-
-class _ThreadLock:
-    """Advisory file lock for one working-memory stream."""
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
-        self._file = None
-
-    def __enter__(self) -> None:
-        self._file = self._path.open("ab")
-        fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
-
-    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
-        if self._file is None:
-            return
-        try:
-            fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
-        finally:
-            self._file.close()
-            self._file = None
 
 
 class ChatAgent:
@@ -1190,63 +877,32 @@ class ConversationGraphRuntime:
         endpoint: LangChainLLMEndpoint,
         prompt: list[ChatMessage],
     ) -> ParsedChatResponse:
-        model = cast(_ToolBindableChatModel, endpoint.model).bind_tools(list(self._tools.values()))
-        messages = _to_langchain_messages(prompt)
-        ai_message = model.invoke(messages)
-        tool_iterations = 0
-        tool_cache: dict[str, str] = {}
-        while ai_message.tool_calls:
-            if tool_iterations >= 5:
-                raise RuntimeError("LangChain tool call loop exceeded 5 iterations")
-            messages.append(ai_message)
-            for tool_call in ai_message.tool_calls:
-                messages.append(self._invoke_langchain_tool_call(cast(dict[str, Any], tool_call), tool_cache=tool_cache))
-            ai_message = model.invoke(messages)
-            tool_iterations += 1
-        messages.append(ai_message)
-        try:
-            return _complete_structured_chat_output(endpoint, messages)
-        except Exception:
-            LOGGER.exception("LangChain structured chat output failed; falling back to text protocol parsing")
-            return _parse_chat_response(_langchain_message_text(ai_message))
+        supervisor = LangChainChatSupervisor(
+            endpoint=endpoint,
+            tools=self._tools.values(),
+            log_tool_call=self._log_langchain_service_tool_call,
+        )
+        return _structured_chat_output_to_response(supervisor.complete(prompt))
 
-    def _invoke_langchain_tool_call(self, tool_call: dict[str, Any], *, tool_cache: dict[str, str]) -> ToolMessage:
-        tool_name_raw = tool_call.get("name")
-        tool_name = _normalize_tool_name(tool_name_raw if isinstance(tool_name_raw, str) else "")
-        tool_args_raw = tool_call.get("args")
-        tool_args = cast(dict[str, Any], tool_args_raw) if isinstance(tool_args_raw, dict) else {}
-        tool_call_id_raw = tool_call.get("id")
-        tool_call_id = tool_call_id_raw if isinstance(tool_call_id_raw, str) else tool_name
+    def _log_langchain_service_tool_call(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        *,
+        result: str | None = None,
+        error: str | None = None,
+    ) -> None:
         service_component = _tool_service_component(tool_name)
-        cache_key = _tool_call_cache_key(tool_name, tool_args)
-        cached_result = tool_cache.get(cache_key)
-        if cached_result is not None:
-            return ToolMessage(content=cached_result, name=tool_name, tool_call_id=tool_call_id)
-        tool_obj = self._tools.get(tool_name)
-        if tool_obj is None:
-            error = f"unknown tool: {tool_name}"
-            if service_component is not None:
-                self._write_service_tool_log(tool_name, service_component, "failed", args=tool_args, error=error)
-            return ToolMessage(content=f"Error: {error}", name=tool_name, tool_call_id=tool_call_id)
-        try:
-            tool_result = cast(_InvokableTool, tool_obj).invoke(tool_call)
-            result_text = _langchain_tool_message_text(tool_result)
-            tool_cache[cache_key] = result_text
-            if service_component is not None:
-                self._write_service_tool_log(
-                    tool_name,
-                    service_component,
-                    "completed",
-                    args=tool_args,
-                    result=result_text,
-                )
-            if isinstance(tool_result, ToolMessage):
-                return tool_result
-            return ToolMessage(content=result_text, name=tool_name, tool_call_id=tool_call_id)
-        except Exception as exc:
-            if service_component is not None:
-                self._write_service_tool_log(tool_name, service_component, "failed", args=tool_args, error=str(exc))
-            return ToolMessage(content=f"Error: {exc}", name=tool_name, tool_call_id=tool_call_id)
+        if service_component is None:
+            return
+        self._write_service_tool_log(
+            tool_name,
+            service_component,
+            "failed" if error is not None else "completed",
+            args=args,
+            result=result,
+            error=error,
+        )
 
     def _detect_tool_call(self, response: ParsedChatResponse) -> ConversationToolCall | None:
         if response.tool is None:
@@ -1721,48 +1377,6 @@ def _truncate_tool_debug_text(text: str, limit: int = 200) -> str:
     if limit <= 0 or len(text) <= limit:
         return text
     return text[: limit - 3].rstrip() + "..."
-
-
-def _to_langchain_messages(messages: list[ChatMessage]) -> list[BaseMessage]:
-    converted: list[BaseMessage] = []
-    for message in messages:
-        if message.role == "system":
-            converted.append(SystemMessage(content=message.content))
-        elif message.role == "assistant":
-            converted.append(AIMessage(content=message.content))
-        else:
-            converted.append(HumanMessage(content=message.content))
-    return converted
-
-
-def _langchain_message_text(message: BaseMessage) -> str:
-    content = cast(str | list[object], getattr(message, "content"))
-    if isinstance(content, str):
-        return content
-    parts: list[str] = []
-    for item in content:
-        if isinstance(item, str):
-            parts.append(item)
-        elif isinstance(item, dict):
-            item_dict = cast(dict[object, object], item)
-            text = item_dict.get("text")
-            if isinstance(text, str):
-                parts.append(text)
-    return "\n".join(parts)
-
-
-def _langchain_tool_message_text(value: object) -> str:
-    if isinstance(value, ToolMessage):
-        return _langchain_message_text(value)
-    return str(value)
-
-
-def _complete_structured_chat_output(
-    endpoint: LangChainLLMEndpoint,
-    messages: list[BaseMessage],
-) -> ParsedChatResponse:
-    structured_model = cast(_StructuredOutputChatModel, endpoint.model).with_structured_output(ChatStructuredOutput)
-    return _structured_chat_output_to_response(structured_model.invoke(messages))
 
 
 def _structured_chat_output_to_response(output: object) -> ParsedChatResponse:

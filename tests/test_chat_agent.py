@@ -11,7 +11,6 @@ from langchain_core.tools import BaseTool
 from nuself.agent.chat import (
     ChatAgent,
     ChatAgentSettings,
-    ChatStructuredOutput,
     ChatResult,
     ConversationGraphRuntime,
     ConversationTurnState,
@@ -1117,28 +1116,55 @@ def test_chat_agent_chains_multiple_fallback_tool_calls_and_skips_persona(tmp_pa
 
 
 def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -> None:
+    from collections.abc import Sequence
+    from typing import Any
+
     from langchain_core.language_models.chat_models import BaseChatModel
     from langchain_core.messages import AIMessage, BaseMessage
+    from langchain_core.outputs import ChatGeneration, ChatResult as LangChainChatResult
+    from pydantic import PrivateAttr
 
     from nuself.llm import LLMSettings, LangChainLLMEndpoint
 
     repo = MemoryEntryRepository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="Clarity matters", body="Prefer explicit assumptions."))
 
-    class NativeToolModel:
-        def __init__(self) -> None:
-            self.calls: list[list[BaseMessage]] = []
+    def empty_calls() -> list[list[BaseMessage]]:
+        return []
 
-        def bind_tools(self, tools: list[BaseTool]) -> "NativeToolModel":
+    def empty_tool_names() -> list[str]:
+        return []
+
+    class NativeStructuredToolModel(BaseChatModel):
+        _calls: list[list[BaseMessage]] = PrivateAttr(default_factory=empty_calls)
+        _bound_tool_names: list[str] = PrivateAttr(default_factory=empty_tool_names)
+
+        @property
+        def calls(self) -> list[list[BaseMessage]]:
+            return self._calls
+
+        @property
+        def _llm_type(self) -> str:
+            return "native-structured-tool-test"
+
+        def bind_tools(
+            self,
+            tools: Sequence[dict[str, Any] | type | Callable[..., Any] | BaseTool],
+            **kwargs: object,
+        ) -> "NativeStructuredToolModel":
+            self._bound_tool_names = [tool.name for tool in tools if isinstance(tool, BaseTool)]
             return self
 
-        def with_structured_output(self, schema: type[ChatStructuredOutput]) -> "NativeToolModel":
-            return self
-
-        def invoke(self, messages: list[BaseMessage]) -> AIMessage:
-            self.calls.append(messages)
-            if len(self.calls) == 1:
-                return AIMessage(
+        def _generate(
+            self,
+            messages: list[BaseMessage],
+            stop: list[str] | None = None,
+            run_manager: object | None = None,
+            **kwargs: object,
+        ) -> LangChainChatResult:
+            self._calls.append(messages)
+            if len(self._calls) == 1:
+                message = AIMessage(
                     content="",
                     tool_calls=[
                         {
@@ -1152,35 +1178,28 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
                             "args": {"query": "clarity", "limit": 5},
                             "id": "call_memory_search_duplicate",
                             "type": "tool_call",
-                        }
+                        },
                     ],
                 )
-            assert messages[-1].type == "tool"
-            return AIMessage(content='{"answer":"You value clarity.","evidence_references":["mem_native"],"epistemic_status":"grounded"}')
-
-    class NativeStructuredToolModel(NativeToolModel):
-        def invoke(self, messages: list[BaseMessage]) -> AIMessage | ChatStructuredOutput:  # type: ignore[override]
-            self.calls.append(messages)
-            if len(self.calls) == 1:
-                return AIMessage(
+            else:
+                assert messages[-1].type == "tool"
+                structured_tool_name = next(name for name in self._bound_tool_names if name == "ChatStructuredOutput")
+                message = AIMessage(
                     content="",
                     tool_calls=[
                         {
-                            "name": "memory_search",
-                            "args": {"query": "clarity", "limit": 5},
-                            "id": "call_memory_search",
+                            "name": structured_tool_name,
+                            "args": {
+                                "answer": "You value clarity.",
+                                "evidence_references": ["mem_native"],
+                                "epistemic_status": "grounded",
+                            },
+                            "id": "call_structured_response",
                             "type": "tool_call",
                         }
                     ],
                 )
-            if len(self.calls) == 2:
-                assert messages[-1].type == "tool"
-                return AIMessage(content="This unstructured final text should not be parsed.")
-            return ChatStructuredOutput(
-                answer="You value clarity.",
-                evidence_references=["mem_native"],
-                epistemic_status="grounded",
-            )
+            return LangChainChatResult(generations=[ChatGeneration(message=message)])
 
     native_model = NativeStructuredToolModel()
     runtime = ConversationGraphRuntime(
@@ -1190,7 +1209,7 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
             LangChainLLMEndpoint(
                 index=0,
                 settings=LLMSettings(base_url="https://example.test/v1", api_key="key", model="native-test"),
-                model=cast(BaseChatModel, native_model),
+                model=native_model,
             ),
         ),
         memory_query_service=MemoryQueryService(repo),
@@ -1208,7 +1227,7 @@ def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -
         "state_update",
         "compression",
     )
-    assert len(native_model.calls) == 3
+    assert len(native_model.calls) == 2
     logs = [
         event
         for event in read_log_events(project_root=tmp_path, component="chat")

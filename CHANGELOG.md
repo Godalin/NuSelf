@@ -14,6 +14,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 ### Changed
 
 - Chat agent tool invocation is being migrated to LangChain-native tool calling instead of NuSelf-specific prompt JSON tool fields.
+- Chat response generation now treats LangChain `create_agent(..., tools=..., response_format=...)` as the primary supervisor boundary, with NuSelf responsible for context, logging, persistence, and validation around that agent.
 - Chat service tools now use subsystem-prefixed names such as `memory_search`, `reflection_list_pending`, `reason_show`, and `trace_search`; old generic tool names are not retained.
 - Agent Skills now use local tool placeholders that are rendered from the active tool registry, so skill instructions stay aligned with generated service tool names.
 - Direct service-status questions now skip persona activation and fallback tool execution can chain multiple service tool calls before producing the final reply.

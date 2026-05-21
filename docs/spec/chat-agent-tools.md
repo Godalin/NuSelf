@@ -16,6 +16,34 @@ Tools are **stateless callables** at the LangChain boundary. They receive struct
 
 Subagents that are visible to the chat supervisor use the same boundary. A subagent is exposed as a tool whose implementation may run an internal LangGraph or LangChain agent and then return a compact result to the supervisor.
 
+### Chat Supervisor Boundary
+
+The primary chat runtime is a LangChain agent:
+
+```text
+create_agent(model, tools=tools, system_prompt=..., response_format=ChatStructuredOutput)
+```
+
+LangChain owns the model/tool loop. NuSelf must not reimplement the normal
+tool-calling cycle by binding tools, reading `AIMessage.tool_calls`, invoking
+tools manually, and then making a separate final structured-output call. That
+manual loop caused protocol leakage, duplicate turn logs, and tool/result
+context drift.
+
+NuSelf owns only the boundaries around the agent:
+
+- prepare durable context from thread state, memory, skills, and current user input;
+- construct the system prompt and message list;
+- provide LangChain `BaseTool` objects;
+- wrap tools for NuSelf logging and per-turn duplicate suppression;
+- validate the final structured response before exposing it to the user;
+- persist the updated thread state, traces, and logs.
+
+If the active model or test double is not a LangChain chat model, NuSelf may use
+a deterministic local fallback parser, but fallback models must not become a
+parallel production protocol. They may return a plain final answer or a legacy
+JSON envelope used by tests and non-agent subsystems.
+
 ### Tool Registry
 
 `ConversationGraphRuntime` owns a `dict[str, BaseTool]` registry. Adding a tool requires three steps:
@@ -69,7 +97,7 @@ Rules:
 Chat tool invocation must follow LangChain's current tool-calling contract:
 
 ```text
-model.bind_tools(tools) → AIMessage.tool_calls → BaseTool.invoke(tool_call) → ToolMessage → final model response
+create_agent(model, tools=tools, response_format=...) → LangChain-managed tool loop → structured_response
 ```
 
 NuSelf must not ask the model to print a private tool protocol in the assistant message body. In particular:
@@ -78,11 +106,11 @@ NuSelf must not ask the model to print a private tool protocol in the assistant 
 - no NuSelf-only `"tool"` / `"tool_args"` JSON envelope as the primary path;
 - no hidden parallel registry outside LangChain `BaseTool` objects.
 
-`ConversationGraphRuntime` may keep its larger LangGraph workflow for NuSelf-specific stages such as context preparation, presentation, state update, and compression. Inside the response-generation stage, tool calling is delegated to LangChain chat model tool-calling APIs. Persona/selves work is not a fixed pre-response stage; it is invoked through the `selves_consult` subagent tool when the main chat agent decides it is useful.
+`ConversationGraphRuntime` may keep a small LangGraph workflow for NuSelf-specific stages such as context preparation, state update, compression, and trace recording. Inside the response-generation stage, tool calling is delegated to `create_agent`. Persona/selves work is not a fixed pre-response stage; it is invoked through the `selves_consult` subagent tool when the main chat agent decides it is useful.
 
 Fallback LLMs that do not implement native tool calling may produce a plain answer, but they must not emulate tools by printing tool markers to the user.
 
-If a non-native model still emits a recoverable tool marker such as `[Tool call: ...]` or `[TOOL_CALL] ... [/TOOL_CALL]`, the runtime should convert it into an internal tool request, normalize any legacy pre-prefix tool name to the current subsystem-prefixed name, execute the tool, and log the call through `chat/service_tool_called`. The marker must never be shown as a NuSelf reply.
+If a non-native fallback model emits a recoverable tool marker such as `[Tool call: ...]` or `[TOOL_CALL] ... [/TOOL_CALL]`, the runtime may convert it into an internal tool request for deterministic fallback behavior. This path is not the primary chat-agent implementation. The marker must never be shown as a NuSelf reply.
 
 Fallback tool execution must support short sequential tool loops. If a follow-up response after one tool result requests another available tool, the runtime should execute it, append the new result to the tool-result context, and ask again until the model returns a real final answer or the loop limit is reached.
 
@@ -90,7 +118,7 @@ Within one logical chat turn, repeated tool calls with the same normalized tool 
 
 Direct service-status queries, such as asking how many memory/reflection/reason/trace records exist, should call those service tools directly. These are operational tool queries; persona discussion before tool results tends to invent capability limits and adds noise.
 
-After any tool loop completes, the chat runtime must request the final answer through LangChain structured output (`with_structured_output(...)` or `create_agent(..., response_format=...)`) when the active model supports it. Prompted JSON parsing is a compatibility fallback for deterministic local test doubles and non-agent subsystems, not the primary chat-agent response protocol.
+The chat runtime must request the final answer through LangChain structured output with `create_agent(..., response_format=...)` when the active model supports it. Prompted JSON parsing is a compatibility fallback for deterministic local test doubles and non-agent subsystems, not the primary chat-agent response protocol.
 
 ## Tool Catalog
 
