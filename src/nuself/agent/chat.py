@@ -6,28 +6,41 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 import json
 import logging
-import re
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, Protocol, TypeAlias, cast
+from typing import Any, Literal, Protocol, cast
 
+from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langchain_core.tools import BaseTool
-from pydantic import ValidationError
+from pydantic import PrivateAttr
 
+from nuself.agent.response import (
+    ChatStructuredOutput,
+    PresentedResponse,
+    ParsedChatResponse,
+    StructuredOutputError,
+    parse_chat_response,
+    structured_chat_output_to_response,
+    to_presented_response,
+    is_parsed_user_facing_safe,
+    apply_unsupported_claim_guard,
+    presentation_hints,
+    trace_summary as _trace_summary,
+    leaks_response_protocol,
+)
 from nuself.agent.skills import AgentSkill, load_agent_skills, render_agent_skill_sections
-from nuself.agent.supervisor import ChatStructuredOutput, LangChainChatSupervisor
 from nuself.agent.thread import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.tools import build_langchain_chat_tools
 from nuself.agent.persona import (
-    PersonaActivation,
     PersonaDefinition,
     LLMBackedActivationPolicy,
     LLMBackedPersonaNode,
     LLMBackedSynthesizerNode,
     PersonaGraphDriver,
     PersonaInput,
-    PersonaSynthesis,
     PersonaTurnState,
     load_persona_definitions,
 )
@@ -54,25 +67,10 @@ from nuself.trace.service import TraceRecorder
 ToolServiceComponent = Literal["memory", "reflection", "reasoning", "trace", "selves"]
 ConversationNodeName = Literal[
     "prepare_context",
-    "persona_activation",
-    "run_personas",
-    "initial_response",
-    "detect_tool_request",
-    "execute_tool",
-    "finalize_response",
+    "respond",
     "state_update",
     "compression",
 ]
-USER_FACING_PERSONA_BOUNDARY = (
-    "Use internal persona synthesis as private context only. "
-    "Do not narrate internal persona composition or say which self contributed what in the user-facing answer, "
-    "unless the user explicitly asks about the internal persona mechanism."
-)
-USER_FACING_PROTOCOL_BOUNDARY = (
-    "The JSON object is only an internal transport protocol. "
-    "The answer field must contain only the text to show to the user; "
-    "do not include raw JSON, fenced code blocks, or protocol field names inside answer."
-)
 LOGGER = logging.getLogger(__name__)
 REGENERATE_USER_FACING_RESPONSE_PROMPT = (
     "Your previous response leaked the internal response protocol into the user-visible answer. "
@@ -80,10 +78,6 @@ REGENERATE_USER_FACING_RESPONSE_PROMPT = (
     "and make the answer field plain user-facing text without JSON, code fences, or protocol field names."
 )
 PRESENTATION_BOUNDARY_FAILURE_ANSWER = "我刚刚的输出格式出了问题。请你再说一遍，我会直接用正常聊天的方式回答。"
-
-
-class _InvokableTool(Protocol):
-    def invoke(self, input: object) -> object: ...
 
 
 @dataclass(frozen=True)
@@ -132,48 +126,12 @@ class ChatResult:
 
 
 @dataclass(frozen=True)
-class DraftResponse:
-    """Internal substantive response before final presentation."""
-
-    answer: str
-    evidence_references: tuple[str, ...] = ()
-    confidence: float | None = None
-    epistemic_status: str = "inferred"
-    tool: str | None = None
-    tool_args: dict[str, Any] | None = None
-
-    @property
-    def draft_answer(self) -> str:
-        return self.answer
-
-
-@dataclass(frozen=True)
-class PresentedResponse:
-    """Final user-facing response after presentation."""
-
-    answer: str
-    evidence_references: tuple[str, ...] = ()
-    confidence: float | None = None
-    epistemic_status: str = "inferred"
-
-
-@dataclass(frozen=True)
 class ConversationRuntimeResult:
     """Output from one conversation runtime turn."""
 
     state: ThreadState
     result: ChatResult
     node_trace: tuple[ConversationNodeName, ...] = ()
-
-
-@dataclass(frozen=True)
-class ConversationToolCall:
-    """Detected tool call request inside one conversation turn."""
-
-    name: str
-    args: dict[str, Any]
-    supported: bool
-    diagnostic: str = ""
 
 
 @dataclass(frozen=True)
@@ -187,12 +145,6 @@ class ConversationTurnState:
     memory_context: str = ""
     base_messages: tuple[ThreadMessage, ...] = ()
     active_messages: tuple[ThreadMessage, ...] = ()
-    persona_activation: PersonaActivation | None = None
-    persona_turn_state: PersonaTurnState | None = None
-    initial_response: DraftResponse | None = None
-    tool_call: ConversationToolCall | None = None
-    tool_result: str | None = None
-    tool_results: tuple[str, ...] = ()
     final_response: PresentedResponse | None = None
     saved_messages: tuple[ThreadMessage, ...] = ()
     updated_thread_state: ThreadState | None = None
@@ -229,7 +181,6 @@ class ConversationRuntime(Protocol):
         *,
         turn_id: str | None = None,
     ) -> ConversationRuntimeResult:
-        """Run one user turn and return the persisted state plus user-facing result."""
         ...
 
 
@@ -277,10 +228,12 @@ class ChatAgent:
 
 
 class ConversationGraphRuntime:
-    """Graph-ready linear conversation runtime.
+    """Graph-ready conversation runtime.
 
-    The node methods below keep the current behavior explicit while giving the
-    later LangGraph migration a narrow replacement boundary.
+    Delegates response generation (including tool calling) to LangChain
+    ``create_agent`` via ``_LangChainChatSupervisor``. NuSelf owns only the
+    boundaries: context preparation, response validation, state persistence,
+    and conversation compression.
     """
 
     def __init__(
@@ -383,10 +336,6 @@ class ConversationGraphRuntime:
         updated = _require_thread_state(turn_state.updated_thread_state)
         final_response = _require_presented_response(turn_state.final_response)
         duration_ms = int((time.monotonic() - started_at) * 1000)
-        completed_metadata: dict[str, object] = {
-            "node_trace": list(turn_state.node_trace),
-            "tool_call_count": len(turn_state.tool_results),
-        }
         with log_context(thread_id=thread_id, turn_id=turn_id, source="chat_runtime"):
             write_log_event(
                 "chat",
@@ -395,7 +344,6 @@ class ConversationGraphRuntime:
                 project_root=self._project_root,
                 duration_ms=duration_ms,
                 status="completed",
-                metadata=completed_metadata,
             )
         self._record_chat_turn_trace(
             user_message=message,
@@ -449,6 +397,10 @@ class ConversationGraphRuntime:
                 metadata={"error": str(exc)},
             )
 
+    # ------------------------------------------------------------------
+    # Graph node methods
+    # ------------------------------------------------------------------
+
     def prepare_context_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         base_messages = tuple(_messages_for_prompt_context(state.persisted_state.messages))
         active_messages = (*base_messages, ThreadMessage(role="user", content=state.user_message, turn_id=state.turn_id))
@@ -464,21 +416,283 @@ class ConversationGraphRuntime:
             ),
         )
 
-    def persona_activation_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        activation = PersonaActivation(
-            trigger="selves available as subagent tool",
-            should_escalate=False,
-            escalation_reason="The main chat agent decides whether to call selves_consult.",
+    def respond_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        prompt = self._build_prompt(state)
+        response = self._complete_response(prompt)
+        final = self._finalize_draft_response(state, response)
+        saved = (
+            *state.active_messages,
+            ThreadMessage(role="assistant", content=final.answer, turn_id=state.turn_id),
         )
         return ConversationNodeResult(
-            node="persona_activation",
+            node="respond",
             state=replace(
                 state,
-                persona_activation=activation,
-                persona_turn_state=None,
-                node_trace=(*state.node_trace, "persona_activation"),
+                final_response=final,
+                saved_messages=saved,
+                node_trace=(*state.node_trace, "respond"),
             ),
         )
+
+    def state_update_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        updated = ThreadState(
+            thread_id=state.thread_id,
+            summary=state.persisted_state.summary,
+            messages=list(state.saved_messages),
+            message_start_index=state.persisted_state.message_start_index,
+            next_message_index=(
+                state.persisted_state.next_message_index + len(state.saved_messages) - len(state.base_messages)
+            ),
+        )
+        return ConversationNodeResult(
+            node="state_update",
+            state=replace(
+                state,
+                updated_thread_state=updated,
+                node_trace=(*state.node_trace, "state_update"),
+            ),
+        )
+
+    def compression_node(self, state: ConversationTurnState) -> ConversationNodeResult:
+        updated = _require_thread_state(state.updated_thread_state)
+        return ConversationNodeResult(
+            node="compression",
+            state=replace(
+                state,
+                updated_thread_state=self._compress_if_needed(updated),
+                node_trace=(*state.node_trace, "compression"),
+            ),
+        )
+
+    # ------------------------------------------------------------------
+    # Prompt building
+    # ------------------------------------------------------------------
+
+    def _build_prompt(self, state: ConversationTurnState) -> list[ChatMessage]:
+        prompt: list[ChatMessage] = [ChatMessage(role="system", content=self._system_prompt(state))]
+        for message in state.active_messages[-self._settings.recent_messages :]:
+            prompt.append(ChatMessage(role=message.role, content=message.content))
+        return prompt
+
+    def _system_prompt(self, state: ConversationTurnState) -> str:
+        parts = [
+            "You are NuSelf, a private AI mirror for one person.",
+            "Use the user's memory entries and source chunks as durable context. Do not invent memories.",
+            "Return a JSON object with answer, evidence_references, confidence, and epistemic_status.",
+            "answer must be the user-facing text. evidence_references must cite relevant memory ids or source refs when available.",
+            "Use internal persona synthesis as private context only. "
+            "Do not narrate internal persona composition or say which self contributed what in the user-facing answer, "
+            "unless the user explicitly asks about the internal persona mechanism.",
+            "The JSON object is only an internal transport protocol. "
+            "The answer field must contain only the text to show to the user; "
+            "do not include raw JSON, fenced code blocks, or protocol field names inside answer.",
+            "If you make a claim about the user's preferences, history, or other personal facts without evidence, set epistemic_status to unsupported.",
+            "confidence should be a number between 0 and 1 when you can estimate it; otherwise omit it.",
+            "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
+            "Answer directly, keep uncertainty explicit, and surface useful questions when appropriate.",
+        ]
+        if self._language_preference != "en":
+            parts.append(f"Respond to the user in {self._language_preference}.")
+        if state.memory_context != "":
+            parts.extend(["", "Relevant memory context:", state.memory_context])
+        if state.persisted_state.summary != "":
+            parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
+        parts.extend(_tool_prompt_sections(self._tools.values(), self._skills))
+        return "\n".join(parts)
+
+    # ------------------------------------------------------------------
+    # Response generation
+    # ------------------------------------------------------------------
+
+    def _complete_response(self, prompt: list[ChatMessage]) -> ParsedChatResponse:
+        if self._langchain_models:
+            return self._complete_response_with_langchain_tools(prompt)
+        return parse_chat_response(self._llm.complete(prompt))
+
+    def _complete_response_with_langchain_tools(self, prompt: list[ChatMessage]) -> ParsedChatResponse:
+        last_error: Exception | None = None
+        for position, endpoint in enumerate(self._langchain_models):
+            for attempt in range(2):
+                try:
+                    response = self._complete_response_with_langchain_endpoint(endpoint, prompt)
+                except Exception as exc:
+                    last_error = exc
+                    if attempt == 0 and not is_endpoint_availability_error(str(exc)):
+                        write_log_event(
+                            "chat",
+                            "llm_endpoint_retry",
+                            "LLM endpoint error; retrying",
+                            project_root=self._project_root,
+                            status="retry",
+                            error=redact_llm_error(str(exc)),
+                            metadata={
+                                "endpoint_index": endpoint.index,
+                                "base_url": endpoint.settings.base_url,
+                                "model": endpoint.settings.model,
+                            },
+                        )
+                        continue
+                    remaining = self._langchain_models[position + 1 :]
+                    if remaining:
+                        status = "failed_over" if is_endpoint_availability_error(str(exc)) else "error"
+                        write_log_event(
+                            "chat",
+                            "llm_endpoint_failed_over" if is_endpoint_availability_error(str(exc)) else "llm_endpoint_error",
+                            "LLM endpoint failed; trying next configured endpoint",
+                            project_root=self._project_root,
+                            status=status,
+                            error=redact_llm_error(str(exc)),
+                            metadata={
+                                "endpoint_index": endpoint.index,
+                                "base_url": endpoint.settings.base_url,
+                                "model": endpoint.settings.model,
+                                "next_endpoint_index": remaining[0].index,
+                            },
+                        )
+                    break
+                else:
+                    record_llm_endpoint_success(self._project_root, endpoint.index)
+                    return response
+        if last_error is not None:
+            write_log_event(
+                "chat",
+                "llm_endpoints_exhausted",
+                "all LLM endpoints failed; falling back to local LLM",
+                project_root=self._project_root,
+                status="fallback",
+                error=redact_llm_error(str(last_error)),
+            )
+        return parse_chat_response(self._llm.complete(prompt))
+
+    def _complete_response_with_langchain_endpoint(
+        self,
+        endpoint: LangChainLLMEndpoint,
+        prompt: list[ChatMessage],
+    ) -> ParsedChatResponse:
+        supervisor = _LangChainChatSupervisor(
+            endpoint=endpoint,
+            tools=self._tools.values(),
+            log_tool_call=self._log_langchain_service_tool_call,
+        )
+        try:
+            structured = supervisor.complete(prompt)
+        except StructuredOutputError as exc:
+            return parse_chat_response(exc.raw_text)
+        return structured_chat_output_to_response(structured)
+
+    def _finalize_draft_response(self, state: ConversationTurnState, draft: ParsedChatResponse) -> PresentedResponse:
+        if is_parsed_user_facing_safe(draft):
+            response = apply_unsupported_claim_guard(to_presented_response(draft))
+            write_log_event(
+                "chat",
+                "final_response_completed",
+                "final response accepted from chat supervisor",
+                project_root=self._project_root,
+                thread_id=state.thread_id,
+                status="completed",
+                metadata={"epistemic_status": response.epistemic_status},
+            )
+            return response
+
+        write_log_event(
+            "chat",
+            "final_response_retry",
+            "chat supervisor draft violated user-facing boundary; retrying",
+            project_root=self._project_root,
+            thread_id=state.thread_id,
+            status="retry",
+            metadata={"retry_reason": "protocol_leak"},
+        )
+        try:
+            retry = self._complete_response(self._build_final_response_retry_prompt(state, draft))
+        except Exception as exc:
+            write_log_event(
+                "chat",
+                "final_response_failed",
+                "final response retry failed",
+                project_root=self._project_root,
+                thread_id=state.thread_id,
+                status="failed",
+                error=str(exc),
+                metadata={"reason": "retry_exception"},
+            )
+            retry = None
+
+        if retry is not None and is_parsed_user_facing_safe(retry):
+            response = apply_unsupported_claim_guard(to_presented_response(retry))
+            write_log_event(
+                "chat",
+                "final_response_completed",
+                "final response accepted after retry",
+                project_root=self._project_root,
+                thread_id=state.thread_id,
+                status="completed",
+                metadata={"epistemic_status": response.epistemic_status, "retried": True},
+            )
+            return response
+
+        write_log_event(
+            "chat",
+            "final_response_failed",
+            "final response remained invalid after retry",
+            project_root=self._project_root,
+            thread_id=state.thread_id,
+            status="failed",
+            metadata={"reason": "protocol_leak"},
+        )
+        return PresentedResponse(
+            answer=PRESENTATION_BOUNDARY_FAILURE_ANSWER,
+            evidence_references=(),
+            confidence=0.0,
+            epistemic_status="unsupported",
+        )
+
+    def _build_final_response_retry_prompt(
+        self,
+        state: ConversationTurnState,
+        draft: ParsedChatResponse,
+    ) -> list[ChatMessage]:
+        prompt = self._build_prompt(state)
+        hints = presentation_hints(state.user_message)
+        retry_parts = [
+            REGENERATE_USER_FACING_RESPONSE_PROMPT,
+            "",
+            "Previous invalid draft:",
+            draft.answer,
+            "",
+            "Draft metadata:",
+            f"- evidence_references: {list(draft.evidence_references)}",
+            f"- confidence: {draft.confidence}",
+            f"- epistemic_status: {draft.epistemic_status}",
+        ]
+        if hints:
+            retry_parts.extend(["", "User-facing style hints:", *[f"- {hint}" for hint in hints]])
+        retry_parts.append("Do not call additional tools unless the previous draft cannot be repaired without missing information.")
+        return [*prompt, ChatMessage(role="user", content="\n".join(retry_parts))]
+
+    def _log_langchain_service_tool_call(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        *,
+        result: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        service_component = _tool_service_component(tool_name)
+        if service_component is None:
+            return
+        self._write_service_tool_log(
+            tool_name,
+            service_component,
+            "failed" if error is not None else "completed",
+            args=args,
+            result=result,
+            error=error,
+        )
+
+    # ------------------------------------------------------------------
+    # Selves consultation (exposed as the selves_consult tool)
+    # ------------------------------------------------------------------
 
     def _consult_selves_tool(self, topic: str, mode: str = "consult", context: str | None = None) -> str:
         thread_id = current_log_context().thread_id or "default"
@@ -590,69 +804,19 @@ class ConversationGraphRuntime:
         except Exception:
             LOGGER.exception("failed to write host discussion decision log")
 
-    def run_personas_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        persona_turn_state = _require_persona_turn_state(state.persona_turn_state)
-        updated_persona_turn_state = self._persona_driver.run(persona_turn_state)
-        activation = state.persona_activation
-        trigger = activation.trigger if activation is not None else "activated"
-        if activation is not None and activation.activated:
-            self._write_persona_summary_log(updated_persona_turn_state, thread_id=state.thread_id, trigger=trigger)
-        should_escalate = activation.should_escalate if activation is not None else False
-        escalation_reason = activation.escalation_reason if activation is not None else "no activation"
-        self._write_host_discussion_decision_log(
-            thread_id=state.thread_id,
-            should_escalate=should_escalate,
-            escalation_reason=escalation_reason,
-        )
-        # Host decision is the only gate for entering competitive discussion.
+    def _write_persona_discussion_step_log(self, thread_id: str, trigger: str, entry: str) -> None:
         try:
-            if should_escalate:
-                # Build a lightweight IdeaCandidate from the chat turn.
-                lines = state.user_message.splitlines()
-                title = (lines[0] if lines else state.user_message)[:120]
-                result = self._persona_discussion_service.discuss(
-                    self._build_chat_discussion_candidate(
-                        thread_id=state.thread_id,
-                        user_message=state.user_message,
-                        title=title,
-                        source_summary=updated_persona_turn_state.synthesis.summary if updated_persona_turn_state.synthesis is not None else "",
-                    ),
-                    on_trace_entry=lambda entry: self._write_persona_discussion_step_log(
-                        state.thread_id,
-                        trigger,
-                        entry,
-                    ),
-                )
-                # Log and REPL-print discussion outcome
-                try:
-                    write_log_event(
-                        "persona",
-                        "persona_discussion",
-                        f"chat-triggered discussion: {result.reason}",
-                        project_root=self._project_root,
-                        thread_id=state.thread_id,
-                        status=trigger,
-                        metadata={
-                            "winner_persona_ids": list(result.winner_persona_ids),
-                            "emergent_persona_ids": list(result.emergent_persona_ids),
-                            "blocking_vetos": list(result.blocking_vetos),
-                            "reason": result.reason,
-                            "discussion_steps": len(result.discussion_trace),
-                        },
-                    )
-                except Exception:
-                    LOGGER.exception("failed to write persona discussion log")
+            write_log_event(
+                "persona",
+                "persona_discussion_step",
+                "",
+                project_root=self._project_root,
+                thread_id=thread_id,
+                status=trigger,
+                metadata={"discussion_trace": [entry]},
+            )
         except Exception:
-            # Keep chat robust: failures in discussion should not break response
-            LOGGER.exception("persona discussion failed during chat turn")
-        return ConversationNodeResult(
-            node="run_personas",
-            state=replace(
-                state,
-                persona_turn_state=updated_persona_turn_state,
-                node_trace=(*state.node_trace, "run_personas"),
-            ),
-        )
+            LOGGER.exception("failed to write persona discussion step log")
 
     def _build_chat_discussion_candidate(
         self,
@@ -667,7 +831,7 @@ class ConversationGraphRuntime:
             id=f"chat-{thread_id}-{int(datetime.now(UTC).timestamp())}",
             title=title,
             body=user_message,
-            candidate_type=ctype,  # type: ignore[arg-type]
+            candidate_type=ctype,
             confidence=0.8,
             novelty=0.5,
             urgency=0.2,
@@ -678,393 +842,9 @@ class ConversationGraphRuntime:
             created_at=datetime.now(UTC).isoformat(),
         )
 
-    def initial_response_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        if state.persona_turn_state is not None and state.persona_turn_state.synthesis is not None:
-            response = self._synthesize_response(state)
-        else:
-            prompt = self._build_prompt(state)
-            response = self._complete_response(prompt)
-        return ConversationNodeResult(
-            node="initial_response",
-            state=replace(
-                state,
-                initial_response=response,
-                node_trace=(*state.node_trace, "initial_response"),
-            ),
-        )
-
-    def detect_tool_request_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        response = _require_chat_response(state.initial_response)
-        tool_call = self._detect_tool_call(response)
-        return ConversationNodeResult(
-            node="detect_tool_request",
-            state=replace(
-                state,
-                tool_call=tool_call,
-                node_trace=(*state.node_trace, "detect_tool_request"),
-            ),
-        )
-
-    def execute_tool_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        response = _require_chat_response(state.initial_response)
-        tool_result = self._invoke_tool(response)
-        return ConversationNodeResult(
-            node="execute_tool",
-            state=replace(
-                state,
-                tool_result=tool_result,
-                tool_results=(tool_result,),
-                saved_messages=state.active_messages,
-                node_trace=(*state.node_trace, "execute_tool"),
-            ),
-        )
-
-    def finalize_response_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        final_tool_results = state.tool_results
-        if _is_supported_tool_call(state.tool_call):
-            draft_response, final_tool_results = self._complete_after_tool_loop(state)
-            final_response = self._finalize_draft_response(state, draft_response)
-            saved_messages = (
-                *state.active_messages,
-                ThreadMessage(role="assistant", content=final_response.answer, turn_id=state.turn_id),
-            )
-        else:
-            response = _require_chat_response(state.initial_response)
-            final_response = self._finalize_draft_response(state, response)
-            saved_messages = (
-                *state.active_messages,
-                ThreadMessage(role="assistant", content=final_response.answer, turn_id=state.turn_id),
-            )
-        return ConversationNodeResult(
-            node="finalize_response",
-            state=replace(
-                state,
-                final_response=final_response,
-                saved_messages=saved_messages,
-                tool_results=final_tool_results,
-                node_trace=(*state.node_trace, "finalize_response"),
-            ),
-        )
-
-    def _finalize_draft_response(self, state: ConversationTurnState, draft: ParsedChatResponse) -> PresentedResponse:
-        if _is_parsed_user_facing_safe(draft):
-            response = _apply_unsupported_claim_guard(_to_presented_response(draft))
-            write_log_event(
-                "chat",
-                "final_response_completed",
-                "final response accepted from chat supervisor",
-                project_root=self._project_root,
-                thread_id=state.thread_id,
-                status="completed",
-                metadata={"epistemic_status": response.epistemic_status},
-            )
-            return response
-
-        write_log_event(
-            "chat",
-            "final_response_retry",
-            "chat supervisor draft violated user-facing boundary; retrying",
-            project_root=self._project_root,
-            thread_id=state.thread_id,
-            status="retry",
-            metadata={"retry_reason": "protocol_leak"},
-        )
-        try:
-            retry = self._complete_response(self._build_final_response_retry_prompt(state, draft))
-        except Exception as exc:
-            write_log_event(
-                "chat",
-                "final_response_failed",
-                "final response retry failed",
-                project_root=self._project_root,
-                thread_id=state.thread_id,
-                status="failed",
-                error=str(exc),
-                metadata={"reason": "retry_exception"},
-            )
-            retry = None
-
-        if retry is not None and _is_parsed_user_facing_safe(retry):
-            response = _apply_unsupported_claim_guard(_to_presented_response(retry))
-            write_log_event(
-                "chat",
-                "final_response_completed",
-                "final response accepted after retry",
-                project_root=self._project_root,
-                thread_id=state.thread_id,
-                status="completed",
-                metadata={"epistemic_status": response.epistemic_status, "retried": True},
-            )
-            return response
-
-        write_log_event(
-            "chat",
-            "final_response_failed",
-            "final response remained invalid after retry",
-            project_root=self._project_root,
-            thread_id=state.thread_id,
-            status="failed",
-            metadata={"reason": "protocol_leak"},
-        )
-        return PresentedResponse(
-            answer=PRESENTATION_BOUNDARY_FAILURE_ANSWER,
-            evidence_references=(),
-            confidence=0.0,
-            epistemic_status="unsupported",
-        )
-
-    def _complete_after_tool_loop(self, state: ConversationTurnState) -> tuple[ParsedChatResponse, tuple[str, ...]]:
-        tool_results = list(state.tool_results)
-        tool_cache: dict[str, str] = {}
-        if state.tool_call is not None and state.tool_results:
-            tool_cache[_tool_call_cache_key(state.tool_call.name, state.tool_call.args)] = state.tool_results[-1]
-        thread_state = ThreadState(
-            thread_id=state.thread_id,
-            summary=state.persisted_state.summary,
-            messages=list(state.active_messages),
-        )
-        draft_response = self._complete_response(self._build_follow_up_prompt(thread_state, tuple(tool_results)))
-        iterations = 0
-        while True:
-            tool_call = self._detect_tool_call(draft_response)
-            if not _is_supported_tool_call(tool_call):
-                return draft_response, tuple(tool_results)
-            if iterations >= 5:
-                raise RuntimeError("fallback tool call loop exceeded 5 iterations")
-            tool_result = self._invoke_tool(draft_response, tool_cache=tool_cache)
-            tool_results.append(tool_result)
-            draft_response = self._complete_response(self._build_follow_up_prompt(thread_state, tuple(tool_results)))
-            iterations += 1
-
-    def _complete_response(self, prompt: list[ChatMessage]) -> ParsedChatResponse:
-        if self._langchain_models:
-            return self._complete_response_with_langchain_tools(prompt)
-        return _parse_chat_response(self._llm.complete(prompt))
-
-    def _complete_response_with_langchain_tools(self, prompt: list[ChatMessage]) -> ParsedChatResponse:
-        last_error: Exception | None = None
-        for position, endpoint in enumerate(self._langchain_models):
-            try:
-                response = self._complete_response_with_langchain_endpoint(endpoint, prompt)
-            except Exception as exc:
-                last_error = exc
-                remaining = self._langchain_models[position + 1 :]
-                if remaining and is_endpoint_availability_error(str(exc)):
-                    write_log_event(
-                        "chat",
-                        "llm_endpoint_failed_over",
-                        "LLM endpoint failed; trying next configured endpoint",
-                        project_root=self._project_root,
-                        status="failed_over",
-                        error=redact_llm_error(str(exc)),
-                        metadata={
-                            "endpoint_index": endpoint.index,
-                            "base_url": endpoint.settings.base_url,
-                            "model": endpoint.settings.model,
-                            "next_endpoint_index": remaining[0].index,
-                        },
-                    )
-                    continue
-                raise
-            record_llm_endpoint_success(self._project_root, endpoint.index)
-            return response
-        if last_error is not None:
-            raise RuntimeError(f"all configured LLM endpoints failed: {redact_llm_error(str(last_error))}") from last_error
-        return _parse_chat_response(self._llm.complete(prompt))
-
-    def _complete_response_with_langchain_endpoint(
-        self,
-        endpoint: LangChainLLMEndpoint,
-        prompt: list[ChatMessage],
-    ) -> ParsedChatResponse:
-        supervisor = LangChainChatSupervisor(
-            endpoint=endpoint,
-            tools=self._tools.values(),
-            log_tool_call=self._log_langchain_service_tool_call,
-        )
-        return _structured_chat_output_to_response(supervisor.complete(prompt))
-
-    def _log_langchain_service_tool_call(
-        self,
-        tool_name: str,
-        args: dict[str, Any],
-        *,
-        result: str | None = None,
-        error: str | None = None,
-    ) -> None:
-        service_component = _tool_service_component(tool_name)
-        if service_component is None:
-            return
-        self._write_service_tool_log(
-            tool_name,
-            service_component,
-            "failed" if error is not None else "completed",
-            args=args,
-            result=result,
-            error=error,
-        )
-
-    def _detect_tool_call(self, response: ParsedChatResponse) -> ConversationToolCall | None:
-        if response.tool is None:
-            return None
-        tool_name = _normalize_tool_name(response.tool)
-        tool_args = response.tool_args if response.tool_args is not None else {}
-        if tool_name not in self._tools:
-            return ConversationToolCall(
-                name=tool_name,
-                args=tool_args,
-                supported=False,
-                diagnostic=f"unsupported tool request: {response.tool}",
-            )
-        return ConversationToolCall(name=tool_name, args=tool_args, supported=True)
-
-    def state_update_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        updated = ThreadState(
-            thread_id=state.thread_id,
-            summary=state.persisted_state.summary,
-            messages=list(state.saved_messages),
-            message_start_index=state.persisted_state.message_start_index,
-            next_message_index=(
-                state.persisted_state.next_message_index + len(state.saved_messages) - len(state.base_messages)
-            ),
-        )
-        return ConversationNodeResult(
-            node="state_update",
-            state=replace(
-                state,
-                updated_thread_state=updated,
-                node_trace=(*state.node_trace, "state_update"),
-            ),
-        )
-
-    def compression_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        updated = _require_thread_state(state.updated_thread_state)
-        return ConversationNodeResult(
-            node="compression",
-            state=replace(
-                state,
-                updated_thread_state=self._compress_if_needed(updated),
-                node_trace=(*state.node_trace, "compression"),
-            ),
-        )
-
-    def _build_prompt(self, state: ConversationTurnState) -> list[ChatMessage]:
-        synthesis = None
-        if state.persona_turn_state is not None:
-            synthesis = state.persona_turn_state.synthesis
-        prompt: list[ChatMessage] = [ChatMessage(role="system", content=self._system_prompt(state, synthesis))]
-        for message in state.active_messages[-self._settings.recent_messages :]:
-            prompt.append(ChatMessage(role=message.role, content=message.content))
-        return prompt
-
-    def _synthesize_response(self, state: ConversationTurnState) -> ParsedChatResponse:
-        """Generate the user-facing response from persona contributions."""
-        synthesis = _require_synthesis(state.persona_turn_state)
-        parts: list[str] = [
-            "You are the synthesizer self of NuSelf. Fuse the following internal persona perspectives into a single, coherent user-facing response.",
-            "Return a JSON object with answer, evidence_references, confidence, and epistemic_status.",
-            "answer must be the user-facing text. evidence_references must cite relevant memory ids or source refs when available.",
-            USER_FACING_PERSONA_BOUNDARY,
-            USER_FACING_PROTOCOL_BOUNDARY,
-            "If you make a claim about the user's preferences, history, or other personal facts without evidence, set epistemic_status to unsupported.",
-            "confidence should be a number between 0 and 1 when you can estimate it; otherwise omit it.",
-            "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
-        ]
-        if self._language_preference != "en":
-            parts.append(f"Respond to the user in {self._language_preference}.")
-        if state.memory_context != "":
-            parts.extend(["", "Relevant memory context:", state.memory_context])
-        if state.persisted_state.summary != "":
-            parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
-        parts.extend(["", "Persona contributions:"])
-        for contrib in state.persona_turn_state.contributions if state.persona_turn_state is not None else ():
-            note = contrib.notes[0] if contrib.notes else ""
-            parts.append(f"- {contrib.persona_id}: {note}")
-        parts.extend([
-            "",
-            "Internal perspective fusion:",
-            f"Summary: {synthesis.summary}",
-            f"Perspectives involved: {', '.join(synthesis.source_personas)}",
-        ])
-        parts.extend(_tool_prompt_sections(self._tools.values(), self._skills))
-        prompt: list[ChatMessage] = [ChatMessage(role="system", content="\n".join(parts))]
-        for message in state.active_messages[-self._settings.recent_messages :]:
-            prompt.append(ChatMessage(role=message.role, content=message.content))
-        return self._complete_response(prompt)
-
-    def _build_follow_up_prompt(self, state: ThreadState, tool_results: str | tuple[str, ...]) -> list[ChatMessage]:
-        """Build a prompt for the follow-up after tool invocation."""
-        results = (tool_results,) if isinstance(tool_results, str) else tool_results
-        follow_up_system = (
-            "You are NuSelf. Previous tool calls returned the following results. "
-            "Use these results to either call another needed tool or generate your final answer. "
-            "Return a JSON object with answer, evidence_references, confidence, and epistemic_status. "
-            f"{USER_FACING_PROTOCOL_BOUNDARY}"
-        )
-        follow_up_system += "\nIf more required information is missing and an available tool can retrieve it, request that tool next."
-        if self._language_preference != "en":
-            follow_up_system += f"\n\nRespond to the user in {self._language_preference}."
-        prompt: list[ChatMessage] = [
-            ChatMessage(
-                role="system",
-                content=follow_up_system,
-            )
-        ]
-        # Include recent message history
-        for message in state.messages[-self._settings.recent_messages :]:
-            prompt.append(ChatMessage(role=message.role, content=message.content))
-        # Add tool results
-        rendered_results = "\n\n".join(f"Tool result {index}:\n{result}" for index, result in enumerate(results, start=1))
-        prompt.append(ChatMessage(role="user", content=f"Tool results so far:\n{rendered_results}"))
-        return prompt
-
-    def _build_final_response_retry_prompt(
-        self,
-        state: ConversationTurnState,
-        draft: ParsedChatResponse,
-    ) -> list[ChatMessage]:
-        prompt = self._build_prompt(state)
-        hints = _presentation_hints(state.user_message)
-        retry_parts = [
-            REGENERATE_USER_FACING_RESPONSE_PROMPT,
-            "",
-            "Previous invalid draft:",
-            draft.answer,
-            "",
-            "Draft metadata:",
-            f"- evidence_references: {list(draft.evidence_references)}",
-            f"- confidence: {draft.confidence}",
-            f"- epistemic_status: {draft.epistemic_status}",
-        ]
-        if hints:
-            retry_parts.extend(["", "User-facing style hints:", *[f"- {hint}" for hint in hints]])
-        retry_parts.append("Do not call additional tools unless the previous draft cannot be repaired without missing information.")
-        return [*prompt, ChatMessage(role="user", content="\n".join(retry_parts))]
-
-    def _system_prompt(self, state: ConversationTurnState, synthesis: "PersonaSynthesis | None" = None) -> str:
-        parts = [
-            "You are NuSelf, a private AI mirror for one person.",
-            "Use the user's memory entries and source chunks as durable context. Do not invent memories.",
-            "Return a JSON object with answer, evidence_references, confidence, and epistemic_status.",
-            "answer must be the user-facing text. evidence_references must cite relevant memory ids or source refs when available.",
-            USER_FACING_PERSONA_BOUNDARY,
-            USER_FACING_PROTOCOL_BOUNDARY,
-            "If you make a claim about the user's preferences, history, or other personal facts without evidence, set epistemic_status to unsupported.",
-            "confidence should be a number between 0 and 1 when you can estimate it; otherwise omit it.",
-            "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
-            "Answer directly, keep uncertainty explicit, and surface useful questions when appropriate.",
-        ]
-        if self._language_preference != "en":
-            parts.append(f"Respond to the user in {self._language_preference}.")
-        if state.memory_context != "":
-            parts.extend(["", "Relevant memory context:", state.memory_context])
-        if state.persisted_state.summary != "":
-            parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
-        if synthesis is not None:
-            parts.extend(["", "Internal perspective fusion:", f"Summary: {synthesis.summary}", f"Perspectives involved: {', '.join(synthesis.source_personas)}"])
-
-        parts.extend(_tool_prompt_sections(self._tools.values(), self._skills))
-        return "\n".join(parts)
+    # ------------------------------------------------------------------
+    # State management
+    # ------------------------------------------------------------------
 
     def _compress_if_needed(self, state: ThreadState) -> ThreadState:
         if len(state.messages) <= self._settings.summary_trigger_messages:
@@ -1080,42 +860,31 @@ class ConversationGraphRuntime:
             next_message_index=state.next_message_index,
         )
 
-    def _invoke_tool(self, tool: ParsedChatResponse, *, tool_cache: dict[str, str] | None = None) -> str:
-        """Execute a tool call and return the result."""
-        tool_name = _normalize_tool_name(tool.tool or "")
-        if tool_name == "" or tool_name not in self._tools:
-            return f"Error: unknown tool {tool.tool}"
-
-        tool_args_input = tool.tool_args if tool.tool_args is not None else {}
-        service_component = _tool_service_component(tool_name)
-        cache_key = _tool_call_cache_key(tool_name, tool_args_input)
-        if tool_cache is not None:
-            cached_result = tool_cache.get(cache_key)
-            if cached_result is not None:
-                return cached_result
-
+    def _summarize(self, previous_summary: str, messages: list[ThreadMessage]) -> str:
+        transcript = "\n".join(f"{message.role}: {message.content}" for message in messages)
+        prompt = [
+            ChatMessage(
+                role="system",
+                content=(
+                    "Compress a private NuSelf conversation into durable context. "
+                    "Preserve user preferences, decisions, unresolved questions, and useful facts. "
+                    "Do not add new facts."
+                ),
+            ),
+            ChatMessage(
+                role="user",
+                content=f"Previous summary:\n{previous_summary or '(none)'}\n\nNew transcript:\n{transcript}",
+            ),
+        ]
         try:
-            tool_obj = self._tools[tool_name]
-            result = str(cast(_InvokableTool, tool_obj).invoke(tool_args_input))
-            if tool_cache is not None:
-                tool_cache[cache_key] = result
-            if service_component is not None:
-                self._write_service_tool_log(
-                    tool_name,
-                    service_component,
-                    "completed",
-                    args=tool_args_input,
-                    result=result,
-                )
-            return result
-        except TypeError as e:
-            if service_component is not None:
-                self._write_service_tool_log(tool_name, service_component, "failed", args=tool_args_input, error=str(e))
-            return f"Error invoking {tool_name}: {e}"
-        except Exception as e:
-            if service_component is not None:
-                self._write_service_tool_log(tool_name, service_component, "failed", args=tool_args_input, error=str(e))
-            return f"Error: {e}"
+            summary = self._llm.complete(prompt).strip()
+        except RuntimeError:
+            summary = _local_summary(previous_summary, transcript, self._settings.summary_target_chars)
+        return summary[: self._settings.summary_target_chars]
+
+    # ------------------------------------------------------------------
+    # Tool logging
+    # ------------------------------------------------------------------
 
     def _write_service_tool_log(
         self,
@@ -1143,41 +912,199 @@ class ConversationGraphRuntime:
             },
         )
 
-    def _write_persona_discussion_step_log(self, thread_id: str, trigger: str, entry: str) -> None:
-        try:
-            write_log_event(
-                "persona",
-                "persona_discussion_step",
-                "",
-                project_root=self._project_root,
-                thread_id=thread_id,
-                status=trigger,
-                metadata={"discussion_trace": [entry]},
-            )
-        except Exception:
-            LOGGER.exception("failed to write persona discussion step log")
 
-    def _summarize(self, previous_summary: str, messages: list[ThreadMessage]) -> str:
-        transcript = "\n".join(f"{message.role}: {message.content}" for message in messages)
-        prompt = [
-            ChatMessage(
-                role="system",
-                content=(
-                    "Compress a private NuSelf conversation into durable context. "
-                    "Preserve user preferences, decisions, unresolved questions, and useful facts. "
-                    "Do not add new facts."
-                ),
-            ),
-            ChatMessage(
-                role="user",
-                content=f"Previous summary:\n{previous_summary or '(none)'}\n\nNew transcript:\n{transcript}",
-            ),
+# ======================================================================
+# LangChain supervisor (inline — wraps create_agent for one chat turn)
+# ======================================================================
+
+
+class _ToolCallLogger(Protocol):
+    """Records one service tool execution."""
+
+    def __call__(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        *,
+        result: str | None = None,
+        error: str | None = None,
+    ) -> None: ...
+
+
+class _LoggedTool(BaseTool):
+    """LangChain tool wrapper that logs real service executions."""
+
+    _inner: BaseTool = PrivateAttr()
+    _log_call: _ToolCallLogger = PrivateAttr()
+    _cache: dict[str, str] = PrivateAttr(default_factory=dict)
+    _cache_lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
+
+    def __init__(self, inner: BaseTool, *, log_call: _ToolCallLogger, cache: dict[str, str]) -> None:
+        super().__init__(
+            name=inner.name,
+            description=inner.description,
+            args_schema=inner.args_schema,
+            return_direct=inner.return_direct,
+            response_format=inner.response_format,
+        )
+        self._inner = inner
+        self._log_call = log_call
+        self._cache = cache
+
+    @property
+    def args(self) -> dict[str, Any]:
+        inner = cast(Any, self._inner)
+        args = cast(object, inner.args)
+        return cast(dict[str, Any], args) if isinstance(args, dict) else {}
+
+    def invoke(self, input: Any, config: Any | None = None, **kwargs: Any) -> Any:
+        tool_args = _tool_args_from_input(input)
+        cache_key = _tool_call_cache_key(self.name, tool_args)
+        with self._cache_lock:
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                return _cached_tool_response(input, self.name, cached)
+            try:
+                inner = cast(Any, self._inner)
+                invoke_inner = inner.invoke
+                result = invoke_inner(input, config=config, **kwargs)
+            except Exception as exc:
+                self._log_call(self.name, tool_args, error=str(exc))
+                raise
+            result_text = _tool_result_text(result)
+            self._cache[cache_key] = result_text
+            self._log_call(self.name, tool_args, result=result_text)
+            return result
+
+    async def ainvoke(self, input: Any, config: Any | None = None, **kwargs: Any) -> Any:
+        tool_args = _tool_args_from_input(input)
+        cache_key = _tool_call_cache_key(self.name, tool_args)
+        with self._cache_lock:
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                return _cached_tool_response(input, self.name, cached)
+            try:
+                inner = cast(Any, self._inner)
+                ainvoke_inner = inner.ainvoke
+                result = await ainvoke_inner(input, config=config, **kwargs)
+            except Exception as exc:
+                self._log_call(self.name, tool_args, error=str(exc))
+                raise
+            result_text = _tool_result_text(result)
+            self._cache[cache_key] = result_text
+            self._log_call(self.name, tool_args, result=result_text)
+            return result
+
+    def _run(self, *args: Any, **kwargs: Any) -> Any:
+        inner = cast(Any, self._inner)
+        invoke_inner = inner.invoke
+        return invoke_inner(kwargs if kwargs else (args[0] if args else {}))
+
+
+class _LangChainChatSupervisor:
+    """Runs one chat turn through LangChain's agent/tool runtime."""
+
+    def __init__(
+        self,
+        *,
+        endpoint: LangChainLLMEndpoint,
+        tools: Iterable[BaseTool],
+        log_tool_call: _ToolCallLogger,
+    ) -> None:
+        self._endpoint = endpoint
+        self._tools = tuple(tools)
+        self._log_tool_call = log_tool_call
+
+    def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
+        system_prompt, messages = _split_prompt(prompt)
+        tool_cache: dict[str, str] = {}
+        tools = [
+            _LoggedTool(tool, log_call=self._log_tool_call, cache=tool_cache)
+            for tool in self._tools
         ]
-        try:
-            summary = self._llm.complete(prompt).strip()
-        except RuntimeError:
-            summary = _local_summary(previous_summary, transcript, self._settings.summary_target_chars)
-        return summary[: self._settings.summary_target_chars]
+        create_agent = cast(Any, _create_agent)
+        agent = create_agent(
+            model=self._endpoint.model,
+            tools=tools,
+            system_prompt=system_prompt,
+            response_format=ChatStructuredOutput,
+        )
+        result = agent.invoke({"messages": messages})
+        return _structured_response_from_agent_state(result)
+
+
+def _split_prompt(prompt: list[ChatMessage]) -> tuple[str | None, list[BaseMessage]]:
+    system_parts: list[str] = []
+    messages: list[BaseMessage] = []
+    for message in prompt:
+        if message.role == "system":
+            system_parts.append(message.content)
+        elif message.role == "assistant":
+            messages.append(AIMessage(content=message.content))
+        else:
+            messages.append(HumanMessage(content=message.content))
+    return ("\n\n".join(system_parts) if system_parts else None), messages
+
+
+def _structured_response_from_agent_state(result: object) -> ChatStructuredOutput:
+    if not isinstance(result, dict):
+        raise ValueError(f"LangChain agent returned invalid state: {type(result).__name__}")
+    state = cast(dict[str, object], result)
+    structured = state.get("structured_response")
+    if isinstance(structured, ChatStructuredOutput):
+        return structured
+    if isinstance(structured, dict):
+        return ChatStructuredOutput.model_validate(structured)
+    messages = state.get("messages")
+    if isinstance(messages, list) and messages:
+        last = cast(object, messages[-1])
+        content = getattr(last, "content", None)
+        if isinstance(content, str):
+            try:
+                return ChatStructuredOutput.model_validate_json(content)
+            except Exception:
+                raise StructuredOutputError(content)
+    raise ValueError("LangChain agent did not return a structured_response")
+
+
+def _tool_args_from_input(input_value: object) -> dict[str, Any]:
+    if isinstance(input_value, dict):
+        input_dict = cast(dict[object, object], input_value)
+        maybe_args = input_dict.get("args")
+        if isinstance(maybe_args, dict):
+            return cast(dict[str, Any], maybe_args)
+        return cast(dict[str, Any], input_dict)
+    return {}
+
+
+def _cached_tool_response(input_value: object, tool_name: str, content: str) -> str | ToolMessage:
+    if isinstance(input_value, dict):
+        input_dict = cast(dict[object, object], input_value)
+        call_id = input_dict.get("id")
+        name = input_dict.get("name")
+        if isinstance(call_id, str):
+            return ToolMessage(
+                content=content,
+                name=name if isinstance(name, str) else tool_name,
+                tool_call_id=call_id,
+            )
+    return content
+
+
+def _tool_call_cache_key(tool_name: str, args: dict[str, Any]) -> str:
+    return f"{tool_name}:{json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
+
+
+def _tool_result_text(result: object) -> str:
+    content = getattr(result, "content", None)
+    if isinstance(content, str):
+        return content
+    return str(result)
+
+
+# ======================================================================
+# Module-level helpers
+# ======================================================================
 
 
 def _local_summary(previous_summary: str, transcript: str, target_chars: int) -> str:
@@ -1230,13 +1157,6 @@ def _format_selves_consult_result(
     return "\n".join(lines)
 
 
-def _trace_summary(text: str, limit: int = 240) -> str:
-    normalized = " ".join(text.split())
-    if len(normalized) <= limit:
-        return normalized
-    return normalized[: limit - 3].rstrip() + "..."
-
-
 def _is_local_fallback_reply(message: ThreadMessage) -> bool:
     return message.role == "assistant" and message.content.startswith("LLM API is not configured yet.")
 
@@ -1248,19 +1168,19 @@ def _messages_for_prompt_context(messages: list[ThreadMessage]) -> list[ThreadMe
 def _is_prompt_context_message(message: ThreadMessage) -> bool:
     if _is_local_fallback_reply(message):
         return False
-    return message.role != "assistant" or _is_user_facing_safe(message.content)
-
-
-def _require_chat_response(response: ParsedChatResponse | None) -> ParsedChatResponse:
-    if response is None:
-        raise RuntimeError("conversation runtime response is missing")
-    return response
+    return message.role != "assistant" or not leaks_response_protocol(message.content)
 
 
 def _require_thread_state(state: ThreadState | None) -> ThreadState:
     if state is None:
         raise RuntimeError("conversation runtime thread state is missing")
     return state
+
+
+def _require_presented_response(response: PresentedResponse | None) -> PresentedResponse:
+    if response is None:
+        raise RuntimeError("conversation runtime presented response is missing")
+    return response
 
 
 def _completed_turn_result(
@@ -1287,28 +1207,6 @@ def _completed_turn_result(
     return None
 
 
-def _require_presented_response(response: PresentedResponse | None) -> PresentedResponse:
-    if response is None:
-        raise RuntimeError("conversation runtime presented response is missing")
-    return response
-
-
-def _require_persona_turn_state(state: PersonaTurnState | None) -> PersonaTurnState:
-    if state is None:
-        raise RuntimeError("conversation runtime persona turn state is missing")
-    return state
-
-
-def _require_synthesis(state: PersonaTurnState | None) -> PersonaSynthesis:
-    if state is None or state.synthesis is None:
-        raise RuntimeError("conversation runtime synthesis is missing")
-    return state.synthesis
-
-
-def _is_supported_tool_call(tool_call: ConversationToolCall | None) -> bool:
-    return tool_call is not None and tool_call.supported
-
-
 def _tool_service_component(tool_name: str) -> ToolServiceComponent | None:
     if tool_name.startswith("memory_"):
         return "memory"
@@ -1321,33 +1219,6 @@ def _tool_service_component(tool_name: str) -> ToolServiceComponent | None:
     if tool_name.startswith("selves_"):
         return "selves"
     return None
-
-
-LEGACY_TOOL_NAME_MAP: dict[str, str] = {
-    "search_memory": "memory_search",
-    "count_memory": "memory_count",
-    "archive_memory": "memory_archive",
-    "update_memory_importance": "memory_update_importance",
-    "list_pending_reflections": "reflection_list_pending",
-    "dismiss_reflection": "reflection_dismiss",
-    "archive_reflection": "reflection_archive",
-    "list_active_reasoning_threads": "reason_list_active",
-    "show_reasoning_thread": "reason_show",
-    "search_trace": "trace_search",
-    "show_trace": "trace_show",
-}
-
-
-def _normalize_tool_name(tool_name: str) -> str:
-    return LEGACY_TOOL_NAME_MAP.get(tool_name, tool_name)
-
-
-def _tool_call_cache_key(tool_name: str, args: dict[str, Any]) -> str:
-    try:
-        args_text = json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)
-    except (TypeError, ValueError):
-        args_text = str(sorted(args.items()))
-    return f"{tool_name}:{args_text}"
 
 
 def _format_tool_debug_body(
@@ -1377,28 +1248,6 @@ def _truncate_tool_debug_text(text: str, limit: int = 200) -> str:
     if limit <= 0 or len(text) <= limit:
         return text
     return text[: limit - 3].rstrip() + "..."
-
-
-def _structured_chat_output_to_response(output: object) -> ParsedChatResponse:
-    if isinstance(output, ChatStructuredOutput):
-        return ParsedChatResponse(
-            answer=output.answer,
-            evidence_references=tuple(output.evidence_references),
-            confidence=output.confidence,
-            epistemic_status=output.epistemic_status,
-        )
-    if isinstance(output, dict):
-        data = cast(dict[object, object], output)
-        answer = data.get("answer")
-        if not isinstance(answer, str):
-            raise ValueError("structured chat output did not include answer")
-        return ParsedChatResponse(
-            answer=answer,
-            evidence_references=_string_tuple(data.get("evidence_references")),
-            confidence=_optional_float(data.get("confidence")),
-            epistemic_status=_string_field(data.get("epistemic_status"), default="inferred") or "inferred",
-        )
-    raise TypeError(f"unsupported structured chat output: {type(output).__name__}")
 
 
 def _tool_prompt_sections(tools: "Iterable[BaseTool]", skills: tuple[AgentSkill, ...]) -> list[str]:
@@ -1459,314 +1308,3 @@ def _tool_args_signature(tool: BaseTool) -> str:
         else:
             pieces.append(f"{name}: {type_name} = {default!r}")
     return ", ".join(pieces)
-
-
-ParsedChatResponse: TypeAlias = DraftResponse
-_PROTOCOL_FIELD_NAMES = ("answer", "evidence_references", "confidence", "epistemic_status")
-_TOOL_MARKER_RE = re.compile(r"^\[Tool call:\s*(?P<tool>[A-Za-z_][A-Za-z0-9_]*)\]\s*(?P<body>.*)$", re.DOTALL)
-_VISIBLE_TOOL_MARKER_RE = re.compile(r"\[Tool call:\s*[A-Za-z_][A-Za-z0-9_]*\]", re.IGNORECASE)
-_TOOL_BLOCK_RE = re.compile(r"\[TOOL_CALL\](?P<body>.*?)\[/TOOL_CALL\]", re.DOTALL | re.IGNORECASE)
-_TOOL_BLOCK_TOOL_RE = re.compile(r"\btool\s*(?:=>|:)\s*[\"'](?P<tool>[A-Za-z_][A-Za-z0-9_]*)[\"']")
-_TOOL_BLOCK_ARGS_RE = re.compile(r"\bargs\s*(?:=>|:)\s*\{(?P<args>.*?)\}", re.DOTALL)
-_QUERY_ARG_RE = re.compile(r"\bQuery\s*:\s*(?P<query>.*?)(?:\s+\bLimit\s*:|$)", re.DOTALL | re.IGNORECASE)
-_LIMIT_ARG_RE = re.compile(r"\bLimit\s*:\s*(?P<limit>\d+)", re.IGNORECASE)
-
-
-def _parse_chat_response(raw: str) -> ParsedChatResponse:
-    stripped = raw.strip()
-    tool_marker_response = _parse_tool_marker_response(stripped)
-    if tool_marker_response is not None:
-        return tool_marker_response
-    protocol_json = _extract_protocol_json(stripped)
-    if protocol_json is not None:
-        try:
-            parsed: object = json.loads(protocol_json)
-        except json.JSONDecodeError:
-            return ParsedChatResponse(answer=raw)
-        if isinstance(parsed, dict) and "tool" not in cast(dict[str, object], parsed):
-            try:
-                structured = ChatStructuredOutput.model_validate_json(protocol_json)
-                return ParsedChatResponse(
-                    answer=structured.answer,
-                    evidence_references=tuple(structured.evidence_references),
-                    confidence=structured.confidence,
-                    epistemic_status=structured.epistemic_status or "inferred",
-                )
-            except ValidationError:
-                pass
-        if isinstance(parsed, dict):
-            data = cast(dict[str, object], parsed)
-            answer = data.get("answer")
-            tool = _string_field(data.get("tool"))
-            if (not isinstance(answer, str) or answer.strip() == "") and tool is None:
-                return ParsedChatResponse(answer=raw)
-            evidence_references = _string_tuple(data.get("evidence_references"))
-            confidence = _optional_float(data.get("confidence"))
-            epistemic_status = _string_field(data.get("epistemic_status"), default="inferred") or "inferred"
-            tool_args_raw = data.get("tool_args")
-            tool_args = cast(dict[str, Any], tool_args_raw) if isinstance(tool_args_raw, dict) else None
-            answer_text = answer if isinstance(answer, str) else ""
-            return ParsedChatResponse(
-                answer=answer_text,
-                evidence_references=evidence_references,
-                confidence=confidence,
-                epistemic_status=epistemic_status,
-                tool=tool,
-                tool_args=tool_args,
-            )
-    markdown_response = _parse_markdown_chat_response(raw)
-    if markdown_response is not None:
-        return markdown_response
-    return ParsedChatResponse(answer=raw)
-
-
-def _parse_tool_marker_response(text: str) -> ParsedChatResponse | None:
-    legacy_match = _TOOL_MARKER_RE.match(text)
-    if legacy_match is not None:
-        tool_name = _normalize_tool_name(legacy_match.group("tool"))
-        return ParsedChatResponse(
-            answer="",
-            tool=tool_name,
-            tool_args=_parse_tool_marker_args(tool_name, legacy_match.group("body")),
-        )
-    block_match = _TOOL_BLOCK_RE.search(text)
-    if block_match is None:
-        return None
-    body = block_match.group("body")
-    tool_match = _TOOL_BLOCK_TOOL_RE.search(body)
-    if tool_match is None:
-        return None
-    tool_name = _normalize_tool_name(tool_match.group("tool"))
-    return ParsedChatResponse(answer="", tool=tool_name, tool_args=_parse_tool_marker_args(tool_name, body))
-
-
-def _parse_tool_marker_args(tool_name: str, body: str) -> dict[str, Any]:
-    args_match = _TOOL_BLOCK_ARGS_RE.search(body)
-    if args_match is not None:
-        parsed = _parse_tool_block_args(args_match.group("args"))
-        if parsed:
-            return parsed
-    result: dict[str, Any] = {}
-    query_match = _QUERY_ARG_RE.search(body)
-    if query_match is not None and query_match.group("query").strip():
-        result["query"] = query_match.group("query").strip()
-    limit_match = _LIMIT_ARG_RE.search(body)
-    if limit_match is not None:
-        result["limit"] = int(limit_match.group("limit"))
-    if tool_name == "reflection_list_pending" and "limit" not in result:
-        result["limit"] = 5
-    return result
-
-
-def _parse_tool_block_args(args_body: str) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, raw_value in re.findall(r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:=>|:)\s*(\"[^\"]*\"|'[^']*'|\d+)", args_body):
-        if raw_value[:1] in {"\"", "'"}:
-            result[key] = raw_value[1:-1]
-        else:
-            result[key] = int(raw_value)
-    return result
-
-
-def _extract_protocol_json(text: str) -> str | None:
-    if text.startswith("{"):
-        return text
-    if not text.startswith("```"):
-        return None
-    lines = text.splitlines()
-    if len(lines) < 3:
-        return None
-    fence = lines[0].strip().casefold()
-    if fence not in {"```", "```json"}:
-        return None
-    closing_index = _closing_fence_index(lines)
-    if closing_index is None:
-        return None
-    body = "\n".join(lines[1:closing_index]).strip()
-    if not body.startswith("{"):
-        return None
-    return body
-
-
-def _closing_fence_index(lines: list[str]) -> int | None:
-    for index in range(len(lines) - 1, 0, -1):
-        if lines[index].strip() == "```":
-            return index
-    return None
-
-
-def _to_presented_response(response: ParsedChatResponse) -> PresentedResponse:
-    return PresentedResponse(
-        answer=response.answer,
-        evidence_references=response.evidence_references,
-        confidence=response.confidence,
-        epistemic_status=response.epistemic_status,
-    )
-
-
-def _leaks_response_protocol(answer: str) -> bool:
-    stripped = answer.strip()
-    if _VISIBLE_TOOL_MARKER_RE.search(stripped) is not None or _TOOL_BLOCK_RE.search(stripped) is not None:
-        return True
-    if stripped.startswith("```"):
-        return True
-    if stripped.startswith("{") and _contains_protocol_field(stripped):
-        return True
-    if _starts_with_persona_attribution(stripped):
-        return True
-    lowered = stripped[:4000].casefold()
-    return sum(1 for field_name in _PROTOCOL_FIELD_NAMES if field_name in lowered) >= 2
-
-
-def _contains_protocol_field(text: str) -> bool:
-    lowered = text[:4000].casefold()
-    for field_name in _PROTOCOL_FIELD_NAMES:
-        if f'"{field_name}"' in lowered or f"{field_name}:" in lowered:
-            return True
-    return False
-
-
-def _is_user_facing_safe(answer: str) -> bool:
-    return not _leaks_response_protocol(answer)
-
-
-def _is_parsed_user_facing_safe(response: ParsedChatResponse) -> bool:
-    if response.tool is not None and response.answer.strip() == "":
-        return False
-    return _is_user_facing_safe(response.answer)
-
-
-def _starts_with_persona_attribution(text: str) -> bool:
-    prefixes = ("(", "（")
-    stripped = text.strip()
-    if not stripped.startswith(prefixes):
-        return False
-    head = stripped[:240]
-    return "_self" in head and (")" in head or "）" in head)
-
-
-def _presentation_hints(user_message: str) -> tuple[str, ...]:
-    normalized = user_message.casefold()
-    hints: list[str] = []
-    if any(marker in normalized for marker in ("简单", "短", "太多", "想不过来", "simple", "short", "too much")):
-        hints.append("The user is asking for a shorter, simpler answer. Prefer compression and one concrete next step.")
-    return tuple(hints)
-
-
-def _parse_markdown_chat_response(raw: str) -> ParsedChatResponse | None:
-    lines = raw.strip().splitlines()
-    fields: dict[str, list[str]] = {}
-    preface: list[str] = []
-    current_field: str | None = None
-    saw_structured_field = False
-    for line in lines:
-        field_name, value = _markdown_response_field(line)
-        if field_name is not None:
-            saw_structured_field = True
-            current_field = field_name
-            fields.setdefault(field_name, [])
-            if value:
-                fields[field_name].append(value)
-            continue
-        if current_field is None:
-            preface.append(line)
-        else:
-            fields[current_field].append(line)
-    answer_lines = fields.get("answer")
-    if not saw_structured_field or not answer_lines:
-        return None
-    answer = "\n".join([*preface, *answer_lines]).strip()
-    if answer == "":
-        return None
-    return ParsedChatResponse(
-        answer=answer,
-        evidence_references=_parse_markdown_evidence_references("\n".join(fields.get("evidence_references", []))),
-        confidence=_optional_float("\n".join(fields.get("confidence", []))),
-        epistemic_status=(
-            _string_field("\n".join(fields.get("epistemic_status", [])).strip(), default="inferred") or "inferred"
-        ),
-        tool=_string_field("\n".join(fields.get("tool", [])).strip()),
-    )
-
-
-def _markdown_response_field(line: str) -> tuple[str | None, str]:
-    left, separator, right = line.partition(":")
-    if not separator:
-        return (None, "")
-    normalized = left.strip().strip("*").strip().casefold()
-    normalized = normalized.replace("-", "_").replace(" ", "_")
-    if normalized in {"answer", "evidence_references", "confidence", "epistemic_status", "tool"}:
-        return (normalized, right.strip())
-    return (None, "")
-
-
-def _parse_markdown_evidence_references(value: str) -> tuple[str, ...]:
-    stripped = value.strip()
-    if stripped == "":
-        return ()
-    if stripped.startswith("[") and stripped.endswith("]"):
-        stripped = stripped[1:-1].strip()
-    if stripped == "":
-        return ()
-    return tuple(part.strip().strip("\"'") for part in stripped.split(",") if part.strip())
-
-
-def _apply_unsupported_claim_guard(response: PresentedResponse) -> PresentedResponse:
-    if response.evidence_references:
-        return response
-    if not _looks_like_personal_claim(response.answer):
-        return response
-    confidence = response.confidence if response.confidence is not None else 0.25
-    return PresentedResponse(
-        answer=response.answer,
-        evidence_references=response.evidence_references,
-        confidence=min(confidence, 0.25),
-        epistemic_status="unsupported",
-    )
-
-
-def _looks_like_personal_claim(answer: str) -> bool:
-    normalized = answer.casefold()
-    claim_markers = (
-        "you ",
-        "your ",
-        "remember",
-        "prefer",
-        "like",
-        "believe",
-        "think",
-        "previously",
-        "earlier",
-        "always",
-        "never",
-        "history",
-        "memory",
-    )
-    return any(marker in normalized for marker in claim_markers)
-
-
-def _string_tuple(value: object) -> tuple[str, ...]:
-    if not isinstance(value, list):
-        return ()
-    result: list[str] = []
-    for item in cast(list[object], value):
-        if isinstance(item, str) and item.strip() != "":
-            result.append(item.strip())
-    return tuple(result)
-
-
-def _optional_float(value: object) -> float | None:
-    if isinstance(value, int | float):
-        return float(value)
-    if isinstance(value, str) and value.strip() != "":
-        try:
-            return float(value)
-        except ValueError:
-            return None
-    return None
-
-
-def _string_field(value: object, *, default: str | None = None) -> str | None:
-    if isinstance(value, str) and value.strip() != "":
-        return value
-    return default

@@ -641,22 +641,14 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
     assert prepared.node == "prepare_context"
     assert prepared.state.active_messages == (ThreadMessage(role="user", content="node contracts"),)
 
-    initial = runtime.initial_response_node(prepared.state)
-    assert initial.node == "initial_response"
-    assert initial.state.initial_response is not None
-    assert initial.state.initial_response.answer == "Runtime node reply."
+    responded = runtime.respond_node(prepared.state)
+    assert responded.node == "respond"
+    assert responded.state.final_response is not None
+    assert responded.state.final_response.answer == "Runtime node reply."
+    assert responded.state.final_response.evidence_references == ("mem_node",)
+    assert responded.state.saved_messages[-1] == ThreadMessage(role="assistant", content="Runtime node reply.")
 
-    detected = runtime.detect_tool_request_node(initial.state)
-    assert detected.node == "detect_tool_request"
-    assert detected.state.tool_call is None
-
-    finalized = runtime.finalize_response_node(detected.state)
-    assert finalized.node == "finalize_response"
-    assert finalized.state.final_response is not None
-    assert finalized.state.final_response.evidence_references == ("mem_node",)
-    assert finalized.state.saved_messages[-1] == ThreadMessage(role="assistant", content="Runtime node reply.")
-
-    updated = runtime.state_update_node(finalized.state)
+    updated = runtime.state_update_node(responded.state)
     assert updated.node == "state_update"
     assert updated.state.updated_thread_state is not None
     assert updated.state.updated_thread_state.next_message_index == 2
@@ -679,10 +671,7 @@ def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path
     assert result.result.answer == "Trivial reply."
     assert result.node_trace == (
         "prepare_context",
-        "persona_activation",
-        "initial_response",
-        "detect_tool_request",
-        "finalize_response",
+        "respond",
         "state_update",
         "compression",
     )
@@ -706,14 +695,6 @@ def test_conversation_runtime_runs_llm_backed_personas_through_selves_subagent(t
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
-    turn_state = ConversationTurnState.start(ThreadState.empty("persona"), "Should I split this project?", "persona")
-    prepared = runtime.prepare_context_node(turn_state)
-    activated = runtime.persona_activation_node(prepared.state)
-
-    assert activated.state.persona_activation is not None
-    assert activated.state.persona_activation.activated is False
-    assert activated.state.persona_turn_state is None
-
     result = runtime._consult_selves_tool("Should I split this project?")  # type: ignore[reportPrivateUsage]
     assert "analyst_self gives a concrete LLM-backed perspective." in result
     assert "LLM-backed synthesis of internal perspectives." in result
@@ -728,10 +709,7 @@ def test_conversation_runtime_runs_llm_backed_personas_through_selves_subagent(t
     assert graph_turn.result.answer == "Persona reply."
     assert graph_turn.node_trace == (
         "prepare_context",
-        "persona_activation",
-        "initial_response",
-        "detect_tool_request",
-        "finalize_response",
+        "respond",
         "state_update",
         "compression",
     )
@@ -756,10 +734,7 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
     assert result.result.confidence == 0.9
     assert result.node_trace == (
         "prepare_context",
-        "persona_activation",
-        "initial_response",
-        "detect_tool_request",
-        "finalize_response",
+        "respond",
         "state_update",
         "compression",
     )
@@ -778,96 +753,10 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
     assert trace.metadata["node_trace"] == list(result.node_trace)
 
 
-def test_conversation_graph_runtime_routes_tool_calls_through_tool_node(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
-    repo.save(
-        MemoryEntry(
-            type="belief",
-            title="Clarity matters",
-            body="Prefer explicit assumptions.",
-            tags=["style"],
-        )
-    )
-
-    class ToolRequestLLM:
-        def __init__(self) -> None:
-            self.call_count = 0
-
-        def complete(self, messages: list[ChatMessage]) -> str:
-            content = messages[0].content
-            if "Persona Activation Gate" in content:
-                return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
-            self.call_count += 1
-            if self.call_count == 1:
-                return '{"answer":"Searching memory.","tool":"memory_search","tool_args":{"query":"clarity"}}'
-            return '{"answer":"You value clarity.","evidence_references":["mem_tool"],"epistemic_status":"grounded"}'
-
-    llm = ToolRequestLLM()
-    runtime = ConversationGraphRuntime(tmp_path, llm=llm, memory_query_service=MemoryQueryService(repo))
-
-    result = runtime.run_turn(ThreadState.empty("tool"), "what about clarity?", "tool")
-
-    assert result.result.answer == "You value clarity."
-    assert result.result.evidence_references == ("mem_tool",)
-    assert result.node_trace == (
-        "prepare_context",
-        "persona_activation",
-        "initial_response",
-        "detect_tool_request",
-        "execute_tool",
-        "finalize_response",
-        "state_update",
-        "compression",
-    )
-    assert result.state.messages == [
-        ThreadMessage(role="user", content="what about clarity?"),
-        ThreadMessage(role="assistant", content="You value clarity."),
-    ]
-    assert all("[Tool call:" not in message.content for message in result.state.messages)
-    assert llm.call_count == 2
 
 
-def test_conversation_graph_runtime_keeps_unsupported_tools_on_no_tool_route(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM(
-        '{"answer":"I cannot run that tool.","tool":"unknown_tool","tool_args":{"query":"clarity"},'
-        '"epistemic_status":"uncertain"}'
-    )
-    runtime = ConversationGraphRuntime(
-        tmp_path,
-        llm=llm,
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
-    )
 
-    result = runtime.run_turn(ThreadState.empty("unsupported"), "try an unknown tool", "unsupported")
 
-    assert result.result.answer == "I cannot run that tool."
-    assert result.node_trace == (
-        "prepare_context",
-        "persona_activation",
-        "initial_response",
-        "detect_tool_request",
-        "finalize_response",
-        "state_update",
-        "compression",
-    )
-    assert len(llm.calls) == 1
-    detected = runtime.detect_tool_request_node(
-        ConversationTurnState(
-            thread_id="unsupported",
-            persisted_state=ThreadState.empty("unsupported"),
-            user_message="try an unknown tool",
-            initial_response=ParsedChatResponse(
-                answer="I cannot run that tool.",
-                tool="unknown_tool",
-                tool_args={"query": "clarity"},
-            ),
-        )
-    )
-    assert detected.state.tool_call is not None
-    assert detected.state.tool_call.name == "unknown_tool"
-    assert detected.state.tool_call.args == {"query": "clarity"}
-    assert detected.state.tool_call.supported is False
-    assert detected.state.tool_call.diagnostic == "unsupported tool request: unknown_tool"
 
 
 def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Path) -> None:
@@ -886,458 +775,14 @@ def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Pat
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
-    with pytest.raises(ConversationGraphRuntimeError, match="conversation graph node 'initial_response' failed") as exc_info:
+    with pytest.raises(ConversationGraphRuntimeError, match="conversation graph node 'respond' failed") as exc_info:
         agent.respond("new message")
 
-    assert exc_info.value.node == "initial_response"
-    assert exc_info.value.node_trace == ("prepare_context", "persona_activation", "initial_response")
+    assert exc_info.value.node == "respond"
+    assert exc_info.value.node_trace == ("prepare_context", "respond")
     state = thread_store.load("default")
     assert state.messages == [ThreadMessage(role="user", content="existing message")]
     assert state.next_message_index == 1
-
-
-def test_chat_agent_tool_invocation_with_memory_search(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
-    repo.save(
-        MemoryEntry(
-            type="belief",
-            title="Clarity matters",
-            body="Prefer explicit assumptions.",
-            tags=["style"],
-        )
-    )
-
-    class ToolRequestLLM:
-        def __init__(self) -> None:
-            self.call_count = 0
-            self.calls: list[list[ChatMessage]] = []
-
-        def complete(self, messages: list[ChatMessage]) -> str:
-            content = messages[0].content
-            if "Persona Activation Gate" in content:
-                return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
-            self.calls.append(messages)
-            self.call_count += 1
-            if self.call_count == 1:
-                # First call: agent requests tool
-                return '{"answer":"Let me search for that.","tool":"memory_search","tool_args":{"query":"clarity"}}'
-            else:
-                # Second call: agent generates final answer with tool results
-                return '{"answer":"You value clarity and explicit assumptions.","evidence_references":["mem_123"]}'
-
-    llm = ToolRequestLLM()
-    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(repo))
-
-    result = agent.respond("tell me about clarity")
-
-    assert result.answer == "You value clarity and explicit assumptions."
-    assert "[Tool call:" not in result.reply
-    stored = ThreadStore(tmp_path).load("default")
-    assert all("[Tool call:" not in message.content for message in stored.messages)
-    assert result.evidence_references == ("mem_123",)
-    assert llm.call_count == 2
-    # First call: initial prompt with tool documentation
-    assert "Available tools:" in llm.calls[0][0].content
-    assert "memory_search" in llm.calls[0][0].content
-    # Second call: follow-up with tool result
-    assert len(llm.calls[1]) > 0
-    logs = [
-        event
-        for event in read_log_events(project_root=tmp_path, component="chat")
-        if event.event == "service_tool_called"
-    ]
-    assert len(logs) == 1
-    assert logs[0].status == "completed"
-    assert logs[0].message.startswith('args: {"query": "clarity"}\nresult: ')
-    metadata = _event_metadata(logs[0])
-    message_body = metadata["message_body"]
-    assert isinstance(message_body, str)
-    assert "Clarity matters" in message_body
-    assert metadata["service_component"] == "memory"
-    assert metadata["tool"] == "memory_search"
-
-
-def test_chat_agent_recovers_raw_tool_marker_without_leaking(tmp_path: Path) -> None:
-    llm = SequencedStructuredFakeLLM([
-        "[Tool call: memory_search] Query: 反思 Limit: 10\n\nMemory context not found in search results.",
-        '{"answer":"请你再说一遍，我会用正常回复格式回答。","epistemic_status":"unsupported"}',
-    ])
-    agent = ChatAgent(tmp_path, llm=llm)
-
-    result = agent.respond("帮我查一下反思")
-
-    assert "[Tool call:" not in result.reply
-    assert result.answer == "请你再说一遍，我会用正常回复格式回答。"
-    logs = [
-        event
-        for event in read_log_events(project_root=tmp_path, component="chat")
-        if event.event == "service_tool_called"
-    ]
-    assert len(logs) == 1
-    metadata = _event_metadata(logs[0])
-    assert metadata["tool"] == "memory_search"
-    assert logs[0].message.startswith('args: {"limit": 10, "query": "反思"}\nresult: ')
-
-
-def test_chat_agent_retries_embedded_visible_tool_marker(tmp_path: Path) -> None:
-    llm = SequencedStructuredFakeLLM(
-        [
-            '{"answer":"好的，再查一次： [Tool call: get_recent_memories]","epistemic_status":"inferred"}',
-            '{"answer":"我刚刚差点把内部工具标记写出来。现在直接回答：我会按正常文本回复。","epistemic_status":"inferred"}',
-        ]
-    )
-    agent = ChatAgent(tmp_path, llm=llm)
-
-    result = agent.respond("正常回答")
-
-    assert "[Tool call:" not in result.answer
-    assert result.answer.startswith("我刚刚差点")
-    retry_logs = [
-        event
-        for event in read_log_events(project_root=tmp_path, component="chat")
-        if event.event == "final_response_retry"
-    ]
-    assert retry_logs
-
-
-def test_chat_agent_excludes_persisted_protocol_leaks_from_prompt_context(tmp_path: Path) -> None:
-    ThreadStore(tmp_path).save(
-        ThreadState(
-            thread_id="default",
-            messages=[
-                ThreadMessage(role="user", content="查一下状态"),
-                ThreadMessage(
-                    role="assistant",
-                    content="好的，马上查：\n[Tool call: get_recent_memories]\n\n当前状态：记忆 26 条。",
-                ),
-                ThreadMessage(role="user", content="正常历史"),
-                ThreadMessage(role="assistant", content="正常回复"),
-            ],
-            next_message_index=4,
-        )
-    )
-    llm = StructuredFakeLLM('{"answer":"干净回复。","epistemic_status":"grounded"}')
-    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
-
-    result = agent.respond("继续")
-
-    assert result.answer == "干净回复。"
-    prompt_text = "\n".join(message.content for message in llm.calls[0][1:])
-    assert "get_recent_memories" not in prompt_text
-    assert "[Tool call:" not in prompt_text
-    assert "正常历史" in prompt_text
-    assert "正常回复" in prompt_text
-
-
-def test_chat_agent_recovers_tool_call_block_and_normalizes_tool_name(tmp_path: Path) -> None:
-    class ToolBlockLLM:
-        def __init__(self) -> None:
-            self.call_count = 0
-
-        def complete(self, messages: list[ChatMessage]) -> str:
-            content = messages[0].content
-            if "Persona Activation Gate" in content:
-                return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
-            self.call_count += 1
-            if self.call_count == 1:
-                return '[TOOL_CALL] {tool => "list_pending_reflections", args => {}} [/TOOL_CALL]'
-            return '{"answer":"我查过了，目前没有待处理反思。","epistemic_status":"grounded"}'
-
-    agent = ChatAgent(tmp_path, llm=ToolBlockLLM())
-
-    result = agent.respond("现在有反思吗？")
-
-    assert "[TOOL_CALL]" not in result.reply
-    assert result.answer == "我查过了，目前没有待处理反思。"
-    logs = [
-        event
-        for event in read_log_events(project_root=tmp_path, component="chat")
-        if event.event == "service_tool_called"
-    ]
-    assert len(logs) == 1
-    metadata = _event_metadata(logs[0])
-    assert metadata["service_component"] == "reflection"
-    assert metadata["tool"] == "reflection_list_pending"
-    assert logs[0].message.startswith('args: {"limit": 5}\nresult: No pending reflection ideas')
-
-
-def test_chat_agent_chains_multiple_fallback_tool_calls_and_skips_persona(tmp_path: Path) -> None:
-    from nuself.reason.service import ReasonService
-    from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
-
-    ReflectionRepository(tmp_path).add(
-        ReflectionEntry(
-            id="r1",
-            title="Countable reflection",
-            body="...",
-            candidate_type="question",
-            confidence=0.8,
-            novelty=0.8,
-            urgency=0.2,
-            interruption_cost=0.1,
-            composite_score=0.7,
-            status="pending",
-            discussion_approved=None,
-            discussion_trace=(),
-            deep_link="nuself://thread/reflections",
-            created_at="2024-01-01T00:00:00+00:00",
-            reviewed_at=None,
-        )
-    )
-    ReasonService(tmp_path).start_thread("Countable reason thread")
-    llm = SequencedStructuredFakeLLM(
-        [
-            '[TOOL_CALL] {tool => "count_memory", args => {}} [/TOOL_CALL]',
-            '[TOOL_CALL] {tool => "list_pending_reflections", args => {}} [/TOOL_CALL]',
-            '{"answer":"","tool":"reason_count","tool_args":{}}',
-            '{"answer":"当前：记忆 0 条；反思 1 条；推理 1 条。","epistemic_status":"grounded"}',
-        ],
-        activation_response={
-            "activated": True,
-            "selected_persona_ids": ["historian_self"],
-            "trigger": "would normally activate",
-            "should_escalate": False,
-            "escalation_reason": "would normally log noisy persona context",
-        },
-    )
-    agent = ChatAgent(tmp_path, llm=llm)
-
-    result = agent.respond("你能调用工具看下现在的记忆、反思、推理各有多少条吗")
-
-    assert result.answer == "当前：记忆 0 条；反思 1 条；推理 1 条。"
-    logs = read_log_events(project_root=tmp_path)
-    tool_logs = [event for event in logs if event.event == "service_tool_called"]
-    assert [_event_metadata(event)["tool"] for event in tool_logs] == [
-        "memory_count",
-        "reflection_list_pending",
-        "reason_count",
-    ]
-    assert not any(event.component == "persona" for event in logs)
-
-
-def test_conversation_runtime_uses_langchain_native_tool_calls(tmp_path: Path) -> None:
-    from collections.abc import Sequence
-    from typing import Any
-
-    from langchain_core.language_models.chat_models import BaseChatModel
-    from langchain_core.messages import AIMessage, BaseMessage
-    from langchain_core.outputs import ChatGeneration, ChatResult as LangChainChatResult
-    from pydantic import PrivateAttr
-
-    from nuself.llm import LLMSettings, LangChainLLMEndpoint
-
-    repo = MemoryEntryRepository(tmp_path)
-    repo.save(MemoryEntry(type="belief", title="Clarity matters", body="Prefer explicit assumptions."))
-
-    def empty_calls() -> list[list[BaseMessage]]:
-        return []
-
-    def empty_tool_names() -> list[str]:
-        return []
-
-    class NativeStructuredToolModel(BaseChatModel):
-        _calls: list[list[BaseMessage]] = PrivateAttr(default_factory=empty_calls)
-        _bound_tool_names: list[str] = PrivateAttr(default_factory=empty_tool_names)
-
-        @property
-        def calls(self) -> list[list[BaseMessage]]:
-            return self._calls
-
-        @property
-        def _llm_type(self) -> str:
-            return "native-structured-tool-test"
-
-        def bind_tools(
-            self,
-            tools: Sequence[dict[str, Any] | type | Callable[..., Any] | BaseTool],
-            **kwargs: object,
-        ) -> "NativeStructuredToolModel":
-            self._bound_tool_names = [tool.name for tool in tools if isinstance(tool, BaseTool)]
-            return self
-
-        def _generate(
-            self,
-            messages: list[BaseMessage],
-            stop: list[str] | None = None,
-            run_manager: object | None = None,
-            **kwargs: object,
-        ) -> LangChainChatResult:
-            self._calls.append(messages)
-            if len(self._calls) == 1:
-                message = AIMessage(
-                    content="",
-                    tool_calls=[
-                        {
-                            "name": "memory_search",
-                            "args": {"query": "clarity", "limit": 5},
-                            "id": "call_memory_search",
-                            "type": "tool_call",
-                        },
-                        {
-                            "name": "memory_search",
-                            "args": {"query": "clarity", "limit": 5},
-                            "id": "call_memory_search_duplicate",
-                            "type": "tool_call",
-                        },
-                    ],
-                )
-            else:
-                assert messages[-1].type == "tool"
-                structured_tool_name = next(name for name in self._bound_tool_names if name == "ChatStructuredOutput")
-                message = AIMessage(
-                    content="",
-                    tool_calls=[
-                        {
-                            "name": structured_tool_name,
-                            "args": {
-                                "answer": "You value clarity.",
-                                "evidence_references": ["mem_native"],
-                                "epistemic_status": "grounded",
-                            },
-                            "id": "call_structured_response",
-                            "type": "tool_call",
-                        }
-                    ],
-                )
-            return LangChainChatResult(generations=[ChatGeneration(message=message)])
-
-    native_model = NativeStructuredToolModel()
-    runtime = ConversationGraphRuntime(
-        tmp_path,
-        llm=StructuredFakeLLM('{"answer":"You value clarity."}'),
-        langchain_models=(
-            LangChainLLMEndpoint(
-                index=0,
-                settings=LLMSettings(base_url="https://example.test/v1", api_key="key", model="native-test"),
-                model=native_model,
-            ),
-        ),
-        memory_query_service=MemoryQueryService(repo),
-    )
-
-    result = runtime.run_turn(ThreadState.empty("native"), "what about clarity?", "native", turn_id="turn-native")
-
-    assert result.result.answer == "You value clarity."
-    assert result.node_trace == (
-        "prepare_context",
-        "persona_activation",
-        "initial_response",
-        "detect_tool_request",
-        "finalize_response",
-        "state_update",
-        "compression",
-    )
-    assert len(native_model.calls) == 2
-    logs = [
-        event
-        for event in read_log_events(project_root=tmp_path, component="chat")
-        if event.event == "service_tool_called"
-    ]
-    assert len(logs) == 1
-    metadata = _event_metadata(logs[0])
-    assert metadata["service_component"] == "memory"
-    assert metadata["tool"] == "memory_search"
-    assert logs[0].turn_id == "turn-native"
-    assert logs[0].thread_id == "native"
-    assert logs[0].message.startswith('args: {"limit": 5, "query": "clarity"}\nresult: ')
-
-
-def test_chat_agent_retries_raw_tool_marker_draft(tmp_path: Path) -> None:
-    class RawToolMarkerDraftLLM:
-        def __init__(self) -> None:
-            self.call_count = 0
-
-        def complete(self, messages: list[ChatMessage]) -> str:
-            content = messages[0].content
-            if "Persona Activation Gate" in content:
-                return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
-            self.call_count += 1
-            if self.call_count == 1:
-                return "[Tool call: memory_search] Query: 反思 Limit: 10"
-            return '{"answer":"这是安全的回复。","epistemic_status":"grounded"}'
-
-    agent = ChatAgent(tmp_path, llm=RawToolMarkerDraftLLM())
-
-    result = agent.respond("简单回答")
-
-    assert result.answer == "这是安全的回复。"
-    assert "[Tool call:" not in result.reply
-
-
-def test_chat_runtime_logs_final_response_boundary_completion(tmp_path: Path) -> None:
-    runtime = ConversationGraphRuntime(
-        tmp_path,
-        llm=StructuredFakeLLM('{"answer":"整理后的回复。","epistemic_status":"grounded"}'),
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
-    )
-
-    result = runtime.run_turn(ThreadState.empty("final-boundary"), "帮我整理一下", "final-boundary")
-
-    assert result.result.answer == "整理后的回复。"
-    logs = [
-        event
-        for event in read_log_events(project_root=tmp_path, component="chat")
-        if event.event == "final_response_completed"
-    ]
-    assert logs[-1].metadata == {"epistemic_status": "grounded"}
-
-
-def test_chat_agent_tool_invocation_with_reflection_logs_service_call(tmp_path: Path) -> None:
-    from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
-
-    repo = ReflectionRepository(tmp_path)
-    repo.add(
-        ReflectionEntry(
-            id="reflection-test",
-            title="Try a smaller next step",
-            body="A pending idea.",
-            candidate_type="question",
-            confidence=0.8,
-            novelty=0.7,
-            urgency=0.4,
-            interruption_cost=0.2,
-            composite_score=0.65,
-            status="pending",
-            discussion_approved=None,
-            discussion_trace=(),
-            deep_link="nuself://thread/reflections",
-            created_at="2026-05-19T00:00:00Z",
-            reviewed_at=None,
-        )
-    )
-
-    class ReflectionToolRequestLLM:
-        def __init__(self) -> None:
-            self.call_count = 0
-
-        def complete(self, messages: list[ChatMessage]) -> str:
-            content = messages[0].content
-            if "Persona Activation Gate" in content:
-                return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
-            self.call_count += 1
-            if self.call_count == 1:
-                return '{"answer":"I will check pending reflections.","tool":"reflection_list_pending","tool_args":{"limit":3}}'
-            return '{"answer":"There is a pending idea about taking a smaller next step."}'
-
-    agent = ChatAgent(tmp_path, llm=ReflectionToolRequestLLM())
-
-    result = agent.respond("do you have any reflections?")
-
-    assert result.answer == "There is a pending idea about taking a smaller next step."
-    logs = [
-        event
-        for event in read_log_events(project_root=tmp_path, component="chat")
-        if event.event == "service_tool_called"
-    ]
-    assert len(logs) == 1
-    assert logs[0].status == "completed"
-    assert logs[0].message.startswith('args: {"limit": 3}\nresult: ')
-    metadata = _event_metadata(logs[0])
-    message_body = metadata["message_body"]
-    assert isinstance(message_body, str)
-    assert "Try a smaller next step" in message_body
-    assert metadata["service_component"] == "reflection"
-    assert metadata["tool"] == "reflection_list_pending"
 
 
 def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) -> None:
@@ -1899,35 +1344,3 @@ def test_chat_agent_includes_memory_tools_in_system_prompt(tmp_path: Path) -> No
     assert "memory_archive" in system_prompt
     assert "memory_update_importance" in system_prompt
     assert "memory_count" in system_prompt
-
-
-def test_chat_agent_end_to_end_memory_archive_via_tool(tmp_path: Path) -> None:
-    """Full path: chat → tool request → memory_archive → verify entry archived."""
-    from nuself.memory.repository import MemoryEntryRepository
-    from nuself.domain.memory import MemoryEntry
-
-    repo = MemoryEntryRepository(tmp_path)
-    repo.save(MemoryEntry(type="belief", id="m1", title="Old belief", body="..."))
-
-    class ArchiveToolLLM:
-        def __init__(self) -> None:
-            self.call_count = 0
-
-        def complete(self, messages: list[ChatMessage]) -> str:
-            content = messages[0].content
-            if "Persona Activation Gate" in content:
-                return '{"activated": false, "selected_persona_ids": [], "trigger": "test", "should_escalate": false, "escalation_reason": ""}'
-            self.call_count += 1
-            if self.call_count == 1:
-                return '{"answer":"Let me archive that for you.","tool":"memory_archive","tool_args":{"entry_id":"m1"}}'
-            return '{"answer":"Done. The entry has been archived.","evidence_references":[]}'
-
-    llm = ArchiveToolLLM()
-    agent = ChatAgent(tmp_path, llm=llm, memory_query_service=MemoryQueryService(repo))
-
-    result = agent.respond("archive that old belief")
-
-    assert "archived" in result.answer.lower() or "Done" in result.answer
-    assert llm.call_count == 2
-    entry = repo.get("m1")
-    assert entry.review_state == "archived"

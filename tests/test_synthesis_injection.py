@@ -87,16 +87,9 @@ def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
 
 
 def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
-    """Verify that the chat graph no longer auto-runs selves before tools."""
+    """Verify that the chat graph does not include synthesis sections in the normal respond path."""
     llm = StructuredFakeLLM(
         '{"answer":"No synthesis reply.","evidence_references":[],"confidence":0.5}',
-        activation_response={
-            "activated": False,
-            "selected_persona_ids": [],
-            "trigger": "not relevant",
-            "should_escalate": False,
-            "escalation_reason": "",
-        },
     )
     runtime = ConversationGraphRuntime(
         tmp_path,
@@ -111,17 +104,14 @@ def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
     )
     
     prepared = runtime.prepare_context_node(turn_state)
-    activated = runtime.persona_activation_node(prepared.state)
+    result = runtime.respond_node(prepared.state)
     
-    assert activated.state.persona_activation is not None
-    assert not activated.state.persona_activation.activated
-    assert activated.state.persona_turn_state is None
+    assert result.state.final_response is not None
+    assert result.state.final_response.answer == "No synthesis reply."
     
-    # Build prompt should not fail with None synthesis
-    prompt = runtime._build_prompt(activated.state)  # type: ignore[reportPrivateUsage]
+    # Build prompt should not contain synthesis sections
+    prompt = runtime._build_prompt(prepared.state)  # type: ignore[reportPrivateUsage]
     system_prompt = prompt[0].content
-    
-    # Verify synthesis section is not in system prompt when not activated
     assert "Internal perspective fusion:" not in system_prompt
 
 
@@ -155,7 +145,7 @@ def test_selves_consult_handles_explicit_multi_persona_request(tmp_path: Path) -
 
 
 def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path: Path) -> None:
-    """Verify that synthesis injection doesn't break existing system prompt sections."""
+    """Verify that the normal respond path preserves essential system prompt sections."""
     from nuself.domain.memory import MemoryEntry
     
     repo = MemoryEntryRepository(tmp_path)
@@ -182,8 +172,7 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
     )
     
     prepared = runtime.prepare_context_node(turn_state)
-    activated = runtime.persona_activation_node(prepared.state)
-    prompt = runtime._build_prompt(activated.state)  # type: ignore[reportPrivateUsage]
+    prompt = runtime._build_prompt(prepared.state)  # type: ignore[reportPrivateUsage]
     system_prompt = prompt[0].content
 
     # Verify essential sections are preserved
@@ -195,8 +184,8 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
     assert "Internal perspective fusion:" not in system_prompt
 
 
-def test_initial_response_uses_main_prompt_after_noop_persona_node(tmp_path: Path) -> None:
-    """Verify that ordinary chat uses the main prompt and can call selves as a tool."""
+def test_respond_node_uses_main_prompt(tmp_path: Path) -> None:
+    """Verify that respond_node uses the main prompt and selves is available as a tool."""
     llm = StructuredFakeLLM('{"answer":"Synthesized reply.","evidence_references":[],"confidence":0.8,"epistemic_status":"grounded"}')
     runtime = ConversationGraphRuntime(
         tmp_path,
@@ -211,13 +200,12 @@ def test_initial_response_uses_main_prompt_after_noop_persona_node(tmp_path: Pat
     )
     
     prepared = runtime.prepare_context_node(turn_state)
-    activated = runtime.persona_activation_node(prepared.state)
-    initial = runtime.initial_response_node(activated.state)
+    result = runtime.respond_node(prepared.state)
     
-    assert initial.state.initial_response is not None
-    assert initial.state.initial_response.answer == "Synthesized reply."
-    assert initial.state.initial_response.epistemic_status == "grounded"
-    assert initial.state.initial_response.confidence == 0.8
+    assert result.state.final_response is not None
+    assert result.state.final_response.answer == "Synthesized reply."
+    assert result.state.final_response.epistemic_status == "grounded"
+    assert result.state.final_response.confidence == 0.8
     
     # Verify main prompt was used; selves is available as a tool.
     assert len(llm.calls) >= 1
@@ -230,16 +218,9 @@ def test_initial_response_uses_main_prompt_after_noop_persona_node(tmp_path: Pat
 
 
 def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
-    """Verify that non-activated turns still use the main LLM system prompt."""
+    """Verify that respond_node uses the main LLM system prompt."""
     llm = StructuredFakeLLM(
         '{"answer":"Normal reply.","evidence_references":[],"confidence":0.5}',
-        activation_response={
-            "activated": False,
-            "selected_persona_ids": [],
-            "trigger": "not relevant",
-            "should_escalate": False,
-            "escalation_reason": "",
-        },
     )
     runtime = ConversationGraphRuntime(
         tmp_path,
@@ -254,14 +235,10 @@ def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
     )
     
     prepared = runtime.prepare_context_node(turn_state)
-    activated = runtime.persona_activation_node(prepared.state)
+    result = runtime.respond_node(prepared.state)
     
-    assert activated.state.persona_turn_state is None
-    
-    initial = runtime.initial_response_node(activated.state)
-    
-    assert initial.state.initial_response is not None
-    assert initial.state.initial_response.answer == "Normal reply."
+    assert result.state.final_response is not None
+    assert result.state.final_response.answer == "Normal reply."
     
     # Verify main prompt was used
     assert len(llm.calls) >= 1

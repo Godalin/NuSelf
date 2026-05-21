@@ -106,19 +106,23 @@ NuSelf must not ask the model to print a private tool protocol in the assistant 
 - no NuSelf-only `"tool"` / `"tool_args"` JSON envelope as the primary path;
 - no hidden parallel registry outside LangChain `BaseTool` objects.
 
-`ConversationGraphRuntime` may keep a small LangGraph workflow for NuSelf-specific stages such as context preparation, state update, compression, and trace recording. Inside the response-generation stage, tool calling is delegated to `create_agent`. Persona/selves work is not a fixed pre-response stage; it is invoked through the `selves_consult` subagent tool when the main chat agent decides it is useful.
+`ConversationGraphRuntime` runs a small LangGraph workflow with four nodes:
+
+1. **prepare_context** — assemble durable context (memory, thread state, skills)
+2. **respond** — delegate to `create_agent` with LangChain-native tool calling and structured output
+3. **state_update** — persist messages and update thread state
+4. **compression** — summarize when the message window grows past the trigger threshold
+
+Tool calling is delegated to `create_agent` inside the **respond** node.
+Persona/selves work is not a fixed pre-response stage; it is invoked through the `selves_consult` subagent tool when the main chat agent decides it is useful.
 
 Fallback LLMs that do not implement native tool calling may produce a plain answer, but they must not emulate tools by printing tool markers to the user.
 
-If a non-native fallback model emits a recoverable tool marker such as `[Tool call: ...]` or `[TOOL_CALL] ... [/TOOL_CALL]`, the runtime may convert it into an internal tool request for deterministic fallback behavior. This path is not the primary chat-agent implementation. The marker must never be shown as a NuSelf reply.
-
-Fallback tool execution must support short sequential tool loops. If a follow-up response after one tool result requests another available tool, the runtime should execute it, append the new result to the tool-result context, and ask again until the model returns a real final answer or the loop limit is reached.
+If the active model or test double is not a LangChain chat model, NuSelf may use a deterministic local fallback parser that accepts a plain JSON envelope (`{"answer": ..., "evidence_references": ..., ...}`) or markdown-fenced JSON. This parser must never be a parallel production protocol for tool calling.
 
 Within one logical chat turn, repeated tool calls with the same normalized tool name and identical arguments should reuse the first result. The runtime should still return a `ToolMessage` for every LangChain tool call id, but it should not execute or log duplicate service calls. This keeps interactive logs readable and prevents repeated status queries such as `memory_count` from looking like retries.
 
 Direct service-status queries, such as asking how many memory/reflection/reason/trace records exist, should call those service tools directly. These are operational tool queries; persona discussion before tool results tends to invent capability limits and adds noise.
-
-The chat runtime must request the final answer through LangChain structured output with `create_agent(..., response_format=...)` when the active model supports it. Prompted JSON parsing is a compatibility fallback for deterministic local test doubles and non-agent subsystems, not the primary chat-agent response protocol.
 
 ## Tool Catalog
 
@@ -264,7 +268,7 @@ Trace tools let the chat agent inspect thought provenance without mutating it.
 
 ## System Prompt Integration
 
-Every chat response-generation prompt in `ConversationGraphRuntime` must include the same `Available tools` section. This includes both the ordinary `_system_prompt` path and the persona-synthesis response path. Persona activation must not hide tool availability from the final response agent.
+Every chat response-generation prompt must include the same `Available tools` section, built from the registered LangChain tool set.
 
 Each tool is described with:
 
@@ -334,4 +338,6 @@ The trace skill lives in `src/nuself/agent/skills/trace/SKILL.md` and must inclu
 - Unit test each new tool in isolation.
 - Integration test: verify the agent can invoke `reflection_list_pending` and `reflection_dismiss` through the graph runtime.
 - Integration test: verify the agent can invoke `reason_list_active` and `reason_show` through the graph runtime.
+- Integration test: verify the supervisor's `complete()` is used via `LangChainChatSupervisor` for LangChain-native tool calling.
 - Test edge cases: empty repository, invalid index, duplicate dismiss, empty reason repository.
+- Remove tests for the legacy manual tool protocol (NuSelf-owned `tool`/`tool_args` JSON envelope, `[Tool call:]` markers, `[TOOL_CALL]` blocks). Those paths are deleted.

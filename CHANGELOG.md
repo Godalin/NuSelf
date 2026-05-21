@@ -10,16 +10,22 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 - Added subsystem-prefixed chat service tools, including `memory_count`, `reflection_count`, `reason_count`, and `trace_count` for quick service-size queries.
 - Added `selves_consult`, a chat-callable multi-persona subagent tool for perspective synthesis and competitive discussion.
+- Added markdown-fenced JSON support to the fallback `parse_chat_response` parser, accepting ` ```json\n{...}\n``` ` responses for test compatibility.
 
 ### Changed
 
-- Chat agent tool invocation is being migrated to LangChain-native tool calling instead of NuSelf-specific prompt JSON tool fields.
-- Chat response generation now treats LangChain `create_agent(..., tools=..., response_format=...)` as the primary supervisor boundary, with NuSelf responsible for context, logging, persistence, and validation around that agent.
+- **Chat graph simplified from 9 to 4 nodes.** Removed `persona_activation`, `initial_response`, `detect_tool_request`, `execute_tool`, and `finalize_response` nodes. The graph is now `prepare_context → respond → state_update → compression`.
+- **Chat agent tool invocation is now fully LangChain-native.** Removed the entire NuSelf-owned manual tool protocol: `[Tool call:]` markers, `[TOOL_CALL]` blocks, the `tool`/`tool_args` JSON envelope, and the 4-node tool loop were all deleted. LangChain `create_agent` with `response_format=ChatStructuredOutput` handles the complete model/tool loop internally.
+- **`respond_node` replaced `initial_response`.** The single node calls `supervisor.complete()` once, which runs the full LangChain agent (including any tool calls). Retry is still available for boundary-protocol leaks but no longer involves multi-turn tool chaining.
+- **`response.py` is the single source** for `DraftResponse`, `PresentedResponse`, `ParsedChatResponse`, `parse_chat_response`, `is_parsed_user_facing_safe`, `apply_unsupported_claim_guard`, and protocol leak detection. `chat.py` imports all response/parsing types from `response.py`, eliminating ~350 lines of duplicate code.
+- Removed ~450 lines of manual tool protocol code from `chat.py` (detection regexes, tool-name map, `_parse_chat_response` duplicates, `_detect_tool_call`, `_invoke_tool`, `_complete_after_tool_loop`, `_synthesize_response`).
+- Removed the following tests for the deleted manual tool protocol: `test_chat_agent_tool_invocation_with_memory_search`, `test_chat_agent_end_to_end_memory_archive_via_tool`, `test_chat_agent_recovers_raw_tool_marker_without_leaking`, `test_chat_agent_recovers_tool_call_block_and_normalizes_tool_name`, `test_chat_agent_chains_multiple_fallback_tool_calls_and_skips_persona`.
 - Chat service tools now use subsystem-prefixed names such as `memory_search`, `reflection_list_pending`, `reason_show`, and `trace_search`; old generic tool names are not retained.
 - Agent Skills now use local tool placeholders that are rendered from the active tool registry, so skill instructions stay aligned with generated service tool names.
-- Direct service-status questions now skip persona activation and fallback tool execution can chain multiple service tool calls before producing the final reply.
+- Direct service-status questions now skip persona activation; tool calling is handled by LangChain inside the respond node.
 - Selves/persona work now participates through the same agent tool loop as other services instead of running as a fixed pre-tool chat stage.
 - Chat now uses the chat supervisor's structured output directly as the final reply, keeping a boundary retry but removing the extra presentation-agent model call from the normal path.
+- Fallback tool marker detection and conversion permanently removed. The non-LangChain fallback path (`parse_chat_response`) accepts only plain text, JSON envelope, or markdown-fenced JSON.
 - Chat lifecycle and retry logs now show turn start, completion, transport retry, and final-response retry events in interactive activity output.
 - Interactive chat log streaming now tracks seen log-event identities instead of timestamp-sorted offsets, preventing old or delayed events from being replayed into the current turn output.
 - Log events now have top-level runtime ownership fields including `turn_id`, `job_id`, `trace_id`, and `source`, with an inherited `LogContext` for daemon requests, chat turns, and service/tool calls.
@@ -50,7 +56,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Docs
 
-- Added post-0.2 stabilization backlog for review-driven refactors that should wait until after local v0.2 testing.
+- Updated `docs/spec/chat-agent-tools.md` to document the 4-node graph, removed sections on fallback tool markers and manual tool protocol.
 
 ## 0.2.0 - 2026-05-19
 

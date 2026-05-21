@@ -92,7 +92,7 @@ def test_daemon_chat_error_includes_root_cause(tmp_path: Path) -> None:
 
     assert response.status == "error"
     assert response.error is not None
-    assert "conversation graph node 'initial_response' failed" in response.error
+    assert "conversation graph node 'respond' failed" in response.error
     assert "llm unavailable" in response.error
 
 
