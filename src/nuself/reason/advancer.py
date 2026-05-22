@@ -5,39 +5,24 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, cast
 
+from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
+from langchain_core.messages import HumanMessage
+from pydantic import BaseModel, Field
+
 from nuself.llm import ChatLLM, ChatMessage, LangChainLLMEndpoint
-from nuself.memory.query import MemoryQueryService
+from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.reason.domain import ReasoningStep, ReasoningThread, StepKind
 from nuself.reflection.repository import ReflectionRepository
 
 
-def _get_step_output_model() -> Any:
-    """Lazy-construct the Pydantic output model for reasoning steps."""
-    try:
-        from pydantic import BaseModel, Field
-
-        class ReasonStepOutput(BaseModel):
-            summary: str
-            delta: str
-            kind: str
-            new_hypotheses: list[str] = Field(default_factory=list)
-            new_open_questions: list[str] = Field(default_factory=list)
-            evidence_refs: list[str] = Field(default_factory=list)
-            confidence: float | None = None
-
-        return ReasonStepOutput
-    except ImportError:
-        return None
-
-
-_reason_step_output_model: Any = None
-
-
-def _get_step_output_model_cached() -> Any:
-    global _reason_step_output_model
-    if _reason_step_output_model is None:
-        _reason_step_output_model = _get_step_output_model()
-    return _reason_step_output_model
+class ReasonStepOutput(BaseModel):
+    summary: str
+    delta: str
+    kind: str
+    new_hypotheses: list[str] = Field(default_factory=list)
+    new_open_questions: list[str] = Field(default_factory=list)
+    evidence_refs: list[str] = Field(default_factory=list)
+    confidence: float | None = None
 
 
 REASON_ADVANCE_SYSTEM_PROMPT = (
@@ -165,20 +150,14 @@ class ReasonAdvancer:
         if not self._langchain_models:
             return self._advance_raw(thread)
         endpoint = self._langchain_models[0]
-        output_model = _get_step_output_model_cached()
-        if output_model is None:
-            return self._advance_raw(thread)
 
         try:
-            from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
-            from langchain_core.messages import HumanMessage
-
             create_agent = cast(Any, _create_agent)
             agent = create_agent(
                 model=endpoint.model,
                 tools=list(self._readonly_tools),
                 system_prompt=REASON_ADVANCE_SYSTEM_PROMPT,
-                response_format=output_model,
+                response_format=ReasonStepOutput,
             )
             messages = [HumanMessage(content=_build_advance_prompt(thread))]
             result = agent.invoke({"messages": messages})
@@ -226,8 +205,6 @@ class ReasonAdvancer:
 
         if self._memory_query_service is not None:
             try:
-                from nuself.memory.query import MemoryQuery
-
                 query = MemoryQuery(text=thread.question, limit=5)
                 packed = self._memory_query_service.pack(query)
                 if packed.text:

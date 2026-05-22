@@ -264,6 +264,7 @@ def build_langchain_chat_tools(
                 "Use natural language queries to find information about preferences, beliefs, episodes, and facts. "
                 "Returns formatted memory context with matches, scores, and match reasons."
             ),
+            tags=("readonly",),
         ),
         tool_from_function(
             count_memory,
@@ -273,6 +274,7 @@ def build_langchain_chat_tools(
                 "Use when the user asks how many memories exist, or to get a quick count "
                 "before deciding whether to search more deeply. Returns a simple count."
             ),
+            tags=("readonly",),
         ),
         tool_from_function(
             list_pending_reflections,
@@ -283,6 +285,7 @@ def build_langchain_chat_tools(
                 "to exploring new topics, or when the conversation naturally pauses. "
                 "Returns a numbered list with title, type, and confidence."
             ),
+            tags=("readonly",),
         ),
         tool_from_function(
             count_pending_reflections,
@@ -291,6 +294,7 @@ def build_langchain_chat_tools(
                 "Count pending proactive reflection ideas. Use when the user asks how many ideas, thoughts, "
                 "or pending reflections are currently available."
             ),
+            tags=("readonly",),
         ),
         tool_from_function(
             dismiss_reflection_by_index,
@@ -300,6 +304,7 @@ def build_langchain_chat_tools(
                 "Use when the user explicitly says they are not interested in a topic. "
                 "The index corresponds to the numbered list from reflection_list_pending."
             ),
+            tags=("write",),
         ),
         tool_from_function(
             archive_reflection_by_index,
@@ -309,6 +314,7 @@ def build_langchain_chat_tools(
                 "Use when the user has engaged with a reflection idea and the topic feels resolved. "
                 "The index corresponds to the numbered list shown in the pending reflections context."
             ),
+            tags=("write",),
         ),
         tool_from_function(
             archive_memory_by_id,
@@ -318,6 +324,7 @@ def build_langchain_chat_tools(
                 "Use when the user says a memory is outdated, no longer relevant, or should be hidden. "
                 "Requires the memory entry_id."
             ),
+            tags=("write",),
         ),
         tool_from_function(
             update_memory_importance_by_id,
@@ -327,6 +334,7 @@ def build_langchain_chat_tools(
                 "Use when the user emphasizes or downplays the significance of a memory. "
                 "Requires the memory entry_id and a new importance value."
             ),
+            tags=("write",),
         ),
         tool_from_function(
             list_active_reasoning_threads,
@@ -335,6 +343,7 @@ def build_langchain_chat_tools(
                 "List active and paused long-run reasoning threads. Use when the user asks about "
                 "open questions, ongoing thinking, active reason threads, or what NuSelf is still considering."
             ),
+            tags=("readonly",),
         ),
         tool_from_function(
             count_reasoning_threads,
@@ -343,6 +352,7 @@ def build_langchain_chat_tools(
                 "Count active and paused long-run reasoning threads. Use when the user asks how many open "
                 "questions or reasoning threads NuSelf is tracking."
             ),
+            tags=("readonly",),
         ),
         tool_from_function(
             show_reasoning_thread,
@@ -351,6 +361,7 @@ def build_langchain_chat_tools(
                 "Show details for a specific long-run reasoning thread, including summary, hypotheses, "
                 "open questions, evidence refs, and recent steps. Requires a thread_id."
             ),
+            tags=("readonly",),
         ),
         tool_from_function(
             search_trace,
@@ -359,6 +370,7 @@ def build_langchain_chat_tools(
                 "Search NuSelf thought provenance records. Use when the user asks where an idea came from, "
                 "how a belief or answer formed, or what prior records support a conclusion."
             ),
+            tags=("readonly",),
         ),
         tool_from_function(
             count_traces,
@@ -367,6 +379,7 @@ def build_langchain_chat_tools(
                 "Count thought provenance trace records, optionally matching a query. Use when the user asks "
                 "how many provenance records exist or match a topic."
             ),
+            tags=("readonly",),
         ),
         tool_from_function(
             show_trace,
@@ -374,6 +387,7 @@ def build_langchain_chat_tools(
             description=(
                 "Show a specific thought provenance trace record with related links. Requires a trace_id."
             ),
+            tags=("readonly",),
         ),
     ]
     if selves_consult is not None:
@@ -387,6 +401,7 @@ def build_langchain_chat_tools(
                     "emotionally loaded reflection, self-model questions, or when the user asks for inner discussion. "
                     "Do not use for direct service status/count/search questions."
                 ),
+                tags=("readonly",),
             )
         )
     return tuple(tools)

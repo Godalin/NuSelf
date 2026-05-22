@@ -23,13 +23,6 @@ from nuself.reason import ReasonScheduler
 from nuself.reflection import ReflectionScheduler
 
 
-_WRITE_TOOL_PREFIXES = ("dismiss", "archive", "update", "delete", "load_")
-
-
-def _is_write_tool(name: str) -> bool:
-    return any(name.startswith(p) for p in _WRITE_TOOL_PREFIXES)
-
-
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
 
 
@@ -160,7 +153,7 @@ class DaemonState:
         rr = getattr(self.chat_agent, "_reflection_repo", None)
         tools_dict = getattr(self.chat_agent, "_tools", None)
         readonly_tools = (
-            [t for t in tools_dict.values() if not _is_write_tool(t.name)]
+            [t for t in tools_dict.values() if "readonly" in (t.tags or [])]
             if tools_dict else None
         )
         lc_models = getattr(self.chat_agent, "_langchain_models", None)
