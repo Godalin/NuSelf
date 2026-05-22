@@ -15,6 +15,17 @@ from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 MAX_ACTIVE_THREADS = 5
 
 
+def _pick_working_summary(step: ReasoningStep | None, thread: ReasoningThread) -> str:
+    if step is not None and step.summary:
+        return step.summary
+    return thread.working_summary
+
+
+def _merge_str_lists(existing: list[str], new_items: list[str]) -> list[str]:
+    seen = set(existing)
+    return existing + [item for item in new_items if item not in seen]
+
+
 class ReasonService:
     """User-intent operations and state transitions for reasoning threads."""
 
@@ -144,10 +155,10 @@ class ReasonService:
             id=thread.id,
             question=thread.question,
             status=thread.status,
-            working_summary=thread.working_summary,
-            hypotheses=list(thread.hypotheses),
-            open_questions=list(thread.open_questions),
-            evidence_refs=list(thread.evidence_refs),
+            working_summary=_pick_working_summary(step, thread),
+            hypotheses=_merge_str_lists(thread.hypotheses, step.new_hypotheses if step else []),
+            open_questions=_merge_str_lists(thread.open_questions, step.new_open_questions if step else []),
+            evidence_refs=_merge_str_lists(thread.evidence_refs, step.evidence_refs if step else []),
             priority=thread.priority,
             last_advanced_at=now,
             next_review_after=thread.next_review_after,
