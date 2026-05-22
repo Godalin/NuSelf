@@ -47,6 +47,8 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
         return _render_persona_discussion_step(event, color=color)
     if _discussion_trace_metadata(event):
         return _render_discussion_log_event(event, color=color)
+    if event.event == "service_tool_called" and event.metadata:
+        return _render_service_tool_called(event, color=color)
 
     theme = TerminalTheme(color=color)
     tag = _render_log_tags(event, theme)
@@ -57,6 +59,35 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
         lines.extend(_render_status_body(event, theme))
     lines.extend(render_record_body(event.message))
     return "\n".join(lines)
+
+
+def _render_service_tool_called(event: LogEvent, *, color: bool | None = None) -> str:
+    """Render a service_tool_called log event via render_tool_call."""
+    service: str | None = None
+    if event.metadata:
+        raw_comp = event.metadata.get("service_component")
+        if isinstance(raw_comp, str):
+            service = raw_comp
+        else:
+            raw_tool = event.metadata.get("tool")
+            service = str(raw_tool) if isinstance(raw_tool, str) else None
+    extra: dict[str, object] = {}
+    if event.thread_id:
+        extra["thread"] = event.thread_id
+    if event.turn_id:
+        extra["turn"] = event.turn_id
+    if event.metadata:
+        raw_tool = event.metadata.get("tool")
+        if isinstance(raw_tool, str):
+            extra["tool"] = raw_tool
+    return render_tool_call(
+        component=event.component,
+        service=service or event.component,
+        args_text=event.message,
+        status=event.status or "completed",
+        extra_fields=extra or None,
+        color=color,
+    )
 
 
 def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None) -> str:
@@ -148,27 +179,33 @@ def render_tool_call(
     args_text: str,
     result: str | None = None,
     status: str = "completed",
+    extra_fields: dict[str, object] | None = None,
     color: bool | None = None,
 ) -> str:
     """Render a tool call with colored component and service tags.
 
     Produces:
-      [component] [service] service_tool_called  status=completed
+      [component] [service] service_tool_called  status=completed  key=value
         args: {json}
         result: ...
     """
     theme = TerminalTheme(color=color)
     comp_tag = theme.tag(f"[{component}]", component)
     srv_tag = theme.tag(f"[{service}]", service)
-    status_text = theme.muted(_format_log_field("status", status))
-    lines = [f"{comp_tag} {srv_tag} service_tool_called  {status_text}"]
+    header_parts: list[str] = [f"{comp_tag} {srv_tag} service_tool_called"]
+    header_parts.append(theme.muted(_format_log_field("status", status)))
+    if extra_fields:
+        for k, v in extra_fields.items():
+            if v is not None:
+                header_parts.append(theme.muted(_format_log_field(k, v)))
+    lines = [" ".join(header_parts)]
     for line in args_text.splitlines():
         if line.strip():
             lines.append(f"  {line}")
     if result:
         for line in result.splitlines():
             if line.strip():
-                lines.append(f"  {line}")
+                lines.append(f"  result: {line}")
     return "\n".join(lines)
 
 
