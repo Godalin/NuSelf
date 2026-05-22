@@ -544,11 +544,13 @@ def build_parser() -> argparse.ArgumentParser:
     reason_show_parser = reason_subparsers.add_parser("show")
     reason_show_parser.add_argument("thread_id")
     reason_show_parser.add_argument("--by-index", "-i", action="store_true", default=False)
+    reason_show_parser.add_argument("--full", "-f", action="store_true", default=False)
     reason_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reason_show_parser, handle_reason_show)
     reason_watch_parser = reason_subparsers.add_parser("watch")
     reason_watch_parser.add_argument("thread_id")
     reason_watch_parser.add_argument("--by-index", "-i", action="store_true", default=False)
+    reason_watch_parser.add_argument("--full", "-f", action="store_true", default=False)
     reason_watch_parser.add_argument("--interval", type=float, default=5.0)
     _add_handler(reason_watch_parser, handle_reason_watch)
     reason_start_parser = reason_subparsers.add_parser("start")
@@ -1472,7 +1474,7 @@ def handle_reason_show(args: argparse.Namespace) -> int:
         payload["steps"] = [step.to_wire() for step in steps]
         print(json.dumps(payload, sort_keys=True, ensure_ascii=True))
         return 0
-    print(render_reason_detail(thread, steps))
+    print(render_reason_detail(thread, steps, full=bool(getattr(args, "full", False))))
     return 0
 
 
@@ -1484,7 +1486,8 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
         print(f"Reason thread not found: {args.thread_id}", file=sys.stderr)
         return 1
     steps = service.list_steps(thread.id)
-    print(render_reason_detail(thread, steps))
+    full = bool(getattr(args, "full", False))
+    print(render_reason_detail(thread, steps, full=full))
     seen = len(steps)
     try:
         while True:
