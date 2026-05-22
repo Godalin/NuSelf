@@ -62,7 +62,7 @@ REASON_ADVANCE_SYSTEM_PROMPT = (
 )
 
 
-def _build_advance_prompt(thread: ReasoningThread) -> str:
+def _build_advance_prompt(thread: ReasoningThread, *, reference_context: str = "") -> str:
     parts = [f"Question: {thread.question}"]
     parts.append(f"Working summary: {thread.working_summary}")
     if thread.hypotheses:
@@ -77,6 +77,10 @@ def _build_advance_prompt(thread: ReasoningThread) -> str:
         parts.append("Evidence references:")
         for r in thread.evidence_refs:
             parts.append(f"  - {r}")
+    if reference_context:
+        parts.append("")
+        parts.append("Reference context (memories, reflections, traces):")
+        parts.append(reference_context)
     parts.append("")
     parts.append("Produce a structured reasoning step for this thread.")
     return "\n".join(parts)
@@ -239,7 +243,7 @@ class ReasonAdvancer:
                 system_prompt=REASON_ADVANCE_SYSTEM_PROMPT,
                 response_format=ReasonStepOutput,
             )
-            messages = [HumanMessage(content=_build_advance_prompt(thread))]
+            messages = [HumanMessage(content=_build_advance_prompt(thread, reference_context=self._gather_context(thread)))]
             result = agent.invoke({"messages": messages})
             state = cast(dict[str, object], result) if isinstance(result, dict) else {}
             structured = state.get("structured_response")
@@ -261,14 +265,8 @@ class ReasonAdvancer:
     def _advance_raw(self, thread: ReasoningThread) -> ReasoningStep | None:
         """Fallback: raw ChatLLM call with pre-injected context."""
         context = self._gather_context(thread)
-        prompt_lines = [_build_advance_prompt(thread)]
-        if context:
-            prompt_lines.append("")
-            prompt_lines.append("Reference context (memories, reflections, traces):")
-            prompt_lines.append(context)
-            prompt_lines.append("")
-            prompt_lines.append("Reply with a JSON object only, no markdown, no explanation.")
-        prompt = "\n".join(prompt_lines)
+        prompt = _build_advance_prompt(thread, reference_context=context)
+        prompt += "\n\nReply with a JSON object only, no markdown, no explanation."
         raw = self._llm.complete([
             ChatMessage(role="system", content=REASON_ADVANCE_SYSTEM_PROMPT),
             ChatMessage(role="user", content=prompt),
