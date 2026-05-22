@@ -117,8 +117,10 @@ def _render_step_body(
     pad = " " * indent
     kind_tag = theme.paint(f"[{step.kind}]", _step_kind_color(step.kind))
     ts = theme.muted(f"({format_display_timestamp(step.created_at)})")
-    header = f"{pad}{kind_tag} {ts}  {_render_markdown(step.summary, theme)}"
-    lines = [header]
+    lines = [f"{pad}{kind_tag} {ts}"]
+    body_pad = f"{pad}  "
+    if step.summary:
+        lines.append(f"{body_pad}{_render_markdown(step.summary, theme)}")
     if step.tool_calls:
         for name, args_dict in step.tool_calls:
             service_tag = _tool_service_tag(name)
@@ -137,7 +139,6 @@ def _render_step_body(
             inner_pad = " " * (indent + _TOOL_CALL_INDENT)
             for line in rendered.splitlines():
                 lines.append(f"{inner_pad}{line}" if line else inner_pad.rstrip())
-    body_pad = f"{pad}  "
     _append_field(lines, body_pad, "delta", step.delta, theme, full=full)
     _append_multi_field(lines, body_pad, "new_hypotheses", step.new_hypotheses, theme, full=full)
     _append_multi_field(lines, body_pad, "new_open_questions", step.new_open_questions, theme, full=full)
