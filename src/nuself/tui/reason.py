@@ -91,7 +91,7 @@ def _render_step_body(
             event = LogEvent(
                 time=step.created_at,
                 level="info",
-                component="chat",
+                component="reasoning",
                 event="service_tool_called",
                 message=tc_display,
                 status="completed",

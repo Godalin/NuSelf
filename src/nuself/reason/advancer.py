@@ -24,7 +24,7 @@ def _log_tool_call(tool_name: str, args: dict[str, object], *, project_root: Pat
 
     body = f"args: {_json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
     write_log_event(
-        "chat",
+        "reasoning",
         "service_tool_called",
         body,
         project_root=project_root,

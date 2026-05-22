@@ -383,7 +383,7 @@ step display by constructing a `LogEvent`-compatible string and passing through
 
 Rules:
 - The advancer's `_advance_with_tools` path must call `write_log_event`
-  with component=`chat`, event=`service_tool_called` for each tool invocation.
+  with component=`reasoning`, event=`service_tool_called` for each tool invocation.
 - The step renderer (`_render_step_body`) must render `tool_calls` entries
   using the `render_log_event` format rather than custom inline formatting.
 - Tool calls from the `_advance_raw` fallback path (no LangChain tools) may be
