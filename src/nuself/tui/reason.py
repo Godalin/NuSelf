@@ -11,7 +11,6 @@ from nuself.tui.render import (
     render_record_header,
 )
 
-_SECTION_INDENT = 2
 _TOOL_CALL_INDENT = 2
 
 
