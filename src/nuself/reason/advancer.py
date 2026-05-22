@@ -138,7 +138,10 @@ def _parse_step_json(raw: str) -> dict[str, object] | None:
 
 
 def _extract_tool_calls(state: dict[str, object]) -> tuple[tuple[str, dict[str, object]], ...]:
-    """Extract (name, args) pairs from agent result messages."""
+    """Extract (name, args) pairs from agent result messages.
+
+    Excludes pseudo tool-calls injected by create_agent's response_format.
+    """
     raw_messages = state.get("messages")
     if not isinstance(raw_messages, list):
         return ()
@@ -152,6 +155,8 @@ def _extract_tool_calls(state: dict[str, object]) -> tuple[tuple[str, dict[str, 
                     continue
                 tc_dict = cast(dict[str, object], tc)
                 name = str(tc_dict.get("name", "?"))
+                if name == "ReasonStepOutput":
+                    continue
                 args = tc_dict.get("args", {})
                 if isinstance(args, dict):
                     calls.append((name, cast(dict[str, object], args)))
