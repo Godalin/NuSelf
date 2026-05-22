@@ -85,6 +85,10 @@ class ReasonRepository:
         path = self._thread_path(thread_id)
         if path.exists():
             path.unlink()
+        steps_dir = self._steps_dir / thread_id
+        if steps_dir.exists():
+            import shutil
+            shutil.rmtree(steps_dir)
 
     # ── Step operations ────────────────────────────────────────────
 

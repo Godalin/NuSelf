@@ -577,6 +577,11 @@ def build_parser() -> argparse.ArgumentParser:
     reason_archive_parser.add_argument("thread_id")
     reason_archive_parser.add_argument("--by-index", "-i", action="store_true", default=False)
     _add_handler(reason_archive_parser, handle_reason_archive)
+    reason_delete_parser = reason_subparsers.add_parser("delete")
+    reason_delete_parser.add_argument("thread_id")
+    reason_delete_parser.add_argument("--by-index", "-i", action="store_true", default=False)
+    reason_delete_parser.add_argument("--yes", "-y", action="store_true", default=False)
+    _add_handler(reason_delete_parser, handle_reason_delete)
     trace_parser = subparsers.add_parser("trace")
     trace_parser.set_defaults(handler=None, help_parser=trace_parser)
     trace_subparsers = trace_parser.add_subparsers(dest="trace_command")
@@ -1570,6 +1575,20 @@ def handle_reason_archive(args: argparse.Namespace) -> int:
         return 1
     print(f"Archived reason thread: {thread.id}")
     print(render_reason_detail(thread))
+    return 0
+
+
+def handle_reason_delete(args: argparse.Namespace) -> int:
+    if not bool(getattr(args, "yes", False)):
+        print("Use --yes to confirm deletion.", file=sys.stderr)
+        return 1
+    service = ReasonService(args.project_root)
+    try:
+        tid = service.delete_thread(args.thread_id, by_index=args.by_index)
+    except (ReasonNotFound, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Deleted reason thread: {tid}")
     return 0
 
 

@@ -184,6 +184,26 @@ class ReasonService:
         thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
         return self._transition(thread, "archived")
 
+    def delete_thread(self, id_or_index: str, *, by_index: bool = False) -> str:
+        thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
+
+        write_log_event(
+            "reasoning",
+            "thread_deleted",
+            f"Deleted reasoning thread: {thread.question[:80]}",
+            project_root=self._project_root,
+            status="deleted",
+            metadata={"thread_id": thread.id, "question": thread.question},
+        )
+
+        import shutil
+        ws = self._workspace_store.paths(thread.id)
+        if ws.root.exists():
+            shutil.rmtree(ws.root)
+
+        self._repository.delete_thread(thread.id)
+        return thread.id
+
     # ── Internal ───────────────────────────────────────────────────
 
     def _transition(self, thread: ReasoningThread, new_status: ReasonStatus) -> ReasoningThread:
