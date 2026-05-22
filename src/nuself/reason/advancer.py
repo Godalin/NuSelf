@@ -8,7 +8,8 @@ from typing import Any, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel, Field
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field, PrivateAttr
 
 from nuself.llm import ChatLLM, ChatMessage, LangChainLLMEndpoint
 from nuself.memory.query import MemoryQuery, MemoryQueryService
@@ -137,34 +138,6 @@ def _parse_step_json(raw: str) -> dict[str, object] | None:
     return cast(dict[str, object], parsed)
 
 
-def _extract_tool_calls(state: dict[str, object], *, known_names: frozenset[str] = frozenset()) -> tuple[tuple[str, dict[str, object]], ...]:
-    """Extract (name, args) pairs from agent result messages.
-
-    Only accepts tool names in known_names. When known_names is empty (default),
-    no tool calls are extracted — callers must provide the set of valid names.
-    """
-    raw_messages = state.get("messages")
-    if not isinstance(raw_messages, list):
-        return ()
-    if not known_names:
-        return ()
-    messages: list[Any] = cast(list[Any], raw_messages)
-    calls: list[tuple[str, dict[str, object]]] = []
-    for msg in messages:
-        tc_raw = getattr(msg, "tool_calls", None)
-        if tc_raw and isinstance(tc_raw, list):
-            for tc in cast(list[Any], tc_raw):
-                if not isinstance(tc, dict):
-                    continue
-                tc_dict = cast(dict[str, object], tc)
-                name = str(tc_dict.get("name", "?"))
-                if name not in known_names:
-                    continue
-                args = tc_dict.get("args", {})
-                if isinstance(args, dict):
-                    calls.append((name, cast(dict[str, object], args)))
-    return tuple(calls)
-
 
 def _format_tool_call_display(name: str, args: dict[str, object]) -> str:
     """Format a tool call for display as name(key=value, ...), truncated."""
@@ -179,6 +152,43 @@ def _format_tool_call_display(name: str, args: dict[str, object]) -> str:
     if len(args_str) > limit:
         args_str = args_str[:limit - 3].rstrip() + "..."
     return f"{name}({args_str})"
+
+
+def _tool_input_to_dict(input_value: object) -> dict[str, object]:
+    """Extract a dict from a tool invocation input."""
+    if isinstance(input_value, dict):
+        return cast(dict[str, object], input_value)
+    return {}
+
+
+class _CapturingTool(BaseTool):
+    """Wraps a tool and records invocations during agent execution.
+
+    Used by ReasonAdvancer to capture tool calls from agent flow
+    instead of mining them from message history afterwards.
+    """
+
+    _inner: BaseTool = PrivateAttr()
+    _captured: list[tuple[str, dict[str, object]]] = PrivateAttr()
+
+    def __init__(self, inner: BaseTool, captured: list[tuple[str, dict[str, object]]]) -> None:
+        super().__init__(
+            name=inner.name,
+            description=inner.description,
+            args_schema=inner.args_schema,
+            return_direct=inner.return_direct,
+            response_format=inner.response_format,
+        )
+        self._inner = inner
+        self._captured = captured
+
+    def invoke(self, input: Any, config: Any | None = None, **kwargs: Any) -> Any:  # pyright: ignore[reportUnknownParameterType]
+        args = _tool_input_to_dict(input)
+        self._captured.append((self.name, dict(args)))
+        return self._inner.invoke(input, config=config, **kwargs)  # pyright: ignore[reportUnknownMemberType]
+
+    def _run(self, *args: Any, **kwargs: Any) -> Any:  # pyright: ignore[reportUnknownParameterType]
+        return self._inner._run(*args, **kwargs)  # pyright: ignore[reportUnknownMemberType]
 
 
 class ReasonAdvancer:
@@ -218,10 +228,12 @@ class ReasonAdvancer:
         endpoint = self._langchain_models[0]
 
         try:
+            captured: list[tuple[str, dict[str, object]]] = []
+            wrapped_tools = [_CapturingTool(t, captured) for t in self._readonly_tools]
             create_agent = cast(Any, _create_agent)
             agent = create_agent(
                 model=endpoint.model,
-                tools=list(self._readonly_tools),
+                tools=wrapped_tools,
                 system_prompt=REASON_ADVANCE_SYSTEM_PROMPT,
                 response_format=ReasonStepOutput,
             )
@@ -229,19 +241,17 @@ class ReasonAdvancer:
             result = agent.invoke({"messages": messages})
             state = cast(dict[str, object], result) if isinstance(result, dict) else {}
             structured = state.get("structured_response")
-            known_names = frozenset(t.name for t in self._readonly_tools)
-            tool_calls = _extract_tool_calls(state, known_names=known_names)
-            for name, args in tool_calls:
+            for name, args in captured:
                 _log_tool_call(name, args, project_root=self._project_root)
             if structured is None:
                 return None
             if isinstance(structured, dict):
-                return _step_from_data(cast(dict[str, object], structured), thread.id, tool_calls=tool_calls)
+                return _step_from_data(cast(dict[str, object], structured), thread.id, tool_calls=tuple(captured))
             pydantic_data = getattr(structured, "model_dump", None)
             if pydantic_data is not None:
                 data = pydantic_data()
                 if isinstance(data, dict):
-                    return _step_from_data(cast(dict[str, object], data), thread.id, tool_calls=tool_calls)
+                    return _step_from_data(cast(dict[str, object], data), thread.id, tool_calls=tuple(captured))
             return None
         except Exception:
             return self._advance_raw(thread)
