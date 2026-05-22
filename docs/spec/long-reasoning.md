@@ -378,14 +378,17 @@ contexts — the same `render_log_event` path renders them identically.
 
 The `tool_calls` field on `ReasoningStep` is a denormalized display cache
 populated from the agent message history after each advance. It is rendered in
-step display by constructing a `LogEvent`-compatible string and passing through
-`render_log_event`, not by a separate custom format.
+step display with the same format as `render_log_event`: a header line
+`[reasoning] [<service>] service_tool_called  [completed]` followed by an
+indented body line showing the tool call arguments, with proper coloring on the
+component and service tags.
 
 Rules:
 - The advancer's `_advance_with_tools` path must call `write_log_event`
   with component=`reasoning`, event=`service_tool_called` for each tool invocation.
 - The step renderer (`_render_step_body`) must render `tool_calls` entries
-  using the `render_log_event` format rather than custom inline formatting.
+  with the same header+body format as `render_log_event`, with colored component
+  and service tags.
 - Tool calls from the `_advance_raw` fallback path (no LangChain tools) may be
   omitted from log output — there are no tool invocations to log.
 

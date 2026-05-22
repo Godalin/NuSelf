@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from nuself.logs import LogEvent
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.tui.render import (
     TerminalTheme,
     format_display_timestamp,
     render_key_value_field,
-    render_log_event,
     render_record_block,
     render_record_header,
 )
@@ -105,19 +103,16 @@ def _render_step_body(
     if step.tool_calls:
         for tc_display in step.tool_calls:
             service_tag = _tool_service_tag(tc_display)
-            event_name = f"[{service_tag}] service_tool_called" if service_tag else "service_tool_called"
-            event = LogEvent(
-                time=step.created_at,
-                level="info",
-                component="reasoning",
-                event=event_name,
-                message=tc_display,
-                status="completed",
-            )
-            rendered = render_log_event(event, color=theme.color)
             inner_pad = " " * (indent + _TOOL_CALL_INDENT)
-            for line in rendered.splitlines():
-                lines.append(f"{inner_pad}{line}" if line else inner_pad.rstrip())
+            calling_tag = theme.tag("[reasoning]", "reasoning")
+            if service_tag:
+                srv_tag = theme.tag(f"[{service_tag}]", service_tag)
+                tc_header = f"{inner_pad}{calling_tag} {srv_tag} service_tool_called"
+            else:
+                tc_header = f"{inner_pad}{calling_tag} service_tool_called"
+            status_tag = theme.paint("[completed]", "completed")
+            lines.append(f"{tc_header}  {status_tag}")
+            lines.append(f"{inner_pad}  {tc_display}")
     body_pad = f"{pad}  "
     _append_field(lines, body_pad, "delta", step.delta, theme, full=full)
     _append_multi_field(lines, body_pad, "new_hypotheses", step.new_hypotheses, theme, full=full)
