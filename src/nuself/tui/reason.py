@@ -77,7 +77,7 @@ def _tool_service_tag(tc_display: str) -> str:
     if name.startswith("reflection_"):
         return "reflection"
     if name.startswith("reason_"):
-        return "reason"
+        return "reasoning"
     if name.startswith("trace_"):
         return "trace"
     if name.startswith("selves_"):
@@ -110,7 +110,7 @@ def _render_step_body(
                 tc_header = f"{inner_pad}{calling_tag} {srv_tag} service_tool_called"
             else:
                 tc_header = f"{inner_pad}{calling_tag} service_tool_called"
-            status_tag = theme.paint("[completed]", "completed")
+            status_tag = theme.muted("[completed]")
             lines.append(f"{tc_header}  {status_tag}")
             lines.append(f"{inner_pad}  {tc_display}")
     body_pad = f"{pad}  "
