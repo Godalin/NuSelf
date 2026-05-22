@@ -22,6 +22,14 @@ from nuself.notification.macos import MacOSNotificationAdapter
 from nuself.reason import ReasonScheduler
 from nuself.reflection import ReflectionScheduler
 
+
+_WRITE_TOOL_PREFIXES = ("dismiss", "archive", "update", "delete", "load_")
+
+
+def _is_write_tool(name: str) -> bool:
+    return any(name.startswith(p) for p in _WRITE_TOOL_PREFIXES)
+
+
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
 
 
@@ -150,11 +158,19 @@ class DaemonState:
             return
         mq = getattr(self.chat_agent, "_memory_query_service", None)
         rr = getattr(self.chat_agent, "_reflection_repo", None)
+        tools_dict = getattr(self.chat_agent, "_tools", None)
+        readonly_tools = (
+            [t for t in tools_dict.values() if not _is_write_tool(t.name)]
+            if tools_dict else None
+        )
+        lc_models = getattr(self.chat_agent, "_langchain_models", None)
         self.reason_scheduler = ReasonScheduler(
             self.project_root,
             interval_seconds=self.reason_scheduler_interval_seconds,
             memory_query_service=mq,
             reflection_repository=rr,
+            readonly_tools=readonly_tools,
+            langchain_models=lc_models,
         )
         self._reason_scheduler_thread = threading.Thread(
             target=self._run_background_reason_scheduler,

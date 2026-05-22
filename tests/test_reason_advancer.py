@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from nuself.llm import ChatLLM, ChatMessage
-from nuself.reason.advancer import ReasonAdvancer, _build_advance_prompt, _parse_step_json, _validate_step_json
+from nuself.reason.advancer import ReasonAdvancer, _build_advance_prompt, _parse_step_json, _step_from_data
 from nuself.reason.domain import ReasoningThread
 
 
@@ -52,18 +52,24 @@ def test_parse_invalid_json_returns_none() -> None:
     assert _parse_step_json('"just a string"') is None
 
 
-def test_validate_step_json_accepts_valid() -> None:
+def test_step_from_data_accepts_valid() -> None:
     data = {"summary": "s", "delta": "d", "kind": "progress"}
-    assert _validate_step_json(data)
+    step = _step_from_data(data, "test-thread")
+    assert step is not None
+    assert step.id is not None
+    assert step.thread_id == "test-thread"
+    assert step.summary == "s"
+    assert step.delta == "d"
+    assert step.kind == "progress"
 
 
-def test_validate_step_json_rejects_missing_fields() -> None:
-    assert not _validate_step_json({"kind": "progress"})
-    assert not _validate_step_json({"summary": "s", "delta": "d"})
+def test_step_from_data_rejects_missing_fields() -> None:
+    assert _step_from_data({"kind": "progress"}, "t") is None
+    assert _step_from_data({"summary": "s", "delta": "d"}, "t") is None
 
 
-def test_validate_step_json_rejects_invalid_kind() -> None:
-    assert not _validate_step_json({"summary": "s", "delta": "d", "kind": "invalid"})
+def test_step_from_data_rejects_invalid_kind() -> None:
+    assert _step_from_data({"summary": "s", "delta": "d", "kind": "invalid"}, "t") is None
 
 
 class FakeLLM:

@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
+from nuself.llm import LangChainLLMEndpoint
+from nuself.memory.query import MemoryQueryService
 from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.domain import ACTIVE_STATUSES, ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
+from nuself.reflection.repository import ReflectionRepository
 
 
 class ReasonScheduler:
@@ -21,8 +26,10 @@ class ReasonScheduler:
         service: ReasonService | None = None,
         interval_seconds: int = 600,
         *,
-        memory_query_service: object | None = None,
-        reflection_repository: object | None = None,
+        memory_query_service: MemoryQueryService | None = None,
+        reflection_repository: ReflectionRepository | None = None,
+        readonly_tools: Sequence[Any] | None = None,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
         self._project_root = project_root
         self._advancer = advancer
@@ -37,6 +44,8 @@ class ReasonScheduler:
                 llm,
                 memory_query_service=memory_query_service,
                 reflection_repository=reflection_repository,
+                readonly_tools=readonly_tools,
+                langchain_models=langchain_models,
             )
 
     def run_once(self) -> None:
