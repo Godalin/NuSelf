@@ -13,6 +13,9 @@ from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 
 MAX_ACTIVE_THREADS = 5
+_MAX_HYPOTHESES = 10
+_MAX_OPEN_QUESTIONS = 10
+_MAX_EVIDENCE_REFS = 20
 
 
 def _pick_working_summary(step: ReasoningStep | None, thread: ReasoningThread) -> str:
@@ -21,9 +24,10 @@ def _pick_working_summary(step: ReasoningStep | None, thread: ReasoningThread) -
     return thread.working_summary
 
 
-def _merge_str_lists(existing: list[str], new_items: list[str]) -> list[str]:
+def _merge_str_lists(existing: list[str], new_items: list[str], *, max_items: int = 10) -> list[str]:
     seen = set(existing)
-    return existing + [item for item in new_items if item not in seen]
+    merged = existing + [item for item in new_items if item not in seen]
+    return merged[-max_items:]
 
 
 class ReasonService:
@@ -156,9 +160,9 @@ class ReasonService:
             question=thread.question,
             status=thread.status,
             working_summary=_pick_working_summary(step, thread),
-            hypotheses=_merge_str_lists(thread.hypotheses, step.new_hypotheses if step else []),
-            open_questions=_merge_str_lists(thread.open_questions, step.new_open_questions if step else []),
-            evidence_refs=_merge_str_lists(thread.evidence_refs, step.evidence_refs if step else []),
+            hypotheses=_merge_str_lists(thread.hypotheses, step.new_hypotheses if step else [], max_items=_MAX_HYPOTHESES),
+            open_questions=_merge_str_lists(thread.open_questions, step.new_open_questions if step else [], max_items=_MAX_OPEN_QUESTIONS),
+            evidence_refs=_merge_str_lists(thread.evidence_refs, step.evidence_refs if step else [], max_items=_MAX_EVIDENCE_REFS),
             priority=thread.priority,
             last_advanced_at=now,
             next_review_after=thread.next_review_after,

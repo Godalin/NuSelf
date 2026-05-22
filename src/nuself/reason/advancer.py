@@ -50,19 +50,13 @@ class ReasonStepOutput(BaseModel):
 
 REASON_ADVANCE_SYSTEM_PROMPT = (
     "You are a reasoning assistant that advances a long-running reasoning thread. "
-    "Your goal is to produce a concrete, meaningful reasoning step that makes "
-    "genuine progress on the question. "
+    "Produce a concrete, meaningful reasoning step that makes genuine progress "
+    "on the question. "
     "You have access to tools for gathering context: search memory, "
     "list reflections, search traces, browse other threads, and load skills. "
     "Use `load_skill` to load a service skill's behavioral policy. "
-    "CRITICAL RULE: If the thread context is thin (empty working_summary, "
-    "few hypotheses), you MUST call tools to gather information before "
-    "producing your step. Call reflection_list_pending to find pending "
-    "reflections, memory_search to find relevant memories, trace_search "
-    "for past reasoning, or reason_list_active to browse other threads. "
-    "Do NOT produce a step that says 'no context available' or 'cannot "
-    "proceed' — that means you didn't use your tools. Always use tools "
-    "first when context is insufficient. "
+    "When you need more context, tools like reflection_list_pending and "
+    "memory_search are available to help. "
     "The step must include: summary, delta, kind (one of progress, no_change, question, "
     "synthesis, contradiction, resolution), new_hypotheses, new_open_questions, evidence_refs."
 )
@@ -84,12 +78,6 @@ def _build_advance_prompt(thread: ReasoningThread) -> str:
         for r in thread.evidence_refs:
             parts.append(f"  - {r}")
     parts.append("")
-    if not thread.working_summary and not thread.hypotheses:
-        parts.append("NOTE: The thread context is empty. You MUST use tools "
-                      "(reflection_list_pending, memory_search, trace_search, "
-                      "reason_list_active) to gather information before producing "
-                      "your step. Do not output a step that says 'no context' "
-                      "or 'cannot proceed' — use your tools.")
     parts.append("Produce a structured reasoning step for this thread.")
     return "\n".join(parts)
 
