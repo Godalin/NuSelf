@@ -137,13 +137,16 @@ def _parse_step_json(raw: str) -> dict[str, object] | None:
     return cast(dict[str, object], parsed)
 
 
-def _extract_tool_calls(state: dict[str, object]) -> tuple[tuple[str, dict[str, object]], ...]:
+def _extract_tool_calls(state: dict[str, object], *, known_names: frozenset[str] = frozenset()) -> tuple[tuple[str, dict[str, object]], ...]:
     """Extract (name, args) pairs from agent result messages.
 
-    Excludes pseudo tool-calls injected by create_agent's response_format.
+    Only accepts tool names in known_names. When known_names is empty (default),
+    no tool calls are extracted — callers must provide the set of valid names.
     """
     raw_messages = state.get("messages")
     if not isinstance(raw_messages, list):
+        return ()
+    if not known_names:
         return ()
     messages: list[Any] = cast(list[Any], raw_messages)
     calls: list[tuple[str, dict[str, object]]] = []
@@ -155,7 +158,7 @@ def _extract_tool_calls(state: dict[str, object]) -> tuple[tuple[str, dict[str, 
                     continue
                 tc_dict = cast(dict[str, object], tc)
                 name = str(tc_dict.get("name", "?"))
-                if name == "ReasonStepOutput":
+                if name not in known_names:
                     continue
                 args = tc_dict.get("args", {})
                 if isinstance(args, dict):
@@ -226,7 +229,8 @@ class ReasonAdvancer:
             result = agent.invoke({"messages": messages})
             state = cast(dict[str, object], result) if isinstance(result, dict) else {}
             structured = state.get("structured_response")
-            tool_calls = _extract_tool_calls(state)
+            known_names = frozenset(t.name for t in self._readonly_tools)
+            tool_calls = _extract_tool_calls(state, known_names=known_names)
             for name, args in tool_calls:
                 _log_tool_call(name, args, project_root=self._project_root)
             if structured is None:
