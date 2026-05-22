@@ -123,6 +123,7 @@ class ReasoningStep:
     retired_hypotheses: list[str] = field(default_factory=_empty_str_list)
     new_open_questions: list[str] = field(default_factory=_empty_str_list)
     evidence_refs: list[str] = field(default_factory=_empty_str_list)
+    tool_calls: tuple[str, ...] = ()
     confidence: float | None = None
     created_at: str = field(default_factory=_now_iso)
 
@@ -145,6 +146,7 @@ class ReasoningStep:
             "retired_hypotheses": self.retired_hypotheses,
             "new_open_questions": self.new_open_questions,
             "evidence_refs": self.evidence_refs,
+            "tool_calls": list(self.tool_calls),
             "confidence": self.confidence,
             "created_at": self.created_at,
         }
@@ -161,6 +163,7 @@ class ReasoningStep:
             retired_hypotheses=_optional_str_list(data, "retired_hypotheses"),
             new_open_questions=_optional_str_list(data, "new_open_questions"),
             evidence_refs=_optional_str_list(data, "evidence_refs"),
+            tool_calls=_optional_str_tuple(data, "tool_calls"),
             confidence=_optional_float(data, "confidence"),
             created_at=_expect_str(data, "created_at"),
         )
@@ -192,6 +195,18 @@ def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
     if not all(isinstance(item, str) for item in raw):
         raise ValueError(f"field '{field_name}' must be a list of strings")
     return list(cast(list[str], raw))
+
+
+def _optional_str_tuple(data: dict[str, object], field_name: str) -> tuple[str, ...]:
+    value = data.get(field_name)
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError(f"field '{field_name}' must be a list of strings")
+    raw = cast(list[object], value)
+    if not all(isinstance(item, str) for item in raw):
+        raise ValueError(f"field '{field_name}' must be a list of strings")
+    return tuple(cast(list[str], raw))
 
 
 def _optional_float(data: dict[str, object], field_name: str) -> float | None:
