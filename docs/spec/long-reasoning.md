@@ -158,6 +158,7 @@ Typed domain model:
 | `new_hypotheses` | list[string] | Added hypotheses |
 | `retired_hypotheses` | list[string] | Retired hypotheses |
 | `new_open_questions` | list[string] | Added subquestions |
+| `tool_calls` | list[string] \| null | Tool invocations during this step, stored as `name(args)` strings for display |
 | `evidence_refs` | list[string] | Evidence used by this step |
 | `confidence` | float \| null | Optional confidence estimate |
 | `created_at` | string | Step timestamp |
@@ -254,7 +255,7 @@ Commands:
 
 ```text
 nuself reason list [--status active|paused|resolved|archived|all] [--json]
-nuself reason show <id_or_index> [--by-index] [--json]
+nuself reason show <id_or_index> [--by-index] [--full] [--json]
 nuself reason start "<question>" [--priority normal|high]
 nuself reason advance <id_or_index> [--by-index]
 nuself reason pause <id_or_index> [--by-index]
@@ -264,6 +265,8 @@ nuself reason archive <id_or_index> [--by-index]
 ```
 
 Human-readable output must use the shared record renderer style from `cli-interaction.md`.
+
+`--full` on `reason show` renders each step with all fields (step id, index, delta, tool calls, hypotheses, open questions, evidence refs, confidence) even when empty, showing `(no ...)` placeholders instead of omitting the section.
 
 Default list output shows active and paused threads. `--status all` includes resolved and archived threads.
 
@@ -283,7 +286,7 @@ Interactive commands:
 :reason archive <id_or_index>
 ```
 
-`:reason` with no arguments prints reason subcommand help.
+`:reason` with no arguments prints reason subcommand help. `:reason show` supports `--full` to show all step fields.
 
 REPL output must match CLI formatting as closely as possible.
 
@@ -362,6 +365,30 @@ Expected events:
 | `advance_no_change` | `skipped` | No meaningful update |
 | `advance_failed` | `failed` | Advance failed safely |
 
+### Tool Call Display Via Log System
+
+All user-visible tool call output must go through the existing log system and its
+`render_log_event` pipeline, not through ad-hoc inline formatting.
+
+The `ReasonAdvancer` must emit `service_tool_called` log events for every tool
+invoked during step generation, using the same `write_log_event` convention as
+`chat.py:_write_service_tool_log`. The `service_tool_called` event is shared
+between chat and reasoning so that tool call presentation is identical in both
+contexts — the same `render_log_event` path renders them identically.
+
+The `tool_calls` field on `ReasoningStep` is a denormalized display cache
+populated from the agent message history after each advance. It is rendered in
+step display by constructing a `LogEvent`-compatible string and passing through
+`render_log_event`, not by a separate custom format.
+
+Rules:
+- The advancer's `_advance_with_tools` path must call `write_log_event`
+  with component=`chat`, event=`service_tool_called` for each tool invocation.
+- The step renderer (`_render_step_body`) must render `tool_calls` entries
+  using the `render_log_event` format rather than custom inline formatting.
+- Tool calls from the `_advance_raw` fallback path (no LangChain tools) may be
+  omitted from log output — there are no tool invocations to log.
+
 ## Decisions
 
 - A new `reasoning` log component is used (as defined above).
@@ -370,3 +397,5 @@ Expected events:
 - First-pass context retrieval: thread-local only (working_summary, hypotheses, open_questions, evidence_refs).
 - Reason is infrastructure for cognitive state evolution, not a stored chain-of-thought transcript.
 - The current thread/step model is the first implementation slice of a future dynamic reason graph.
+- All user-visible tool call display goes through the `service_tool_called` log event + `render_log_event` pipeline, not ad-hoc inline formatting.
+- `tool_calls` on `ReasoningStep` is a denormalized cache populated from agent message history, rendered via the log pipeline.
