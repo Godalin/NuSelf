@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from nuself.llm import LangChainLLMEndpoint
+from nuself.logs import log_context
 from nuself.memory.query import MemoryQueryService
 from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.domain import ACTIVE_STATUSES, ReasoningThread
@@ -74,11 +75,11 @@ class ReasonScheduler:
         if candidate is None:
             return
 
-        step = self._advancer.advance(candidate)
-        if step is None:
-            return
-
-        updated = self._service.advance_thread(candidate.id, step=step)
+        with log_context(thread_id=candidate.id, source="reason_scheduler"):
+            step = self._advancer.advance(candidate)
+            if step is None:
+                return
+            updated = self._service.advance_thread(candidate.id, step=step)
         cooldown_end = (datetime.now(UTC) + timedelta(seconds=self._interval_seconds)).isoformat()
         cooled = ReasoningThread(
             id=updated.id,
