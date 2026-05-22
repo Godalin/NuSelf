@@ -62,13 +62,13 @@ def render_reason_detail(
     if steps:
         lines.append("")
         for i, step in enumerate(steps, start=1):
-            lines.append(_render_step_body(step, theme, indent=_SECTION_INDENT, full=full, step_index=i))
+            lines.append(_render_step_body(step, theme, indent=0, full=full, step_index=i))
     return "\n".join(lines)
 
 
 def render_step_watch_entry(step: ReasoningStep, *, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
-    return _render_step_body(step, theme, indent=_SECTION_INDENT, full=True)
+    return _render_step_body(step, theme, indent=0, full=True)
 
 
 def _tool_service_tag(tc_display: str) -> str:
