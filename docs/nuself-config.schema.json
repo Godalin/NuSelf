@@ -133,6 +133,18 @@
             }
           }
         },
+        "reason_scheduler": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "interval_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 600,
+              "description": "Interval to advance active reasoning threads"
+            }
+          }
+        },
         "notification_delivery": {
           "type": "object",
           "additionalProperties": false,

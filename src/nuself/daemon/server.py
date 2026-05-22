@@ -19,6 +19,7 @@ from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.notification import NotificationAdapter, NotificationDeliveryLoop
 from nuself.notification.email import EmailNotificationAdapter
 from nuself.notification.macos import MacOSNotificationAdapter
+from nuself.reason import ReasonScheduler
 from nuself.reflection import ReflectionScheduler
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
@@ -64,6 +65,10 @@ class DaemonState:
         )
         self.notification_delivery_interval_seconds = config.daemon.notification_delivery.interval_seconds
         self._notification_delivery_thread: threading.Thread | None = None
+
+        self.reason_scheduler: ReasonScheduler | None = None
+        self.reason_scheduler_interval_seconds = config.daemon.reason_scheduler.interval_seconds
+        self._reason_scheduler_thread: threading.Thread | None = None
 
     def start_background_memory_curator(self) -> None:
         if self._memory_curator_thread is not None:
@@ -138,6 +143,43 @@ class DaemonState:
                     status="error",
                     error=str(e)
                 )
+                continue
+
+    def start_background_reason_scheduler(self) -> None:
+        if self._reason_scheduler_thread is not None:
+            return
+        self.reason_scheduler = ReasonScheduler(
+            self.project_root,
+            interval_seconds=self.reason_scheduler_interval_seconds,
+        )
+        self._reason_scheduler_thread = threading.Thread(
+            target=self._run_background_reason_scheduler,
+            name="nuself-reason-scheduler",
+            daemon=True,
+        )
+        self._reason_scheduler_thread.start()
+
+    def stop_background_reason_scheduler(self) -> None:
+        if self._reason_scheduler_thread is not None:
+            self._reason_scheduler_thread.join(timeout=1.0)
+
+    def _run_background_reason_scheduler(self) -> None:
+        from nuself.logs import write_log_event
+
+        write_log_event(
+            "daemon",
+            "reason_scheduler_started",
+            "reason scheduler thread started",
+            project_root=self.project_root,
+            level="info",
+            status="started"
+        )
+
+        while not self.shutdown_requested.wait(self.reason_scheduler_interval_seconds):
+            try:
+                if self.reason_scheduler is not None:
+                    self.reason_scheduler.run_once()
+            except RuntimeError:
                 continue
 
     def start_background_notification_delivery(self) -> None:
@@ -308,6 +350,7 @@ def run_daemon(project_root: Path | None = None) -> int:
         write_log_event("daemon", "started", "daemon started", project_root=paths.project_root)
         state.start_background_memory_curator()
         state.start_background_reflection_scheduler()
+        state.start_background_reason_scheduler()
         state.start_background_notification_delivery()
         with NuSelfUnixServer(str(paths.socket_path), RequestHandler, state) as server:
             server.timeout = 0.2
@@ -317,6 +360,7 @@ def run_daemon(project_root: Path | None = None) -> int:
         write_log_event("daemon", "stopped", "daemon stopped", project_root=paths.project_root)
         state.stop_background_memory_curator()
         state.stop_background_reflection_scheduler()
+        state.stop_background_reason_scheduler()
         state.stop_background_notification_delivery()
         if paths.socket_path.exists():
             paths.socket_path.unlink()

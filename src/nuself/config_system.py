@@ -166,11 +166,18 @@ class DaemonNotificationDeliveryConfig:
 
 
 @dataclass(frozen=True)
+class DaemonReasonSchedulerConfig:
+    """Reason scheduler background task."""
+    interval_seconds: int
+
+
+@dataclass(frozen=True)
 class DaemonConfig:
     """Daemon background task configuration."""
     memory_curator: DaemonMemoryCuratorConfig
     reflection_scheduler: DaemonReflectionSchedulerConfig
     notification_delivery: DaemonNotificationDeliveryConfig
+    reason_scheduler: DaemonReasonSchedulerConfig
 
 
 @dataclass(frozen=True)
@@ -296,6 +303,7 @@ class ConfigSystem:
                 memory_curator=DaemonMemoryCuratorConfig(interval_seconds=300),
                 reflection_scheduler=DaemonReflectionSchedulerConfig(check_interval_seconds=600),
                 notification_delivery=DaemonNotificationDeliveryConfig(interval_seconds=30),
+                reason_scheduler=DaemonReasonSchedulerConfig(interval_seconds=600),
             ),
             reflection=ReflectionSettings(
                 scheduler=ReflectionSchedulerConfig(
@@ -353,6 +361,7 @@ class ConfigSystem:
                 memory_curator=DaemonMemoryCuratorConfig(interval_seconds=5),
                 reflection_scheduler=DaemonReflectionSchedulerConfig(check_interval_seconds=1),
                 notification_delivery=DaemonNotificationDeliveryConfig(interval_seconds=1),
+                reason_scheduler=DaemonReasonSchedulerConfig(interval_seconds=1),
             ),
             reflection=ReflectionSettings(
                 scheduler=ReflectionSchedulerConfig(
@@ -425,6 +434,7 @@ class ConfigSystem:
         curator_interval = max(1, _config_int(yaml_data, "daemon.memory_curator.interval_seconds", defaults.daemon.memory_curator.interval_seconds))
         reflection_check = max(1, _config_int(yaml_data, "daemon.reflection_scheduler.check_interval_seconds", defaults.daemon.reflection_scheduler.check_interval_seconds))
         notification_interval = max(1, _config_int(yaml_data, "daemon.notification_delivery.interval_seconds", defaults.daemon.notification_delivery.interval_seconds))
+        reason_scheduler_interval = max(1, _config_int(yaml_data, "daemon.reason_scheduler.interval_seconds", defaults.daemon.reason_scheduler.interval_seconds))
 
         # Reflection Config
         refl_interval = max(60, _config_int(yaml_data, "reflection.scheduler.interval_seconds", defaults.reflection.scheduler.interval_seconds))
@@ -478,6 +488,7 @@ class ConfigSystem:
                 memory_curator=DaemonMemoryCuratorConfig(interval_seconds=curator_interval),
                 reflection_scheduler=DaemonReflectionSchedulerConfig(check_interval_seconds=reflection_check),
                 notification_delivery=DaemonNotificationDeliveryConfig(interval_seconds=notification_interval),
+                reason_scheduler=DaemonReasonSchedulerConfig(interval_seconds=reason_scheduler_interval),
             ),
             reflection=ReflectionSettings(
                 scheduler=ReflectionSchedulerConfig(
@@ -540,6 +551,7 @@ class ConfigSystem:
             "daemon.memory_curator.interval_seconds": config.daemon.memory_curator.interval_seconds,
             "daemon.reflection_scheduler.check_interval_seconds": config.daemon.reflection_scheduler.check_interval_seconds,
             "daemon.notification_delivery.interval_seconds": config.daemon.notification_delivery.interval_seconds,
+            "daemon.reason_scheduler.interval_seconds": config.daemon.reason_scheduler.interval_seconds,
             "reflection.scheduler.interval_seconds": config.reflection.scheduler.interval_seconds,
             "reflection.scheduler.cooldown_seconds": config.reflection.scheduler.cooldown_seconds,
             "reflection.scheduler.quiet_start_hour": config.reflection.scheduler.quiet_start_hour,

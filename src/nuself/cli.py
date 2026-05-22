@@ -91,7 +91,7 @@ try:
     )
     from nuself.reason.service import ReasonService
     from nuself.reason.repository import ReasonNotFound
-    from nuself.tui.reason import render_reason_detail, render_reason_row
+    from nuself.tui.reason import render_reason_detail, render_reason_row, render_step_watch_entry
     from nuself.tui.render import format_display_timestamp, render_log_event, render_log_event_json, render_session_header
     from nuself.tui.trace import render_trace_detail, render_trace_row
 finally:
@@ -546,6 +546,11 @@ def build_parser() -> argparse.ArgumentParser:
     reason_show_parser.add_argument("--by-index", "-i", action="store_true", default=False)
     reason_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reason_show_parser, handle_reason_show)
+    reason_watch_parser = reason_subparsers.add_parser("watch")
+    reason_watch_parser.add_argument("thread_id")
+    reason_watch_parser.add_argument("--by-index", "-i", action="store_true", default=False)
+    reason_watch_parser.add_argument("--interval", type=float, default=5.0)
+    _add_handler(reason_watch_parser, handle_reason_watch)
     reason_start_parser = reason_subparsers.add_parser("start")
     reason_start_parser.add_argument("question")
     reason_start_parser.add_argument("--priority", choices=("normal", "high"), default="normal")
@@ -1469,6 +1474,28 @@ def handle_reason_show(args: argparse.Namespace) -> int:
         return 0
     print(render_reason_detail(thread, steps))
     return 0
+
+
+def handle_reason_watch(args: argparse.Namespace) -> int:
+    service = ReasonService(args.project_root)
+    try:
+        thread = service.show_thread(args.thread_id, by_index=args.by_index)
+    except ReasonNotFound:
+        print(f"Reason thread not found: {args.thread_id}", file=sys.stderr)
+        return 1
+    steps = service.list_steps(thread.id)
+    print(render_reason_detail(thread, steps))
+    seen = len(steps)
+    try:
+        while True:
+            time.sleep(args.interval)
+            steps = service.list_steps(thread.id)
+            if len(steps) > seen:
+                for step in steps[seen:]:
+                    print(render_step_watch_entry(step))
+                seen = len(steps)
+    except KeyboardInterrupt:
+        return 0
 
 
 def handle_reason_start(args: argparse.Namespace) -> int:

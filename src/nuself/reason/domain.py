@@ -46,6 +46,7 @@ class ReasoningThread:
     priority: ReasonPriority = "normal"
     last_advanced_at: str | None = None
     next_review_after: str | None = None
+    skip_next_advance_until: str | None = None
     created_at: str = field(default_factory=_now_iso)
     updated_at: str = field(default_factory=_now_iso)
 
@@ -69,6 +70,7 @@ class ReasoningThread:
             "priority": self.priority,
             "last_advanced_at": self.last_advanced_at,
             "next_review_after": self.next_review_after,
+            "skip_next_advance_until": self.skip_next_advance_until,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -86,6 +88,7 @@ class ReasoningThread:
             priority=_expect_reason_priority(data, "priority"),
             last_advanced_at=_optional_str(data, "last_advanced_at"),
             next_review_after=_optional_str(data, "next_review_after"),
+            skip_next_advance_until=_optional_str(data, "skip_next_advance_until"),
             created_at=_expect_str(data, "created_at"),
             updated_at=_expect_str(data, "updated_at"),
         )
@@ -103,6 +106,7 @@ class ReasoningThread:
             priority=self.priority,
             last_advanced_at=self.last_advanced_at,
             next_review_after=self.next_review_after,
+            skip_next_advance_until=self.skip_next_advance_until,
             created_at=self.created_at,
             updated_at=now,
         )

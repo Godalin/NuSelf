@@ -13,6 +13,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Added `build_workspace_tools()` — factory that produces `workspace_put`/`workspace_get`/`workspace_search`/`workspace_delete` LangChain StructuredTool instances from a `ScopedWorkspace`.
 - Added `ReasonService.workspace(thread_id)` — returns a thread-scoped `ScopedWorkspace` backed by the thread's private SQLite database.
 - Added subsystem-prefixed chat service tools, including `memory_count`, `reflection_count`, `reason_count`, and `trace_count` for quick service-size queries.
+- Added `reason watch` CLI command — continuously polls a reasoning thread for new steps and prints them incrementally.
+- Added `TerminalTheme` color support to `render_reason_row`, `render_reason_detail`, and `render_step_watch_entry` — status, step kinds, tags, and timestamps are now colored.
+- Added `DaemonReasonSchedulerConfig` with `interval_seconds` to daemon config schema.
+- Added background reasoning scheduler — `ReasonAdvancer` (LLM step generation) + `ReasonScheduler` (polling thread) wired into daemon lifecycle.
+- Added `skip_next_advance_until` field to `ReasoningThread` for cooldown support in the scheduler.
 - Added `selves_consult`, a chat-callable multi-persona subagent tool for perspective synthesis and competitive discussion.
 - Added markdown-fenced JSON support to the fallback `parse_chat_response` parser, accepting ` ```json\n{...}\n``` ` responses for test compatibility.
 

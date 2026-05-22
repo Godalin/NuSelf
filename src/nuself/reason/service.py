@@ -106,7 +106,13 @@ class ReasonService:
         )
         return saved
 
-    def advance_thread(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
+    def advance_thread(
+        self,
+        id_or_index: str,
+        *,
+        by_index: bool = False,
+        step: ReasoningStep | None = None,
+    ) -> ReasoningThread:
         thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
 
         if thread.status != "active":
@@ -121,14 +127,17 @@ class ReasonService:
             metadata={"thread_id": thread.id},
         )
 
-        step = ReasoningStep(
-            thread_id=thread.id,
-            kind="progress",
-            summary=f"Manual advance requested for: {thread.question[:80]}",
-            delta="Manual advance placeholder — LLM integration deferred.",
-            evidence_refs=list(thread.evidence_refs),
-        )
-        self._repository.save_step(step)
+        if step is not None:
+            self._repository.save_step(step)
+        else:
+            step = ReasoningStep(
+                thread_id=thread.id,
+                kind="progress",
+                summary=f"Manual advance requested for: {thread.question[:80]}",
+                delta="Manual advance placeholder — LLM integration deferred.",
+                evidence_refs=list(thread.evidence_refs),
+            )
+            self._repository.save_step(step)
 
         now = datetime.now(UTC).isoformat()
         updated = ReasoningThread(

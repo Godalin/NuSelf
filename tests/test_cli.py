@@ -3349,7 +3349,7 @@ def test_reason_cli_start_list_show_and_advance(tmp_path: Path, capsys: CaptureF
     list_result = main(["--project-root", str(tmp_path), "reason", "list"])
     list_output = capsys.readouterr().out
     assert list_result == 0
-    assert "[1] [reason] status=active priority=normal" in list_output
+    assert "[1] [reason] status=[active] priority=normal" in list_output
     assert "How should I keep thinking?" in list_output
 
     show_result = main(["--project-root", str(tmp_path), "reason", "show", "1", "--by-index"])
