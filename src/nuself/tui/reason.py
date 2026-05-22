@@ -105,13 +105,13 @@ def _render_step_body(
     if step.tool_calls:
         for tc_display in step.tool_calls:
             service_tag = _tool_service_tag(tc_display)
-            message = f"[{service_tag}] {tc_display}" if service_tag else tc_display
+            event_name = f"[{service_tag}] service_tool_called" if service_tag else "service_tool_called"
             event = LogEvent(
                 time=step.created_at,
                 level="info",
                 component="reasoning",
-                event="service_tool_called",
-                message=message,
+                event=event_name,
+                message=tc_display,
                 status="completed",
             )
             rendered = render_log_event(event, color=theme.color)
