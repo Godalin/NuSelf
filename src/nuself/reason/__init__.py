@@ -16,6 +16,7 @@ from nuself.reason.repository import (
     REASON_STORAGE_VERSION,
 )
 from nuself.reason.service import ReasonService
+from nuself.store import ScopedWorkspace as ReasonWorkspace, SqliteStore as ReasonStore
 
 __all__ = [
     "REASON_STATUSES",
@@ -25,6 +26,8 @@ __all__ = [
     "ReasonNotFound",
     "ReasonRepository",
     "ReasonService",
+    "ReasonStore",
+    "ReasonWorkspace",
     "ReasoningThread",
     "ReasoningStep",
     "ReasonStatus",

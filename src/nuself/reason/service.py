@@ -8,6 +8,7 @@ from pathlib import Path
 from nuself.logs import write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonStatus
 from nuself.reason.repository import ReasonRepository
+from nuself.store import ScopedWorkspace, SqliteStore
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 
@@ -26,10 +27,13 @@ class ReasonService:
     ) -> None:
         self._project_root = project_root
         self._repository = repository or ReasonRepository(project_root)
-        self._workspace_store = workspace_store or PrivateWorkspaceStore(project_root, scope="reason")
+        repo_root = self._repository.project_root
+        effective_root = repo_root if repo_root is not None else project_root
+        self._workspace_store = workspace_store or PrivateWorkspaceStore(effective_root, scope="reason")
         self._trace_recorder = trace_recorder if trace_recorder is not None else (
-            TraceRecorder(project_root) if project_root is not None else None
+            TraceRecorder(effective_root) if effective_root is not None else None
         )
+        self._workspace_cache: dict[str, ScopedWorkspace] = {}
 
     # ── Read ───────────────────────────────────────────────────────
 
@@ -45,6 +49,17 @@ class ReasonService:
     def workspace_paths(self, thread_id: str) -> PrivateWorkspacePaths:
         self._repository.get_thread(thread_id)
         return self._workspace_store.paths(thread_id)
+
+    def workspace(self, thread_id: str) -> ScopedWorkspace:
+        """Return a thread-scoped workspace for the given thread."""
+        cached = self._workspace_cache.get(thread_id)
+        if cached is not None:
+            return cached
+        ws = self._workspace_store.ensure(thread_id)
+        store = SqliteStore(ws.database)
+        w = ScopedWorkspace(store, (thread_id,))
+        self._workspace_cache[thread_id] = w
+        return w
 
     # ── Write ──────────────────────────────────────────────────────
 

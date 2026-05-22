@@ -8,6 +8,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Added
 
+- Added `SqliteStore` — general-purpose sync `BaseStore` implementation backed by SQLite, usable by any agent for persistent JSON document storage.
+- Added `ScopedWorkspace` — namespace-scoped wrapper around `SqliteStore` that auto-injects a prefix (e.g. thread ID) so agents don't manage namespaces manually.
+- Added `build_workspace_tools()` — factory that produces `workspace_put`/`workspace_get`/`workspace_search`/`workspace_delete` LangChain StructuredTool instances from a `ScopedWorkspace`.
+- Added `ReasonService.workspace(thread_id)` — returns a thread-scoped `ScopedWorkspace` backed by the thread's private SQLite database.
 - Added subsystem-prefixed chat service tools, including `memory_count`, `reflection_count`, `reason_count`, and `trace_count` for quick service-size queries.
 - Added `selves_consult`, a chat-callable multi-persona subagent tool for perspective synthesis and competitive discussion.
 - Added markdown-fenced JSON support to the fallback `parse_chat_response` parser, accepting ` ```json\n{...}\n``` ` responses for test compatibility.

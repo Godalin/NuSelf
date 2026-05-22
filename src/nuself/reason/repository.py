@@ -23,11 +23,16 @@ class ReasonRepository:
     """Store reasoning threads and steps under private/reasoning/."""
 
     def __init__(self, project_root: Path | None = None) -> None:
+        self._project_root = project_root
         paths = runtime_paths(project_root)
         self._root = paths.private_root / "reasoning"
         self._threads_dir = self._root / "threads"
         self._steps_dir = self._root / "steps"
         self._index_path = self._root / "index.json"
+
+    @property
+    def project_root(self) -> Path | None:
+        return self._project_root
 
     def ensure(self) -> None:
         self._threads_dir.mkdir(parents=True, exist_ok=True)
