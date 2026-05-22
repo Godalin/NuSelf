@@ -148,9 +148,13 @@ class DaemonState:
     def start_background_reason_scheduler(self) -> None:
         if self._reason_scheduler_thread is not None:
             return
+        mq = getattr(self.chat_agent, "_memory_query_service", None)
+        rr = getattr(self.chat_agent, "_reflection_repo", None)
         self.reason_scheduler = ReasonScheduler(
             self.project_root,
             interval_seconds=self.reason_scheduler_interval_seconds,
+            memory_query_service=mq,
+            reflection_repository=rr,
         )
         self._reason_scheduler_thread = threading.Thread(
             target=self._run_background_reason_scheduler,

@@ -20,6 +20,9 @@ class ReasonScheduler:
         advancer: ReasonAdvancer | None = None,
         service: ReasonService | None = None,
         interval_seconds: int = 600,
+        *,
+        memory_query_service: object | None = None,
+        reflection_repository: object | None = None,
     ) -> None:
         self._project_root = project_root
         self._advancer = advancer
@@ -30,7 +33,11 @@ class ReasonScheduler:
         if advancer is None and project_root is not None:
             from nuself.llm import default_llm
             llm = default_llm(project_root)
-            self._advancer = ReasonAdvancer(llm)
+            self._advancer = ReasonAdvancer(
+                llm,
+                memory_query_service=memory_query_service,
+                reflection_repository=reflection_repository,
+            )
 
     def run_once(self) -> None:
         """Advance exactly one thread if any active thread is not on cooldown."""

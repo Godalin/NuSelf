@@ -18,6 +18,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Added `DaemonReasonSchedulerConfig` with `interval_seconds` to daemon config schema.
 - Added background reasoning scheduler — `ReasonAdvancer` (LLM step generation) + `ReasonScheduler` (polling thread) wired into daemon lifecycle.
 - Added `skip_next_advance_until` field to `ReasoningThread` for cooldown support in the scheduler.
+- Added past-thought context injection to `ReasonAdvancer` — the LLM step generator now queries `MemoryQueryService` and `ReflectionRepository` before each advance and injects relevant memories and recent reflections into the prompt.
 - Added `selves_consult`, a chat-callable multi-persona subagent tool for perspective synthesis and competitive discussion.
 - Added markdown-fenced JSON support to the fallback `parse_chat_response` parser, accepting ` ```json\n{...}\n``` ` responses for test compatibility.
 

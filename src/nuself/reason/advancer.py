@@ -8,10 +8,18 @@ from nuself.llm import ChatLLM, ChatMessage
 from nuself.reason.domain import ReasoningStep, ReasoningThread, StepKind
 
 
-REASON_ADVANCE_SYSTEM_PROMPT = "You are a reasoning assistant that advances a long-running reasoning thread. Given the current state of a reasoning thread, produce a structured step that makes progress on the question. The step must include: summary, delta, kind (one of progress, no_change, question, synthesis, contradiction, resolution), new_hypotheses, new_open_questions, evidence_refs. Reply with a JSON object only, no markdown, no explanation."
+REASON_ADVANCE_SYSTEM_PROMPT = (
+    "You are a reasoning assistant that advances a long-running reasoning thread. "
+    "Given the current state of a reasoning thread and any relevant reference context, "
+    "produce a structured step that makes progress on the question. "
+    "The step must include: summary, delta, kind (one of progress, no_change, question, "
+    "synthesis, contradiction, resolution), new_hypotheses, new_open_questions, evidence_refs. "
+    "Use the provided reference context (memory entries, past reflections, traces) to inform "
+    "your reasoning where applicable. Reply with a JSON object only, no markdown, no explanation."
+)
 
 
-def _build_advance_prompt(thread: ReasoningThread) -> str:
+def _build_advance_prompt(thread: ReasoningThread, *, context: str = "") -> str:
     parts = [f"Question: {thread.question}"]
     parts.append(f"Working summary: {thread.working_summary}")
     if thread.hypotheses:
@@ -26,7 +34,12 @@ def _build_advance_prompt(thread: ReasoningThread) -> str:
         parts.append("Evidence references:")
         for r in thread.evidence_refs:
             parts.append(f"  - {r}")
-    parts.append("\nProduce a reasoning step as a JSON object with fields: summary, delta, kind, new_hypotheses, new_open_questions, evidence_refs, confidence.")
+    if context:
+        parts.append("")
+        parts.append("Reference context (memories, reflections, traces):")
+        parts.append(context)
+    parts.append("")
+    parts.append("Produce a reasoning step as a JSON object with fields: summary, delta, kind, new_hypotheses, new_open_questions, evidence_refs, confidence.")
     return "\n".join(parts)
 
 
@@ -71,12 +84,21 @@ def _validate_step_json(data: dict[str, object]) -> bool:
 class ReasonAdvancer:
     """LLM-backed generator of reasoning steps."""
 
-    def __init__(self, llm: ChatLLM) -> None:
+    def __init__(
+        self,
+        llm: ChatLLM,
+        *,
+        memory_query_service: object | None = None,
+        reflection_repository: object | None = None,
+    ) -> None:
         self._llm = llm
+        self._memory_query_service = memory_query_service
+        self._reflection_repository = reflection_repository
 
     def advance(self, thread: ReasoningThread) -> ReasoningStep | None:
         """Generate a reasoning step for the given thread, or None on failure."""
-        prompt = _build_advance_prompt(thread)
+        context = self._gather_context(thread)
+        prompt = _build_advance_prompt(thread, context=context)
         raw = self._llm.complete([
             ChatMessage(role="system", content=REASON_ADVANCE_SYSTEM_PROMPT),
             ChatMessage(role="user", content=prompt),
@@ -114,3 +136,34 @@ class ReasonAdvancer:
             evidence_refs=evidence_refs,
             confidence=confidence,
         )
+
+    def _gather_context(self, thread: ReasoningThread) -> str:
+        """Collect relevant memory and reflection context for the thread question."""
+        parts: list[str] = []
+
+        if self._memory_query_service is not None:
+            try:
+                from nuself.memory.query import MemoryQuery
+                query = MemoryQuery(text=thread.question, limit=5)
+                packed = self._memory_query_service.pack(query)
+                if packed.text:
+                    parts.append(packed.text)
+            except Exception:
+                pass
+
+        if self._reflection_repository is not None:
+            try:
+                entries = self._reflection_repository.list(status=None)
+                recent = entries[:5]
+                if recent:
+                    ref_lines = ["Recent reflection entries:"]
+                    for e in recent:
+                        ref_lines.append(
+                            f"  - [{e.status}] {e.title} (type={e.candidate_type}, "
+                            f"confidence={e.confidence:.2f})"
+                        )
+                    parts.append("\n".join(ref_lines))
+            except Exception:
+                pass
+
+        return "\n\n".join(parts)
