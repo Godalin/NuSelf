@@ -13,7 +13,6 @@ from nuself.tui.render import (
     render_record_header,
 )
 
-_STEP_INDENT = 4
 _SECTION_INDENT = 2
 _TOOL_CALL_INDENT = 2
 
@@ -62,15 +61,32 @@ def render_reason_detail(
     lines.extend(_section("evidence", thread.evidence_refs, theme))
     if steps:
         lines.append("")
-        lines.append(f"  {theme.tag('steps:', 'reasoning')}")
         for i, step in enumerate(steps, start=1):
-            lines.append(_render_step_body(step, theme, indent=_STEP_INDENT, full=full, step_index=i))
+            lines.append(_render_step_body(step, theme, indent=_SECTION_INDENT, full=full, step_index=i))
     return "\n".join(lines)
 
 
 def render_step_watch_entry(step: ReasoningStep, *, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
     return _render_step_body(step, theme, indent=_SECTION_INDENT, full=True)
+
+
+def _tool_service_tag(tc_display: str) -> str:
+    """Extract the service component tag from a tool call display string."""
+    name = tc_display.split("(", 1)[0] if "(" in tc_display else tc_display
+    if name.startswith("memory_"):
+        return "memory"
+    if name.startswith("reflection_"):
+        return "reflection"
+    if name.startswith("reason_"):
+        return "reason"
+    if name.startswith("trace_"):
+        return "trace"
+    if name.startswith("selves_"):
+        return "selves"
+    if name == "load_skill":
+        return "skill"
+    return ""
 
 
 def _render_step_body(
@@ -88,12 +104,14 @@ def _render_step_body(
     lines = [header]
     if step.tool_calls:
         for tc_display in step.tool_calls:
+            service_tag = _tool_service_tag(tc_display)
+            message = f"[{service_tag}] {tc_display}" if service_tag else tc_display
             event = LogEvent(
                 time=step.created_at,
                 level="info",
                 component="reasoning",
                 event="service_tool_called",
-                message=tc_display,
+                message=message,
                 status="completed",
             )
             rendered = render_log_event(event, color=theme.color)
