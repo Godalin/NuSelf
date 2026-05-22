@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from nuself.logs import LogEvent
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.tui.render import (
     TerminalTheme,
     format_display_timestamp,
     render_key_value_field,
-    render_log_event,
     render_record_block,
     render_record_header,
 )
@@ -125,23 +123,21 @@ def _render_step_body(
     if step.summary:
         lines.append(f"{body_pad}{_render_markdown(step.summary, theme)}")
     if step.tool_calls:
-        for name, args_dict in step.tool_calls:
+        for name, args_dict, tc_result in step.tool_calls:
             service_tag = _tool_service_tag(name)
             if not service_tag:
                 continue
-            message = _format_tool_args(args_dict)
-            event = LogEvent(
-                time=step.created_at,
-                level="info",
-                component="reasoning",
-                event=f"[{service_tag}] service_tool_called",
-                message=message,
-                status="completed",
-            )
-            rendered = render_log_event(event, color=theme.color)
             inner_pad = " " * (indent + _TOOL_CALL_INDENT)
-            for line in rendered.splitlines():
-                lines.append(f"{inner_pad}{line}" if line else inner_pad.rstrip())
+            reasoning_tag = theme.tag("[reasoning]", "reasoning")
+            srv_tag = theme.tag(f"[{service_tag}]", service_tag)
+            status_text = theme.muted("status=completed")
+            lines.append(f"{inner_pad}{reasoning_tag} {srv_tag} service_tool_called  {status_text}")
+            message = _format_tool_args(args_dict)
+            for msg_line in message.splitlines():
+                if msg_line.strip():
+                    lines.append(f"{inner_pad}  {msg_line}")
+            if tc_result:
+                lines.append(f"{inner_pad}  result: {tc_result}")
     _append_field(lines, body_pad, "delta", step.delta, theme, full=full)
     _append_multi_field(lines, body_pad, "new_hypotheses", step.new_hypotheses, theme, full=full)
     _append_multi_field(lines, body_pad, "new_open_questions", step.new_open_questions, theme, full=full)

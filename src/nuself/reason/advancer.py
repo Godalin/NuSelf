@@ -83,7 +83,7 @@ def _build_advance_prompt(thread: ReasoningThread) -> str:
     return "\n".join(parts)
 
 
-def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tuple[tuple[str, dict[str, object]], ...] = ()) -> ReasoningStep | None:
+def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tuple[tuple[str, dict[str, object], str | None], ...] = ()) -> ReasoningStep | None:
     kind_raw = data.get("kind")
     summary_raw = data.get("summary")
     delta_raw = data.get("delta")
@@ -142,7 +142,11 @@ def _parse_step_json(raw: str) -> dict[str, object] | None:
 def _tool_input_to_dict(input_value: object) -> dict[str, object]:
     """Extract a dict from a tool invocation input."""
     if isinstance(input_value, dict):
-        return cast(dict[str, object], input_value)
+        raw = cast(dict[str, object], input_value)
+        inner = raw.get("args")
+        if isinstance(inner, dict):
+            return cast(dict[str, object], inner)
+        return raw
     return {}
 
 
@@ -235,7 +239,7 @@ class ReasonAdvancer:
             state = cast(dict[str, object], result) if isinstance(result, dict) else {}
             for name, args, tc_result in captured:
                 _log_tool_call(name, args, project_root=self._project_root, result=tc_result)
-            step_tool_calls = tuple((n, a) for n, a, _ in captured)
+            step_tool_calls = tuple((n, a, r) for n, a, r in captured)
             structured = state.get("structured_response")
             if structured is None:
                 return None
