@@ -206,9 +206,10 @@ def _optional_tool_calls(data: dict[str, object], field_name: str) -> tuple[tupl
     raw = cast(list[Any], value)  # pyright: ignore[reportUnknownVariableType]
     result: list[tuple[str, dict[str, object]]] = []
     for item in raw:
-        item_list = cast(list[Any], item) if isinstance(item, list) else None
-        if item_list is not None and len(item_list) >= 2 and isinstance(item_list[0], str) and isinstance(item_list[1], dict):
-            result.append((item_list[0], cast(dict[str, object], item_list[1])))
+        if isinstance(item, list) and item and isinstance(item[0], str) and isinstance(item[1], dict):
+            result.append((item[0], cast(dict[str, object], item[1])))
+        elif isinstance(item, str) and "(" in item:
+            result.append((item.split("(")[0], {"_raw": item}))
     return tuple(result)
 
 

@@ -103,6 +103,9 @@ def _tool_service_tag(name: str) -> str:
 
 def _format_tool_args(args: dict[str, object]) -> str:
     """Format tool args as args: {json} matching the log system convention."""
+    raw = args.get("_raw")
+    if raw is not None and isinstance(raw, str):
+        return f"args: {raw}"
     import json as _json
     return f"args: {_json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
 
