@@ -16,6 +16,18 @@ from nuself.tui.render import (
 _TOOL_CALL_INDENT = 2
 
 
+def _render_markdown(text: str, theme: TerminalTheme) -> str:
+    """Render markdown text to ANSI-formatted string if color is enabled."""
+    if not theme.color:
+        return text
+    from rich.console import Console
+    from rich.markdown import Markdown
+    import io
+    buf = io.StringIO()
+    Console(file=buf, force_terminal=True, width=160).print(Markdown(text), end="")
+    return buf.getvalue().rstrip()
+
+
 def render_reason_row(
     thread: ReasoningThread,
     *,
@@ -105,7 +117,7 @@ def _render_step_body(
     pad = " " * indent
     kind_tag = theme.paint(f"[{step.kind}]", _step_kind_color(step.kind))
     ts = theme.muted(f"({format_display_timestamp(step.created_at)})")
-    header = f"{pad}{kind_tag} {ts}  {step.summary}"
+    header = f"{pad}{kind_tag} {ts}  {_render_markdown(step.summary, theme)}"
     lines = [header]
     if step.tool_calls:
         for name, args_dict in step.tool_calls:
@@ -152,7 +164,8 @@ def _append_field(
         lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')}")
         body_pad = pad + "  "
         for line in value.splitlines():
-            lines.append(f"{body_pad}{line}" if line.strip() else body_pad.rstrip())
+            rendered = _render_markdown(line, theme) if line.strip() else ""
+            lines.append(f"{body_pad}{rendered}")
     elif full:
         lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')} {theme.muted('(none)')}")
 
@@ -169,7 +182,7 @@ def _append_multi_field(
     if items:
         lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')}")
         for item in items:
-            lines.append(f"{pad}  - {item}")
+            lines.append(f"{pad}  - {_render_markdown(item, theme)}")
     elif full:
         lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')} {theme.muted('(none)')}")
 
@@ -191,5 +204,5 @@ def _section(title: str, values: list[str], theme: TerminalTheme) -> list[str]:
         return []
     label = theme.tag(f"{title}:", "reasoning")
     lines = [f"  {label}"]
-    lines.extend(f"    - {value}" for value in values)
+    lines.extend(f"    - {_render_markdown(value, theme)}" for value in values)
     return lines
