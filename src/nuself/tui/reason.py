@@ -103,7 +103,9 @@ def _render_step_body(
     if step.tool_calls:
         for tc_display in step.tool_calls:
             service_tag = _tool_service_tag(tc_display)
-            message = f"[{service_tag}] {tc_display}" if service_tag else tc_display
+            if not service_tag:
+                continue
+            message = f"[{service_tag}] {tc_display}"
             event = LogEvent(
                 time=step.created_at,
                 level="info",
