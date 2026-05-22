@@ -159,8 +159,17 @@ def _extract_tool_calls(state: dict[str, object]) -> tuple[tuple[str, dict[str, 
 
 
 def _format_tool_call_display(name: str, args: dict[str, object]) -> str:
-    """Format a tool call for display as name(args)."""
-    args_str = ", ".join(f"{k}={v}" for k, v in args.items())
+    """Format a tool call for display as name(key=value, ...), truncated."""
+    limit = 120
+    pieces: list[str] = []
+    for k, v in args.items():
+        v_str = str(v)
+        if len(v_str) > 60:
+            v_str = v_str[:57] + "..."
+        pieces.append(f"{k}={v_str}")
+    args_str = ", ".join(pieces)
+    if len(args_str) > limit:
+        args_str = args_str[:limit - 3].rstrip() + "..."
     return f"{name}({args_str})"
 
 
