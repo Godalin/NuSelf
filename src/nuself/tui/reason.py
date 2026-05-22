@@ -70,9 +70,8 @@ def render_step_watch_entry(step: ReasoningStep, *, color: bool | None = None) -
     return _render_step_body(step, theme, indent=0, full=True)
 
 
-def _tool_service_tag(tc_display: str) -> str:
-    """Extract the service component tag from a tool call display string."""
-    name = tc_display.split("(", 1)[0] if "(" in tc_display else tc_display
+def _tool_service_tag(name: str) -> str:
+    """Extract the service component tag from a tool name."""
     if name.startswith("memory_"):
         return "memory"
     if name.startswith("reflection_"):
@@ -88,6 +87,12 @@ def _tool_service_tag(tc_display: str) -> str:
     return ""
 
 
+def _format_tool_args(args: dict[str, object]) -> str:
+    """Format tool args as args: {json} matching the log system convention."""
+    import json as _json
+    return f"args: {_json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
+
+
 def _render_step_body(
     step: ReasoningStep,
     theme: TerminalTheme,
@@ -101,16 +106,16 @@ def _render_step_body(
     header = f"{pad}{kind_tag} {step.summary}  {ts}"
     lines = [header]
     if step.tool_calls:
-        for tc_display in step.tool_calls:
-            service_tag = _tool_service_tag(tc_display)
+        for name, args_dict in step.tool_calls:
+            service_tag = _tool_service_tag(name)
             if not service_tag:
                 continue
-            message = f"[{service_tag}] {tc_display}"
+            message = _format_tool_args(args_dict)
             event = LogEvent(
                 time=step.created_at,
                 level="info",
                 component="reasoning",
-                event="service_tool_called",
+                event=f"[{service_tag}] service_tool_called",
                 message=message,
                 status="completed",
             )

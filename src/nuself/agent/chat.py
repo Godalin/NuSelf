@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from nuself.agent.skills import AgentSkill, load_agent_skills, render_tool_placeholders
 from nuself.agent.thread import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.tools import build_langchain_chat_tools
+from nuself.agent.tool_utils import format_tool_debug_body, tool_result_text
 from nuself.agent.persona import (
     PersonaDefinition,
     LLMBackedActivationPolicy,
@@ -852,8 +853,8 @@ class ConversationGraphRuntime:
         result: str | None = None,
         error: str | None = None,
     ) -> None:
-        message = _format_tool_debug_body(args=args, result=result, error=error)
-        full_body = _format_tool_debug_body(args=args, result=result, error=error, full=True)
+        message = format_tool_debug_body(args=args, result=result, error=error)
+        full_body = format_tool_debug_body(args=args, result=result, error=error, full=True)
         write_log_event(
             "chat",
             "service_tool_called",
@@ -941,7 +942,7 @@ class _LoggedTool(BaseTool):
             except Exception as exc:
                 self._log_call(self.name, tool_args, error=str(exc))
                 raise
-            result_text = _tool_result_text(result)
+            result_text = tool_result_text(result)
             self._cache[cache_key] = result_text
             self._log_call(self.name, tool_args, result=result_text)
             return result
@@ -960,7 +961,7 @@ class _LoggedTool(BaseTool):
             except Exception as exc:
                 self._log_call(self.name, tool_args, error=str(exc))
                 raise
-            result_text = _tool_result_text(result)
+            result_text = tool_result_text(result)
             self._cache[cache_key] = result_text
             self._log_call(self.name, tool_args, result=result_text)
             return result
@@ -1065,11 +1066,6 @@ def _tool_call_cache_key(tool_name: str, args: dict[str, Any]) -> str:
     return f"{tool_name}:{json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
 
 
-def _tool_result_text(result: object) -> str:
-    content = getattr(result, "content", None)
-    if isinstance(content, str):
-        return content
-    return str(result)
 
 
 # ======================================================================
@@ -1181,35 +1177,6 @@ def _tool_service_component(tool_name: str) -> ToolServiceComponent | None:
     if tool_name == "load_skill":
         return "skill"
     return None
-
-
-def _format_tool_debug_body(
-    *,
-    args: dict[str, Any],
-    result: str | None = None,
-    error: str | None = None,
-    full: bool = False,
-) -> str:
-    limit = 0 if full else 200
-    lines = [f"args: {_format_tool_debug_value(args, limit=limit)}"]
-    if result is not None:
-        lines.append(f"result: {_truncate_tool_debug_text(result, limit=limit)}")
-    if error is not None:
-        lines.append(f"error: {_truncate_tool_debug_text(error, limit=limit)}")
-    return "\n".join(lines)
-
-
-def _format_tool_debug_value(value: object, limit: int = 200) -> str:
-    try:
-        return _truncate_tool_debug_text(json.dumps(value, sort_keys=True, ensure_ascii=False, default=str), limit=limit)
-    except (TypeError, ValueError):
-        return _truncate_tool_debug_text(str(value), limit=limit)
-
-
-def _truncate_tool_debug_text(text: str, limit: int = 200) -> str:
-    if limit <= 0 or len(text) <= limit:
-        return text
-    return text[: limit - 3].rstrip() + "..."
 
 
 def _tool_prompt_sections(tools: "Iterable[BaseTool]") -> list[str]:

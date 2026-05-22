@@ -19,17 +19,18 @@ from nuself.reflection.repository import ReflectionRepository
 import json as _json
 
 
-def _log_tool_call(tool_name: str, args: dict[str, object], *, project_root: Path | None) -> None:
+def _log_tool_call(tool_name: str, args: dict[str, object], *, project_root: Path | None, result: str | None = None, error: str | None = None) -> None:
     """Emit a service_tool_called log event for a reasoning tool invocation."""
+    from nuself.agent.tool_utils import format_tool_debug_body
     from nuself.logs import write_log_event
 
-    body = f"args: {_json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
+    body = format_tool_debug_body(args=args, result=result, error=error)
     write_log_event(
         "reasoning",
         "service_tool_called",
         body,
         project_root=project_root,
-        status="completed",
+        status="completed" if error is None else "failed",
         metadata={
             "service_component": "reason_advancer",
             "tool": tool_name,
@@ -106,8 +107,6 @@ def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tupl
     new_open_questions: list[str] = list(cast(list[str], new_q)) if isinstance(new_q, list) else []
     evidence_refs_list: list[str] = list(cast(list[str], ev_refs)) if isinstance(ev_refs, list) else []
 
-    display_calls = tuple(_format_tool_call_display(name, args) for name, args in tool_calls)
-
     return ReasoningStep(
         thread_id=thread_id,
         kind=kind_raw,
@@ -116,7 +115,7 @@ def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tupl
         new_hypotheses=new_hypotheses,
         new_open_questions=new_open_questions,
         evidence_refs=evidence_refs_list,
-        tool_calls=display_calls,
+        tool_calls=tool_calls,
         confidence=confidence,
     )
 
@@ -140,22 +139,6 @@ def _parse_step_json(raw: str) -> dict[str, object] | None:
     return cast(dict[str, object], parsed)
 
 
-
-def _format_tool_call_display(name: str, args: dict[str, object]) -> str:
-    """Format a tool call for display as name(key=value, ...), truncated."""
-    limit = 120
-    pieces: list[str] = []
-    for k, v in args.items():
-        v_str = str(v)
-        if len(v_str) > 60:
-            v_str = v_str[:57] + "..."
-        pieces.append(f"{k}={v_str}")
-    args_str = ", ".join(pieces)
-    if len(args_str) > limit:
-        args_str = args_str[:limit - 3].rstrip() + "..."
-    return f"{name}({args_str})"
-
-
 def _tool_input_to_dict(input_value: object) -> dict[str, object]:
     """Extract a dict from a tool invocation input."""
     if isinstance(input_value, dict):
@@ -171,9 +154,9 @@ class _CapturingTool(BaseTool):
     """
 
     _inner: BaseTool = PrivateAttr()
-    _captured: list[tuple[str, dict[str, object]]] = PrivateAttr()
+    _captured: list[tuple[str, dict[str, object], str | None]] = PrivateAttr()
 
-    def __init__(self, inner: BaseTool, captured: list[tuple[str, dict[str, object]]]) -> None:
+    def __init__(self, inner: BaseTool, captured: list[tuple[str, dict[str, object], str | None]]) -> None:
         super().__init__(
             name=inner.name,
             description=inner.description,
@@ -186,8 +169,16 @@ class _CapturingTool(BaseTool):
 
     def invoke(self, input: Any, config: Any | None = None, **kwargs: Any) -> Any:  # pyright: ignore[reportUnknownParameterType]
         args = _tool_input_to_dict(input)
-        self._captured.append((self.name, dict(args)))
-        return self._inner.invoke(input, config=config, **kwargs)  # pyright: ignore[reportUnknownMemberType]
+        try:
+            result = self._inner.invoke(input, config=config, **kwargs)  # pyright: ignore[reportUnknownMemberType]
+            result_text = str(result)
+            if len(result_text) > 200:
+                result_text = result_text[:197] + "..."
+            self._captured.append((self.name, args, result_text))
+            return result
+        except Exception as exc:
+            self._captured.append((self.name, args, str(exc)))
+            raise
 
     def _run(self, *args: Any, **kwargs: Any) -> Any:  # pyright: ignore[reportUnknownParameterType]
         return self._inner._run(*args, **kwargs)  # pyright: ignore[reportUnknownMemberType]
@@ -230,7 +221,7 @@ class ReasonAdvancer:
         endpoint = self._langchain_models[0]
 
         try:
-            captured: list[tuple[str, dict[str, object]]] = []
+            captured: list[tuple[str, dict[str, object], str | None]] = []
             wrapped_tools = [_CapturingTool(t, captured) for t in self._readonly_tools]
             create_agent = cast(Any, _create_agent)
             agent = create_agent(
@@ -242,18 +233,19 @@ class ReasonAdvancer:
             messages = [HumanMessage(content=_build_advance_prompt(thread))]
             result = agent.invoke({"messages": messages})
             state = cast(dict[str, object], result) if isinstance(result, dict) else {}
-            for name, args in captured:
-                _log_tool_call(name, args, project_root=self._project_root)
+            for name, args, tc_result in captured:
+                _log_tool_call(name, args, project_root=self._project_root, result=tc_result)
+            step_tool_calls = tuple((n, a) for n, a, _ in captured)
             structured = state.get("structured_response")
             if structured is None:
                 return None
             if isinstance(structured, dict):
-                return _step_from_data(cast(dict[str, object], structured), thread.id, tool_calls=tuple(captured))
+                return _step_from_data(cast(dict[str, object], structured), thread.id, tool_calls=step_tool_calls)
             pydantic_data = getattr(structured, "model_dump", None)
             if pydantic_data is not None:
                 data = pydantic_data()
                 if isinstance(data, dict):
-                    return _step_from_data(cast(dict[str, object], data), thread.id, tool_calls=tuple(captured))
+                    return _step_from_data(cast(dict[str, object], data), thread.id, tool_calls=step_tool_calls)
             return None
         except Exception:
             return self._advance_raw(thread)

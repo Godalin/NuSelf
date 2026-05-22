@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Literal, TypeAlias, cast
+from typing import Any, Literal, TypeAlias, cast
 from uuid import uuid4
 
 ReasonStatus: TypeAlias = Literal["active", "paused", "resolved", "archived"]
@@ -123,7 +123,7 @@ class ReasoningStep:
     retired_hypotheses: list[str] = field(default_factory=_empty_str_list)
     new_open_questions: list[str] = field(default_factory=_empty_str_list)
     evidence_refs: list[str] = field(default_factory=_empty_str_list)
-    tool_calls: tuple[str, ...] = ()
+    tool_calls: tuple[tuple[str, dict[str, object]], ...] = ()
     confidence: float | None = None
     created_at: str = field(default_factory=_now_iso)
 
@@ -146,7 +146,7 @@ class ReasoningStep:
             "retired_hypotheses": self.retired_hypotheses,
             "new_open_questions": self.new_open_questions,
             "evidence_refs": self.evidence_refs,
-            "tool_calls": list(self.tool_calls),
+            "tool_calls": [[name, args] for name, args in self.tool_calls],
             "confidence": self.confidence,
             "created_at": self.created_at,
         }
@@ -163,7 +163,7 @@ class ReasoningStep:
             retired_hypotheses=_optional_str_list(data, "retired_hypotheses"),
             new_open_questions=_optional_str_list(data, "new_open_questions"),
             evidence_refs=_optional_str_list(data, "evidence_refs"),
-            tool_calls=_optional_str_tuple(data, "tool_calls"),
+            tool_calls=_optional_tool_calls(data, "tool_calls"),
             confidence=_optional_float(data, "confidence"),
             created_at=_expect_str(data, "created_at"),
         )
@@ -197,16 +197,19 @@ def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
     return list(cast(list[str], raw))
 
 
-def _optional_str_tuple(data: dict[str, object], field_name: str) -> tuple[str, ...]:
+def _optional_tool_calls(data: dict[str, object], field_name: str) -> tuple[tuple[str, dict[str, object]], ...]:
     value = data.get(field_name)
     if value is None:
         return ()
     if not isinstance(value, list):
-        raise ValueError(f"field '{field_name}' must be a list of strings")
-    raw = cast(list[object], value)
-    if not all(isinstance(item, str) for item in raw):
-        raise ValueError(f"field '{field_name}' must be a list of strings")
-    return tuple(cast(list[str], raw))
+        raise ValueError(f"field '{field_name}' must be a list")
+    raw = cast(list[Any], value)  # pyright: ignore[reportUnknownVariableType]
+    result: list[tuple[str, dict[str, object]]] = []
+    for item in raw:
+        item_list = cast(list[Any], item) if isinstance(item, list) else None
+        if item_list is not None and len(item_list) >= 2 and isinstance(item_list[0], str) and isinstance(item_list[1], dict):
+            result.append((item_list[0], cast(dict[str, object], item_list[1])))
+    return tuple(result)
 
 
 def _optional_float(data: dict[str, object], field_name: str) -> float | None:
