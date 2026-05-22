@@ -60,7 +60,9 @@ def render_reason_detail(
     lines.extend(_section("evidence", thread.evidence_refs, theme))
     if steps:
         lines.append("")
-        for step in steps:
+        for i, step in enumerate(steps):
+            if i > 0:
+                lines.append("")
             lines.append(_render_step_body(step, theme, indent=0, full=full))
     return "\n".join(lines)
 
@@ -103,7 +105,7 @@ def _render_step_body(
     pad = " " * indent
     kind_tag = theme.paint(f"[{step.kind}]", _step_kind_color(step.kind))
     ts = theme.muted(f"({format_display_timestamp(step.created_at)})")
-    header = f"{pad}{kind_tag} {step.summary}  {ts}"
+    header = f"{pad}{kind_tag} {ts}  {step.summary}"
     lines = [header]
     if step.tool_calls:
         for name, args_dict in step.tool_calls:
