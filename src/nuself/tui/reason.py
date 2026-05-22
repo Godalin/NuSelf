@@ -125,7 +125,10 @@ def _append_field(
     full: bool,
 ) -> None:
     if value:
-        lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')} {value}")
+        lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')}")
+        body_pad = pad + "  "
+        for line in value.splitlines():
+            lines.append(f"{body_pad}{line}" if line.strip() else body_pad.rstrip())
     elif full:
         lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')} {theme.muted('(none)')}")
 
