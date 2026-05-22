@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from nuself.llm import ChatLLM, ChatMessage, LangChainLLMEndpoint
 from nuself.memory.query import MemoryQuery, MemoryQueryService
-from nuself.reason.domain import ReasoningStep, ReasoningThread, StepKind
+from nuself.reason.domain import STEP_KINDS, ReasoningStep, ReasoningThread
 from nuself.reflection.repository import ReflectionRepository
 
 
@@ -57,14 +57,11 @@ def _build_advance_prompt(thread: ReasoningThread) -> str:
     return "\n".join(parts)
 
 
-_VALID_KINDS: set[str] = {"progress", "no_change", "question", "synthesis", "contradiction", "resolution"}
-
-
 def _step_from_data(data: dict[str, object], thread_id: str) -> ReasoningStep | None:
     kind_raw = data.get("kind")
     summary_raw = data.get("summary")
     delta_raw = data.get("delta")
-    if not isinstance(kind_raw, str) or kind_raw not in _VALID_KINDS:
+    if not isinstance(kind_raw, str) or kind_raw not in STEP_KINDS:
         return None
     if not isinstance(summary_raw, str) or not summary_raw.strip():
         return None
@@ -86,7 +83,7 @@ def _step_from_data(data: dict[str, object], thread_id: str) -> ReasoningStep | 
 
     return ReasoningStep(
         thread_id=thread_id,
-        kind=cast(StepKind, kind_raw),
+        kind=kind_raw,
         summary=summary_raw.strip(),
         delta=delta_raw.strip(),
         new_hypotheses=new_hypotheses,
