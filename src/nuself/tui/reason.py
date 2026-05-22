@@ -60,8 +60,8 @@ def render_reason_detail(
     lines.extend(_section("evidence", thread.evidence_refs, theme))
     if steps:
         lines.append("")
-        for i, step in enumerate(steps, start=1):
-            lines.append(_render_step_body(step, theme, indent=0, full=full, step_index=i))
+        for step in steps:
+            lines.append(_render_step_body(step, theme, indent=0, full=full))
     return "\n".join(lines)
 
 
@@ -94,7 +94,6 @@ def _render_step_body(
     *,
     indent: int,
     full: bool = False,
-    step_index: int | None = None,
 ) -> str:
     pad = " " * indent
     kind_tag = theme.paint(f"[{step.kind}]", _step_kind_color(step.kind))
@@ -157,16 +156,11 @@ def _append_multi_field(
     theme: TerminalTheme,
     *,
     full: bool,
-    inline: bool = False,
 ) -> None:
     if items:
-        if inline:
-            for item in items:
-                lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')} {item}")
-        else:
-            lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')}")
-            for item in items:
-                lines.append(f"{pad}  - {item}")
+        lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')}")
+        for item in items:
+            lines.append(f"{pad}  - {item}")
     elif full:
         lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')} {theme.muted('(none)')}")
 
