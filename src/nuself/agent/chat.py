@@ -892,6 +892,7 @@ class ConversationGraphRuntime:
             name="load_skill",
             description=f"Load a service skill's behavioral policy. Skills define when and how the agent should use service tools.\n\nAvailable skills:\n{skill_lines}",
             func=load_skill,
+            tags=("readonly",),
         )
 
 
