@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
@@ -13,6 +14,27 @@ from nuself.llm import ChatLLM, ChatMessage, LangChainLLMEndpoint
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.reason.domain import STEP_KINDS, ReasoningStep, ReasoningThread
 from nuself.reflection.repository import ReflectionRepository
+
+import json as _json
+
+
+def _log_tool_call(tool_name: str, args: dict[str, object], *, project_root: Path | None) -> None:
+    """Emit a service_tool_called log event for a reasoning tool invocation."""
+    from nuself.logs import write_log_event
+
+    body = f"args: {_json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
+    write_log_event(
+        "chat",
+        "service_tool_called",
+        body,
+        project_root=project_root,
+        status="completed",
+        metadata={
+            "service_component": "reason_advancer",
+            "tool": tool_name,
+            "message_body": body,
+        },
+    )
 
 
 class ReasonStepOutput(BaseModel):
@@ -57,7 +79,7 @@ def _build_advance_prompt(thread: ReasoningThread) -> str:
     return "\n".join(parts)
 
 
-def _step_from_data(data: dict[str, object], thread_id: str) -> ReasoningStep | None:
+def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tuple[tuple[str, dict[str, object]], ...] = ()) -> ReasoningStep | None:
     kind_raw = data.get("kind")
     summary_raw = data.get("summary")
     delta_raw = data.get("delta")
@@ -81,6 +103,8 @@ def _step_from_data(data: dict[str, object], thread_id: str) -> ReasoningStep | 
     new_open_questions: list[str] = list(cast(list[str], new_q)) if isinstance(new_q, list) else []
     evidence_refs_list: list[str] = list(cast(list[str], ev_refs)) if isinstance(ev_refs, list) else []
 
+    display_calls = tuple(_format_tool_call_display(name, args) for name, args in tool_calls)
+
     return ReasoningStep(
         thread_id=thread_id,
         kind=kind_raw,
@@ -89,13 +113,12 @@ def _step_from_data(data: dict[str, object], thread_id: str) -> ReasoningStep | 
         new_hypotheses=new_hypotheses,
         new_open_questions=new_open_questions,
         evidence_refs=evidence_refs_list,
+        tool_calls=display_calls,
         confidence=confidence,
     )
 
 
 def _parse_step_json(raw: str) -> dict[str, object] | None:
-    import json as _json
-
     text = raw.strip()
     if text.startswith("```"):
         lines = text.splitlines()
@@ -114,6 +137,33 @@ def _parse_step_json(raw: str) -> dict[str, object] | None:
     return cast(dict[str, object], parsed)
 
 
+def _extract_tool_calls(state: dict[str, object]) -> tuple[tuple[str, dict[str, object]], ...]:
+    """Extract (name, args) pairs from agent result messages."""
+    raw_messages = state.get("messages")
+    if not isinstance(raw_messages, list):
+        return ()
+    messages: list[Any] = cast(list[Any], raw_messages)
+    calls: list[tuple[str, dict[str, object]]] = []
+    for msg in messages:
+        tc_raw = getattr(msg, "tool_calls", None)
+        if tc_raw and isinstance(tc_raw, list):
+            for tc in cast(list[Any], tc_raw):
+                if not isinstance(tc, dict):
+                    continue
+                tc_dict = cast(dict[str, object], tc)
+                name = str(tc_dict.get("name", "?"))
+                args = tc_dict.get("args", {})
+                if isinstance(args, dict):
+                    calls.append((name, cast(dict[str, object], args)))
+    return tuple(calls)
+
+
+def _format_tool_call_display(name: str, args: dict[str, object]) -> str:
+    """Format a tool call for display as name(args)."""
+    args_str = ", ".join(f"{k}={v}" for k, v in args.items())
+    return f"{name}({args_str})"
+
+
 class ReasonAdvancer:
     """LLM-backed generator of reasoning steps.
 
@@ -126,11 +176,13 @@ class ReasonAdvancer:
         self,
         llm: ChatLLM,
         *,
+        project_root: Path | None = None,
         memory_query_service: MemoryQueryService | None = None,
         reflection_repository: ReflectionRepository | None = None,
         readonly_tools: Sequence[Any] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
+        self._project_root = project_root
         self._llm = llm
         self._memory_query_service = memory_query_service
         self._reflection_repository = reflection_repository
@@ -160,15 +212,18 @@ class ReasonAdvancer:
             result = agent.invoke({"messages": messages})
             state = cast(dict[str, object], result) if isinstance(result, dict) else {}
             structured = state.get("structured_response")
+            tool_calls = _extract_tool_calls(state)
+            for name, args in tool_calls:
+                _log_tool_call(name, args, project_root=self._project_root)
             if structured is None:
                 return None
             if isinstance(structured, dict):
-                return _step_from_data(cast(dict[str, object], structured), thread.id)
+                return _step_from_data(cast(dict[str, object], structured), thread.id, tool_calls=tool_calls)
             pydantic_data = getattr(structured, "model_dump", None)
             if pydantic_data is not None:
                 data = pydantic_data()
                 if isinstance(data, dict):
-                    return _step_from_data(cast(dict[str, object], data), thread.id)
+                    return _step_from_data(cast(dict[str, object], data), thread.id, tool_calls=tool_calls)
             return None
         except Exception:
             return self._advance_raw(thread)

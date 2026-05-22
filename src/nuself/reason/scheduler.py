@@ -42,6 +42,7 @@ class ReasonScheduler:
             llm = default_llm(project_root)
             self._advancer = ReasonAdvancer(
                 llm,
+                project_root=project_root,
                 memory_query_service=memory_query_service,
                 reflection_repository=reflection_repository,
                 readonly_tools=readonly_tools,
