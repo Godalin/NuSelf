@@ -86,7 +86,7 @@ def _render_step_body(
     ts = theme.muted(f"({format_display_timestamp(step.created_at)})")
     header = f"{pad}{kind_tag} {step.summary}  {ts}"
     lines = [header]
-    if not full and step.tool_calls:
+    if step.tool_calls:
         for tc_display in step.tool_calls:
             event = LogEvent(
                 time=step.created_at,
@@ -102,7 +102,6 @@ def _render_step_body(
                 lines.append(f"{inner_pad}{line}" if line else inner_pad.rstrip())
     body_pad = f"{pad}  "
     _append_field(lines, body_pad, "delta", step.delta, theme, full=full)
-    _append_multi_field(lines, body_pad, "tool_calls", step.tool_calls, theme, full=full, inline=True)
     _append_multi_field(lines, body_pad, "new_hypotheses", step.new_hypotheses, theme, full=full)
     _append_multi_field(lines, body_pad, "new_open_questions", step.new_open_questions, theme, full=full)
     _append_multi_field(lines, body_pad, "evidence_refs", step.evidence_refs, theme, full=full)
