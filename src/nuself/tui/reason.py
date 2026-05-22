@@ -9,6 +9,7 @@ from nuself.tui.render import (
     render_key_value_field,
     render_record_block,
     render_record_header,
+    render_tool_call,
 )
 
 _TOOL_CALL_INDENT = 2
@@ -128,16 +129,16 @@ def _render_step_body(
             if not service_tag:
                 continue
             inner_pad = " " * (indent + _TOOL_CALL_INDENT)
-            reasoning_tag = theme.tag("[reasoning]", "reasoning")
-            srv_tag = theme.tag(f"[{service_tag}]", service_tag)
-            status_text = theme.muted("status=completed")
-            lines.append(f"{inner_pad}{reasoning_tag} {srv_tag} service_tool_called  {status_text}")
-            message = _format_tool_args(args_dict)
-            for msg_line in message.splitlines():
-                if msg_line.strip():
-                    lines.append(f"{inner_pad}  {msg_line}")
-            if tc_result:
-                lines.append(f"{inner_pad}  result: {tc_result}")
+            tc_rendered = render_tool_call(
+                component="reasoning",
+                service=service_tag,
+                args_text=_format_tool_args(args_dict),
+                result=tc_result,
+                status="completed",
+                color=theme.color,
+            )
+            for line in tc_rendered.splitlines():
+                lines.append(f"{inner_pad}{line}" if line else inner_pad.rstrip())
     _append_field(lines, body_pad, "delta", step.delta, theme, full=full)
     _append_multi_field(lines, body_pad, "new_hypotheses", step.new_hypotheses, theme, full=full)
     _append_multi_field(lines, body_pad, "new_open_questions", step.new_open_questions, theme, full=full)

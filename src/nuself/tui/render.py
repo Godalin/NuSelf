@@ -141,6 +141,37 @@ def render_record_block(label: str, fields: Sequence[str] = (), *, body: str = "
     return "\n".join(lines)
 
 
+def render_tool_call(
+    *,
+    component: str,
+    service: str,
+    args_text: str,
+    result: str | None = None,
+    status: str = "completed",
+    color: bool | None = None,
+) -> str:
+    """Render a tool call with colored component and service tags.
+
+    Produces:
+      [component] [service] service_tool_called  status=completed
+        args: {json}
+        result: ...
+    """
+    theme = TerminalTheme(color=color)
+    comp_tag = theme.tag(f"[{component}]", component)
+    srv_tag = theme.tag(f"[{service}]", service)
+    status_text = theme.muted(_format_log_field("status", status))
+    lines = [f"{comp_tag} {srv_tag} service_tool_called  {status_text}"]
+    for line in args_text.splitlines():
+        if line.strip():
+            lines.append(f"  {line}")
+    if result:
+        for line in result.splitlines():
+            if line.strip():
+                lines.append(f"  {line}")
+    return "\n".join(lines)
+
+
 def _discussion_trace_metadata(event: LogEvent) -> list[object]:
     if not event.metadata:
         return []
