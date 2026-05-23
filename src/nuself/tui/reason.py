@@ -8,24 +8,15 @@ from nuself.tui.render import (
     TerminalTheme,
     format_display_timestamp,
     render_key_value_field,
+    render_markdown,
     render_record_block,
     render_record_header,
+    render_section,
     render_tool_call,
 )
 
 _TOOL_CALL_INDENT = 2
-
-
-def _render_markdown(text: str, theme: TerminalTheme) -> str:
-    """Render markdown text to ANSI-formatted string if color is enabled."""
-    if not theme.color:
-        return text
-    from rich.console import Console
-    from rich.markdown import Markdown
-    import io
-    buf = io.StringIO()
-    Console(file=buf, force_terminal=True, width=160).print(Markdown(text), end="")
-    return buf.getvalue().rstrip()
+ 
 
 
 def render_reason_row(
@@ -66,10 +57,10 @@ def render_reason_detail(
     if thread.last_advanced_at is not None:
         fields.append(theme.muted(render_key_value_field("last_advanced_at", thread.last_advanced_at)))
     lines = [render_record_header(f"{tag} {thread.question}", fields)]
-    lines.extend(_section("summary", [thread.working_summary] if thread.working_summary else [], theme))
-    lines.extend(_section("hypotheses", thread.hypotheses, theme))
-    lines.extend(_section("open_questions", thread.open_questions, theme))
-    lines.extend(_section("evidence", thread.evidence_refs, theme))
+    lines.extend(render_section("summary", [thread.working_summary] if thread.working_summary else [], theme))
+    lines.extend(render_section("hypotheses", thread.hypotheses, theme))
+    lines.extend(render_section("open_questions", thread.open_questions, theme))
+    lines.extend(render_section("evidence", thread.evidence_refs, theme))
     if steps:
         lines.append("")
         for i, step in enumerate(steps):
@@ -116,7 +107,7 @@ def _render_step_body(
     lines = [f"{pad}{kind_tag} {ts}"]
     body_pad = f"{pad}  "
     if step.summary:
-        lines.append(f"{body_pad}{_render_markdown(step.summary, theme)}")
+        lines.append(f"{body_pad}{render_markdown(step.summary, theme)}")
     if step.tool_calls:
         for name, args_dict, tc_result in step.tool_calls:
             service_tag = _tool_service_tag(name)
@@ -158,7 +149,7 @@ def _append_field(
         lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')}")
         body_pad = pad + "  "
         for line in value.splitlines():
-            rendered = _render_markdown(line, theme) if line.strip() else ""
+            rendered = render_markdown(line, theme) if line.strip() else ""
             lines.append(f"{body_pad}{rendered}")
     elif full:
         lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')} {theme.muted('(none)')}")
@@ -176,7 +167,7 @@ def _append_multi_field(
     if items:
         lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')}")
         for item in items:
-            lines.append(f"{pad}  - {_render_markdown(item, theme)}")
+            lines.append(f"{pad}  - {render_markdown(item, theme)}")
     elif full:
         lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')} {theme.muted('(none)')}")
 
@@ -191,12 +182,3 @@ def _step_kind_color(kind: str) -> str:
 
 def _maybe_muted(value: str, theme: TerminalTheme) -> str:
     return theme.muted(value) if theme.color else value
-
-
-def _section(title: str, values: list[str], theme: TerminalTheme) -> list[str]:
-    if not values:
-        return []
-    label = theme.tag(f"{title}:", "reasoning")
-    lines = [f"  {label}"]
-    lines.extend(f"    - {_render_markdown(value, theme)}" for value in values)
-    return lines

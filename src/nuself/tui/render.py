@@ -664,3 +664,34 @@ def render_host_decision(event: LogEvent, *, color: bool | None = None) -> list[
     lines.extend(_render_status_body(event, theme))
     lines.extend(render_record_body(event.message))
     return lines
+
+
+# ---------------------------------------------------------------------------
+# Shared Rich utilities — used by reason.py, trace.py, and other renderers
+# ---------------------------------------------------------------------------
+
+def _rich_render_to_ansi(renderable: object) -> str:
+    """Render a Rich renderable to an ANSI string via StringIO Console."""
+    from rich.console import Console
+    import io
+    buf = io.StringIO()
+    Console(file=buf, force_terminal=True, width=160).print(renderable, end="")
+    return buf.getvalue().rstrip()
+
+
+def render_markdown(text: str, theme: TerminalTheme) -> str:
+    """Render markdown text to ANSI-formatted string if color is enabled."""
+    if not theme.color:
+        return text
+    from rich.markdown import Markdown
+    return _rich_render_to_ansi(Markdown(text))
+
+
+def render_section(title: str, values: list[str], theme: TerminalTheme) -> list[str]:
+    """Render a bulleted section with colored label and markdown items."""
+    if not values:
+        return []
+    label = theme.tag(f"{title}:", "reasoning")
+    lines = [f"  {label}"]
+    lines.extend(f"    - {render_markdown(value, theme)}" for value in values)
+    return lines

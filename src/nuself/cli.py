@@ -557,26 +557,12 @@ def build_parser() -> argparse.ArgumentParser:
     reason_start_parser.add_argument("question")
     reason_start_parser.add_argument("--priority", choices=("normal", "high"), default="normal")
     _add_handler(reason_start_parser, handle_reason_start)
-    reason_advance_parser = reason_subparsers.add_parser("advance")
-    reason_advance_parser.add_argument("thread_id")
-    reason_advance_parser.add_argument("--by-index", "-i", action="store_true", default=False)
-    _add_handler(reason_advance_parser, handle_reason_advance)
-    reason_pause_parser = reason_subparsers.add_parser("pause")
-    reason_pause_parser.add_argument("thread_id")
-    reason_pause_parser.add_argument("--by-index", "-i", action="store_true", default=False)
-    _add_handler(reason_pause_parser, handle_reason_pause)
-    reason_resume_parser = reason_subparsers.add_parser("resume")
-    reason_resume_parser.add_argument("thread_id")
-    reason_resume_parser.add_argument("--by-index", "-i", action="store_true", default=False)
-    _add_handler(reason_resume_parser, handle_reason_resume)
-    reason_resolve_parser = reason_subparsers.add_parser("resolve")
-    reason_resolve_parser.add_argument("thread_id")
-    reason_resolve_parser.add_argument("--by-index", "-i", action="store_true", default=False)
-    _add_handler(reason_resolve_parser, handle_reason_resolve)
-    reason_archive_parser = reason_subparsers.add_parser("archive")
-    reason_archive_parser.add_argument("thread_id")
-    reason_archive_parser.add_argument("--by-index", "-i", action="store_true", default=False)
-    _add_handler(reason_archive_parser, handle_reason_archive)
+    for action_name in _REASON_VERBS:
+        p = reason_subparsers.add_parser(action_name)
+        p.add_argument("thread_id")
+        p.add_argument("--by-index", "-i", action="store_true", default=False)
+        p.set_defaults(action=action_name)
+        _add_handler(p, handle_reason_thread_action)
     reason_delete_parser = reason_subparsers.add_parser("delete")
     reason_delete_parser.add_argument("thread_id")
     reason_delete_parser.add_argument("--by-index", "-i", action="store_true", default=False)
@@ -622,6 +608,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _add_handler(parser: argparse.ArgumentParser, handler: object) -> None:
     parser.set_defaults(handler=handler)
+
+
+def _print_json_wire(*entities: object) -> None:
+    """Print one or more to_wire() dicts as compact JSON lines."""
+    import json
+    for entity in entities:
+        print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
 
 
 def _add_log_arguments(parser: argparse.ArgumentParser) -> None:
@@ -1454,10 +1447,7 @@ def handle_reason_list(args: argparse.Namespace) -> int:
         print("No reason threads.")
         return 0
     if args.as_json:
-        import json
-
-        for thread in threads:
-            print(json.dumps(thread.to_wire(), sort_keys=True, ensure_ascii=True))
+        _print_json_wire(*(thread.to_wire() for thread in threads))
         return 0
     for index, thread in enumerate(threads, start=1):
         print(render_reason_row(thread, index=index))
@@ -1473,11 +1463,9 @@ def handle_reason_show(args: argparse.Namespace) -> int:
         return 1
     steps = service.list_steps(thread.id)
     if args.as_json:
-        import json
-
         payload = thread.to_wire()
         payload["steps"] = [step.to_wire() for step in steps]
-        print(json.dumps(payload, sort_keys=True, ensure_ascii=True))
+        _print_json_wire(payload)
         return 0
     print(render_reason_detail(thread, steps, full=bool(getattr(args, "full", False))))
     return 0
@@ -1518,62 +1506,24 @@ def handle_reason_start(args: argparse.Namespace) -> int:
     return 0
 
 
-def handle_reason_advance(args: argparse.Namespace) -> int:
-    service = ReasonService(args.project_root)
+_REASON_VERBS: dict[str, tuple[str, str]] = {
+    "advance": ("Advanced", "advance_thread"),
+    "pause": ("Paused", "pause_thread"),
+    "resume": ("Resumed", "resume_thread"),
+    "resolve": ("Resolved", "resolve_thread"),
+    "archive": ("Archived", "archive_thread"),
+}
+
+
+def handle_reason_thread_action(args: argparse.Namespace) -> int:
+    verb, method_name = _REASON_VERBS[args.action]
+    method = getattr(ReasonService(args.project_root), method_name)
     try:
-        thread = service.advance_thread(args.thread_id, by_index=args.by_index)
+        thread = method(args.thread_id, by_index=args.by_index)
     except (ReasonNotFound, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
-    print(f"Advanced reason thread: {thread.id}")
-    print(render_reason_detail(thread))
-    return 0
-
-
-def handle_reason_pause(args: argparse.Namespace) -> int:
-    service = ReasonService(args.project_root)
-    try:
-        thread = service.pause_thread(args.thread_id, by_index=args.by_index)
-    except (ReasonNotFound, RuntimeError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-    print(f"Paused reason thread: {thread.id}")
-    print(render_reason_detail(thread))
-    return 0
-
-
-def handle_reason_resume(args: argparse.Namespace) -> int:
-    service = ReasonService(args.project_root)
-    try:
-        thread = service.resume_thread(args.thread_id, by_index=args.by_index)
-    except (ReasonNotFound, RuntimeError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-    print(f"Resumed reason thread: {thread.id}")
-    print(render_reason_detail(thread))
-    return 0
-
-
-def handle_reason_resolve(args: argparse.Namespace) -> int:
-    service = ReasonService(args.project_root)
-    try:
-        thread = service.resolve_thread(args.thread_id, by_index=args.by_index)
-    except (ReasonNotFound, RuntimeError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-    print(f"Resolved reason thread: {thread.id}")
-    print(render_reason_detail(thread))
-    return 0
-
-
-def handle_reason_archive(args: argparse.Namespace) -> int:
-    service = ReasonService(args.project_root)
-    try:
-        thread = service.archive_thread(args.thread_id, by_index=args.by_index)
-    except (ReasonNotFound, RuntimeError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-    print(f"Archived reason thread: {thread.id}")
+    print(f"{verb} reason thread: {thread.id}")
     print(render_reason_detail(thread))
     return 0
 
@@ -1602,10 +1552,7 @@ def handle_trace_list(args: argparse.Namespace) -> int:
         print("No trace records.")
         return 0
     if args.as_json:
-        import json
-
-        for trace in traces:
-            print(json.dumps(trace.to_wire(), sort_keys=True, ensure_ascii=True))
+        _print_json_wire(*(trace.to_wire() for trace in traces))
         return 0
     for index, trace in enumerate(traces, start=1):
         print(render_trace_row(trace, index=index))
@@ -1620,11 +1567,9 @@ def handle_trace_show(args: argparse.Namespace) -> int:
         print(f"Trace not found: {args.trace_id}", file=sys.stderr)
         return 1
     if args.as_json:
-        import json
-
         payload = trace.to_wire()
         payload["links"] = [link.to_wire() for link in repository.links_for(trace.id)]
-        print(json.dumps(payload, sort_keys=True, ensure_ascii=True))
+        _print_json_wire(payload)
         return 0
     print(render_trace_detail(trace, repository.links_for(trace.id)))
     return 0
@@ -1641,10 +1586,7 @@ def handle_trace_search(args: argparse.Namespace) -> int:
         print("No matching trace records.")
         return 0
     if args.as_json:
-        import json
-
-        for trace in traces:
-            print(json.dumps(trace.to_wire(), sort_keys=True, ensure_ascii=True))
+        _print_json_wire(*(trace.to_wire() for trace in traces))
         return 0
     for index, trace in enumerate(traces, start=1):
         print(render_trace_row(trace, index=index))
@@ -1699,10 +1641,7 @@ def handle_reflection_list(args: argparse.Namespace) -> int:
         print(f"No reflection entries{filter_msg}.")
         return 0
     if args.as_json:
-        import json
-
-        for entry in entries:
-            print(json.dumps(entry.to_wire(), sort_keys=True, ensure_ascii=True))
+        _print_json_wire(*(entry.to_wire() for entry in entries))
         return 0
     for idx, entry in enumerate(entries):
         print(render_reflection_entry_summary(entry, index=idx))
@@ -1722,9 +1661,7 @@ def handle_reflection_show(args: argparse.Namespace) -> int:
         print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
         return 1
     if args.as_json:
-        import json
-
-        print(json.dumps(entry.to_wire(), sort_keys=True, ensure_ascii=True))
+        _print_json_wire(entry.to_wire())
         return 0
     print(render_reflection_entry_detail(entry))
     return 0
