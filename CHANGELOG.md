@@ -54,6 +54,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Chat-triggered persona discussions now stream `persona_discussion_step` logs during discussion instead of waiting to dump the full trace at the end.
 - Discussion trace logs now render section and turn headers as square-bracket tags, such as `[discussion]` and `[turn-1]`.
 - Interactive chat now filters live activity output to current-turn chat, tool, persona, and failure events, while hiding background reason/reflection/memory/trace service logs from the REPL.
+- Tool call log formatting simplified: JSON args/results are now pretty-printed with `indent=2` and highlighted via `rich.json.JSON`. The separate `result` parameter was removed from `render_tool_call` — all content goes through the combined body text with `args:`/`result:`/`error:` section headers.
 
 ### Fixed
 
