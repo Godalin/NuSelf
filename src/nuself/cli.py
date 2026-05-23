@@ -75,7 +75,7 @@ try:
     from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
     from nuself.trace.domain import TRACE_KINDS, TraceKind
     from nuself.trace.repository import TraceNotFound, TraceRepository, TraceVisibilityFilter
-    from nuself.trace.service import TraceQueryService
+    from nuself.trace.service import TraceQueryService, TraceRecorder
     from nuself.logs import (
         LOG_COMPONENTS,
         InteractiveLogCursor,
@@ -912,6 +912,7 @@ def handle_memory_add(args: argparse.Namespace) -> int:
     )
     repo.save(entry)
     repo.reindex()
+    _record_cli_memory_trace(args.project_root, entry, "add")
     print(render_memory_entry_row(entry))
     return 0
 
@@ -1753,6 +1754,7 @@ def handle_memory_import(args: argparse.Namespace) -> int:
             continue
         entry = MemoryEntry.from_wire(cast(dict[str, object], item))
         repo.save(entry)
+        _record_cli_memory_trace(args.project_root, entry, "import")
         imported += 1
     repo.reindex()
     print(f"Imported {imported} memory entries from {args.path}")
@@ -1804,6 +1806,7 @@ def handle_memory_candidate_accept(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
+    _record_cli_memory_trace(args.project_root, entry, "accept")
     print(f"Accepted memory candidate: {args.candidate_id} -> {entry.id}")
     return 0
 
@@ -1853,6 +1856,7 @@ def handle_memory_candidate_merge(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
+    _record_cli_memory_trace(args.project_root, entry, "merge")
     print(f"Merged memory candidate: {args.candidate_id} -> {entry.id}")
     return 0
 
@@ -2475,6 +2479,20 @@ def _run_memory_curator(project_root: Path | None) -> None:
             metadata={"summary": result.summary()},
         )
         print(f"[memory] {result.summary()}")
+
+
+def _record_cli_memory_trace(project_root: Path | None, entry: MemoryEntry, action: str) -> None:
+    try:
+        TraceRecorder(project_root=project_root).record_memory_update(
+            memory_id=entry.id,
+            title=entry.title,
+            summary=entry.body,
+            memory_type=entry.type,
+            action=action,
+            confidence=entry.confidence,
+        )
+    except Exception:
+        pass
 
 
 def _brand_banner() -> str:

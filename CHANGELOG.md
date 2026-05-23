@@ -10,6 +10,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 - Reflection creation now records a `kind="reflection"` thought trace, enabling users to trace why a specific reflection was produced.
 - Memory curator auto-accept now records a `kind="memory_update"` thought trace linked to the source chat turn trace, so users can trace from a memory entry back to the conversation that produced it.
+- Manual CLI operations (`memory add`, `memory import`, `candidate accept`, `candidate merge`) now also record `memory_update` traces for full provenance coverage.
 
 - Added `SqliteStore` — general-purpose sync `BaseStore` implementation backed by SQLite, usable by any agent for persistent JSON document storage.
 - Added `ScopedWorkspace` — namespace-scoped wrapper around `SqliteStore` that auto-injects a prefix (e.g. thread ID) so agents don't manage namespaces manually.
