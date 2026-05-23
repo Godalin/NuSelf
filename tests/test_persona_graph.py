@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import json
 
-from nuself.agent.persona import (
+from nuself.persona import (
+    LLMBackedActivationPolicy,
+    LLMBackedPersonaNode,
+    LLMBackedSynthesizerNode,
+    PersonaGraphDriver,
+)
+from nuself.persona.definition import (
     ANALYST_PERSONA,
     BUILDER_PERSONA,
     CARE_PERSONA,
@@ -10,10 +16,6 @@ from nuself.agent.persona import (
     SKEPTIC_PERSONA,
     PersonaContribution,
     PersonaDefinition,
-    LLMBackedActivationPolicy,
-    LLMBackedPersonaNode,
-    LLMBackedSynthesizerNode,
-    PersonaGraphDriver,
     PersonaInput,
     PersonaSynthesis,
     PersonaTurnState,

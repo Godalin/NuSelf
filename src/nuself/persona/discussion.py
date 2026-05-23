@@ -6,24 +6,27 @@ import json
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import cast
 
 from pydantic import BaseModel, Field, ValidationError
 
-from nuself.agent.persona import (
-    BUILTIN_PERSONAS,
-    LLMBackedSynthesizerNode,
-    PersonaContribution,
-    PersonaDefinition,
-    PersonaGraphDriver,
-    PersonaInput,
-    MODERATOR_PERSONA,
-    PersonaTurnState,
-)
-from nuself.config import ReflectionSettings
+from nuself.config import ConfigSystem, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatLLM, ChatMessage
 from nuself.llm import parse_llm_json_object
+from nuself.persona.definition import (
+    BUILTIN_PERSONAS,
+    MODERATOR_PERSONA,
+    PersonaContribution,
+    PersonaDefinition,
+    PersonaInput,
+    PersonaTurnState,
+)
+from nuself.persona.graph import (
+    LLMBackedSynthesizerNode,
+    PersonaGraphDriver,
+)
 
 DiscussionTraceSink = Callable[[str], None]
 
@@ -508,3 +511,34 @@ class ProactivePersonaDiscussion:
                 description="A temporary urgency persona that checks whether the candidate needs immediate attention.",
             )
         return None
+
+
+class SharedPersonaDiscussionService:
+    """Shared entry point for competitive persona discussion."""
+
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        *,
+        config: ReflectionSettings | None = None,
+        discussion: ProactivePersonaDiscussion | None = None,
+        llm: ChatLLM | None = None,
+        language_preference: str | None = None,
+    ) -> None:
+        if discussion is not None:
+            self._discussion = discussion
+            return
+        system_config = ConfigSystem.load(project_root=project_root)
+        if config is None:
+            config = system_config.reflection
+        if language_preference is None:
+            language_preference = system_config.chat.language_preference
+        self._discussion = ProactivePersonaDiscussion(config=config, llm=llm, language_preference=language_preference)
+
+    def discuss(
+        self,
+        candidate: IdeaCandidate,
+        *,
+        on_trace_entry: DiscussionTraceSink | None = None,
+    ) -> PersonaCompetitionResult:
+        return self._discussion.discuss(candidate, on_trace_entry=on_trace_entry)

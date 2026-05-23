@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nuself.domain.proactive import IdeaCandidate
-from nuself.persona_discussion_service import SharedPersonaDiscussionService
+from nuself.persona import SharedPersonaDiscussionService
 
 
 @dataclass(frozen=True)

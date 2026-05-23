@@ -23,16 +23,6 @@ from nuself.agent.skills import AgentSkill, load_agent_skills, render_tool_place
 from nuself.agent.thread import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.tools import build_langchain_chat_tools
 from nuself.agent.tool_utils import format_tool_debug_body
-from nuself.agent.persona import (
-    PersonaDefinition,
-    LLMBackedActivationPolicy,
-    LLMBackedPersonaNode,
-    LLMBackedSynthesizerNode,
-    PersonaGraphDriver,
-    PersonaInput,
-    PersonaTurnState,
-    load_persona_definitions,
-)
 from nuself.domain.proactive import IdeaCandidate
 from nuself.config import ConfigSystem
 from nuself.llm import (
@@ -49,8 +39,18 @@ from nuself.logs import current_log_context, log_context, write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
+from nuself.persona import (
+    LLMBackedActivationPolicy,
+    LLMBackedPersonaNode,
+    LLMBackedSynthesizerNode,
+    PersonaDefinition,
+    PersonaGraphDriver,
+    PersonaInput,
+    PersonaTurnState,
+    SharedPersonaDiscussionService,
+    load_persona_definitions,
+)
 from nuself.profile.repository import ProfileItemRepository
-from nuself.persona_discussion_service import SharedPersonaDiscussionService
 from nuself.trace.service import TraceRecorder
 
 ToolServiceComponent = Literal["memory", "reflection", "reasoning", "trace", "selves", "skill", "workspace"]

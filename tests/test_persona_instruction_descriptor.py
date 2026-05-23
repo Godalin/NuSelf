@@ -6,11 +6,13 @@ from pathlib import Path
 
 import json
 
-from nuself.agent.persona import (
-    PersonaDefinition,
+from nuself.persona import (
     LLMBackedActivationPolicy,
-    PersonaInput,
     load_persona_definitions,
+)
+from nuself.persona.definition import (
+    PersonaDefinition,
+    PersonaInput,
 )
 from nuself.domain.memory import (
     MemoryObject,

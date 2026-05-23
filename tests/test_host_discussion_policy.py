@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 
-from nuself.agent.persona import (
+from nuself.persona import LLMBackedActivationPolicy
+from nuself.persona.definition import (
     ANALYST_PERSONA,
     BUILDER_PERSONA,
-    LLMBackedActivationPolicy,
     PersonaInput,
 )
 

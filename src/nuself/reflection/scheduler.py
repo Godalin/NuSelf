@@ -18,7 +18,7 @@ from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.llm import default_llm
-from nuself.persona_discussion_service import SharedPersonaDiscussionService
+from nuself.persona import SharedPersonaDiscussionService
 
 if TYPE_CHECKING:
     from nuself.llm import ChatLLM, ChatMessage
@@ -409,7 +409,7 @@ class ReflectionScheduler:
         now: datetime,
     ) -> None:
         from nuself.logs import write_log_event
-        from nuself.proactive_persona import PersonaCompetitionResult
+        from nuself.persona import PersonaCompetitionResult
 
         if not isinstance(result, PersonaCompetitionResult):
             return

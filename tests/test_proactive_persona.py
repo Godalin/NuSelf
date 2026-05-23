@@ -7,7 +7,14 @@ import json
 
 import pytest
 
-from nuself.agent.persona import (
+from nuself.domain.proactive import IdeaCandidate
+from nuself.llm import ChatMessage
+from nuself.persona import (
+    PersonaCompetitionResult,
+    ProactivePersonaDiscussion,
+)
+from nuself.persona.discussion import LLMBackedScoringPersonaNode
+from nuself.persona.definition import (
     ANALYST_PERSONA,
     BUILDER_PERSONA,
     HISTORIAN_PERSONA,
@@ -17,13 +24,6 @@ from nuself.agent.persona import (
     PersonaInput,
     PersonaSynthesis,
     PersonaTurnState,
-)
-from nuself.domain.proactive import IdeaCandidate
-from nuself.llm import ChatMessage
-from nuself.proactive_persona import (
-    LLMBackedScoringPersonaNode,
-    PersonaCompetitionResult,
-    ProactivePersonaDiscussion,
 )
 
 
@@ -362,7 +362,8 @@ def test_proactive_persona_discussion_injects_language_preference() -> None:
 
 
 def test_llm_backed_persona_node_generates_distinct_notes() -> None:
-    from nuself.agent.persona import LLMBackedPersonaNode, PersonaDefinition, PersonaInput
+    from nuself.persona.graph import LLMBackedPersonaNode
+    from nuself.persona.definition import PersonaDefinition, PersonaInput
 
     class _LegacyFakeLLM:
         def complete(self, messages: list[ChatMessage]) -> str:
@@ -394,11 +395,11 @@ def test_llm_backed_persona_node_generates_distinct_notes() -> None:
 
 
 def test_llm_backed_synthesizer_node_produces_summary() -> None:
-    from nuself.agent.persona import (
-        LLMBackedSynthesizerNode,
+    from nuself.persona.graph import LLMBackedSynthesizerNode
+    from nuself.persona.definition import (
         PersonaContribution,
-        PersonaTurnState,
         PersonaInput,
+        PersonaTurnState,
     )
 
     class _EchoLLM:
