@@ -1,5 +1,9 @@
 # Persona Discussion Spec
 
+See [static.md](static.md) for the builtin persona data models, graph,
+activation policy, and node implementations (LLMBackedPersonaNode,
+PersonaGraphDriver, etc.).
+
 ## Competitive Discussion Flow
 
 ```
@@ -39,18 +43,6 @@ Rules:
 - Chat-triggered selves activity must be logged as `[selves]` activity and the tool call itself must also be logged through the caller/service format as `[chat] [selves] service_tool_called`.
 
 Internally, the `selves_consult` subagent may reuse the existing persona LangGraph subgraph and competitive discussion service. The public boundary is still the LangChain tool/subagent contract; the old fixed chat graph nodes are transitional plumbing and must not be the primary activation path.
-
-## Persona Node Implementation
-
-When an LLM is available, both ordinary chat self passes and competitive discussions use **LLM-backed nodes**:
-
-- **LLMBackedPersonaNode**: Prompts the LLM with the persona's `id` and `description`, plus the current topic and prior discussion context. Each persona generates a 1–2 sentence response from its unique perspective. Later personas in the same turn see earlier personas' contributions and can build on or challenge them.
-- **LLMBackedSynthesizerNode**: Prompts the LLM to distill the turn's contributions into a 1–2 sentence summary capturing consensus or key tension.
-- **LLMBackedActivationPolicy**: Decides activation and escalation through LangChain structured output when a LangChain chat model is available.
-
-LLM-backed persona activation, persona notes, and synthesis must request structured data through LangChain structured output (`with_structured_output(...)` or equivalent response-format support) when available. Prompted JSON parsing is a compatibility fallback for deterministic tests and non-LangChain local fallback models.
-
-When no LLM is configured, the system falls back to **MinimalPersonaNode** / **MinimalSynthesizerNode**, which produce deterministic placeholder utterances.
 
 `persona_summary` logs are ordinary activated self passes. They are not proof that competitive discussion ran. Competitive chat discussion only runs when `LLMBackedActivationPolicy.should_escalate` is true; otherwise the host decision log is `status=skipped`.
 
@@ -104,7 +96,7 @@ Trace entries are strings with these prefixes:
 | `turn-N:synthesis:` | `turn-1:synthesis: <summary>` | Synthesizer summary |
 | `turn-N:` | `turn-1: reached convergence` | Turn-level system message |
 
-Renderers must parse these prefixes and group by turn. User-facing discussion trace rendering uses square-bracket tags for the trace title, group headers, and speaker labels, such as `[discussion]`, `[turn-1]`, and `[analyst_self]`. See [`cli-interaction.md`](cli-interaction.md) for trace rendering contract.
+Renderers must parse these prefixes and group by turn. User-facing discussion trace rendering uses square-bracket tags for the trace title, group headers, and speaker labels, such as `[discussion]`, `[turn-1]`, and `[analyst_self]`. See [`cli-interaction.md`](../cli-interaction.md) for trace rendering contract.
 
 Chat-triggered discussion must also stream visible trace entries as `persona_discussion_step` logs while the discussion runs. The final chat-triggered `persona_discussion` log is a summary and must not re-emit the full discussion trace in one delayed block.
 
@@ -122,3 +114,7 @@ PersonaCompetitionResult:
   discussion_trace: tuple[str, ...]
   emergent_persona_ids: tuple[str, ...]
 ```
+
+## Source
+
+- `src/nuself/persona/discussion.py` — `ProactivePersonaDiscussion`, `SharedPersonaDiscussionService`

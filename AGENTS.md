@@ -22,7 +22,7 @@ An AI mirror for deep personal discussion — someone with similar life experien
 - [`docs/spec/private-workspace.md`](docs/spec/private-workspace.md) — isolated private scratch storage for agent-facing services
 - [`docs/spec/trace.md`](docs/spec/trace.md) — TODO thought provenance contracts
 - [`docs/spec/notification.md`](docs/spec/notification.md) — outbox state machine and delivery
-- [`docs/spec/persona-discussion.md`](docs/spec/persona-discussion.md) — competitive discussion flow
+- [`docs/spec/persona/`](docs/spec/persona/) — persona subsystem: builtin (`static.md`), competitive discussion (`discussion.md`), dynamic prompts (`dynamic.md`)
 - [`docs/spec/error-handling.md`](docs/spec/error-handling.md) — error classes, retry policy, exception-chain preservation
 - [`docs/spec/logging.md`](docs/spec/logging.md) — log write/read contracts
 - [`docs/spec/configuration.md`](docs/spec/configuration.md) — config hierarchy and runtime paths

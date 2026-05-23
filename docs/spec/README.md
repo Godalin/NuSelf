@@ -14,7 +14,7 @@ This directory contains the authoritative behavioral specifications for NuSelf. 
 | [`private-workspace.md`](private-workspace.md) | Isolated private scratch storage for agent-facing services |
 | [`trace.md`](trace.md) | TODO thought provenance records for tracing how important thoughts were derived |
 | [`notification.md`](notification.md) | Outbox state machine, delivery pipeline, adapters, deep links |
-| [`persona-discussion.md`](persona-discussion.md) | Competitive discussion flow, scoring, consensus, trace format |
+| [`persona/`](persona/) | Persona subsystem — builtin personas (`static.md`), competitive discussion (`discussion.md`), dynamic prompts (`dynamic.md`) |
 | [`presentation-agent.md`](presentation-agent.md) | Final user-facing answer presentation stage and retry boundary |
 | [`error-handling.md`](error-handling.md) | Error classes, retry policy, exception-chain preservation |
 | [`logging.md`](logging.md) | Log components, write/read contracts, event structure |
