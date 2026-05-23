@@ -273,3 +273,34 @@ def _optional_str(value: object) -> str | None:
 
 def _optional_int(value: object) -> int | None:
     return value if isinstance(value, int) else None
+
+
+# ============================================================================
+# Read-side utilities
+# ============================================================================
+
+
+def log_event_key(event: LogEvent) -> str:
+    """Canonical JSON identity for deduplication."""
+    return json.dumps(event.to_record(), sort_keys=True, ensure_ascii=True)
+
+
+class InteractiveLogCursor:
+    """Tracks which log events have already been consumed."""
+
+    def __init__(self, seen_event_keys: set[str]) -> None:
+        self.seen_event_keys = seen_event_keys
+
+    @classmethod
+    def from_project(cls, project_root: Path | None) -> InteractiveLogCursor:
+        return cls({log_event_key(event) for event in read_log_events(project_root=project_root)})
+
+    def read_new_events(self, project_root: Path | None) -> list[LogEvent]:
+        events = read_log_events(project_root=project_root)
+        new_events: list[LogEvent] = []
+        for event in events:
+            key = log_event_key(event)
+            if key not in self.seen_event_keys:
+                new_events.append(event)
+            self.seen_event_keys.add(key)
+        return new_events

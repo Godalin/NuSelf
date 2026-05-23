@@ -708,7 +708,14 @@ class ConversationGraphRuntime:
                 except Exception:
                     LOGGER.exception("failed to write persona discussion log")
         except Exception as exc:
-            LOGGER.exception("persona discussion failed during selves consultation")
+            write_log_event(
+                "persona",
+                "persona_discussion_failure",
+                str(exc),
+                project_root=self._project_root,
+                level="error",
+                error=str(exc),
+            )
             discussion_note = f"\nDiscussion failed: {exc}"
 
         return _format_selves_consult_result(updated_turn_state, trigger=trigger, discussion_note=discussion_note)

@@ -1090,13 +1090,16 @@ def test_log_context_applies_runtime_ownership_fields(tmp_path: Path) -> None:
 
 def test_interactive_activity_cursor_does_not_replay_seen_events(tmp_path: Path) -> None:
     write_log_event("chat", "turn_started", "old turn", project_root=tmp_path)
-    cli_module = cast(Any, cli)
-    cursor = cli_module._InteractiveLogCursor.from_project(tmp_path)
+    from nuself.logs import InteractiveLogCursor
+
+    cursor = InteractiveLogCursor.from_project(tmp_path)
 
     write_log_event("chat", "turn_completed", "new turn", project_root=tmp_path, turn_id="turn-new")
 
-    first_read = cli_module._interactive_activity_events(tmp_path, cursor, turn_id="turn-new")
-    second_read = cli_module._interactive_activity_events(tmp_path, cursor)
+    from nuself.cli import _interactive_activity_events
+
+    first_read = _interactive_activity_events(tmp_path, cursor, turn_id="turn-new")
+    second_read = _interactive_activity_events(tmp_path, cursor)
 
     assert [event.event for event in first_read] == ["turn_completed"]
     assert second_read == []

@@ -6,7 +6,6 @@ import argparse
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -77,7 +76,14 @@ try:
     from nuself.trace.domain import TRACE_KINDS, TraceKind
     from nuself.trace.repository import TraceNotFound, TraceRepository, TraceVisibilityFilter
     from nuself.trace.service import TraceQueryService
-    from nuself.logs import LOG_COMPONENTS, LogComponent, LogEvent, read_log_events, write_log_event
+    from nuself.logs import (
+        LOG_COMPONENTS,
+        InteractiveLogCursor,
+        LogComponent,
+        LogEvent,
+        read_log_events,
+        write_log_event,
+    )
     from nuself.config import ConfigSystem
     from nuself.tui.memory import (
         render_candidate_detail,
@@ -208,27 +214,7 @@ class InteractiveChatResult:
     error: str | None = None
 
 
-@dataclass
-class _InteractiveLogCursor:
-    seen_event_keys: set[str]
 
-    @classmethod
-    def from_project(cls, project_root: Path | None) -> "_InteractiveLogCursor":
-        return cls({_log_event_key(event) for event in read_log_events(project_root=project_root)})
-
-    def read_new_events(self, project_root: Path | None) -> list[LogEvent]:
-        events = read_log_events(project_root=project_root)
-        new_events: list[LogEvent] = []
-        for event in events:
-            key = _log_event_key(event)
-            if key not in self.seen_event_keys:
-                new_events.append(event)
-            self.seen_event_keys.add(key)
-        return new_events
-
-
-def _log_event_key(event: LogEvent) -> str:
-    return json.dumps(event.to_record(), sort_keys=True, ensure_ascii=True)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -2160,7 +2146,7 @@ def _send_interactive_chat_turn(
     message: str,
     session: InteractiveSession,
 ) -> int:
-    log_cursor = _InteractiveLogCursor.from_project(project_root)
+    log_cursor = InteractiveLogCursor.from_project(project_root)
     result = InteractiveChatResult(code=1)
     printed_logs = False
     turn_id = f"turn-{uuid4().hex}"
@@ -2226,7 +2212,7 @@ def _run_interactive_send_with_live_logs(
     thread_id: str,
     turn_id: str | None,
     project_root: Path | None,
-    log_cursor: _InteractiveLogCursor,
+    log_cursor: InteractiveLogCursor,
     *,
     printed_logs: bool,
 ) -> tuple[InteractiveChatResult, list[LogEvent], bool]:
@@ -2829,7 +2815,7 @@ def _print_recent_logs(project_root: Path | None, *, limit: int) -> None:
 
 def _interactive_activity_events(
     project_root: Path | None,
-    log_cursor: _InteractiveLogCursor,
+    log_cursor: InteractiveLogCursor,
     *,
     turn_id: str | None = None,
 ) -> list[LogEvent]:
