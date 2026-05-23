@@ -11,7 +11,7 @@ from nuself.llm import LangChainLLMEndpoint
 from nuself.logs import log_context
 from nuself.memory.query import MemoryQueryService
 from nuself.reason.advancer import ReasonAdvancer
-from nuself.reason.domain import ACTIVE_STATUSES, ReasoningThread
+from nuself.reason.domain import ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
@@ -56,7 +56,7 @@ class ReasonScheduler:
             return
 
         threads = self._service.list_threads(status=None)
-        active = [t for t in threads if t.status in ACTIVE_STATUSES]
+        active = [t for t in threads if t.status == "active"]
 
         now = datetime.now(UTC)
         candidate: ReasoningThread | None = None
