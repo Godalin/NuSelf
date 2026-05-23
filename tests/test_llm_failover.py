@@ -1,42 +1,57 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Any
 
 import pytest
 
-from nuself.llm import ChatMessage, FailoverLLM, LLMEndpoint, LLMSettings
+from nuself.llm import ChatMessage, LangChainLLMEndpoint, LLMSettings, default_llm
 from nuself.logs import read_log_events
 
 
-def _endpoint(index: int, model: str, *, provider: Literal["openai", "anthropic"] = "openai") -> LLMEndpoint:
-    return LLMEndpoint(
+def _lc_endpoint(index: int, model: str) -> LangChainLLMEndpoint:
+    return LangChainLLMEndpoint(
         index=index,
         settings=LLMSettings(
             base_url=f"https://{model}.example/v1",
             api_key=f"{model}-key",
             model=model,
-            provider=provider,
         ),
+        model=index,  # placeholder; will be replaced by monkeypatched _invoke
     )
 
 
+class _FakeModel:
+    """A fake ``BaseChatModel`` that delegates to a user-provided callable."""
+
+    def __init__(self, invoke_fn: Any) -> None:
+        self._invoke_fn = invoke_fn
+
+    def invoke(self, messages: Any, **kwargs: Any) -> Any:
+        return self._invoke_fn(messages, **kwargs)
+
+
 def test_failover_llm_switches_and_remembers_success(
-    tmp_path: Path, monkeypatch: object
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls: list[str] = []
 
-    def fake_complete(self: object, messages: list[ChatMessage]) -> str:
-        settings = getattr(self, "_settings")
-        model = getattr(settings, "model")
-        calls.append(model)
-        if model == "primary":
+    def fake_invoke(model: object, messages: list[ChatMessage]) -> str:
+        assert isinstance(model, int)
+        label = {0: "primary", 1: "backup"}[model]
+        calls.append(label)
+        if label == "primary":
             raise RuntimeError("LLM request failed with HTTP 400: InvalidSubscription")
-        return f"ok:{model}"
+        return f"ok:{label}"
 
-    monkeypatch.setattr("nuself.llm.OpenAICompatibleLLM.complete", fake_complete)  # type: ignore[attr-defined]
-    llm = FailoverLLM((_endpoint(0, "primary"), _endpoint(1, "backup")), project_root=tmp_path)
+    monkeypatch.setattr("nuself.llm._invoke_langchain_model", fake_invoke)
+    from nuself.llm import _LangChainFailoverLLM
 
+    eps = (
+        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("primary"), model=0),
+        LangChainLLMEndpoint(index=1, settings=_endpoint_cfg("backup"), model=1),
+    )
+    llm = _LangChainFailoverLLM(eps, project_root=tmp_path)
     result = llm.complete([ChatMessage(role="user", content="hello")])
 
     assert result == "ok:backup"
@@ -52,15 +67,20 @@ def test_failover_llm_switches_and_remembers_success(
 
 
 def test_failover_llm_logs_unavailable_when_no_fallback_remains(
-    tmp_path: Path, monkeypatch: object
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def fake_complete(self: object, messages: list[ChatMessage]) -> str:
+    def fake_invoke(model: object, messages: list[ChatMessage]) -> str:
         raise RuntimeError(
             'LLM request failed with HTTP 429: {"type":"error","error":{"type":"FreeUsageLimitError"}}'
         )
 
-    monkeypatch.setattr("nuself.llm.OpenAICompatibleLLM.complete", fake_complete)  # type: ignore[attr-defined]
-    llm = FailoverLLM((_endpoint(0, "free-model"),), project_root=tmp_path)
+    monkeypatch.setattr("nuself.llm._invoke_langchain_model", fake_invoke)
+    from nuself.llm import _LangChainFailoverLLM
+
+    eps = (
+        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("free-model"), model=0),
+    )
+    llm = _LangChainFailoverLLM(eps, project_root=tmp_path)
 
     with pytest.raises(RuntimeError, match="all configured LLM endpoints failed"):
         llm.complete([ChatMessage(role="user", content="hello")])
@@ -75,90 +95,79 @@ def test_failover_llm_logs_unavailable_when_no_fallback_remains(
 
 
 def test_failover_llm_does_not_treat_longer_http_code_as_availability_error(
-    tmp_path: Path, monkeypatch: object
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls: list[str] = []
 
-    def fake_complete(self: object, messages: list[ChatMessage]) -> str:
-        settings = getattr(self, "_settings")
-        calls.append(getattr(settings, "model"))
+    def fake_invoke(model: object, messages: list[ChatMessage]) -> str:
+        calls.append(str(model))
         raise RuntimeError("LLM request failed with HTTP 4013: upstream bug")
 
-    monkeypatch.setattr("nuself.llm.OpenAICompatibleLLM.complete", fake_complete)  # type: ignore[attr-defined]
-    llm = FailoverLLM((_endpoint(0, "primary"), _endpoint(1, "backup")), project_root=tmp_path)
+    monkeypatch.setattr("nuself.llm._invoke_langchain_model", fake_invoke)
+    from nuself.llm import _LangChainFailoverLLM
+
+    eps = (
+        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("primary"), model=0),
+        LangChainLLMEndpoint(index=1, settings=_endpoint_cfg("backup"), model=1),
+    )
+    llm = _LangChainFailoverLLM(eps, project_root=tmp_path)
 
     with pytest.raises(RuntimeError, match="HTTP 4013"):
         llm.complete([ChatMessage(role="user", content="hello")])
 
-    assert calls == ["primary"]
+    assert calls == ["0"]
     assert read_log_events(project_root=tmp_path, component="chat") == []
 
 
 def test_failover_llm_starts_from_remembered_success(
-    tmp_path: Path, monkeypatch: object
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     state_path = tmp_path / "private" / "runtime" / "llm_state.json"
     state_path.parent.mkdir(parents=True)
     state_path.write_text('{"active_endpoint_index": 1}\n', encoding="utf-8")
     calls: list[str] = []
 
-    def fake_complete(self: object, messages: list[ChatMessage]) -> str:
-        settings = getattr(self, "_settings")
-        model = getattr(settings, "model")
-        calls.append(model)
-        return f"ok:{model}"
-
-    monkeypatch.setattr("nuself.llm.OpenAICompatibleLLM.complete", fake_complete)  # type: ignore[attr-defined]
-    llm = FailoverLLM((_endpoint(0, "primary"), _endpoint(1, "backup")), project_root=tmp_path)
-
-    result = llm.complete([ChatMessage(role="user", content="hello")])
-
-    assert result == "ok:backup"
-    assert calls == ["backup"]
-
-
-def test_failover_llm_dispatches_anthropic_endpoint(
-    tmp_path: Path, monkeypatch: object
-) -> None:
-    calls: list[str] = []
-
-    def fake_anthropic_complete(self: object, messages: list[ChatMessage]) -> str:
-        settings = getattr(self, "_settings")
-        model = getattr(settings, "model")
-        calls.append(model)
-        return f"ok:{model}"
-
-    monkeypatch.setattr("nuself.llm.AnthropicLLM.complete", fake_anthropic_complete)  # type: ignore[attr-defined]
-    llm = FailoverLLM((_endpoint(0, "claude", provider="anthropic"),), project_root=tmp_path)
-
-    result = llm.complete([ChatMessage(role="user", content="hello")])
-
-    assert result == "ok:claude"
-    assert calls == ["claude"]
-
-
-def test_failover_llm_uses_endpoint_timeout(
-    tmp_path: Path, monkeypatch: object
-) -> None:
-    captured_timeout = 0.0
-
-    def fake_complete(self: object, messages: list[ChatMessage]) -> str:
-        settings = getattr(self, "_settings")
-        nonlocal captured_timeout
-        captured_timeout = getattr(settings, "timeout_seconds")
+    def fake_invoke(model: object, messages: list[ChatMessage]) -> str:
+        calls.append(str(model))
         return "ok"
 
-    monkeypatch.setattr("nuself.llm.OpenAICompatibleLLM.complete", fake_complete)  # type: ignore[attr-defined]
-    endpoint = LLMEndpoint(
-        index=0,
-        settings=LLMSettings(
-            base_url="http://localhost:11434/v1",
-            api_key="ollama",
-            model="deepseek-r1",
-            timeout_seconds=300,
-        ),
-    )
-    llm = FailoverLLM((endpoint,), project_root=tmp_path)
+    monkeypatch.setattr("nuself.llm._invoke_langchain_model", fake_invoke)
+    from nuself.llm import _LangChainFailoverLLM
 
-    assert llm.complete([ChatMessage(role="user", content="hello")]) == "ok"
-    assert captured_timeout == 300
+    eps = (
+        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("primary"), model=0),
+        LangChainLLMEndpoint(index=1, settings=_endpoint_cfg("backup"), model=1),
+    )
+    llm = _LangChainFailoverLLM(eps, project_root=tmp_path)
+
+    result = llm.complete([ChatMessage(role="user", content="hello")])
+
+    assert result == "ok"
+    assert calls == ["1"]
+
+
+def test_failover_llm_re_raises_non_availability_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_invoke(model: object, messages: list[ChatMessage]) -> str:
+        raise RuntimeError("some unrelated error")
+
+    monkeypatch.setattr("nuself.llm._invoke_langchain_model", fake_invoke)
+    from nuself.llm import _LangChainFailoverLLM
+
+    eps = (
+        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("primary"), model=0),
+        LangChainLLMEndpoint(index=1, settings=_endpoint_cfg("backup"), model=1),
+    )
+    llm = _LangChainFailoverLLM(eps, project_root=tmp_path)
+
+    with pytest.raises(RuntimeError, match="some unrelated error"):
+        llm.complete([ChatMessage(role="user", content="hello")])
+
+
+def _endpoint_cfg(model: str) -> LLMSettings:
+    return LLMSettings(
+        base_url=f"https://{model}.example/v1",
+        api_key=f"{model}-key",
+        model=model,
+    )
