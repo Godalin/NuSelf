@@ -12,7 +12,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
 from pydantic import BaseModel, Field, ValidationError
 
-from nuself.llm_json import parse_llm_json_object
+from nuself.llm import parse_llm_json_object
 from nuself.llm import (
     ChatLLM,
     ChatMessage,

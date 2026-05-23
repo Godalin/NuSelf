@@ -23,7 +23,7 @@ from nuself.agent.persona import (
 from nuself.config import ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatLLM, ChatMessage
-from nuself.llm_json import parse_llm_json_object
+from nuself.llm import parse_llm_json_object
 
 DiscussionTraceSink = Callable[[str], None]
 

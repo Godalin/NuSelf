@@ -20,6 +20,22 @@ ChatRole: TypeAlias = Literal["system", "user", "assistant"]
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 
 
+def parse_llm_json_object(raw: str) -> dict[str, object]:
+    """Parse an LLM response that should contain one JSON object.
+
+    Tolerates Markdown code fences because weaker models sometimes
+    ignore 'return JSON only' instructions.
+    """
+    stripped = raw.strip()
+    if stripped.startswith("```"):
+        lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+        stripped = "\n".join(lines).strip()
+    parsed: object = json.loads(stripped)
+    if not isinstance(parsed, dict):
+        raise ValueError("LLM response is not a JSON object")
+    return cast(dict[str, object], parsed)
+
+
 @dataclass(frozen=True)
 class ChatMessage:
     """One chat message sent to or returned by an LLM."""

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from nuself.llm_json import parse_llm_json_object
+from nuself.llm import parse_llm_json_object
 
 
 def test_parse_llm_json_object_accepts_plain_json() -> None:
