@@ -10,7 +10,6 @@ from nuself.agent.tool_utils import format_tool_debug_body
 from nuself.llm import ChatMessage, default_llm
 from nuself.logs import write_log_event
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
-from nuself.trace.service import TraceRecorder
 
 
 def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredTool, ...]:
@@ -127,6 +126,8 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
 
 def _record_prompt_trace(prompt: PersonaPrompt, *, project_root: Path | None = None) -> None:
     try:
+        from nuself.trace.service import TraceRecorder
+
         TraceRecorder(project_root=project_root).record_persona_prompt_created(
             persona_prompt_id=prompt.id,
             name=prompt.name,
