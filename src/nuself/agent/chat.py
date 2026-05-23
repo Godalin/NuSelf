@@ -52,7 +52,7 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.persona_discussion_service import SharedPersonaDiscussionService
 from nuself.trace.service import TraceRecorder
 
-ToolServiceComponent = Literal["memory", "reflection", "reasoning", "trace", "selves", "skill"]
+ToolServiceComponent = Literal["memory", "reflection", "reasoning", "trace", "selves", "skill", "workspace"]
 ConversationNodeName = Literal[
     "prepare_context",
     "respond",
@@ -1176,6 +1176,8 @@ def _tool_service_component(tool_name: str) -> ToolServiceComponent | None:
         return "selves"
     if tool_name == "load_skill":
         return "skill"
+    if tool_name.startswith("workspace_"):
+        return "workspace"
     return None
 
 

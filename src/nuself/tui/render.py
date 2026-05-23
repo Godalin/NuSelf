@@ -423,6 +423,8 @@ def _component_color(component: str) -> str:
         return "35"
     if component == "skill":
         return "31"
+    if component == "workspace":
+        return "33"
     return "0"
 
 
