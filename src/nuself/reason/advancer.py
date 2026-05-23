@@ -15,6 +15,7 @@ from nuself.llm import ChatLLM, ChatMessage, LangChainLLMEndpoint
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.reason.domain import STEP_KINDS, ReasoningStep, ReasoningThread
 from nuself.reflection.repository import ReflectionRepository
+from nuself.workspace import PrivateWorkspaceStore
 
 import json as _json
 
@@ -203,6 +204,7 @@ class ReasonAdvancer:
         project_root: Path | None = None,
         memory_query_service: MemoryQueryService | None = None,
         reflection_repository: ReflectionRepository | None = None,
+        workspace_store: PrivateWorkspaceStore | None = None,
         readonly_tools: Sequence[Any] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
@@ -210,6 +212,7 @@ class ReasonAdvancer:
         self._llm = llm
         self._memory_query_service = memory_query_service
         self._reflection_repository = reflection_repository
+        self._workspace_store = workspace_store
         self._readonly_tools = tuple(readonly_tools) if readonly_tools else ()
         self._langchain_models = langchain_models or ()
 
@@ -227,10 +230,12 @@ class ReasonAdvancer:
         try:
             captured: list[tuple[str, dict[str, object], str | None]] = []
             wrapped_tools = [_CapturingTool(t, captured) for t in self._readonly_tools]
+            ws_tools = self._build_workspace_tools(thread)
+            all_tools = list(wrapped_tools) + list(ws_tools)
             create_agent = cast(Any, _create_agent)
             agent = create_agent(
                 model=endpoint.model,
-                tools=wrapped_tools,
+                tools=all_tools,
                 system_prompt=REASON_ADVANCE_SYSTEM_PROMPT,
                 response_format=ReasonStepOutput,
             )
@@ -253,6 +258,17 @@ class ReasonAdvancer:
             return None
         except Exception:
             return self._advance_raw(thread)
+
+    def _build_workspace_tools(self, thread: ReasoningThread) -> tuple[Any, ...]:
+        if self._workspace_store is None:
+            return ()
+        from nuself.agent.tools import build_workspace_tools
+        from nuself.store import ScopedWorkspace, SqliteStore
+
+        wpath = self._workspace_store.ensure(thread.id)
+        sqlite = SqliteStore(wpath.database)
+        ws = ScopedWorkspace(sqlite, ("workspace", thread.id))
+        return build_workspace_tools(ws)
 
     def _advance_raw(self, thread: ReasoningThread) -> ReasoningStep | None:
         """Fallback: raw ChatLLM call with pre-injected context."""

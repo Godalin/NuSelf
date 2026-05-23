@@ -15,6 +15,7 @@ from nuself.reason.domain import ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
+from nuself.workspace import PrivateWorkspaceStore
 
 
 class ReasonScheduler:
@@ -37,6 +38,7 @@ class ReasonScheduler:
         self._service = service or ReasonService(project_root)
         self._repository = ReasonRepository(project_root)
         self._interval_seconds = interval_seconds
+        self._workspace_store = PrivateWorkspaceStore(project_root, scope="reason")
 
         if advancer is None and project_root is not None:
             from nuself.llm import default_llm
@@ -46,6 +48,7 @@ class ReasonScheduler:
                 project_root=project_root,
                 memory_query_service=memory_query_service,
                 reflection_repository=reflection_repository,
+                workspace_store=self._workspace_store,
                 readonly_tools=readonly_tools,
                 langchain_models=langchain_models,
             )
