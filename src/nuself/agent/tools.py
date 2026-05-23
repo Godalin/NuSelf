@@ -407,13 +407,26 @@ def build_langchain_chat_tools(
     return tuple(tools)
 
 
-def build_workspace_tools(workspace: ScopedWorkspace) -> tuple[BaseTool, ...]:
+def build_workspace_tools(
+    workspace: ScopedWorkspace,
+) -> tuple[BaseTool, ...]:
     """Build LangChain tools for a thread-scoped workspace.
 
     The caller provides a ``ScopedWorkspace`` (obtained via
     ``service.workspace(thread_id)``) and receives StructuredTool instances
     that the agent can call to store, retrieve, search, and delete data
     in the thread's private SQLite database.
+    """
+    return _build_workspace_tools_from_provider(lambda: workspace)
+
+
+def _build_workspace_tools_from_provider(
+    workspace_provider: Callable[[], ScopedWorkspace],
+) -> tuple[BaseTool, ...]:
+    """Build workspace tools that resolve the workspace lazily per call.
+
+    Accepts a callable returning a ``ScopedWorkspace`` so that tools can
+    be built once and reused across threads (e.g. in ``ReasonAdvancer``).
     """
     tool_from_function = _structured_tool_factory()
 
@@ -426,13 +439,13 @@ def build_workspace_tools(workspace: ScopedWorkspace) -> tuple[BaseTool, ...]:
             return "Error: value must be a valid JSON string"
         if not isinstance(parsed, dict):
             return "Error: value must be a JSON object (dict)"
-        workspace.put(str(key), cast(dict[str, object], parsed), sub=str(sub_namespace) if sub_namespace else None)
+        workspace_provider().put(str(key), cast(dict[str, object], parsed), sub=str(sub_namespace) if sub_namespace else None)
         return f"Stored {key}"
 
     def get(key: str, sub_namespace: str | None = None) -> str:
         """Retrieve the JSON value stored under the given key."""
         import json as _json
-        result = workspace.get(str(key), sub=str(sub_namespace) if sub_namespace else None)
+        result = workspace_provider().get(str(key), sub=str(sub_namespace) if sub_namespace else None)
         if result is None:
             return f"Key {key} not found"
         return _json.dumps(result, ensure_ascii=True)
@@ -453,7 +466,7 @@ def build_workspace_tools(workspace: ScopedWorkspace) -> tuple[BaseTool, ...]:
                     filter_dict = cast(dict[str, object], parsed)
             except _json.JSONDecodeError:
                 return "Error: filter_json must be a valid JSON object"
-        results = workspace.search(
+        results = workspace_provider().search(
             query=str(query) if query else None,
             filter=filter_dict,
             limit=max(1, int(limit)),
@@ -463,7 +476,7 @@ def build_workspace_tools(workspace: ScopedWorkspace) -> tuple[BaseTool, ...]:
 
     def delete(key: str, sub_namespace: str | None = None) -> str:
         """Delete an item from the thread's workspace."""
-        workspace.delete(str(key), sub=str(sub_namespace) if sub_namespace else None)
+        workspace_provider().delete(str(key), sub=str(sub_namespace) if sub_namespace else None)
         return f"Deleted {key}"
 
     return (

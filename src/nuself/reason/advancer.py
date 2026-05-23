@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import Any, cast
 
@@ -19,6 +20,9 @@ from nuself.reflection.repository import ReflectionRepository
 from nuself.workspace import PrivateWorkspaceStore
 
 import json as _json
+
+
+_current_reason_thread_id: ContextVar[str] = ContextVar("reason_thread_id")
 
 
 def _log_tool_call(tool_name: str, args: dict[str, object], *, project_root: Path | None, result: str | None = None, error: str | None = None) -> None:
@@ -144,9 +148,13 @@ def _parse_step_json(raw: str) -> dict[str, object] | None:
 class ReasonAdvancer:
     """LLM-backed generator of reasoning steps.
 
-    When LangChain models and tools are available, uses create_agent with
-    structured output for tool-assisted reasoning.  Falls back to raw
-    ChatLLM.complete() otherwise.
+    When LangChain models and tools are available, uses a pre-built
+    ``create_agent`` graph with structured output for tool-assisted
+    reasoning.  Falls back to raw ``ChatLLM.complete()`` otherwise.
+
+    The LangGraph agent is built once in ``__init__``.  Workspace tools
+    resolve the current thread from a ``ContextVar`` so that the same
+    tool instances can be reused across threads.
     """
 
     def __init__(
@@ -167,37 +175,43 @@ class ReasonAdvancer:
         self._workspace_store = workspace_store
         self._readonly_tools = tuple(readonly_tools) if readonly_tools else ()
         self._langchain_models = langchain_models or ()
+        self._captured: list[tuple[str, dict[str, object], str | None]] = []
+        self._middleware = ToolCaptureMiddleware(captured=self._captured)
+        self._agent = self._build_agent()
+
+    def _build_agent(self) -> Any:
+        """Build the LangGraph agent graph once (or return None for fallback)."""
+        if not self._langchain_models or not self._readonly_tools:
+            return None
+        endpoint = self._langchain_models[0]
+        ws_tools = self._build_workspace_tools()
+        all_tools = list(self._readonly_tools) + list(ws_tools)
+        create_agent = cast(Any, _create_agent)
+        return create_agent(
+            model=endpoint.model,
+            tools=all_tools,
+            system_prompt=REASON_ADVANCE_SYSTEM_PROMPT,
+            response_format=ReasonStepOutput,
+            middleware=[self._middleware],
+        )
 
     def advance(self, thread: ReasoningThread) -> ReasoningStep | None:
         """Generate a reasoning step for the given thread, or None on failure."""
-        if self._langchain_models and self._readonly_tools:
+        if self._agent is not None:
             return self._advance_with_tools(thread)
         return self._advance_raw(thread)
 
     def _advance_with_tools(self, thread: ReasoningThread) -> ReasoningStep | None:
-        if not self._langchain_models:
-            return self._advance_raw(thread)
-        endpoint = self._langchain_models[0]
-
+        assert self._agent is not None
+        token: Token[str] = _current_reason_thread_id.set(thread.id)
         try:
-            captured: list[tuple[str, dict[str, object], str | None]] = []
-            middleware = ToolCaptureMiddleware(captured=captured)
-            ws_tools = self._build_workspace_tools(thread)
-            all_tools = list(self._readonly_tools) + list(ws_tools)
-            create_agent = cast(Any, _create_agent)
-            agent = create_agent(
-                model=endpoint.model,
-                tools=all_tools,
-                system_prompt=REASON_ADVANCE_SYSTEM_PROMPT,
-                response_format=ReasonStepOutput,
-                middleware=[middleware],
-            )
+            self._captured.clear()
             messages = [HumanMessage(content=_build_advance_prompt(thread))]
-            result = agent.invoke({"messages": messages})
+            result = self._agent.invoke({"messages": messages})
             state = cast(dict[str, object], result) if isinstance(result, dict) else {}
-            for name, args, tc_result in captured:
+            for name, args, tc_result in self._captured:
                 _log_tool_call(name, args, project_root=self._project_root, result=tc_result)
-            step_tool_calls = tuple((n, a, r) for n, a, r in captured)
+            step_tool_calls = tuple(self._captured)
             structured = state.get("structured_response")
             if structured is None:
                 return None
@@ -211,17 +225,24 @@ class ReasonAdvancer:
             return None
         except Exception:
             return self._advance_raw(thread)
+        finally:
+            _current_reason_thread_id.reset(token)
 
-    def _build_workspace_tools(self, thread: ReasoningThread) -> tuple[Any, ...]:
-        if self._workspace_store is None:
+    def _build_workspace_tools(self) -> tuple[Any, ...]:
+        """Build workspace tools once that resolve the thread from ContextVar."""
+        ws_store = self._workspace_store
+        if ws_store is None:
             return ()
-        from nuself.agent.tools import build_workspace_tools
+        from nuself.agent.tools import _build_workspace_tools_from_provider  # pyright: ignore[reportPrivateUsage]
         from nuself.store import ScopedWorkspace, SqliteStore
 
-        wpath = self._workspace_store.ensure(thread.id)
-        sqlite = SqliteStore(wpath.database)
-        ws = ScopedWorkspace(sqlite, ("workspace", thread.id))
-        return build_workspace_tools(ws)
+        def _resolve() -> ScopedWorkspace:
+            thread_id = _current_reason_thread_id.get()
+            wpath = ws_store.ensure(thread_id)
+            sqlite = SqliteStore(wpath.database)
+            return ScopedWorkspace(sqlite, ("workspace", thread_id))
+
+        return _build_workspace_tools_from_provider(_resolve)
 
     def _advance_raw(self, thread: ReasoningThread) -> ReasoningStep | None:
         """Fallback: raw ChatLLM call with pre-injected context."""

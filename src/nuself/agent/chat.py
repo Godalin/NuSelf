@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
 from pydantic import BaseModel, Field
@@ -910,7 +910,12 @@ class ConversationGraphRuntime:
 
 
 class _LangChainChatSupervisor:
-    """Runs one chat turn through LangChain's agent/tool runtime."""
+    """Runs one chat turn through LangChain's agent/tool runtime.
+
+    The LangGraph agent is built once in ``__init__`` and reused across
+    turns.  Per-call state (system prompt, tool cache) is reset on each
+    ``complete()``.
+    """
 
     def __init__(
         self,
@@ -920,25 +925,25 @@ class _LangChainChatSupervisor:
         log_tool_call: Callable[..., None],
     ) -> None:
         self._endpoint = endpoint
-        self._tools = tuple(tools)
-        self._log_tool_call = log_tool_call
-
-    def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
-        system_prompt, messages = _split_prompt(prompt)
-        tool_cache: dict[str, str] = {}
-        middleware = ToolCaptureMiddleware(
-            log_callback=self._log_tool_call,
-            cache=tool_cache,
+        self._tool_cache: dict[str, str] = {}
+        self._middleware = ToolCaptureMiddleware(
+            log_callback=log_tool_call,
+            cache=self._tool_cache,
         )
         create_agent = cast(Any, _create_agent)
-        agent = create_agent(
-            model=self._endpoint.model,
-            tools=list(self._tools),
-            system_prompt=system_prompt,
+        self._agent = create_agent(
+            model=endpoint.model,
+            tools=list(tools),
             response_format=ChatStructuredOutput,
-            middleware=[middleware],
+            middleware=[self._middleware],
         )
-        result = agent.invoke({"messages": messages})
+
+    def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
+        system_text, messages = _split_prompt(prompt)
+        self._tool_cache.clear()
+        if system_text is not None:
+            messages.insert(0, SystemMessage(content=system_text))
+        result = self._agent.invoke({"messages": messages})
         return _structured_response_from_agent_state(result)
 
 

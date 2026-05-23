@@ -19,6 +19,9 @@ class ToolCaptureMiddleware(AgentMiddleware):
     Replaces the per-file ``_LoggedTool`` (chat.py) and ``_CapturingTool``
     (advancer.py) pattern with a single LangGraph middleware hook.
 
+    The same middleware instance can be reused across multiple agent
+    invocations by calling ``reset()`` before each ``invoke()``.
+
     Parameters
     ----------
     log_callback:
@@ -50,6 +53,21 @@ class ToolCaptureMiddleware(AgentMiddleware):
         self._captured = captured
         self._cache = cache
         self._cache_lock = threading.Lock()
+
+    def reset(
+        self,
+        *,
+        log_callback: Callable[..., None] | None = None,
+        captured: list[tuple[str, dict[str, object], str | None]] | None = None,
+        cache: dict[str, str] | None = None,
+    ) -> None:
+        """Replace per-invocation state without rebuilding the middleware."""
+        if log_callback is not None:
+            self._log_callback = log_callback
+        if captured is not None:
+            self._captured = captured
+        if cache is not None:
+            self._cache = cache
 
     def wrap_tool_call(
         self,
