@@ -78,7 +78,7 @@ try:
     from nuself.trace.repository import TraceNotFound, TraceRepository, TraceVisibilityFilter
     from nuself.trace.service import TraceQueryService
     from nuself.logs import LOG_COMPONENTS, LogComponent, LogEvent, read_log_events, write_log_event
-    from nuself.config_system import ConfigSystem
+    from nuself.config import ConfigSystem
     from nuself.tui.memory import (
         render_candidate_detail,
         render_candidate_row,

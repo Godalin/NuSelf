@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.config_system import ConfigSystem
+from nuself.config import ConfigSystem
 
 
 def test_reflection_settings_default_loaded_from_system(tmp_path: Path) -> None:

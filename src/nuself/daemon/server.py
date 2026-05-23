@@ -12,7 +12,7 @@ from typing import override
 
 from nuself.agent.chat import ChatAgent
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.config_system import ConfigSystem
+from nuself.config import ConfigSystem
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
 from nuself.logs import log_context, write_log_event
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult

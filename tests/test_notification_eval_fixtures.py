@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import pytest
 
-from nuself.config_system import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
+from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.notification.deep_link import DeepLink
 from nuself.reflection import ReflectionScheduler

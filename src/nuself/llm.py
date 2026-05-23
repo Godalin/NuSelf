@@ -14,7 +14,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 
-from nuself.config_system import ConfigSystem
+from nuself.config import ConfigSystem
 from nuself.config import runtime_paths
 from nuself.logs import write_log_event
 

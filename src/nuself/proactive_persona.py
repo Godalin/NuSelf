@@ -20,7 +20,7 @@ from nuself.agent.persona import (
     MODERATOR_PERSONA,
     PersonaTurnState,
 )
-from nuself.config_system import ReflectionSettings
+from nuself.config import ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatLLM, ChatMessage
 from nuself.llm_json import parse_llm_json_object

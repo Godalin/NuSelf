@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config_system import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
+from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatMessage
 from nuself.logs import read_log_events
@@ -288,7 +288,7 @@ def test_reflect_does_not_skip_when_pending_reflections_exist(scheduler: Reflect
 
 
 def test_reflect_auto_notify_creates_outbox_entry(scheduler: ReflectionScheduler) -> None:
-    from nuself.config_system import ReflectionSettings
+    from nuself.config import ReflectionSettings
     scheduler._config = ReflectionSettings(
         scheduler=scheduler._config.scheduler,
         gate=scheduler._config.gate,

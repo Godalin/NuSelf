@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, cast
 from pydantic import BaseModel, Field, ValidationError
 
 from nuself.config import runtime_paths
-from nuself.config_system import ConfigSystem, ReflectionSettings
+from nuself.config import ConfigSystem, ReflectionSettings
 from nuself.domain.memory import now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
 from nuself.notification import NotificationOutbox, OutboxEntry

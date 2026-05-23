@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from nuself.config_system import ConfigSystem, ReflectionSettings
+from nuself.config import ConfigSystem, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatLLM
 from nuself.proactive_persona import PersonaCompetitionResult, ProactivePersonaDiscussion

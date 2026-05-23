@@ -33,7 +33,7 @@ from nuself.agent.persona import (
     load_persona_definitions,
 )
 from nuself.domain.proactive import IdeaCandidate
-from nuself.config_system import ConfigSystem
+from nuself.config import ConfigSystem
 from nuself.llm import (
     ChatLLM,
     ChatMessage,
