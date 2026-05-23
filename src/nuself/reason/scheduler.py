@@ -78,25 +78,10 @@ class ReasonScheduler:
         with log_context(thread_id=candidate.id, source="reason_scheduler"):
             step = self._advancer.advance(candidate)
             if step is None:
+                self._apply_cooldown(candidate)
                 return
             updated = self._service.advance_thread(candidate.id, step=step)
-        cooldown_end = (datetime.now(UTC) + timedelta(seconds=self._interval_seconds)).isoformat()
-        cooled = ReasoningThread(
-            id=updated.id,
-            question=updated.question,
-            status=updated.status,
-            working_summary=updated.working_summary,
-            hypotheses=list(updated.hypotheses),
-            open_questions=list(updated.open_questions),
-            evidence_refs=list(updated.evidence_refs),
-            priority=updated.priority,
-            last_advanced_at=updated.last_advanced_at,
-            next_review_after=updated.next_review_after,
-            skip_next_advance_until=cooldown_end,
-            created_at=updated.created_at,
-            updated_at=updated.updated_at,
-        )
-        self._repository.save_thread(cooled)
+            self._apply_cooldown(updated)
 
         from nuself.logs import write_log_event
         write_log_event(
@@ -107,3 +92,22 @@ class ReasonScheduler:
             status="completed",
             metadata={"thread_id": candidate.id, "step_kind": step.kind, "step_id": step.id},
         )
+
+    def _apply_cooldown(self, thread: ReasoningThread) -> None:
+        cooldown_end = (datetime.now(UTC) + timedelta(seconds=self._interval_seconds)).isoformat()
+        cooled = ReasoningThread(
+            id=thread.id,
+            question=thread.question,
+            status=thread.status,
+            working_summary=thread.working_summary,
+            hypotheses=list(thread.hypotheses),
+            open_questions=list(thread.open_questions),
+            evidence_refs=list(thread.evidence_refs),
+            priority=thread.priority,
+            last_advanced_at=thread.last_advanced_at,
+            next_review_after=thread.next_review_after,
+            skip_next_advance_until=cooldown_end,
+            created_at=thread.created_at,
+            updated_at=thread.updated_at,
+        )
+        self._repository.save_thread(cooled)
