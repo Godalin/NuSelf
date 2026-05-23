@@ -8,8 +8,9 @@ from typing import Any, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain_core.messages import HumanMessage
-from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field
+
+from nuself.agent.middleware import ToolCaptureMiddleware
 
 from nuself.llm import ChatLLM, ChatMessage, LangChainLLMEndpoint
 from nuself.memory.query import MemoryQuery, MemoryQueryService
@@ -140,55 +141,6 @@ def _parse_step_json(raw: str) -> dict[str, object] | None:
     return cast(dict[str, object], parsed)
 
 
-def _tool_input_to_dict(input_value: object) -> dict[str, object]:
-    """Extract a dict from a tool invocation input."""
-    if isinstance(input_value, dict):
-        raw = cast(dict[str, object], input_value)
-        inner = raw.get("args")
-        if isinstance(inner, dict):
-            return cast(dict[str, object], inner)
-        return raw
-    return {}
-
-
-class _CapturingTool(BaseTool):
-    """Wraps a tool and records invocations during agent execution.
-
-    Used by ReasonAdvancer to capture tool calls from agent flow
-    instead of mining them from message history afterwards.
-    """
-
-    _inner: BaseTool = PrivateAttr()
-    _captured: list[tuple[str, dict[str, object], str | None]] = PrivateAttr()
-
-    def __init__(self, inner: BaseTool, captured: list[tuple[str, dict[str, object], str | None]]) -> None:
-        super().__init__(
-            name=inner.name,
-            description=inner.description,
-            args_schema=inner.args_schema,
-            return_direct=inner.return_direct,
-            response_format=inner.response_format,
-        )
-        self._inner = inner
-        self._captured = captured
-
-    def invoke(self, input: Any, config: Any | None = None, **kwargs: Any) -> Any:  # pyright: ignore[reportUnknownParameterType]
-        args = _tool_input_to_dict(input)
-        try:
-            result = self._inner.invoke(input, config=config, **kwargs)  # pyright: ignore[reportUnknownMemberType]
-            result_text = str(result)
-            if len(result_text) > 200:
-                result_text = result_text[:197] + "..."
-            self._captured.append((self.name, args, result_text))
-            return result
-        except Exception as exc:
-            self._captured.append((self.name, args, str(exc)))
-            raise
-
-    def _run(self, *args: Any, **kwargs: Any) -> Any:  # pyright: ignore[reportUnknownParameterType]
-        return self._inner._run(*args, **kwargs)  # pyright: ignore[reportUnknownMemberType]
-
-
 class ReasonAdvancer:
     """LLM-backed generator of reasoning steps.
 
@@ -229,15 +181,16 @@ class ReasonAdvancer:
 
         try:
             captured: list[tuple[str, dict[str, object], str | None]] = []
-            wrapped_tools = [_CapturingTool(t, captured) for t in self._readonly_tools]
+            middleware = ToolCaptureMiddleware(captured=captured)
             ws_tools = self._build_workspace_tools(thread)
-            all_tools = list(wrapped_tools) + list(ws_tools)
+            all_tools = list(self._readonly_tools) + list(ws_tools)
             create_agent = cast(Any, _create_agent)
             agent = create_agent(
                 model=endpoint.model,
                 tools=all_tools,
                 system_prompt=REASON_ADVANCE_SYSTEM_PROMPT,
                 response_format=ReasonStepOutput,
+                middleware=[middleware],
             )
             messages = [HumanMessage(content=_build_advance_prompt(thread))]
             result = agent.invoke({"messages": messages})

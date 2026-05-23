@@ -6,22 +6,22 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 import json
 import logging
-import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field
 
+from nuself.agent.middleware import ToolCaptureMiddleware
 from nuself.agent.skills import AgentSkill, load_agent_skills, render_tool_placeholders
 from nuself.agent.thread import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.tools import build_langchain_chat_tools
-from nuself.agent.tool_utils import format_tool_debug_body, tool_result_text
+from nuself.agent.tool_utils import format_tool_debug_body
 from nuself.agent.persona import (
     PersonaDefinition,
     LLMBackedActivationPolicy,
@@ -902,76 +902,6 @@ class ConversationGraphRuntime:
 # ======================================================================
 
 
-class _LoggedTool(BaseTool):
-    """LangChain tool wrapper that logs real service executions."""
-
-    _inner: BaseTool = PrivateAttr()
-    _log_call: Any = PrivateAttr()
-    _cache: dict[str, str] = PrivateAttr(default_factory=dict)
-    _cache_lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
-
-    def __init__(self, inner: BaseTool, *, log_call: Callable[..., None], cache: dict[str, str]) -> None:
-        super().__init__(
-            name=inner.name,
-            description=inner.description,
-            args_schema=inner.args_schema,
-            return_direct=inner.return_direct,
-            response_format=inner.response_format,
-        )
-        self._inner = inner
-        self._log_call = log_call
-        self._cache = cache
-
-    @property
-    def args(self) -> dict[str, Any]:
-        inner = cast(Any, self._inner)
-        args = cast(object, inner.args)
-        return cast(dict[str, Any], args) if isinstance(args, dict) else {}
-
-    def invoke(self, input: Any, config: Any | None = None, **kwargs: Any) -> Any:
-        tool_args = _tool_args_from_input(input)
-        cache_key = _tool_call_cache_key(self.name, tool_args)
-        with self._cache_lock:
-            cached = self._cache.get(cache_key)
-            if cached is not None:
-                return _cached_tool_response(input, self.name, cached)
-            try:
-                inner = cast(Any, self._inner)
-                invoke_inner = inner.invoke
-                result = invoke_inner(input, config=config, **kwargs)
-            except Exception as exc:
-                self._log_call(self.name, tool_args, error=str(exc))
-                raise
-            result_text = tool_result_text(result)
-            self._cache[cache_key] = result_text
-            self._log_call(self.name, tool_args, result=result_text)
-            return result
-
-    async def ainvoke(self, input: Any, config: Any | None = None, **kwargs: Any) -> Any:
-        tool_args = _tool_args_from_input(input)
-        cache_key = _tool_call_cache_key(self.name, tool_args)
-        with self._cache_lock:
-            cached = self._cache.get(cache_key)
-            if cached is not None:
-                return _cached_tool_response(input, self.name, cached)
-            try:
-                inner = cast(Any, self._inner)
-                ainvoke_inner = inner.ainvoke
-                result = await ainvoke_inner(input, config=config, **kwargs)
-            except Exception as exc:
-                self._log_call(self.name, tool_args, error=str(exc))
-                raise
-            result_text = tool_result_text(result)
-            self._cache[cache_key] = result_text
-            self._log_call(self.name, tool_args, result=result_text)
-            return result
-
-    def _run(self, *args: Any, **kwargs: Any) -> Any:
-        inner = cast(Any, self._inner)
-        invoke_inner = inner.invoke
-        return invoke_inner(kwargs if kwargs else (args[0] if args else {}))
-
-
 class _LangChainChatSupervisor:
     """Runs one chat turn through LangChain's agent/tool runtime."""
 
@@ -989,16 +919,17 @@ class _LangChainChatSupervisor:
     def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
         system_prompt, messages = _split_prompt(prompt)
         tool_cache: dict[str, str] = {}
-        tools = [
-            _LoggedTool(tool, log_call=self._log_tool_call, cache=tool_cache)
-            for tool in self._tools
-        ]
+        middleware = ToolCaptureMiddleware(
+            log_callback=self._log_tool_call,
+            cache=tool_cache,
+        )
         create_agent = cast(Any, _create_agent)
         agent = create_agent(
             model=self._endpoint.model,
-            tools=tools,
+            tools=list(self._tools),
             system_prompt=system_prompt,
             response_format=ChatStructuredOutput,
+            middleware=[middleware],
         )
         result = agent.invoke({"messages": messages})
         return _structured_response_from_agent_state(result)
@@ -1038,32 +969,6 @@ def _structured_response_from_agent_state(result: object) -> ChatStructuredOutpu
     raise ValueError("LangChain agent did not return a structured_response")
 
 
-def _tool_args_from_input(input_value: object) -> dict[str, Any]:
-    if isinstance(input_value, dict):
-        input_dict = cast(dict[object, object], input_value)
-        maybe_args = input_dict.get("args")
-        if isinstance(maybe_args, dict):
-            return cast(dict[str, Any], maybe_args)
-        return cast(dict[str, Any], input_dict)
-    return {}
-
-
-def _cached_tool_response(input_value: object, tool_name: str, content: str) -> str | ToolMessage:
-    if isinstance(input_value, dict):
-        input_dict = cast(dict[object, object], input_value)
-        call_id = input_dict.get("id")
-        name = input_dict.get("name")
-        if isinstance(call_id, str):
-            return ToolMessage(
-                content=content,
-                name=name if isinstance(name, str) else tool_name,
-                tool_call_id=call_id,
-            )
-    return content
-
-
-def _tool_call_cache_key(tool_name: str, args: dict[str, Any]) -> str:
-    return f"{tool_name}:{json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
 
 
 
