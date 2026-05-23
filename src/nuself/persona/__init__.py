@@ -1,4 +1,4 @@
-"""Persona subsystem — definitions, graph, and competitive discussion."""
+"""Persona subsystem — definitions, graph, competitive discussion, and dynamic prompts."""
 
 from nuself.persona.definition import (
     BUILTIN_PERSONAS,
@@ -21,6 +21,8 @@ from nuself.persona.discussion import (
     ProactivePersonaDiscussion,
     SharedPersonaDiscussionService,
 )
+from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository
+from nuself.persona.tools import build_persona_tools
 
 __all__ = [
     "BUILTIN_PERSONAS",
@@ -34,8 +36,11 @@ __all__ = [
     "PersonaDefinition",
     "PersonaGraphDriver",
     "PersonaInput",
+    "PersonaPrompt",
+    "PersonaPromptRepository",
     "PersonaTurnState",
     "ProactivePersonaDiscussion",
     "SharedPersonaDiscussionService",
+    "build_persona_tools",
     "load_persona_definitions",
 ]

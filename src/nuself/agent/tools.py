@@ -18,6 +18,7 @@ from nuself.trace.repository import TraceNotFound
 from nuself.trace.service import TraceQueryService
 from nuself.tui.reason import render_reason_detail, render_reason_row
 from nuself.tui.trace import render_trace_detail, render_trace_row
+from nuself.persona.tools import build_persona_tools
 
 StructuredToolFactory = Callable[..., StructuredTool]
 
@@ -404,7 +405,8 @@ def build_langchain_chat_tools(
                 tags=("readonly",),
             )
         )
-    return tuple(tools)
+    persona_tools = build_persona_tools(project_root)
+    return tuple(tools) + persona_tools
 
 
 def build_workspace_tools(

@@ -100,6 +100,8 @@ try:
     from nuself.tui.reason import render_reason_detail, render_reason_row, render_step_watch_entry
     from nuself.tui.render import TerminalTheme, format_display_timestamp, render_log_event, render_log_event_json, render_session_header
     from nuself.tui.trace import render_trace_detail, render_trace_row
+    from nuself.persona.prompt_repo import PersonaPromptRepository
+    from nuself.persona.definition import BUILTIN_PERSONAS, MODERATOR_PERSONA, SYNTHESIZER_PERSONA
 finally:
     warnings.warn = _original_warn
 
@@ -574,6 +576,18 @@ def build_parser() -> argparse.ArgumentParser:
     trace_search_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(trace_search_parser, handle_trace_search)
     _add_handler(trace_subparsers.add_parser("reindex"), handle_trace_reindex)
+
+    persona_parser = subparsers.add_parser("persona")
+    persona_parser.set_defaults(handler=None, help_parser=persona_parser)
+    persona_subparsers = persona_parser.add_subparsers(dest="persona_command")
+    _add_handler(persona_subparsers.add_parser("list"), handle_persona_list)
+    persona_show_parser = persona_subparsers.add_parser("show")
+    persona_show_parser.add_argument("name_or_id")
+    _add_handler(persona_show_parser, handle_persona_show)
+    persona_delete_parser = persona_subparsers.add_parser("delete")
+    persona_delete_parser.add_argument("name_or_id")
+    persona_delete_parser.add_argument("--yes", "-y", action="store_true", default=False)
+    _add_handler(persona_delete_parser, handle_persona_delete)
 
     dev_parser = subparsers.add_parser("dev")
     dev_parser.set_defaults(handler=None, help_parser=dev_parser)
@@ -2010,6 +2024,53 @@ def handle_memory_profile_reindex(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_persona_list(args: argparse.Namespace) -> int:
+    static = list(BUILTIN_PERSONAS) + [MODERATOR_PERSONA, SYNTHESIZER_PERSONA]
+    print("Built-in personas (static):")
+    for p in static:
+        print(f"  {p.id}: {p.description}")
+    prompts = PersonaPromptRepository(args.project_root).list()
+    if prompts:
+        print()
+        print("Custom personas (dynamic):")
+        for p in prompts:
+            print(f"  {p.name} (id={p.id})")
+    else:
+        print("  (no custom personas yet — use persona_craft in chat to create one)")
+    return 0
+
+
+def handle_persona_show(args: argparse.Namespace) -> int:
+    repo = PersonaPromptRepository(args.project_root)
+    prompt = repo.resolve(args.name_or_id)
+    if prompt is None:
+        print(f"Persona not found: {args.name_or_id}", file=sys.stderr)
+        return 1
+    print(f"Name: {prompt.name}")
+    print(f"ID:   {prompt.id}")
+    print(f"Created: {prompt.created_at}")
+    print(f"Updated: {prompt.updated_at}")
+    print("---")
+    print(prompt.prompt)
+    return 0
+
+
+def handle_persona_delete(args: argparse.Namespace) -> int:
+    repo = PersonaPromptRepository(args.project_root)
+    prompt = repo.resolve(args.name_or_id)
+    if prompt is None:
+        print(f"Persona not found: {args.name_or_id}", file=sys.stderr)
+        return 1
+    if not args.yes:
+        confirm = input(f"Delete persona '{prompt.name}'? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("Aborted.")
+            return 0
+    repo.delete(prompt.id)
+    print(f"Deleted persona: {prompt.name}")
+    return 0
+
+
 def _send_chat(message: str, project_root: Path | None, thread_id: str = "default") -> int:
     result = _send_chat_interactive(message, project_root, thread_id)
     if result.reply is not None:
@@ -2863,6 +2924,10 @@ def _is_interactive_activity_log(event: LogEvent) -> bool:
             "host_discussion_decision",
             "persona_discussion",
             "persona_discussion_step",
+            "persona_crafted",
+            "persona_listed",
+            "persona_think",
+            "persona_think_failed",
         }
     if event.component == "chat":
         if event.event == "service_tool_called":

@@ -15,6 +15,7 @@ TraceKind: TypeAlias = Literal[
     "reason_step",
     "promotion",
     "decision",
+    "persona_prompt_created",
 ]
 TraceVisibility: TypeAlias = Literal["private", "shareable", "internal"]
 TraceRelation: TypeAlias = Literal[
@@ -35,6 +36,7 @@ TRACE_KINDS: tuple[TraceKind, ...] = (
     "reason_step",
     "promotion",
     "decision",
+    "persona_prompt_created",
 )
 TRACE_VISIBILITIES: tuple[TraceVisibility, ...] = ("private", "shareable", "internal")
 TRACE_RELATIONS: tuple[TraceRelation, ...] = (

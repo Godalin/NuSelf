@@ -180,6 +180,24 @@ class TraceRecorder:
             },
         )
 
+    def record_persona_prompt_created(
+        self,
+        *,
+        persona_prompt_id: str,
+        name: str,
+        participants: list[str] | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> ThoughtTrace:
+        return self.record(
+            kind="persona_prompt_created",
+            title=f"Persona prompt: {name}",
+            summary=f"Created or updated dynamic thinking persona: {name}",
+            outputs=[f"persona_prompt:{persona_prompt_id}"],
+            participants=participants or ["chat"],
+            visibility="private",
+            metadata={"prompt_id": persona_prompt_id, "name": name, **(metadata or {})},
+        )
+
     def record_reflection_promoted(
         self,
         *,
