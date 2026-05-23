@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
+from langchain.agents.factory import ToolStrategy as _ToolStrategy
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
@@ -115,6 +116,7 @@ class ChatResult:
     evidence_references: tuple[str, ...] = ()
     confidence: float | None = None
     epistemic_status: str = "inferred"
+    trace_id: str | None = None
 
     @property
     def reply(self) -> str:
@@ -130,6 +132,8 @@ class ChatResult:
         }
         if self.confidence is not None:
             payload["confidence"] = self.confidence
+        if self.trace_id is not None:
+            payload["trace_id"] = self.trace_id
         return payload
 
 
@@ -350,7 +354,7 @@ class ConversationGraphRuntime:
                 duration_ms=duration_ms,
                 status="completed",
             )
-        self._record_chat_turn_trace(
+        trace_id = self._record_chat_turn_trace(
             user_message=message,
             final_response=final_response,
             thread_id=thread_id,
@@ -363,6 +367,7 @@ class ConversationGraphRuntime:
             evidence_references=tuple(final_response.evidence_references),
             confidence=final_response.confidence,
             epistemic_status=final_response.epistemic_status,
+            trace_id=trace_id,
         ), turn_state.node_trace
 
     def _record_chat_turn_trace(
@@ -372,12 +377,12 @@ class ConversationGraphRuntime:
         final_response: ChatStructuredOutput,
         thread_id: str,
         node_trace: tuple[ConversationNodeName, ...],
-    ) -> None:
+    ) -> str | None:
         if not final_response.evidence_references:
-            return
+            return None
         evidence_refs = list(final_response.evidence_references)
         try:
-            self._trace_recorder.record_chat_turn(
+            trace = self._trace_recorder.record_chat_turn(
                 title=f"Chat turn cited {evidence_refs[0]}",
                 summary="Assistant reply used retrieved context cited by the final response.",
                 user_input=trace_summary(user_message),
@@ -388,6 +393,7 @@ class ConversationGraphRuntime:
                 decision_points=["Recorded because the final response cited evidence references."],
                 metadata={"node_trace": list(node_trace), "epistemic_status": final_response.epistemic_status},
             )
+            return trace.id
         except Exception as exc:
             write_log_event(
                 "memory",
@@ -398,6 +404,7 @@ class ConversationGraphRuntime:
                 status="error",
                 metadata={"error": str(exc)},
             )
+        return None
 
     # ------------------------------------------------------------------
     # LangGraph node wrappers
@@ -941,11 +948,62 @@ class _LangChainChatSupervisor:
             model=self._endpoint.model,
             tools=list(self._tools),
             system_prompt=system_prompt,
-            response_format=ChatStructuredOutput,
+            response_format=_ToolStrategy(schema=ChatStructuredOutput),
             middleware=[middleware],
         )
         result = agent.invoke({"messages": messages})
-        return _structured_response_from_agent_state(result)
+        return _structured_output_from_state(result)
+
+
+def _structured_output_from_state(result: object) -> ChatStructuredOutput:
+    """Extract ChatStructuredOutput from agent state.
+
+    1. Prefer ``state.structured_response`` (set by LangChain's
+       ``response_format`` mechanism) — validated that the answer
+       doesn't contain tool call markers.
+    2. Fall through to parse the last message content directly.
+    """
+    if not isinstance(result, dict):
+        raise ValueError(f"LangChain agent returned invalid state: {type(result).__name__}")
+    state = cast(dict[str, object], result)
+
+    # Priority 1 — structured_response from response_format mechanism.
+    structured = state.get("structured_response")
+    if isinstance(structured, ChatStructuredOutput):
+        if not _looks_like_tool_call(structured.answer):
+            return structured
+    elif isinstance(structured, dict):
+        try:
+            parsed = ChatStructuredOutput.model_validate(structured)
+            if not _looks_like_tool_call(parsed.answer):
+                return parsed
+        except Exception:
+            pass
+
+    # Priority 2 — parse last message content.
+    msgs = state.get("messages")
+    if isinstance(msgs, list) and msgs:
+        last = cast(object, msgs[-1])
+        content = getattr(last, "content", None)
+        if isinstance(content, str):
+            if _looks_like_tool_call(content):
+                raise ValueError(
+                    f"Agent produced tool call text instead of structured response: {content[:200]!r}"
+                )
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, dict):
+                    return ChatStructuredOutput.model_validate(cast(dict[str, object], parsed))
+            except json.JSONDecodeError:
+                pass
+            return ChatStructuredOutput(answer=content)
+    raise ValueError("no valid structured output in agent state")
+
+
+def _looks_like_tool_call(text: str) -> bool:
+    """Heuristic: does the text look like a serialised tool call?"""
+    # Minimax serialises tool calls as ``minimax:tool_call`` XML markers.
+    return "minimax:tool_call" in text
 
 
 def _split_prompt(prompt: list[ChatMessage]) -> tuple[str | None, list[BaseMessage]]:
@@ -961,31 +1019,11 @@ def _split_prompt(prompt: list[ChatMessage]) -> tuple[str | None, list[BaseMessa
     return ("\n\n".join(system_parts) if system_parts else None), messages
 
 
-def _structured_response_from_agent_state(result: object) -> ChatStructuredOutput:
-    if not isinstance(result, dict):
-        raise ValueError(f"LangChain agent returned invalid state: {type(result).__name__}")
-    state = cast(dict[str, object], result)
-    structured = state.get("structured_response")
-    if isinstance(structured, ChatStructuredOutput):
-        return structured
-    if isinstance(structured, dict):
-        return ChatStructuredOutput.model_validate(structured)
-    messages = state.get("messages")
-    if isinstance(messages, list) and messages:
-        last = cast(object, messages[-1])
-        content = getattr(last, "content", None)
-        if isinstance(content, str):
-            try:
-                return ChatStructuredOutput.model_validate_json(content)
-            except Exception as exc:
-                raise ValueError(f"LangChain agent returned non-JSON response: {content[:200]!r}") from exc
-    raise ValueError("LangChain agent did not return a structured_response")
 
 
 
-
-
-
+# ======================================================================
+# Module-level helpers
 # ======================================================================
 # Module-level helpers
 # ======================================================================
@@ -1104,8 +1142,7 @@ def _tool_prompt_sections(tools: "Iterable[BaseTool]") -> list[str]:
         "",
         "Available tools:",
         "The following LangChain tools are loaded in the current NuSelf runtime.",
-        "CRITICAL: When the user asks a question that a tool can answer, you MUST call the tool before generating your final answer.",
-        "Do NOT answer from your training data; always use the tool to get the actual current state.",
+        "CRITICAL: When the user asks a question that a tool can answer, you MUST call the tool before generating your final answer. Always use the tool to get the actual current state.",
         "Tools are bound through LangChain's native tool-calling API.",
         'Do not write visible markers such as "[Tool call: memory_search]" or JSON tool fields in the answer body.',
         "The tool will be executed and its result injected back into context. Only then generate your final answer.",

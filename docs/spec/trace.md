@@ -254,8 +254,10 @@ v0.2.0 must record traces for:
 
 - reason thread creation: `kind=reason_thread`;
 - reason advance: `kind=reason_step`;
+- reflection creation: `kind=reflection`;
 - reflection promotion into reason: `kind=promotion`;
-- important chat turns when the answer used memory, source, reflection, or reason context: `kind=chat_turn`.
+- important chat turns when the answer used memory, source, reflection, or reason context: `kind=chat_turn`;
+- memory curator auto-accept: `kind=memory_update`.
 
 Important chat turn rule:
 
@@ -275,8 +277,15 @@ Reason integration:
 
 Reflection integration:
 
+- Creating a reflection writes a `reflection` trace.
 - Promoting a reflection into a reason thread writes a `promotion` trace.
 - The promotion trace links the reflection candidate/entry to the new reason thread.
+
+Memory integration:
+
+- Creating a memory entry through the curator's auto-accept writes a `memory_update` trace.
+- The trace's `evidence_refs` links to the source `chat_turn` trace when available, enabling provenance from memory entry back to the original conversation.
+- The trace is recorded best-effort: failure does not prevent the memory entry from being saved.
 
 ## CLI Contract
 

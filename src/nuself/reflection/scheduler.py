@@ -177,6 +177,47 @@ class ReflectionScheduler:
             discussion_trace=discussion_trace,
         )
         self._reflection_repo.add(entry)
+        try:
+            from nuself.trace.service import TraceRecorder
+
+            decision_points: list[str] = [
+                f"Relevance gate passed: composite={score.composite:.2f} threshold={self._config.gate.relevance_threshold}",
+                f"Novelty={score.novelty:.2f} confidence={score.confidence:.2f} urgency={score.urgency:.2f}",
+            ]
+            if discussion_approved is not None:
+                decision_points.append(
+                    f"Persona discussion threshold met (composite >= {self._config.gate.persona_discussion_threshold})"
+                )
+                decision_points.append(
+                    f"Persona discussion {'approved' if discussion_approved else 'rejected'}"
+                )
+            else:
+                decision_points.append(
+                    f"Below persona discussion threshold ({self._config.gate.persona_discussion_threshold}), no discussion triggered"
+                )
+
+            TraceRecorder(project_root=self._project_root).record_reflection_created(
+                reflection_id=entry.id,
+                title=entry.title,
+                body=entry.body,
+                candidate_type=entry.candidate_type,
+                composite_score=entry.composite_score,
+                discussion_approved=entry.discussion_approved,
+                thread_id="reflections",
+                decision_points=decision_points,
+            )
+        except Exception as exc:
+            from nuself.logs import write_log_event
+
+            write_log_event(
+                "reflection",
+                "trace_recording_failed",
+                f"failed to record trace for reflection: {exc}",
+                project_root=self._project_root,
+                level="error",
+                status="failed",
+                error=str(exc),
+            )
         self._organize_pending_reflections()
         self._write_last_reflection(now, title=title, body=body)
 

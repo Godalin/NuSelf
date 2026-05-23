@@ -109,7 +109,7 @@ def test_daemon_chat_error_preserves_repeated_exception_messages(tmp_path: Path)
 
 
 class FakeChangedCurator:
-    def run_once(self) -> MemoryCuratorResult:
+    def run_once(self, **kwargs: object) -> MemoryCuratorResult:
         return MemoryCuratorResult(
             processed_messages=2,
             created=1,

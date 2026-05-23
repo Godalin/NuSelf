@@ -290,7 +290,7 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
         with log_context(request_id=request.request_id, thread_id=thread_id, turn_id=turn_id, source="daemon"):
             try:
                 result = state.chat_agent.respond(message, thread_id=thread_id, turn_id=turn_id)
-                memory_update = _run_memory_curator_once(state.memory_curator)
+                memory_update = _run_memory_curator_once(state.memory_curator, source_trace_id=result.trace_id)
             except RuntimeError as exc:
                 error_detail = _format_exception_chain(exc)
                 write_log_event(
@@ -342,9 +342,9 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
     return DaemonResponse.fail(request.request_id, f"unsupported request type: {request.type}")
 
 
-def _run_memory_curator_once(memory_curator: MemoryCurator) -> MemoryCuratorResult | None:
+def _run_memory_curator_once(memory_curator: MemoryCurator, *, source_trace_id: str | None = None) -> MemoryCuratorResult | None:
     try:
-        return memory_curator.run_once()
+        return memory_curator.run_once(source_trace_id=source_trace_id)
     except RuntimeError:
         return None
 

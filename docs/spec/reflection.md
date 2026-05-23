@@ -54,8 +54,31 @@ reflect()
   ├─ persona_discussion            (if score ≥ persona_discussion_threshold)
   │   └─ cycle_discussion_rejected (if !approved)
   └─ ReflectionRepository.add()    ( ReflectionEntry created )
+       ├─ TraceRecorder.record_reflection_created()  ← kind="reflection"
        └─ auto_notify? → NotificationOutbox.add(brief notify)
 ```
+
+## Trace Recording
+
+Every published reflection must create a `ThoughtTrace` with `kind="reflection"`. This provides provenance for the reflection's existence so users can trace why it was created.
+
+The trace is recorded by `ReflectionScheduler.reflect()` immediately after `ReflectionRepository.add()` succeeds.
+
+Trace fields:
+
+| ThoughtTrace Field | Value |
+|---|---|
+| `kind` | `"reflection"` |
+| `title` | Reflection title |
+| `summary` | Reflection body (2-4 sentences) |
+| `inputs` | `[]` — generated proactively, not from user input |
+| `evidence_refs` | `[]` (no direct evidence chain in v0.2.0) |
+| `outputs` | `["reflection:{entry.id}"]` |
+| `participants` | `["reflection"]` |
+| `thread_id` | Key used for link building or cross-referencing, e.g. `"reflections"` |
+| `visibility` | `"private"` |
+| `decision_points` | `["Relevance gate passed: composite=... threshold=...", "Persona discussion approved/rejected"]` |
+| `metadata` | `{"candidate_type": ..., "composite_score": ..., "discussion_approved": ...}` |
 
 ## LLMRelevanceGate Scoring
 

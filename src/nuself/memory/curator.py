@@ -15,6 +15,7 @@ from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, 
 from nuself.profile.repository import ProfileItemRepository
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
+from nuself.trace.service import TraceRecorder
 
 MemoryActionType: TypeAlias = Literal["create", "update", "ignore"]
 DecisionStatus: TypeAlias = Literal["ready", "deferred"]
@@ -103,6 +104,7 @@ class MemoryCurator:
         candidate_repository: MemoryCandidateRepository | None = None,
         profile_repository: ProfileItemRepository | None = None,
         registry: MemoryTypeRegistry | None = None,
+        trace_recorder: TraceRecorder | None = None,
     ) -> None:
         paths = runtime_paths(project_root)
         self._paths = paths
@@ -116,8 +118,11 @@ class MemoryCurator:
             entry_repository=self._repository,
         )
         self._registry = registry or default_memory_type_registry()
+        self._trace_recorder = trace_recorder
+        self._source_trace_id: str | None = None
 
-    def run_once(self, thread_id: str = "default") -> MemoryCuratorResult:
+    def run_once(self, thread_id: str = "default", *, source_trace_id: str | None = None) -> MemoryCuratorResult:
+        self._source_trace_id = source_trace_id
         state = self._thread_store.load(thread_id)
         cursor = self._load_cursor(thread_id)
         visible_start = state.message_start_index
@@ -366,8 +371,27 @@ class MemoryCurator:
             if isinstance(result, MemoryEntry) and result.review_state != "quarantined":
                 reviewed = result.with_updates(review_state="reviewed")
                 self._repository.save(reviewed)
+                self._record_memory_update_trace(result)
         except (ValueError, MemoryEntryNotFound):
             pass
+
+    def _record_memory_update_trace(self, entry: MemoryEntry) -> None:
+        if self._trace_recorder is None:
+            return
+        try:
+            self._trace_recorder.record_memory_update(
+                memory_id=entry.id,
+                title=entry.title,
+                summary=entry.body,
+                memory_type=entry.type,
+                action="create",
+                confidence=entry.confidence,
+                source_trace_id=self._source_trace_id,
+            )
+        except Exception as exc:
+            self._append_log(
+                f"memory_update_trace_failed id={entry.id} error={exc}"
+            )
 
     def _load_cursor(self, thread_id: str) -> int:
         path = self._cursor_path(thread_id)

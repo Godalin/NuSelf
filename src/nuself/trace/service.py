@@ -119,6 +119,67 @@ class TraceRecorder:
             },
         )
 
+    def record_reflection_created(
+        self,
+        *,
+        reflection_id: str,
+        title: str,
+        body: str,
+        candidate_type: str,
+        composite_score: float,
+        discussion_approved: bool | None,
+        thread_id: str | None = None,
+        decision_points: list[str] | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> ThoughtTrace:
+        return self.record(
+            kind="reflection",
+            title=title,
+            summary=body,
+            outputs=[f"reflection:{reflection_id}"],
+            participants=["reflection"],
+            thread_id=thread_id,
+            decision_points=decision_points or [],
+            visibility="private",
+            metadata={
+                "candidate_type": candidate_type,
+                "composite_score": composite_score,
+                "discussion_approved": discussion_approved,
+                **(metadata or {}),
+            },
+        )
+
+    def record_memory_update(
+        self,
+        *,
+        memory_id: str,
+        title: str,
+        summary: str,
+        memory_type: str,
+        action: str,
+        confidence: float,
+        source_trace_id: str | None = None,
+        participants: list[str] | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> ThoughtTrace:
+        evidence_refs = [f"trace:{source_trace_id}"] if source_trace_id else []
+        return self.record(
+            kind="memory_update",
+            title=title,
+            summary=summary,
+            outputs=[f"memory:{memory_id}"],
+            evidence_refs=evidence_refs,
+            participants=participants or ["memory_curator"],
+            decision_points=[f"curator action: {action} (confidence={confidence:.2f}, type={memory_type})"],
+            visibility="private",
+            metadata={
+                "memory_type": memory_type,
+                "action": action,
+                "confidence": confidence,
+                **(metadata or {}),
+            },
+        )
+
     def record_reflection_promoted(
         self,
         *,
