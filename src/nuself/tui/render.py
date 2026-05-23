@@ -456,6 +456,54 @@ def _should_color() -> bool:
     return sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
 
 
+_color_depth_256: bool | None = None
+
+
+def _supports_256_color() -> bool:
+    global _color_depth_256
+    if _color_depth_256 is not None:
+        return _color_depth_256
+    colorterm = os.environ.get("COLORTERM")
+    if colorterm in ("truecolor", "24bit"):
+        _color_depth_256 = True
+        return True
+    term = os.environ.get("TERM", "")
+    if "256color" in term:
+        _color_depth_256 = True
+        return True
+    _color_depth_256 = False
+    return False
+
+
+_COLORS_256: dict[str, str] = {
+    "daemon": "90",
+    "chat": "34",
+    "memory": "32",
+    "persona": "35",
+    "reasoning": "201",
+    "selves": "213",
+    "outbox": "36",
+    "trace": "96",
+    "reflection": "33",
+    "workspace": "208",
+    "skill": "31",
+}
+
+_COLORS_BASIC: dict[str, str] = {
+    "daemon": "90",
+    "chat": "34",
+    "memory": "32",
+    "persona": "35",
+    "reasoning": "35",
+    "selves": "35",
+    "outbox": "36",
+    "trace": "36",
+    "reflection": "33",
+    "workspace": "33",
+    "skill": "31",
+}
+
+
 def _display_component(component: str) -> str:
     if component == "persona":
         return "selves"
@@ -463,29 +511,9 @@ def _display_component(component: str) -> str:
 
 
 def _component_color(component: str) -> str:
-    if component == "daemon":
-        return "90"
-    if component == "chat":
-        return "34"
-    if component == "memory":
-        return "32"
-    if component == "persona":
-        return "35"
-    if component == "outbox":
-        return "36"
-    if component == "reflection":
-        return "33"
-    if component == "reasoning":
-        return "35"
-    if component == "trace":
-        return "36"
-    if component == "selves":
-        return "35"
-    if component == "skill":
-        return "31"
-    if component == "workspace":
-        return "33"
-    return "0"
+    if _supports_256_color():
+        return _COLORS_256.get(component, "0")
+    return _COLORS_BASIC.get(component, "0")
 
 
 def _status_color(status: str) -> str:

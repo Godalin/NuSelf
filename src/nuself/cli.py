@@ -98,7 +98,7 @@ try:
     from nuself.reason.service import ReasonService
     from nuself.reason.repository import ReasonNotFound
     from nuself.tui.reason import render_reason_detail, render_reason_row, render_step_watch_entry
-    from nuself.tui.render import format_display_timestamp, render_log_event, render_log_event_json, render_session_header
+    from nuself.tui.render import TerminalTheme, format_display_timestamp, render_log_event, render_log_event_json, render_session_header
     from nuself.tui.trace import render_trace_detail, render_trace_row
 finally:
     warnings.warn = _original_warn
@@ -2015,7 +2015,8 @@ def _send_chat(message: str, project_root: Path | None, thread_id: str = "defaul
     if result.reply is not None:
         _print_assistant_reply(result.reply)
     if result.memory_update is not None:
-        print(f"[memory] {result.memory_update}")
+        theme = TerminalTheme()
+        print(f"{theme.tag('[memory]', 'memory')} {result.memory_update}")
     if result.error is not None:
         print(result.error, file=sys.stderr)
     return result.code
@@ -2194,7 +2195,8 @@ def _send_interactive_chat_turn(
                 print()
                 print("Logs:")
                 printed_logs = True
-            print(f"[memory] {result.memory_update}")
+            _theme = TerminalTheme()
+            print(f"{_theme.tag('[memory]', 'memory')} {result.memory_update}")
         if result.reply is not None:
             print()
             print("NuSelf:")
@@ -2467,7 +2469,8 @@ def _run_memory_curator(project_root: Path | None) -> None:
             status="error",
             error=str(exc),
         )
-        print(f"[memory] curator failed: {exc}", file=sys.stderr)
+        _theme = TerminalTheme()
+        print(f"{_theme.tag('[memory]', 'memory')} curator failed: {exc}", file=sys.stderr)
         return
     if result.changed:
         write_log_event(
@@ -2478,7 +2481,8 @@ def _run_memory_curator(project_root: Path | None) -> None:
             status="changed",
             metadata={"summary": result.summary()},
         )
-        print(f"[memory] {result.summary()}")
+        _theme = TerminalTheme()
+        print(f"{_theme.tag('[memory]', 'memory')} {result.summary()}")
 
 
 def _record_cli_memory_trace(project_root: Path | None, entry: MemoryEntry, action: str) -> None:
