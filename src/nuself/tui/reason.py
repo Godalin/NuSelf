@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from nuself.agent.tool_utils import format_tool_debug_body
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.tui.render import (
     TerminalTheme,
@@ -98,15 +99,8 @@ def _tool_service_tag(name: str) -> str:
     if name == "load_skill":
         return "skill"
     return ""
+ 
 
-
-def _format_tool_args(args: dict[str, object]) -> str:
-    """Format tool args as args: {json} matching the log system convention."""
-    raw = args.get("_raw")
-    if raw is not None and isinstance(raw, str):
-        return f"args: {raw}"
-    import json as _json
-    return f"args: {_json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
 
 
 def _render_step_body(
@@ -132,8 +126,7 @@ def _render_step_body(
             tc_rendered = render_tool_call(
                 component="reasoning",
                 service=service_tag,
-                args_text=_format_tool_args(args_dict),
-                result=tc_result,
+                args_text=format_tool_debug_body(args=args_dict, result=tc_result, full=True),
                 status="completed",
                 color=theme.color,
             )

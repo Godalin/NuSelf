@@ -172,12 +172,75 @@ def render_record_block(label: str, fields: Sequence[str] = (), *, body: str = "
     return "\n".join(lines)
 
 
+def _colorize_tool_body(body: str, theme: TerminalTheme) -> str:
+    """Apply Rich JSON syntax highlighting to a tool call body string.
+
+    Each line in *body* either starts a JSON section (``args:``, ``result:``,
+    ``error:``) or continues the previous one.  Valid JSON sections are
+    re-rendered through ``rich.json.JSON`` for colored display.
+    """
+    if not theme.color:
+        return body
+
+    from rich.console import Console
+    from rich.json import JSON as RichJSON
+    import io
+
+    lines = body.splitlines()
+    out: list[str] = []
+    section_tag: str | None = None
+    section_raw: list[str] = []
+
+    def flush() -> None:
+        nonlocal section_tag, section_raw
+        if section_tag is None:
+            return
+        content = "\n".join(section_raw)
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            out.append(f"{section_tag}: {content}")
+            section_tag = None
+            section_raw = []
+            return
+        buf = io.StringIO()
+        Console(file=buf, force_terminal=True, width=160).print(
+            RichJSON(json.dumps(parsed, indent=2), indent=2), end=""
+        )
+        hl = buf.getvalue().rstrip()
+        hl_lines = hl.splitlines()
+        out.append(f"{section_tag}: {hl_lines[0]}")
+        out.extend(hl_lines[1:])
+        section_tag = None
+        section_raw = []
+
+    for line in lines:
+        stripped = line.strip()
+        tag: str | None = None
+        if stripped.startswith("args:"):
+            tag = "args"
+        elif stripped.startswith("result:"):
+            tag = "result"
+        elif stripped.startswith("error:"):
+            tag = "error"
+        if tag is not None:
+            flush()
+            section_tag = tag
+            _, _, rest = stripped.partition(": ")
+            section_raw = [rest] if rest else []
+        elif section_tag is not None:
+            section_raw.append(stripped)
+        else:
+            out.append(line)
+    flush()
+    return "\n".join(out)
+
+
 def render_tool_call(
     *,
     component: str,
     service: str,
     args_text: str,
-    result: str | None = None,
     status: str = "completed",
     extra_fields: dict[str, object] | None = None,
     color: bool | None = None,
@@ -199,13 +262,10 @@ def render_tool_call(
             if v is not None:
                 header_parts.append(theme.muted(_format_log_field(k, v)))
     lines = [" ".join(header_parts)]
-    for line in args_text.splitlines():
+    colored_body = _colorize_tool_body(args_text, theme)
+    for line in colored_body.splitlines():
         if line.strip():
             lines.append(f"  {line}")
-    if result:
-        for line in result.splitlines():
-            if line.strip():
-                lines.append(f"  result: {line}")
     return "\n".join(lines)
 
 
