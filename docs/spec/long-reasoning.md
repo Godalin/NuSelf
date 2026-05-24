@@ -1,6 +1,6 @@
 # Long-Run Reasoning Spec
 
-Status: updated — chat-based thread initiation added.
+Status: updated — chat-based thread initiation + turn-confirmation protocol (v2).
 
 ## Purpose
 
@@ -142,90 +142,140 @@ context (working_summary, hypotheses, evidence_refs) in its metadata.
 
 ## Turn-Confirmation Protocol
 
-A shared mechanism for any subsystem (reasoning, memory, etc.) to ask the
-user a yes/no question in the chat flow without requiring LLM tool calls.
+A shared architecture layer for any subsystem to ask the user a
+yes/no question in the chat flow without blocking the agent.
 
-### How It Works
+### Domain Events vs Operational Logs
 
-1. A subsystem writes a `proposal_created` log event
-   (e.g. `{component: "reason", event: "proposal_created"}` or
-   `{component: "memory", event: "candidate_created"}`). The event's
-   metadata contains a unique proposal id and a human-readable description.
-2. The sender returns a PENDING signal string in the tool result or
-   function return value, e.g. `"PENDING:reason-proposal:{id}"`.
-3. After the chat turn completes, the CLI checks the captured log events
-   for any `proposal_created` / `candidate_created` events.
-4. If found, the CLI prints a confirmation prompt:
-   `[reason] 开启推理线程「question」? (y/n):`
-   `[memory] 记录记忆「title」? (y/n):`
-5. The CLI reads one line of user input.
-6. On `y`/`yes`: the CLI executes the confirmed action
-   (calls `ReasonService.start_thread()` / promotes candidate to entry).
-   On `n`/`no`: the proposal is discarded (candidate stays in queue).
-7. Normal chat loop resumes.
+This protocol uses the existing log system as a **domain event bus**,
+not as operational logging:
+
+- **Domain events** (`proposal_created`, `candidate_created`) carry
+  structured payloads that CLI code consumes to drive interactive
+  behavior. They are written by domain logic (tools, curators) and
+  read by the CLI after each chat turn.
+- **Operational logs** (`turn_completed`, `service_tool_called`) record
+  what happened for display and debugging. They are a read-only
+  record and must never drive control flow.
+
+The log file (`private/logs/reasoning.log`) is the transport medium:
+the producer writes an event entry, the consumer reads it after the
+turn. It is NOT an audit trail — confirmed proposals are consumed
+immediately and should not be replayed.
+
+Future subsystems (memory curator, reflection promoter, etc.) can
+plug into this protocol by writing their own `proposal_created` event
+with a unique component name, then adding a handler in
+`_handle_proposals_after_turn`.
+
+### Lifecycle
+
+```
+producer (tool/curator)                     consumer (CLI)
+        │                                        │
+        │  write_log_event(component,             │
+        │    "proposal_created",                  │
+        │    metadata={...})                      │
+        ├─────────────────────────────────────────►
+        │                                        │
+        │  return "PENDING:{ns}:{id}"            │
+        │                                        │
+        │                              turn finishes
+        │                              reply printed
+        │                              _handle_proposals_after_turn()
+        │                                        │
+        │                              print "[tag] 确认? (y/n):"
+        │                              readline()
+        │                                        │
+        │                              if y/yes: execute action
+        │                              if n/no:  discard silently
+        │                                        │
+        │                              resume normal chat loop
+```
+
+### Event Schema
+
+```python
+write_log_event(
+    component,              # e.g. "reasoning", "memory"
+    "proposal_created",     # fixed event name for all proposals
+    f"{description}",       # human-readable one-liner
+    project_root=...,
+    metadata={
+        "proposal_id": str,     # unique id from producer
+        # ... subsystem-specific fields ...
+    },
+)
+```
 
 ### CLI Contract
 
+After each chat turn, the CLI calls `_handle_proposals_after_turn`
+which scans for `proposal_created` events and dispatches to the
+appropriate handler:
+
 ```python
-def _handle_proposals_after_turn(
-    events: list[LogEvent],
-    project_root: Path | None,
-) -> None:
+def _handle_proposals_after_turn(events, project_root):
+    # 1. Check in-band events from the turn (one-shot mode)
     for event in events:
-        if event.component == "reason" and event.event == "proposal_created":
-            _prompt_and_confirm_reason(event)
-        elif event.component == "memory" and event.event == "candidate_created":
-            _prompt_and_confirm_memory(event)
+        handler = _PROPOSAL_HANDLERS.get((event.component, event.event))
+        if handler:
+            handler(event, project_root)
+            return
+    # 2. Also scan the shared log (daemon mode — turn_ids differ)
+    for event in reversed(read_log_events(tail=50)):
+        handler = _PROPOSAL_HANDLERS.get((event.component, event.event))
+        if handler:
+            handler(event, project_root)
+            return
 ```
 
-Prompt helpers:
+A dispatch registry maps (component, event) to handlers:
 
 ```python
-def _prompt_and_confirm_reason(event: LogEvent) -> None:
-    proposal_id = event.metadata.get("proposal_id", "")
-    question = event.metadata.get("question", "")
-    print(f"[reason] 开启推理线程「{question}」? (y/n): ", end="", flush=True)
+_PROPOSAL_HANDLERS: dict[tuple[str, str], Callable] = {
+    ("reasoning", "proposal_created"): _confirm_reason_proposal,
+    # ("memory",    "proposal_created"): _confirm_memory_candidate,  # future
+}
+```
+
+Each handler follows the same pattern:
+
+```python
+def _confirm_reason_proposal(event, project_root):
+    meta = event.metadata
+    print()  # blank line before prompt
+    print(f"[tag] 确认内容「{meta['question']}」? (y/n): ", end="", flush=True)
     line = sys.stdin.readline().strip().lower()
     if line in ("y", "yes"):
-        # materialise: call ReasonService.start_thread() with stored proposal
+        # materialise: call domain service with meta fields
         ...
-    # else: discard silently or keep as pending
+    # else: discard silently
 ```
 
-### Interaction With Daemon Mode
+### Daemon Mode
 
-In daemon mode, the daemon processes the chat turn and returns an event
-list to the CLI client. The client-side `_send_interactive_chat_turn`
-function checks those events and runs the confirmation prompt locally.
-The daemon itself never blocks waiting for user input — prompting is
-always a CLI responsibility.
+In daemon mode the proposal event is written on the daemon side but
+the log files are shared (`private/logs/` under the same project root).
+The CLI reads the daemon's events from the shared log in step 2 above.
+The daemon never blocks for user input — prompting is always the
+CLI's responsibility.
 
-### Interaction With One-Shot Mode
+### One-Shot Mode
 
-In one-shot mode (`nuself chat --message "..."`), there is no
-conversation loop to prompt in. Pending proposals are written as log
-events but no confirmation prompt is shown. The user can inspect
-pending proposals via a future CLI command or they expire on next
-successful one-shot turn.
+One-shot chat (`nuseful chat --message "..."`) does not enter the
+interactive loop. Proposal events are silently ignored because there
+is no context to prompt in.
 
-### Memory Use Case
+### Extending To Memory (Future)
 
-When the memory curator creates a medium-confidence candidate (high
-enough to consider, not high enough to auto-create), instead of silently
-adding it to the candidate queue, it writes a `candidate_created` log
-event. The CLI detects this and prompts the user immediately. This
-replaces the manual `:mem candidate list` review for the most
-context-relevant candidates.
+When the memory curator creates a medium-confidence candidate,
+instead of adding it quietly to the candidate queue, it writes a
+`proposal_created` event with `component="memory"`. The CLI handler
+detects it and asks the user to confirm the memory entry immediately.
 
-High-confidence memories are still auto-created without prompting.
-Low-confidence proposals remain queued as candidates for offline review.
-
-### Future Extensions
-
-- Batch: if multiple proposals arrive in one turn (e.g. 3 memory
-  candidates), prompt them sequentially.
-- Timeout: if no input within N seconds, skip all pending proposals
-  silently and keep them in queue for offline review.
+High-confidence memories bypass the protocol (auto-create).
+Low-confidence proposals stay in the queue for offline review.
 
 ```text
 private/reasoning/threads/{thread_id}.json
