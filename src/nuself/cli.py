@@ -133,6 +133,15 @@ _PROMPT_TEXT = FormattedText([("class:ansicyan bold", "\nNuSelf> ")])
 _history: FileHistory | None = None
 _interactive_completer: _InteractiveCompleter | None = None
 _theme = TerminalTheme()
+_last_header_thread: str = ""
+
+
+def _maybe_show_session_update(project_root: Path | None, thread_id: str) -> None:
+    global _last_header_thread
+    status = _interactive_daemon_status(project_root) if project_root else "unknown"
+    if thread_id != _last_header_thread or status != "running":
+        _print_ansi(render_session_header(daemon_status=status, thread_id=thread_id))
+    _last_header_thread = thread_id
 
 
 def _print_ansi(text: str, **kwargs: object) -> None:
@@ -2222,6 +2231,7 @@ def _interactive_loop(
     session.start_index_for(project_root, current_thread_id)
     print(_brand_banner())
     print("νSelf interactive mode. Type :help for commands, :q to quit.")
+    _last_header_thread = current_thread_id
     _print_ansi(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
     try:
         while True:
@@ -2246,6 +2256,7 @@ def _interactive_loop(
                 if command_result == "exit":
                     return 0
                 if command_result == "redraw_header":
+                    _last_header_thread = current_thread_id
                     _print_ansi(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
                 continue
             result = _send_interactive_chat_turn(
@@ -2255,7 +2266,7 @@ def _interactive_loop(
                 message,
                 session,
             )
-            _print_ansi(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
+            _maybe_show_session_update(project_root, current_thread_id)
             if result != 0:
                 continue
     finally:
