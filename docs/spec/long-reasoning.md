@@ -502,6 +502,8 @@ nuself reason pause <id_or_index> [--by-index]
 nuself reason resume <id_or_index> [--by-index]
 nuself reason resolve <id_or_index> [--by-index]
 nuself reason archive <id_or_index> [--by-index]
+nuself reason delete <id_or_index> [--by-index]
+nuself reason watch [--interval <seconds>]
 ```
 
 Human-readable output must use the shared record renderer style from `cli-interaction.md`.
@@ -524,6 +526,8 @@ Interactive commands:
 :reason resume <id_or_index>
 :reason resolve <id_or_index>
 :reason archive <id_or_index>
+:reason delete <id_or_index>
+:reason watch
 ```
 
 `:reason` with no arguments prints reason subcommand help. `:reason show` supports `--full` to show all step fields.
