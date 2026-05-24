@@ -189,7 +189,8 @@ class ReasonAdvancer:
             return None
         endpoint = self._langchain_models[0]
         ws_tools = self._build_workspace_tools()
-        all_tools = list(self._readonly_tools) + list(ws_tools)
+        persona_tools = self._build_persona_tools()
+        all_tools = list(self._readonly_tools) + list(ws_tools) + list(persona_tools)
         create_agent = cast(Any, _create_agent)
         return create_agent(
             model=endpoint.model,
@@ -247,6 +248,25 @@ class ReasonAdvancer:
             return ScopedWorkspace(sqlite, ("workspace", thread_id))
 
         return _build_workspace_tools_from_provider(_resolve)
+
+    def _build_persona_tools(self) -> tuple[Any, ...]:
+        """Build thread-scoped persona tools that resolve the current thread."""
+        if self._workspace_store is None:
+            return ()
+
+        from nuself.persona.tools import build_reason_persona_tools
+
+        def _persona_root() -> Path:
+            thread_id = _current_reason_thread_id.get()
+            wpath = self._workspace_store.ensure(thread_id)
+            root = wpath.root / "persona_prompts"
+            root.mkdir(parents=True, exist_ok=True)
+            return root
+
+        return build_reason_persona_tools(
+            global_project_root=self._project_root,
+            get_thread_persona_root=_persona_root,
+        )
 
     def _advance_raw(self, thread: ReasoningThread) -> ReasoningStep | None:
         """Fallback: raw ChatLLM call with pre-injected context."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from langchain_core.tools import StructuredTool
@@ -163,3 +164,114 @@ def _log_persona_tool(
         )
     except RuntimeError:
         pass
+
+
+def build_reason_persona_tools(
+    *,
+    global_project_root: Path | None,
+    get_thread_persona_root: Callable[[], Path],
+) -> tuple[StructuredTool, ...]:
+    """Build persona tools scoped to a reason thread.
+
+    *get_thread_persona_root* is called on each tool invocation to resolve the
+    current thread's private persona directory, allowing the same tool instances
+    to be reused across threads.
+
+    - ``persona_craft`` stores in the thread's private workspace only.
+    - ``persona_list`` merges global + thread personas.
+    - ``persona_think`` resolves from thread first, then global.
+    """
+
+    def _thread_repo() -> PersonaPromptRepository:
+        return PersonaPromptRepository(root=get_thread_persona_root())
+
+    global_repo = PersonaPromptRepository(global_project_root) if global_project_root else None
+
+    def _craft(name: str, prompt: str) -> str:
+        name = name.strip()
+        prompt = prompt.strip()
+        if not name:
+            return "Error: name must be a non-empty string"
+        if not prompt:
+            return "Error: prompt must be a non-empty string"
+        if len(name) > 40:
+            return "Error: name must be 40 characters or fewer"
+
+        repo = _thread_repo()
+        persona = create_persona_prompt(name, prompt, project_root=global_project_root)
+        existing = repo.get_by_name(name)
+        if existing is not None:
+            persona = PersonaPrompt(
+                id=existing.id,
+                name=name,
+                prompt=prompt,
+                created_at=existing.created_at,
+                updated_at=persona.updated_at,
+            )
+        repo.save(persona)
+        _record_prompt_trace(persona, project_root=global_project_root)
+        result = f"Created thinking persona '{name}' (id={persona.id}, scoped to this reason thread)."
+        _log_persona_tool("persona_craft", args={"name": name}, result=result, project_root=global_project_root)
+        return result
+
+    def _list() -> str:
+        repo = _thread_repo()
+        thread_prompts = repo.list()
+        global_prompts = global_repo.list() if global_repo else ()
+        all_prompts = list(global_prompts) + list(thread_prompts)
+        if not all_prompts:
+            result = "No thinking personas available. Use persona_craft to create one."
+        else:
+            lines = ["Available thinking personas:"]
+            for p in all_prompts:
+                tag = " [thread]" if repo.get(p.id) is not None else ""
+                lines.append(f"  - {p.name} (id={p.id}){tag}")
+            result = "\n".join(lines)
+        _log_persona_tool("persona_list", args={}, result=result, project_root=global_project_root)
+        return result
+
+    def _think(persona: str, question: str) -> str:
+        persona = persona.strip()
+        question = question.strip()
+        if not persona:
+            return "Error: persona must be a non-empty string (name or id)"
+        if not question:
+            return "Error: question must be a non-empty string"
+
+        thread_repo_inst = _thread_repo()
+        prompt = thread_repo_inst.resolve(persona)
+        if prompt is None and global_repo is not None:
+            prompt = global_repo.resolve(persona)
+        if prompt is None:
+            available: list[str] = []
+            if global_repo:
+                available.extend(p.name for p in global_repo.list())
+            available.extend(p.name for p in thread_repo_inst.list())
+            if available:
+                return f"No persona found for '{persona}'. Available: {', '.join(available)}"
+            return f"No persona found for '{persona}'. Use persona_craft to create one first."
+
+        messages = [
+            ChatMessage(role="system", content=prompt.prompt),
+            ChatMessage(role="user", content=question),
+        ]
+        from nuself.llm import default_llm
+
+        llm = default_llm(global_project_root)
+        try:
+            raw = llm.complete(messages)
+        except RuntimeError as exc:
+            error_msg = f"persona_think failed: {exc}"
+            _log_persona_tool("persona_think", args={"persona": persona, "question": question}, error=error_msg, project_root=global_project_root)
+            return error_msg
+        result = raw.strip()
+        _log_persona_tool("persona_think", args={"persona": persona, "question": question}, result=result, project_root=global_project_root)
+        return result
+
+    from langchain_core.tools import StructuredTool
+
+    return (
+        StructuredTool.from_function(func=_craft, name="persona_craft", description="Create or update a thinking persona scoped to the current reason thread. Also consults global personas when listing and thinking."),
+        StructuredTool.from_function(func=_list, name="persona_list", description="List all available thinking personas (global + current reason thread).", tags=("readonly",)),
+        StructuredTool.from_function(func=_think, name="persona_think", description="Consult a thinking persona by name or id (searches thread scope first, then global).", tags=("readonly",)),
+    )

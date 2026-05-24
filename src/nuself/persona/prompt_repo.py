@@ -52,11 +52,17 @@ def _expect_str(data: dict[str, object], key: str) -> str:
 class PersonaPromptRepository:
     """File-backed repository for dynamic thinking personas.
 
-    Stored under ``private/persona_prompts/``.
+    By default stores under ``private/persona_prompts/``.
+    Pass a custom *root* to scope to a thread workspace.
     """
 
-    def __init__(self, project_root: Path | None = None) -> None:
-        self._root = runtime_paths(project_root).private_root / "persona_prompts"
+    def __init__(self, project_root: Path | None = None, *, root: Path | None = None) -> None:
+        if root is not None:
+            self._root = root
+        else:
+            paths = runtime_paths(project_root)
+            self._root = paths.private_root / "persona_prompts"
+        self._is_scoped = root is not None
 
     # Public API ---------------------------------------------------------------
 
