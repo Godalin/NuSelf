@@ -202,7 +202,8 @@ write_log_event(
     f"{description}",       # human-readable one-liner
     project_root=...,
     metadata={
-        "proposal_id": str,     # unique id from producer
+        "proposal_id": str,     # unique id — MUST be unique per proposal so
+                                # the CLI can deduplicate stale log entries
         # ... subsystem-specific fields ...
     },
 )
