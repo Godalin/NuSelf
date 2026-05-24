@@ -135,6 +135,7 @@ _interactive_completer: _InteractiveCompleter | None = None
 _theme = TerminalTheme()
 _last_header_thread: str = ""
 _last_header_status: str = ""
+_handled_proposal_ids: set[str] = set()
 
 
 def _maybe_show_session_update(project_root: Path | None, thread_id: str) -> None:
@@ -164,8 +165,10 @@ def _handle_proposals_after_turn(events: list[LogEvent], project_root: Path | No
     proposal: LogEvent | None = None
     for event in reversed(fresh):
         if event.component == "reasoning" and event.event == "proposal_created":
-            proposal = event
-            break
+            pid = (event.metadata or {}).get("proposal_id", "") or ""
+            if pid not in _handled_proposal_ids:
+                proposal = event
+                break
     if proposal is not None:
         _prompt_and_confirm_reason_proposal(proposal, project_root)
 
@@ -173,8 +176,10 @@ def _handle_proposals_after_turn(events: list[LogEvent], project_root: Path | No
 def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | None) -> None:
     meta = event.metadata or {}
     question = meta.get("question", "") or ""
+    proposal_id = meta.get("proposal_id", "") or ""
     if not question:
         return
+    _handled_proposal_ids.add(proposal_id)
     print()
     tag = _theme.tag("[reason]", "reasoning")
     _print_ansi(f"{tag} 开启推理线程「{question}」? (y/n): ", end="", flush=True)
