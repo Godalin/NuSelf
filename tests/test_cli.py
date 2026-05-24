@@ -281,12 +281,14 @@ def test_interactive_turn_prints_activity_events(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
+    monkeypatch.setattr("nuself.cli._last_header_thread", "")
+    monkeypatch.setattr("nuself.cli._last_header_status", "")
 
     result = main(["--project-root", str(tmp_path), "chat"])
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "\nNuSelf:\nLLM API is not configured yet." in captured.out
+    assert "\nNuSelf:\n\nLLM API is not configured yet." in captured.out
     assert "[chat] one_shot_chat_completed" not in captured.out
     assert "LLM API is not configured yet" in captured.out
     assert "Last message: hello\n[daemon] session status=one-shot thread=default" in captured.out
@@ -336,8 +338,8 @@ def test_interactive_turn_prints_activity_events_while_waiting(
 
     assert result == 0
     assert "Logs:\n[chat] [memory] service_tool_called" in captured.out
-    assert "NuSelf:\nfinal reply" in captured.out
-    assert captured.out.index("[chat] [memory] service_tool_called") < captured.out.index("NuSelf:\nfinal reply")
+    assert "NuSelf:\n\nfinal reply" in captured.out
+    assert captured.out.index("[chat] [memory] service_tool_called") < captured.out.index("NuSelf:\n\nfinal reply")
 
 
 def test_interactive_turn_hides_background_activity_events(
@@ -391,7 +393,7 @@ def test_interactive_turn_hides_background_activity_events(
     assert "background reasoning advanced" not in captured.out
     assert "[chat] [memory] service_tool_called" in captured.out
     assert "visible service result" in captured.out
-    assert "NuSelf:\nfinal reply" in captured.out
+    assert "NuSelf:\n\nfinal reply" in captured.out
     captured_events = session.transcript_log_events("default", include_all=True)
     assert [event.component for event in captured_events] == ["chat"]
 

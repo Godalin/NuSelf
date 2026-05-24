@@ -134,14 +134,16 @@ _history: FileHistory | None = None
 _interactive_completer: _InteractiveCompleter | None = None
 _theme = TerminalTheme()
 _last_header_thread: str = ""
+_last_header_status: str = ""
 
 
 def _maybe_show_session_update(project_root: Path | None, thread_id: str) -> None:
-    global _last_header_thread
+    global _last_header_thread, _last_header_status
     status = _interactive_daemon_status(project_root) if project_root else "unknown"
-    if thread_id != _last_header_thread or status != "running":
+    if thread_id != _last_header_thread or status != _last_header_status:
         _print_ansi(render_session_header(daemon_status=status, thread_id=thread_id))
     _last_header_thread = thread_id
+    _last_header_status = status
 
 
 def _print_ansi(text: str, **kwargs: object) -> None:
@@ -2329,6 +2331,7 @@ def _send_interactive_chat_turn(
         if result.reply is not None:
             print()
             _print_ansi(_theme.paint("NuSelf:", "96"))
+            print()
             _print_assistant_reply(result.reply)
         if result.code == 0:
             return 0
