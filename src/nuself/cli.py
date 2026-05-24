@@ -16,9 +16,11 @@ from typing import cast
 from uuid import uuid4
 import warnings
 
-from prompt_toolkit import HTML
+from prompt_toolkit import print_formatted_text as _print_ft
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
+from prompt_toolkit.formatted_text import ANSI as _ANSI
+from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.shortcuts import prompt as _prompt
 from prompt_toolkit.styles import Style
@@ -123,12 +125,21 @@ class _DedupFileHistory(FileHistory):
 
 
 _PROMPT_STYLE = Style.from_dict({
-    "prompt": "ansicyan bold",
+    "ansicyan": "ansicyan bold",
 })
+
+_PROMPT_TEXT = FormattedText([("class:ansicyan bold", "\nNuSelf> ")])
 
 _history: FileHistory | None = None
 _interactive_completer: _InteractiveCompleter | None = None
 _theme = TerminalTheme()
+
+
+def _print_ansi(text: str, **kwargs: object) -> None:
+    if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
+        _print_ft(_ANSI(text), **kwargs)
+    else:
+        print(text, **kwargs)
 
 
 def _init_interactive_input(project_root: Path | None) -> None:
@@ -146,7 +157,7 @@ def _read_interactive_input() -> str:
         if sys.stdin.isatty():
             assert _history is not None
             return _prompt(
-                HTML('<style fg="ansicyan" bold>NuSelf&gt; </style>'),
+                _PROMPT_TEXT,
                 style=_PROMPT_STYLE,
                 history=_history,
                 completer=_interactive_completer,
@@ -824,9 +835,9 @@ def handle_logs(args: argparse.Namespace) -> int:
         return 0
     for event in events:
         if args.json:
-            print(render_log_event_json(event))
+            _print_ansi(render_log_event_json(event))
         else:
-            print(render_log_event(event, color=False if args.no_color else None))
+            _print_ansi(render_log_event(event, color=False if args.no_color else None))
     if args.follow:
         print("Log follow is not streaming yet; showing current tail only.", file=sys.stderr)
     return 0
@@ -940,7 +951,7 @@ def handle_memory_list(args: argparse.Namespace) -> int:
     elif sort_by == "type":
         entries = sorted(entries, key=lambda e: (e.type, e.updated_at, e.id))
     for entry in entries:
-        print(render_memory_entry_row(entry))
+        _print_ansi(render_memory_entry_row(entry))
     return 0
 
 
@@ -956,7 +967,7 @@ def handle_memory_show(args: argparse.Namespace) -> int:
     except MemoryEntryNotFound:
         print(f"Memory entry not found: {args.entry_id}", file=sys.stderr)
         return 1
-    print(render_memory_entry_detail(entry))
+    _print_ansi(render_memory_entry_detail(entry))
     return 0
 
 
@@ -979,7 +990,7 @@ def handle_memory_add(args: argparse.Namespace) -> int:
     repo.save(entry)
     repo.reindex()
     _record_cli_memory_trace(args.project_root, entry, "add")
-    print(render_memory_entry_row(entry))
+    _print_ansi(render_memory_entry_row(entry))
     return 0
 
 
@@ -999,7 +1010,7 @@ def handle_memory_edit(args: argparse.Namespace) -> int:
     )
     repo.save(updated)
     repo.reindex()
-    print(render_memory_entry_row(updated))
+    _print_ansi(render_memory_entry_row(updated))
     return 0
 
 
@@ -1033,7 +1044,7 @@ def handle_memory_search(args: argparse.Namespace) -> int:
         print("No matching memory entries.")
         return 0
     for entry in entries:
-        print(render_memory_entry_row(entry))
+        _print_ansi(render_memory_entry_row(entry))
     return 0
 
 
@@ -1362,7 +1373,7 @@ def handle_notify_list(args: argparse.Namespace) -> int:
         print(f"No outbox entries{filter_msg}.")
         return 0
     for entry in entries:
-        print(render_outbox_summary(entry))
+        _print_ansi(render_outbox_summary(entry))
     return 0
 
 
@@ -1397,7 +1408,7 @@ def handle_notify_show(args: argparse.Namespace) -> int:
     except OutboxEntryNotFound:
         print(f"Outbox entry not found: {entry_id}", file=sys.stderr)
         return 1
-    print(render_outbox_detail(entry))
+    _print_ansi(render_outbox_detail(entry))
     return 0
 
 
@@ -1437,7 +1448,7 @@ def handle_notify_watch(args: argparse.Namespace) -> int:
             for entry in outbox.list():
                 if entry.id not in seen:
                     seen.add(entry.id)
-                    print(render_outbox_summary(entry))
+                    _print_ansi(render_outbox_summary(entry))
             # Non-blocking check for 'q' is not possible with plain input();
             # rely on Ctrl+C for clean exit.
     except KeyboardInterrupt:
@@ -1503,7 +1514,7 @@ def handle_reason_list(args: argparse.Namespace) -> int:
         _print_json_wire(*(thread.to_wire() for thread in threads))
         return 0
     for index, thread in enumerate(threads, start=1):
-        print(render_reason_row(thread, index=index))
+        _print_ansi(render_reason_row(thread, index=index))
     return 0
 
 
@@ -1520,7 +1531,7 @@ def handle_reason_show(args: argparse.Namespace) -> int:
         payload["steps"] = [step.to_wire() for step in steps]
         _print_json_wire(payload)
         return 0
-    print(render_reason_detail(thread, steps, full=bool(getattr(args, "full", False))))
+    _print_ansi(render_reason_detail(thread, steps, full=bool(getattr(args, "full", False))))
     return 0
 
 
@@ -1533,7 +1544,7 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
         return 1
     steps = service.list_steps(thread.id)
     full = bool(getattr(args, "full", False))
-    print(render_reason_detail(thread, steps, full=full))
+    _print_ansi(render_reason_detail(thread, steps, full=full))
     seen = len(steps)
     try:
         while True:
@@ -1541,7 +1552,7 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
             steps = service.list_steps(thread.id)
             if len(steps) > seen:
                 for step in steps[seen:]:
-                    print(render_step_watch_entry(step))
+                    _print_ansi(render_step_watch_entry(step))
                 seen = len(steps)
     except KeyboardInterrupt:
         return 0
@@ -1555,7 +1566,7 @@ def handle_reason_start(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     print(f"Started reasoning thread: {thread.id}")
-    print(render_reason_detail(thread))
+    _print_ansi(render_reason_detail(thread))
     return 0
 
 
@@ -1577,7 +1588,7 @@ def handle_reason_thread_action(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     print(f"{verb} reason thread: {thread.id}")
-    print(render_reason_detail(thread))
+    _print_ansi(render_reason_detail(thread))
     return 0
 
 
@@ -1608,7 +1619,7 @@ def handle_trace_list(args: argparse.Namespace) -> int:
         _print_json_wire(*(trace.to_wire() for trace in traces))
         return 0
     for index, trace in enumerate(traces, start=1):
-        print(render_trace_row(trace, index=index))
+        _print_ansi(render_trace_row(trace, index=index))
     return 0
 
 
@@ -1624,7 +1635,7 @@ def handle_trace_show(args: argparse.Namespace) -> int:
         payload["links"] = [link.to_wire() for link in repository.links_for(trace.id)]
         _print_json_wire(payload)
         return 0
-    print(render_trace_detail(trace, repository.links_for(trace.id)))
+    _print_ansi(render_trace_detail(trace, repository.links_for(trace.id)))
     return 0
 
 
@@ -1642,7 +1653,7 @@ def handle_trace_search(args: argparse.Namespace) -> int:
         _print_json_wire(*(trace.to_wire() for trace in traces))
         return 0
     for index, trace in enumerate(traces, start=1):
-        print(render_trace_row(trace, index=index))
+        _print_ansi(render_trace_row(trace, index=index))
     return 0
 
 
@@ -1697,7 +1708,7 @@ def handle_reflection_list(args: argparse.Namespace) -> int:
         _print_json_wire(*(entry.to_wire() for entry in entries))
         return 0
     for idx, entry in enumerate(entries):
-        print(render_reflection_entry_summary(entry, index=idx))
+        _print_ansi(render_reflection_entry_summary(entry, index=idx))
     return 0
 
 
@@ -1716,7 +1727,7 @@ def handle_reflection_show(args: argparse.Namespace) -> int:
     if args.as_json:
         _print_json_wire(entry.to_wire())
         return 0
-    print(render_reflection_entry_detail(entry))
+    _print_ansi(render_reflection_entry_detail(entry))
     return 0
 
 
@@ -1760,7 +1771,7 @@ def handle_reflection_promote(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     print(f"Promoted reflection to reason thread: {thread.id}")
-    print(render_reason_detail(thread))
+    _print_ansi(render_reason_detail(thread))
     return 0
 
 
@@ -1843,7 +1854,7 @@ def handle_memory_candidate_list(args: argparse.Namespace) -> int:
     for i, candidate in enumerate(candidates):
         if i > 0:
             print()
-        print(render_candidate_row(candidate))
+        _print_ansi(render_candidate_row(candidate))
     pending = [c for c in candidates if c.review_state == "pending"]
     if pending:
         print()
@@ -1858,7 +1869,7 @@ def handle_memory_candidate_show(args: argparse.Namespace) -> int:
     except MemoryCandidateNotFound:
         print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
         return 1
-    print(render_candidate_detail(candidate))
+    _print_ansi(render_candidate_detail(candidate))
     return 0
 
 
@@ -1905,7 +1916,7 @@ def handle_memory_candidate_edit(args: argparse.Namespace) -> int:
     except MemoryCandidateNotFound:
         print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
         return 1
-    print(render_candidate_row(updated))
+    _print_ansi(render_candidate_row(updated))
     return 0
 
 
@@ -1945,7 +1956,7 @@ def handle_memory_source_list(args: argparse.Namespace) -> int:
         print("No source documents.")
         return 0
     for document in documents:
-        print(render_source_row(document))
+        _print_ansi(render_source_row(document))
     return 0
 
 
@@ -1956,7 +1967,7 @@ def handle_memory_source_show(args: argparse.Namespace) -> int:
     except SourceDocumentNotFound:
         print(f"Source document not found: {args.source_id}", file=sys.stderr)
         return 1
-    print(render_source_detail(document, chunk_count=len(repo.list_chunks(document.id))))
+    _print_ansi(render_source_detail(document, chunk_count=len(repo.list_chunks(document.id))))
     return 0
 
 
@@ -2023,7 +2034,7 @@ def handle_memory_profile_list(args: argparse.Namespace) -> int:
     elif sort_by == "type":
         items = sorted(items, key=lambda i: (i.type, i.updated_at, i.id))
     for item in items:
-        print(render_profile_row(item))
+        _print_ansi(render_profile_row(item))
     return 0
 
 
@@ -2043,7 +2054,7 @@ def handle_memory_profile_search(args: argparse.Namespace) -> int:
         print("No matching profile items.")
         return 0
     for item in items:
-        print(render_profile_row(item))
+        _print_ansi(render_profile_row(item))
     return 0
 
 
@@ -2054,7 +2065,7 @@ def handle_memory_profile_show(args: argparse.Namespace) -> int:
     except ProfileItemNotFound:
         print(f"Profile item not found: {args.profile_id}", file=sys.stderr)
         return 1
-    print(render_profile_detail(item))
+    _print_ansi(render_profile_detail(item))
     return 0
 
 
@@ -2129,7 +2140,7 @@ def _send_chat(message: str, project_root: Path | None, thread_id: str = "defaul
         _print_assistant_reply(result.reply)
     if result.memory_update is not None:
         theme = TerminalTheme()
-        print(f"{theme.tag('[memory]', 'memory')} {result.memory_update}")
+        _print_ansi(f"{theme.tag('[memory]', 'memory')} {result.memory_update}")
     if result.error is not None:
         print(result.error, file=sys.stderr)
     return result.code
@@ -2212,7 +2223,7 @@ def _interactive_loop(
     session.start_index_for(project_root, current_thread_id)
     print(_brand_banner())
     print("νSelf interactive mode. Type :help for commands, :q to quit.")
-    print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
+    _print_ansi(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
     try:
         while True:
             try:
@@ -2236,7 +2247,7 @@ def _interactive_loop(
                 if command_result == "exit":
                     return 0
                 if command_result == "redraw_header":
-                    print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
+                    _print_ansi(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
                 continue
             result = _send_interactive_chat_turn(
                 send_message,
@@ -2245,7 +2256,7 @@ def _interactive_loop(
                 message,
                 session,
             )
-            print(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
+            _print_ansi(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
             if result != 0:
                 continue
     finally:
@@ -2302,12 +2313,12 @@ def _send_interactive_chat_turn(
         if result.memory_update is not None:
             if not printed_logs:
                 print()
-                print(_theme.paint("Logs:", "93"))
+                _print_ansi(_theme.paint("Logs:", "93"))
                 printed_logs = True
-            print(f"{_theme.tag('[memory]', 'memory')} {result.memory_update}")
+            _print_ansi(f"{_theme.tag('[memory]', 'memory')} {result.memory_update}")
         if result.reply is not None:
             print()
-            print(_theme.paint("NuSelf:", "96"))
+            _print_ansi(_theme.paint("NuSelf:", "96"))
             _print_assistant_reply(result.reply)
         if result.code == 0:
             return 0
@@ -2369,7 +2380,7 @@ def _print_visible_interactive_activity_events(events: list[LogEvent], *, printe
 def _print_live_interactive_activity_events(events: list[LogEvent], *, printed_logs: bool) -> bool:
     if not printed_logs:
         print()
-        print(_theme.paint("Logs:", "93"))
+        _print_ansi(_theme.paint("Logs:", "93"))
         printed_logs = True
     _print_interactive_activity_events(events)
     return printed_logs
@@ -2517,7 +2528,7 @@ def _run_memory_curator(project_root: Path | None) -> None:
             error=str(exc),
         )
         _theme = TerminalTheme()
-        print(f"{_theme.tag('[memory]', 'memory')} curator failed: {exc}", file=sys.stderr)
+        _print_ansi(f"{_theme.tag('[memory]', 'memory')} curator failed: {exc}", file=sys.stderr)
         return
     if result.changed:
         write_log_event(
@@ -2529,7 +2540,7 @@ def _run_memory_curator(project_root: Path | None) -> None:
             metadata={"summary": result.summary()},
         )
         _theme = TerminalTheme()
-        print(f"{_theme.tag('[memory]', 'memory')} {result.summary()}")
+        _print_ansi(f"{_theme.tag('[memory]', 'memory')} {result.summary()}")
 
 
 def _record_cli_memory_trace(project_root: Path | None, entry: MemoryEntry, action: str) -> None:
@@ -2879,7 +2890,7 @@ def _print_recent_logs(project_root: Path | None, *, limit: int) -> None:
         print("No recent activity logs.")
         return
     for event in events:
-        print(render_log_event(event))
+        _print_ansi(render_log_event(event))
 
 
 def _interactive_activity_events(
@@ -2896,7 +2907,7 @@ def _interactive_activity_events(
 
 def _print_interactive_activity_events(events: list[LogEvent]) -> None:
     for event in events:
-        print(render_log_event(event))
+        _print_ansi(render_log_event(event))
 
 
 def _visible_interactive_activity_events(events: list[LogEvent]) -> list[LogEvent]:
@@ -3604,7 +3615,7 @@ def _handle_interactive_watch_command(project_root: Path | None) -> None:
             for entry in outbox.list():
                 if entry.id not in seen:
                     seen.add(entry.id)
-                    print(render_outbox_summary(entry))
+                    _print_ansi(render_outbox_summary(entry))
     except KeyboardInterrupt:
         print("\nStopped watching.")
 

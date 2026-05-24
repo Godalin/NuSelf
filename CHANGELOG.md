@@ -6,17 +6,34 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
-### Fixed
+### Added
 
-- `reason_show` chat agent tool now accepts `"current"` as alias for the most recent active reasoning thread.
-- `reason_show` description updated to document the `"current"` feature.
+- Reflection creation now records a `kind="reflection"` thought trace, enabling users to trace why a specific reflection was produced.
+- Memory curator auto-accept now records a `kind="memory_update"` thought trace linked to the source chat turn trace, so users can trace from a memory entry back to the conversation that produced it.
+- Manual CLI operations (`memory add`, `memory import`, `candidate accept`, `candidate merge`) now also record `memory_update` traces for full provenance coverage.
+
+- Added `SqliteStore` — general-purpose sync `BaseStore` implementation backed by SQLite, usable by any agent for persistent JSON document storage.
+- Added `ScopedWorkspace` — namespace-scoped wrapper around `SqliteStore` that auto-injects a prefix (e.g. thread ID) so agents don't manage namespaces manually.
+- Added `build_workspace_tools()` — factory that produces `workspace_put`/`workspace_get`/`workspace_search`/`workspace_delete` LangChain StructuredTool instances from a `ScopedWorkspace`.
+- Added `ReasonService.workspace(thread_id)` — returns a thread-scoped `ScopedWorkspace` backed by the thread's private SQLite database.
+- Added subsystem-prefixed chat service tools, including `memory_count`, `reflection_count`, `reason_count`, and `trace_count` for quick service-size queries.
+- Added `reason watch` CLI command — continuously polls a reasoning thread for new steps and prints them incrementally.
+- Added `TerminalTheme` color support to `render_reason_row`, `render_reason_detail`, and `render_step_watch_entry` — status, step kinds, tags, and timestamps are now colored.
+- Added `DaemonReasonSchedulerConfig` with `interval_seconds` to daemon config schema.
+- Added background reasoning scheduler — `ReasonAdvancer` (LLM step generation) + `ReasonScheduler` (polling thread) wired into daemon lifecycle.
+- Added `skip_next_advance_until` field to `ReasoningThread` for cooldown support in the scheduler.
+- Added past-thought context injection to `ReasonAdvancer` — the LLM step generator now queries `MemoryQueryService` and `ReflectionRepository` before each advance and injects relevant memories and recent reflections into the prompt.
+- Added `selves_consult`, a chat-callable multi-persona subagent tool for perspective synthesis and competitive discussion.
+- Added markdown-fenced JSON support to the fallback `parse_chat_response` parser, accepting ` ```json\n{...}\n``` ` responses for test compatibility.
 
 ### Changed
 
-- **Replaced `readline` with `prompt_toolkit`** for interactive CLI input. Robust Unicode/IME composition handling (fixes Chinese input corruption). Input prompt (`NuSelf>`) and section headers (`NuSelf:`, `Logs:`) are now colorized. History is persisted via `FileHistory` with consecutive-duplicate skipping.
-- Tab completion updated from readline callbacks to prompt_toolkit's `Completer` API.
-
-### Added
+- **Chat graph simplified from 9 to 4 nodes.** Removed `persona_activation`, `initial_response`, `detect_tool_request`, `execute_tool`, and `finalize_response` nodes. The graph is now `prepare_context → respond → state_update → compression`.
+- **Chat agent tool invocation is now fully LangChain-native.** Removed the entire NuSelf-owned manual tool protocol: `[Tool call:]` markers, `[TOOL_CALL]` blocks, the `tool`/`tool_args` JSON envelope, and the 4-node tool loop were all deleted. LangChain `create_agent` with `response_format=ChatStructuredOutput` handles the complete model/tool loop internally.
+- **`respond_node` replaced `initial_response`.** The single node calls `supervisor.complete()` once, which runs the full LangChain agent (including any tool calls). Retry is still available for boundary-protocol leaks but no longer involves multi-turn tool chaining.
+- **`response.py` is the single source** for `DraftResponse`, `PresentedResponse`, `ParsedChatResponse`, `parse_chat_response`, `is_parsed_user_facing_safe`, `apply_unsupported_claim_guard`, and protocol leak detection. `chat.py` imports all response/parsing types from `response.py`, eliminating ~350 lines of duplicate code.
+- Removed ~450 lines of manual tool protocol code from `chat.py` (detection regexes, tool-name map, `_parse_chat_response` duplicates, `_detect_tool_call`, `_invoke_tool`, `_complete_after_tool_loop`, `_synthesize_response`).
+- Removed the following tests for the deleted manual tool protocol: `test_chat_agent_tool_invocation_with_memory_search`, `test_chat_agent_end_to_end_memory_archive_via_tool`, `test_chat_agent_recovers_raw_tool_marker_without_leaking`, `test_chat_agent_recovers_tool_call_block_and_normalizes_tool_name`, `test_chat_agent_chains_multiple_fallback_tool_calls_and_skips_persona`.
 
 - Reflection creation now records a `kind="reflection"` thought trace, enabling users to trace why a specific reflection was produced.
 - Memory curator auto-accept now records a `kind="memory_update"` thought trace linked to the source chat turn trace, so users can trace from a memory entry back to the conversation that produced it.
@@ -70,7 +87,14 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Interactive chat now filters live activity output to current-turn chat, tool, persona, and failure events, while hiding background reason/reflection/memory/trace service logs from the REPL.
 - Tool call log formatting simplified: JSON args/results are now pretty-printed with `indent=2` and highlighted via `rich.json.JSON`. The separate `result` parameter was removed from `render_tool_call` — all content goes through the combined body text with `args:`/`result:`/`error:` section headers.
 
+- **Replaced `readline` with `prompt_toolkit`** for interactive CLI input. Robust Unicode/IME composition handling (fixes Chinese input corruption). Input prompt (`NuSelf>`) and section headers (`NuSelf:`, `Logs:`) are now colorized. History is persisted via `FileHistory` with consecutive-duplicate skipping.
+- **Terminal output now uses `prompt_toolkit.print_formatted_text`** for all colored/ANSI output. Prompt_toolkit handles terminal capability detection and ANSI parsing, eliminating the need for manual `_supports_256_color()` / `_component_color()` fallback logic. Falls back to `print()` when stdout is not a TTY (piped/non-interactive output).
+- Tab completion updated from readline callbacks to prompt_toolkit's `Completer` API.
+
 ### Fixed
+
+- `reason_show` chat agent tool now accepts `"current"` as alias for the most recent active reasoning thread.
+- `reason_show` description updated to document the `"current"` feature.
 
 - Fixed raw `[Tool call: ...]` text leaking into NuSelf replies by recovering parseable markers into real tool calls and rejecting tool markers at the presentation boundary.
 - Fixed older persisted replies with raw `[Tool call: ...]` markers polluting future chat prompts and causing the agent to invent unavailable tools such as `get_recent_memories`.
