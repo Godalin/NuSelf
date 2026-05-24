@@ -1600,29 +1600,6 @@ def handle_reason_show(args: argparse.Namespace) -> int:
     return 0
 
 
-def handle_reason_watch(args: argparse.Namespace) -> int:
-    service = ReasonService(args.project_root)
-    try:
-        thread = service.show_thread(args.thread_id, by_index=args.by_index)
-    except ReasonNotFound:
-        print(f"Reason thread not found: {args.thread_id}", file=sys.stderr)
-        return 1
-    steps = service.list_steps(thread.id)
-    full = bool(getattr(args, "full", False))
-    _print_ansi(render_reason_detail(thread, steps, full=full))
-    seen = len(steps)
-    try:
-        while True:
-            time.sleep(args.interval)
-            steps = service.list_steps(thread.id)
-            if len(steps) > seen:
-                for step in steps[seen:]:
-                    _print_ansi(render_step_watch_entry(step))
-                seen = len(steps)
-    except KeyboardInterrupt:
-        return 0
-
-
 def handle_reason_start(args: argparse.Namespace) -> int:
     service = ReasonService(args.project_root)
     try:
@@ -2795,7 +2772,9 @@ def _handle_interactive_command(
         return ("redraw_header", new_id if new_id != "" else current_thread_id)
     if command.startswith(":reason watch"):
         print()
-        _handle_interactive_reason_watch(project_root)
+        parts = command.removeprefix(":reason watch").strip().split()
+        interval = int(parts[0]) if parts and parts[0].isdigit() else 2
+        _handle_interactive_reason_watch(project_root, interval=interval)
         return ("", current_thread_id)
     if command.startswith(":reason"):
         print()
@@ -3492,31 +3471,32 @@ def _handle_interactive_reason_watch(project_root: Path | None, interval: int = 
     """Watch for new reasoning steps and print them."""
     import time
 
-    from nuself.logs import read_log_events
+    from nuself.reason.service import ReasonService
+    from nuself.tui.reason import render_reason_row, render_step_watch_entry
 
-    seen: set[str] = set()
-    # Seed with already-seen advance_completed events.
-    for event in read_log_events(project_root=project_root):
-        if event.component == "reasoning" and event.event == "advance_completed":
-            step_id = (event.metadata or {}).get("step_id", "") or ""
-            if step_id:
-                seen.add(step_id)
+    # Print all existing steps first.
+    service = ReasonService(project_root)
+    for index, thread in enumerate(service.list_threads(), start=1):
+        _print_ansi(render_reason_row(thread, index=index, color=False))
+        for step in service.list_steps(thread.id):
+            _print_ansi(render_step_watch_entry(step))
+    print()
+    print("Watching for new reasoning steps. Press Ctrl+C to stop.")
 
-    print("Watching reasoning steps. Press Ctrl+C to stop.")
+    # Track step count per thread for polling.
+    counts: dict[str, int] = {}
+    for thread in service.list_threads():
+        counts[thread.id] = len(service.list_steps(thread.id))
+
     try:
         while True:
             time.sleep(interval)
-            for event in read_log_events(project_root=project_root):
-                if event.component != "reasoning" or event.event != "advance_completed":
-                    continue
-                step_id = (event.metadata or {}).get("step_id", "") or ""
-                if not step_id or step_id in seen:
-                    continue
-                seen.add(step_id)
-                thread_id = (event.metadata or {}).get("thread_id", "") or ""
-                kind = (event.metadata or {}).get("step_kind", "") or ""
-                tag = _theme.tag("[reason]", "reasoning")
-                _print_ansi(f"{tag} 步骤 {step_id[:8]} thread={thread_id[:8]} kind={kind} - {event.message}")
+            for thread in service.list_threads():
+                steps = service.list_steps(thread.id)
+                if len(steps) > counts.get(thread.id, 0):
+                    for step in steps[counts[thread.id]:]:
+                        _print_ansi(render_step_watch_entry(step))
+                    counts[thread.id] = len(steps)
     except KeyboardInterrupt:
         print("\nStopped watching.")
 
