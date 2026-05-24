@@ -2539,6 +2539,7 @@ class _InteractiveCompleter(Completer):
         ("resolve", "Mark a reasoning thread as resolved", True),
         ("archive", "Archive a resolved or inactive thread", True),
         ("delete", "Permanently delete a reasoning thread", True),
+        ("watch", "Watch for new reasoning steps in real-time", False),
     ]
 
     def _reason_subcommand_completions(self, stripped: str, word: str) -> Completion:
