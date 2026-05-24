@@ -666,12 +666,6 @@ def build_parser() -> argparse.ArgumentParser:
     reason_show_parser.add_argument("--full", "-f", action="store_true", default=False)
     reason_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reason_show_parser, handle_reason_show)
-    reason_watch_parser = reason_subparsers.add_parser("watch")
-    reason_watch_parser.add_argument("thread_id")
-    reason_watch_parser.add_argument("--by-index", "-i", action="store_true", default=False)
-    reason_watch_parser.add_argument("--full", "-f", action="store_true", default=False)
-    reason_watch_parser.add_argument("--interval", type=float, default=5.0)
-    _add_handler(reason_watch_parser, handle_reason_watch)
     reason_start_parser = reason_subparsers.add_parser("start")
     reason_start_parser.add_argument("question")
     reason_start_parser.add_argument("--priority", choices=("normal", "high"), default="normal")
@@ -687,6 +681,9 @@ def build_parser() -> argparse.ArgumentParser:
     reason_delete_parser.add_argument("--by-index", "-i", action="store_true", default=False)
     reason_delete_parser.add_argument("--yes", "-y", action="store_true", default=False)
     _add_handler(reason_delete_parser, handle_reason_delete)
+    reason_watch_parser = reason_subparsers.add_parser("watch")
+    reason_watch_parser.add_argument("--interval", type=int, default=5, help="Poll interval in seconds")
+    _add_handler(reason_watch_parser, handle_reason_watch)
     trace_parser = subparsers.add_parser("trace")
     trace_parser.set_defaults(handler=None, help_parser=trace_parser)
     trace_subparsers = trace_parser.add_subparsers(dest="trace_command")
@@ -1671,6 +1668,11 @@ def handle_reason_delete(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     print(f"Deleted reason thread: {tid}")
+    return 0
+
+
+def handle_reason_watch(args: argparse.Namespace) -> int:
+    _handle_interactive_reason_watch(args.project_root, interval=getattr(args, "interval", 5))
     return 0
 
 
@@ -3480,13 +3482,13 @@ def _interactive_reason_help(command: str | None = None) -> str:
             "  :reason resolve <id|index>",
             "  :reason archive <id|index>",
             "  :reason delete <id|index>",
-            "  :reason watch              watch for new reasoning steps",
+            "  :reason watch              watch for new reasoning steps (Ctrl+C to stop)",
         ]
     )
     return "\n".join(lines)
 
 
-def _handle_interactive_reason_watch(project_root: Path | None) -> None:
+def _handle_interactive_reason_watch(project_root: Path | None, interval: int = 2) -> None:
     """Watch for new reasoning steps and print them."""
     import time
 
@@ -3503,7 +3505,7 @@ def _handle_interactive_reason_watch(project_root: Path | None) -> None:
     print("Watching reasoning steps. Press Ctrl+C to stop.")
     try:
         while True:
-            time.sleep(2)
+            time.sleep(interval)
             for event in read_log_events(project_root=project_root):
                 if event.component != "reasoning" or event.event != "advance_completed":
                     continue
