@@ -2516,10 +2516,54 @@ class _InteractiveCompleter(Completer):
         if stripped.startswith(":unarchive ") and word and not word.startswith(":"):
             yield from self._archived_thread_completions(word)
             return
+        if text.rstrip().endswith(":reason") or text.rstrip().endswith(":re"):
+            # Cursor at :reason or :re — offer all subcommands
+            for cmd, desc, _ in self._REASON_SUBCOMMANDS:
+                yield Completion(f"{cmd} ", start_position=0, display=cmd, display_meta=desc)
+            return
+        if (stripped.startswith(":reason ") or stripped.startswith(":re ")) and word and not word.startswith(":"):
+            yield from self._reason_subcommand_completions(stripped, word)
+            return
         if word.startswith(":"):
             for cmd in _INTERACTIVE_COMMANDS:
                 if cmd.startswith(word):
                     yield Completion(cmd, start_position=-len(word))
+
+    _REASON_SUBCOMMANDS: list[tuple[str, str, bool]] = [
+        ("list", "List active and paused reasoning threads", False),
+        ("show", "Show details for a reasoning thread", True),
+        ("start", "Create a new reasoning thread from a question", False),
+        ("advance", "Advance a thread with the next reasoning step", True),
+        ("pause", "Pause a reasoning thread", True),
+        ("resume", "Resume a paused reasoning thread", True),
+        ("resolve", "Mark a reasoning thread as resolved", True),
+        ("archive", "Archive a resolved or inactive thread", True),
+        ("delete", "Permanently delete a reasoning thread", True),
+    ]
+
+    def _reason_subcommand_completions(self, stripped: str, word: str) -> Completion:
+        prefix = stripped.removeprefix(":reason ").removeprefix(":re ")
+        subcmd = prefix.split()[0] if prefix.strip() else ""
+        # After a subcommand that takes a thread id, offer thread completions
+        needs_id = any(cmd == subcmd for cmd, _, needs in self._REASON_SUBCOMMANDS if needs)
+        if subcmd and needs_id and prefix.strip() != subcmd:
+            thread_words = prefix.removeprefix(subcmd).strip()
+            for tid in self._all_thread_ids_with_status():
+                if thread_words == "" or tid.startswith(thread_words):
+                    yield Completion(tid, start_position=-len(thread_words) if thread_words else 0)
+            return
+        # Offer subcommand completions with descriptions
+        for cmd, desc, _ in self._REASON_SUBCOMMANDS:
+            if cmd.startswith(word):
+                yield Completion(f"{cmd} ", start_position=-len(word), display=cmd, display_meta=desc)
+
+    def _all_thread_ids_with_status(self) -> list[str]:
+        try:
+            from nuself.reason.repository import ReasonRepository
+            repo = ReasonRepository(self._project_root)
+            return [f"{t.id} ({t.status}, {t.question[:40]})" for t in repo.list_threads(status="all")]
+        except Exception:
+            return []
 
     def _thread_completions(self, word: str) -> Completion:
         try:
@@ -3404,6 +3448,13 @@ def _handle_interactive_reason_command(command: str, project_root: Path | None) 
         except (ReasonNotFound, RuntimeError) as exc:
             return f"Error: {exc}"
         return f"Archived reason thread: {thread.id}\n{render_reason_detail(thread)}"
+    if command.startswith("delete "):
+        thread_id = command.removeprefix("delete ").strip()
+        try:
+            tid = service.delete_thread(thread_id)
+        except (ReasonNotFound, RuntimeError) as exc:
+            return f"Error: {exc}"
+        return f"Deleted reason thread: {tid}"
     return _interactive_reason_help(command)
 
 
@@ -3423,6 +3474,7 @@ def _interactive_reason_help(command: str | None = None) -> str:
             "  :reason resume <id|index>",
             "  :reason resolve <id|index>",
             "  :reason archive <id|index>",
+            "  :reason delete <id|index>",
         ]
     )
     return "\n".join(lines)
