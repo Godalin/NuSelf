@@ -682,6 +682,7 @@ def build_parser() -> argparse.ArgumentParser:
     reason_delete_parser.add_argument("--yes", "-y", action="store_true", default=False)
     _add_handler(reason_delete_parser, handle_reason_delete)
     reason_watch_parser = reason_subparsers.add_parser("watch")
+    reason_watch_parser.add_argument("thread_id", nargs="?", default=None, help="Thread id or index to watch (default: all threads)")
     reason_watch_parser.add_argument("--interval", type=int, default=5, help="Poll interval in seconds")
     _add_handler(reason_watch_parser, handle_reason_watch)
     trace_parser = subparsers.add_parser("trace")
@@ -1649,7 +1650,11 @@ def handle_reason_delete(args: argparse.Namespace) -> int:
 
 
 def handle_reason_watch(args: argparse.Namespace) -> int:
-    _handle_interactive_reason_watch(args.project_root, interval=getattr(args, "interval", 5))
+    _handle_interactive_reason_watch(
+        args.project_root,
+        interval=getattr(args, "interval", 5),
+        thread_ref=getattr(args, "thread_id", None) or None,
+    )
     return 0
 
 
@@ -2772,9 +2777,9 @@ def _handle_interactive_command(
         return ("redraw_header", new_id if new_id != "" else current_thread_id)
     if command.startswith(":reason watch"):
         print()
-        parts = command.removeprefix(":reason watch").strip().split()
-        interval = int(parts[0]) if parts and parts[0].isdigit() else 2
-        _handle_interactive_reason_watch(project_root, interval=interval)
+        body = command.removeprefix(":reason watch").strip()
+        thread_ref = body if body else None
+        _handle_interactive_reason_watch(project_root, thread_ref=thread_ref)
         return ("", current_thread_id)
     if command.startswith(":reason"):
         print()
@@ -3467,31 +3472,46 @@ def _interactive_reason_help(command: str | None = None) -> str:
     return "\n".join(lines)
 
 
-def _handle_interactive_reason_watch(project_root: Path | None, interval: int = 2) -> None:
-    """Watch for new reasoning steps and print them."""
+def _handle_interactive_reason_watch(project_root: Path | None, interval: int = 2, thread_ref: str | None = None) -> None:
+    """Watch for new reasoning steps and print them.
+
+    If *thread_ref* is given (id or index), watch only that thread.
+    """
     import time
 
     from nuself.reason.service import ReasonService
+    from nuself.reason.repository import ReasonNotFound
     from nuself.tui.reason import render_reason_row, render_step_watch_entry
 
-    # Print all existing steps first.
     service = ReasonService(project_root)
-    for index, thread in enumerate(service.list_threads(), start=1):
-        _print_ansi(render_reason_row(thread, index=index, color=False))
+    threads = service.list_threads()
+    if thread_ref is not None:
+        try:
+            thread = service.show_thread(thread_ref)
+        except ReasonNotFound:
+            print(f"Reason thread not found: {thread_ref}", file=sys.stderr)
+            return
+        threads = [thread]
+        _print_ansi(render_reason_row(thread, color=False))
         for step in service.list_steps(thread.id):
             _print_ansi(render_step_watch_entry(step))
+    else:
+        for index, thread in enumerate(threads, start=1):
+            _print_ansi(render_reason_row(thread, index=index, color=False))
+            for step in service.list_steps(thread.id):
+                _print_ansi(render_step_watch_entry(step))
     print()
     print("Watching for new reasoning steps. Press Ctrl+C to stop.")
 
     # Track step count per thread for polling.
     counts: dict[str, int] = {}
-    for thread in service.list_threads():
+    for thread in threads:
         counts[thread.id] = len(service.list_steps(thread.id))
 
     try:
         while True:
             time.sleep(interval)
-            for thread in service.list_threads():
+            for thread in threads:
                 steps = service.list_steps(thread.id)
                 if len(steps) > counts.get(thread.id, 0):
                     for step in steps[counts[thread.id]:]:
