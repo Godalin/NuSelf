@@ -180,7 +180,7 @@ def build_langchain_chat_tools(
         lines = ["Active and paused reasoning threads:"]
         for index, thread in enumerate(threads, start=1):
             steps = service.list_steps(thread.id)
-            row = render_reason_row(thread, index=index)
+            row = render_reason_row(thread, index=index, color=False)
             lines.append(f"{row}\n  steps={len(steps)}")
         return "\n".join(lines)
 
@@ -201,12 +201,12 @@ def build_langchain_chat_tools(
             if not threads:
                 return "No active reasoning threads."
             thread = threads[-1]
-            return render_reason_detail(thread, service.list_steps(thread.id))
+            return render_reason_detail(thread, service.list_steps(thread.id), color=False)
         try:
             thread = service.show_thread(tid)
         except ReasonNotFound as exc:
             return f"Error: {exc}"
-        return render_reason_detail(thread, service.list_steps(thread.id))
+        return render_reason_detail(thread, service.list_steps(thread.id), color=False)
 
     def search_trace(query: str, limit: int = 5) -> str:
         """Search thought provenance trace records."""
@@ -226,7 +226,7 @@ def build_langchain_chat_tools(
             return f"No trace records matched: {query_str}"
         lines = ["Matching trace records:"]
         for index, trace in enumerate(traces, start=1):
-            lines.append(render_trace_row(trace, index=index))
+            lines.append(render_trace_row(trace, index=index, color=False))
         return "\n".join(lines)
 
     def count_traces(query: str | None = None) -> str:
