@@ -512,7 +512,42 @@ Human-readable output must use the shared record renderer style from `cli-intera
 
 Default list output shows active and paused threads. `--status all` includes resolved and archived threads.
 
+### `delete` Behavior
+
+`reason delete <id>` permanently removes a thread and all its data:
+
+- Thread file (`private/reasoning/threads/{id}.json`)
+- Steps directory (`private/reasoning/steps/{id}/`)
+- Workspace (`private/workspaces/reason/{id}/`)
+- A `thread_deleted` log event is written before deletion.
+
+The `--yes` flag is required to confirm. Without it, the command prints
+"Use --yes to confirm deletion." and exits with code 1.
+
+This operation is irreversible. For reversible hiding, use `archive` instead.
+
+### `watch` Behavior
+
+`reason watch` enters a blocking loop that polls for new reasoning steps:
+
+1. On start, prints a summary of each existing thread: question, step count,
+   and latest step kind + summary.
+2. Then polls the log for `advance_completed` events every N seconds
+   (default 5 for CLI, 2 for interactive).
+3. Each new step is printed as it arrives: `[reason] thread=... kind=... - ...`
+4. Press Ctrl+C to stop.
+
+The loop runs in the foreground. It is not a daemon background process.
+
 ## REPL Contract
+
+`:reason` with no arguments prints reason subcommand help. `:reason show` supports `--full` to show all step fields.
+
+`:reason delete` and `:reason watch` have the same behavior as their
+CLI counterparts (`reason delete`, `reason watch`), except that
+`:reason delete` does not require the `--yes` flag (interactive context
+already implies intent) and `:reason watch` uses a 2-second default
+poll interval instead of 5.
 
 Interactive commands:
 
