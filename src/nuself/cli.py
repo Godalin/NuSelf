@@ -956,7 +956,7 @@ def handle_memory_list(args: argparse.Namespace) -> int:
 
 
 def handle_memory_preview(args: argparse.Namespace) -> int:
-    print(_format_memory_preview(args.project_root, args.limit))
+    _print_ansi(_format_memory_preview(args.project_root, args.limit))
     return 0
 
 
@@ -2139,8 +2139,7 @@ def _send_chat(message: str, project_root: Path | None, thread_id: str = "defaul
     if result.reply is not None:
         _print_assistant_reply(result.reply)
     if result.memory_update is not None:
-        theme = TerminalTheme()
-        _print_ansi(f"{theme.tag('[memory]', 'memory')} {result.memory_update}")
+        _print_ansi(f"{_theme.tag('[memory]', 'memory')} {result.memory_update}")
     if result.error is not None:
         print(result.error, file=sys.stderr)
     return result.code
@@ -2527,7 +2526,6 @@ def _run_memory_curator(project_root: Path | None) -> None:
             status="error",
             error=str(exc),
         )
-        _theme = TerminalTheme()
         _print_ansi(f"{_theme.tag('[memory]', 'memory')} curator failed: {exc}", file=sys.stderr)
         return
     if result.changed:
@@ -2539,7 +2537,6 @@ def _run_memory_curator(project_root: Path | None) -> None:
             status="changed",
             metadata={"summary": result.summary()},
         )
-        _theme = TerminalTheme()
         _print_ansi(f"{_theme.tag('[memory]', 'memory')} {result.summary()}")
 
 
@@ -2581,15 +2578,15 @@ def _handle_interactive_command(
         return ("exit", current_thread_id)
     if command == ":history":
         print()
-        print(_handle_interactive_history_command(project_root, current_thread_id))
+        _print_ansi(_handle_interactive_history_command(project_root, current_thread_id))
         return ("", current_thread_id)
     if command == ":whoami":
         print()
-        print(_handle_interactive_whoami_command(project_root))
+        _print_ansi(_handle_interactive_whoami_command(project_root))
         return ("", current_thread_id)
     if command in {":inbox", ":i"}:
         print()
-        print(_handle_interactive_inbox_command(project_root))
+        _print_ansi(_handle_interactive_inbox_command(project_root))
         return ("", current_thread_id)
     if command.startswith(":inbox reflection ") or command.startswith(":i reflection "):
         print()
@@ -2598,18 +2595,18 @@ def _handle_interactive_command(
         if not parts:
             print(_interactive_help(":inbox reflection"))
         elif parts[0] == "list":
-            print(_handle_interactive_reflection_list_command(project_root))
+            _print_ansi(_handle_interactive_reflection_list_command(project_root))
         elif parts[0] == "show" and len(parts) == 2:
-            print(_handle_interactive_reflection_show_command(project_root, parts[1]))
+            _print_ansi(_handle_interactive_reflection_show_command(project_root, parts[1]))
         elif len(parts) == 2:
             subcmd, entry_id = parts[0], parts[1]
-            print(_handle_interactive_reflection_subcommand(project_root, subcmd, entry_id))
+            _print_ansi(_handle_interactive_reflection_subcommand(project_root, subcmd, entry_id))
         else:
             print(_interactive_help(":inbox reflection"))
         return ("", current_thread_id)
     if command in {":inbox reflection", ":i reflection"}:
         print()
-        print(_handle_interactive_reflection_command(project_root))
+        _print_ansi(_handle_interactive_reflection_command(project_root))
         return ("", current_thread_id)
     if command.startswith(":inbox notify ") or command.startswith(":i notify "):
         print()
@@ -2618,20 +2615,20 @@ def _handle_interactive_command(
         if not parts:
             print(_interactive_help(":inbox notify"))
         elif parts[0] == "list":
-            print(_handle_interactive_notify_list_command(project_root))
+            _print_ansi(_handle_interactive_notify_list_command(project_root))
         elif parts[0] == "show" and len(parts) == 2:
-            print(_handle_interactive_notify_show_command(project_root, parts[1]))
+            _print_ansi(_handle_interactive_notify_show_command(project_root, parts[1]))
         elif parts[0] == "watch":
             _handle_interactive_watch_command(project_root)
         elif len(parts) == 2:
             subcmd, entry_id = parts[0], parts[1]
-            print(_handle_interactive_notify_subcommand(project_root, subcmd, entry_id))
+            _print_ansi(_handle_interactive_notify_subcommand(project_root, subcmd, entry_id))
         else:
             print(_interactive_help(":inbox notify"))
         return ("", current_thread_id)
     if command in {":inbox notify", ":i notify"}:
         print()
-        print(_handle_interactive_notify_command(project_root))
+        _print_ansi(_handle_interactive_notify_command(project_root))
         return ("", current_thread_id)
     if command == ":help":
         print()
@@ -2651,20 +2648,20 @@ def _handle_interactive_command(
         return ("", current_thread_id)
     if command in {":export", ":e"} or command.startswith(":export ") or command.startswith(":e "):
         print()
-        print(_handle_interactive_export_command(command, project_root, current_thread_id, session))
+        _print_ansi(_handle_interactive_export_command(command, project_root, current_thread_id, session))
         return ("", current_thread_id)
     if command in {":mem", ":m"}:
         print()
-        print(_format_memory_preview(project_root))
+        _print_ansi(_format_memory_preview(project_root))
         return ("", current_thread_id)
     if command.startswith(":mem ") or command.startswith(":m "):
         print()
         body = command.removeprefix(":mem").removeprefix(":m").strip()
-        print(_handle_interactive_memory_command(body, project_root))
+        _print_ansi(_handle_interactive_memory_command(body, project_root))
         return ("", current_thread_id)
     if command in {":thread", ":t"}:
         print()
-        print(_handle_interactive_threads_command(project_root))
+        _print_ansi(_handle_interactive_threads_command(project_root))
         return ("", current_thread_id)
     if command.startswith(":thread ") or command.startswith(":t "):
         print()
@@ -2680,16 +2677,16 @@ def _handle_interactive_command(
     if command.startswith(":reason"):
         print()
         body = command.removeprefix(":reason").strip()
-        print(_handle_interactive_reason_command(body, project_root))
+        _print_ansi(_handle_interactive_reason_command(body, project_root))
         return ("", current_thread_id)
     if command.startswith(":trace"):
         print()
         body = command.removeprefix(":trace").strip()
-        print(_handle_interactive_trace_command(body, project_root))
+        _print_ansi(_handle_interactive_trace_command(body, project_root))
         return ("", current_thread_id)
     if command in {":restart", ":r"}:
         print()
-        print(_handle_interactive_restart_command(project_root))
+        _print_ansi(_handle_interactive_restart_command(project_root))
         return ("redraw_header", current_thread_id)
     if command.startswith(":rename "):
         print()
