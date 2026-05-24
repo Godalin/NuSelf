@@ -2790,6 +2790,10 @@ def _handle_interactive_command(
                 store.save(ThreadState.empty(new_id))
             print(f"Switched to thread: {new_id}")
         return ("redraw_header", new_id if new_id != "" else current_thread_id)
+    if command.startswith(":reason watch"):
+        print()
+        _handle_interactive_reason_watch(project_root)
+        return ("", current_thread_id)
     if command.startswith(":reason"):
         print()
         body = command.removeprefix(":reason").strip()
@@ -3475,9 +3479,43 @@ def _interactive_reason_help(command: str | None = None) -> str:
             "  :reason resolve <id|index>",
             "  :reason archive <id|index>",
             "  :reason delete <id|index>",
+            "  :reason watch              watch for new reasoning steps",
         ]
     )
     return "\n".join(lines)
+
+
+def _handle_interactive_reason_watch(project_root: Path | None) -> None:
+    """Watch for new reasoning steps and print them."""
+    import time
+
+    from nuself.logs import read_log_events
+
+    seen: set[str] = set()
+    # Seed with already-seen advance_completed events.
+    for event in read_log_events(project_root=project_root):
+        if event.component == "reasoning" and event.event == "advance_completed":
+            step_id = (event.metadata or {}).get("step_id", "") or ""
+            if step_id:
+                seen.add(step_id)
+
+    print("Watching reasoning steps. Press Ctrl+C to stop.")
+    try:
+        while True:
+            time.sleep(2)
+            for event in read_log_events(project_root=project_root):
+                if event.component != "reasoning" or event.event != "advance_completed":
+                    continue
+                step_id = (event.metadata or {}).get("step_id", "") or ""
+                if not step_id or step_id in seen:
+                    continue
+                seen.add(step_id)
+                thread_id = (event.metadata or {}).get("thread_id", "") or ""
+                kind = (event.metadata or {}).get("step_kind", "") or ""
+                tag = _theme.tag("[reason]", "reasoning")
+                _print_ansi(f"{tag} 步骤 {step_id[:8]} thread={thread_id[:8]} kind={kind} - {event.message}")
+    except KeyboardInterrupt:
+        print("\nStopped watching.")
 
 
 def _handle_interactive_trace_command(command: str, project_root: Path | None) -> str:
