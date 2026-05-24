@@ -532,6 +532,18 @@ class ConversationGraphRuntime:
         if state.persisted_state.summary != "":
             parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
         parts.extend(_tool_prompt_sections(self._tools.values()))
+        if any(tool.name == "reason_propose" for tool in self._tools.values()):
+            parts.extend([
+                "",
+                "Reason skill:",
+                "Reason is NuSelf's durable long-run thinking space. When a discussion reveals a topic "
+                "with real depth that would benefit from sustained incremental reasoning, you should "
+                "suggest creating a reasoning thread. Help the user refine the question, add hypotheses "
+                "and open questions from your discussion, and only call reason_propose after the user "
+                "explicitly confirms. Do NOT call reason_propose based on a user's mere agreement that "
+                "a topic is 'interesting' — wait for explicit confirmation like 'yes, start it', "
+                "'go ahead', or 'create the thread'.",
+            ])
         return "\n".join(parts)
 
     # ------------------------------------------------------------------

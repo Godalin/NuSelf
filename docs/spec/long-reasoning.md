@@ -1,6 +1,6 @@
 # Long-Run Reasoning Spec
 
-Status: ready for first v0.2.0 implementation.
+Status: updated — chat-based thread initiation added.
 
 ## Purpose
 
@@ -27,16 +27,205 @@ Reason steps may be exploratory, uncertain, speculative, or failed. Such steps c
 
 ## Non-Goals For First Implementation
 
-- No autonomous creation of reasoning threads from ordinary chat.
 - No always-on high-frequency background thinking.
 - No automatic notification for every reasoning step.
 - No replacement of memory curation or reflection.
 - No raw hidden model chain-of-thought storage.
 - No explicit branch graph schema in the first storage slice.
 
-## Storage Contract
+## Chat-Based Reasoning Initiation
 
-File-backed repository under:
+### Motivation
+
+CLI-only thread creation (`:reason start "question"`) is too primitive for complex
+reasoning tasks. Before starting a long-run thread, the user and NuSelf should be
+able to discuss the topic, explore different angles, gather relevant context from
+memory/reflection, and enrich the initial question with hypotheses, open questions,
+and evidence — all within a normal chat conversation.
+
+Only after the idea is well-formed should a reasoning thread be created, carrying
+the enriched context as its initial state.
+
+### Flow
+
+```
+1. User and NuSelf discuss a topic during normal chat.
+2. NuSelf identifies the topic has depth and would benefit from long-run reasoning.
+3. NuSelf proposes a draft question and invites the user to refine it.
+4. Optional back-and-forth: NuSelf uses existing reason/reflection/memory/trace tools
+   to gather context, proposes hypotheses, and refines the question together with the user.
+5. When the idea is mature, NuSelf calls reason_propose(...) with the enriched context.
+   This tool does NOT create the thread — it validates the proposal, writes a
+   "reason_proposal_created" log event, and returns a PENDING signal.
+6. The chat turn completes normally. The CLI (not the agent) detects the pending
+   proposal via the log event and prompts the user:
+   [reason] 开启推理线程「question」? (y/n):
+7. User types "y". The CLI calls ReasonService.start_thread() with the enriched
+   context. Thread is created. A confirmation line is printed:
+   [reason] 推理线程已创建: <id>
+8. If the user types "n", the proposal is discarded silently.
+9. Normal chat loop resumes with the next NuSelf> prompt.
+```
+
+### Role Of The Agent
+
+The chat agent is the actor. The system prompt must instruct the agent to:
+
+1. **Identify depth** — when a user's topic has multiple dimensions, unresolved
+   tensions, or would benefit from durable incremental reasoning, proactively
+   suggest creating a reasoning thread.
+2. **Co-enrich** — help the user refine the question, propose hypotheses, surface
+   open questions, and reference relevant memory or reflection entries.
+3. **Confirm** — do NOT call `reason_start` until the user has explicitly confirmed.
+   Confirmation may be as simple as "yes, start it" or "go ahead".
+4. **Create with context** — when confirmed, call `reason_start` with the full
+   enriched context: the spoken/settled question as `question`, a concise
+   `working_summary` of the discussion's key insights, any `hypotheses` that
+   emerged, and `evidence_refs` pointing to memory/reflection entries discussed.
+
+### Proposal Tool: `reason_propose`
+
+The `reason_propose` tool does NOT create the thread. It validates the
+proposal and writes a `reason_proposal_created` log event that the CLI
+will detect. The tool returns a PENDING signal string such as:
+
+```
+PENDING:reason-proposal:{id}
+```
+
+The agent must never call this tool speculatively. See the
+[Turn-Confirmation Protocol](##turn-confirmation-protocol) for how the
+CLI handles pending proposals.
+
+### Tool Signature
+
+```python
+def reason_propose(
+    question: str,
+    working_summary: str = "",
+    hypotheses: list[str] = [],
+    evidence_refs: list[str] = [],
+) -> str:
+```
+
+- `question` (required) — finalised, user-approved question.
+- `working_summary` (optional) — enriched context from the discussion.
+- `hypotheses` (optional) — initial hypotheses that emerged.
+- `evidence_refs` (optional) — references to memory, reflection, trace records.
+
+### Role Of The Agent
+
+The chat agent is the actor. The system prompt must instruct the agent to:
+
+1. **Identify depth** — when a user's topic has multiple dimensions, unresolved
+   tensions, or would benefit from durable incremental reasoning, proactively
+   suggest creating a reasoning thread.
+2. **Co-enrich** — help the user refine the question, propose hypotheses, surface
+   open questions, and reference relevant memory or reflection entries.
+3. **Confirm before propose** — do NOT call `reason_propose` until the user has
+   explicitly said something like "yes, start it", "go ahead", "create the thread".
+4. **Propose with context** — when confirmed, call `reason_propose` with the full
+   enriched context.
+
+### Active Thread Cap Interaction
+
+If the active thread cap (default 5) is already reached when the agent calls
+`reason_propose`, the tool must reject with an error listing active threads.
+The agent should relay this to the user and suggest pausing or resolving one
+before retrying. No pending proposal is created.
+
+### Trace Contract
+
+Thread creation after user confirmation must record the same `reason_thread`
+trace as `ReasonService.start_thread()`. The trace must include the enriched
+context (working_summary, hypotheses, evidence_refs) in its metadata.
+
+## Turn-Confirmation Protocol
+
+A shared mechanism for any subsystem (reasoning, memory, etc.) to ask the
+user a yes/no question in the chat flow without requiring LLM tool calls.
+
+### How It Works
+
+1. A subsystem writes a `proposal_created` log event
+   (e.g. `{component: "reason", event: "proposal_created"}` or
+   `{component: "memory", event: "candidate_created"}`). The event's
+   metadata contains a unique proposal id and a human-readable description.
+2. The sender returns a PENDING signal string in the tool result or
+   function return value, e.g. `"PENDING:reason-proposal:{id}"`.
+3. After the chat turn completes, the CLI checks the captured log events
+   for any `proposal_created` / `candidate_created` events.
+4. If found, the CLI prints a confirmation prompt:
+   `[reason] 开启推理线程「question」? (y/n):`
+   `[memory] 记录记忆「title」? (y/n):`
+5. The CLI reads one line of user input.
+6. On `y`/`yes`: the CLI executes the confirmed action
+   (calls `ReasonService.start_thread()` / promotes candidate to entry).
+   On `n`/`no`: the proposal is discarded (candidate stays in queue).
+7. Normal chat loop resumes.
+
+### CLI Contract
+
+```python
+def _handle_proposals_after_turn(
+    events: list[LogEvent],
+    project_root: Path | None,
+) -> None:
+    for event in events:
+        if event.component == "reason" and event.event == "proposal_created":
+            _prompt_and_confirm_reason(event)
+        elif event.component == "memory" and event.event == "candidate_created":
+            _prompt_and_confirm_memory(event)
+```
+
+Prompt helpers:
+
+```python
+def _prompt_and_confirm_reason(event: LogEvent) -> None:
+    proposal_id = event.metadata.get("proposal_id", "")
+    question = event.metadata.get("question", "")
+    print(f"[reason] 开启推理线程「{question}」? (y/n): ", end="", flush=True)
+    line = sys.stdin.readline().strip().lower()
+    if line in ("y", "yes"):
+        # materialise: call ReasonService.start_thread() with stored proposal
+        ...
+    # else: discard silently or keep as pending
+```
+
+### Interaction With Daemon Mode
+
+In daemon mode, the daemon processes the chat turn and returns an event
+list to the CLI client. The client-side `_send_interactive_chat_turn`
+function checks those events and runs the confirmation prompt locally.
+The daemon itself never blocks waiting for user input — prompting is
+always a CLI responsibility.
+
+### Interaction With One-Shot Mode
+
+In one-shot mode (`nuself chat --message "..."`), there is no
+conversation loop to prompt in. Pending proposals are written as log
+events but no confirmation prompt is shown. The user can inspect
+pending proposals via a future CLI command or they expire on next
+successful one-shot turn.
+
+### Memory Use Case
+
+When the memory curator creates a medium-confidence candidate (high
+enough to consider, not high enough to auto-create), instead of silently
+adding it to the candidate queue, it writes a `candidate_created` log
+event. The CLI detects this and prompts the user immediately. This
+replaces the manual `:mem candidate list` review for the most
+context-relevant candidates.
+
+High-confidence memories are still auto-created without prompting.
+Low-confidence proposals remain queued as candidates for offline review.
+
+### Future Extensions
+
+- Batch: if multiple proposals arrive in one turn (e.g. 3 memory
+  candidates), prompt them sequentially.
+- Timeout: if no input within N seconds, skip all pending proposals
+  silently and keep them in queue for offline review.
 
 ```text
 private/reasoning/threads/{thread_id}.json
@@ -292,28 +481,92 @@ REPL output must match CLI formatting as closely as possible.
 
 ## Chat Tool Contract
 
-Add chat tools after manual CLI support exists:
+The following tools are registered for the chat agent. Read-only tools are
+available to inspect reasoning state; write tools require explicit user
+confirmation and include the reasoning thread's enriched conversation context.
 
-- `reason_list_active`
-- `reason_count`
-- `reason_show`
-- `reason_start`
-- `reason_advance`
-- `reason_pause`
-- `reason_resolve`
-- `reason_archive`
+### Read-Only Tools
 
-The chat agent may suggest a new reasoning thread, but must not create one without user confirmation.
+- `reason_list_active` — list active/paused threads.
+- `reason_count` — count active/paused threads.
+- `reason_show` — show a thread's current state and steps.
 
-The chat prompt must include a Reason skill once reason tools are registered:
+### Write Tool: `reason_propose`
 
-> "Reason is NuSelf's durable long-run thinking space. If the user asks about active long-running questions, what NuSelf is still thinking about, or the state of a specific reasoning thread, use reason tools before answering unless the answer is fully present in visible context. You may suggest creating or advancing a reasoning thread, but must not create, advance, resolve, or archive one without explicit user confirmation."
+Proposes a reasoning thread for user confirmation. Does NOT create the thread.
+Validates the proposal, writes a `reason_proposal_created` log event, and
+returns a PENDING signal. See the Turn-Confirmation Protocol for how the
+CLI handles the pending proposal.
+
+Tool function:
+
+```python
+def reason_propose(
+    question: str,
+    working_summary: str = "",
+    hypotheses: list[str] = [],
+    evidence_refs: list[str] = [],
+) -> str:
+```
+
+Parameters:
+
+- `question` (required) — the core long-run question the thread will explore.
+  Must be finalised and user-approved before calling this tool.
+- `working_summary` (optional) — enriched summary from the chat discussion:
+  key insights, contextual background, what has already been considered.
+- `hypotheses` (optional) — initial hypotheses that emerged during the
+  conversation.
+- `evidence_refs` (optional) — references to memory, reflection, trace, or
+  other records that were surfaced during the discussion.
+
+Returns a string in the format `"PENDING:reason-proposal:{proposal_id}"`.
+
+The agent must NOT call `reason_propose` until the user has given explicit
+verbal confirmation (said "yes, start it", "go ahead", "create the thread",
+or equivalent).
+
+### Write Tool: `reason_advance`
+
+(Reserved for future implementation — not yet registered as a chat tool.)
+
+### Write Tool: `reason_pause`, `reason_resolve`, `reason_archive`
+
+(Not yet registered as chat tools. These remain CLI/REPL-only for now.)
+
+### Confirmation Rule
+
+The chat agent may suggest, discuss, and enrich a reasoning thread topic,
+but must NOT call `reason_propose` until the user has given explicit verbal
+confirmation. The system prompt must include this hard rule:
+
+> "You may propose and refine a reasoning thread idea with the user. You
+> may surface context from memory, reflection, and existing threads. But
+> you MUST NOT call `reason_propose` until the user has explicitly said
+> something like 'yes, start it', 'go ahead', 'create the thread', or
+> equivalent clear confirmation. A user's agreement that a topic is
+> 'interesting' or 'worth exploring' does not count as confirmation."
+
+### System Prompt Skill
+
+The chat prompt must include the following Reason skill:
+
+> "Reason is NuSelf's durable long-run thinking space. If the user asks
+> about active long-running questions, what NuSelf is still thinking about,
+> or the state of a specific reasoning thread, use reason tools before
+> answering unless the answer is fully present in visible context. When a
+> discussion reveals a topic with real depth, you should suggest creating
+> a reasoning thread. Help the user refine the question, add hypotheses
+> and open questions from your discussion, and only call `reason_propose`
+> after the user explicitly confirms."
 
 ## Trace Contract
 
 Every reason thread creation and non-trivial advance writes a `ThoughtTrace`.
 
-- Thread creation writes `kind=reason_thread`.
+- Thread creation writes `kind=reason_thread`. When created via the chat tool
+  `reason_start`, the trace must include the enriched context
+  (`working_summary`, `hypotheses`, `evidence_refs`) in its metadata.
 - Advance writes `kind=reason_step`.
 - Reflection promotion writes `kind=promotion`.
 - Trace outputs include the created or updated reason artifact ids.

@@ -5,9 +5,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
+from uuid import uuid4
 
 from langchain_core.tools import BaseTool, StructuredTool
 
+from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.reason.repository import ReasonNotFound
@@ -208,6 +210,43 @@ def build_langchain_chat_tools(
             return f"Error: {exc}"
         return render_reason_detail(thread, service.list_steps(thread.id), color=False)
 
+    def reason_propose(
+        question: str,
+        working_summary: str = "",
+        hypotheses: list[str] | None = None,
+        evidence_refs: list[str] | None = None,
+    ) -> str:
+        """Propose creating a long-run reasoning thread. Does NOT create the thread — writes a pending proposal for user confirmation."""
+
+        question = question.strip()
+        if not question:
+            return "Error: question must be a non-empty string"
+
+        # Validate active thread cap before creating a proposal.
+        service = ReasonService(project_root)
+        active = service.list_threads()
+        if len(active) >= 5:
+            lines = [f"Cannot start new thread: already {len(active)} active threads (max 5). Please pause, resolve, or archive one first.", "Active threads:"]
+            for t in active:
+                lines.append(f"  - {t.id}: {t.question[:60]}")
+            return "\n".join(lines)
+
+        proposal_id = uuid4().hex[:12]
+        write_log_event(
+            "reasoning",
+            "proposal_created",
+            f"Reasoning thread proposal: {question[:60]}",
+            project_root=project_root,
+            metadata={
+                "proposal_id": proposal_id,
+                "question": question,
+                "working_summary": working_summary.strip(),
+                "hypotheses": hypotheses or [],
+                "evidence_refs": evidence_refs or [],
+            },
+        )
+        return f"PENDING:reason-proposal:{proposal_id}"
+
     def search_trace(query: str, limit: int = 5) -> str:
         """Search thought provenance trace records."""
 
@@ -371,6 +410,17 @@ def build_langchain_chat_tools(
                 "active thread."
             ),
             tags=("readonly",),
+        ),
+        tool_from_function(
+            reason_propose,
+            name="reason_propose",
+            description=(
+                "Propose creating a new long-run reasoning thread. After the user has discussed a topic "
+                "and explicitly confirmed they want a reasoning thread about it, call this tool to submit "
+                "the proposal. The proposal will be presented to the user for final confirmation before "
+                "the thread is actually created. Do NOT call this until the user explicitly says 'yes'."
+            ),
+            tags=("write",),
         ),
         tool_from_function(
             search_trace,

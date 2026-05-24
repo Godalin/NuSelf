@@ -146,6 +146,58 @@ def _maybe_show_session_update(project_root: Path | None, thread_id: str) -> Non
     _last_header_status = status
 
 
+def _handle_proposals_after_turn(events: list[LogEvent], project_root: Path | None) -> None:
+    """Check for turn-confirmation proposals and prompt the user."""
+    # Check the captured events first (one-shot mode where turn_ids match).
+    for event in events:
+        if event.component == "reasoning" and event.event == "proposal_created":
+            _prompt_and_confirm_reason_proposal(event, project_root)
+            return
+    # Daemon mode: turn_ids differ. Scan the tail of the shared log for
+    # the most recent unhandled proposal_created event.
+    try:
+        from nuself.logs import read_log_events
+
+        fresh = read_log_events(project_root=project_root, tail=50)
+    except Exception:
+        return
+    proposal: LogEvent | None = None
+    for event in reversed(fresh):
+        if event.component == "reasoning" and event.event == "proposal_created":
+            proposal = event
+            break
+    if proposal is not None:
+        _prompt_and_confirm_reason_proposal(proposal, project_root)
+
+
+def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | None) -> None:
+    meta = event.metadata or {}
+    question = meta.get("question", "") or ""
+    if not question:
+        return
+    print()
+    tag = _theme.tag("[reason]", "reasoning")
+    _print_ansi(f"{tag} 开启推理线程「{question}」? (y/n): ", end="", flush=True)
+    line = sys.stdin.readline().strip().lower()
+    if line not in ("y", "yes"):
+        _print_ansi(f"{tag} 已取消")
+        return
+    from nuself.reason.service import ReasonService
+
+    service = ReasonService(project_root)
+    try:
+        thread = service.start_thread(
+            question=question,
+            working_summary=meta.get("working_summary", "") or "",
+            hypotheses=tuple(meta.get("hypotheses", []) or []),
+            evidence_refs=tuple(meta.get("evidence_refs", []) or []),
+        )
+    except RuntimeError as exc:
+        _print_ansi(f"{tag} 创建失败: {exc}")
+        return
+    _print_ansi(f"{tag} 推理线程已创建: id={thread.id}")
+
+
 def _print_ansi(text: str, **kwargs: object) -> None:
     if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
         _print_ft(_ANSI(text), **kwargs)
@@ -2333,6 +2385,7 @@ def _send_interactive_chat_turn(
             _print_ansi(_theme.paint("NuSelf:", "96"))
             print()
             _print_assistant_reply(result.reply)
+        _handle_proposals_after_turn(events, project_root)
         if result.code == 0:
             return 0
         if not result.retryable:

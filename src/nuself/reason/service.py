@@ -83,6 +83,7 @@ class ReasonService:
         question: str,
         *,
         working_summary: str = "",
+        hypotheses: tuple[str, ...] = (),
         evidence_refs: tuple[str, ...] = (),
         source_trace_ids: tuple[str, ...] = (),
         priority: str = "normal",
@@ -99,6 +100,7 @@ class ReasonService:
         thread = ReasoningThread(
             question=question.strip(),
             working_summary=working_summary.strip(),
+            hypotheses=list(hypotheses),
             priority="normal" if priority not in ("normal", "high") else priority,  # type: ignore[arg-type]
             evidence_refs=list(evidence_refs),
         )
