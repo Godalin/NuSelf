@@ -16,10 +16,12 @@ from typing import cast
 from uuid import uuid4
 import warnings
 
-try:
-    import readline
-except ImportError:  # pragma: no cover - platform fallback
-    readline = None  # type: ignore[assignment]
+from prompt_toolkit import HTML
+from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.document import Document
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.shortcuts import prompt as _prompt
+from prompt_toolkit.styles import Style
 
 _original_warn = warnings.warn
 
@@ -109,6 +111,56 @@ CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
 INTERACTIVE_CHAT_ATTEMPTS = 2
 INTERACTIVE_LOG_POLL_INTERVAL_SECONDS = 0.1
+
+class _DedupFileHistory(FileHistory):
+    """FileHistory that skips consecutive duplicate entries."""
+
+    def append_string(self, string: str) -> None:
+        loaded = self.get_strings()
+        if loaded and loaded[-1] == string:
+            return
+        super().append_string(string)
+
+
+_PROMPT_STYLE = Style.from_dict({
+    "prompt": "ansicyan bold",
+})
+
+_history: FileHistory | None = None
+_interactive_completer: _InteractiveCompleter | None = None
+_theme = TerminalTheme()
+
+
+def _init_interactive_input(project_root: Path | None) -> None:
+    global _history, _interactive_completer
+    paths = runtime_paths(project_root)
+    ensure_runtime_dirs(paths)
+    history_path = paths.runtime_dir / "interactive_history"
+    _history = _DedupFileHistory(str(history_path))
+    _interactive_completer = _InteractiveCompleter(project_root)
+
+
+def _read_interactive_input() -> str:
+    """Read a line of input with prompt_toolkit (styled), falling back to input()."""
+    try:
+        if sys.stdin.isatty():
+            assert _history is not None
+            return _prompt(
+                HTML('<style fg="ansicyan" bold>NuSelf&gt; </style>'),
+                style=_PROMPT_STYLE,
+                history=_history,
+                completer=_interactive_completer,
+            )
+    except (AttributeError, OSError):
+        pass
+    line = input("NuSelf> ")
+    _append_history(line)
+    return line
+
+
+def _append_history(line: str) -> None:
+    if _history is not None and line:
+        _history.append_string(line)
 
 
 def empty_thread_start_indexes() -> dict[str, int]:
@@ -2154,8 +2206,7 @@ def _interactive_loop(
     *,
     initial_thread_id: str = "default",
 ) -> int:
-    history_path = _load_interactive_history(project_root)
-    _setup_interactive_completer(project_root)
+    _init_interactive_input(project_root)
     current_thread_id = initial_thread_id
     session = InteractiveSession(connected_at=datetime.now(UTC))
     session.start_index_for(project_root, current_thread_id)
@@ -2165,7 +2216,7 @@ def _interactive_loop(
     try:
         while True:
             try:
-                line = input("NuSelf> ")
+                line = _read_interactive_input()
             except EOFError:
                 print()
                 _auto_save_interactive_transcripts(project_root, session)
@@ -2177,7 +2228,6 @@ def _interactive_loop(
             message = line.strip()
             if message == "":
                 continue
-            _remember_interactive_input(message)
             if message.startswith(":"):
                 command_result, current_thread_id = _handle_interactive_command(
                     message, project_root, current_thread_id, session
@@ -2200,8 +2250,6 @@ def _interactive_loop(
                 continue
     finally:
         _auto_save_interactive_transcripts(project_root, session)
-        if history_path is not None:
-            _write_interactive_history(history_path)
         _run_memory_curator(project_root)
 
 
@@ -2254,13 +2302,12 @@ def _send_interactive_chat_turn(
         if result.memory_update is not None:
             if not printed_logs:
                 print()
-                print("Logs:")
+                print(_theme.paint("Logs:", "93"))
                 printed_logs = True
-            _theme = TerminalTheme()
             print(f"{_theme.tag('[memory]', 'memory')} {result.memory_update}")
         if result.reply is not None:
             print()
-            print("NuSelf:")
+            print(_theme.paint("NuSelf:", "96"))
             _print_assistant_reply(result.reply)
         if result.code == 0:
             return 0
@@ -2322,7 +2369,7 @@ def _print_visible_interactive_activity_events(events: list[LogEvent], *, printe
 def _print_live_interactive_activity_events(events: list[LogEvent], *, printed_logs: bool) -> bool:
     if not printed_logs:
         print()
-        print("Logs:")
+        print(_theme.paint("Logs:", "93"))
         printed_logs = True
     _print_interactive_activity_events(events)
     return printed_logs
@@ -2371,105 +2418,44 @@ def _setup_interactive_completer(project_root: Path | None) -> None:
     readline.set_completer_delims(delims)
 
 
-class _InteractiveCompleter:
+class _InteractiveCompleter(Completer):
     def __init__(self, project_root: Path | None) -> None:
+        super().__init__()
         self._project_root = project_root
 
-    def __call__(self, text: str, state: int) -> str | None:
-        if readline is None:
-            return None
-        line = readline.get_line_buffer()
-        candidates = self._candidates(line, text)
-        if state < len(candidates):
-            return candidates[state]
-        return None
+    def get_completions(self, document: Document, complete_event: object) -> Completion:
+        text = document.text_before_cursor
+        stripped = text.lstrip()
+        word = text.split()[-1] if text.split() else ""
 
-    def _candidates(self, line: str, text: str) -> list[str]:
-        stripped = line.lstrip()
-        if (stripped.startswith(":thread ") or stripped.startswith(":t ")) and text and not text.startswith(":"):
-            return self._thread_candidates(text)
-        if stripped.startswith(":unarchive ") and text and not text.startswith(":"):
-            return self._archived_thread_candidates(text)
-        if text.startswith(":"):
-            return [cmd for cmd in _INTERACTIVE_COMMANDS if cmd.startswith(text)]
-        return []
+        if (stripped.startswith(":thread ") or stripped.startswith(":t ")) and word and not word.startswith(":"):
+            yield from self._thread_completions(word)
+            return
+        if stripped.startswith(":unarchive ") and word and not word.startswith(":"):
+            yield from self._archived_thread_completions(word)
+            return
+        if word.startswith(":"):
+            for cmd in _INTERACTIVE_COMMANDS:
+                if cmd.startswith(word):
+                    yield Completion(cmd, start_position=-len(word))
 
-    def _thread_candidates(self, text: str) -> list[str]:
+    def _thread_completions(self, word: str) -> Completion:
         try:
             threads = ThreadStore(self._project_root).list()
         except Exception:
-            return []
-        return [t for t in threads if t.startswith(text)]
+            return
+        for t in threads:
+            if t.startswith(word):
+                yield Completion(t, start_position=-len(word))
 
-    def _archived_thread_candidates(self, text: str) -> list[str]:
+    def _archived_thread_completions(self, word: str) -> Completion:
         try:
             threads = ThreadStore(self._project_root).list_archived()
         except Exception:
-            return []
-        return [t for t in threads if t.startswith(text)]
-
-
-def _load_interactive_history(project_root: Path | None) -> Path | None:
-    if readline is None:
-        return None
-    paths = runtime_paths(project_root)
-    ensure_runtime_dirs(paths)
-    history_path = paths.runtime_dir / "interactive_history"
-    readline.clear_history()
-    try:
-        readline.read_history_file(str(history_path))
-    except FileNotFoundError:
-        pass
-    except OSError:
-        _load_plain_interactive_history(history_path)
-    _dedupe_interactive_history()
-    readline.set_history_length(1000)
-    return history_path
-
-
-def _load_plain_interactive_history(history_path: Path) -> None:
-    if readline is None:
-        return
-    try:
-        lines = history_path.read_text(encoding="utf-8").splitlines()
-    except FileNotFoundError:
-        return
-    for line in lines:
-        if line != "":
-            readline.add_history(line)
-
-
-def _write_interactive_history(history_path: Path) -> None:
-    if readline is None:
-        return
-    _dedupe_interactive_history()
-    history_path.parent.mkdir(parents=True, exist_ok=True)
-    readline.write_history_file(str(history_path))
-
-
-def _remember_interactive_input(message: str) -> None:
-    if readline is None:
-        return
-    history_length = readline.get_current_history_length()
-    if history_length > 0 and readline.get_history_item(history_length) == message:
-        return
-    readline.add_history(message)
-
-
-def _dedupe_interactive_history() -> None:
-    if readline is None:
-        return
-    history: list[str] = []
-    previous: str | None = None
-    for index in range(1, readline.get_current_history_length() + 1):
-        item = readline.get_history_item(index)
-        if item == previous:
-            continue
-        history.append(item)
-        previous = item
-    readline.clear_history()
-    for item in history:
-        readline.add_history(item)
+            return
+        for t in threads:
+            if t.startswith(word):
+                yield Completion(t, start_position=-len(word))
 
 
 def _send_one_shot_chat(message: str, project_root: Path | None, thread_id: str = "default") -> int:

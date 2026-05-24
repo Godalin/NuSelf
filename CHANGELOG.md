@@ -11,6 +11,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - `reason_show` chat agent tool now accepts `"current"` as alias for the most recent active reasoning thread.
 - `reason_show` description updated to document the `"current"` feature.
 
+### Changed
+
+- **Replaced `readline` with `prompt_toolkit`** for interactive CLI input. Robust Unicode/IME composition handling (fixes Chinese input corruption). Input prompt (`NuSelf>`) and section headers (`NuSelf:`, `Logs:`) are now colorized. History is persisted via `FileHistory` with consecutive-duplicate skipping.
+- Tab completion updated from readline callbacks to prompt_toolkit's `Completer` API.
+
 ### Added
 
 - Reflection creation now records a `kind="reflection"` thought trace, enabling users to trace why a specific reflection was produced.

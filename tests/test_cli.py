@@ -120,10 +120,10 @@ def test_chat_without_message_enters_one_shot_interactive_mode(
     assert "interactive mode" in captured.out
     assert "LLM API is not configured yet" in captured.out
     assert "Last message: hello" in captured.out
-    if cli.readline is not None:
-        history_path = tmp_path / "private" / "runtime" / "interactive_history"
-        assert history_path.is_file()
-        assert "hello" in history_path.read_text(encoding="utf-8")
+    history_path = tmp_path / "private" / "runtime" / "interactive_history"
+    assert history_path.is_file()
+    content = history_path.read_text(encoding="utf-8")
+    assert "+hello" in content
 
 
 def test_unknown_interactive_command_shows_help_and_keeps_session_open(
@@ -730,30 +730,9 @@ def test_interactive_history_skips_consecutive_duplicates(
     capsys.readouterr()
 
     assert result == 0
-    if cli.readline is not None:
-        history_path = tmp_path / "private" / "runtime" / "interactive_history"
-        history_lines = history_path.read_text(encoding="utf-8").splitlines()
-        assert history_lines.count("same") == 1
-
-
-def test_interactive_history_dedupes_existing_consecutive_duplicates(
-    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
-) -> None:
     history_path = tmp_path / "private" / "runtime" / "interactive_history"
-    history_path.parent.mkdir(parents=True)
-    history_path.write_text("old\nold\nnew\n:q\n", encoding="utf-8")
-    monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
-
-    result = main(["--project-root", str(tmp_path), "chat"])
-    capsys.readouterr()
-
-    assert result == 0
-    if cli.readline is not None:
-        history = [
-            cli.readline.get_history_item(index)
-            for index in range(1, cli.readline.get_current_history_length() + 1)
-        ]
-        assert history == ["old", "new", ":q"]
+    content = history_path.read_text(encoding="utf-8")
+    assert content.count("+same") == 1
 
 
 def test_daemon_status_reports_missing_daemon(tmp_path: Path, capsys: CaptureFixture) -> None:

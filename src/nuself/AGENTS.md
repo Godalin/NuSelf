@@ -11,7 +11,7 @@ Development constraints for `src/nuself/`.
 - Interactive input starting with `:` is always an interactive command.
 - Interactive chat exits on `:q`, `:quit`, `:exit`, or EOF.
 - Interactive `:memory` and `:mem` must preview current memory entries without invoking an LLM.
-- Interactive input should use readline-backed line editing/history when available, with history stored under ignored `private/runtime/interactive_history`.
+- Interactive input should use `prompt_toolkit` for line editing, styled prompts, and history (via `FileHistory`), with history stored under ignored `private/runtime/interactive_history`.
 - Interactive history must skip consecutive duplicate entries.
 - Unknown interactive commands must print interactive help and keep the session open.
 - Keep CLI behavior covered by tests when adding command groups or changing parser structure.
