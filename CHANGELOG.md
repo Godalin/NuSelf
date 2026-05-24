@@ -6,6 +6,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+### Fixed
+
+- `reason_show` chat agent tool now accepts `"current"` as alias for the most recent active reasoning thread.
+- `reason_show` description updated to document the `"current"` feature.
+
 ### Added
 
 - Reflection creation now records a `kind="reflection"` thought trace, enabling users to trace why a specific reflection was produced.

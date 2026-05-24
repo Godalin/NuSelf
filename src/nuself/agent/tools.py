@@ -190,13 +190,20 @@ def build_langchain_chat_tools(
         return f"Active and paused reasoning threads: {len(ReasonService(project_root).list_threads())} total"
 
     def show_reasoning_thread(thread_id: str) -> str:
-        """Show one long-run reasoning thread."""
+        """Show one long-run reasoning thread. Use "current" to show the most recent active thread."""
 
-        if not thread_id.strip():
+        tid = thread_id.strip()
+        if not tid:
             return "Error: thread_id must be a non-empty string"
         service = ReasonService(project_root)
+        if tid.lower() == "current":
+            threads = service.list_threads()
+            if not threads:
+                return "No active reasoning threads."
+            thread = threads[-1]
+            return render_reason_detail(thread, service.list_steps(thread.id))
         try:
-            thread = service.show_thread(thread_id.strip())
+            thread = service.show_thread(tid)
         except ReasonNotFound as exc:
             return f"Error: {exc}"
         return render_reason_detail(thread, service.list_steps(thread.id))
@@ -360,7 +367,8 @@ def build_langchain_chat_tools(
             name="reason_show",
             description=(
                 "Show details for a specific long-run reasoning thread, including summary, hypotheses, "
-                "open questions, evidence refs, and recent steps. Requires a thread_id."
+                "open questions, evidence refs, and recent steps. Pass 'current' to show the most recent "
+                "active thread."
             ),
             tags=("readonly",),
         ),
