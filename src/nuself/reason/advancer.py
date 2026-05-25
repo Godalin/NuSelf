@@ -75,14 +75,10 @@ REASON_ADVANCE_SYSTEM_PROMPT = (
 
 
 def _build_advance_prompt(thread: ReasoningThread) -> str:
-    parts = []
-    if thread.reasoning_prompt:
-        parts.append(thread.reasoning_prompt)
-        parts.append("")
-    parts.extend([
+    parts = [
         f"You are thinking about: {thread.topic}",
         f"So far you have noted: {thread.working_summary}",
-    ])
+    ]
     mandates = thread.mandates
     if mandates:
         parts.append("You must follow these constraints:")
@@ -243,7 +239,10 @@ class ReasonAdvancer:
         token: Token[str] = _current_reason_thread_id.set(thread.id)
         try:
             self._captured.clear()
-            messages = [HumanMessage(content=_build_advance_prompt(thread))]
+            base = _build_advance_prompt(thread)
+            if thread.reasoning_prompt:
+                base = thread.reasoning_prompt + "\n\n" + base
+            messages = [HumanMessage(content=base)]
             result = self._agent.invoke({"messages": messages})
             state = cast(dict[str, object], result) if isinstance(result, dict) else {}
             for name, args, tc_result in self._captured:

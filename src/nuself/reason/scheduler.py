@@ -110,5 +110,10 @@ class ReasonScheduler:
             skip_next_advance_until=cooldown_end,
             created_at=thread.created_at,
             updated_at=thread.updated_at,
+            active_items_data=thread.active_items_data,
+            pending_items_data=thread.pending_items_data,
+            next_steps_data=thread.next_steps_data,
+            mandates_data=thread.mandates_data,
+            reasoning_prompt=thread.reasoning_prompt,
         )
         self._repository.save_thread(cooled)

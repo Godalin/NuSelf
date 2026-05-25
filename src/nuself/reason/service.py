@@ -281,6 +281,7 @@ class ReasonService:
             pending_items_data=_merge_tracked_items(thread.pending_items_data, step.new_pending_data if step else (), ()),
             next_steps_data=step.next_steps_data if step and step.next_steps_data else thread.next_steps_data,
             mandates_data=thread.mandates_data,
+            reasoning_prompt=thread.reasoning_prompt,
         )
         with self._repository.batch_write():
             self._repository.save_step(step)
