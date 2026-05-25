@@ -20,7 +20,7 @@ Trace is not hidden raw model chain-of-thought. It stores inspectable system-lev
 
 - **Provenance, not transcript duplication**: a trace summarizes why an artifact exists; it does not copy a whole chat transcript.
 - **Structured enough to query**: records are JSON files with stable typed fields.
-- **Human-readable by default**: CLI and REPL output must use the shared record renderer style from `cli-interaction.md`.
+- **Human-readable by default**: CLI and REPL output must use the shared record renderer style from `cli.md`.
 - **Privacy first**: default visibility is `private`; `internal` traces are hidden from default list/search/export.
 - **Append-friendly**: traces are durable records. Later traces can revise or link to earlier traces instead of mutating history casually.
 - **No hidden reasoning capture**: decision points are public summaries of system decisions, not private token-level reasoning.
@@ -42,7 +42,7 @@ Rules:
 - `links/` contains one `TraceLink` JSON object per file.
 - `index.json` is derived and rebuildable from `traces/` and `links/`.
 - Record timestamps are timezone-aware ISO strings.
-- Human-readable output renders timestamps in the current system timezone per `cli-interaction.md`.
+- Human-readable output renders timestamps in the current system timezone per `cli.md`.
 - Repository writes must be atomic enough for local CLI use: write to a temporary sibling file, then replace the target file.
 - Invalid JSON files are skipped by list/search but surfaced by a dev diagnostic later. First implementation may ignore invalid files silently in normal commands.
 
@@ -299,7 +299,7 @@ nuself trace search <query> [--kind <kind>] [--visibility private|shareable|inte
 
 Output rules:
 
-- Human-readable output uses the shared record renderer style from `cli-interaction.md`.
+- Human-readable output uses the shared record renderer style from `cli.md`.
 - List rows show index, kind tag, visibility, title, and local display timestamp.
 - Show output includes summary, inputs, evidence refs, derived_from, outputs, participants, decision points, and related links.
 - JSON output returns stable machine-readable objects using stored field names.

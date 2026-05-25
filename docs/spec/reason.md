@@ -291,7 +291,7 @@ private/reasoning/threads/{thread_id}.json
 private/reasoning/steps/{thread_id}/{step_id}.json
 ```
 
-Machine-readable records store timezone-aware ISO timestamps. Human-readable CLI output renders timestamps in the current system timezone per `cli-interaction.md`.
+Machine-readable records store timezone-aware ISO timestamps. Human-readable CLI output renders timestamps in the current system timezone per `cli.md`.
 
 Repository writes must be atomic: write to a temporary sibling file, then replace the target file.
 
@@ -303,7 +303,7 @@ Each reasoning thread owns an isolated generic private workspace:
 private/workspaces/reason/{thread_id}/
 ```
 
-The workspace is task-local storage for the reasoning process. It follows `private-workspace.md`. It is not global memory, not trace, and not a shared cross-thread database.
+The workspace is task-local storage for the reasoning process. It follows `workspace.md`. It is not global memory, not trace, and not a shared cross-thread database.
 
 Rules:
 
@@ -566,7 +566,7 @@ nuself reason delete <id_or_index> [--by-index]
 nuself reason watch [--interval <seconds>]
 ```
 
-Human-readable output must use the shared record renderer style from `cli-interaction.md`.
+Human-readable output must use the shared record renderer style from `cli.md`.
 
 ### Thread Header Format
 

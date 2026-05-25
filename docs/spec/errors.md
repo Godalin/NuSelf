@@ -90,7 +90,7 @@ For non-retryable failures, the REPL must:
 
 ## Log Rendering
 
-Human-readable error logs follow the shared log style from [`cli-interaction.md`](cli-interaction.md):
+Human-readable error logs follow the shared log style from [`cli.md`](cli.md):
 
 ```text
 [chat] turn_failed status=error thread=default request=<id> error="outer <- root"

@@ -14,16 +14,16 @@ An AI mirror for deep personal discussion — someone with similar life experien
 
 ## Quick Links
 
-- [`docs/spec/development-process.md`](docs/spec/development-process.md) — code standards, commit policy, architecture direction
-- [`docs/spec/cli-interaction.md`](docs/spec/cli-interaction.md) — CLI/REPL output contracts
+- [`docs/spec/development.md`](docs/spec/development.md) — code standards, commit policy, architecture direction
+- [`docs/spec/cli.md`](docs/spec/cli.md) — CLI/REPL output contracts
 - [`docs/spec/memory.md`](docs/spec/memory.md) — memory system behavioral contracts
 - [`docs/spec/reflection.md`](docs/spec/reflection.md) — reflection event taxonomy and pipeline
-- [`docs/spec/reason.md`](docs/spec/reason.md) — TODO long-run reasoning thread contracts
-- [`docs/spec/private-workspace.md`](docs/spec/private-workspace.md) — isolated private scratch storage for agent-facing services
+- [`docs/spec/reason.md`](docs/spec/reason.md) — long-run reasoning thread contracts
+- [`docs/spec/workspace.md`](docs/spec/workspace.md) — isolated private scratch storage for agent-facing services
 - [`docs/spec/trace.md`](docs/spec/trace.md) — TODO thought provenance contracts
 - [`docs/spec/notification.md`](docs/spec/notification.md) — outbox state machine and delivery
 - [`docs/spec/persona/`](docs/spec/persona/) — persona subsystem: builtin (`static.md`), competitive discussion (`discussion.md`), dynamic prompts (`dynamic.md`)
-- [`docs/spec/error-handling.md`](docs/spec/error-handling.md) — error classes, retry policy, exception-chain preservation
-- [`docs/spec/logging.md`](docs/spec/logging.md) — log write/read contracts
-- [`docs/spec/configuration.md`](docs/spec/configuration.md) — config hierarchy and runtime paths
+- [`docs/spec/errors.md`](docs/spec/errors.md) — error classes, retry policy, exception-chain preservation
+- [`docs/spec/logs.md`](docs/spec/logs.md) — log write/read contracts
+- [`docs/spec/config.md`](docs/spec/config.md) — config hierarchy and runtime paths
 - [`docs/spec/versioning.md`](docs/spec/versioning.md) — version, changelog, and release rules

@@ -113,4 +113,4 @@ Rules:
 - The default is 120 seconds.
 - This is a client-side daemon request timeout, not the provider HTTP timeout.
 - Slow local models should raise this value and may also need a larger per-endpoint `llm[].timeout_seconds`.
-- When this timeout is reached in the interactive REPL, the request is treated as a retryable transport failure according to the error-handling spec.
+- When this timeout is reached in the interactive REPL, the request is treated as a retryable transport failure according to the errors spec.
