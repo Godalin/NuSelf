@@ -326,27 +326,10 @@ def _optional_str_with_default(data: dict[str, object], field_name: str, default
 def _optional_tool_logs(data: dict[str, object], field_name: str) -> tuple[dict[str, object], ...]:
     value = data.get(field_name)
     if value is None:
-        old = data.get("tool_calls")
-        if old is not None and isinstance(old, list):
-            return tuple(_legacy_tool_call_to_log(item) for item in old if isinstance(item, list) and len(item) >= 2)
         return ()
     if not isinstance(value, list):
         raise ValueError(f"field '{field_name}' must be a list")
     return tuple(cast(dict[str, object], item) for item in value if isinstance(item, dict))
-
-
-def _legacy_tool_call_to_log(item: list[object]) -> dict[str, object]:
-    name = str(item[0]) if item else ""
-    args = cast(dict[str, object], item[1]) if len(item) >= 2 and isinstance(item[1], dict) else {}
-    result = str(item[2]) if len(item) >= 3 and item[2] is not None else None
-    from nuself.agent.tool_utils import format_tool_debug_body
-    return {
-        "component": "reasoning",
-        "event": "service_tool_called",
-        "message": format_tool_debug_body(args=args, result=result, full=True),
-        "status": "completed",
-        "metadata": {"tool": name},
-    }
 
 
 def _optional_float(data: dict[str, object], field_name: str) -> float | None:
