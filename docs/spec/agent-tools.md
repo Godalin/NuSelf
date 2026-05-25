@@ -136,6 +136,8 @@ Direct service-status queries, such as asking how many memory/reflection/reason/
 
 Tool names must start with the owning subsystem name. This keeps agent-visible tool calls readable in logs and avoids generic names such as `search_*`, `list_*`, or `show_*` becoming ambiguous as more subsystems are exposed.
 
+Each `StructuredTool` definition must set `metadata={"service_component": "<subsystem>"}` — e.g., `metadata={"service_component": "memory"}` for a memory tool. The `service_component` is used by the log wrapper when writing `service_tool_called` events; the renderer reads it directly from the log event's metadata. No code should derive the service tag from the tool name.
+
 #### `memory_count`
 
 - **Args**: `types: list[str] | str | None = None`, `tags: list[str] | str | None = None`

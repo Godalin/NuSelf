@@ -53,7 +53,6 @@ from nuself.persona import (
 from nuself.profile.repository import ProfileItemRepository
 from nuself.trace.service import TraceRecorder
 
-ToolServiceComponent = Literal["memory", "reflection", "reasoning", "trace", "selves", "skill", "workspace", "persona"]
 ConversationNodeName = Literal[
     "prepare_context",
     "respond",
@@ -274,8 +273,8 @@ class ConversationGraphRuntime:
         self._skills: tuple[AgentSkill, ...] = load_agent_skills()
         self._tools_by_skill: dict[str, tuple[str, ...]] = {
             skill.name: tuple(
-                name for name in self._tools
-                if _tool_service_component(name) == skill.name
+                name for name, tool in self._tools.items()
+                if tool.metadata and tool.metadata.get("service_component") == skill.name
             )
             for skill in self._skills
         }
@@ -655,8 +654,11 @@ class ConversationGraphRuntime:
         result: str | None = None,
         error: str | None = None,
     ) -> None:
-        service_component = _tool_service_component(tool_name)
-        if service_component is None:
+        tool = self._tools.get(tool_name)
+        if tool is None or not tool.metadata:
+            return
+        service_component = tool.metadata.get("service_component")
+        if not isinstance(service_component, str):
             return
         self._write_service_tool_log(
             tool_name,
@@ -873,7 +875,7 @@ class ConversationGraphRuntime:
     def _write_service_tool_log(
         self,
         tool_name: str,
-        service_component: ToolServiceComponent,
+        service_component: str,
         status: str,
         *,
         args: dict[str, Any],
@@ -921,6 +923,7 @@ class ConversationGraphRuntime:
             description=f"Load a service skill's behavioral policy. Skills define when and how the agent should use service tools.\n\nAvailable skills:\n{skill_lines}",
             func=load_skill,
             tags=("readonly",),
+            metadata={"service_component": "skill"},
         )
 
 
@@ -1129,26 +1132,6 @@ def _completed_turn_result(
             if item.content == message:
                 return ChatResult(answer=assistant_message.content, thread_id=thread_id)
             return None
-    return None
-
-
-def _tool_service_component(tool_name: str) -> ToolServiceComponent | None:
-    if tool_name.startswith("memory_"):
-        return "memory"
-    if tool_name.startswith("reflection_"):
-        return "reflection"
-    if tool_name.startswith("reason_"):
-        return "reasoning"
-    if tool_name.startswith("trace_"):
-        return "trace"
-    if tool_name.startswith("selves_"):
-        return "selves"
-    if tool_name.startswith("persona_"):
-        return "persona"
-    if tool_name == "load_skill":
-        return "skill"
-    if tool_name.startswith("workspace_"):
-        return "workspace"
     return None
 
 

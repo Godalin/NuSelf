@@ -25,12 +25,13 @@ import json as _json
 _current_reason_thread_id: ContextVar[str] = ContextVar("reason_thread_id")
 
 
-def _log_tool_call(tool_name: str, args: dict[str, object], *, project_root: Path | None, result: str | None = None, error: str | None = None) -> None:
+def _log_tool_call(tool_name: str, args: dict[str, object], *, tool_service_map: dict[str, str] | None = None, project_root: Path | None, result: str | None = None, error: str | None = None) -> None:
     """Emit a service_tool_called log event for a reasoning tool invocation."""
     from nuself.agent.tool_utils import format_tool_debug_body
     from nuself.logs import write_log_event
 
     body = format_tool_debug_body(args=args, result=result, error=error)
+    service_component = (tool_service_map or {}).get(tool_name) or "reason_advancer"
     write_log_event(
         "reasoning",
         "service_tool_called",
@@ -38,7 +39,7 @@ def _log_tool_call(tool_name: str, args: dict[str, object], *, project_root: Pat
         project_root=project_root,
         status="completed" if error is None else "failed",
         metadata={
-            "service_component": "reason_advancer",
+            "service_component": service_component,
             "tool": tool_name,
             "message_body": body,
         },
@@ -61,30 +62,27 @@ class ReasonStepOutput(BaseModel):
 
 
 REASON_ADVANCE_SYSTEM_PROMPT = (
-    "You are a reasoning assistant that advances a long-running thinking thread. "
-    "Produce a concrete, meaningful step that makes genuine progress "
-    "on the topic. "
-    "Your thread has state that you update each step:"
+    "You are an assistant that advances a long-running thinking thread. "
+    "Produce a concrete, meaningful step that makes genuine progress. "
     ""
-    "- active_items — things you are currently tracking. Each item has:"
-    "  label (short name), description (optional detail), kind (free-text tag,"
-    "  e.g. hypothesis, character, suspect, plot_thread, world_rule),"
-    "  and status (default \"active\")."
-    "- pending_items — things still unresolved. Same structure as active_items."
-    "- next_steps — planned actions for the next advance. Same structure."
-    "- mandates — REQUIRED actions you MUST follow on this advance. These are"
-    "  architectural constraints set by the user, not suggestions."
-    "  You MUST plan your work to satisfy every mandate."
+    "The thread has state that you update:"
     ""
-    "Each step includes:"
+    "- active_items — things being tracked. Each item has:"
+    "  label (short name), description (optional detail), kind (free-text tag),"
+    "  and status."
+    "- pending_items — unresolved items. Same structure."
+    "- next_steps — planned actions. Same structure."
+    "- mandates — requirements you must follow on this advance."
+    ""
+    "Each step has:"
     "- summary — what this step accomplished."
     "- delta — what changed since the last step."
-    "- kind — progress, no_change, question, planning, synthesis, contradiction,"
-    "  or resolution."
-    "- new_findings — items to ADD to active_items."
-    "- new_pending — items to ADD to pending_items."
-    "- retired_findings — items to REMOVE from active_items."
-    "- next_steps — items to ADD to next_steps."
+    "- kind — one of: progress, no_change, question, planning, synthesis,"
+    "  contradiction, or resolution."
+    "- new_findings — items to add to active_items."
+    "- new_pending — items to add to pending_items."
+    "- retired_findings — items to remove from active_items."
+    "- next_steps — items to add to next_steps."
     "- evidence_refs — optional references to memory, reflection, or trace."
     ""
     "Use load_skill to load service skills. Use load_skill(\"persona\") to"
@@ -124,11 +122,11 @@ def _build_advance_prompt(thread: ReasoningThread) -> str:
         for r in thread.evidence_refs:
             parts.append(f"  - {r}")
     parts.append("")
-    parts.append("Produce a structured reasoning step for this thread.")
+    parts.append("Produce the next step for this thread.")
     return "\n".join(parts)
 
 
-def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tuple[tuple[str, dict[str, object], str | None], ...] = ()) -> ReasoningStep | None:
+def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tuple[tuple[str, str, dict[str, object], str | None], ...] = ()) -> ReasoningStep | None:
     kind_raw = data.get("kind")
     summary_raw = data.get("summary")
     delta_raw = data.get("delta")
@@ -236,6 +234,10 @@ class ReasonAdvancer:
         persona_tools = self._build_persona_tools()
         all_tools = list(self._readonly_tools) + list(ws_tools) + list(persona_tools)
         create_agent = cast(Any, _create_agent)
+        self._tool_service_map: dict[str, str] = {}
+        for tool in all_tools:
+            if hasattr(tool, "metadata") and tool.metadata and "service_component" in tool.metadata:
+                self._tool_service_map[tool.name] = tool.metadata["service_component"]
         return create_agent(
             model=endpoint.model,
             tools=all_tools,
@@ -259,8 +261,11 @@ class ReasonAdvancer:
             result = self._agent.invoke({"messages": messages})
             state = cast(dict[str, object], result) if isinstance(result, dict) else {}
             for name, args, tc_result in self._captured:
-                _log_tool_call(name, args, project_root=self._project_root, result=tc_result)
-            step_tool_calls = tuple(self._captured)
+                _log_tool_call(name, args, project_root=self._project_root, result=tc_result, tool_service_map=self._tool_service_map)
+            step_tool_calls = tuple(
+                (name, self._tool_service_map.get(name, ""), dict(args), result)
+                for name, args, result in self._captured
+            )
             structured = state.get("structured_response")
             if structured is None:
                 return None

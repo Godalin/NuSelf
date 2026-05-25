@@ -29,7 +29,7 @@ The long-term target is a dynamic reason graph:
 - threads are durable reasoning spaces;
 - steps are state updates inside those spaces;
 - tracked items (active, pending, next steps) are live graph state, with free-text `kind` tags that adapt to the task;
-- **mandates** are required actions the advancer must follow on every advance — architectural constraints the LLM is not free to skip;
+- **mandates** are required actions the advancer must follow on every advance — constraints the LLM is not free to skip;
 - future branches and links may represent competing paths, revisions, tool calls, and failed explorations.
 
 The first implementation stores this as `ReasoningThread` plus ordered `ReasoningStep` records. This is an implementation slice of the graph model, not a claim that reasoning is linear.
@@ -97,7 +97,6 @@ The `kind` field is the extension point. Different tasks use different kinds wit
 | `retired_findings_data` | list[dict]           | Items to remove from `active_items` (matched by label)                                         |
 | `next_steps_data`       | list[dict]           | Items to add to `next_steps`                                                                   |
 | `evidence_refs`         | list[string]         | Evidence used by this step                                                                     |
-| `tool_calls`            | list[tuple] \| null  | Tool invocations during this step `(name, args_dict, result_text?)`                            |
 | `confidence`            | float \| null        | Optional confidence estimate                                                                   |
 | `created_at`            | string               | Step timestamp                                                                                 |
 
@@ -274,7 +273,7 @@ When an explicit `step` is provided to `advance_thread`, the service uses it ins
 
 - Takes the thread's `topic`, `working_summary`, `active_items`, `pending_items`, `next_steps`, **mandates**, and `evidence_refs` as context.
 - Mandates are requirements the LLM MUST follow on every advance. The system prompt and advance prompt surface mandates prominently; they are not optional suggestions.
-- Calls `ChatLLM.complete()` (or LangGraph `create_agent` when tools are available) with a system prompt requesting a structured reasoning step.
+- Calls `ChatLLM.complete()` (or LangGraph `create_agent` when tools are available) with a system prompt requesting a reasoning step.
 - Validates the response has required fields (`summary`, `delta`, `kind`) and a valid `kind`.
 - Returns a `ReasoningStep` with parsed fields, or `None` if the LLM response is empty or unparseable.
 - Supports `kind` values: `progress`, `no_change`, `question`, `synthesis`, `contradiction`, `resolution`, `planning`.
@@ -552,13 +551,12 @@ Reason uses the `reasoning` log component.
 
 ### Tool Call Display Via Log System
 
-All user-visible tool call output must go through the existing log system and its `render_log_event` pipeline, not through ad-hoc inline formatting. This is a **general pattern** shared by all subsystems (reasoning, chat, memory, etc.) — the same `write_log_event` convention with `event="service_tool_called"` and the same `render_log_event` pipeline renders tool calls identically regardless of which subsystem invoked them.
+Tool invocations during step generation are recorded as structured log events (component `"reasoning"`, event `"service_tool_called"`), not stored on the step itself. All user-visible tool call output goes through the `render_log_event` pipeline — the same pipeline used by every other subsystem — which reads the service tag from the log event's `metadata.service_component`. No code derives the service tag from the tool name or maintains a separate tool-call cache on the step.
 
 For the reason subsystem specifically:
 
 - The advancer's `_advance_with_tools` path emits `service_tool_called` log events with `component="reasoning"` for every tool invoked during step generation.
-- The `tool_calls` field on `ReasoningStep` is a denormalized display cache populated from the agent message history after each advance.
-- The step renderer renders `tool_calls` entries using the same format as `render_log_event`: a header line `[reasoning] [<service>] service_tool_called  [completed]` followed by an indented body line showing arguments.
+- `ReasoningStep` has no `tool_calls` field. If a user wants to see which tools were invoked during an advance, they view the relevant log events through the standard log viewer.
 - Tool calls from the `_advance_raw` fallback path (no LangChain tools) may be omitted — there are no tool invocations to log.
 
 ### Notification Policy

@@ -98,18 +98,21 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
             func=persona_craft,
             name="persona_craft",
             description="Create or update a reusable thinking persona with a name and custom prompt.",
+            metadata={"service_component": "persona"},
         ),
         StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
             func=persona_list,
             name="persona_list",
             description="List all available thinking personas with id and name.",
             tags=("readonly",),
+            metadata={"service_component": "persona"},
         ),
         StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
             func=persona_think,
             name="persona_think",
             description="Consult a thinking persona by name or id and get its response to a question.",
             tags=("readonly",),
+            metadata={"service_component": "persona"},
         ),
     )
 
@@ -230,7 +233,7 @@ def build_reason_persona_tools(
     from langchain_core.tools import StructuredTool
 
     return (
-        StructuredTool.from_function(func=_craft, name="persona_craft", description="Create or update a thinking persona scoped to the current reason thread. Also consults global personas when listing and thinking."),
-        StructuredTool.from_function(func=_list, name="persona_list", description="List available thinking personas (global + current reason thread). Pass scope='local' for only thread-scoped personas, scope='global' for only global ones.", tags=("readonly",)),
-        StructuredTool.from_function(func=_think, name="persona_think", description="Consult a thinking persona by name or id. Searches local (thread-scoped) first then global by default. Pass scope='local' to search only local, scope='global' to search only global.", tags=("readonly",)),
+        StructuredTool.from_function(func=_craft, name="persona_craft", description="Create or update a thinking persona scoped to the current reason thread. Also consults global personas when listing and thinking.", metadata={"service_component": "persona"}),
+        StructuredTool.from_function(func=_list, name="persona_list", description="List available thinking personas (global + current reason thread). Pass scope='local' for only thread-scoped personas, scope='global' for only global ones.", tags=("readonly",), metadata={"service_component": "persona"}),
+        StructuredTool.from_function(func=_think, name="persona_think", description="Consult a thinking persona by name or id. Searches local (thread-scoped) first then global by default. Pass scope='local' to search only local, scope='global' to search only global.", tags=("readonly",), metadata={"service_component": "persona"}),
     )

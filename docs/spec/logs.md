@@ -65,6 +65,17 @@ Rules:
 - `selves_consult` also emits ordinary `persona` component logs for internal persona activity. The service-tool log records that chat called the selves service; the `persona` logs record what the selves service did.
 - All other log formatting rules remain unchanged.
 - Tool/service call body text is for debugging. It should include compact `args:` plus `result:` or `error:` lines, bounded in length so interactive output remains readable.
+### Service Tag Rendering
+
+The log event itself is the single source of truth for the service tag. When a tool is invoked, the wrapper writes the `service_component` directly into `metadata`. No code derives the service tag from the tool name at render time.
+
+All rendering of tool call log events must read `metadata.service_component` from the log event — never guess it from the tool name.
+
+Rules:
+
+- The writer (log callback) is responsible for determining the correct `service_component` and writing it into the log event's `metadata`. The writer may use any approach (e.g. consulting tool metadata, a naming convention, or an explicit tag on the tool object).
+- The renderer (`_render_service_tool_called`) reads `metadata.service_component` directly. It must NOT re-derive the service from the tool name.
+- No subsystem stores a separate tool-call cache on domain objects. The log event is the record of a tool invocation. Any code that needs to display a past tool call queries the log system.
 
 ## Chat Turn Logs
 

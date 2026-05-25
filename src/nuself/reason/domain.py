@@ -205,7 +205,7 @@ class ReasoningStep:
     retired_hypotheses: list[str] = field(default_factory=_empty_str_list)
     new_open_questions: list[str] = field(default_factory=_empty_str_list)
     evidence_refs: list[str] = field(default_factory=_empty_str_list)
-    tool_calls: tuple[tuple[str, dict[str, object], str | None], ...] = ()
+    tool_calls: tuple[tuple[str, str, dict[str, object], str | None], ...] = ()
     confidence: float | None = None
     created_at: str = field(default_factory=_now_iso)
     # New general-purpose fields (v2).
@@ -255,7 +255,7 @@ class ReasoningStep:
             "summary": self.summary,
             "delta": self.delta,
             "evidence_refs": self.evidence_refs,
-            "tool_calls": [[name, args, result] for name, args, result in self.tool_calls],
+            "tool_calls": [[name, service, args, result] for name, service, args, result in self.tool_calls],
             "confidence": self.confidence,
             "created_at": self.created_at,
             "new_findings_data": [t for t in self.new_findings_data],
@@ -342,21 +342,19 @@ def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
     return list(cast(list[str], raw))
 
 
-def _optional_tool_calls(data: dict[str, object], field_name: str) -> tuple[tuple[str, dict[str, object], str | None], ...]:
+def _optional_tool_calls(data: dict[str, object], field_name: str) -> tuple[tuple[str, str, dict[str, object], str | None], ...]:
     value = data.get(field_name)
     if value is None:
         return ()
     if not isinstance(value, list):
         raise ValueError(f"field '{field_name}' must be a list")
-    raw = cast(list[Any], value)  # pyright: ignore[reportUnknownVariableType]
-    result: list[tuple[str, dict[str, object], str | None]] = []
+    raw = cast(list[Any], value)
+    result: list[tuple[str, str, dict[str, object], str | None]] = []
     for item in raw:
-        if isinstance(item, list) and item and isinstance(item[0], str) and isinstance(item[1], dict):
-            item_len = len(item)  # pyright: ignore[reportUnknownArgumentType]
-            result_text = str(item[2]) if item_len >= 3 and item[2] is not None else None  # pyright: ignore[reportUnknownArgumentType]
-            result.append((item[0], cast(dict[str, object], item[1]), result_text))
+        if isinstance(item, list) and len(item) >= 4 and isinstance(item[0], str) and isinstance(item[1], str) and isinstance(item[2], dict):
+            result.append((item[0], item[1], cast(dict[str, object], item[2]), str(item[3]) if item[3] is not None else None))
         elif isinstance(item, str) and "(" in item:
-            result.append((item.split("(")[0], {"_raw": item}, None))
+            result.append((item.split("(")[0], "", {"_raw": item}, None))
     return tuple(result)
 
 

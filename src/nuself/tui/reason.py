@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from nuself.agent.tool_utils import format_tool_debug_body
+from nuself.logs import LogEvent
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.tui.render import (
     TerminalTheme,
     format_display_timestamp,
     render_key_value_field,
+    render_log_event,
     render_markdown,
     render_record_block,
     render_record_header,
     render_section,
-    render_tool_call,
 )
 
 _TOOL_CALL_INDENT = 2
@@ -85,21 +86,6 @@ def render_step_watch_entry(step: ReasoningStep, *, color: bool | None = None) -
     return _render_step_body(step, theme, indent=0, full=True)
 
 
-def _tool_service_tag(name: str) -> str:
-    if name.startswith("memory_"):
-        return "memory"
-    if name.startswith("reflection_"):
-        return "reflection"
-    if name.startswith("reason_"):
-        return "reasoning"
-    if name.startswith("trace_"):
-        return "trace"
-    if name.startswith("selves_"):
-        return "selves"
-    if name == "load_skill":
-        return "skill"
-    return ""
-  
 
  
 
@@ -118,19 +104,22 @@ def _render_step_body(
     if step.summary:
         lines.append(f"{body_pad}{render_markdown(step.summary, theme)}")
     if step.tool_calls:
-        for name, args_dict, tc_result in step.tool_calls:
-            service_tag = _tool_service_tag(name)
-            if not service_tag:
+        for name, service, args_dict, tc_result in step.tool_calls:
+            if not service:
                 continue
             inner_pad = " " * (indent + _TOOL_CALL_INDENT)
-            tc_rendered = render_tool_call(
+            body = format_tool_debug_body(args=args_dict, result=tc_result, full=True)
+            log_event = LogEvent(
+                time=step.created_at,
+                level="info",
                 component="reasoning",
-                service=service_tag,
-                args_text=format_tool_debug_body(args=args_dict, result=tc_result, full=True),
+                event="service_tool_called",
+                message=body,
                 status="completed",
-                color=theme.color,
+                metadata={"service_component": service, "tool": name},
             )
-            for line in tc_rendered.splitlines():
+            rendered = render_log_event(log_event, color=theme.color)
+            for line in rendered.splitlines():
                 lines.append(f"{inner_pad}{line}" if line else inner_pad.rstrip())
     _append_field(lines, body_pad, "delta", step.delta, theme, full=full)
     findings = step.new_findings

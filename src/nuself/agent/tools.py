@@ -327,6 +327,7 @@ def build_langchain_chat_tools(
                 "Returns formatted memory context with matches, scores, and match reasons."
             ),
             tags=("readonly",),
+            metadata={"service_component": "memory"},
         ),
         tool_from_function(
             count_memory,
@@ -486,6 +487,28 @@ def build_langchain_chat_tools(
             )
         )
     persona_tools = build_persona_tools(project_root)
+    _SERVICE_BY_TOOL: dict[str, str] = {
+        "memory_search": "memory",
+        "memory_count": "memory",
+        "memory_archive": "memory",
+        "memory_update_importance": "memory",
+        "reflection_list_pending": "reflection",
+        "reflection_count": "reflection",
+        "reflection_dismiss": "reflection",
+        "reflection_archive": "reflection",
+        "reason_list_active": "reasoning",
+        "reason_count": "reasoning",
+        "reason_show": "reasoning",
+        "reason_propose": "reasoning",
+        "trace_search": "trace",
+        "trace_count": "trace",
+        "trace_show": "trace",
+        "selves_consult": "selves",
+    }
+    for tool in tools:
+        service = _SERVICE_BY_TOOL.get(tool.name)
+        if service:
+            tool.metadata = {"service_component": service}  # pyright: ignore[reportAttributeAccessIssue]
     return tuple(tools) + persona_tools
 
 
@@ -562,10 +585,10 @@ def _build_workspace_tools_from_provider(
         return f"Deleted {key}"
 
     return (
-        tool_from_function(put, name="workspace_put", description=put.__doc__ or ""),
-        tool_from_function(get, name="workspace_get", description=get.__doc__ or ""),
-        tool_from_function(search, name="workspace_search", description=search.__doc__ or ""),
-        tool_from_function(delete, name="workspace_delete", description=delete.__doc__ or ""),
+        tool_from_function(put, name="workspace_put", description=put.__doc__ or "", metadata={"service_component": "workspace"}),
+        tool_from_function(get, name="workspace_get", description=get.__doc__ or "", metadata={"service_component": "workspace"}),
+        tool_from_function(search, name="workspace_search", description=search.__doc__ or "", metadata={"service_component": "workspace"}),
+        tool_from_function(delete, name="workspace_delete", description=delete.__doc__ or "", metadata={"service_component": "workspace"}),
     )
 
 
