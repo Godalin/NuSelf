@@ -271,6 +271,16 @@ class ReasonAdvancer:
                     return _step_from_data(cast(dict[str, object], data), thread.id, tool_logs=step_tool_logs)
             return None
         except Exception:
+            import traceback
+            from nuself.logs import write_log_event
+            write_log_event(
+                "reasoning",
+                "advance_tool_failed",
+                traceback.format_exc(),
+                project_root=self._project_root,
+                status="failed",
+                metadata={"thread_id": thread.id},
+            )
             return self._advance_raw(thread)
         finally:
             _current_reason_thread_id.reset(token)

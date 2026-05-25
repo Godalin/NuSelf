@@ -309,18 +309,11 @@ def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
     return list(cast(list[str], raw))
 
 
-def _optional_str(data: dict[str, object], field_name: str) -> str | None:
-    value = data.get(field_name)
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError(f"field '{field_name}' must be a string or null")
-    return value
-
-
 def _optional_str_with_default(data: dict[str, object], field_name: str, default: str = "") -> str:
-    value = _optional_str(data, field_name)
-    return value if value is not None else default
+    value = data.get(field_name)
+    if isinstance(value, str):
+        return value
+    return default
 
 
 def _optional_tool_logs(data: dict[str, object], field_name: str) -> tuple[dict[str, object], ...]:

@@ -13,8 +13,6 @@ from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 
 MAX_ACTIVE_THREADS = 5
-_MAX_HYPOTHESES = 10
-_MAX_OPEN_QUESTIONS = 10
 _MAX_EVIDENCE_REFS = 20
 
 
