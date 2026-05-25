@@ -10,13 +10,15 @@ from nuself.profile.repository import ProfileItemRepository
 
 
 def test_memory_intake_locally_infers_goal() -> None:
-    result = MemoryIntakeAgent().infer(body="My goal is to finish the memory system planning.")
+    llm = FakeIntakeLLM('{"type":"goal","title":"Finish memory system planning","confidence":0.8}')
+    result = MemoryIntakeAgent(llm=llm).infer(body="My goal is to finish the memory system planning.")
 
     assert result.type == "goal"
 
 
 def test_memory_intake_locally_infers_concept() -> None:
-    result = MemoryIntakeAgent().infer(body="Temporal memory means preserving when a thought changed.")
+    llm = FakeIntakeLLM('{"type":"concept","title":"Temporal memory preserves change","confidence":0.7}')
+    result = MemoryIntakeAgent(llm=llm).infer(body="Temporal memory means preserving when a thought changed.")
 
     assert result.type == "concept"
 
