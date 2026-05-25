@@ -77,7 +77,8 @@ def render_reason_detail(
         for i, step in enumerate(steps):
             if i > 0:
                 lines.append("")
-            lines.append(_render_step_body(step, theme, indent=0, full=full))
+            step_header = f"[{i + 1}] " if len(steps) > 1 else ""
+            lines.append(_render_step_body(step, theme, indent=0, full=full, step_prefix=step_header))
     return "\n".join(lines)
 
 
@@ -95,16 +96,19 @@ def _render_step_body(
     *,
     indent: int,
     full: bool = False,
+    step_prefix: str = "",
 ) -> str:
     pad = " " * indent
     kind_tag = theme.paint(f"[{step.kind}]", _step_kind_color(step.kind))
     ts = theme.muted(f"({format_display_timestamp(step.created_at)})")
-    lines = [f"{pad}{kind_tag} {ts}"]
+    lines = [f"{pad}{step_prefix}{kind_tag} {ts}"]
     body_pad = f"{pad}  "
     if step.summary:
         lines.append(f"{body_pad}{render_markdown(step.summary, theme)}")
     if step.output:
-        lines.append(f"{body_pad}{theme.tag('output:', 'reasoning')} {step.output}")
+        lines.append(f"{body_pad}{theme.tag('output:', 'reasoning')}")
+        for line in step.output.splitlines():
+            lines.append(f"{body_pad}  {render_markdown(line, theme)}")
     if step.tool_calls:
         for name, service, args_dict, tc_result in step.tool_calls:
             if not service:

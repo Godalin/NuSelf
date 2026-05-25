@@ -60,88 +60,65 @@ class ReasonStepOutput(BaseModel):
 
 
 REASON_ADVANCE_SYSTEM_PROMPT = (
-    "You are advancing a long-running thinking thread by exactly one step. "
-    "Your job is to take what exists, decide what to do next, and produce "
-    "both an observable output and a state update for the thread."
+    "You are a person engaged in deep thinking. You record your thoughts "
+    "as you reason step by step."
     ""
-    "--- Thread overview ---"
+    "Write what you are thinking right now as output — a paragraph of "
+    "free-form thought, analysis, draft, or reflection. This is your "
+    "inner monologue."
     ""
-    "The thread has a topic (the overall project or question), a working "
-    "summary of progress so far, and the following state that you update:"
+    "Then update your notes:"
+    "- active_items — ideas or things you are actively tracking."
+    "- pending_items — open questions or unresolved points."
+    "- next_steps — what you plan to do next."
+    "- retired_findings — ideas you are setting aside."
+    "- delta — what changed in your thinking this step."
+    "- mandates — constraints you must follow."
     ""
-    "- active_items — things being actively tracked. Each item has:"
-    "  label (short name), description (optional detail), kind (free-text tag),"
-    "  and status."
-    "- pending_items — unresolved items or open questions. Same structure."
-    "- next_steps — planned next actions. Same structure."
-    "- mandates — requirements you MUST follow on every advance."
+    "Keep each step focused. One or two new active items per step is "
+    "enough. Do not rush; genuine thinking unfolds one step at a time."
     ""
-    "--- This step ---"
-    ""
-    "Each step produces two things:"
-    ""
-    "1. output — the observable product of THIS step. This is what an"
-    "   external observer would see: a paragraph of generated story, a"
-    "   candidate answer, a design sketch, an analysis paragraph."
-    "   Empty if the step is purely internal bookkeeping."
-    ""
-    "2. A state update that changes the thread for the next step:"
-    "   - summary — what this step accomplished (one line)."
-    "   - delta — what changed since the last step."
-    "   - kind — progress, no_change, question, planning, synthesis,"
-    "     contradiction, or resolution."
-    "   - new_findings — items to ADD to active_items."
-    "   - new_pending — items to ADD to pending_items."
-    "   - retired_findings — items to REMOVE from active_items."
-    "   - next_steps — items to ADD to next_steps."
-    "   - evidence_refs — optional references to memory, reflection, or trace."
-    ""
-    "After this step the thread will have updated active_items,"
-    "pending_items, and next_steps. The next advance will see those"
-    "updated fields and decide what to do next."
-    ""
-    "Use load_skill to load service skills. Use load_skill(\"persona\") to"
-    "get different perspectives on the current problem."
+    "If relevant, load a persona skill and consult a persona to get "
+    "a different angle on the problem."
 )
 
 
 def _build_advance_prompt(thread: ReasoningThread) -> str:
     parts = [
-        "--- Current thread state ---",
-        f"Topic: {thread.topic}",
-        f"Working summary: {thread.working_summary}",
+        f"You are thinking about: {thread.topic}",
+        f"So far you have noted: {thread.working_summary}",
     ]
     mandates = thread.mandates
     if mandates:
-        parts.append("Mandates:")
+        parts.append("You must follow these constraints:")
         for m in mandates:
             parts.append(f"  - {m}")
     items = thread.active_items
     if items:
-        parts.append("Active items:")
+        parts.append("Active ideas you are tracking:")
         for item in items:
             tag = f" ({item.kind})" if item.kind else ""
             desc = f" — {item.description}" if item.description else ""
             parts.append(f"  - {item.label}{tag}{desc}")
     pending = thread.pending_items
     if pending:
-        parts.append("Pending items:")
+        parts.append("Open questions or unresolved points:")
         for item in pending:
             tag = f" ({item.kind})" if item.kind else ""
             desc = f" — {item.description}" if item.description else ""
             parts.append(f"  - {item.label}{tag}{desc}")
     nxt = thread.next_steps
     if nxt:
-        parts.append("Next steps (planned):")
+        parts.append("Planned next actions:")
         for item in nxt:
             parts.append(f"  - {item.label}")
     if thread.evidence_refs:
-        parts.append("References:")
+        parts.append("References you have:")
         for r in thread.evidence_refs:
             parts.append(f"  - {r}")
     parts.append("")
-    parts.append("Produce exactly one step. Start from this state, decide what to do,")
-    parts.append("fill in output and state changes, and stop. Do not plan multiple steps.")
+    parts.append("Think one step forward. Write your current thoughts as output,")
+    parts.append("then update your notes for the next round.")
     return "\n".join(parts)
 
 
@@ -337,7 +314,7 @@ class ReasonAdvancer:
         prompt_lines = [_build_advance_prompt(thread)]
         if context:
             prompt_lines.append("")
-            prompt_lines.append("Reference context (memories, reflections, traces):")
+            prompt_lines.append("You recall:")
             prompt_lines.append(context)
             prompt_lines.append("")
             prompt_lines.append("Reply with a JSON object only, no markdown, no explanation.")
@@ -355,7 +332,7 @@ class ReasonAdvancer:
         return _step_from_data(data, thread.id)
 
     def _gather_context(self, thread: ReasoningThread) -> str:
-        """Collect relevant memory and reflection context for the thread topic."""
+        """Collect relevant memory, reflection, and persona context for the thread topic."""
         parts: list[str] = []
 
         if self._memory_query_service is not None:
@@ -379,6 +356,25 @@ class ReasonAdvancer:
                             f"confidence={e.confidence:.2f})"
                         )
                     parts.append("\n".join(ref_lines))
+            except Exception:
+                pass
+
+        if self._workspace_store is not None:
+            try:
+                from nuself.persona.prompt_repo import PersonaPromptRepository
+
+                wpath = self._workspace_store.paths(thread.id)
+                thread_repo = PersonaPromptRepository(root=wpath.root / "persona_prompts")
+                global_repo = PersonaPromptRepository(project_root=self._project_root)
+                all_prompts: list[str] = []
+                for repo in (thread_repo, global_repo):
+                    for p in repo.list():
+                        all_prompts.append(f"  - {p.name}: {p.prompt[:200]}")
+                if all_prompts:
+                    persona_lines = ["Personas you can consult:"]
+                    persona_lines.extend(all_prompts)
+                    persona_lines.append("Use persona_think to get a different angle.")
+                    parts.append("\n".join(persona_lines))
             except Exception:
                 pass
 
