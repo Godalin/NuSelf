@@ -195,14 +195,6 @@ def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | No
         if not isinstance(raw_active, list):
             raw_active = []
         active_items = [cast(dict[str, object], item) for item in raw_active if isinstance(item, dict)]
-        # Merge legacy hypotheses (from old log events) into active_items.
-        legacy_hypotheses: list[str] = meta.get("hypotheses", []) or []
-        if legacy_hypotheses:
-            seen_labels = {item.get("label", "") for item in active_items}
-            for h in legacy_hypotheses:
-                if h not in seen_labels:
-                    active_items.append({"label": h, "description": "", "kind": "item"})
-                    seen_labels.add(h)
         thread = service.start_thread(
             topic=topic_raw,
             working_summary=meta.get("working_summary", "") or "",

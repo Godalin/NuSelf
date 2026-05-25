@@ -421,8 +421,8 @@ def build_langchain_chat_tools(
             show_reasoning_thread,
             name="reason_show",
             description=(
-                "Show details for a specific long-run reasoning thread, including summary, hypotheses, "
-                "open questions, evidence refs, and recent steps. Pass 'current' to show the most recent "
+                "Show details for a specific long-run reasoning thread, including summary, tracked items, "
+                "evidence refs, and recent steps. Pass 'current' to show the most recent "
                 "active thread."
             ),
             tags=("readonly",),
