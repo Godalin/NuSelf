@@ -186,7 +186,7 @@ class ReasoningStep:
     delta: str = ""
     evidence_refs: list[str] = field(default_factory=_empty_str_list)
     output: str = ""
-    tool_calls: tuple[tuple[str, str, dict[str, object], str | None], ...] = ()
+    tool_logs: tuple[dict[str, object], ...] = ()
     confidence: float | None = None
     created_at: str = field(default_factory=_now_iso)
     new_findings_data: tuple[dict[str, object], ...] = ()
@@ -227,7 +227,7 @@ class ReasoningStep:
             "delta": self.delta,
             "evidence_refs": self.evidence_refs,
             "output": self.output,
-            "tool_calls": [[name, service, args, result] for name, service, args, result in self.tool_calls],
+            "tool_logs": [dict(t) for t in self.tool_logs],
             "confidence": self.confidence,
             "created_at": self.created_at,
             "new_findings_data": [t for t in self.new_findings_data],
@@ -247,7 +247,7 @@ class ReasoningStep:
             delta=_expect_str(data, "delta"),
             evidence_refs=_optional_str_list(data, "evidence_refs"),
             output=_optional_str_with_default(data, "output"),
-            tool_calls=_optional_tool_calls(data, "tool_calls"),
+            tool_logs=_optional_tool_logs(data, "tool_logs"),
             confidence=_optional_float(data, "confidence"),
             created_at=_expect_str(data, "created_at"),
             new_findings_data=_optional_tracked_items(data, "new_findings_data"),
@@ -323,20 +323,13 @@ def _optional_str_with_default(data: dict[str, object], field_name: str, default
     return value if value is not None else default
 
 
-def _optional_tool_calls(data: dict[str, object], field_name: str) -> tuple[tuple[str, str, dict[str, object], str | None], ...]:
+def _optional_tool_logs(data: dict[str, object], field_name: str) -> tuple[dict[str, object], ...]:
     value = data.get(field_name)
     if value is None:
         return ()
     if not isinstance(value, list):
         raise ValueError(f"field '{field_name}' must be a list")
-    raw = cast(list[Any], value)
-    result: list[tuple[str, str, dict[str, object], str | None]] = []
-    for item in raw:
-        if isinstance(item, list) and len(item) >= 4 and isinstance(item[0], str) and isinstance(item[1], str) and isinstance(item[2], dict):
-            result.append((item[0], item[1], cast(dict[str, object], item[2]), str(item[3]) if item[3] is not None else None))
-        elif isinstance(item, str) and "(" in item:
-            result.append((item.split("(")[0], "", {"_raw": item}, None))
-    return tuple(result)
+    return tuple(cast(dict[str, object], item) for item in value if isinstance(item, dict))
 
 
 def _optional_float(data: dict[str, object], field_name: str) -> float | None:

@@ -117,7 +117,7 @@ def _build_advance_prompt(thread: ReasoningThread) -> str:
     return "\n".join(parts)
 
 
-def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tuple[tuple[str, str, dict[str, object], str | None], ...] = ()) -> ReasoningStep | None:
+def _step_from_data(data: dict[str, object], thread_id: str, *, tool_logs: tuple[dict[str, object], ...] = ()) -> ReasoningStep | None:
     kind_raw = data.get("kind")
     summary_raw = data.get("summary")
     delta_raw = data.get("delta")
@@ -149,7 +149,7 @@ def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tupl
         delta=delta_raw.strip(),
         evidence_refs=evidence_refs_list,
         output=str(data.get("output", "")),
-        tool_calls=tool_calls,
+        tool_logs=tool_logs,
         confidence=confidence,
         new_findings_data=_as_tracked_list(data.get("new_findings")),
         new_pending_data=_as_tracked_list(data.get("new_pending")),
@@ -248,20 +248,28 @@ class ReasonAdvancer:
             state = cast(dict[str, object], result) if isinstance(result, dict) else {}
             for name, args, tc_result in self._captured:
                 _log_tool_call(name, args, project_root=self._project_root, result=tc_result, tool_service_map=self._tool_service_map)
-            step_tool_calls = tuple(
-                (name, self._tool_service_map.get(name, ""), dict(args), result)
+            from nuself.agent.tool_utils import format_tool_debug_body
+
+            step_tool_logs = tuple(
+                {
+                    "component": "reasoning",
+                    "event": "service_tool_called",
+                    "message": format_tool_debug_body(args=dict(args), result=result, full=True),
+                    "status": "completed",
+                    "metadata": {"service_component": self._tool_service_map.get(name, ""), "tool": name},
+                }
                 for name, args, result in self._captured
             )
             structured = state.get("structured_response")
             if structured is None:
                 return None
             if isinstance(structured, dict):
-                return _step_from_data(cast(dict[str, object], structured), thread.id, tool_calls=step_tool_calls)
+                return _step_from_data(cast(dict[str, object], structured), thread.id, tool_logs=step_tool_logs)
             pydantic_data = getattr(structured, "model_dump", None)
             if pydantic_data is not None:
                 data = pydantic_data()
                 if isinstance(data, dict):
-                    return _step_from_data(cast(dict[str, object], data), thread.id, tool_calls=step_tool_calls)
+                    return _step_from_data(cast(dict[str, object], data), thread.id, tool_logs=step_tool_logs)
             return None
         except Exception:
             return self._advance_raw(thread)
@@ -308,6 +316,56 @@ class ReasonAdvancer:
         context = self._gather_context(thread)
         system_prompt = thread.reasoning_prompt if thread.reasoning_prompt else REASON_ADVANCE_SYSTEM_PROMPT
         prompt_lines = [_build_advance_prompt(thread)]
+        tool_logs: list[dict[str, object]] = []
+
+        # Auto-consult available personas and inject their perspectives.
+        if self._workspace_store is not None:
+            try:
+                from nuself.llm import default_llm
+                from nuself.persona.prompt_repo import PersonaPromptRepository
+                from nuself.agent.tool_utils import format_tool_debug_body
+
+                wpath = self._workspace_store.paths(thread.id)
+                thread_repo = PersonaPromptRepository(root=wpath.root / "persona_prompts")
+                global_repo = PersonaPromptRepository(project_root=self._project_root)
+                all_personas: list[tuple[str, str]] = []
+                for repo in (thread_repo, global_repo):
+                    for p in repo.list():
+                        all_personas.append((p.name, p.prompt))
+                if all_personas:
+                    persona_lines: list[str] = []
+                    for name, prompt in all_personas:
+                        try:
+                            llm = default_llm(self._project_root)
+                            response = llm.complete([
+                                ChatMessage(role="system", content=prompt),
+                                ChatMessage(role="user", content=f"Topic: {thread.topic}\n\nShare your perspective."),
+                            ])
+                            text = response.strip()
+                            persona_lines.append(f"[{name}] {text[:300]}")
+                            tool_logs.append({
+                                "component": "reasoning",
+                                "event": "service_tool_called",
+                                "message": format_tool_debug_body(args={"persona": name, "question": thread.topic}, result=text, full=True),
+                                "status": "completed",
+                                "metadata": {"service_component": "persona", "tool": "persona_think"},
+                            })
+                        except Exception as exc:
+                            persona_lines.append(f"[{name}] (unavailable)")
+                            tool_logs.append({
+                                "component": "reasoning",
+                                "event": "service_tool_called",
+                                "message": format_tool_debug_body(args={"persona": name, "question": thread.topic}, error=str(exc), full=True),
+                                "status": "failed",
+                                "metadata": {"service_component": "persona", "tool": "persona_think"},
+                            })
+                    if persona_lines:
+                        prompt_lines.append("")
+                        prompt_lines.append("Perspectives you gathered:")
+                        prompt_lines.extend(persona_lines)
+            except Exception:
+                pass
+
         if context:
             prompt_lines.append("")
             prompt_lines.append("You recall:")
@@ -325,10 +383,10 @@ class ReasonAdvancer:
         data = _parse_step_json(raw)
         if data is None:
             return None
-        return _step_from_data(data, thread.id)
+        return _step_from_data(data, thread.id, tool_logs=tuple(tool_logs))
 
     def _gather_context(self, thread: ReasoningThread) -> str:
-        """Collect relevant memory, reflection, and persona context for the thread topic."""
+        """Collect relevant memory and reflection context for the thread topic."""
         parts: list[str] = []
 
         if self._memory_query_service is not None:
@@ -352,36 +410,6 @@ class ReasonAdvancer:
                             f"confidence={e.confidence:.2f})"
                         )
                     parts.append("\n".join(ref_lines))
-            except Exception:
-                pass
-
-        if self._workspace_store is not None:
-            try:
-                from nuself.llm import ChatMessage, default_llm
-                from nuself.persona.prompt_repo import PersonaPromptRepository
-
-                wpath = self._workspace_store.paths(thread.id)
-                thread_repo = PersonaPromptRepository(root=wpath.root / "persona_prompts")
-                global_repo = PersonaPromptRepository(project_root=self._project_root)
-                all_personas: list[tuple[str, str]] = []
-                for repo in (thread_repo, global_repo):
-                    for p in repo.list():
-                        all_personas.append((p.name, p.prompt))
-                if all_personas:
-                    persona_lines: list[str] = []
-                    for name, prompt in all_personas:
-                        try:
-                            llm = default_llm(self._project_root)
-                            response = llm.complete([
-                                ChatMessage(role="system", content=prompt),
-                                ChatMessage(role="user", content=f"Topic: {thread.topic}\n\nShare your perspective."),
-                            ])
-                            persona_lines.append(f"[{name}] {response.strip()[:300]}")
-                        except Exception:
-                            persona_lines.append(f"[{name}] (unavailable)")
-                    if persona_lines:
-                        parts.append("Perspectives you gathered:")
-                        parts.extend(persona_lines)
             except Exception:
                 pass
 

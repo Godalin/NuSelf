@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from nuself.agent.tool_utils import format_tool_debug_body
+from typing import cast
+
 from nuself.logs import LogEvent
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.tui.render import (
@@ -109,20 +110,17 @@ def _render_step_body(
         lines.append(f"{body_pad}{theme.tag('output:', 'reasoning')}")
         for line in step.output.splitlines():
             lines.append(f"{body_pad}  {render_markdown(line, theme)}")
-    if step.tool_calls:
-        for name, service, args_dict, tc_result in step.tool_calls:
-            if not service:
-                continue
+    if step.tool_logs:
+        for entry in step.tool_logs:
             inner_pad = " " * (indent + _TOOL_CALL_INDENT)
-            body = format_tool_debug_body(args=args_dict, result=tc_result, full=True)
             log_event = LogEvent(
                 time=step.created_at,
                 level="info",
-                component="reasoning",
-                event="service_tool_called",
-                message=body,
-                status="completed",
-                metadata={"service_component": service, "tool": name},
+                component=str(entry.get("component", "reasoning")),
+                event=str(entry.get("event", "")),
+                message=str(entry.get("message", "")),
+                status=str(entry.get("status")) if entry.get("status") else None,
+                metadata=cast(dict[str, object] | None, entry.get("metadata")),
             )
             rendered = render_log_event(log_event, color=theme.color)
             for line in rendered.splitlines():
