@@ -215,6 +215,7 @@ def build_langchain_chat_tools(
         working_summary: str = "",
         evidence_refs: list[str] | None = None,
         active_items: list[dict[str, object]] | None = None,
+        mandates: list[str] | None = None,
     ) -> str:
         """Propose creating a long-run reasoning thread. Does NOT create the thread — writes a pending proposal for user confirmation.
 
@@ -226,6 +227,9 @@ def build_langchain_chat_tools(
             "description" (optional), "kind" (optional free-text tag).
             The kind tag adapts to the task (e.g. "hypothesis", "character",
             "suspect", "plot_thread", "world_rule", etc.).
+          mandates – required actions the advancer MUST follow on every
+            advance (e.g. ["use persona_craft to create at least one new
+            persona before each advance"]).
         """
 
         topic = topic.strip()
@@ -252,6 +256,7 @@ def build_langchain_chat_tools(
                 "topic": topic,
                 "working_summary": working_summary.strip(),
                 "active_items": list(active_items) if active_items else [],
+                "mandates": list(mandates) if mandates else [],
                 "evidence_refs": evidence_refs or [],
             },
         )

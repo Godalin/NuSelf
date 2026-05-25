@@ -106,6 +106,7 @@ class ReasonService:
         source_trace_ids: tuple[str, ...] = (),
         priority: str = "normal",
         active_items: tuple[dict[str, object], ...] = (),
+        mandates: tuple[str, ...] = (),
     ) -> ReasoningThread:
         active = self._repository.list_threads(status="active")
         if len(active) >= MAX_ACTIVE_THREADS:
@@ -122,6 +123,7 @@ class ReasonService:
             priority="normal" if priority not in ("normal", "high") else priority,  # type: ignore[arg-type]
             evidence_refs=list(evidence_refs),
             active_items_data=tuple(active_items),
+            mandates_data=tuple(mandates),
         )
         saved = self._repository.save_thread(thread)
         workspace = self._workspace_store.ensure(thread.id)
@@ -129,7 +131,7 @@ class ReasonService:
             self._trace_recorder.record_reason_thread_created(
                 thread=saved,
                 source_trace_ids=list(source_trace_ids),
-                metadata={"workspace": str(workspace.root)},
+                metadata={"workspace": str(workspace.root), "mandates": list(thread.mandates_data)},
             )
 
         write_log_event(
@@ -192,6 +194,7 @@ class ReasonService:
             active_items_data=_merge_tracked_items(thread.active_items_data, step.new_findings_data if step else (), step.retired_findings_data if step else ()),
             pending_items_data=_merge_tracked_items(thread.pending_items_data, step.new_pending_data if step else (), ()),
             next_steps_data=step.next_steps_data if step and step.next_steps_data else thread.next_steps_data,
+            mandates_data=thread.mandates_data,
         )
         self._repository.save_thread(updated)
         if self._trace_recorder is not None:

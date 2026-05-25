@@ -182,10 +182,10 @@ def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | No
     _handled_proposal_ids.add(proposal_id)
     print()
     tag = _theme.tag("[reason]", "reasoning")
-    _print_ansi(f"{tag} 开启推理线程「{topic_raw}」? (y/n): ", end="", flush=True)
+    _print_ansi(f"{tag} Start reason thread「{topic_raw}」? (y/n): ", end="", flush=True)
     line = sys.stdin.readline().strip().lower()
     if line not in ("y", "yes"):
-        _print_ansi(f"{tag} 已取消")
+        _print_ansi(f"{tag} Cancelled")
         return
     from nuself.reason.service import ReasonService
 
@@ -208,11 +208,12 @@ def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | No
             working_summary=meta.get("working_summary", "") or "",
             evidence_refs=tuple(meta.get("evidence_refs", []) or []),
             active_items=tuple(active_items),
+            mandates=tuple(meta.get("mandates", []) or []),
         )
     except RuntimeError as exc:
-        _print_ansi(f"{tag} 创建失败: {exc}")
+        _print_ansi(f"{tag} Failed to create: {exc}")
         return
-    _print_ansi(f"{tag} 推理线程已创建: id={thread.id}")
+    _print_ansi(f"{tag} Reason thread created: id={thread.id}")
 
 
 def _print_ansi(text: str, **kwargs: object) -> None:
@@ -681,6 +682,7 @@ def build_parser() -> argparse.ArgumentParser:
     reason_start_parser = reason_subparsers.add_parser("start")
     reason_start_parser.add_argument("topic")
     reason_start_parser.add_argument("--priority", choices=("normal", "high"), default="normal")
+    reason_start_parser.add_argument("--mandate", action="append", default=[], help="Required action the advancer must follow on every advance (repeatable)")
     _add_handler(reason_start_parser, handle_reason_start)
     for action_name in _REASON_VERBS:
         p = reason_subparsers.add_parser(action_name)
@@ -1615,8 +1617,9 @@ def handle_reason_show(args: argparse.Namespace) -> int:
 
 def handle_reason_start(args: argparse.Namespace) -> int:
     service = ReasonService(args.project_root)
+    mandates = tuple(getattr(args, "mandate", None) or [])
     try:
-        thread = service.start_thread(args.topic, priority=args.priority)
+        thread = service.start_thread(args.topic, priority=args.priority, mandates=mandates)
     except RuntimeError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

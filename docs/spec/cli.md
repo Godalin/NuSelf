@@ -272,3 +272,115 @@ Discussion traces rendered by `render_discussion_trace()` must:
 4. Render the trace section title as a square-bracket tag, such as `[discussion]`.
 5. Render each group header as a square-bracket tag, such as `[host]`, `[candidate]`, or `[turn-1]`.
 6. If the group header and speaker are the same, render one tag followed by the content instead of repeating `[host] [host]` or `[candidate] [candidate]`.
+
+## Turn-Confirmation Protocol
+
+A shared architecture layer for any subsystem to ask the user a yes/no question in the chat flow without blocking the agent.
+
+### Architecture
+
+This protocol uses the existing log system as a **domain event bus**, not as operational logging:
+
+- **Domain events** (`proposal_created`, `candidate_created`) carry structured payloads that CLI code consumes to drive interactive behavior. They are written by domain logic (tools, curators) and read by the CLI after each chat turn.
+- **Operational logs** (`turn_completed`, `service_tool_called`) record what happened for display and debugging. They are a read-only record and must never drive control flow.
+
+The log file is the transport medium: the producer writes an event entry, the consumer reads it after the turn. It is NOT an audit trail — confirmed proposals are consumed immediately and should not be replayed.
+
+### Lifecycle
+
+```
+producer (tool/curator)                     consumer (CLI)
+        │                                        │
+        │  write_log_event(component,             │
+        │    "proposal_created",                  │
+        │    metadata={...})                      │
+        ├─────────────────────────────────────────►
+        │                                        │
+        │  return "PENDING:{ns}:{id}"            │
+        │                                        │
+        │                              turn finishes
+        │                              reply printed
+        │                              _handle_proposals_after_turn()
+        │                                        │
+        │                              print "[tag] Confirm? (y/n):"
+        │                              readline()
+        │                                        │
+        │                              if y/yes: execute action
+        │                              if n/no:  discard silently
+        │                                        │
+        │                              resume normal chat loop
+```
+
+### Event Schema
+
+```python
+write_log_event(
+    component,              # e.g. "reasoning", "memory"
+    "proposal_created",     # fixed event name for all proposals
+    f"{description}",       # human-readable one-liner
+    project_root=...,
+    metadata={
+        "proposal_id": str,     # unique id — CLI deduplicates stale entries
+        # ... subsystem-specific fields ...
+    },
+)
+```
+
+### CLI Dispatch
+
+After each chat turn, the CLI calls `_handle_proposals_after_turn` which scans for `proposal_created` events and dispatches to the appropriate handler:
+
+```python
+def _handle_proposals_after_turn(events, project_root):
+    # 1. Check in-band events from the turn (one-shot mode)
+    for event in events:
+        handler = _PROPOSAL_HANDLERS.get((event.component, event.event))
+        if handler:
+            handler(event, project_root)
+            return
+    # 2. Also scan the shared log (daemon mode — turn_ids differ)
+    for event in reversed(read_log_events(tail=50)):
+        handler = _PROPOSAL_HANDLERS.get((event.component, event.event))
+        if handler:
+            handler(event, project_root)
+            return
+```
+
+A dispatch registry maps `(component, event)` to handlers:
+
+```python
+_PROPOSAL_HANDLERS: dict[tuple[str, str], Callable] = {
+    ("reasoning", "proposal_created"): _confirm_reason_proposal,
+    # ("memory",    "proposal_created"): _confirm_memory_candidate,  # future
+}
+```
+
+Each handler follows the same pattern:
+
+```python
+def _confirm_reason_proposal(event, project_root):
+    meta = event.metadata
+    print()  # blank line before prompt
+    print(f"[tag] Start reason thread「{meta['topic']}」? (y/n): ", end="", flush=True)
+    line = sys.stdin.readline().strip().lower()
+    if line in ("y", "yes"):
+        # materialise: call domain service with meta fields
+        ...
+    # else: discard silently
+```
+
+### Daemon Mode
+
+In daemon mode the proposal event is written on the daemon side but the log files are shared (`private/logs/` under the same project root). The CLI reads the daemon's events from the shared log in step 2 of the dispatch scan. The daemon never blocks for user input — prompting is always the CLI's responsibility.
+
+### One-Shot Mode
+
+One-shot chat (`nuself chat --message "..."`) does not enter the interactive loop. Proposal events are silently ignored because there is no context to prompt in.
+
+### Extending To Other Subsystems
+
+Any subsystem can use this protocol by:
+
+1. Writing a `proposal_created` event with its own component name and metadata.
+2. Adding a handler in `_PROPOSAL_HANDLERS` under its `(component, "proposal_created")` key.
+3. The handler reads subsystem-specific metadata from the event and calls the appropriate domain service on confirmation.

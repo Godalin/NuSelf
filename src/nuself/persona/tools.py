@@ -7,9 +7,7 @@ from pathlib import Path
 
 from langchain_core.tools import StructuredTool
 
-from nuself.agent.tool_utils import format_tool_debug_body
 from nuself.llm import ChatMessage, default_llm
-from nuself.logs import write_log_event
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
 
 
@@ -48,12 +46,6 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
         repo.save(persona)
         _record_prompt_trace(persona, project_root=project_root)
         result = f"Created thinking persona '{name}' (id={persona.id}). Use persona_think to consult it."
-        _log_persona_tool(
-            "persona_craft",
-            args={"name": name},
-            result=result,
-            project_root=project_root,
-        )
         return result
 
     def persona_list() -> str:
@@ -66,7 +58,6 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
             for p in prompts:
                 lines.append(f"  - {p.name} (id={p.id})")
             result = "\n".join(lines)
-        _log_persona_tool("persona_list", args={}, result=result, project_root=project_root)
         return result
 
     def persona_think(persona: str, question: str) -> str:
@@ -98,10 +89,8 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
             llm = default_llm(project_root)
             response = llm.complete(messages).strip()
         except RuntimeError as exc:
-            _log_persona_tool("persona_think", args={"persona": prompt.name, "question": question}, project_root=project_root, error=str(exc))
             return f"Error consulting persona '{prompt.name}': {exc}"
 
-        _log_persona_tool("persona_think", args={"persona": prompt.name, "question": question}, result=response, project_root=project_root)
         return response
 
     return (
@@ -132,35 +121,6 @@ def _record_prompt_trace(prompt: PersonaPrompt, *, project_root: Path | None = N
         TraceRecorder(project_root=project_root).record_persona_prompt_created(
             persona_prompt_id=prompt.id,
             name=prompt.name,
-        )
-    except RuntimeError:
-        pass
-
-
-def _log_persona_tool(
-    tool_name: str,
-    *,
-    args: dict[str, object],
-    result: str | None = None,
-    error: str | None = None,
-    project_root: Path | None = None,
-) -> None:
-    try:
-        message = format_tool_debug_body(args=args, result=result, error=error)
-        full_body = format_tool_debug_body(args=args, result=result, error=error, full=True)
-        write_log_event(
-            "chat",
-            "service_tool_called",
-            message,
-            project_root=project_root,
-            status="failed" if error else "completed",
-            error=error,
-            metadata={
-                "service_component": "persona",
-                "tool": tool_name,
-                "message_body": full_body,
-                **(args or {}),
-            },
         )
     except RuntimeError:
         pass
@@ -211,7 +171,6 @@ def build_reason_persona_tools(
         repo.save(persona)
         _record_prompt_trace(persona, project_root=global_project_root)
         result = f"Created thinking persona '{name}' (id={persona.id}, scoped to this reason thread)."
-        _log_persona_tool("persona_craft", args={"name": name}, result=result, project_root=global_project_root)
         return result
 
     def _list(scope: str = "") -> str:
@@ -229,7 +188,6 @@ def build_reason_persona_tools(
                 tag = " [local]" if scope == "" and repo.get(p.id) is not None else ""
                 lines.append(f"  - {p.name} (id={p.id}){tag}")
             result = "\n".join(lines)
-        _log_persona_tool("persona_list", args={"scope": scope} if scope else {}, result=result, project_root=global_project_root)
         return result
 
     def _think(persona: str, question: str, scope: str = "") -> str:
@@ -265,11 +223,8 @@ def build_reason_persona_tools(
         try:
             raw = llm.complete(messages)
         except RuntimeError as exc:
-            error_msg = f"persona_think failed: {exc}"
-            _log_persona_tool("persona_think", args={"persona": persona, "question": question}, error=error_msg, project_root=global_project_root)
-            return error_msg
+            return f"persona_think failed: {exc}"
         result = raw.strip()
-        _log_persona_tool("persona_think", args={"persona": persona, "question": question}, result=result, project_root=global_project_root)
         return result
 
     from langchain_core.tools import StructuredTool

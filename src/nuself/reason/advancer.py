@@ -72,6 +72,9 @@ REASON_ADVANCE_SYSTEM_PROMPT = (
     "  and status (default \"active\")."
     "- pending_items — things still unresolved. Same structure as active_items."
     "- next_steps — planned actions for the next advance. Same structure."
+    "- mandates — REQUIRED actions you MUST follow on this advance. These are"
+    "  architectural constraints set by the user, not suggestions."
+    "  You MUST plan your work to satisfy every mandate."
     ""
     "Each step includes:"
     "- summary — what this step accomplished."
@@ -92,6 +95,11 @@ REASON_ADVANCE_SYSTEM_PROMPT = (
 def _build_advance_prompt(thread: ReasoningThread) -> str:
     parts = [f"Topic: {thread.topic}"]
     parts.append(f"Working summary: {thread.working_summary}")
+    mandates = thread.mandates
+    if mandates:
+        parts.append("Mandates (you MUST follow these on every advance):")
+        for m in mandates:
+            parts.append(f"  - {m}")
     items = thread.active_items
     if items:
         parts.append("Active items:")

@@ -91,7 +91,7 @@ class TraceRecorder:
             participants=["reason"],
             decision_points=["User-approved long-run reasoning thread creation."],
             visibility="private",
-            metadata={"thread_id": thread.id, "status": thread.status, **(metadata or {})},
+            metadata={"thread_id": thread.id, "status": thread.status, "mandates": list(thread.mandates_data), **(metadata or {})},
         )
 
     def record_reason_step(

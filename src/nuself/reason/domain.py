@@ -85,6 +85,7 @@ class ReasoningThread:
     active_items_data: tuple[dict[str, object], ...] = ()
     pending_items_data: tuple[dict[str, object], ...] = ()
     next_steps_data: tuple[dict[str, object], ...] = ()
+    mandates_data: tuple[str, ...] = ()
     # Legacy compat: hypotheses → active_items, open_questions → pending_items
 
     def __post_init__(self) -> None:
@@ -113,6 +114,10 @@ class ReasoningThread:
     def next_steps(self) -> list[TrackedItem]:
         return [TrackedItem.from_wire(d) for d in self.next_steps_data]
 
+    @property
+    def mandates(self) -> list[str]:
+        return list(self.mandates_data)
+
     def to_wire(self) -> dict[str, object]:
         result: dict[str, object] = {
             "id": self.id,
@@ -129,6 +134,7 @@ class ReasoningThread:
             "active_items_data": [t for t in self.active_items_data],
             "pending_items_data": [t for t in self.pending_items_data],
             "next_steps_data": [t for t in self.next_steps_data],
+            "mandates_data": [m for m in self.mandates_data],
         }
         # Keep legacy fields for backward compat readers.
         result["question"] = self.topic
@@ -162,6 +168,7 @@ class ReasoningThread:
             active_items_data=_optional_tracked_items(data, "active_items_data"),
             pending_items_data=_optional_tracked_items(data, "pending_items_data"),
             next_steps_data=_optional_tracked_items(data, "next_steps_data"),
+            mandates_data=_optional_mandates(data, "mandates_data"),
         )
 
     def with_status(self, status: ReasonStatus) -> ReasoningThread:
@@ -183,6 +190,7 @@ class ReasoningThread:
             active_items_data=self.active_items_data,
             pending_items_data=self.pending_items_data,
             next_steps_data=self.next_steps_data,
+            mandates_data=self.mandates_data,
         )
 
 
@@ -294,6 +302,16 @@ def _optional_tracked_items(data: dict[str, object], field_name: str) -> tuple[d
         if isinstance(item, dict):
             result.append(cast(dict[str, object], item))
     return tuple(result)
+
+
+def _optional_mandates(data: dict[str, object], field_name: str) -> tuple[str, ...]:
+    value = data.get(field_name)
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        return ()
+    raw = cast(list[object], value)
+    return tuple(str(item) for item in raw if isinstance(item, str))
 
 
 def _expect_str(data: dict[str, object], field_name: str) -> str:

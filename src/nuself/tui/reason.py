@@ -58,6 +58,9 @@ def render_reason_detail(
         fields.append(theme.muted(render_key_value_field("last_advanced_at", thread.last_advanced_at)))
     lines = [render_record_header(f"{tag} {thread.topic}", fields)]
     lines.extend(render_section("description", [thread.working_summary] if thread.working_summary else [], theme))
+    mandates = thread.mandates
+    if mandates:
+        lines.extend(render_section("mandates", mandates, theme))
     active = thread.active_items
     if active:
         lines.extend(render_section("active_items", [f"{i.label}{' — ' + i.description if i.description else ''}{' (' + i.kind + ')' if i.kind else ''}" for i in active], theme))
