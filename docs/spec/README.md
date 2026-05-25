@@ -10,7 +10,7 @@ This directory contains the authoritative behavioral specifications for NuSelf. 
 | [`cli-interaction.md`](cli-interaction.md) | CLI commands, REPL commands, output formats, color conventions |
 | [`memory.md`](memory.md) | Memory intake, curation, optimization, query, type system, symbolic graph |
 | [`reflection.md`](reflection.md) | Reflection scheduler event taxonomy, pipeline flow, discussion outcomes |
-| [`long-reasoning.md`](long-reasoning.md) | TODO long-run reasoning threads for sustained work on explicit questions |
+| [`reason.md`](reason.md) | Long-run reasoning threads for sustained work on explicit topics |
 | [`private-workspace.md`](private-workspace.md) | Isolated private scratch storage for agent-facing services |
 | [`trace.md`](trace.md) | TODO thought provenance records for tracing how important thoughts were derived |
 | [`notification.md`](notification.md) | Outbox state machine, delivery pipeline, adapters, deep links |

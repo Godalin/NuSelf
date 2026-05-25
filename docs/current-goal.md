@@ -31,7 +31,7 @@ The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace desi
 
 - [x] Update [`docs/spec/cli-interaction.md`](spec/cli-interaction.md) with the new command tree and breaking-removal policy.
 - [x] Finalize [`docs/spec/trace.md`](spec/trace.md) enough for first implementation.
-- [x] Finalize [`docs/spec/long-reasoning.md`](spec/long-reasoning.md) enough for first implementation.
+- [x] Finalize [`docs/spec/reason.md`](spec/reason.md) enough for first implementation.
 - [x] Update [`docs/spec/chat-agent-tools.md`](spec/chat-agent-tools.md) for read-only reason and trace tools.
 
 ### P1 — Command Cleanup
