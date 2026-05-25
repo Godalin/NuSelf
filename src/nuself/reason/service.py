@@ -271,7 +271,10 @@ class ReasonService:
             topic=thread.topic,
             status=thread.status,
             working_summary=_pick_working_summary(step, thread),
-            evidence_refs=_merge_str_lists(thread.evidence_refs, step.evidence_refs if step else [], max_items=_MAX_EVIDENCE_REFS),
+            evidence_refs=_merge_str_lists(
+                [r for r in thread.evidence_refs if not r.startswith("reason-proposal:")],
+                step.evidence_refs if step else [], max_items=_MAX_EVIDENCE_REFS,
+            ),
             priority=thread.priority,
             last_advanced_at=now,
             next_review_after=thread.next_review_after,

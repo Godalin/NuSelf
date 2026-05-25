@@ -198,7 +198,10 @@ def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | No
         thread = service.start_thread(
             topic=topic_raw,
             working_summary=meta.get("working_summary", "") or "",
-            evidence_refs=tuple(meta.get("evidence_refs", []) or []),
+            evidence_refs=tuple(
+                ref for ref in (meta.get("evidence_refs", []) or [])
+                if isinstance(ref, str) and not ref.startswith("reason-proposal:")
+            ),
             active_items=tuple(active_items),
             mandates=tuple(meta.get("mandates", []) or []),
         )
