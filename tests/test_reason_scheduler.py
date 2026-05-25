@@ -31,8 +31,6 @@ def test_run_once_skips_thread_on_cooldown(tmp_path: Path) -> None:
         topic=thread.topic,
         status=thread.status,
         working_summary=thread.working_summary,
-        hypotheses=list(thread.hypotheses),
-        open_questions=list(thread.open_questions),
         evidence_refs=list(thread.evidence_refs),
         priority=thread.priority,
         last_advanced_at=thread.last_advanced_at,
@@ -40,6 +38,10 @@ def test_run_once_skips_thread_on_cooldown(tmp_path: Path) -> None:
         skip_next_advance_until=cooldown_end,
         created_at=thread.created_at,
         updated_at=thread.updated_at,
+        active_items_data=thread.active_items_data,
+        pending_items_data=thread.pending_items_data,
+        next_steps_data=thread.next_steps_data,
+        mandates_data=thread.mandates_data,
     )
     repo = ReasonRepository(tmp_path)
     repo.save_thread(cooled)

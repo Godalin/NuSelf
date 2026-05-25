@@ -196,8 +196,6 @@ class ReasonService:
             topic=thread.topic,
             status=thread.status,
             working_summary=_pick_working_summary(step, thread),
-            hypotheses=_merge_str_lists(thread.hypotheses, step.new_hypotheses if step else [], max_items=_MAX_HYPOTHESES),
-            open_questions=_merge_str_lists(thread.open_questions, step.new_open_questions if step else [], max_items=_MAX_OPEN_QUESTIONS),
             evidence_refs=_merge_str_lists(thread.evidence_refs, step.evidence_refs if step else [], max_items=_MAX_EVIDENCE_REFS),
             priority=thread.priority,
             last_advanced_at=now,

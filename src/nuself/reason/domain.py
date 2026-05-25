@@ -61,10 +61,6 @@ class TrackedItem:
         return cls(label=label, description=description, kind=kind, status=status)
 
 
-def _migrate_legacy_str_list(items: list[str], *, default_kind: str = "") -> list[TrackedItem]:
-    """Convert a legacy ``list[str]`` to ``list[TrackedItem]``."""
-    return [TrackedItem(label=s, kind=default_kind) for s in items]
-
 
 @dataclass(frozen=True)
 class ReasoningThread:
@@ -72,8 +68,6 @@ class ReasoningThread:
     topic: str = ""
     status: ReasonStatus = "active"
     working_summary: str = ""
-    hypotheses: list[str] = field(default_factory=_empty_str_list)
-    open_questions: list[str] = field(default_factory=_empty_str_list)
     evidence_refs: list[str] = field(default_factory=_empty_str_list)
     priority: ReasonPriority = "normal"
     last_advanced_at: str | None = None
@@ -81,12 +75,10 @@ class ReasoningThread:
     skip_next_advance_until: str | None = None
     created_at: str = field(default_factory=_now_iso)
     updated_at: str = field(default_factory=_now_iso)
-    # New general-purpose fields (v2). Stored as tuple of wire dicts.
     active_items_data: tuple[dict[str, object], ...] = ()
     pending_items_data: tuple[dict[str, object], ...] = ()
     next_steps_data: tuple[dict[str, object], ...] = ()
     mandates_data: tuple[str, ...] = ()
-    # Legacy compat: hypotheses → active_items, open_questions → pending_items
 
     def __post_init__(self) -> None:
         if self.status not in REASON_STATUSES:
@@ -98,17 +90,11 @@ class ReasoningThread:
 
     @property
     def active_items(self) -> list[TrackedItem]:
-        items = [TrackedItem.from_wire(d) for d in self.active_items_data]
-        if items:
-            return items
-        return _migrate_legacy_str_list(self.hypotheses, default_kind="item")
+        return [TrackedItem.from_wire(d) for d in self.active_items_data]
 
     @property
     def pending_items(self) -> list[TrackedItem]:
-        items = [TrackedItem.from_wire(d) for d in self.pending_items_data]
-        if items:
-            return items
-        return _migrate_legacy_str_list(self.open_questions, default_kind="pending")
+        return [TrackedItem.from_wire(d) for d in self.pending_items_data]
 
     @property
     def next_steps(self) -> list[TrackedItem]:
@@ -136,10 +122,7 @@ class ReasoningThread:
             "next_steps_data": [t for t in self.next_steps_data],
             "mandates_data": [m for m in self.mandates_data],
         }
-        # Keep legacy fields for backward compat readers.
         result["question"] = self.topic
-        result["hypotheses"] = self.hypotheses
-        result["open_questions"] = self.open_questions
         return result
 
     @classmethod
@@ -156,8 +139,6 @@ class ReasoningThread:
             topic=topic,
             status=_expect_reason_status(data, "status"),
             working_summary=_expect_str(data, "working_summary"),
-            hypotheses=_optional_str_list(data, "hypotheses"),
-            open_questions=_optional_str_list(data, "open_questions"),
             evidence_refs=_optional_str_list(data, "evidence_refs"),
             priority=_expect_reason_priority(data, "priority"),
             last_advanced_at=_optional_str(data, "last_advanced_at"),
@@ -178,8 +159,6 @@ class ReasoningThread:
             topic=self.topic,
             status=status,
             working_summary=self.working_summary,
-            hypotheses=list(self.hypotheses),
-            open_questions=list(self.open_questions),
             evidence_refs=list(self.evidence_refs),
             priority=self.priority,
             last_advanced_at=self.last_advanced_at,
@@ -201,15 +180,11 @@ class ReasoningStep:
     kind: StepKind = "progress"
     summary: str = ""
     delta: str = ""
-    new_hypotheses: list[str] = field(default_factory=_empty_str_list)
-    retired_hypotheses: list[str] = field(default_factory=_empty_str_list)
-    new_open_questions: list[str] = field(default_factory=_empty_str_list)
     evidence_refs: list[str] = field(default_factory=_empty_str_list)
     output: str = ""
     tool_calls: tuple[tuple[str, str, dict[str, object], str | None], ...] = ()
     confidence: float | None = None
     created_at: str = field(default_factory=_now_iso)
-    # New general-purpose fields (v2).
     new_findings_data: tuple[dict[str, object], ...] = ()
     new_pending_data: tuple[dict[str, object], ...] = ()
     retired_findings_data: tuple[dict[str, object], ...] = ()
@@ -225,24 +200,15 @@ class ReasoningStep:
 
     @property
     def new_findings(self) -> list[TrackedItem]:
-        items = [TrackedItem.from_wire(d) for d in self.new_findings_data]
-        if items:
-            return items
-        return _migrate_legacy_str_list(self.new_hypotheses, default_kind="finding")
+        return [TrackedItem.from_wire(d) for d in self.new_findings_data]
 
     @property
     def new_pending(self) -> list[TrackedItem]:
-        items = [TrackedItem.from_wire(d) for d in self.new_pending_data]
-        if items:
-            return items
-        return _migrate_legacy_str_list(self.new_open_questions, default_kind="pending")
+        return [TrackedItem.from_wire(d) for d in self.new_pending_data]
 
     @property
     def retired_findings(self) -> list[TrackedItem]:
-        items = [TrackedItem.from_wire(d) for d in self.retired_findings_data]
-        if items:
-            return items
-        return _migrate_legacy_str_list(self.retired_hypotheses, default_kind="finding")
+        return [TrackedItem.from_wire(d) for d in self.retired_findings_data]
 
     @property
     def next_steps(self) -> list[TrackedItem]:
@@ -265,9 +231,6 @@ class ReasoningStep:
             "retired_findings_data": [t for t in self.retired_findings_data],
             "next_steps_data": [t for t in self.next_steps_data],
         }
-        result["new_hypotheses"] = self.new_hypotheses
-        result["retired_hypotheses"] = self.retired_hypotheses
-        result["new_open_questions"] = self.new_open_questions
         return result
 
     @classmethod
@@ -278,9 +241,6 @@ class ReasoningStep:
             kind=_expect_step_kind(data, "kind"),
             summary=_expect_str(data, "summary"),
             delta=_expect_str(data, "delta"),
-            new_hypotheses=_optional_str_list(data, "new_hypotheses"),
-            retired_hypotheses=_optional_str_list(data, "retired_hypotheses"),
-            new_open_questions=_optional_str_list(data, "new_open_questions"),
             evidence_refs=_optional_str_list(data, "evidence_refs"),
             output=_optional_str_with_default(data, "output"),
             tool_calls=_optional_tool_calls(data, "tool_calls"),

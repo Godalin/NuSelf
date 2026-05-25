@@ -11,9 +11,9 @@ def test_build_prompt_includes_thread_fields() -> None:
     thread = ReasoningThread(
         topic="Test question",
         working_summary="Some summary",
-        hypotheses=["hyp1"],
-        open_questions=["q1"],
         evidence_refs=["ref1"],
+        active_items_data=({"label": "hyp1", "kind": "finding"},),
+        pending_items_data=({"label": "q1", "kind": "pending"},),
     )
     prompt = _build_advance_prompt(thread)
     assert "Test question" in prompt
@@ -26,8 +26,8 @@ def test_build_prompt_includes_thread_fields() -> None:
 def test_build_prompt_empty_lists_omitted() -> None:
     thread = ReasoningThread(topic="Q")
     prompt = _build_advance_prompt(thread)
-    assert "Hypotheses:" not in prompt
-    assert "Open questions:" not in prompt
+    assert "Active items:" not in prompt
+    assert "Pending items:" not in prompt
     assert "Evidence references:" not in prompt
 
 

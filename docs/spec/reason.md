@@ -58,12 +58,10 @@ Reason steps may be exploratory, uncertain, speculative, or failed. Such steps c
 
 Properties:
 
-- `active_items` — returns `[TrackedItem]` from `active_items_data`, falling back to legacy `hypotheses` (list of strings → kind `"item"`).
-- `pending_items` — returns `[TrackedItem]` from `pending_items_data`, falling back to legacy `open_questions`.
+- `active_items` — returns `[TrackedItem]` from `active_items_data`.
+- `pending_items` — returns `[TrackedItem]` from `pending_items_data`.
 - `next_steps` — returns `[TrackedItem]` from `next_steps_data`.
 - `mandates` — returns `list[str]` from `mandates_data`.
-
-Legacy fields `hypotheses` and `open_questions` are still written to disk for backward compat but are no longer the primary storage for new threads.
 
 ### TrackedItem
 
@@ -103,12 +101,10 @@ The `kind` field is the extension point. Different tasks use different kinds wit
 
 Properties:
 
-- `new_findings` — returns `[TrackedItem]` from `new_findings_data`, falling back to legacy `new_hypotheses`.
-- `new_pending` — returns `[TrackedItem]` from `new_pending_data`, falling back to legacy `new_open_questions`.
-- `retired_findings` — returns `[TrackedItem]` from `retired_findings_data`, falling back to legacy `retired_hypotheses`.
+- `new_findings` — returns `[TrackedItem]` from `new_findings_data`.
+- `new_pending` — returns `[TrackedItem]` from `new_pending_data`.
+- `retired_findings` — returns `[TrackedItem]` from `retired_findings_data`.
 - `next_steps` — returns `[TrackedItem]` from `next_steps_data`.
-
-Legacy fields `new_hypotheses`, `retired_hypotheses`, `new_open_questions` are still written to disk for backward compat.
 
 ### State Transitions
 

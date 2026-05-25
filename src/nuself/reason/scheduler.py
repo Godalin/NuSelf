@@ -103,8 +103,6 @@ class ReasonScheduler:
             topic=thread.topic,
             status=thread.status,
             working_summary=thread.working_summary,
-            hypotheses=list(thread.hypotheses),
-            open_questions=list(thread.open_questions),
             evidence_refs=list(thread.evidence_refs),
             priority=thread.priority,
             last_advanced_at=thread.last_advanced_at,
