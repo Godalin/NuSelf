@@ -79,6 +79,7 @@ class ReasoningThread:
     pending_items_data: tuple[dict[str, object], ...] = ()
     next_steps_data: tuple[dict[str, object], ...] = ()
     mandates_data: tuple[str, ...] = ()
+    reasoning_prompt: str = ""
 
     def __post_init__(self) -> None:
         if self.status not in REASON_STATUSES:
@@ -122,6 +123,7 @@ class ReasoningThread:
             "next_steps_data": [t for t in self.next_steps_data],
             "mandates_data": [m for m in self.mandates_data],
         }
+        result["reasoning_prompt"] = self.reasoning_prompt
         result["question"] = self.topic
         return result
 
@@ -150,6 +152,7 @@ class ReasoningThread:
             pending_items_data=_optional_tracked_items(data, "pending_items_data"),
             next_steps_data=_optional_tracked_items(data, "next_steps_data"),
             mandates_data=_optional_mandates(data, "mandates_data"),
+            reasoning_prompt=_optional_str_with_default(data, "reasoning_prompt"),
         )
 
     def with_status(self, status: ReasonStatus) -> ReasoningThread:
@@ -170,6 +173,7 @@ class ReasoningThread:
             pending_items_data=self.pending_items_data,
             next_steps_data=self.next_steps_data,
             mandates_data=self.mandates_data,
+            reasoning_prompt=self.reasoning_prompt,
         )
 
 

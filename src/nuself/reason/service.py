@@ -37,9 +37,7 @@ def _merge_tracked_items(
 ) -> tuple[dict[str, object], ...]:
     retired_labels = {d.get("label", "") for d in retired}
     merged = list(existing)
-    # Remove retired items
     merged = [d for d in merged if d.get("label", "") not in retired_labels]
-    # Add new items (dedup by label)
     seen = {d.get("label", "") for d in merged}
     for d in new_items:
         label = d.get("label", "")
@@ -47,6 +45,77 @@ def _merge_tracked_items(
             merged.append(d)
             seen.add(label)
     return tuple(merged)
+
+
+def _generate_reasoning_prompt(
+    topic: str,
+    *,
+    mandates: tuple[str, ...] = (),
+    active_items: tuple[dict[str, object], ...] = (),
+    project_root: Path | None = None,
+) -> str:
+    """Generate a custom reasoning system prompt for a thread topic."""
+    if project_root is None:
+        return ""
+    from nuself.llm import ChatMessage, configured_langchain_chat_models, default_llm
+
+    if not configured_langchain_chat_models(project_root):
+        return ""
+    parts = [
+        "You are setting up a reasoning thread. The user's topic is:",
+        topic,
+    ]
+    if mandates:
+        parts.append("\nConstraints that apply:")
+        for m in mandates:
+            parts.append(f"  - {m}")
+    if active_items:
+        parts.append("\nInitial items being tracked:")
+        for item in active_items:
+            label = item.get("label", "")
+            kind = item.get("kind", "")
+            desc = item.get("description", "")
+            desc_text = f" — {desc}" if desc else ""
+            parts.append(f"  - {label} ({kind}){desc_text}")
+    parts.append(
+        """
+Generate a concise system prompt (2-4 paragraphs) for a reasoning agent
+that will advance this thread one step at a time. The agent sees this
+prompt before EVERY step, so it should set the tone and explain the
+fields in terms of THIS specific topic.
+
+The prompt must cover:
+
+1. What kind of thinking this is (e.g. story writing, scientific analysis,
+   debate, investigation, design). Set the appropriate voice and pace.
+
+2. Explain what each field means IN THE CONTEXT OF THIS TOPIC:
+   - output — the visible product of each step. What form does it take
+     for this topic? (e.g. story paragraph, analysis paragraph, design
+     sketch, argument)
+   - active_items — what kind of things will be tracked here?
+     (e.g. characters and plot threads for a story; hypotheses and
+     evidence for science; arguments for debate)
+   - pending_items — what kind of open questions?
+   - new_findings — what counts as a new insight?
+   - delta — what kind of change matters?
+   - retired_findings — when does something get set aside?
+
+3. The pace: how much should one step accomplish? Focused or broad?
+
+4. Any special rules derived from the constraints.
+
+Write in second person ("You are..."). Keep it concise but specific.
+Do NOT include field type/format descriptions — only explain meaning.
+"""
+    )
+    prompt = "\n".join(parts)
+    try:
+        llm = default_llm(project_root)
+        raw = llm.complete([ChatMessage(role="user", content=prompt)])
+        return raw.strip()
+    except Exception:
+        return ""
 
 
 class ReasonService:
@@ -126,6 +195,12 @@ class ReasonService:
             evidence_refs=list(evidence_refs),
             active_items_data=tuple(active_items),
             mandates_data=tuple(mandates),
+            reasoning_prompt=_generate_reasoning_prompt(
+                topic,
+                mandates=mandates,
+                active_items=tuple(active_items),
+                project_root=self._project_root,
+            ),
         )
         saved = self._repository.save_thread(thread)
         workspace = self._workspace_store.ensure(thread.id)

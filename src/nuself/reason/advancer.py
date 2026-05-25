@@ -60,34 +60,29 @@ class ReasonStepOutput(BaseModel):
 
 
 REASON_ADVANCE_SYSTEM_PROMPT = (
-    "You are a person engaged in deep thinking. You record your thoughts "
-    "as you reason step by step."
-    ""
-    "Write what you are thinking right now as output — a paragraph of "
-    "free-form thought, analysis, draft, or reflection. This is your "
-    "inner monologue."
-    ""
-    "Then update your notes:"
-    "- active_items — ideas or things you are actively tracking."
-    "- pending_items — open questions or unresolved points."
-    "- next_steps — what you plan to do next."
-    "- retired_findings — ideas you are setting aside."
-    "- delta — what changed in your thinking this step."
-    "- mandates — constraints you must follow."
-    ""
-    "Keep each step focused. One or two new active items per step is "
-    "enough. Do not rush; genuine thinking unfolds one step at a time."
-    ""
-    "If relevant, load a persona skill and consult a persona to get "
-    "a different angle on the problem."
+    "You are a person engaged in deep thinking. Write what you are "
+    "thinking right now as output, then update your notes.\n"
+    "- output: your current thoughts, analysis, or draft.\n"
+    "- active_items: ideas you are tracking.\n"
+    "- pending_items: open questions or unresolved points.\n"
+    "- new_findings: add new ideas to active_items.\n"
+    "- new_pending: add new questions to pending_items.\n"
+    "- retired_findings: set aside completed or abandoned ideas.\n"
+    "- delta: what changed in your thinking this step.\n"
+    "- next_steps: what you plan to do next.\n"
+    "- mandates: constraints you must follow."
 )
 
 
 def _build_advance_prompt(thread: ReasoningThread) -> str:
-    parts = [
+    parts = []
+    if thread.reasoning_prompt:
+        parts.append(thread.reasoning_prompt)
+        parts.append("")
+    parts.extend([
         f"You are thinking about: {thread.topic}",
         f"So far you have noted: {thread.working_summary}",
-    ]
+    ])
     mandates = thread.mandates
     if mandates:
         parts.append("You must follow these constraints:")
@@ -311,6 +306,7 @@ class ReasonAdvancer:
     def _advance_raw(self, thread: ReasoningThread) -> ReasoningStep | None:
         """Fallback: raw ChatLLM call with pre-injected context."""
         context = self._gather_context(thread)
+        system_prompt = thread.reasoning_prompt if thread.reasoning_prompt else REASON_ADVANCE_SYSTEM_PROMPT
         prompt_lines = [_build_advance_prompt(thread)]
         if context:
             prompt_lines.append("")
@@ -320,7 +316,7 @@ class ReasonAdvancer:
             prompt_lines.append("Reply with a JSON object only, no markdown, no explanation.")
         prompt = "\n".join(prompt_lines)
         raw = self._llm.complete([
-            ChatMessage(role="system", content=REASON_ADVANCE_SYSTEM_PROMPT),
+            ChatMessage(role="system", content=system_prompt),
             ChatMessage(role="user", content=prompt),
         ])
         if not raw.strip():
