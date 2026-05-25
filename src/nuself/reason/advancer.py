@@ -357,20 +357,31 @@ class ReasonAdvancer:
 
         if self._workspace_store is not None:
             try:
+                from nuself.llm import ChatMessage, default_llm
                 from nuself.persona.prompt_repo import PersonaPromptRepository
 
                 wpath = self._workspace_store.paths(thread.id)
                 thread_repo = PersonaPromptRepository(root=wpath.root / "persona_prompts")
                 global_repo = PersonaPromptRepository(project_root=self._project_root)
-                all_prompts: list[str] = []
+                all_personas: list[tuple[str, str]] = []
                 for repo in (thread_repo, global_repo):
                     for p in repo.list():
-                        all_prompts.append(f"  - {p.name}: {p.prompt[:200]}")
-                if all_prompts:
-                    persona_lines = ["Personas you can consult:"]
-                    persona_lines.extend(all_prompts)
-                    persona_lines.append("Use persona_think to get a different angle.")
-                    parts.append("\n".join(persona_lines))
+                        all_personas.append((p.name, p.prompt))
+                if all_personas:
+                    persona_lines: list[str] = []
+                    for name, prompt in all_personas:
+                        try:
+                            llm = default_llm(self._project_root)
+                            response = llm.complete([
+                                ChatMessage(role="system", content=prompt),
+                                ChatMessage(role="user", content=f"Topic: {thread.topic}\n\nShare your perspective."),
+                            ])
+                            persona_lines.append(f"[{name}] {response.strip()[:300]}")
+                        except Exception:
+                            persona_lines.append(f"[{name}] (unavailable)")
+                    if persona_lines:
+                        parts.append("Perspectives you gathered:")
+                        parts.extend(persona_lines)
             except Exception:
                 pass
 
