@@ -261,7 +261,7 @@ Trace tools let the chat agent inspect thought provenance without mutating it.
 
 ### Behavioral Guidelines for Reason Awareness (Prompt-Level)
 
-> "You can also read active reasoning threads—durable long-run questions the user is working through. If the user asks about their open questions or threads, summarize the active reasoning threads. You may suggest creating or advancing a thread if the conversation relates, but never call `reason_propose` until the user has explicitly confirmed they want a thread. When proposing, enrich the context with initial tracked items, evidence refs, and any required mandates."
+> "You can also read active reasoning threads—durable long-run questions the user is working through. If the user asks about their open questions or threads, summarize the active reasoning threads. You may suggest creating or advancing a thread if the conversation relates, but never call `reason_propose` until the user has explicitly confirmed they want a thread. When proposing, enrich the context with initial tracked items and any required mandates."
 
 ### Behavioral Guidelines for Memory Curation (Prompt-Level)
 

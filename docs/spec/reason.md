@@ -220,7 +220,7 @@ Rules:
 
 Every reason thread creation and non-trivial advance writes a `ThoughtTrace`.
 
-- Thread creation writes `kind=reason_thread`. When created via `reason_propose` + user confirmation, the trace must include the enriched context (`topic`, `working_summary`, `active_items`, `evidence_refs`, `mandates`) in its metadata.
+- Thread creation writes `kind=reason_thread`. When created via `reason_propose` + user confirmation, the trace must include the enriched context (`topic`, `working_summary`, `active_items`, `mandates`) in its metadata.
 - Advance writes `kind=reason_step`.
 - Reflection promotion writes `kind=promotion`.
 - Trace outputs include the created or updated reason artifact ids.

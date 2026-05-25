@@ -213,7 +213,6 @@ def build_langchain_chat_tools(
     def reason_propose(
         topic: str,
         working_summary: str = "",
-        evidence_refs: list[str] | None = None,
         active_items: list[dict[str, object]] | None = None,
         mandates: list[str] | None = None,
     ) -> str:
@@ -222,7 +221,6 @@ def build_langchain_chat_tools(
         Parameters:
           topic – the core topic for the thread.
           working_summary – enriched context from the discussion.
-          evidence_refs – references to memory/reflection/trace entries.
           active_items – initial tracked items, each with "label" (required),
             "description" (optional), "kind" (optional free-text tag).
             The kind tag adapts to the task (e.g. "hypothesis", "character",
@@ -257,7 +255,7 @@ def build_langchain_chat_tools(
                 "working_summary": working_summary.strip(),
                 "active_items": list(active_items) if active_items else [],
                 "mandates": list(mandates) if mandates else [],
-                "evidence_refs": evidence_refs or [],
+                "evidence_refs": [],
             },
         )
         return f"PENDING:reason-proposal:{proposal_id}"
