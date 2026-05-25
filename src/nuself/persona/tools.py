@@ -178,7 +178,7 @@ def build_reason_persona_tools(
     to be reused across threads.
 
     - ``persona_craft`` stores in the thread's private workspace only.
-    - ``persona_list`` merges global + thread personas.
+    - ``persona_list`` merges global + local personas.
     - ``persona_think`` resolves from thread first, then global.
     """
 
@@ -214,23 +214,25 @@ def build_reason_persona_tools(
         _log_persona_tool("persona_craft", args={"name": name}, result=result, project_root=global_project_root)
         return result
 
-    def _list() -> str:
+    def _list(scope: str = "") -> str:
         repo = _thread_repo()
         thread_prompts = repo.list()
         global_prompts = global_repo.list() if global_repo else ()
-        all_prompts = list(global_prompts) + list(thread_prompts)
+        local_list = thread_prompts if scope in ("", "local") else ()
+        global_list = global_prompts if scope in ("", "global") else ()
+        all_prompts = list(global_list) + list(local_list)
         if not all_prompts:
             result = "No thinking personas available. Use persona_craft to create one."
         else:
             lines = ["Available thinking personas:"]
             for p in all_prompts:
-                tag = " [thread]" if repo.get(p.id) is not None else ""
+                tag = " [local]" if scope == "" and repo.get(p.id) is not None else ""
                 lines.append(f"  - {p.name} (id={p.id}){tag}")
             result = "\n".join(lines)
-        _log_persona_tool("persona_list", args={}, result=result, project_root=global_project_root)
+        _log_persona_tool("persona_list", args={"scope": scope} if scope else {}, result=result, project_root=global_project_root)
         return result
 
-    def _think(persona: str, question: str) -> str:
+    def _think(persona: str, question: str, scope: str = "") -> str:
         persona = persona.strip()
         question = question.strip()
         if not persona:
@@ -239,8 +241,10 @@ def build_reason_persona_tools(
             return "Error: question must be a non-empty string"
 
         thread_repo_inst = _thread_repo()
-        prompt = thread_repo_inst.resolve(persona)
-        if prompt is None and global_repo is not None:
+        prompt: PersonaPrompt | None = None
+        if scope in ("", "local"):
+            prompt = thread_repo_inst.resolve(persona)
+        if prompt is None and scope in ("", "global") and global_repo is not None:
             prompt = global_repo.resolve(persona)
         if prompt is None:
             available: list[str] = []
@@ -272,6 +276,6 @@ def build_reason_persona_tools(
 
     return (
         StructuredTool.from_function(func=_craft, name="persona_craft", description="Create or update a thinking persona scoped to the current reason thread. Also consults global personas when listing and thinking."),
-        StructuredTool.from_function(func=_list, name="persona_list", description="List all available thinking personas (global + current reason thread).", tags=("readonly",)),
-        StructuredTool.from_function(func=_think, name="persona_think", description="Consult a thinking persona by name or id (searches thread scope first, then global).", tags=("readonly",)),
+        StructuredTool.from_function(func=_list, name="persona_list", description="List available thinking personas (global + current reason thread). Pass scope='local' for only thread-scoped personas, scope='global' for only global ones.", tags=("readonly",)),
+        StructuredTool.from_function(func=_think, name="persona_think", description="Consult a thinking persona by name or id. Searches local (thread-scoped) first then global by default. Pass scope='local' to search only local, scope='global' to search only global.", tags=("readonly",)),
     )
