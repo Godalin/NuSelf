@@ -92,6 +92,7 @@ The `kind` field is the extension point. Different tasks use different kinds wit
 | `kind`                  | string               | `progress`, `no_change`, `question`, `synthesis`, `contradiction`, `resolution`, or `planning` |
 | `summary`               | string               | User-readable step summary                                                                     |
 | `delta`                 | string               | What changed since the previous step                                                           |
+| `output`                | string               | Observable product of this step (e.g. a paragraph of generated story, a candidate answer).     |
 | `new_findings_data`     | list[dict]           | Items to add to `active_items` (TrackedItem wire format)                                       |
 | `new_pending_data`      | list[dict]           | Items to add to `pending_items`                                                                |
 | `retired_findings_data` | list[dict]           | Items to remove from `active_items` (matched by label)                                         |

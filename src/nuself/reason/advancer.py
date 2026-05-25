@@ -50,11 +50,9 @@ class ReasonStepOutput(BaseModel):
     summary: str
     delta: str
     kind: str
-    new_hypotheses: list[str] = Field(default_factory=list)
-    new_open_questions: list[str] = Field(default_factory=list)
+    output: str = ""
     evidence_refs: list[str] = Field(default_factory=list)
     confidence: float | None = None
-    # General-purpose fields (v2).  Optional so LLM doesn't have to fill them.
     new_findings: list[dict[str, object]] = Field(default_factory=list)
     new_pending: list[dict[str, object]] = Field(default_factory=list)
     retired_findings: list[dict[str, object]] = Field(default_factory=list)
@@ -79,6 +77,9 @@ REASON_ADVANCE_SYSTEM_PROMPT = (
     "- delta — what changed since the last step."
     "- kind — one of: progress, no_change, question, planning, synthesis,"
     "  contradiction, or resolution."
+    "- output — the visible result or product of this step (e.g. a"
+    "  paragraph of story, a candidate answer, a design sketch)."
+    "  Empty if the step is purely internal."
     "- new_findings — items to add to active_items."
     "- new_pending — items to add to pending_items."
     "- retired_findings — items to remove from active_items."
@@ -137,8 +138,6 @@ def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tupl
     if not isinstance(delta_raw, str):
         return None
 
-    new_hyp = data.get("new_hypotheses")
-    new_q = data.get("new_open_questions")
     ev_refs = data.get("evidence_refs")
     conf_raw = data.get("confidence")
 
@@ -146,8 +145,6 @@ def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tupl
     if isinstance(conf_raw, int | float):
         confidence = max(0.0, min(float(conf_raw), 1.0))
 
-    new_hypotheses: list[str] = list(cast(list[str], new_hyp)) if isinstance(new_hyp, list) else []
-    new_open_questions: list[str] = list(cast(list[str], new_q)) if isinstance(new_q, list) else []
     evidence_refs_list: list[str] = list(cast(list[str], ev_refs)) if isinstance(ev_refs, list) else []
 
     def _as_tracked_list(raw: object) -> tuple[dict[str, object], ...]:
@@ -160,9 +157,8 @@ def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tupl
         kind=kind_raw,
         summary=summary_raw.strip(),
         delta=delta_raw.strip(),
-        new_hypotheses=new_hypotheses,
-        new_open_questions=new_open_questions,
         evidence_refs=evidence_refs_list,
+        output=str(data.get("output", "")),
         tool_calls=tool_calls,
         confidence=confidence,
         new_findings_data=_as_tracked_list(data.get("new_findings")),

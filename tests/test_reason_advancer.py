@@ -82,17 +82,23 @@ class FakeLLM:
 
 def test_advance_returns_step_on_valid_llm() -> None:
     thread = ReasoningThread(topic="Test")
-    llm = FakeLLM('{"summary": "s", "delta": "d", "kind": "progress", "new_hypotheses": ["h1"], "new_open_questions": ["q1"], "evidence_refs": ["e1"], "confidence": 0.9}')
+    llm = FakeLLM('{"summary": "s", "delta": "d", "kind": "progress", "evidence_refs": ["e1"], "confidence": 0.9, "new_findings": [{"label": "f1", "kind": "finding"}], "new_pending": [{"label": "p1", "kind": "pending"}], "retired_findings": [{"label": "old"}], "next_steps": [{"label": "n1"}]}')
     advancer = ReasonAdvancer(cast_llm(llm))
     step = advancer.advance(thread)
     assert step is not None
     assert step.summary == "s"
     assert step.kind == "progress"
-    assert step.new_hypotheses == ["h1"]
-    assert step.new_open_questions == ["q1"]
     assert step.evidence_refs == ["e1"]
     assert step.confidence == 0.9
     assert step.thread_id == thread.id
+    assert len(step.new_findings) == 1
+    assert step.new_findings[0].label == "f1"
+    assert len(step.new_pending) == 1
+    assert step.new_pending[0].label == "p1"
+    assert len(step.retired_findings) == 1
+    assert step.retired_findings[0].label == "old"
+    assert len(step.next_steps) == 1
+    assert step.next_steps[0].label == "n1"
 
 
 def test_advance_returns_none_on_empty_response() -> None:

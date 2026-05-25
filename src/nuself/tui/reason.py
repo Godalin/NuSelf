@@ -103,6 +103,8 @@ def _render_step_body(
     body_pad = f"{pad}  "
     if step.summary:
         lines.append(f"{body_pad}{render_markdown(step.summary, theme)}")
+    if step.output:
+        lines.append(f"{body_pad}{theme.tag('output:', 'reasoning')} {step.output}")
     if step.tool_calls:
         for name, service, args_dict, tc_result in step.tool_calls:
             if not service:

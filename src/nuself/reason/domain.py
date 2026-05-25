@@ -205,6 +205,7 @@ class ReasoningStep:
     retired_hypotheses: list[str] = field(default_factory=_empty_str_list)
     new_open_questions: list[str] = field(default_factory=_empty_str_list)
     evidence_refs: list[str] = field(default_factory=_empty_str_list)
+    output: str = ""
     tool_calls: tuple[tuple[str, str, dict[str, object], str | None], ...] = ()
     confidence: float | None = None
     created_at: str = field(default_factory=_now_iso)
@@ -255,6 +256,7 @@ class ReasoningStep:
             "summary": self.summary,
             "delta": self.delta,
             "evidence_refs": self.evidence_refs,
+            "output": self.output,
             "tool_calls": [[name, service, args, result] for name, service, args, result in self.tool_calls],
             "confidence": self.confidence,
             "created_at": self.created_at,
@@ -280,6 +282,7 @@ class ReasoningStep:
             retired_hypotheses=_optional_str_list(data, "retired_hypotheses"),
             new_open_questions=_optional_str_list(data, "new_open_questions"),
             evidence_refs=_optional_str_list(data, "evidence_refs"),
+            output=_optional_str_with_default(data, "output"),
             tool_calls=_optional_tool_calls(data, "tool_calls"),
             confidence=_optional_float(data, "confidence"),
             created_at=_expect_str(data, "created_at"),
@@ -340,6 +343,20 @@ def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
     if not all(isinstance(item, str) for item in raw):
         raise ValueError(f"field '{field_name}' must be a list of strings")
     return list(cast(list[str], raw))
+
+
+def _optional_str(data: dict[str, object], field_name: str) -> str | None:
+    value = data.get(field_name)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"field '{field_name}' must be a string or null")
+    return value
+
+
+def _optional_str_with_default(data: dict[str, object], field_name: str, default: str = "") -> str:
+    value = _optional_str(data, field_name)
+    return value if value is not None else default
 
 
 def _optional_tool_calls(data: dict[str, object], field_name: str) -> tuple[tuple[str, str, dict[str, object], str | None], ...]:
