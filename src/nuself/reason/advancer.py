@@ -152,11 +152,21 @@ def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tupl
             return ()
         return tuple(cast(dict[str, object], item) for item in raw if isinstance(item, dict))
 
+    # Parse both old string-list format and new TrackedItem dict format.
+    # ReasoningStep's property fallbacks (new_findings → new_hypotheses etc.)
+    # bridge old data until the LLM adapts to the new schema.
+    new_hyp = data.get("new_hypotheses")
+    new_q = data.get("new_open_questions")
+    new_hypotheses: list[str] = list(cast(list[str], new_hyp)) if isinstance(new_hyp, list) else []
+    new_open_questions: list[str] = list(cast(list[str], new_q)) if isinstance(new_q, list) else []
+
     return ReasoningStep(
         thread_id=thread_id,
         kind=kind_raw,
         summary=summary_raw.strip(),
         delta=delta_raw.strip(),
+        new_hypotheses=new_hypotheses,
+        new_open_questions=new_open_questions,
         evidence_refs=evidence_refs_list,
         output=str(data.get("output", "")),
         tool_calls=tool_calls,
