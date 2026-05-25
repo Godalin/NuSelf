@@ -1636,8 +1636,9 @@ def handle_reason_thread_action(args: argparse.Namespace) -> int:
         try:
             from nuself.llm import default_llm
             from nuself.reason.advancer import ReasonAdvancer
+            from nuself.workspace import PrivateWorkspaceStore
 
-            advancer = ReasonAdvancer(default_llm(args.project_root), project_root=args.project_root)
+            advancer = ReasonAdvancer(default_llm(args.project_root), project_root=args.project_root, workspace_store=PrivateWorkspaceStore(args.project_root, scope="reason"))
             service = ReasonService(args.project_root, advancer=advancer)
         except RuntimeError:
             pass
@@ -3427,8 +3428,9 @@ def _handle_interactive_reason_command(command: str, project_root: Path | None) 
             try:
                 from nuself.llm import default_llm
                 from nuself.reason.advancer import ReasonAdvancer
+                from nuself.workspace import PrivateWorkspaceStore
 
-                advancer = ReasonAdvancer(default_llm(project_root), project_root=project_root)
+                advancer = ReasonAdvancer(default_llm(project_root), project_root=project_root, workspace_store=PrivateWorkspaceStore(project_root, scope="reason"))
                 service = ReasonService(project_root, advancer=advancer)
             except RuntimeError:
                 service = ReasonService(project_root)

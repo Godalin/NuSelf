@@ -50,7 +50,7 @@ class ReasonStepOutput(BaseModel):
     summary: str
     delta: str
     kind: str
-    output: str = ""
+    output: str
     evidence_refs: list[str] = Field(default_factory=list)
     confidence: float | None = None
     new_findings: list[dict[str, object]] = Field(default_factory=list)
