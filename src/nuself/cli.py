@@ -1639,7 +1639,17 @@ _REASON_VERBS: dict[str, tuple[str, str]] = {
 
 def handle_reason_thread_action(args: argparse.Namespace) -> int:
     verb, method_name = _REASON_VERBS[args.action]
-    method = getattr(ReasonService(args.project_root), method_name)
+    service = ReasonService(args.project_root)
+    if args.action == "advance":
+        try:
+            from nuself.llm import default_llm
+            from nuself.reason.advancer import ReasonAdvancer
+
+            advancer = ReasonAdvancer(default_llm(args.project_root), project_root=args.project_root)
+            service = ReasonService(args.project_root, advancer=advancer)
+        except RuntimeError:
+            pass
+    method = getattr(service, method_name)
     try:
         thread = method(args.thread_id, by_index=args.by_index)
     except (ReasonNotFound, RuntimeError) as exc:
@@ -3422,6 +3432,14 @@ def _handle_interactive_reason_command(command: str, project_root: Path | None) 
     if command.startswith("advance "):
         thread_id = command.removeprefix("advance ").strip()
         try:
+            try:
+                from nuself.llm import default_llm
+                from nuself.reason.advancer import ReasonAdvancer
+
+                advancer = ReasonAdvancer(default_llm(project_root), project_root=project_root)
+                service = ReasonService(project_root, advancer=advancer)
+            except RuntimeError:
+                service = ReasonService(project_root)
             thread = service.advance_thread(thread_id)
         except (ReasonNotFound, RuntimeError) as exc:
             return f"Error: {exc}"

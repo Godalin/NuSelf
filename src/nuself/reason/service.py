@@ -58,6 +58,7 @@ class ReasonService:
         repository: ReasonRepository | None = None,
         workspace_store: PrivateWorkspaceStore | None = None,
         trace_recorder: TraceRecorder | None = None,
+        advancer: Any | None = None,
     ) -> None:
         self._project_root = project_root
         self._repository = repository or ReasonRepository(project_root)
@@ -68,6 +69,7 @@ class ReasonService:
             TraceRecorder(effective_root) if effective_root is not None else None
         )
         self._workspace_cache: dict[str, ScopedWorkspace] = {}
+        self._advancer = advancer
 
     # ── Read ───────────────────────────────────────────────────────
 
@@ -166,7 +168,19 @@ class ReasonService:
         )
 
         if step is not None:
-            self._repository.save_step(step)
+            pass
+        elif self._advancer is not None:
+            generated = self._advancer.advance(thread)
+            if generated is not None:
+                step = generated
+            else:
+                step = ReasoningStep(
+                    thread_id=thread.id,
+                    kind="progress",
+                    summary=f"Manual advance requested for: {thread.topic[:80]}",
+                    delta="Advance requested but LLM did not produce a step — you may need to configure an API key.",
+                    evidence_refs=list(thread.evidence_refs),
+                )
         else:
             step = ReasoningStep(
                 thread_id=thread.id,
@@ -175,7 +189,6 @@ class ReasonService:
                 delta="Manual advance placeholder — LLM integration deferred.",
                 evidence_refs=list(thread.evidence_refs),
             )
-            self._repository.save_step(step)
 
         now = datetime.now(UTC).isoformat()
         updated = ReasoningThread(
@@ -196,7 +209,9 @@ class ReasonService:
             next_steps_data=step.next_steps_data if step and step.next_steps_data else thread.next_steps_data,
             mandates_data=thread.mandates_data,
         )
-        self._repository.save_thread(updated)
+        with self._repository.batch_write():
+            self._repository.save_step(step)
+            self._repository.save_thread(updated)
         if self._trace_recorder is not None:
             self._trace_recorder.record_reason_step(thread=updated, step=step)
 
