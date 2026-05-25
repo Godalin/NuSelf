@@ -223,20 +223,20 @@ Tool names must start with the owning subsystem name. This keeps agent-visible t
 
 - **Args**: none
 - **Behavior**: Reads `ReasonService.list_threads(status="active")` and formats active/paused threads for the LLM.
-- **Returns**: Numbered list of threads with question, status, step count, and last-advanced time. Empty message if none.
-- **When to use**: The agent may call this when the user asks about "what I'm thinking about", "open questions", "reasoning threads", or when contextually relevant.
+- **Returns**: Numbered list of threads with topic, status, step count, and last-advanced time. Empty message if none.
+- **When to use**: The agent may call this when the user asks about "what I'm thinking about", "open topics", "reasoning threads", or when contextually relevant.
 
 #### `reason_count`
 
 - **Args**: none
 - **Behavior**: Counts active/paused reasoning threads from `ReasonService.list_threads()`.
 - **Returns**: A simple count string.
-- **When to use**: When the user asks how many active reasoning threads or open long-running questions exist.
+- **When to use**: When the user asks how many active reasoning threads exist.
 
 #### `reason_show`
 
 - **Args**: `thread_id: str`
-- **Behavior**: Reads the full thread via `ReasonService.show_thread(thread_id)` including hypotheses, open questions, and recent steps.
+- **Behavior**: Reads the full thread via `ReasonService.show_thread(thread_id)` including topic, description, tracked items (active, pending, next steps), and recent steps.
 - **Returns**: Formatted thread details, or error if not found.
 - **When to use**: When the user asks about a specific reasoning thread in detail.
 

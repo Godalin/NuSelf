@@ -1,16 +1,16 @@
 # Long-Run Reasoning Spec
 
-Status: updated — chat-based thread initiation + turn-confirmation protocol (v2).
+Status: CURRENT — general-purpose tracked items with chat tools and `topic` field.
 
 ## Purpose
 
-Long-run reasoning maintains durable, incremental reasoning around a small number of explicit user-approved questions.
+Long-run reasoning maintains durable, incremental reasoning around a small number of explicit user-approved topics.
 
 Reason is infrastructure, not chain-of-thought. It manages persistent cognitive state and must not expose or rely on hidden token-level reasoning transcripts.
 
-It must not replace reflection. Reflection discovers candidate ideas; long-run reasoning sustains work on selected questions.
+It must not replace reflection. Reflection discovers candidate ideas; long-run reasoning sustains work on selected topics.
 
-Reason must integrate with trace. Reason owns durable long-run question state; trace records provenance for thread creation, advances, and reflection promotion.
+Reason must integrate with trace. Reason owns durable long-run topic state; trace records provenance for thread creation, advances, and reflection promotion.
 
 ## Conceptual Model
 
@@ -18,7 +18,10 @@ The long-term target is a dynamic reason graph:
 
 - threads are durable reasoning spaces;
 - steps are state updates inside those spaces;
-- hypotheses and open questions are live graph state;
+- tracked items (active, pending, next steps) are live graph state, with
+  free-text `kind` tags that adapt to the task (character, suspect,
+  hypothesis, plot_thread, ...);
+- future branches and links may represent competing paths, revisions, tool calls, and failed explorations.
 - future branches and links may represent competing paths, revisions, tool calls, and failed explorations.
 
 The first v0.2.0 implementation stores this as `ReasoningThread` plus ordered `ReasoningStep` records. This is an implementation slice of the graph model, not a claim that reasoning is linear.
@@ -37,11 +40,11 @@ Reason steps may be exploratory, uncertain, speculative, or failed. Such steps c
 
 ### Motivation
 
-CLI-only thread creation (`:reason start "question"`) is too primitive for complex
+CLI-only thread creation (`:reason start "<topic>"`) is too primitive for complex
 reasoning tasks. Before starting a long-run thread, the user and NuSelf should be
 able to discuss the topic, explore different angles, gather relevant context from
-memory/reflection, and enrich the initial question with hypotheses, open questions,
-and evidence — all within a normal chat conversation.
+memory/reflection, and enrich the initial topic with tracked items (each with
+free-text kind tags) and evidence — all within a normal chat conversation.
 
 Only after the idea is well-formed should a reasoning thread be created, carrying
 the enriched context as its initial state.
@@ -51,15 +54,17 @@ the enriched context as its initial state.
 ```
 1. User and NuSelf discuss a topic during normal chat.
 2. NuSelf identifies the topic has depth and would benefit from long-run reasoning.
-3. NuSelf proposes a draft question and invites the user to refine it.
+3. NuSelf proposes a draft topic and invites the user to refine it.
 4. Optional back-and-forth: NuSelf uses existing reason/reflection/memory/trace tools
-   to gather context, proposes hypotheses, and refines the question together with the user.
+   to gather context, proposes initial tracked items (each with a free-text `kind` tag
+   such as "character", "suspect", "hypothesis", "plot_thread"), and refines the topic
+   together with the user.
 5. When the idea is mature, NuSelf calls reason_propose(...) with the enriched context.
    This tool does NOT create the thread — it validates the proposal, writes a
    "reason_proposal_created" log event, and returns a PENDING signal.
 6. The chat turn completes normally. The CLI (not the agent) detects the pending
    proposal via the log event and prompts the user:
-   [reason] 开启推理线程「question」? (y/n):
+   [reason] 开启推理线程「topic」? (y/n):
 7. User types "y". The CLI calls ReasonService.start_thread() with the enriched
    context. Thread is created. A confirmation line is printed:
    [reason] 推理线程已创建: <id>
@@ -74,14 +79,15 @@ The chat agent is the actor. The system prompt must instruct the agent to:
 1. **Identify depth** — when a user's topic has multiple dimensions, unresolved
    tensions, or would benefit from durable incremental reasoning, proactively
    suggest creating a reasoning thread.
-2. **Co-enrich** — help the user refine the question, propose hypotheses, surface
-   open questions, and reference relevant memory or reflection entries.
-3. **Confirm** — do NOT call `reason_start` until the user has explicitly confirmed.
-   Confirmation may be as simple as "yes, start it" or "go ahead".
-4. **Create with context** — when confirmed, call `reason_start` with the full
-   enriched context: the spoken/settled question as `question`, a concise
-   `working_summary` of the discussion's key insights, any `hypotheses` that
-   emerged, and `evidence_refs` pointing to memory/reflection entries discussed.
+2. **Co-enrich** — help the user refine the topic, surface initial tracked items
+   (with appropriate kind tags), and reference relevant memory or reflection entries.
+3. **Confirm before propose** — do NOT call `reason_propose` until the user has
+   explicitly confirmed. Confirmation may be as simple as "yes, start it" or "go ahead".
+4. **Propose with context** — when confirmed, call `reason_propose` with the full
+   enriched context: the spoken/settled topic as `topic`, a concise
+   `working_summary` of the discussion's key insights, initial `active_items`
+   (each with label, optional description, and free-text kind tag), and
+   `evidence_refs` pointing to memory/reflection entries discussed.
 
 ### Proposal Tool: `reason_propose`
 
@@ -101,17 +107,19 @@ CLI handles pending proposals.
 
 ```python
 def reason_propose(
-    question: str,
+    topic: str,
     working_summary: str = "",
-    hypotheses: list[str] = [],
     evidence_refs: list[str] = [],
+    active_items: list[dict] = [],
 ) -> str:
 ```
 
-- `question` (required) — finalised, user-approved question.
+- `topic` (required) — finalised, user-approved topic.
 - `working_summary` (optional) — enriched context from the discussion.
-- `hypotheses` (optional) — initial hypotheses that emerged.
 - `evidence_refs` (optional) — references to memory, reflection, trace records.
+- `active_items` (optional) — initial tracked items, each with `"label"` (required),
+  `"description"` (optional), `"kind"` (optional free-text tag that adapts to
+  the task — e.g. `"hypothesis"`, `"character"`, `"suspect"`, `"plot_thread"`).
 
 ### Role Of The Agent
 
@@ -120,8 +128,8 @@ The chat agent is the actor. The system prompt must instruct the agent to:
 1. **Identify depth** — when a user's topic has multiple dimensions, unresolved
    tensions, or would benefit from durable incremental reasoning, proactively
    suggest creating a reasoning thread.
-2. **Co-enrich** — help the user refine the question, propose hypotheses, surface
-   open questions, and reference relevant memory or reflection entries.
+2. **Co-enrich** — help the user refine the topic, surface initial tracked items
+   (with appropriate kind tags), and reference relevant memory or reflection entries.
 3. **Confirm before propose** — do NOT call `reason_propose` until the user has
    explicitly said something like "yes, start it", "go ahead", "create the thread".
 4. **Propose with context** — when confirmed, call `reason_propose` with the full
@@ -138,7 +146,7 @@ before retrying. No pending proposal is created.
 
 Thread creation after user confirmation must record the same `reason_thread`
 trace as `ReasonService.start_thread()`. The trace must include the enriched
-context (working_summary, hypotheses, evidence_refs) in its metadata.
+context (`topic`, `working_summary`, `active_items`) in its metadata.
 
 ## Turn-Confirmation Protocol
 
@@ -246,7 +254,7 @@ Each handler follows the same pattern:
 def _confirm_reason_proposal(event, project_root):
     meta = event.metadata
     print()  # blank line before prompt
-    print(f"[tag] 确认内容「{meta['question']}」? (y/n): ", end="", flush=True)
+    print(f"[tag] 确认内容「{meta['topic']}」? (y/n): ", end="", flush=True)
     line = sys.stdin.readline().strip().lower()
     if line in ("y", "yes"):
         # materialise: call domain service with meta fields
@@ -345,7 +353,7 @@ Required first service methods:
 ```text
 list_threads(status_filter)
 show_thread(id_or_index)
-start_thread(question, working_summary="", evidence_refs=(), source_trace_ids=())
+start_thread(topic, working_summary="", evidence_refs=(), source_trace_ids=())
 advance_thread(id_or_index)
 pause_thread(id_or_index)
 resume_thread(id_or_index)
@@ -360,7 +368,7 @@ Required first tool-facing methods:
 reason_list_active()
 reason_count()
 reason_show(thread_id)
-start_reasoning_thread_after_confirmation(question)
+start_reasoning_thread_after_confirmation(topic)
 advance_reasoning_thread_after_confirmation(thread_id)
 ```
 
@@ -368,35 +376,87 @@ advance_reasoning_thread_after_confirmation(thread_id)
 
 Typed domain model:
 
-| Field | Type | Meaning |
-|---|---|---|
-| `id` | string | Stable thread id (uuid4 hex) |
-| `question` | string | User-approved long-run question |
-| `status` | string | `active`, `paused`, `resolved`, or `archived` |
-| `working_summary` | string | Current compact state of the reasoning |
-| `hypotheses` | list[string] | Current live hypotheses |
-| `open_questions` | list[string] | Subquestions still unresolved |
-| `evidence_refs` | list[string] | Memory, source, thread, reflection, or step refs |
-| `priority` | string | `normal` or `high` |
-| `last_advanced_at` | string \| null | Last successful advance timestamp |
+| Field                     | Type           | Meaning                                                               |
+| ------------------------- | -------------- | --------------------------------------------------------------------- |
+| `id`                      | string         | Stable thread id (uuid4 hex)                                          |
+| `topic`                   | string         | User-approved long-run topic                                          |
+| `status`                  | string         | `active`, `paused`, `resolved`, or `archived`                         |
+| `working_summary`         | string         | Current compact state of the reasoning                                |
+| `active_items_data`       | list[dict]     | General-purpose tracked items (see `TrackedItem`)                     |
+| `pending_items_data`      | list[dict]     | Items still unresolved                                                |
+| `next_steps_data`         | list[dict]     | Planned actions for the next advance                                  |
+| `evidence_refs`           | list[string]   | Memory, source, thread, reflection, or step refs                      |
+| `priority`                | string         | `normal` or `high`                                                    |
+| `last_advanced_at`        | string \| null | Last successful advance timestamp                                     |
 | `skip_next_advance_until` | string \| null | ISO timestamp; background scheduler skips this thread until this time |
-| `next_review_after` | string \| null | Earliest scheduler review time (null for first impl) |
-| `created_at` | string | Creation timestamp |
-| `updated_at` | string | Last state update timestamp |
+| `next_review_after`       | string \| null | Earliest scheduler review time (null for first impl)                  |
+| `created_at`              | string         | Creation timestamp                                                    |
+| `updated_at`              | string         | Last state update timestamp                                           |
+
+### TrackedItem
+
+General-purpose tracked item with free-text kind tag:
+
+| Field         | Type   | Meaning                                   |
+| ------------- | ------ | ----------------------------------------- |
+| `label`       | string | Short name (required)                     |
+| `description` | string | Optional detail                           |
+| `kind`        | string | Free-text tag — LLM chooses based on task |
+| `status`      | string | `"active"` by default                     |
+
+The `kind` field is the extension point. Different tasks use different kinds
+without any code change:
+
+| Task             | Example kind values                                        |
+| ---------------- | ---------------------------------------------------------- |
+| Storytelling     | `"character"`, `"plot_thread"`, `"conflict"`, `"location"` |
+| Investigation    | `"suspect"`, `"evidence"`, `"timeline"`, `"alibi"`         |
+| World simulation | `"world_rule"`, `"faction"`, `"region"`, `"event"`         |
+| Science          | `"hypothesis"`, `"theory"`, `"experiment"`, `"prediction"` |
+
+Properties on `ReasoningThread`:
+
+- `active_items` — returns `[TrackedItem]` from `active_items_data`, falling
+  back to legacy `hypotheses` (list of strings → kind `"item"`).
+- `pending_items` — returns `[TrackedItem]` from `pending_items_data`, falling
+  back to legacy `open_questions`.
+- `next_steps` — returns `[TrackedItem]` from `next_steps_data`.
+
+Legacy fields `hypotheses` and `open_questions` are still written to disk for
+backward compat but are no longer the primary storage for new threads.
 
 ## ReasoningStep
 
 Typed domain model:
 
-| Field | Type | Meaning |
-|---|---|---|
-| `id` | string | Stable step id (uuid4 hex) |
-| `thread_id` | string | Parent reasoning thread |
-| `kind` | string | `progress`, `no_change`, `question`, `synthesis`, `contradiction`, or `resolution` |
-| `summary` | string | User-readable step summary |
-| `delta` | string | What changed since the previous step |
-| `new_hypotheses` | list[string] | Added hypotheses |
-| `retired_hypotheses` | list[string] | Retired hypotheses |
+| Field                   | Type                 | Meaning                                                                                        |
+| ----------------------- | -------------------- | ---------------------------------------------------------------------------------------------- |
+| `id`                    | string               | Stable step id (uuid4 hex)                                                                     |
+| `thread_id`             | string               | Parent reasoning thread                                                                        |
+| `kind`                  | string               | `progress`, `no_change`, `question`, `synthesis`, `contradiction`, `resolution`, or `planning` |
+| `summary`               | string               | User-readable step summary                                                                     |
+| `delta`                 | string               | What changed since the previous step                                                           |
+| `new_hypotheses`        | list[string]         | Legacy — added strings (now replaced by `new_findings_data`)                                   |
+| `retired_hypotheses`    | list[string]         | Legacy — retired strings (now replaced by `retired_findings_data`)                             |
+| `new_open_questions`    | list[string]         | Legacy — added questions (now replaced by `new_pending_data`)                                  |
+| `new_findings_data`     | list[dict]           | Items to add to `active_items` (TrackedItem wire format)                                       |
+| `new_pending_data`      | list[dict]           | Items to add to `pending_items`                                                                |
+| `retired_findings_data` | list[dict]           | Items to remove from `active_items` (matched by label)                                         |
+| `next_steps_data`       | list[dict]           | Items to add to `next_steps`                                                                   |
+| `evidence_refs`         | list[string]         | Evidence used by this step                                                                     |
+| `tool_calls`            | list[string] \| null | Tool invocations during this step                                                              |
+| `confidence`            | float \| null        | Optional confidence estimate                                                                   |
+| `created_at`            | string               | Step timestamp                                                                                 |
+
+Properties on `ReasoningStep`:
+
+- `new_findings` — returns `[TrackedItem]` from `new_findings_data`, falling
+  back to legacy `new_hypotheses` (list of strings → kind `"finding"`).
+- `new_pending` — returns `[TrackedItem]` from `new_pending_data`, falling
+  back to legacy `new_open_questions`.
+- `retired_findings` — returns `[TrackedItem]` from `retired_findings_data`,
+  falling back to legacy `retired_hypotheses`.
+- `next_steps` — returns `[TrackedItem]` from `next_steps_data`.
 | `new_open_questions` | list[string] | Added subquestions |
 | `tool_calls` | list[string] \| null | Tool invocations during this step, stored as `name(args)` strings for display |
 | `evidence_refs` | list[string] | Evidence used by this step |
@@ -405,12 +465,12 @@ Typed domain model:
 
 ## State Transitions
 
-| From | Action | To |
-|---|---|---|
-| none | `start` | `active` |
-| `active` | `pause` | `paused` |
-| `paused` | `resume` | `active` |
-| `active`, `paused` | `resolve` | `resolved` |
+| From                           | Action    | To         |
+| ------------------------------ | --------- | ---------- |
+| none                           | `start`   | `active`   |
+| `active`                       | `pause`   | `paused`   |
+| `paused`                       | `resume`  | `active`   |
+| `active`, `paused`             | `resolve` | `resolved` |
 | `active`, `paused`, `resolved` | `archive` | `archived` |
 
 Archived threads are hidden from default list output but remain addressable by id.
@@ -425,7 +485,7 @@ The implementation provides two advance paths:
 advance(thread)
   ├─ load thread
   ├─ reject unless status=active
-  ├─ retrieve thread context (working_summary, hypotheses, open_questions, evidence_refs)
+  ├─ retrieve thread context (working_summary, active_items, pending_items, next_steps, evidence_refs)
   ├─ create a deterministic placeholder ReasoningStep with kind=progress
   ├─ update last_advanced_at
   └─ persist atomically
@@ -435,12 +495,12 @@ advance(thread)
 
 When an explicit `step` is provided to `advance_thread`, the service uses it instead of creating a placeholder. The LLM-backed step is generated by `ReasonAdvancer`, which:
 
-- Takes the thread's `question`, `working_summary`, `hypotheses`, `open_questions`, and `evidence_refs` as context.
+- Takes the thread's `topic`, `working_summary`, `active_items`, `pending_items`, `next_steps`, and `evidence_refs` as context.
 - Calls `ChatLLM.complete()` with a system prompt requesting a structured JSON reasoning step.
 - Validates the response has required fields (`summary`, `delta`, `kind`) and a valid `kind`.
 - Returns a `ReasoningStep` with parsed fields, or `None` if the LLM response is empty or unparseable.
-- Supports `kind` values: `progress`, `no_change`, `question`, `synthesis`, `contradiction`, `resolution`.
-- Integrates `new_hypotheses`, `new_open_questions`, and `evidence_refs` from the step into the updated thread state.
+- Supports `kind` values: `progress`, `no_change`, `question`, `synthesis`, `contradiction`, `resolution`, `planning`.
+- Integrates `new_findings`, `new_pending`, `retired_findings`, and `evidence_refs` from the step into the updated thread state.
 
 ### Background Scheduler (ReasonScheduler)
 
@@ -468,13 +528,13 @@ Config:
 
 Each non-`no_change` step must explain the `delta` from the prior state. A step that cannot identify meaningful movement should use `kind=no_change` and should not notify by default.
 
-First-pass context retrieval scope: thread's own `working_summary`, `hypotheses`, `open_questions`, and `evidence_refs`. No external retrieval from memory/reflection/trace in first implementation.
+First-pass context retrieval scope: thread's own `working_summary`, `active_items`, `pending_items`, and `evidence_refs`. No external retrieval from memory/reflection/trace in first implementation.
 
 ### Graph-Oriented Advance Contract
 
 LLM-backed advance must preserve the graph nature of reasoning:
 
-- it may add, retire, or revise hypotheses without forcing a final answer;
+- it may add, retire, or revise tracked items without forcing a final answer;
 - it may identify contradictions and create `kind=contradiction` steps;
 - it may create `kind=question` steps when user input is needed;
 - it may preserve failed paths as no-change or contradiction steps when they remain informative;
@@ -496,7 +556,7 @@ Commands:
 ```text
 nuself reason list [--status active|paused|resolved|archived|all] [--json]
 nuself reason show <id_or_index> [--by-index] [--full] [--json]
-nuself reason start "<question>" [--priority normal|high]
+nuself reason start "<topic>" [--priority normal|high]
 nuself reason advance <id_or_index> [--by-index]
 nuself reason pause <id_or_index> [--by-index]
 nuself reason resume <id_or_index> [--by-index]
@@ -508,7 +568,26 @@ nuself reason watch [--interval <seconds>]
 
 Human-readable output must use the shared record renderer style from `cli-interaction.md`.
 
-`--full` on `reason show` renders each step with all fields (step id, index, delta, tool calls, hypotheses, open questions, evidence refs, confidence) even when empty, showing `(no ...)` placeholders instead of omitting the section.
+### Thread Header Format
+
+Both `reason show` and `reason watch` begin by printing the thread's global
+context. The header consists of:
+
+1. **Header line**: `[reason] <topic>` followed by inline metadata fields
+   (`id`, `status`, `priority`, `created_at`, `last_advanced_at`).
+2. **Description section**: labeled `description:`, shows the thread's
+   `working_summary` as bulleted markdown-rendered text.
+3. **Active items section**: `active_items:`, each rendered as
+   `label — description (kind)`.
+4. **Pending items section**: `pending_items:`, same format as active.
+5. **Next steps section**: `next_steps:`, each rendered as `label`.
+6. **Evidence refs section**: `evidence_refs:`, each rendered as markdown.
+
+After the thread header, `reason show` appends each step's body (see
+`_render_step_body`). `reason watch` prints existing steps followed by
+a polling loop for new steps.
+
+`--full` on `reason show` renders each step with all fields (step id, index, delta, tool calls, findings, pending, evidence refs, confidence) even when empty, showing `(no ...)` placeholders instead of omitting the section.
 
 Default list output shows active and paused threads. `--status all` includes resolved and archived threads.
 
@@ -530,11 +609,12 @@ This operation is irreversible. For reversible hiding, use `archive` instead.
 
 `reason watch` enters a blocking loop that polls for new reasoning steps:
 
-1. On start, prints a summary of each existing thread: question, step count,
-   and latest step kind + summary.
-2. Then polls the log for `advance_completed` events every N seconds
-   (default 5 for CLI, 2 for interactive).
-3. Each new step is printed as it arrives: `[reason] thread=... kind=... - ...`
+1. On start, prints each thread's full [Thread Header Format](#thread-header-format)
+   followed by all existing steps.
+2. Then polls for new steps every N seconds (default 5 for CLI, 2 for
+   interactive).
+3. Each new step is printed as it arrives via `render_step_watch_entry`
+   (same format as a single step in `reason show --full`).
 4. Press Ctrl+C to stop.
 
 The loop runs in the foreground. It is not a daemon background process.
@@ -555,7 +635,7 @@ Interactive commands:
 :reason
 :reason list
 :reason show <id_or_index>
-:reason start <question>
+:reason start <topic>
 :reason advance <id_or_index>
 :reason pause <id_or_index>
 :reason resume <id_or_index>
@@ -571,58 +651,75 @@ REPL output must match CLI formatting as closely as possible.
 
 ## Chat Tool Contract
 
-The following tools are registered for the chat agent. Read-only tools are
-available to inspect reasoning state; write tools require explicit user
-confirmation and include the reasoning thread's enriched conversation context.
+Reason tools let the chat agent inspect, propose, and manage reasoning threads.
+Tools that create a thread (propose) use the turn-confirmation protocol; tools
+that change a thread's status act directly after the agent reports the action.
 
 ### Read-Only Tools
 
-- `reason_list_active` — list active/paused threads.
-- `reason_count` — count active/paused threads.
-- `reason_show` — show a thread's current state and steps.
+| Tool                     | Description                                                                  |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| `reason_list_active()`   | List active and paused threads with step counts.                             |
+| `reason_count()`         | Return count of active and paused threads.                                   |
+| `reason_show(thread_id)` | Show a thread's topic, description, tracked items, evidence refs, and steps. |
 
-### Write Tool: `reason_propose`
+No user confirmation is needed for read-only tools.
+
+### Write Tool (Turn-Confirmation): `reason_propose`
 
 Proposes a reasoning thread for user confirmation. Does NOT create the thread.
 Validates the proposal, writes a `reason_proposal_created` log event, and
 returns a PENDING signal. See the Turn-Confirmation Protocol for how the
 CLI handles the pending proposal.
 
-Tool function:
-
 ```python
 def reason_propose(
-    question: str,
+    topic: str,
     working_summary: str = "",
-    hypotheses: list[str] = [],
     evidence_refs: list[str] = [],
+    active_items: list[dict] = [],
 ) -> str:
 ```
 
 Parameters:
 
-- `question` (required) — the core long-run question the thread will explore.
-  Must be finalised and user-approved before calling this tool.
-- `working_summary` (optional) — enriched summary from the chat discussion:
-  key insights, contextual background, what has already been considered.
-- `hypotheses` (optional) — initial hypotheses that emerged during the
-  conversation.
-- `evidence_refs` (optional) — references to memory, reflection, trace, or
-  other records that were surfaced during the discussion.
+- `topic` (required) — finalised, user-approved topic for the thread.
+- `working_summary` (optional) — enriched context from the discussion.
+- `evidence_refs` (optional) — references to memory, reflection, trace records.
+- `active_items` (optional) — initial tracked items, each with `"label"` (required),
+  `"description"` (optional), `"kind"` (optional free-text tag that adapts to
+  the task — e.g. `"hypothesis"`, `"character"`, `"suspect"`, `"plot_thread"`).
 
-Returns a string in the format `"PENDING:reason-proposal:{proposal_id}"`.
+Returns `"PENDING:reason-proposal:{proposal_id}"`.
 
 The agent must NOT call `reason_propose` until the user has given explicit
-verbal confirmation (said "yes, start it", "go ahead", "create the thread",
-or equivalent).
+verbal confirmation. See also [Confirmation Rule](#confirmation-rule-1).
 
-### Write Tool: `reason_advance`
+### Write Tools (Direct): State Transitions
 
-(Reserved for future implementation — not yet registered as a chat tool.)
+The agent may pause, resume, resolve, or archive a thread directly. The agent
+should tell the user what it intends to do before calling the tool so the user
+can object before the turn ends.
 
-### Write Tool: `reason_pause`, `reason_resolve`, `reason_archive`
+| Tool                        | Effect                                                        |
+| --------------------------- | ------------------------------------------------------------- |
+| `reason_pause(thread_id)`   | Pause an active thread.                                       |
+| `reason_resume(thread_id)`  | Resume a paused thread back to active.                        |
+| `reason_resolve(thread_id)` | Mark a thread as resolved (answered/concluded).               |
+| `reason_archive(thread_id)` | Archive a thread (hidden from list, still addressable by id). |
 
-(Not yet registered as chat tools. These remain CLI/REPL-only for now.)
+Each returns a one-line confirmation string.
+
+These tools do NOT use the turn-confirmation protocol. The normal chat flow
+(agent says what it will do, user agrees, agent calls tool in the same turn)
+is sufficient. If the user disagrees, the agent aborts before calling the tool.
+
+### Write Tool (Reserved): `reason_advance`
+
+(Reserved for future implementation — not yet registered as a chat tool.
+The background scheduler handles automatic advances; manual advance from
+chat would require the turn-confirmation protocol because it invokes an
+LLM and may change state unpredictably.)
 
 ### Confirmation Rule
 
@@ -635,28 +732,31 @@ confirmation. The system prompt must include this hard rule:
 > you MUST NOT call `reason_propose` until the user has explicitly said
 > something like 'yes, start it', 'go ahead', 'create the thread', or
 > equivalent clear confirmation. A user's agreement that a topic is
-> 'interesting' or 'worth exploring' does not count as confirmation."
+> 'interesting' or 'worth exploring' does not count as confirmation.
+> For state changes (pause, resume, resolve, archive), tell the user
+> what you intend first and let them respond before calling the tool."
 
 ### System Prompt Skill
 
 The chat prompt must include the following Reason skill:
 
 > "Reason is NuSelf's durable long-run thinking space. If the user asks
-> about active long-running questions, what NuSelf is still thinking about,
+> about active long-running topics, what NuSelf is still thinking about,
 > or the state of a specific reasoning thread, use reason tools before
 > answering unless the answer is fully present in visible context. When a
 > discussion reveals a topic with real depth, you should suggest creating
-> a reasoning thread. Help the user refine the question, add hypotheses
-> and open questions from your discussion, and only call `reason_propose`
-> after the user explicitly confirms."
+> a reasoning thread. Help the user refine the topic and add initial
+> tracked items with appropriate kind tags, and only call `reason_propose`
+> after the user explicitly confirms. For state changes (pause, resume,
+> resolve, archive), explain what you're doing and call the tool directly."
 
 ## Trace Contract
 
 Every reason thread creation and non-trivial advance writes a `ThoughtTrace`.
 
-- Thread creation writes `kind=reason_thread`. When created via the chat tool
-  `reason_start`, the trace must include the enriched context
-  (`working_summary`, `hypotheses`, `evidence_refs`) in its metadata.
+- Thread creation writes `kind=reason_thread`. When created via `reason_propose`
+  + user confirmation, the trace must include the enriched context
+  (`topic`, `working_summary`, `active_items`, `evidence_refs`) in its metadata.
 - Advance writes `kind=reason_step`.
 - Reflection promotion writes `kind=promotion`.
 - Trace outputs include the created or updated reason artifact ids.
@@ -699,14 +799,14 @@ Add a `reasoning` log component.
 
 Expected events:
 
-| Event | Status | Meaning |
-|---|---|---|
-| `thread_started` | `created` | New reasoning thread created |
-| `thread_status_changed` | `updated` | Pause, resume, resolve, or archive |
-| `advance_started` | `started` | Advance began |
-| `advance_completed` | `completed` | Step persisted |
-| `advance_no_change` | `skipped` | No meaningful update |
-| `advance_failed` | `failed` | Advance failed safely |
+| Event                   | Status      | Meaning                            |
+| ----------------------- | ----------- | ---------------------------------- |
+| `thread_started`        | `created`   | New reasoning thread created       |
+| `thread_status_changed` | `updated`   | Pause, resume, resolve, or archive |
+| `advance_started`       | `started`   | Advance began                      |
+| `advance_completed`     | `completed` | Step persisted                     |
+| `advance_no_change`     | `skipped`   | No meaningful update               |
+| `advance_failed`        | `failed`    | Advance failed safely              |
 
 ### Tool Call Display Via Log System
 
@@ -740,7 +840,7 @@ Rules:
 - A new `reasoning` log component is used (as defined above).
 - Active thread cap: 5 by default. Priority does not change the cap.
 - Promotion does not archive the source reflection automatically.
-- First-pass context retrieval: thread-local only (working_summary, hypotheses, open_questions, evidence_refs).
+- First-pass context retrieval: thread-local only (working_summary, active_items, pending_items, next_steps, evidence_refs).
 - Reason is infrastructure for cognitive state evolution, not a stored chain-of-thought transcript.
 - The current thread/step model is the first implementation slice of a future dynamic reason graph.
 - All user-visible tool call display goes through the `service_tool_called` log event + `render_log_event` pipeline, not ad-hoc inline formatting.

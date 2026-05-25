@@ -19,6 +19,6 @@ This workspace is thread-scoped and private. Data stored here is NOT visible to 
 
 Common use cases:
 - Track which branches of reasoning you have already explored
-- Store partial hypotheses that are not yet ready for the thread's `new_hypotheses` field
+- Store partial tracked items that are not yet ready for the thread's active_items
 - Save external tool results for reuse across multiple reasoning steps
 - Record meta-observations about your own reasoning process

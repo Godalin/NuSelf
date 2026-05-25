@@ -53,7 +53,7 @@ Reason uses:
 private/workspaces/reason/{thread_id}/workspace.sqlite
 ```
 
-The reason workspace can hold branch tables, temporary hypotheses, local evidence indexes, tool results, scratch rankings, intermediate plans, and failed-path records.
+The reason workspace can hold branch tables, temporary tracked items, local evidence indexes, tool results, scratch rankings, intermediate plans, and failed-path records.
 
 Stable data leaves the workspace only through explicit promotion:
 
