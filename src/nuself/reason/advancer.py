@@ -60,31 +60,45 @@ class ReasonStepOutput(BaseModel):
 
 
 REASON_ADVANCE_SYSTEM_PROMPT = (
-    "You are an assistant that advances a long-running thinking thread. "
-    "Produce a concrete, meaningful step that makes genuine progress. "
+    "You are advancing a long-running thinking thread by exactly one step. "
+    "Your job is to take what exists, decide what to do next, and produce "
+    "both an observable output and a state update for the thread."
     ""
-    "The thread has state that you update:"
+    "--- Thread overview ---"
     ""
-    "- active_items — things being tracked. Each item has:"
+    "The thread has a topic (the overall project or question), a working "
+    "summary of progress so far, and the following state that you update:"
+    ""
+    "- active_items — things being actively tracked. Each item has:"
     "  label (short name), description (optional detail), kind (free-text tag),"
     "  and status."
-    "- pending_items — unresolved items. Same structure."
-    "- next_steps — planned actions. Same structure."
-    "- mandates — requirements you must follow on this advance."
+    "- pending_items — unresolved items or open questions. Same structure."
+    "- next_steps — planned next actions. Same structure."
+    "- mandates — requirements you MUST follow on every advance."
     ""
-    "Each step has:"
-    "- summary — what this step accomplished."
-    "- delta — what changed since the last step."
-    "- kind — one of: progress, no_change, question, planning, synthesis,"
-    "  contradiction, or resolution."
-    "- output — the visible result or product of this step (e.g. a"
-    "  paragraph of story, a candidate answer, a design sketch)."
-    "  Empty if the step is purely internal."
-    "- new_findings — items to add to active_items."
-    "- new_pending — items to add to pending_items."
-    "- retired_findings — items to remove from active_items."
-    "- next_steps — items to add to next_steps."
-    "- evidence_refs — optional references to memory, reflection, or trace."
+    "--- This step ---"
+    ""
+    "Each step produces two things:"
+    ""
+    "1. output — the observable product of THIS step. This is what an"
+    "   external observer would see: a paragraph of generated story, a"
+    "   candidate answer, a design sketch, an analysis paragraph."
+    "   Empty if the step is purely internal bookkeeping."
+    ""
+    "2. A state update that changes the thread for the next step:"
+    "   - summary — what this step accomplished (one line)."
+    "   - delta — what changed since the last step."
+    "   - kind — progress, no_change, question, planning, synthesis,"
+    "     contradiction, or resolution."
+    "   - new_findings — items to ADD to active_items."
+    "   - new_pending — items to ADD to pending_items."
+    "   - retired_findings — items to REMOVE from active_items."
+    "   - next_steps — items to ADD to next_steps."
+    "   - evidence_refs — optional references to memory, reflection, or trace."
+    ""
+    "After this step the thread will have updated active_items,"
+    "pending_items, and next_steps. The next advance will see those"
+    "updated fields and decide what to do next."
     ""
     "Use load_skill to load service skills. Use load_skill(\"persona\") to"
     "get different perspectives on the current problem."
@@ -92,11 +106,14 @@ REASON_ADVANCE_SYSTEM_PROMPT = (
 
 
 def _build_advance_prompt(thread: ReasoningThread) -> str:
-    parts = [f"Topic: {thread.topic}"]
-    parts.append(f"Working summary: {thread.working_summary}")
+    parts = [
+        "--- Current thread state ---",
+        f"Topic: {thread.topic}",
+        f"Working summary: {thread.working_summary}",
+    ]
     mandates = thread.mandates
     if mandates:
-        parts.append("Mandates (you MUST follow these on every advance):")
+        parts.append("Mandates:")
         for m in mandates:
             parts.append(f"  - {m}")
     items = thread.active_items
@@ -115,7 +132,7 @@ def _build_advance_prompt(thread: ReasoningThread) -> str:
             parts.append(f"  - {item.label}{tag}{desc}")
     nxt = thread.next_steps
     if nxt:
-        parts.append("Next steps:")
+        parts.append("Next steps (planned):")
         for item in nxt:
             parts.append(f"  - {item.label}")
     if thread.evidence_refs:
@@ -123,7 +140,8 @@ def _build_advance_prompt(thread: ReasoningThread) -> str:
         for r in thread.evidence_refs:
             parts.append(f"  - {r}")
     parts.append("")
-    parts.append("Produce the next step for this thread.")
+    parts.append("Produce exactly one step. Start from this state, decide what to do,")
+    parts.append("fill in output and state changes, and stop. Do not plan multiple steps.")
     return "\n".join(parts)
 
 
