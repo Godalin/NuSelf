@@ -9,7 +9,7 @@ from nuself.reason.domain import ReasoningThread
 
 def test_build_prompt_includes_thread_fields() -> None:
     thread = ReasoningThread(
-        question="Test question",
+        topic="Test question",
         working_summary="Some summary",
         hypotheses=["hyp1"],
         open_questions=["q1"],
@@ -24,7 +24,7 @@ def test_build_prompt_includes_thread_fields() -> None:
 
 
 def test_build_prompt_empty_lists_omitted() -> None:
-    thread = ReasoningThread(question="Q")
+    thread = ReasoningThread(topic="Q")
     prompt = _build_advance_prompt(thread)
     assert "Hypotheses:" not in prompt
     assert "Open questions:" not in prompt
@@ -81,7 +81,7 @@ class FakeLLM:
 
 
 def test_advance_returns_step_on_valid_llm() -> None:
-    thread = ReasoningThread(question="Test")
+    thread = ReasoningThread(topic="Test")
     llm = FakeLLM('{"summary": "s", "delta": "d", "kind": "progress", "new_hypotheses": ["h1"], "new_open_questions": ["q1"], "evidence_refs": ["e1"], "confidence": 0.9}')
     advancer = ReasonAdvancer(cast_llm(llm))
     step = advancer.advance(thread)
@@ -96,21 +96,21 @@ def test_advance_returns_step_on_valid_llm() -> None:
 
 
 def test_advance_returns_none_on_empty_response() -> None:
-    thread = ReasoningThread(question="Test")
+    thread = ReasoningThread(topic="Test")
     llm = FakeLLM("")
     advancer = ReasonAdvancer(cast_llm(llm))
     assert advancer.advance(thread) is None
 
 
 def test_advance_returns_none_on_invalid_json() -> None:
-    thread = ReasoningThread(question="Test")
+    thread = ReasoningThread(topic="Test")
     llm = FakeLLM("not json")
     advancer = ReasonAdvancer(cast_llm(llm))
     assert advancer.advance(thread) is None
 
 
 def test_advance_confidence_clamped() -> None:
-    thread = ReasoningThread(question="Test")
+    thread = ReasoningThread(topic="Test")
     llm = FakeLLM('{"summary": "s", "delta": "d", "kind": "synthesis", "confidence": 2.5}')
     advancer = ReasonAdvancer(cast_llm(llm))
     step = advancer.advance(thread)
@@ -119,7 +119,7 @@ def test_advance_confidence_clamped() -> None:
 
 
 def test_advance_confidence_none_when_missing() -> None:
-    thread = ReasoningThread(question="Test")
+    thread = ReasoningThread(topic="Test")
     llm = FakeLLM('{"summary": "s", "delta": "d", "kind": "resolution"}')
     advancer = ReasonAdvancer(cast_llm(llm))
     step = advancer.advance(thread)

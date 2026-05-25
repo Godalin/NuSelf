@@ -28,7 +28,7 @@ def test_run_once_skips_thread_on_cooldown(tmp_path: Path) -> None:
     cooldown_end = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     cooled = ReasoningThread(
         id=thread.id,
-        question=thread.question,
+        topic=thread.topic,
         status=thread.status,
         working_summary=thread.working_summary,
         hypotheses=list(thread.hypotheses),

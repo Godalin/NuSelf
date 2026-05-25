@@ -53,39 +53,66 @@ class ReasonStepOutput(BaseModel):
     new_open_questions: list[str] = Field(default_factory=list)
     evidence_refs: list[str] = Field(default_factory=list)
     confidence: float | None = None
+    # General-purpose fields (v2).  Optional so LLM doesn't have to fill them.
+    new_findings: list[dict[str, object]] = Field(default_factory=list)
+    new_pending: list[dict[str, object]] = Field(default_factory=list)
+    retired_findings: list[dict[str, object]] = Field(default_factory=list)
+    next_steps: list[dict[str, object]] = Field(default_factory=list)
 
 
 REASON_ADVANCE_SYSTEM_PROMPT = (
-    "You are a reasoning assistant that advances a long-running reasoning thread. "
-    "Produce a concrete, meaningful reasoning step that makes genuine progress "
-    "on the question. "
-    "You have access to tools for gathering context: search memory, "
-    "list reflections, search traces, browse other threads, load skills, "
-    "and consult internal thinking personas. "
-    "Use `load_skill` to load a service skill's behavioral policy. "
-    "Use `load_skill(\"persona\")` to load the persona skill — it explains how "
-    "to use persona_list and persona_think to get different perspectives "
-    "on the current problem. "
-    "When you need more context, tools like reflection_list_pending and "
-    "memory_search are available to help. "
-    "The step must include: summary, delta, kind (one of progress, no_change, question, "
-    "synthesis, contradiction, resolution), new_hypotheses, new_open_questions, evidence_refs."
+    "You are a reasoning assistant that advances a long-running thinking thread. "
+    "Produce a concrete, meaningful step that makes genuine progress "
+    "on the topic. "
+    "Your thread has state that you update each step:"
+    ""
+    "- active_items — things you are currently tracking. Each item has:"
+    "  label (short name), description (optional detail), kind (free-text tag,"
+    "  e.g. hypothesis, character, suspect, plot_thread, world_rule),"
+    "  and status (default \"active\")."
+    "- pending_items — things still unresolved. Same structure as active_items."
+    "- next_steps — planned actions for the next advance. Same structure."
+    ""
+    "Each step includes:"
+    "- summary — what this step accomplished."
+    "- delta — what changed since the last step."
+    "- kind — progress, no_change, question, planning, synthesis, contradiction,"
+    "  or resolution."
+    "- new_findings — items to ADD to active_items."
+    "- new_pending — items to ADD to pending_items."
+    "- retired_findings — items to REMOVE from active_items."
+    "- next_steps — items to ADD to next_steps."
+    "- evidence_refs — optional references to memory, reflection, or trace."
+    ""
+    "Use load_skill to load service skills. Use load_skill(\"persona\") to"
+    "get different perspectives on the current problem."
 )
 
 
 def _build_advance_prompt(thread: ReasoningThread) -> str:
-    parts = [f"Question: {thread.question}"]
+    parts = [f"Topic: {thread.topic}"]
     parts.append(f"Working summary: {thread.working_summary}")
-    if thread.hypotheses:
-        parts.append("Hypotheses:")
-        for h in thread.hypotheses:
-            parts.append(f"  - {h}")
-    if thread.open_questions:
-        parts.append("Open questions:")
-        for q in thread.open_questions:
-            parts.append(f"  - {q}")
+    items = thread.active_items
+    if items:
+        parts.append("Active items:")
+        for item in items:
+            tag = f" ({item.kind})" if item.kind else ""
+            desc = f" — {item.description}" if item.description else ""
+            parts.append(f"  - {item.label}{tag}{desc}")
+    pending = thread.pending_items
+    if pending:
+        parts.append("Pending items:")
+        for item in pending:
+            tag = f" ({item.kind})" if item.kind else ""
+            desc = f" — {item.description}" if item.description else ""
+            parts.append(f"  - {item.label}{tag}{desc}")
+    nxt = thread.next_steps
+    if nxt:
+        parts.append("Next steps:")
+        for item in nxt:
+            parts.append(f"  - {item.label}")
     if thread.evidence_refs:
-        parts.append("Evidence references:")
+        parts.append("References:")
         for r in thread.evidence_refs:
             parts.append(f"  - {r}")
     parts.append("")
@@ -117,6 +144,11 @@ def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tupl
     new_open_questions: list[str] = list(cast(list[str], new_q)) if isinstance(new_q, list) else []
     evidence_refs_list: list[str] = list(cast(list[str], ev_refs)) if isinstance(ev_refs, list) else []
 
+    def _as_tracked_list(raw: object) -> tuple[dict[str, object], ...]:
+        if not isinstance(raw, list):
+            return ()
+        return tuple(cast(dict[str, object], item) for item in raw if isinstance(item, dict))
+
     return ReasoningStep(
         thread_id=thread_id,
         kind=kind_raw,
@@ -127,6 +159,10 @@ def _step_from_data(data: dict[str, object], thread_id: str, *, tool_calls: tupl
         evidence_refs=evidence_refs_list,
         tool_calls=tool_calls,
         confidence=confidence,
+        new_findings_data=_as_tracked_list(data.get("new_findings")),
+        new_pending_data=_as_tracked_list(data.get("new_pending")),
+        retired_findings_data=_as_tracked_list(data.get("retired_findings")),
+        next_steps_data=_as_tracked_list(data.get("next_steps")),
     )
 
 
@@ -292,12 +328,12 @@ class ReasonAdvancer:
         return _step_from_data(data, thread.id)
 
     def _gather_context(self, thread: ReasoningThread) -> str:
-        """Collect relevant memory and reflection context for the thread question."""
+        """Collect relevant memory and reflection context for the thread topic."""
         parts: list[str] = []
 
         if self._memory_query_service is not None:
             try:
-                query = MemoryQuery(text=thread.question, limit=5)
+                query = MemoryQuery(text=thread.topic, limit=5)
                 packed = self._memory_query_service.pack(query)
                 if packed.text:
                     parts.append(packed.text)

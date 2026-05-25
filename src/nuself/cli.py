@@ -175,14 +175,14 @@ def _handle_proposals_after_turn(events: list[LogEvent], project_root: Path | No
 
 def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | None) -> None:
     meta = event.metadata or {}
-    question = meta.get("question", "") or ""
+    topic_raw = meta.get("topic", meta.get("question", "")) or ""
     proposal_id = meta.get("proposal_id", "") or ""
-    if not question:
+    if not topic_raw:
         return
     _handled_proposal_ids.add(proposal_id)
     print()
     tag = _theme.tag("[reason]", "reasoning")
-    _print_ansi(f"{tag} 开启推理线程「{question}」? (y/n): ", end="", flush=True)
+    _print_ansi(f"{tag} 开启推理线程「{topic_raw}」? (y/n): ", end="", flush=True)
     line = sys.stdin.readline().strip().lower()
     if line not in ("y", "yes"):
         _print_ansi(f"{tag} 已取消")
@@ -191,11 +191,23 @@ def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | No
 
     service = ReasonService(project_root)
     try:
+        raw_active = meta.get("active_items") or []
+        if not isinstance(raw_active, list):
+            raw_active = []
+        active_items = [cast(dict[str, object], item) for item in raw_active if isinstance(item, dict)]
+        # Merge legacy hypotheses (from old log events) into active_items.
+        legacy_hypotheses: list[str] = meta.get("hypotheses", []) or []
+        if legacy_hypotheses:
+            seen_labels = {item.get("label", "") for item in active_items}
+            for h in legacy_hypotheses:
+                if h not in seen_labels:
+                    active_items.append({"label": h, "description": "", "kind": "item"})
+                    seen_labels.add(h)
         thread = service.start_thread(
-            question=question,
+            topic=topic_raw,
             working_summary=meta.get("working_summary", "") or "",
-            hypotheses=tuple(meta.get("hypotheses", []) or []),
             evidence_refs=tuple(meta.get("evidence_refs", []) or []),
+            active_items=tuple(active_items),
         )
     except RuntimeError as exc:
         _print_ansi(f"{tag} 创建失败: {exc}")
@@ -667,7 +679,7 @@ def build_parser() -> argparse.ArgumentParser:
     reason_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reason_show_parser, handle_reason_show)
     reason_start_parser = reason_subparsers.add_parser("start")
-    reason_start_parser.add_argument("question")
+    reason_start_parser.add_argument("topic")
     reason_start_parser.add_argument("--priority", choices=("normal", "high"), default="normal")
     _add_handler(reason_start_parser, handle_reason_start)
     for action_name in _REASON_VERBS:
@@ -1604,7 +1616,7 @@ def handle_reason_show(args: argparse.Namespace) -> int:
 def handle_reason_start(args: argparse.Namespace) -> int:
     service = ReasonService(args.project_root)
     try:
-        thread = service.start_thread(args.question, priority=args.priority)
+        thread = service.start_thread(args.topic, priority=args.priority)
     except RuntimeError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -2516,7 +2528,7 @@ class _InteractiveCompleter(Completer):
     _REASON_SUBCOMMANDS: list[tuple[str, str, bool]] = [
         ("list", "List active and paused reasoning threads", False),
         ("show", "Show details for a reasoning thread", True),
-        ("start", "Create a new reasoning thread from a question", False),
+        ("start", "Create a new reasoning thread from a topic", False),
         ("advance", "Advance a thread with the next reasoning step", True),
         ("pause", "Pause a reasoning thread", True),
         ("resume", "Resume a paused reasoning thread", True),
@@ -2546,7 +2558,7 @@ class _InteractiveCompleter(Completer):
         try:
             from nuself.reason.repository import ReasonRepository
             repo = ReasonRepository(self._project_root)
-            return [f"{t.id} ({t.status}, {t.question[:40]})" for t in repo.list_threads(status="all")]
+            return [f"{t.id} ({t.status}, {t.topic[:40]})" for t in repo.list_threads(status="all")]
         except Exception:
             return []
 
@@ -3459,7 +3471,7 @@ def _interactive_reason_help(command: str | None = None) -> str:
             "  :reason",
             "  :reason list",
             "  :reason show <id|index>",
-            "  :reason start <question>",
+            "  :reason start <topic>",
             "  :reason advance <id|index>",
             "  :reason pause <id|index>",
             "  :reason resume <id|index>",
@@ -3481,7 +3493,7 @@ def _handle_interactive_reason_watch(project_root: Path | None, interval: int = 
 
     from nuself.reason.service import ReasonService
     from nuself.reason.repository import ReasonNotFound
-    from nuself.tui.reason import render_reason_row, render_step_watch_entry
+    from nuself.tui.reason import render_reason_detail, render_reason_row, render_step_watch_entry
 
     service = ReasonService(project_root)
     threads = service.list_threads()
@@ -3492,12 +3504,13 @@ def _handle_interactive_reason_watch(project_root: Path | None, interval: int = 
             print(f"Reason thread not found: {thread_ref}", file=sys.stderr)
             return
         threads = [thread]
-        _print_ansi(render_reason_row(thread, color=False))
+        _print_ansi(render_reason_detail(thread))
         for step in service.list_steps(thread.id):
             _print_ansi(render_step_watch_entry(step))
     else:
         for index, thread in enumerate(threads, start=1):
-            _print_ansi(render_reason_row(thread, index=index, color=False))
+            _print_ansi(render_reason_detail(thread))
+            _print_ansi(_theme.muted(f"(index: {index})"))
             for step in service.list_steps(thread.id):
                 _print_ansi(render_step_watch_entry(step))
     print()

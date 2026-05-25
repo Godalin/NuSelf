@@ -10,11 +10,11 @@ from nuself.reason.repository import ReasonNotFound, ReasonRepository
 
 def test_save_and_get_thread(tmp_path: Path) -> None:
     repo = ReasonRepository(tmp_path)
-    t = ReasoningThread(question="What is the meaning of life?")
+    t = ReasoningThread(topic="What is the meaning of life?")
     saved = repo.save_thread(t)
     loaded = repo.get_thread(t.id)
     assert loaded == saved
-    assert loaded.question == "What is the meaning of life?"
+    assert loaded.topic == "What is the meaning of life?"
 
 
 def test_get_missing_thread_raises(tmp_path: Path) -> None:
@@ -28,9 +28,9 @@ def test_get_missing_thread_raises(tmp_path: Path) -> None:
 
 def test_list_threads(tmp_path: Path) -> None:
     repo = ReasonRepository(tmp_path)
-    t1 = ReasoningThread(question="Question 1")
-    t2 = ReasoningThread(question="Question 2", status="paused")
-    t3 = ReasoningThread(question="Question 3", status="resolved")
+    t1 = ReasoningThread(topic="Question 1")
+    t2 = ReasoningThread(topic="Question 2", status="paused")
+    t3 = ReasoningThread(topic="Question 3", status="resolved")
     repo.save_thread(t1)
     repo.save_thread(t2)
     repo.save_thread(t3)
@@ -56,7 +56,7 @@ def test_list_threads(tmp_path: Path) -> None:
 
 def test_resolve_thread_by_id(tmp_path: Path) -> None:
     repo = ReasonRepository(tmp_path)
-    t = ReasoningThread(question="Test")
+    t = ReasoningThread(topic="Test")
     repo.save_thread(t)
     resolved = repo.resolve_thread(t.id)
     assert resolved.id == t.id
@@ -64,8 +64,8 @@ def test_resolve_thread_by_id(tmp_path: Path) -> None:
 
 def test_resolve_thread_by_index(tmp_path: Path) -> None:
     repo = ReasonRepository(tmp_path)
-    t1 = ReasoningThread(question="First")
-    t2 = ReasoningThread(question="Second")
+    t1 = ReasoningThread(topic="First")
+    t2 = ReasoningThread(topic="Second")
     repo.save_thread(t1)
     repo.save_thread(t2)
     resolved = repo.resolve_thread("2", by_index=True)
@@ -74,7 +74,7 @@ def test_resolve_thread_by_index(tmp_path: Path) -> None:
 
 def test_save_and_list_steps(tmp_path: Path) -> None:
     repo = ReasonRepository(tmp_path)
-    t = ReasoningThread(question="Test")
+    t = ReasoningThread(topic="Test")
     repo.save_thread(t)
     s1 = ReasoningStep(thread_id=t.id, summary="Step 1")
     s2 = ReasoningStep(thread_id=t.id, summary="Step 2")
@@ -87,7 +87,7 @@ def test_save_and_list_steps(tmp_path: Path) -> None:
 
 def test_get_step(tmp_path: Path) -> None:
     repo = ReasonRepository(tmp_path)
-    t = ReasoningThread(question="Test")
+    t = ReasoningThread(topic="Test")
     repo.save_thread(t)
     s = ReasoningStep(thread_id=t.id, summary="Step")
     repo.save_step(s)
@@ -107,7 +107,7 @@ def test_list_empty_steps(tmp_path: Path) -> None:
 
 def test_reindex(tmp_path: Path) -> None:
     repo = ReasonRepository(tmp_path)
-    t = ReasoningThread(question="Test")
+    t = ReasoningThread(topic="Test")
     repo.save_thread(t)
     s = ReasoningStep(thread_id=t.id, summary="Step")
     repo.save_step(s)

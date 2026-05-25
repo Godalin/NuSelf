@@ -211,16 +211,26 @@ def build_langchain_chat_tools(
         return render_reason_detail(thread, service.list_steps(thread.id), color=False)
 
     def reason_propose(
-        question: str,
+        topic: str,
         working_summary: str = "",
-        hypotheses: list[str] | None = None,
         evidence_refs: list[str] | None = None,
+        active_items: list[dict[str, object]] | None = None,
     ) -> str:
-        """Propose creating a long-run reasoning thread. Does NOT create the thread — writes a pending proposal for user confirmation."""
+        """Propose creating a long-run reasoning thread. Does NOT create the thread — writes a pending proposal for user confirmation.
 
-        question = question.strip()
-        if not question:
-            return "Error: question must be a non-empty string"
+        Parameters:
+          topic – the core topic for the thread.
+          working_summary – enriched context from the discussion.
+          evidence_refs – references to memory/reflection/trace entries.
+          active_items – initial tracked items, each with "label" (required),
+            "description" (optional), "kind" (optional free-text tag).
+            The kind tag adapts to the task (e.g. "hypothesis", "character",
+            "suspect", "plot_thread", "world_rule", etc.).
+        """
+
+        topic = topic.strip()
+        if not topic:
+            return "Error: topic must be a non-empty string"
 
         # Validate active thread cap before creating a proposal.
         service = ReasonService(project_root)
@@ -228,20 +238,20 @@ def build_langchain_chat_tools(
         if len(active) >= 5:
             lines = [f"Cannot start new thread: already {len(active)} active threads (max 5). Please pause, resolve, or archive one first.", "Active threads:"]
             for t in active:
-                lines.append(f"  - {t.id}: {t.question[:60]}")
+                lines.append(f"  - {t.id}: {t.topic[:60]}")
             return "\n".join(lines)
 
         proposal_id = uuid4().hex[:12]
         write_log_event(
             "reasoning",
             "proposal_created",
-            f"Reasoning thread proposal: {question[:60]}",
+            f"Reasoning thread proposal: {topic[:60]}",
             project_root=project_root,
             metadata={
                 "proposal_id": proposal_id,
-                "question": question,
+                "topic": topic,
                 "working_summary": working_summary.strip(),
-                "hypotheses": hypotheses or [],
+                "active_items": list(active_items) if active_items else [],
                 "evidence_refs": evidence_refs or [],
             },
         )
@@ -415,10 +425,17 @@ def build_langchain_chat_tools(
             reason_propose,
             name="reason_propose",
             description=(
-                "Propose creating a new long-run reasoning thread. After the user has discussed a topic "
-                "and explicitly confirmed they want a reasoning thread about it, call this tool to submit "
-                "the proposal. The proposal will be presented to the user for final confirmation before "
-                "the thread is actually created. Do NOT call this until the user explicitly says 'yes'."
+                "Propose creating a new long-run thinking thread. "
+                "After discussing a topic with the user and getting explicit confirmation, "
+                "call this to submit the proposal. "
+                "The thread tracks state as general-purpose tracked items (active_items, "
+                "pending_items, next_steps) with free-text kind labels that adapt to the task "
+                "— e.g. 'hypothesis', 'character', 'suspect', 'plot_thread', 'world_rule'. "
+                "The proposal will be presented to the user for final confirmation "
+                "before the thread is actually created. "
+                "Do NOT call this until the user explicitly says 'yes'. "
+                "Tip: before proposing, consider using persona_list and persona_think to "
+                "enrich the thread's initial context with different perspectives."
             ),
             tags=("write",),
         ),

@@ -538,9 +538,10 @@ class ConversationGraphRuntime:
                 "Reason skill:",
                 "Reason is NuSelf's durable long-run thinking space. When a discussion reveals a topic "
                 "with real depth that would benefit from sustained incremental reasoning, you should "
-                "suggest creating a reasoning thread. Help the user refine the question, add hypotheses "
-                "and open questions from your discussion, and only call reason_propose after the user "
-                "explicitly confirms. Do NOT call reason_propose based on a user's mere agreement that "
+                "suggest creating a reasoning thread. Help the user refine the question and add "
+                "initial tracked items with appropriate kind tags from your discussion, and only "
+                "call reason_propose after the user explicitly confirms. Do NOT call reason_propose "
+                "based on a user's mere agreement that "
                 "a topic is 'interesting' — wait for explicit confirmation like 'yes, start it', "
                 "'go ahead', or 'create the thread'.",
             ])

@@ -100,7 +100,7 @@ class ReasonScheduler:
         cooldown_end = (datetime.now(UTC) + timedelta(seconds=self._interval_seconds)).isoformat()
         cooled = ReasoningThread(
             id=thread.id,
-            question=thread.question,
+            topic=thread.topic,
             status=thread.status,
             working_summary=thread.working_summary,
             hypotheses=list(thread.hypotheses),

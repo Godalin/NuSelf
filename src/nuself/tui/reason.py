@@ -35,7 +35,7 @@ def render_reason_row(
     ]
     if thread.last_advanced_at is not None:
         fields.append(theme.muted(render_key_value_field("advanced", format_display_timestamp(thread.last_advanced_at))))
-    return render_record_block(label, fields, body=thread.question)
+    return render_record_block(label, fields, body=thread.topic)
 
 
 def render_reason_detail(
@@ -56,10 +56,17 @@ def render_reason_detail(
     ]
     if thread.last_advanced_at is not None:
         fields.append(theme.muted(render_key_value_field("last_advanced_at", thread.last_advanced_at)))
-    lines = [render_record_header(f"{tag} {thread.question}", fields)]
-    lines.extend(render_section("summary", [thread.working_summary] if thread.working_summary else [], theme))
-    lines.extend(render_section("hypotheses", thread.hypotheses, theme))
-    lines.extend(render_section("open_questions", thread.open_questions, theme))
+    lines = [render_record_header(f"{tag} {thread.topic}", fields)]
+    lines.extend(render_section("description", [thread.working_summary] if thread.working_summary else [], theme))
+    active = thread.active_items
+    if active:
+        lines.extend(render_section("active_items", [f"{i.label}{' — ' + i.description if i.description else ''}{' (' + i.kind + ')' if i.kind else ''}" for i in active], theme))
+    pending = thread.pending_items
+    if pending:
+        lines.extend(render_section("pending_items", [f"{i.label}{' — ' + i.description if i.description else ''}{' (' + i.kind + ')' if i.kind else ''}" for i in pending], theme))
+    steps_list = thread.next_steps
+    if steps_list:
+        lines.extend(render_section("next_steps", [s.label for s in steps_list], theme))
     lines.extend(render_section("evidence", thread.evidence_refs, theme))
     if steps:
         lines.append("")
@@ -76,7 +83,6 @@ def render_step_watch_entry(step: ReasoningStep, *, color: bool | None = None) -
 
 
 def _tool_service_tag(name: str) -> str:
-    """Extract the service component tag from a tool name."""
     if name.startswith("memory_"):
         return "memory"
     if name.startswith("reflection_"):
@@ -90,9 +96,9 @@ def _tool_service_tag(name: str) -> str:
     if name == "load_skill":
         return "skill"
     return ""
+  
+
  
-
-
 
 def _render_step_body(
     step: ReasoningStep,
@@ -124,8 +130,18 @@ def _render_step_body(
             for line in tc_rendered.splitlines():
                 lines.append(f"{inner_pad}{line}" if line else inner_pad.rstrip())
     _append_field(lines, body_pad, "delta", step.delta, theme, full=full)
-    _append_multi_field(lines, body_pad, "new_hypotheses", step.new_hypotheses, theme, full=full)
-    _append_multi_field(lines, body_pad, "new_open_questions", step.new_open_questions, theme, full=full)
+    findings = step.new_findings
+    if findings:
+        _append_multi_field(lines, body_pad, "new_findings", [f"{f.label}{' — ' + f.description if f.description else ''}{' (' + f.kind + ')' if f.kind else ''}" for f in findings], theme, full=full)
+    pending = step.new_pending
+    if pending:
+        _append_multi_field(lines, body_pad, "new_pending", [f"{p.label}{' — ' + p.description if p.description else ''}{' (' + p.kind + ')' if p.kind else ''}" for p in pending], theme, full=full)
+    retired = step.retired_findings
+    if retired:
+        _append_multi_field(lines, body_pad, "retired_findings", [f"{r.label}{' — ' + r.description if r.description else ''}{' (' + r.kind + ')' if r.kind else ''}" for r in retired], theme, full=full)
+    nxt = step.next_steps
+    if nxt:
+        _append_multi_field(lines, body_pad, "next_steps", [s.label for s in nxt], theme, full=full)
     _append_multi_field(lines, body_pad, "evidence_refs", step.evidence_refs, theme, full=full)
     if full or step.confidence is not None:
         conf = step.confidence

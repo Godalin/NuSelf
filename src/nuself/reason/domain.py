@@ -8,11 +8,11 @@ from typing import Any, Literal, TypeAlias, cast
 from uuid import uuid4
 
 ReasonStatus: TypeAlias = Literal["active", "paused", "resolved", "archived"]
-StepKind: TypeAlias = Literal["progress", "no_change", "question", "synthesis", "contradiction", "resolution"]
+StepKind: TypeAlias = Literal["progress", "no_change", "question", "synthesis", "contradiction", "resolution", "planning"]
 ReasonPriority: TypeAlias = Literal["normal", "high"]
 
 REASON_STATUSES: tuple[ReasonStatus, ...] = ("active", "paused", "resolved", "archived")
-STEP_KINDS: tuple[StepKind, ...] = ("progress", "no_change", "question", "synthesis", "contradiction", "resolution")
+STEP_KINDS: tuple[StepKind, ...] = ("progress", "no_change", "question", "synthesis", "contradiction", "resolution", "planning")
 REASON_PRIORITIES: tuple[ReasonPriority, ...] = ("normal", "high")
 
 ACTIVE_STATUSES: tuple[ReasonStatus, ...] = ("active", "paused")
@@ -35,9 +35,41 @@ def _empty_str_list() -> list[str]:
 
 
 @dataclass(frozen=True)
+class TrackedItem:
+    """A single tracked item in reasoning state — can represent any kind of active
+    clue, pending question, step plan, etc. The *kind* field is free-text so the
+    LLM adapts it to the task (character, suspect, hypothesis, plot_thread, ...)."""
+
+    label: str
+    description: str = ""
+    kind: str = ""
+    status: str = "active"
+
+    def to_wire(self) -> dict[str, object]:
+        return {"label": self.label, "description": self.description, "kind": self.kind, "status": self.status}
+
+    @classmethod
+    def from_wire(cls, data: dict[str, object]) -> TrackedItem:
+        raw_label = data.get("label")
+        label = str(raw_label) if raw_label is not None else ""
+        raw_desc = data.get("description")
+        description = str(raw_desc) if isinstance(raw_desc, str) else ""
+        raw_kind = data.get("kind")
+        kind = str(raw_kind) if isinstance(raw_kind, str) else ""
+        raw_status = data.get("status")
+        status = str(raw_status) if isinstance(raw_status, str) else "active"
+        return cls(label=label, description=description, kind=kind, status=status)
+
+
+def _migrate_legacy_str_list(items: list[str], *, default_kind: str = "") -> list[TrackedItem]:
+    """Convert a legacy ``list[str]`` to ``list[TrackedItem]``."""
+    return [TrackedItem(label=s, kind=default_kind) for s in items]
+
+
+@dataclass(frozen=True)
 class ReasoningThread:
     id: str = field(default_factory=new_thread_id)
-    question: str = ""
+    topic: str = ""
     status: ReasonStatus = "active"
     working_summary: str = ""
     hypotheses: list[str] = field(default_factory=_empty_str_list)
@@ -49,23 +81,44 @@ class ReasoningThread:
     skip_next_advance_until: str | None = None
     created_at: str = field(default_factory=_now_iso)
     updated_at: str = field(default_factory=_now_iso)
+    # New general-purpose fields (v2). Stored as tuple of wire dicts.
+    active_items_data: tuple[dict[str, object], ...] = ()
+    pending_items_data: tuple[dict[str, object], ...] = ()
+    next_steps_data: tuple[dict[str, object], ...] = ()
+    # Legacy compat: hypotheses → active_items, open_questions → pending_items
 
     def __post_init__(self) -> None:
         if self.status not in REASON_STATUSES:
             raise ValueError(f"invalid reason status: {self.status}")
         if self.priority not in REASON_PRIORITIES:
             raise ValueError(f"invalid reason priority: {self.priority}")
-        if self.question.strip() == "":
-            raise ValueError("reason question must not be empty")
+        if self.topic.strip() == "":
+            raise ValueError("reason topic must not be empty")
+
+    @property
+    def active_items(self) -> list[TrackedItem]:
+        items = [TrackedItem.from_wire(d) for d in self.active_items_data]
+        if items:
+            return items
+        return _migrate_legacy_str_list(self.hypotheses, default_kind="item")
+
+    @property
+    def pending_items(self) -> list[TrackedItem]:
+        items = [TrackedItem.from_wire(d) for d in self.pending_items_data]
+        if items:
+            return items
+        return _migrate_legacy_str_list(self.open_questions, default_kind="pending")
+
+    @property
+    def next_steps(self) -> list[TrackedItem]:
+        return [TrackedItem.from_wire(d) for d in self.next_steps_data]
 
     def to_wire(self) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "id": self.id,
-            "question": self.question,
+            "topic": self.topic,
             "status": self.status,
             "working_summary": self.working_summary,
-            "hypotheses": self.hypotheses,
-            "open_questions": self.open_questions,
             "evidence_refs": self.evidence_refs,
             "priority": self.priority,
             "last_advanced_at": self.last_advanced_at,
@@ -73,13 +126,28 @@ class ReasoningThread:
             "skip_next_advance_until": self.skip_next_advance_until,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "active_items_data": [t for t in self.active_items_data],
+            "pending_items_data": [t for t in self.pending_items_data],
+            "next_steps_data": [t for t in self.next_steps_data],
         }
+        # Keep legacy fields for backward compat readers.
+        result["question"] = self.topic
+        result["hypotheses"] = self.hypotheses
+        result["open_questions"] = self.open_questions
+        return result
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> ReasoningThread:
+        # Read "topic" first, fall back to "question" for legacy threads.
+        raw_topic = data.get("topic")
+        topic: str
+        if isinstance(raw_topic, str):
+            topic = raw_topic
+        else:
+            topic = _expect_str(data, "question")
         return cls(
             id=_expect_str(data, "id"),
-            question=_expect_str(data, "question"),
+            topic=topic,
             status=_expect_reason_status(data, "status"),
             working_summary=_expect_str(data, "working_summary"),
             hypotheses=_optional_str_list(data, "hypotheses"),
@@ -91,13 +159,16 @@ class ReasoningThread:
             skip_next_advance_until=_optional_str(data, "skip_next_advance_until"),
             created_at=_expect_str(data, "created_at"),
             updated_at=_expect_str(data, "updated_at"),
+            active_items_data=_optional_tracked_items(data, "active_items_data"),
+            pending_items_data=_optional_tracked_items(data, "pending_items_data"),
+            next_steps_data=_optional_tracked_items(data, "next_steps_data"),
         )
 
     def with_status(self, status: ReasonStatus) -> ReasoningThread:
         now = _now_iso()
         return ReasoningThread(
             id=self.id,
-            question=self.question,
+            topic=self.topic,
             status=status,
             working_summary=self.working_summary,
             hypotheses=list(self.hypotheses),
@@ -109,6 +180,9 @@ class ReasoningThread:
             skip_next_advance_until=self.skip_next_advance_until,
             created_at=self.created_at,
             updated_at=now,
+            active_items_data=self.active_items_data,
+            pending_items_data=self.pending_items_data,
+            next_steps_data=self.next_steps_data,
         )
 
 
@@ -126,6 +200,11 @@ class ReasoningStep:
     tool_calls: tuple[tuple[str, dict[str, object], str | None], ...] = ()
     confidence: float | None = None
     created_at: str = field(default_factory=_now_iso)
+    # New general-purpose fields (v2).
+    new_findings_data: tuple[dict[str, object], ...] = ()
+    new_pending_data: tuple[dict[str, object], ...] = ()
+    retired_findings_data: tuple[dict[str, object], ...] = ()
+    next_steps_data: tuple[dict[str, object], ...] = ()
 
     def __post_init__(self) -> None:
         if self.kind not in STEP_KINDS:
@@ -135,21 +214,51 @@ class ReasoningStep:
         if self.summary.strip() == "":
             raise ValueError("step summary must not be empty")
 
+    @property
+    def new_findings(self) -> list[TrackedItem]:
+        items = [TrackedItem.from_wire(d) for d in self.new_findings_data]
+        if items:
+            return items
+        return _migrate_legacy_str_list(self.new_hypotheses, default_kind="finding")
+
+    @property
+    def new_pending(self) -> list[TrackedItem]:
+        items = [TrackedItem.from_wire(d) for d in self.new_pending_data]
+        if items:
+            return items
+        return _migrate_legacy_str_list(self.new_open_questions, default_kind="pending")
+
+    @property
+    def retired_findings(self) -> list[TrackedItem]:
+        items = [TrackedItem.from_wire(d) for d in self.retired_findings_data]
+        if items:
+            return items
+        return _migrate_legacy_str_list(self.retired_hypotheses, default_kind="finding")
+
+    @property
+    def next_steps(self) -> list[TrackedItem]:
+        return [TrackedItem.from_wire(d) for d in self.next_steps_data]
+
     def to_wire(self) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "id": self.id,
             "thread_id": self.thread_id,
             "kind": self.kind,
             "summary": self.summary,
             "delta": self.delta,
-            "new_hypotheses": self.new_hypotheses,
-            "retired_hypotheses": self.retired_hypotheses,
-            "new_open_questions": self.new_open_questions,
             "evidence_refs": self.evidence_refs,
             "tool_calls": [[name, args, result] for name, args, result in self.tool_calls],
             "confidence": self.confidence,
             "created_at": self.created_at,
+            "new_findings_data": [t for t in self.new_findings_data],
+            "new_pending_data": [t for t in self.new_pending_data],
+            "retired_findings_data": [t for t in self.retired_findings_data],
+            "next_steps_data": [t for t in self.next_steps_data],
         }
+        result["new_hypotheses"] = self.new_hypotheses
+        result["retired_hypotheses"] = self.retired_hypotheses
+        result["new_open_questions"] = self.new_open_questions
+        return result
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> ReasoningStep:
@@ -166,7 +275,25 @@ class ReasoningStep:
             tool_calls=_optional_tool_calls(data, "tool_calls"),
             confidence=_optional_float(data, "confidence"),
             created_at=_expect_str(data, "created_at"),
+            new_findings_data=_optional_tracked_items(data, "new_findings_data"),
+            new_pending_data=_optional_tracked_items(data, "new_pending_data"),
+            retired_findings_data=_optional_tracked_items(data, "retired_findings_data"),
+            next_steps_data=_optional_tracked_items(data, "next_steps_data"),
         )
+
+
+def _optional_tracked_items(data: dict[str, object], field_name: str) -> tuple[dict[str, object], ...]:
+    value = data.get(field_name)
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        return ()
+    raw = cast(list[object], value)
+    result: list[dict[str, object]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            result.append(cast(dict[str, object], item))
+    return tuple(result)
 
 
 def _expect_str(data: dict[str, object], field_name: str) -> str:

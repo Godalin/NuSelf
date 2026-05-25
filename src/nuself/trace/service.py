@@ -82,9 +82,9 @@ class TraceRecorder:
     ) -> ThoughtTrace:
         return self.record(
             kind="reason_thread",
-            title=f"Reason thread created: {_short(thread.question)}",
-            summary=f"Created a durable reasoning thread for: {thread.question}",
-            inputs=[thread.question],
+            title=f"Reason thread created: {_short(thread.topic)}",
+            summary=f"Created a durable reasoning thread for: {thread.topic}",
+            inputs=[thread.topic],
             evidence_refs=list(thread.evidence_refs),
             derived_from=source_trace_ids or [],
             outputs=[f"reason:{thread.id}"],
@@ -103,7 +103,7 @@ class TraceRecorder:
     ) -> ThoughtTrace:
         return self.record(
             kind="reason_step",
-            title=f"Reason step: {_short(thread.question)}",
+            title=f"Reason step: {_short(thread.topic)}",
             summary=step.summary,
             inputs=[f"reason:{thread.id}"],
             evidence_refs=list(step.evidence_refs),
@@ -209,7 +209,7 @@ class TraceRecorder:
         trace = self.record(
             kind="promotion",
             title=f"Reflection promoted: {_short(reflection_title)}",
-            summary=f"Promoted reflection into reason thread: {thread.question}",
+            summary=f"Promoted reflection into reason thread: {thread.topic}",
             inputs=[f"reflection:{reflection_id}"],
             evidence_refs=[f"reflection:{reflection_id}", *thread.evidence_refs],
             outputs=[f"reason:{thread.id}"],

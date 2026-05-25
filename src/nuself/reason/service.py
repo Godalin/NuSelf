@@ -30,6 +30,25 @@ def _merge_str_lists(existing: list[str], new_items: list[str], *, max_items: in
     return merged[-max_items:]
 
 
+def _merge_tracked_items(
+    existing: tuple[dict[str, object], ...],
+    new_items: tuple[dict[str, object], ...],
+    retired: tuple[dict[str, object], ...],
+) -> tuple[dict[str, object], ...]:
+    retired_labels = {d.get("label", "") for d in retired}
+    merged = list(existing)
+    # Remove retired items
+    merged = [d for d in merged if d.get("label", "") not in retired_labels]
+    # Add new items (dedup by label)
+    seen = {d.get("label", "") for d in merged}
+    for d in new_items:
+        label = d.get("label", "")
+        if label and label not in seen:
+            merged.append(d)
+            seen.add(label)
+    return tuple(merged)
+
+
 class ReasonService:
     """User-intent operations and state transitions for reasoning threads."""
 
@@ -80,17 +99,17 @@ class ReasonService:
 
     def start_thread(
         self,
-        question: str,
+        topic: str,
         *,
         working_summary: str = "",
-        hypotheses: tuple[str, ...] = (),
         evidence_refs: tuple[str, ...] = (),
         source_trace_ids: tuple[str, ...] = (),
         priority: str = "normal",
+        active_items: tuple[dict[str, object], ...] = (),
     ) -> ReasoningThread:
         active = self._repository.list_threads(status="active")
         if len(active) >= MAX_ACTIVE_THREADS:
-            active_names = "\n".join(f"  - {t.id}: {t.question[:60]}" for t in active)
+            active_names = "\n".join(f"  - {t.id}: {t.topic[:60]}" for t in active)
             raise RuntimeError(
                 f"Cannot start new thread: already {len(active)} active threads "
                 f"(max {MAX_ACTIVE_THREADS}). Please pause, resolve, or archive one first.\n"
@@ -98,11 +117,11 @@ class ReasonService:
             )
 
         thread = ReasoningThread(
-            question=question.strip(),
+            topic=topic.strip(),
             working_summary=working_summary.strip(),
-            hypotheses=list(hypotheses),
             priority="normal" if priority not in ("normal", "high") else priority,  # type: ignore[arg-type]
             evidence_refs=list(evidence_refs),
+            active_items_data=tuple(active_items),
         )
         saved = self._repository.save_thread(thread)
         workspace = self._workspace_store.ensure(thread.id)
@@ -116,10 +135,10 @@ class ReasonService:
         write_log_event(
             "reasoning",
             "thread_started",
-            f"Started reasoning thread: {thread.question[:80]}",
+            f"Started reasoning thread: {thread.topic[:80]}",
             project_root=self._project_root,
             status="created",
-            metadata={"thread_id": thread.id, "question": thread.question, "workspace": str(workspace.root)},
+            metadata={"thread_id": thread.id, "topic": thread.topic, "workspace": str(workspace.root)},
         )
         return saved
 
@@ -138,7 +157,7 @@ class ReasonService:
         write_log_event(
             "reasoning",
             "advance_started",
-            f"Advancing reasoning thread: {thread.question[:80]}",
+            f"Advancing reasoning thread: {thread.topic[:80]}",
             project_root=self._project_root,
             status="started",
             metadata={"thread_id": thread.id},
@@ -150,7 +169,7 @@ class ReasonService:
             step = ReasoningStep(
                 thread_id=thread.id,
                 kind="progress",
-                summary=f"Manual advance requested for: {thread.question[:80]}",
+                summary=f"Manual advance requested for: {thread.topic[:80]}",
                 delta="Manual advance placeholder — LLM integration deferred.",
                 evidence_refs=list(thread.evidence_refs),
             )
@@ -159,7 +178,7 @@ class ReasonService:
         now = datetime.now(UTC).isoformat()
         updated = ReasoningThread(
             id=thread.id,
-            question=thread.question,
+            topic=thread.topic,
             status=thread.status,
             working_summary=_pick_working_summary(step, thread),
             hypotheses=_merge_str_lists(thread.hypotheses, step.new_hypotheses if step else [], max_items=_MAX_HYPOTHESES),
@@ -170,6 +189,9 @@ class ReasonService:
             next_review_after=thread.next_review_after,
             created_at=thread.created_at,
             updated_at=now,
+            active_items_data=_merge_tracked_items(thread.active_items_data, step.new_findings_data if step else (), step.retired_findings_data if step else ()),
+            pending_items_data=_merge_tracked_items(thread.pending_items_data, step.new_pending_data if step else (), ()),
+            next_steps_data=step.next_steps_data if step and step.next_steps_data else thread.next_steps_data,
         )
         self._repository.save_thread(updated)
         if self._trace_recorder is not None:
@@ -178,10 +200,18 @@ class ReasonService:
         write_log_event(
             "reasoning",
             "advance_completed",
-            f"Advance completed for thread: {thread.question[:80]}",
+            f"Advance completed for thread: {thread.topic[:80]}",
             project_root=self._project_root,
             status="completed",
-            metadata={"thread_id": thread.id, "step_id": step.id, "step_kind": step.kind},
+            metadata={
+                "thread_id": thread.id,
+                "step_id": step.id,
+                "step_kind": step.kind,
+                "new_findings": len(step.new_findings_data) if step else 0,
+                "new_pending": len(step.new_pending_data) if step else 0,
+                "retired_findings": len(step.retired_findings_data) if step else 0,
+                "next_steps": len(step.next_steps_data) if step else 0,
+            },
         )
         return updated
 
@@ -207,10 +237,10 @@ class ReasonService:
         write_log_event(
             "reasoning",
             "thread_deleted",
-            f"Deleted reasoning thread: {thread.question[:80]}",
+            f"Deleted reasoning thread: {thread.topic[:80]}",
             project_root=self._project_root,
             status="deleted",
-            metadata={"thread_id": thread.id, "question": thread.question},
+            metadata={"thread_id": thread.id, "topic": thread.topic},
         )
 
         import shutil

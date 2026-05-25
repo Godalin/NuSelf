@@ -14,7 +14,7 @@ from nuself.trace.service import TraceQueryService
 def test_start_thread(tmp_path: Path) -> None:
     service = ReasonService(repository=ReasonRepository(tmp_path))
     thread = service.start_thread("What should I do?")
-    assert thread.question == "What should I do?"
+    assert thread.topic == "What should I do?"
     assert thread.status == "active"
 
 

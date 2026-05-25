@@ -6,10 +6,10 @@ from nuself.reason.domain import ReasoningStep, ReasoningThread
 
 
 def test_thread_defaults() -> None:
-    t = ReasoningThread(question="What is the meaning of life?")
+    t = ReasoningThread(topic="What is the meaning of life?")
     assert t.status == "active"
     assert t.priority == "normal"
-    assert t.question == "What is the meaning of life?"
+    assert t.topic == "What is the meaning of life?"
     assert t.hypotheses == []
     assert t.open_questions == []
     assert t.evidence_refs == []
@@ -17,7 +17,7 @@ def test_thread_defaults() -> None:
 
 def test_thread_empty_question_raises() -> None:
     try:
-        ReasoningThread(question="")
+        ReasoningThread(topic="")
         assert False, "expected ValueError"
     except ValueError:
         pass
@@ -25,7 +25,7 @@ def test_thread_empty_question_raises() -> None:
 
 def test_thread_invalid_status_raises() -> None:
     try:
-        ReasoningThread(question="test", status="invalid")  # type: ignore[arg-type]
+        ReasoningThread(topic="test", status="invalid")  # type: ignore[arg-type]
         assert False, "expected ValueError"
     except ValueError:
         pass
@@ -33,7 +33,7 @@ def test_thread_invalid_status_raises() -> None:
 
 def test_thread_to_wire_roundtrip() -> None:
     t = ReasoningThread(
-        question="Should I switch careers?",
+        topic="Should I switch careers?",
         working_summary="Exploring options",
         hypotheses=["Option A", "Option B"],
         open_questions=["What about money?"],
@@ -46,7 +46,7 @@ def test_thread_to_wire_roundtrip() -> None:
 
 
 def test_thread_with_status() -> None:
-    t = ReasoningThread(question="test").with_status("paused")
+    t = ReasoningThread(topic="test").with_status("paused")
     assert t.status == "paused"
     assert t.updated_at != t.created_at
 
