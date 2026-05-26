@@ -967,7 +967,7 @@ def test_memory_count_tool_with_tag_filter(tmp_path: Path) -> None:
 def test_reason_list_active_tool(tmp_path: Path) -> None:
     from nuself.reason.service import ReasonService
 
-    service = ReasonService(tmp_path)
+    service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
     service.start_thread("How should this be remembered?")
     tool = _chat_tool(tmp_path, "reason_list_active")
 
@@ -981,7 +981,7 @@ def test_reason_list_active_tool(tmp_path: Path) -> None:
 def test_reason_count_tool(tmp_path: Path) -> None:
     from nuself.reason.service import ReasonService
 
-    service = ReasonService(tmp_path)
+    service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
     service.start_thread("Count this reason thread")
     tool = _chat_tool(tmp_path, "reason_count")
 
@@ -993,13 +993,17 @@ def test_reason_count_tool(tmp_path: Path) -> None:
 def test_reason_show_tool(tmp_path: Path) -> None:
     from nuself.reason.service import ReasonService
 
-    thread = ReasonService(tmp_path).start_thread("Inspect this reason thread")
+    thread = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator).start_thread("Inspect this reason thread")
     tool = _chat_tool(tmp_path, "reason_show")
 
     result = _invoke_chat_tool(tool, {"thread_id": thread.id})
 
     assert "[reason] Inspect this reason thread" in result
     assert thread.id in result
+
+
+def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
+    return "Test-generated reasoning prompt."
 
 
 def test_trace_search_tool(tmp_path: Path) -> None:

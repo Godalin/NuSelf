@@ -196,7 +196,7 @@ def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | No
     try:
         raw_active_obj = meta.get("active_items")
         raw_active: list[object] = cast(list[object], raw_active_obj) if isinstance(raw_active_obj, list) else []
-        active_items = [cast(dict[str, object], item) for item in raw_active if isinstance(item, dict)]
+        active_items = [_normalize_reason_active_item(cast(dict[str, object], item)) for item in raw_active if isinstance(item, dict)]
         raw_evidence_obj = meta.get("evidence_refs")
         raw_evidence: list[object] = cast(list[object], raw_evidence_obj) if isinstance(raw_evidence_obj, list) else []
         evidence_refs = tuple(item for item in raw_evidence if isinstance(item, str))
@@ -216,6 +216,19 @@ def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | No
         _print_ansi(f"{tag} Failed to create: {exc}")
         return
     _print_ansi(f"{tag} Reason thread created: id={thread.id}")
+
+
+def _normalize_reason_active_item(item: dict[str, object]) -> dict[str, object]:
+    raw_label = item.get("label", item.get("content", ""))
+    raw_description = item.get("description", "")
+    raw_kind = item.get("kind", "")
+    raw_status = item.get("status", "active")
+    return {
+        "label": raw_label if isinstance(raw_label, str) else "",
+        "description": raw_description if isinstance(raw_description, str) else "",
+        "kind": raw_kind if isinstance(raw_kind, str) else "",
+        "status": raw_status if isinstance(raw_status, str) else "active",
+    }
 
 
 def _print_ansi(text: str, **kwargs: Any) -> None:

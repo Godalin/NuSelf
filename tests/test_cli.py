@@ -3325,7 +3325,11 @@ def test_top_level_subcommand_help(argv: list[str]) -> None:
     assert exc_info.value.code == 0
 
 
-def test_reason_cli_start_list_show_and_advance(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_reason_cli_start_list_show_and_advance(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("nuself.reason.service.generate_reasoning_prompt", _test_reason_prompt_generator)
+
     start_result = main(["--project-root", str(tmp_path), "reason", "start", "How should I keep thinking?"])
     start_output = capsys.readouterr().out
     assert start_result == 0
@@ -3348,7 +3352,11 @@ def test_reason_cli_start_list_show_and_advance(tmp_path: Path, capsys: CaptureF
     assert "Error:" in advance_output.err or "Error:" in advance_output.out
 
 
-def test_reflection_cli_promote_creates_reason_and_trace(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_reflection_cli_promote_creates_reason_and_trace(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    monkeypatch.setattr("nuself.reason.service.generate_reasoning_prompt", _test_reason_prompt_generator)
+
     entry = ReflectionEntry(
         id="reflection-cli",
         title="Follow a long idea",
@@ -3400,7 +3408,7 @@ def test_interactive_reason_list_shows_threads(
     def fake_status(project_root: Path | None) -> DaemonStatus:
         return _mock_status(tmp_path)
 
-    ReasonService(tmp_path).start_thread("Track this reasoning thread")
+    ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator).start_thread("Track this reasoning thread")
     monkeypatch.setattr("sys.stdin", _TextInput(":reason list\n:q\n"))
     monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
 
@@ -3410,6 +3418,10 @@ def test_interactive_reason_list_shows_threads(
     assert result == 0
     assert "[1] [reason] status=[active] priority=normal" in captured.out
     assert "Track this reasoning thread" in captured.out
+
+
+def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
+    return "Test-generated reasoning prompt."
 
 
 

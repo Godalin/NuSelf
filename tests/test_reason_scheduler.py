@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.domain import ReasoningStep, ReasoningThread
@@ -13,18 +13,26 @@ from nuself.reason.scheduler import ReasonScheduler
 from nuself.reason.service import ReasonService
 
 
+def _reason_service(**kwargs: Any) -> ReasonService:
+    return ReasonService(prompt_generator=_test_prompt_generator, **kwargs)
+
+
+def _test_prompt_generator(*args: object, **kwargs: object) -> str:
+    return "Test-generated reasoning prompt."
+
+
 def test_run_once_no_active_threads_does_nothing(tmp_path: Path) -> None:
     scheduler = ReasonScheduler(
         project_root=tmp_path,
         advancer=_null_advancer(),
-        service=ReasonService(repository=ReasonRepository(tmp_path)),
+        service=_reason_service(repository=ReasonRepository(tmp_path)),
         interval_seconds=600,
     )
     scheduler.run_once()
 
 
 def test_run_once_skips_thread_on_cooldown(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     thread = service.start_thread("Test")
     cooldown_end = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     cooled = ReasoningThread(
@@ -57,7 +65,7 @@ def test_run_once_skips_thread_on_cooldown(tmp_path: Path) -> None:
 
 
 def test_run_once_advances_eligible_thread(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     thread = service.start_thread("Test advance")
 
     called = False
@@ -88,7 +96,7 @@ def test_run_once_advances_eligible_thread(tmp_path: Path) -> None:
 
 
 def test_run_once_respects_cooldown_after_advance(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     thread = service.start_thread("Test cooldown")
 
     class Advancer:

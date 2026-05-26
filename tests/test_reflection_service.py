@@ -11,6 +11,14 @@ from nuself.reflection.service import ReflectionService
 from nuself.trace.service import TraceQueryService
 
 
+def _reason_service(project_root: Path) -> ReasonService:
+    return ReasonService(project_root, prompt_generator=_test_prompt_generator)
+
+
+def _test_prompt_generator(*args: object, **kwargs: object) -> str:
+    return "Test-generated reasoning prompt."
+
+
 def _reflection_entry(entry_id: str = "reflection-test") -> ReflectionEntry:
     now = datetime.now(UTC).isoformat()
     return ReflectionEntry(
@@ -35,7 +43,7 @@ def _reflection_entry(entry_id: str = "reflection-test") -> ReflectionEntry:
 def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:
     repo = ReflectionRepository(tmp_path)
     entry = repo.add(_reflection_entry())
-    service = ReflectionService(tmp_path, repository=repo, reason_service=ReasonService(tmp_path))
+    service = ReflectionService(tmp_path, repository=repo, reason_service=_reason_service(tmp_path))
 
     thread = service.promote_to_reason(entry.id)
 
@@ -61,7 +69,7 @@ def test_promote_rejects_non_pending_reflection(tmp_path: Path) -> None:
     entry = repo.add(_reflection_entry()).with_status("archived")
     repo.update(entry)
 
-    service = ReflectionService(tmp_path, repository=repo, reason_service=ReasonService(tmp_path))
+    service = ReflectionService(tmp_path, repository=repo, reason_service=_reason_service(tmp_path))
 
     try:
         service.promote_to_reason(entry.id)

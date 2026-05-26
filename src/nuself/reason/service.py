@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
@@ -62,6 +63,7 @@ class ReasonService:
         workspace_store: PrivateWorkspaceStore | None = None,
         trace_recorder: TraceRecorder | None = None,
         advancer: ReasonAdvancerProtocol | None = None,
+        prompt_generator: Callable[..., str] | None = None,
     ) -> None:
         self._project_root = project_root
         self._repository = repository or ReasonRepository(project_root)
@@ -73,6 +75,7 @@ class ReasonService:
         )
         self._workspace_cache: dict[str, ScopedWorkspace] = {}
         self._advancer = advancer
+        self._prompt_generator = prompt_generator or generate_reasoning_prompt
 
     # ── Read ───────────────────────────────────────────────────────
 
@@ -123,6 +126,15 @@ class ReasonService:
             )
 
         priority_value: ReasonPriority = "high" if priority == "high" else "normal"
+        reasoning_prompt = self._prompt_generator(
+            topic,
+            mandates=mandates,
+            active_items=tuple(active_items),
+            project_root=self._project_root,
+        ).strip()
+        if not reasoning_prompt:
+            raise RuntimeError("Cannot start reason thread: reasoning prompt generation returned empty output")
+
         thread = ReasoningThread(
             topic=topic.strip(),
             working_summary=working_summary.strip(),
@@ -130,12 +142,7 @@ class ReasonService:
             evidence_refs=list(evidence_refs),
             active_items_data=tuple(active_items),
             mandates_data=tuple(mandates),
-            reasoning_prompt=generate_reasoning_prompt(
-                topic,
-                mandates=mandates,
-                active_items=tuple(active_items),
-                project_root=self._project_root,
-            ),
+            reasoning_prompt=reasoning_prompt,
         )
         saved = self._repository.save_thread(thread)
         workspace = self._workspace_store.ensure(thread.id)

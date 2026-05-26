@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sqlite3
+from typing import Any
 
 from nuself.logs import read_log_events
 from nuself.reason.domain import ReasoningStep
@@ -12,15 +13,23 @@ from nuself.reason.service import ReasonService
 from nuself.trace.service import TraceQueryService
 
 
+def _reason_service(**kwargs: Any) -> ReasonService:
+    return ReasonService(prompt_generator=_test_prompt_generator, **kwargs)
+
+
+def _test_prompt_generator(*args: object, **kwargs: object) -> str:
+    return "Test-generated reasoning prompt."
+
+
 def test_start_thread(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     thread = service.start_thread("What should I do?")
     assert thread.topic == "What should I do?"
     assert thread.status == "active"
 
 
 def test_start_thread_writes_logs_under_project_root(tmp_path: Path) -> None:
-    service = ReasonService(project_root=tmp_path)
+    service = _reason_service(project_root=tmp_path)
 
     service.start_thread("Where should reason logs live?")
 
@@ -31,7 +40,7 @@ def test_start_thread_writes_logs_under_project_root(tmp_path: Path) -> None:
 
 
 def test_start_thread_initializes_private_workspace(tmp_path: Path) -> None:
-    service = ReasonService(project_root=tmp_path)
+    service = _reason_service(project_root=tmp_path)
 
     thread = service.start_thread("Where should scratch state live?")
 
@@ -48,7 +57,7 @@ def test_start_thread_initializes_private_workspace(tmp_path: Path) -> None:
 
 
 def test_start_and_list(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     service.start_thread("Question 1")
     service.start_thread("Question 2")
     threads = service.list_threads()
@@ -56,13 +65,13 @@ def test_start_and_list(tmp_path: Path) -> None:
 
 
 def test_start_with_evidence(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     thread = service.start_thread("Test", evidence_refs=("ref-1", "ref-2"))
     assert thread.evidence_refs == ["ref-1", "ref-2"]
 
 
 def test_start_thread_records_trace(tmp_path: Path) -> None:
-    service = ReasonService(project_root=tmp_path)
+    service = _reason_service(project_root=tmp_path)
 
     thread = service.start_thread("What should be traced?", evidence_refs=("memory:abc",))
 
@@ -73,7 +82,7 @@ def test_start_thread_records_trace(tmp_path: Path) -> None:
 
 
 def test_start_thread_records_trace_when_repository_is_injected(tmp_path: Path) -> None:
-    service = ReasonService(project_root=tmp_path, repository=ReasonRepository(tmp_path))
+    service = _reason_service(project_root=tmp_path, repository=ReasonRepository(tmp_path))
 
     thread = service.start_thread("Injected repository should still trace")
 
@@ -83,14 +92,14 @@ def test_start_thread_records_trace_when_repository_is_injected(tmp_path: Path) 
 
 
 def test_show_thread_by_id(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     created = service.start_thread("Show me")
     shown = service.show_thread(created.id)
     assert shown.id == created.id
 
 
 def test_pause_and_resume_thread(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     t = service.start_thread("Test")
     paused = service.pause_thread(t.id)
     assert paused.status == "paused"
@@ -99,21 +108,21 @@ def test_pause_and_resume_thread(tmp_path: Path) -> None:
 
 
 def test_resolve_thread(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     t = service.start_thread("Test")
     resolved = service.resolve_thread(t.id)
     assert resolved.status == "resolved"
 
 
 def test_archive_thread(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     t = service.start_thread("Test")
     archived = service.archive_thread(t.id)
     assert archived.status == "archived"
 
 
 def test_invalid_transition_raises(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     t = service.start_thread("Test")
     service.resolve_thread(t.id)
     try:
@@ -124,7 +133,7 @@ def test_invalid_transition_raises(tmp_path: Path) -> None:
 
 
 def test_advance_thread(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     t = service.start_thread("Test advance")
     step = _test_step(t.id)
     advanced = service.advance_thread(t.id, step=step)
@@ -135,7 +144,7 @@ def test_advance_thread(tmp_path: Path) -> None:
 
 
 def test_advance_thread_records_trace(tmp_path: Path) -> None:
-    service = ReasonService(project_root=tmp_path)
+    service = _reason_service(project_root=tmp_path)
     thread = service.start_thread("Trace advances")
     step = _test_step(thread.id)
 
@@ -149,7 +158,7 @@ def test_advance_thread_records_trace(tmp_path: Path) -> None:
 
 
 def test_advance_without_advancer_or_step_raises(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     thread = service.start_thread("No fallback advance")
 
     try:
@@ -164,7 +173,7 @@ def test_advance_when_advancer_returns_none_raises(tmp_path: Path) -> None:
         def advance(self, thread: object) -> None:
             return None
 
-    service = ReasonService(repository=ReasonRepository(tmp_path), advancer=EmptyAdvancer())
+    service = _reason_service(repository=ReasonRepository(tmp_path), advancer=EmptyAdvancer())
     thread = service.start_thread("No fake steps")
 
     try:
@@ -175,7 +184,7 @@ def test_advance_when_advancer_returns_none_raises(tmp_path: Path) -> None:
 
 
 def test_advance_paused_thread_raises(tmp_path: Path) -> None:
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     t = service.start_thread("Test")
     service.pause_thread(t.id)
     try:
@@ -198,7 +207,7 @@ def _test_step(thread_id: str) -> ReasoningStep:
 def test_active_thread_cap(tmp_path: Path) -> None:
     from nuself.reason.service import MAX_ACTIVE_THREADS
 
-    service = ReasonService(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(tmp_path))
     for i in range(MAX_ACTIVE_THREADS):
         service.start_thread(f"Question {i}")
     try:
