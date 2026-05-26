@@ -6,7 +6,7 @@ import json
 import threading
 from pathlib import Path
 from contextlib import contextmanager
-from typing import Iterator, cast
+from typing import Generator, cast
 
 from nuself.config import runtime_paths
 from nuself.reason.domain import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
@@ -39,7 +39,7 @@ class ReasonRepository:
         return self._project_root
 
     @contextmanager
-    def batch_write(self) -> Iterator[None]:
+    def batch_write(self) -> Generator[None]:
         """Context manager for atomic multi-file writes (e.g. step + thread)."""
         with _write_lock:
             yield

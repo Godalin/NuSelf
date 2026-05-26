@@ -124,21 +124,13 @@ class ReasoningThread:
             "mandates_data": [m for m in self.mandates_data],
         }
         result["reasoning_prompt"] = self.reasoning_prompt
-        result["question"] = self.topic
         return result
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> ReasoningThread:
-        # Read "topic" first, fall back to "question" for legacy threads.
-        raw_topic = data.get("topic")
-        topic: str
-        if isinstance(raw_topic, str):
-            topic = raw_topic
-        else:
-            topic = _expect_str(data, "question")
         return cls(
             id=_expect_str(data, "id"),
-            topic=topic,
+            topic=_expect_str(data, "topic"),
             status=_expect_reason_status(data, "status"),
             working_summary=_expect_str(data, "working_summary"),
             evidence_refs=_optional_str_list(data, "evidence_refs"),

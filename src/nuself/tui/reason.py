@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import cast
 
-from nuself.logs import LogEvent
-from nuself.reason.domain import ReasoningStep, ReasoningThread
+from nuself.logs import LogComponent, LogEvent
+from nuself.reason.domain import ReasoningStep, ReasoningThread, TrackedItem
 from nuself.tui.render import (
     TerminalTheme,
     format_display_timestamp,
@@ -69,6 +69,9 @@ def render_reason_detail(
             lines.append(f"    - {m}")
     else:
         lines.append(f"    {theme.muted('(none)')}")
+    _append_tracked_section(lines, "active_items", thread.active_items, theme)
+    _append_tracked_section(lines, "pending_items", thread.pending_items, theme)
+    _append_tracked_section(lines, "next_steps", thread.next_steps, theme)
     lines.append(f"  {theme.tag('reasoning_prompt:', 'reasoning')}")
     if thread.reasoning_prompt:
         for line in thread.reasoning_prompt.splitlines():
@@ -124,7 +127,7 @@ def _render_step_body(
             log_event = LogEvent(
                 time=step.created_at,
                 level="info",
-                component=str(entry.get("component", "reasoning")),
+                component=cast(LogComponent, str(entry.get("component", "reasoning"))),
                 event=str(entry.get("event", "")),
                 message=str(entry.get("message", "")),
                 status=str(entry.get("status")) if entry.get("status") else None,
@@ -190,6 +193,22 @@ def _append_multi_field(
             lines.append(f"{pad}  - {render_markdown(item, theme)}")
     elif full:
         lines.append(f"{pad}{theme.tag(f'{tag}:', 'reasoning')} {theme.muted('(none)')}")
+
+
+def _append_tracked_section(
+    lines: list[str],
+    tag: str,
+    items: list[TrackedItem],
+    theme: TerminalTheme,
+) -> None:
+    lines.append(f"  {theme.tag(f'{tag}:', 'reasoning')}")
+    if items:
+        for item in items:
+            suffix = f" ({item.kind})" if item.kind else ""
+            description = f" — {item.description}" if item.description else ""
+            lines.append(f"    - {item.label}{description}{suffix}")
+    else:
+        lines.append(f"    {theme.muted('(none)')}")
 
 
 def _reason_status_color(status: str) -> str:

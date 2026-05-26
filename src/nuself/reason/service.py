@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Protocol
 
 from nuself.logs import write_log_event
-from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonStatus
+from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus
 from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
 from nuself.store import ScopedWorkspace, SqliteStore
@@ -15,6 +16,11 @@ from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 
 MAX_ACTIVE_THREADS = 5
 _MAX_EVIDENCE_REFS = 20
+
+
+class ReasonAdvancerProtocol(Protocol):
+    def advance(self, thread: ReasoningThread) -> ReasoningStep | None:
+        """Generate one reasoning step for a thread."""
 
 
 def _pick_working_summary(step: ReasoningStep | None, thread: ReasoningThread) -> str:
@@ -55,7 +61,7 @@ class ReasonService:
         repository: ReasonRepository | None = None,
         workspace_store: PrivateWorkspaceStore | None = None,
         trace_recorder: TraceRecorder | None = None,
-        advancer: Any | None = None,
+        advancer: ReasonAdvancerProtocol | None = None,
     ) -> None:
         self._project_root = project_root
         self._repository = repository or ReasonRepository(project_root)
@@ -116,10 +122,11 @@ class ReasonService:
                 f"Active threads:\n{active_names}"
             )
 
+        priority_value: ReasonPriority = "high" if priority == "high" else "normal"
         thread = ReasoningThread(
             topic=topic.strip(),
             working_summary=working_summary.strip(),
-            priority="normal" if priority not in ("normal", "high") else priority,  # type: ignore[arg-type]
+            priority=priority_value,
             evidence_refs=list(evidence_refs),
             active_items_data=tuple(active_items),
             mandates_data=tuple(mandates),
@@ -177,21 +184,9 @@ class ReasonService:
             if generated is not None:
                 step = generated
             else:
-                step = ReasoningStep(
-                    thread_id=thread.id,
-                    kind="progress",
-                    summary=f"Manual advance requested for: {thread.topic[:80]}",
-                    delta="Advance requested but LLM did not produce a step — you may need to configure an API key.",
-                    evidence_refs=list(thread.evidence_refs),
-                )
+                raise RuntimeError(f"Cannot advance thread {thread.id}: advancer did not produce a structured step")
         else:
-            step = ReasoningStep(
-                thread_id=thread.id,
-                kind="progress",
-                summary=f"Manual advance requested for: {thread.topic[:80]}",
-                delta="Manual advance placeholder — LLM integration deferred.",
-                evidence_refs=list(thread.evidence_refs),
-            )
+            raise RuntimeError(f"Cannot advance thread {thread.id}: no reason advancer configured")
 
         now = datetime.now(UTC).isoformat()
         updated = ReasoningThread(
@@ -203,6 +198,7 @@ class ReasonService:
             priority=thread.priority,
             last_advanced_at=now,
             next_review_after=thread.next_review_after,
+            skip_next_advance_until=thread.skip_next_advance_until,
             created_at=thread.created_at,
             updated_at=now,
             active_items_data=_merge_tracked_items(thread.active_items_data, step.new_findings_data if step else (), step.retired_findings_data if step else ()),

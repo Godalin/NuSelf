@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,7 +12,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import cast
+from typing import Any, cast
 from uuid import uuid4
 import warnings
 
@@ -56,6 +56,7 @@ try:
         default_memory_type_registry,
         default_relation_descriptor_registry,
     )
+    from nuself.domain.profile import ProfileItem
     from nuself.domain.source import SourceChunk
     from nuself.memory.curator import MemoryCurator
     from nuself.memory.intake import MemoryIntakeAgent
@@ -101,7 +102,7 @@ try:
     )
     from nuself.reason.service import ReasonService
     from nuself.reason.repository import ReasonNotFound
-    from nuself.tui.reason import render_reason_detail, render_reason_row, render_step_watch_entry
+    from nuself.tui.reason import render_reason_detail, render_reason_row
     from nuself.tui.render import TerminalTheme, format_display_timestamp, render_log_event, render_log_event_json, render_session_header
     from nuself.tui.trace import render_trace_detail, render_trace_row
     from nuself.persona.prompt_repo import PersonaPromptRepository
@@ -175,14 +176,16 @@ def _handle_proposals_after_turn(events: list[LogEvent], project_root: Path | No
 
 def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | None) -> None:
     meta = event.metadata or {}
-    topic_raw = meta.get("topic", meta.get("question", "")) or ""
-    proposal_id = meta.get("proposal_id", "") or ""
-    if not topic_raw:
+    topic_value = meta.get("topic", meta.get("question", ""))
+    proposal_value = meta.get("proposal_id", "")
+    topic = topic_value if isinstance(topic_value, str) else ""
+    proposal_id = proposal_value if isinstance(proposal_value, str) else ""
+    if not topic:
         return
     _handled_proposal_ids.add(proposal_id)
     print()
     tag = _theme.tag("[reason]", "reasoning")
-    _print_ansi(f"{tag} Start reason thread「{topic_raw}」? (y/n): ", end="", flush=True)
+    _print_ansi(f"{tag} Start reason thread「{topic}」? (y/n): ", end="", flush=True)
     line = sys.stdin.readline().strip().lower()
     if line not in ("y", "yes"):
         _print_ansi(f"{tag} Cancelled")
@@ -191,16 +194,23 @@ def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | No
 
     service = ReasonService(project_root)
     try:
-        raw_active = meta.get("active_items") or []
-        if not isinstance(raw_active, list):
-            raw_active = []
+        raw_active_obj = meta.get("active_items")
+        raw_active: list[object] = cast(list[object], raw_active_obj) if isinstance(raw_active_obj, list) else []
         active_items = [cast(dict[str, object], item) for item in raw_active if isinstance(item, dict)]
+        raw_evidence_obj = meta.get("evidence_refs")
+        raw_evidence: list[object] = cast(list[object], raw_evidence_obj) if isinstance(raw_evidence_obj, list) else []
+        evidence_refs = tuple(item for item in raw_evidence if isinstance(item, str))
+        raw_mandates_obj = meta.get("mandates")
+        raw_mandates: list[object] = cast(list[object], raw_mandates_obj) if isinstance(raw_mandates_obj, list) else []
+        mandates = tuple(item for item in raw_mandates if isinstance(item, str))
+        summary_value = meta.get("working_summary", "")
+        working_summary = summary_value if isinstance(summary_value, str) else ""
         thread = service.start_thread(
-            topic=topic_raw,
-            working_summary=meta.get("working_summary", "") or "",
-            evidence_refs=tuple(meta.get("evidence_refs", []) or []),
+            topic=topic,
+            working_summary=working_summary,
+            evidence_refs=evidence_refs,
             active_items=tuple(active_items),
-            mandates=tuple(meta.get("mandates", []) or []),
+            mandates=mandates,
         )
     except RuntimeError as exc:
         _print_ansi(f"{tag} Failed to create: {exc}")
@@ -208,7 +218,7 @@ def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | No
     _print_ansi(f"{tag} Reason thread created: id={thread.id}")
 
 
-def _print_ansi(text: str, **kwargs: object) -> None:
+def _print_ansi(text: str, **kwargs: Any) -> None:
     if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
         _print_ft(_ANSI(text), **kwargs)
     else:
@@ -1646,7 +1656,7 @@ def handle_reason_thread_action(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     print(f"{verb} reason thread: {thread.id}")
-    _print_ansi(render_reason_detail(thread))
+    _print_ansi(render_reason_detail(thread, service.list_steps(thread.id)))
     return 0
 
 
@@ -2489,22 +2499,12 @@ _INTERACTIVE_COMMANDS = [
 ]
 
 
-def _setup_interactive_completer(project_root: Path | None) -> None:
-    if readline is None:
-        return
-    readline.parse_and_bind("tab: complete")
-    readline.set_completer(_InteractiveCompleter(project_root))
-    # Keep colon as part of the word so :command completions work
-    delims = readline.get_completer_delims().replace(":", "")
-    readline.set_completer_delims(delims)
-
-
 class _InteractiveCompleter(Completer):
     def __init__(self, project_root: Path | None) -> None:
         super().__init__()
         self._project_root = project_root
 
-    def get_completions(self, document: Document, complete_event: object) -> Completion:
+    def get_completions(self, document: Document, complete_event: object) -> Iterable[Completion]:
         text = document.text_before_cursor
         stripped = text.lstrip()
         word = text.split()[-1] if text.split() else ""
@@ -2541,7 +2541,7 @@ class _InteractiveCompleter(Completer):
         ("watch", "Watch for new reasoning steps in real-time", False),
     ]
 
-    def _reason_subcommand_completions(self, stripped: str, word: str) -> Completion:
+    def _reason_subcommand_completions(self, stripped: str, word: str) -> Iterable[Completion]:
         prefix = stripped.removeprefix(":reason ").removeprefix(":re ")
         subcmd = prefix.split()[0] if prefix.strip() else ""
         # After a subcommand that takes a thread id, offer thread completions
@@ -2565,20 +2565,20 @@ class _InteractiveCompleter(Completer):
         except Exception:
             return []
 
-    def _thread_completions(self, word: str) -> Completion:
+    def _thread_completions(self, word: str) -> Iterable[Completion]:
         try:
             threads = ThreadStore(self._project_root).list()
         except Exception:
-            return
+            return ()
         for t in threads:
             if t.startswith(word):
                 yield Completion(t, start_position=-len(word))
 
-    def _archived_thread_completions(self, word: str) -> Completion:
+    def _archived_thread_completions(self, word: str) -> Iterable[Completion]:
         try:
             threads = ThreadStore(self._project_root).list_archived()
         except Exception:
-            return
+            return ()
         for t in threads:
             if t.startswith(word):
                 yield Completion(t, start_position=-len(word))
@@ -2656,7 +2656,7 @@ def _run_memory_curator(project_root: Path | None) -> None:
         _print_ansi(f"{_theme.tag('[memory]', 'memory')} {result.summary()}")
 
 
-def _record_cli_memory_trace(project_root: Path | None, entry: MemoryEntry, action: str) -> None:
+def _record_cli_memory_trace(project_root: Path | None, entry: MemoryEntry | ProfileItem, action: str) -> None:
     try:
         TraceRecorder(project_root=project_root).record_memory_update(
             memory_id=entry.id,
@@ -3431,7 +3431,7 @@ def _handle_interactive_reason_command(command: str, project_root: Path | None) 
             thread = service.advance_thread(thread_id)
         except (ReasonNotFound, RuntimeError) as exc:
             return f"Error: {exc}"
-        return f"Advanced reason thread: {thread.id}\n{render_reason_detail(thread)}"
+        return f"Advanced reason thread: {thread.id}\n{render_reason_detail(thread, service.list_steps(thread.id))}"
     if command.startswith("pause "):
         thread_id = command.removeprefix("pause ").strip()
         try:
@@ -3502,7 +3502,7 @@ def _handle_interactive_reason_watch(project_root: Path | None, interval: int = 
 
     from nuself.reason.service import ReasonService
     from nuself.reason.repository import ReasonNotFound
-    from nuself.tui.reason import render_reason_detail, render_reason_row, render_step_watch_entry
+    from nuself.tui.reason import render_reason_detail, render_step_watch_entry
 
     service = ReasonService(project_root)
     threads = service.list_threads()
