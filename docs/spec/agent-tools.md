@@ -224,7 +224,7 @@ Each `StructuredTool` definition must set `metadata={"service_component": "<subs
 #### `reason_list_active`
 
 - **Args**: none
-- **Behavior**: Reads `ReasonService.list_threads(status="active")` and formats active/paused threads for the LLM.
+- **Behavior**: Reads `ReasonService.list_threads()` and formats active/paused threads for the LLM.
 - **Returns**: Numbered list of threads with topic, status, step count, and last-advanced time. Empty message if none.
 - **When to use**: The agent may call this when the user asks about "what I'm thinking about", "open topics", "reasoning threads", or when contextually relevant.
 
@@ -238,9 +238,16 @@ Each `StructuredTool` definition must set `metadata={"service_component": "<subs
 #### `reason_show`
 
 - **Args**: `thread_id: str`
-- **Behavior**: Reads the full thread via `ReasonService.show_thread(thread_id)` including topic, description, tracked items (active, pending, next steps), and recent steps.
+- **Behavior**: Reads the full thread via `ReasonService.show_thread(thread_id)` including topic, description, mandates, reasoning prompt, tracked items (active, pending, next steps), evidence refs, recent steps, step output, and persisted tool logs.
 - **Returns**: Formatted thread details, or error if not found.
 - **When to use**: When the user asks about a specific reasoning thread in detail.
+
+#### `reason_propose`
+
+- **Args**: `topic: str`, `working_summary: str`, `active_items: list[dict]`, `mandates: list[str]`
+- **Behavior**: Validates a user-approved proposal, writes a pending `proposal_created` log event, and returns a `PENDING:reason-proposal:<id>` signal. It does not create the thread directly.
+- **When to use**: Only after the user explicitly confirms that NuSelf should start a reason thread. The agent must provide initial tracked items and mandates, even if either list is empty.
+- **Evidence**: The tool does not accept arbitrary `evidence_refs`; durable evidence refs must be added through explicit service paths.
 
 ### New: Trace Awareness Tools (Read-Only)
 
@@ -261,7 +268,7 @@ Trace tools let the chat agent inspect thought provenance without mutating it.
 
 ### Behavioral Guidelines for Reason Awareness (Prompt-Level)
 
-> "You can also read active reasoning threads—durable long-run questions the user is working through. If the user asks about their open questions or threads, summarize the active reasoning threads. You may suggest creating or advancing a thread if the conversation relates, but never call `reason_propose` until the user has explicitly confirmed they want a thread. When proposing, enrich the context with initial tracked items and any required mandates."
+> "You can also read active reasoning threads—durable long-run topics the user is working through. If the user asks about their open topics, questions, or threads, summarize the active reasoning threads. You may suggest creating or advancing a thread if the conversation relates, but never call `reason_propose` until the user has explicitly confirmed they want a thread. When proposing, enrich the context with a working summary, initial tracked items, and required mandates."
 
 ### Behavioral Guidelines for Memory Curation (Prompt-Level)
 
@@ -321,7 +328,7 @@ The reflection skill lives in `src/nuself/agent/skills/reflection/SKILL.md` and 
 
 The reason skill lives in `src/nuself/agent/skills/reason/SKILL.md` and must include this behavioral contract:
 
-> "Reason is NuSelf's durable long-run thinking space. If the user asks about active long-running questions, open threads, or what NuSelf is continuing to think about, use `{tool:list_active}` or `{tool:show}` before answering unless the answer is fully present in visible context. You may suggest creating or advancing a thread, but must not create, advance, resolve, or archive one without explicit user confirmation."
+> "Reason is NuSelf's durable long-run thinking space. If the user asks about active long-running topics, open threads, or what NuSelf is continuing to think about, use `{tool:list_active}` or `{tool:show}` before answering unless the answer is fully present in visible context. You may suggest creating or advancing a thread, but must not create, advance, resolve, or archive one without explicit user confirmation. When proposing a thread, provide a working summary, initial tracked items, and mandates."
 
 ### Trace Skill
 

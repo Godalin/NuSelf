@@ -130,9 +130,9 @@ the response.
 
 The reason advancer's tool set includes `persona_list` and
 `persona_think`. During a reasoning step, the advancer may choose to consult
-a persona — for example, when a question benefits from a specific thinking
-style. The `persona_think` call appears in the step's `tool_calls` field and
-is rendered identically to other tool calls in step display and logs.
+a persona — for example, when a topic benefits from a specific thinking
+style. The `persona_think` call appears in the step's `tool_logs` snapshots
+and is rendered identically to other tool calls in step display and logs.
 
 Example reasoning step trace:
 
@@ -198,7 +198,7 @@ nuself persona delete <name_or_id>
 | Created by | Storage | Available to |
 |---|---|---|
 | Chat tool `persona_craft` | `private/persona_prompts/` | Reason, Chat, selves_consult (via tools) |
-| Reason internal | Thread workspace (post-V1) | Only that thread |
+| Reason internal | Thread workspace | Only that thread |
 
 ## Non-Goals For V1
 
@@ -206,7 +206,7 @@ nuself persona delete <name_or_id>
 - No `persona_prompt_id` on ReasoningThread.
 - No `--persona` flag on `reason start` or `reason advance`.
 - No reflection competitive discussion integration.
-- No Reason-internal prompt creation (post-V1, workspace path).
+- No global Reason-internal prompt creation. Thread-scoped persona prompts and scratch state belong in the reason workspace.
 - No persona chaining or composition.
 
 ## Post-V1

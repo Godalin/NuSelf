@@ -1,21 +1,21 @@
 # Reason Infrastructure Design
 
-Status: evolving design; v0.2.0 has the first manual durable-thread foundation.
+Status: background design note. The authoritative v0.2.0 behavior contract is [`docs/spec/reason.md`](spec/reason.md), which supersedes older hypothesis/question-specific wording in this file.
 
 ## Purpose
 
 Reason is not traditional chain-of-thought, and it is not a prompt trick for producing longer explanations.
 
-Reason is NuSelf's long-running cognitive runtime: a subsystem for managing durable reasoning processes, exploratory branches, revisions, tool use, and eventual synthesis around explicit user-approved questions.
+Reason is NuSelf's long-running cognitive runtime: a subsystem for managing durable reasoning processes, exploratory branches, revisions, tool use, and eventual synthesis around explicit user-approved topics.
 
 It is separate from reflection:
 
 - Reflection discovers many lightweight ideas from memory, conversations, and sources.
-- Reason maintains durable reasoning spaces around questions the user wants NuSelf to keep thinking about.
+- Reason maintains durable reasoning spaces around topics the user wants NuSelf to keep thinking about.
 
-The system should feel like a continuing research notebook and an internal thinking runtime: each step records what changed, which hypotheses are still alive, what remains uncertain, which paths failed, and whether the user needs to be involved.
+The system should feel like a continuing research notebook and an internal thinking runtime: each step records what changed, which tracked items are still active, what remains uncertain, which paths failed, and whether the user needs to be involved.
 
-For v0.2.0, reason is designed together with trace. Reason owns durable question state; trace owns the provenance for how each reasoning step was derived.
+For v0.2.0, reason is designed together with trace. Reason owns durable topic state; trace owns the provenance for how each reasoning step was derived.
 
 ## Core Framing
 

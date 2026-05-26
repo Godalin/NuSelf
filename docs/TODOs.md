@@ -14,6 +14,11 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 - [x] Implement reason repository, manual commands, and trace recording.
 - [x] Wire reflection promotion into reason and trace.
 - [x] Let chat read active reason summaries without silently creating threads.
+- [x] Generalize reason threads around `topic`, free-text tracked items, and mandates instead of hard-coded hypothesis/question fields.
+- [x] Add LangGraph-backed reason advance with structured output and topic-specific reasoning prompts.
+- [x] Persist explicit reason step `tool_logs` and render them through the shared log renderer.
+- [x] Add daemon background reason scheduling with per-thread cooldown.
+- [ ] Stabilize reason usability for v0.2.0 release candidate review.
 - [x] Update release metadata.
 
 ## Post-0.2 Stabilization Backlog
@@ -205,7 +210,8 @@ These are review-driven refactors that should not block local v0.2 testing. They
 - [x] Add manual reasoning advance.
 - [x] Add chat tools for user-approved reasoning thread access.
 - [x] Add reflection promotion into reasoning threads.
-- [ ] Add scheduled advance and notification policy.
+- [x] Add scheduled advance.
+- [ ] Add reason notification policy.
 
 ## Thought Trace
 
