@@ -50,6 +50,7 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 - Clarified LLM endpoint logs so exhausted endpoints are distinguished from actual failover attempts.
 - Fixed reason step validation so missing structured `output` is rejected.
 - Fixed reason tool rendering so captured tool results are not truncated by the middleware before being persisted on `step.tool_logs`.
+- Fixed reason thread creation so prompt-generation failures surface as errors instead of persisting a thread with `(not generated)`.
 - Fixed `reason_show` chat tool to accept `current` as an alias for the most recent active thread.
 - Removed name-prefix matching for tool service components; `StructuredTool.metadata["service_component"]` is now the source of truth for `service_tool_called` rendering.
 - Fixed memory update trace coverage for curator auto-accept and manual memory operations.
