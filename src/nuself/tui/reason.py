@@ -14,7 +14,6 @@ from nuself.tui.render import (
     render_markdown,
     render_record_block,
     render_record_header,
-    render_section,
 )
 
 _TOOL_CALL_INDENT = 2
@@ -59,20 +58,29 @@ def render_reason_detail(
     if thread.last_advanced_at is not None:
         fields.append(theme.muted(render_key_value_field("last_advanced_at", thread.last_advanced_at)))
     lines = [render_record_header(f"{tag} {thread.topic}", fields)]
-    lines.extend(render_section("description", [thread.working_summary] if thread.working_summary else [], theme))
-    mandates = thread.mandates
-    if mandates:
-        lines.extend(render_section("mandates", mandates, theme))
-    active = thread.active_items
-    if active:
-        lines.extend(render_section("active_items", [f"{i.label}{' — ' + i.description if i.description else ''}{' (' + i.kind + ')' if i.kind else ''}" for i in active], theme))
-    pending = thread.pending_items
-    if pending:
-        lines.extend(render_section("pending_items", [f"{i.label}{' — ' + i.description if i.description else ''}{' (' + i.kind + ')' if i.kind else ''}" for i in pending], theme))
-    steps_list = thread.next_steps
-    if steps_list:
-        lines.extend(render_section("next_steps", [s.label for s in steps_list], theme))
-    lines.extend(render_section("evidence", thread.evidence_refs, theme))
+    lines.append(f"  {theme.tag('description:', 'reasoning')}")
+    if thread.working_summary:
+        lines.append(f"    {render_markdown(thread.working_summary, theme)}")
+    else:
+        lines.append(f"    {theme.muted('(empty)')}")
+    lines.append(f"  {theme.tag('mandates:', 'reasoning')}")
+    if thread.mandates:
+        for m in thread.mandates:
+            lines.append(f"    - {m}")
+    else:
+        lines.append(f"    {theme.muted('(none)')}")
+    lines.append(f"  {theme.tag('reasoning_prompt:', 'reasoning')}")
+    if thread.reasoning_prompt:
+        for line in thread.reasoning_prompt.splitlines():
+            lines.append(f"    {line}")
+    else:
+        lines.append(f"    {theme.muted('(not generated)')}")
+    lines.append(f"  {theme.tag('evidence:', 'reasoning')}")
+    if thread.evidence_refs:
+        for r in thread.evidence_refs:
+            lines.append(f"    - {r}")
+    else:
+        lines.append(f"    {theme.muted('(none)')}")
     if steps:
         lines.append("")
         for i, step in enumerate(steps):
