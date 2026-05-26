@@ -1,34 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
-from nuself.llm import ChatMessage, LangChainLLMEndpoint, LLMSettings, default_llm
+from nuself.llm import ChatMessage, LangChainLLMEndpoint, LLMSettings
 from nuself.logs import read_log_events
-
-
-def _lc_endpoint(index: int, model: str) -> LangChainLLMEndpoint:
-    return LangChainLLMEndpoint(
-        index=index,
-        settings=LLMSettings(
-            base_url=f"https://{model}.example/v1",
-            api_key=f"{model}-key",
-            model=model,
-        ),
-        model=index,  # placeholder; will be replaced by monkeypatched _invoke
-    )
-
-
-class _FakeModel:
-    """A fake ``BaseChatModel`` that delegates to a user-provided callable."""
-
-    def __init__(self, invoke_fn: Any) -> None:
-        self._invoke_fn = invoke_fn
-
-    def invoke(self, messages: Any, **kwargs: Any) -> Any:
-        return self._invoke_fn(messages, **kwargs)
 
 
 def test_failover_llm_switches_and_remembers_success(
@@ -45,11 +23,11 @@ def test_failover_llm_switches_and_remembers_success(
         return f"ok:{label}"
 
     monkeypatch.setattr("nuself.llm._invoke_langchain_model", fake_invoke)
-    from nuself.llm import _LangChainFailoverLLM
+    from nuself.llm import _LangChainFailoverLLM  # pyright: ignore[reportPrivateUsage]
 
     eps = (
-        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("primary"), model=0),
-        LangChainLLMEndpoint(index=1, settings=_endpoint_cfg("backup"), model=1),
+        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("primary"), model=cast(Any, 0)),
+        LangChainLLMEndpoint(index=1, settings=_endpoint_cfg("backup"), model=cast(Any, 1)),
     )
     llm = _LangChainFailoverLLM(eps, project_root=tmp_path)
     result = llm.complete([ChatMessage(role="user", content="hello")])
@@ -75,10 +53,10 @@ def test_failover_llm_logs_unavailable_when_no_fallback_remains(
         )
 
     monkeypatch.setattr("nuself.llm._invoke_langchain_model", fake_invoke)
-    from nuself.llm import _LangChainFailoverLLM
+    from nuself.llm import _LangChainFailoverLLM  # pyright: ignore[reportPrivateUsage]
 
     eps = (
-        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("free-model"), model=0),
+        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("free-model"), model=cast(Any, 0)),
     )
     llm = _LangChainFailoverLLM(eps, project_root=tmp_path)
 
@@ -104,11 +82,11 @@ def test_failover_llm_does_not_treat_longer_http_code_as_availability_error(
         raise RuntimeError("LLM request failed with HTTP 4013: upstream bug")
 
     monkeypatch.setattr("nuself.llm._invoke_langchain_model", fake_invoke)
-    from nuself.llm import _LangChainFailoverLLM
+    from nuself.llm import _LangChainFailoverLLM  # pyright: ignore[reportPrivateUsage]
 
     eps = (
-        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("primary"), model=0),
-        LangChainLLMEndpoint(index=1, settings=_endpoint_cfg("backup"), model=1),
+        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("primary"), model=cast(Any, 0)),
+        LangChainLLMEndpoint(index=1, settings=_endpoint_cfg("backup"), model=cast(Any, 1)),
     )
     llm = _LangChainFailoverLLM(eps, project_root=tmp_path)
 
@@ -132,11 +110,11 @@ def test_failover_llm_starts_from_remembered_success(
         return "ok"
 
     monkeypatch.setattr("nuself.llm._invoke_langchain_model", fake_invoke)
-    from nuself.llm import _LangChainFailoverLLM
+    from nuself.llm import _LangChainFailoverLLM  # pyright: ignore[reportPrivateUsage]
 
     eps = (
-        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("primary"), model=0),
-        LangChainLLMEndpoint(index=1, settings=_endpoint_cfg("backup"), model=1),
+        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("primary"), model=cast(Any, 0)),
+        LangChainLLMEndpoint(index=1, settings=_endpoint_cfg("backup"), model=cast(Any, 1)),
     )
     llm = _LangChainFailoverLLM(eps, project_root=tmp_path)
 
@@ -153,11 +131,11 @@ def test_failover_llm_re_raises_non_availability_error(
         raise RuntimeError("some unrelated error")
 
     monkeypatch.setattr("nuself.llm._invoke_langchain_model", fake_invoke)
-    from nuself.llm import _LangChainFailoverLLM
+    from nuself.llm import _LangChainFailoverLLM  # pyright: ignore[reportPrivateUsage]
 
     eps = (
-        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("primary"), model=0),
-        LangChainLLMEndpoint(index=1, settings=_endpoint_cfg("backup"), model=1),
+        LangChainLLMEndpoint(index=0, settings=_endpoint_cfg("primary"), model=cast(Any, 0)),
+        LangChainLLMEndpoint(index=1, settings=_endpoint_cfg("backup"), model=cast(Any, 1)),
     )
     llm = _LangChainFailoverLLM(eps, project_root=tmp_path)
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 from nuself.store import ScopedWorkspace, SqliteStore
 from nuself.workspace import PrivateWorkspacePaths
@@ -146,10 +147,10 @@ def test_build_workspace_tools_put_get(tmp_path: Path) -> None:
     tools = build_workspace_tools(ws)
     tool_map = {t.name: t for t in tools}
 
-    result = tool_map["workspace_put"].invoke({"key": "k1", "value": '{"msg": "hello"}'})
+    result = cast(Any, tool_map["workspace_put"]).invoke({"key": "k1", "value": '{"msg": "hello"}'})
     assert "Stored" in result
 
-    result = tool_map["workspace_get"].invoke({"key": "k1"})
+    result = cast(Any, tool_map["workspace_get"]).invoke({"key": "k1"})
     assert '"msg": "hello"' in result
 
 
@@ -162,7 +163,7 @@ def test_build_workspace_tools_search(tmp_path: Path) -> None:
     tools = build_workspace_tools(ws)
     tool_map = {t.name: t for t in tools}
 
-    result = tool_map["workspace_search"].invoke({"filter_json": '{"type": "hypothesis"}'})
+    result = cast(Any, tool_map["workspace_search"]).invoke({"filter_json": '{"type": "hypothesis"}'})
     assert '"h1"' in result
 
 
@@ -174,7 +175,7 @@ def test_build_workspace_tools_delete(tmp_path: Path) -> None:
     tools = build_workspace_tools(ws)
     tool_map = {t.name: t for t in tools}
 
-    result = tool_map["workspace_delete"].invoke({"key": "k"})
+    result = cast(Any, tool_map["workspace_delete"]).invoke({"key": "k"})
     assert "Deleted" in result
     assert ws.get("k") is None
 
@@ -186,5 +187,5 @@ def test_build_workspace_tools_put_invalid_json(tmp_path: Path) -> None:
     tools = build_workspace_tools(ws)
     tool_map = {t.name: t for t in tools}
 
-    result = tool_map["workspace_put"].invoke({"key": "k", "value": "not json"})
+    result = cast(Any, tool_map["workspace_put"]).invoke({"key": "k", "value": "not json"})
     assert "Error" in result

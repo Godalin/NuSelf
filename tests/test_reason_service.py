@@ -6,6 +6,7 @@ from pathlib import Path
 import sqlite3
 
 from nuself.logs import read_log_events
+from nuself.reason.domain import ReasoningStep
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.trace.service import TraceQueryService
@@ -125,23 +126,52 @@ def test_invalid_transition_raises(tmp_path: Path) -> None:
 def test_advance_thread(tmp_path: Path) -> None:
     service = ReasonService(repository=ReasonRepository(tmp_path))
     t = service.start_thread("Test advance")
-    advanced = service.advance_thread(t.id)
+    step = _test_step(t.id)
+    advanced = service.advance_thread(t.id, step=step)
     assert advanced.last_advanced_at is not None
     steps = service.list_steps(t.id)
     assert len(steps) == 1
+    assert steps[0] == step
 
 
 def test_advance_thread_records_trace(tmp_path: Path) -> None:
     service = ReasonService(project_root=tmp_path)
     thread = service.start_thread("Trace advances")
+    step = _test_step(thread.id)
 
-    advanced = service.advance_thread(thread.id)
+    advanced = service.advance_thread(thread.id, step=step)
 
     steps = service.list_steps(thread.id)
     traces = TraceQueryService(tmp_path).list_traces(kind="reason_step")
     assert len(traces) == 1
     assert traces[0].outputs == [f"reason:{advanced.id}", f"reason_step:{steps[0].id}"]
     assert traces[0].metadata["step_kind"] == "progress"
+
+
+def test_advance_without_advancer_or_step_raises(tmp_path: Path) -> None:
+    service = ReasonService(repository=ReasonRepository(tmp_path))
+    thread = service.start_thread("No fallback advance")
+
+    try:
+        service.advance_thread(thread.id)
+        assert False, "expected RuntimeError"
+    except RuntimeError as exc:
+        assert "no reason advancer configured" in str(exc)
+
+
+def test_advance_when_advancer_returns_none_raises(tmp_path: Path) -> None:
+    class EmptyAdvancer:
+        def advance(self, thread: object) -> None:
+            return None
+
+    service = ReasonService(repository=ReasonRepository(tmp_path), advancer=EmptyAdvancer())
+    thread = service.start_thread("No fake steps")
+
+    try:
+        service.advance_thread(thread.id)
+        assert False, "expected RuntimeError"
+    except RuntimeError as exc:
+        assert "did not produce a structured step" in str(exc)
 
 
 def test_advance_paused_thread_raises(tmp_path: Path) -> None:
@@ -153,6 +183,16 @@ def test_advance_paused_thread_raises(tmp_path: Path) -> None:
         assert False, "expected RuntimeError"
     except RuntimeError:
         pass
+
+
+def _test_step(thread_id: str) -> ReasoningStep:
+    return ReasoningStep(
+        thread_id=thread_id,
+        kind="progress",
+        summary="Advanced",
+        delta="Moved forward",
+        output="Observable output",
+    )
 
 
 def test_active_thread_cap(tmp_path: Path) -> None:

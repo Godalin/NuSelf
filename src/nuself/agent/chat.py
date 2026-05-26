@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
-from langchain.agents.factory import ToolStrategy as _ToolStrategy
+from langchain.agents.structured_output import ToolStrategy as _ToolStrategy
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]

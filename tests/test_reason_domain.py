@@ -41,6 +41,7 @@ def test_thread_to_wire_roundtrip() -> None:
         pending_items_data=({"label": "What about money?", "kind": "pending"},),
     )
     wire = t.to_wire()
+    assert "question" not in wire
     t2 = ReasoningThread.from_wire(wire)
     assert t2 == t
 

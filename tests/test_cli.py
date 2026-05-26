@@ -6,7 +6,7 @@ import subprocess
 import sys
 import threading
 import tomllib
-from typing import Any, Protocol, cast
+from typing import Protocol, cast
 
 import pytest
 
@@ -28,6 +28,7 @@ from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepos
 from nuself.profile.repository import ProfileItemRepository
 from nuself.logs import LogEvent, log_context, read_log_events, write_log_event
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+from nuself.reason.service import ReasonService
 from nuself.trace.service import TraceQueryService
 
 
@@ -1077,7 +1078,7 @@ def test_interactive_activity_cursor_does_not_replay_seen_events(tmp_path: Path)
 
     write_log_event("chat", "turn_completed", "new turn", project_root=tmp_path, turn_id="turn-new")
 
-    from nuself.cli import _interactive_activity_events
+    from nuself.cli import _interactive_activity_events  # pyright: ignore[reportPrivateUsage]
 
     first_read = _interactive_activity_events(tmp_path, cursor, turn_id="turn-new")
     second_read = _interactive_activity_events(tmp_path, cursor)
@@ -3391,6 +3392,24 @@ def test_interactive_reason_without_args_shows_help(
     assert result == 0
     assert "Reason commands:" in captured.out
     assert "No reason threads." not in captured.out
+
+
+def test_interactive_reason_list_shows_threads(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        return _mock_status(tmp_path)
+
+    ReasonService(tmp_path).start_thread("Track this reasoning thread")
+    monkeypatch.setattr("sys.stdin", _TextInput(":reason list\n:q\n"))
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+
+    result = main(["--project-root", str(tmp_path), "attach"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[1] [reason] status=[active] priority=normal" in captured.out
+    assert "Track this reasoning thread" in captured.out
 
 
 

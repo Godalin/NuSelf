@@ -232,8 +232,9 @@ def build_reason_persona_tools(
 
     from langchain_core.tools import StructuredTool
 
+    from_function = getattr(StructuredTool, "from_function")
     return (
-        StructuredTool.from_function(func=_craft, name="persona_craft", description="Create or update a thinking persona scoped to the current reason thread. Also consults global personas when listing and thinking.", metadata={"service_component": "persona"}),
-        StructuredTool.from_function(func=_list, name="persona_list", description="List available thinking personas (global + current reason thread). Pass scope='local' for only thread-scoped personas, scope='global' for only global ones.", tags=("readonly",), metadata={"service_component": "persona"}),
-        StructuredTool.from_function(func=_think, name="persona_think", description="Consult a thinking persona by name or id. Searches local (thread-scoped) first then global by default. Pass scope='local' to search only local, scope='global' to search only global.", tags=("readonly",), metadata={"service_component": "persona"}),
+        from_function(func=_craft, name="persona_craft", description="Create or update a thinking persona scoped to the current reason thread. Also consults global personas when listing and thinking.", metadata={"service_component": "persona"}),
+        from_function(func=_list, name="persona_list", description="List available thinking personas (global + current reason thread). Pass scope='local' for only thread-scoped personas, scope='global' for only global ones.", tags=("readonly",), metadata={"service_component": "persona"}),
+        from_function(func=_think, name="persona_think", description="Consult a thinking persona by name or id. Searches local (thread-scoped) first then global by default. Pass scope='local' to search only local, scope='global' to search only global.", tags=("readonly",), metadata={"service_component": "persona"}),
     )
