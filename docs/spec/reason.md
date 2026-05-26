@@ -240,7 +240,7 @@ Trace is the audit layer for Reason. Reason may be dynamic, revisable, branching
 ### Reflection Bridge
 
 ```
-nuself inbox reflection promote <id_or_index> [--by-index]
+nuself inbox reflection promote <id_or_index>
 ```
 
 Promotion creates a reasoning thread from the reflection title/body and records the reflection id in `evidence_refs`. The original reflection must remain pending — promotion does not automatically archive or dismiss the source reflection.
@@ -464,20 +464,21 @@ Reserved for future implementation — not yet registered as a chat tool. The ba
 
 ```text
 nuself reason list [--status active|paused|resolved|archived|all] [--json]
-nuself reason show <id_or_index> [--by-index] [--full] [--json]
+nuself reason show <id_or_index> [--full] [--json]
 nuself reason start "<topic>" [--priority normal|high] [--mandate <text> ...]
-nuself reason advance <id_or_index> [--by-index]
-nuself reason pause <id_or_index> [--by-index]
-nuself reason resume <id_or_index> [--by-index]
-nuself reason resolve <id_or_index> [--by-index]
-nuself reason archive <id_or_index> [--by-index]
-nuself reason delete <id_or_index> [--by-index]
+nuself reason advance <id_or_index>
+nuself reason pause <id_or_index>
+nuself reason resume <id_or_index>
+nuself reason resolve <id_or_index>
+nuself reason archive <id_or_index>
+nuself reason delete <id_or_index>
 nuself reason watch [--interval <seconds>]
 ```
 
 Human-readable output must use the shared record renderer style from `cli.md`.
 
 Default list output shows active and paused threads. `--status all` includes resolved and archived threads.
+Human-readable list output includes the shared temporary 0-based visible index marker (`[0]`, `[1]`, ...), and numeric handles resolve that same visible index.
 
 #### Thread Header Format
 

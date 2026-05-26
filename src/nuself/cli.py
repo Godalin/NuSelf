@@ -7,6 +7,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -51,6 +52,7 @@ try:
     from nuself.daemon import client, lifecycle
     from nuself.daemon.protocol import JsonValue
     from nuself.domain.memory import (
+        MemoryCandidate,
         MemoryEntry,
         PrivacyLevel,
         default_memory_type_registry,
@@ -229,6 +231,56 @@ def _normalize_reason_active_item(item: dict[str, object]) -> dict[str, object]:
         "kind": raw_kind if isinstance(raw_kind, str) else "",
         "status": raw_status if isinstance(raw_status, str) else "active",
     }
+
+
+def _parse_visible_index(value: str, *, count: int, label: str) -> int | None:
+    try:
+        index = int(value)
+    except ValueError:
+        print(f"Invalid {label} index: {value}", file=sys.stderr)
+        return None
+    if index < 0 or index >= count:
+        valid = f"0-{count - 1}" if count else "(none)"
+        print(f"Invalid {label} index {index}. Valid range: {valid}", file=sys.stderr)
+        return None
+    return index
+
+
+_INDEX_SELECTION_RE = re.compile(r"\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*")
+
+
+def _looks_like_visible_index(value: str) -> bool:
+    return value.isdigit()
+
+
+def _parse_visible_index_selection(value: str, *, count: int, label: str) -> list[int] | None:
+    """Parse a compact 0-based index selection such as `1,3-5,9`."""
+
+    if _INDEX_SELECTION_RE.fullmatch(value) is None:
+        print(f"Invalid {label} index selection: {value}. Expected compact form like 0,2-4,8.", file=sys.stderr)
+        return None
+    indexes: list[int] = []
+    seen: set[int] = set()
+    for token in value.split(","):
+        if "-" in token:
+            start_raw, end_raw = token.split("-", maxsplit=1)
+            start = int(start_raw)
+            end = int(end_raw)
+            if start > end:
+                print(f"Invalid {label} index range {token}. Range start must be <= end.", file=sys.stderr)
+                return None
+            expanded = range(start, end + 1)
+        else:
+            expanded = range(int(token), int(token) + 1)
+        for index in expanded:
+            if index < 0 or index >= count:
+                valid = f"0-{count - 1}" if count else "(none)"
+                print(f"Invalid {label} index {index}. Valid range: {valid}", file=sys.stderr)
+                return None
+            if index not in seen:
+                indexes.append(index)
+                seen.add(index)
+    return indexes
 
 
 def _print_ansi(text: str, **kwargs: Any) -> None:
@@ -640,20 +692,16 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(reflection_list_parser, handle_reflection_list)
     reflection_show_parser = reflection_subparsers.add_parser("show")
     reflection_show_parser.add_argument("entry_id")
-    reflection_show_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
     reflection_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reflection_show_parser, handle_reflection_show)
     reflection_dismiss_parser = reflection_subparsers.add_parser("dismiss")
     reflection_dismiss_parser.add_argument("entry_id")
-    reflection_dismiss_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
     _add_handler(reflection_dismiss_parser, handle_reflection_dismiss)
     reflection_archive_parser = reflection_subparsers.add_parser("archive")
     reflection_archive_parser.add_argument("entry_id")
-    reflection_archive_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
     _add_handler(reflection_archive_parser, handle_reflection_archive)
     reflection_promote_parser = reflection_subparsers.add_parser("promote")
     reflection_promote_parser.add_argument("entry_id")
-    reflection_promote_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'reflection list'")
     _add_handler(reflection_promote_parser, handle_reflection_promote)
     _add_handler(reflection_subparsers.add_parser("organize"), handle_reflection_organize)
 
@@ -665,15 +713,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(notify_list_parser, handle_notify_list)
     notify_show_parser = notify_subparsers.add_parser("show")
     notify_show_parser.add_argument("entry_id")
-    notify_show_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'notify list'")
     _add_handler(notify_show_parser, handle_notify_show)
     notify_send_parser = notify_subparsers.add_parser("send")
     notify_send_parser.add_argument("entry_id")
-    notify_send_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'notify list'")
     _add_handler(notify_send_parser, handle_notify_send)
     notify_dismiss_parser = notify_subparsers.add_parser("dismiss")
     notify_dismiss_parser.add_argument("entry_id")
-    notify_dismiss_parser.add_argument("--by-index", "-i", action="store_true", default=False, help="Treat entry_id as a 0-based index from 'notify list'")
     _add_handler(notify_dismiss_parser, handle_notify_dismiss)
     _add_handler(notify_subparsers.add_parser("stats"), handle_notify_stats)
     notify_watch_parser = notify_subparsers.add_parser("watch")
@@ -690,7 +735,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(reason_list_parser, handle_reason_list)
     reason_show_parser = reason_subparsers.add_parser("show")
     reason_show_parser.add_argument("thread_id")
-    reason_show_parser.add_argument("--by-index", "-i", action="store_true", default=False)
     reason_show_parser.add_argument("--full", "-f", action="store_true", default=False)
     reason_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reason_show_parser, handle_reason_show)
@@ -702,12 +746,10 @@ def build_parser() -> argparse.ArgumentParser:
     for action_name in _REASON_VERBS:
         p = reason_subparsers.add_parser(action_name)
         p.add_argument("thread_id")
-        p.add_argument("--by-index", "-i", action="store_true", default=False)
         p.set_defaults(action=action_name)
         _add_handler(p, handle_reason_thread_action)
     reason_delete_parser = reason_subparsers.add_parser("delete")
     reason_delete_parser.add_argument("thread_id")
-    reason_delete_parser.add_argument("--by-index", "-i", action="store_true", default=False)
     reason_delete_parser.add_argument("--yes", "-y", action="store_true", default=False)
     _add_handler(reason_delete_parser, handle_reason_delete)
     reason_watch_parser = reason_subparsers.add_parser("watch")
@@ -724,7 +766,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(trace_list_parser, handle_trace_list)
     trace_show_parser = trace_subparsers.add_parser("show")
     trace_show_parser.add_argument("trace_id")
-    trace_show_parser.add_argument("--by-index", "-i", action="store_true", default=False)
     trace_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(trace_show_parser, handle_trace_show)
     trace_search_parser = trace_subparsers.add_parser("search")
@@ -1033,20 +1074,12 @@ def handle_open(args: argparse.Namespace) -> int:
 
 
 def handle_memory_list(args: argparse.Namespace) -> int:
-    repo = MemoryEntryRepository(args.project_root)
-    entries = repo.list()
-    if args.review_state is not None:
-        entries = [e for e in entries if e.review_state == args.review_state]
+    entries = _memory_entries_for_list(args.project_root, sort_by=args.sort_by, review_state=args.review_state)
     if not entries:
         print("No memory entries.")
         return 0
-    sort_by = args.sort_by
-    if sort_by == "importance":
-        entries = sorted(entries, key=lambda e: (-e.importance, e.updated_at, e.id))
-    elif sort_by == "type":
-        entries = sorted(entries, key=lambda e: (e.type, e.updated_at, e.id))
-    for entry in entries:
-        _print_ansi(render_memory_entry_row(entry))
+    for index, entry in enumerate(entries):
+        _print_ansi(render_memory_entry_row(entry, index=index))
     return 0
 
 
@@ -1057,10 +1090,13 @@ def handle_memory_preview(args: argparse.Namespace) -> int:
 
 def handle_memory_show(args: argparse.Namespace) -> int:
     repo = MemoryEntryRepository(args.project_root)
+    entry_id = _resolve_memory_entry_id(args)
+    if entry_id is None:
+        return 1
     try:
-        entry = repo.get(args.entry_id)
+        entry = repo.get(entry_id)
     except MemoryEntryNotFound:
-        print(f"Memory entry not found: {args.entry_id}", file=sys.stderr)
+        print(f"Memory entry not found: {entry_id}", file=sys.stderr)
         return 1
     _print_ansi(render_memory_entry_detail(entry))
     return 0
@@ -1091,10 +1127,13 @@ def handle_memory_add(args: argparse.Namespace) -> int:
 
 def handle_memory_edit(args: argparse.Namespace) -> int:
     repo = MemoryEntryRepository(args.project_root)
+    entry_id = _resolve_memory_entry_id(args)
+    if entry_id is None:
+        return 1
     try:
-        entry = repo.get(args.entry_id)
+        entry = repo.get(entry_id)
     except MemoryEntryNotFound:
-        print(f"Memory entry not found: {args.entry_id}", file=sys.stderr)
+        print(f"Memory entry not found: {entry_id}", file=sys.stderr)
         return 1
     updated = entry.with_updates(
         title=args.title,
@@ -1111,13 +1150,16 @@ def handle_memory_edit(args: argparse.Namespace) -> int:
 
 def handle_memory_delete(args: argparse.Namespace) -> int:
     repo = MemoryEntryRepository(args.project_root)
+    entry_id = _resolve_memory_entry_id(args)
+    if entry_id is None:
+        return 1
     try:
-        repo.delete(args.entry_id)
+        repo.delete(entry_id)
     except MemoryEntryNotFound:
-        print(f"Memory entry not found: {args.entry_id}", file=sys.stderr)
+        print(f"Memory entry not found: {entry_id}", file=sys.stderr)
         return 1
     repo.reindex()
-    print(f"Deleted memory entry: {args.entry_id}")
+    print(f"Deleted memory entry: {entry_id}")
     return 0
 
 
@@ -1141,6 +1183,32 @@ def handle_memory_search(args: argparse.Namespace) -> int:
     for entry in entries:
         _print_ansi(render_memory_entry_row(entry))
     return 0
+
+
+def _memory_entries_for_list(
+    project_root: Path | None,
+    *,
+    sort_by: str = "updated_at",
+    review_state: str | None = None,
+) -> list[MemoryEntry]:
+    entries = MemoryEntryRepository(project_root).list()
+    if review_state is not None:
+        entries = [entry for entry in entries if entry.review_state == review_state]
+    if sort_by == "importance":
+        return sorted(entries, key=lambda entry: (-entry.importance, entry.updated_at, entry.id))
+    if sort_by == "type":
+        return sorted(entries, key=lambda entry: (entry.type, entry.updated_at, entry.id))
+    return entries
+
+
+def _resolve_memory_entry_id(args: argparse.Namespace) -> str | None:
+    if not _looks_like_visible_index(args.entry_id):
+        return args.entry_id
+    entries = _memory_entries_for_list(args.project_root)
+    index = _parse_visible_index(args.entry_id, count=len(entries), label="memory")
+    if index is None:
+        return None
+    return entries[index].id
 
 
 def handle_memory_stats(args: argparse.Namespace) -> int:
@@ -1467,26 +1535,21 @@ def handle_notify_list(args: argparse.Namespace) -> int:
         filter_msg = f" with status '{status}'" if status else ""
         print(f"No outbox entries{filter_msg}.")
         return 0
-    for entry in entries:
-        _print_ansi(render_outbox_summary(entry))
+    for index, entry in enumerate(entries):
+        _print_ansi(render_outbox_summary(entry, index=index))
     return 0
 
 
 def _resolve_notify_entry_id(args: argparse.Namespace) -> str | None:
-    """Resolve entry_id to actual entry id, supporting --by-index lookup."""
+    """Resolve a notification id or visible numeric index to the stored id."""
     from nuself.notification import NotificationOutbox
 
-    if not getattr(args, "by_index", False):
+    if not _looks_like_visible_index(args.entry_id):
         return args.entry_id
     outbox = NotificationOutbox(args.project_root)
     entries = outbox.list()
-    try:
-        idx = int(args.entry_id)
-    except ValueError:
-        print(f"Invalid index: {args.entry_id}", file=sys.stderr)
-        return None
-    if idx < 0 or idx >= len(entries):
-        print(f"Invalid index {idx}. Valid range: 0-{len(entries) - 1}", file=sys.stderr)
+    idx = _parse_visible_index(args.entry_id, count=len(entries), label="notification")
+    if idx is None:
         return None
     return entries[idx].id
 
@@ -1608,7 +1671,7 @@ def handle_reason_list(args: argparse.Namespace) -> int:
     if args.as_json:
         _print_json_wire(*(thread.to_wire() for thread in threads))
         return 0
-    for index, thread in enumerate(threads, start=1):
+    for index, thread in enumerate(threads):
         _print_ansi(render_reason_row(thread, index=index))
     return 0
 
@@ -1616,7 +1679,7 @@ def handle_reason_list(args: argparse.Namespace) -> int:
 def handle_reason_show(args: argparse.Namespace) -> int:
     service = ReasonService(args.project_root)
     try:
-        thread = service.show_thread(args.thread_id, by_index=args.by_index)
+        thread = service.show_thread(args.thread_id)
     except ReasonNotFound:
         print(f"Reason thread not found: {args.thread_id}", file=sys.stderr)
         return 1
@@ -1664,7 +1727,7 @@ def handle_reason_thread_action(args: argparse.Namespace) -> int:
         service = ReasonService(args.project_root, advancer=advancer)
     method = getattr(service, method_name)
     try:
-        thread = method(args.thread_id, by_index=args.by_index)
+        thread = method(args.thread_id)
     except (ReasonNotFound, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -1679,7 +1742,7 @@ def handle_reason_delete(args: argparse.Namespace) -> int:
         return 1
     service = ReasonService(args.project_root)
     try:
-        tid = service.delete_thread(args.thread_id, by_index=args.by_index)
+        tid = service.delete_thread(args.thread_id)
     except (ReasonNotFound, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -1708,7 +1771,7 @@ def handle_trace_list(args: argparse.Namespace) -> int:
     if args.as_json:
         _print_json_wire(*(trace.to_wire() for trace in traces))
         return 0
-    for index, trace in enumerate(traces, start=1):
+    for index, trace in enumerate(traces):
         _print_ansi(render_trace_row(trace, index=index))
     return 0
 
@@ -1716,7 +1779,7 @@ def handle_trace_list(args: argparse.Namespace) -> int:
 def handle_trace_show(args: argparse.Namespace) -> int:
     repository = TraceRepository(args.project_root)
     try:
-        trace = repository.resolve_trace(args.trace_id, by_index=args.by_index)
+        trace = repository.resolve_trace(args.trace_id)
     except TraceNotFound:
         print(f"Trace not found: {args.trace_id}", file=sys.stderr)
         return 1
@@ -1742,7 +1805,7 @@ def handle_trace_search(args: argparse.Namespace) -> int:
     if args.as_json:
         _print_json_wire(*(trace.to_wire() for trace in traces))
         return 0
-    for index, trace in enumerate(traces, start=1):
+    for index, trace in enumerate(traces):
         _print_ansi(render_trace_row(trace, index=index))
     return 0
 
@@ -1766,20 +1829,15 @@ def _trace_visibility_filter(value: str | None) -> TraceVisibilityFilter:
 
 
 def _resolve_reflection_entry_id(args: argparse.Namespace) -> str | None:
-    """Resolve entry_id to actual reflection id, supporting --by-index lookup."""
+    """Resolve a reflection id or visible numeric index to the stored id."""
     from nuself.reflection.repository import ReflectionRepository
 
-    if not getattr(args, "by_index", False):
+    if not _looks_like_visible_index(args.entry_id):
         return args.entry_id
     repo = ReflectionRepository(args.project_root)
     entries = repo.list()
-    try:
-        idx = int(args.entry_id)
-    except ValueError:
-        print(f"Invalid index: {args.entry_id}", file=sys.stderr)
-        return None
-    if idx < 0 or idx >= len(entries):
-        print(f"Invalid index {idx}. Valid range: 0-{len(entries) - 1}", file=sys.stderr)
+    idx = _parse_visible_index(args.entry_id, count=len(entries), label="reflection")
+    if idx is None:
         return None
     return entries[idx].id
 
@@ -1855,8 +1913,11 @@ def handle_reflection_promote(args: argparse.Namespace) -> int:
     from nuself.reflection.repository import ReflectionEntryNotFound
     from nuself.reflection.service import ReflectionService
 
+    entry_id = _resolve_reflection_entry_id(args)
+    if entry_id is None:
+        return 1
     try:
-        thread = ReflectionService(args.project_root).promote_to_reason(args.entry_id, by_index=args.by_index)
+        thread = ReflectionService(args.project_root).promote_to_reason(entry_id)
     except (ReflectionEntryNotFound, ValueError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -1929,35 +1990,35 @@ def handle_memory_import(args: argparse.Namespace) -> int:
 
 
 def handle_memory_candidate_list(args: argparse.Namespace) -> int:
-    repo = MemoryCandidateRepository(args.project_root)
-    candidates = repo.list(include_reviewed=args.all)
-    if args.review_state is not None:
-        candidates = [c for c in candidates if c.review_state == args.review_state]
+    candidates = _memory_candidates_for_list(
+        args.project_root,
+        include_reviewed=args.all,
+        review_state=args.review_state,
+        sort_by=args.sort_by,
+    )
     if not candidates:
         print("No memory candidates.")
         return 0
-    sort_by = args.sort_by
-    if sort_by == "importance":
-        candidates = sorted(candidates, key=lambda c: (-c.importance, c.updated_at, c.id))
-    elif sort_by == "type":
-        candidates = sorted(candidates, key=lambda c: (c.type, c.updated_at, c.id))
     for i, candidate in enumerate(candidates):
         if i > 0:
             print()
-        _print_ansi(render_candidate_row(candidate))
+        _print_ansi(render_candidate_row(candidate, index=i))
     pending = [c for c in candidates if c.review_state == "pending"]
     if pending:
         print()
-        print(f"{len(pending)} pending candidate(s). Accept: nuself memory review accept <id>")
+        print(f"{len(pending)} pending candidate(s). Accept: nuself memory review accept <id|index-selection>")
     return 0
 
 
 def handle_memory_candidate_show(args: argparse.Namespace) -> int:
     repo = MemoryCandidateRepository(args.project_root)
+    candidate_id = _resolve_memory_candidate_id(args)
+    if candidate_id is None:
+        return 1
     try:
-        candidate = repo.get(args.candidate_id)
+        candidate = repo.get(candidate_id)
     except MemoryCandidateNotFound:
-        print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
+        print(f"Memory candidate not found: {candidate_id}", file=sys.stderr)
         return 1
     _print_ansi(render_candidate_detail(candidate))
     return 0
@@ -1965,35 +2026,46 @@ def handle_memory_candidate_show(args: argparse.Namespace) -> int:
 
 def handle_memory_candidate_accept(args: argparse.Namespace) -> int:
     repo = MemoryCandidateRepository(args.project_root)
-    try:
-        entry = repo.accept(args.candidate_id)
-    except MemoryCandidateNotFound:
-        print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
+    candidate_ids = _resolve_memory_candidate_ids(args)
+    if candidate_ids is None:
         return 1
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    _record_cli_memory_trace(args.project_root, entry, "accept")
-    print(f"Accepted memory candidate: {args.candidate_id} -> {entry.id}")
+    for candidate_id in candidate_ids:
+        try:
+            entry = repo.accept(candidate_id)
+        except MemoryCandidateNotFound:
+            print(f"Memory candidate not found: {candidate_id}", file=sys.stderr)
+            return 1
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        _record_cli_memory_trace(args.project_root, entry, "accept")
+        print(f"Accepted memory candidate: {candidate_id} -> {entry.id}")
     return 0
 
 
 def handle_memory_candidate_reject(args: argparse.Namespace) -> int:
     repo = MemoryCandidateRepository(args.project_root)
-    try:
-        repo.reject(args.candidate_id)
-    except MemoryCandidateNotFound:
-        print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
+    candidate_ids = _resolve_memory_candidate_ids(args)
+    if candidate_ids is None:
         return 1
-    print(f"Rejected memory candidate: {args.candidate_id}")
+    for candidate_id in candidate_ids:
+        try:
+            repo.reject(candidate_id)
+        except MemoryCandidateNotFound:
+            print(f"Memory candidate not found: {candidate_id}", file=sys.stderr)
+            return 1
+        print(f"Rejected memory candidate: {candidate_id}")
     return 0
 
 
 def handle_memory_candidate_edit(args: argparse.Namespace) -> int:
     repo = MemoryCandidateRepository(args.project_root)
+    candidate_id = _resolve_memory_candidate_id(args)
+    if candidate_id is None:
+        return 1
     try:
         updated = repo.edit(
-            args.candidate_id,
+            candidate_id,
             title=args.title,
             body=args.body,
             tags=list(args.tag) if args.tag is not None else None,
@@ -2004,7 +2076,7 @@ def handle_memory_candidate_edit(args: argparse.Namespace) -> int:
             temporal_note=args.temporal_note,
         )
     except MemoryCandidateNotFound:
-        print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
+        print(f"Memory candidate not found: {candidate_id}", file=sys.stderr)
         return 1
     _print_ansi(render_candidate_row(updated))
     return 0
@@ -2012,10 +2084,13 @@ def handle_memory_candidate_edit(args: argparse.Namespace) -> int:
 
 def handle_memory_candidate_merge(args: argparse.Namespace) -> int:
     repo = MemoryCandidateRepository(args.project_root)
+    candidate_id = _resolve_memory_candidate_id(args)
+    if candidate_id is None:
+        return 1
     try:
-        entry = repo.merge(args.candidate_id, args.entry_id)
+        entry = repo.merge(candidate_id, args.entry_id)
     except MemoryCandidateNotFound:
-        print(f"Memory candidate not found: {args.candidate_id}", file=sys.stderr)
+        print(f"Memory candidate not found: {candidate_id}", file=sys.stderr)
         return 1
     except MemoryEntryNotFound:
         print(f"Memory entry not found: {args.entry_id}", file=sys.stderr)
@@ -2024,8 +2099,46 @@ def handle_memory_candidate_merge(args: argparse.Namespace) -> int:
         print(str(exc), file=sys.stderr)
         return 1
     _record_cli_memory_trace(args.project_root, entry, "merge")
-    print(f"Merged memory candidate: {args.candidate_id} -> {entry.id}")
+    print(f"Merged memory candidate: {candidate_id} -> {entry.id}")
     return 0
+
+
+def _memory_candidates_for_list(
+    project_root: Path | None,
+    *,
+    include_reviewed: bool = False,
+    review_state: str | None = None,
+    sort_by: str = "updated_at",
+) -> list[MemoryCandidate]:
+    candidates = MemoryCandidateRepository(project_root).list(include_reviewed=include_reviewed)
+    if review_state is not None:
+        candidates = [candidate for candidate in candidates if candidate.review_state == review_state]
+    if sort_by == "importance":
+        return sorted(candidates, key=lambda candidate: (-candidate.importance, candidate.updated_at, candidate.id))
+    if sort_by == "type":
+        return sorted(candidates, key=lambda candidate: (candidate.type, candidate.updated_at, candidate.id))
+    return candidates
+
+
+def _resolve_memory_candidate_id(args: argparse.Namespace) -> str | None:
+    if not _looks_like_visible_index(args.candidate_id):
+        return args.candidate_id
+    candidates = _memory_candidates_for_list(args.project_root)
+    index = _parse_visible_index(args.candidate_id, count=len(candidates), label="memory candidate")
+    if index is None:
+        return None
+    return candidates[index].id
+
+
+def _resolve_memory_candidate_ids(args: argparse.Namespace) -> list[str] | None:
+    uses_selection_syntax = "," in args.candidate_id or "-" in args.candidate_id
+    if not _looks_like_visible_index(args.candidate_id) and not uses_selection_syntax:
+        return [args.candidate_id]
+    candidates = _memory_candidates_for_list(args.project_root)
+    indexes = _parse_visible_index_selection(args.candidate_id, count=len(candidates), label="memory candidate")
+    if indexes is None:
+        return None
+    return [candidates[index].id for index in indexes]
 
 
 def handle_memory_source_ingest(args: argparse.Namespace) -> int:
@@ -2045,17 +2158,20 @@ def handle_memory_source_list(args: argparse.Namespace) -> int:
     if not documents:
         print("No source documents.")
         return 0
-    for document in documents:
-        _print_ansi(render_source_row(document))
+    for index, document in enumerate(documents):
+        _print_ansi(render_source_row(document, index=index))
     return 0
 
 
 def handle_memory_source_show(args: argparse.Namespace) -> int:
     repo = SourceRepository(args.project_root)
+    source_id = _resolve_source_id(args)
+    if source_id is None:
+        return 1
     try:
-        document = repo.get_document(args.source_id)
+        document = repo.get_document(source_id)
     except SourceDocumentNotFound:
-        print(f"Source document not found: {args.source_id}", file=sys.stderr)
+        print(f"Source document not found: {source_id}", file=sys.stderr)
         return 1
     _print_ansi(render_source_detail(document, chunk_count=len(repo.list_chunks(document.id))))
     return 0
@@ -2064,19 +2180,25 @@ def handle_memory_source_show(args: argparse.Namespace) -> int:
 def handle_memory_source_delete(args: argparse.Namespace) -> int:
     source_repo = SourceRepository(args.project_root)
     profile_repo = ProfileItemRepository(args.project_root)
+    source_id = _resolve_source_id(args)
+    if source_id is None:
+        return 1
     try:
-        source_repo.delete_document(args.source_id)
+        source_repo.delete_document(source_id)
     except SourceDocumentNotFound:
-        print(f"Source document not found: {args.source_id}", file=sys.stderr)
+        print(f"Source document not found: {source_id}", file=sys.stderr)
         return 1
     source_repo.reindex()
     profile_repo.reindex()
-    print(f"Deleted source document: {args.source_id}")
+    print(f"Deleted source document: {source_id}")
     return 0
 
 
 def handle_memory_source_chunks(args: argparse.Namespace) -> int:
-    chunks = SourceRepository(args.project_root).list_chunks(args.source_id)
+    source_id = _resolve_source_id(args) if getattr(args, "source_id", None) is not None else None
+    if getattr(args, "source_id", None) is not None and source_id is None:
+        return 1
+    chunks = SourceRepository(args.project_root).list_chunks(source_id)
     if not chunks:
         print("No source chunks.")
         return 0
@@ -2098,33 +2220,40 @@ def handle_memory_source_search(args: argparse.Namespace) -> int:
 def handle_memory_source_extract(args: argparse.Namespace) -> int:
     source_repo = SourceRepository(args.project_root)
     candidate_repo = MemoryCandidateRepository(args.project_root)
+    source_id = _resolve_source_id(args)
+    if source_id is None:
+        return 1
     try:
-        candidates = source_repo.extract_candidates(args.source_id)
+        candidates = source_repo.extract_candidates(source_id)
     except SourceDocumentNotFound:
-        print(f"Source document not found: {args.source_id}", file=sys.stderr)
+        print(f"Source document not found: {source_id}", file=sys.stderr)
         return 1
     if not candidates:
         print("No source chunks to extract.")
         return 0
     for candidate in candidates:
         candidate_repo.save(candidate)
-    print(f"Extracted source candidates: source={args.source_id} candidates={len(candidates)}")
+    print(f"Extracted source candidates: source={source_id} candidates={len(candidates)}")
     return 0
 
 
+def _resolve_source_id(args: argparse.Namespace) -> str | None:
+    if not _looks_like_visible_index(args.source_id):
+        return args.source_id
+    documents = SourceRepository(args.project_root).list_documents()
+    index = _parse_visible_index(args.source_id, count=len(documents), label="source")
+    if index is None:
+        return None
+    return documents[index].id
+
+
 def handle_memory_profile_list(args: argparse.Namespace) -> int:
-    repo = ProfileItemRepository(args.project_root)
-    items = repo.list()
+    items = _profile_items_for_list(args.project_root, sort_by=args.sort_by)
     if not items:
         print("No profile items.")
         return 0
-    sort_by = args.sort_by
-    if sort_by == "importance":
-        items = sorted(items, key=lambda i: (-i.importance, i.updated_at, i.id))
-    elif sort_by == "type":
-        items = sorted(items, key=lambda i: (i.type, i.updated_at, i.id))
-    for item in items:
-        _print_ansi(render_profile_row(item))
+    for index, item in enumerate(items):
+        _print_ansi(render_profile_row(item, index=index))
     return 0
 
 
@@ -2150,10 +2279,13 @@ def handle_memory_profile_search(args: argparse.Namespace) -> int:
 
 def handle_memory_profile_show(args: argparse.Namespace) -> int:
     repo = ProfileItemRepository(args.project_root)
+    profile_id = _resolve_profile_id(args)
+    if profile_id is None:
+        return 1
     try:
-        item = repo.get(args.profile_id)
+        item = repo.get(profile_id)
     except ProfileItemNotFound:
-        print(f"Profile item not found: {args.profile_id}", file=sys.stderr)
+        print(f"Profile item not found: {profile_id}", file=sys.stderr)
         return 1
     _print_ansi(render_profile_detail(item))
     return 0
@@ -2161,13 +2293,16 @@ def handle_memory_profile_show(args: argparse.Namespace) -> int:
 
 def handle_memory_profile_delete(args: argparse.Namespace) -> int:
     repo = ProfileItemRepository(args.project_root)
+    profile_id = _resolve_profile_id(args)
+    if profile_id is None:
+        return 1
     try:
-        repo.delete(args.profile_id)
+        repo.delete(profile_id)
     except ProfileItemNotFound:
-        print(f"Profile item not found: {args.profile_id}", file=sys.stderr)
+        print(f"Profile item not found: {profile_id}", file=sys.stderr)
         return 1
     repo.reindex()
-    print(f"Deleted profile item: {args.profile_id}")
+    print(f"Deleted profile item: {profile_id}")
     return 0
 
 
@@ -2175,6 +2310,25 @@ def handle_memory_profile_reindex(args: argparse.Namespace) -> int:
     profile_index_path = ProfileItemRepository(args.project_root).reindex()
     print(f"Rebuilt profile index: {profile_index_path}")
     return 0
+
+
+def _profile_items_for_list(project_root: Path | None, *, sort_by: str = "updated_at") -> list[ProfileItem]:
+    items = ProfileItemRepository(project_root).list()
+    if sort_by == "importance":
+        return sorted(items, key=lambda item: (-item.importance, item.updated_at, item.id))
+    if sort_by == "type":
+        return sorted(items, key=lambda item: (item.type, item.updated_at, item.id))
+    return items
+
+
+def _resolve_profile_id(args: argparse.Namespace) -> str | None:
+    if not _looks_like_visible_index(args.profile_id):
+        return args.profile_id
+    items = _profile_items_for_list(args.project_root)
+    index = _parse_visible_index(args.profile_id, count=len(items), label="profile")
+    if index is None:
+        return None
+    return items[index].id
 
 
 def handle_persona_list(args: argparse.Namespace) -> int:
@@ -3366,6 +3520,11 @@ def _handle_interactive_memory_command(command: str, project_root: Path | None) 
         return _handle_interactive_memory_search(query, project_root)
     if command.startswith("show "):
         entry_id = command.removeprefix("show ").strip()
+        if entry_id.isdigit():
+            entries = MemoryEntryRepository(project_root).list()
+            index = int(entry_id)
+            if 0 <= index < len(entries):
+                entry_id = entries[index].id
         try:
             entry = MemoryEntryRepository(project_root).get(entry_id)
         except MemoryEntryNotFound:
@@ -3375,9 +3534,14 @@ def _handle_interactive_memory_command(command: str, project_root: Path | None) 
         candidates = MemoryCandidateRepository(project_root).list()
         if not candidates:
             return "No memory candidates."
-        return "\n".join(render_candidate_row(candidate) for candidate in candidates)
+        return "\n".join(render_candidate_row(candidate, index=index) for index, candidate in enumerate(candidates))
     if command.startswith("review "):
         candidate_id = command.removeprefix("review ").strip()
+        if candidate_id.isdigit():
+            candidates = MemoryCandidateRepository(project_root).list()
+            index = int(candidate_id)
+            if 0 <= index < len(candidates):
+                candidate_id = candidates[index].id
         try:
             candidate = MemoryCandidateRepository(project_root).get(candidate_id)
         except MemoryCandidateNotFound:
@@ -3395,11 +3559,17 @@ def _handle_interactive_memory_command(command: str, project_root: Path | None) 
         if not documents:
             return "No source documents."
         return "\n".join(
-            render_source_row(document, chunk_count=len(repo.list_chunks(document.id))) for document in documents
+            render_source_row(document, index=index, chunk_count=len(repo.list_chunks(document.id)))
+            for index, document in enumerate(documents)
         )
     if command.startswith("source "):
         source_id = command.removeprefix("source ").strip()
         repo = SourceRepository(project_root)
+        if source_id.isdigit():
+            documents = repo.list_documents()
+            index = int(source_id)
+            if 0 <= index < len(documents):
+                source_id = documents[index].id
         try:
             document = repo.get_document(source_id)
         except SourceDocumentNotFound:
@@ -3416,7 +3586,7 @@ def _handle_interactive_reason_command(command: str, project_root: Path | None) 
         threads = service.list_threads()
         if not threads:
             return "No reason threads."
-        return "\n".join(render_reason_row(thread, index=index) for index, thread in enumerate(threads, start=1))
+        return "\n".join(render_reason_row(thread, index=index) for index, thread in enumerate(threads))
     if command.startswith("show "):
         thread_id = command.removeprefix("show ").strip()
         try:
@@ -3530,7 +3700,7 @@ def _handle_interactive_reason_watch(project_root: Path | None, interval: int = 
         for step in service.list_steps(thread.id):
             _print_ansi(render_step_watch_entry(step))
     else:
-        for index, thread in enumerate(threads, start=1):
+        for index, thread in enumerate(threads):
             _print_ansi(render_reason_detail(thread))
             _print_ansi(_theme.muted(f"(index: {index})"))
             for step in service.list_steps(thread.id):
@@ -3562,7 +3732,7 @@ def _handle_interactive_trace_command(command: str, project_root: Path | None) -
         traces = service.list_traces()
         if not traces:
             return "No trace records."
-        return "\n".join(render_trace_row(trace, index=index) for index, trace in enumerate(traces, start=1))
+        return "\n".join(render_trace_row(trace, index=index) for index, trace in enumerate(traces))
     if command.startswith("show "):
         trace_id = command.removeprefix("show ").strip()
         try:
@@ -3575,7 +3745,7 @@ def _handle_interactive_trace_command(command: str, project_root: Path | None) -
         traces = service.search_traces(query)
         if not traces:
             return "No matching trace records."
-        return "\n".join(render_trace_row(trace, index=index) for index, trace in enumerate(traces, start=1))
+        return "\n".join(render_trace_row(trace, index=index) for index, trace in enumerate(traces))
     return _interactive_trace_help(command)
 
 
@@ -3622,12 +3792,12 @@ def _interactive_memory_help(command: str | None = None) -> str:
         [
             "Memory commands:",
             "  :mem search <query>",
-            "  :mem show <entry-id>",
+            "  :mem show <entry-id|index>",
             "  :mem review",
-            "  :mem review <candidate-id>",
+            "  :mem review <candidate-id|index>",
             "  :mem profile <query>",
             "  :mem sources",
-            "  :mem source <source-id>",
+            "  :mem source <source-id|index>",
             "  :mem why",
         ]
     )
@@ -3744,8 +3914,8 @@ def _handle_interactive_notify_command(project_root: Path | None) -> str:
     if not entries:
         return "No pending notifications."
     lines = ["Pending notifications:"]
-    for entry in entries:
-        lines.append("  " + render_outbox_summary(entry))
+    for index, entry in enumerate(entries):
+        lines.append("  " + render_outbox_summary(entry, index=index))
     return "\n".join(lines)
 
 
@@ -3757,8 +3927,8 @@ def _handle_interactive_notify_list_command(project_root: Path | None) -> str:
     if not entries:
         return "No notifications."
     lines = ["All notifications:"]
-    for entry in entries:
-        lines.append("  " + render_outbox_summary(entry))
+    for index, entry in enumerate(entries):
+        lines.append("  " + render_outbox_summary(entry, index=index))
     return "\n".join(lines)
 
 

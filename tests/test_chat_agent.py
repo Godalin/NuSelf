@@ -676,8 +676,8 @@ def test_reflection_list_pending_with_entries(tmp_path: Path) -> None:
     tool = _chat_tool(tmp_path, "reflection_list_pending", reflection_repository=repo)
     result = _invoke_chat_tool(tool)
     assert "Pending reflection ideas:" in result
-    assert "[1] Explore recursion in habits" in result
-    assert "[2] Sleep and creativity link" in result
+    assert "[0] Explore recursion in habits" in result
+    assert "[1] Sleep and creativity link" in result
 
 
 def test_reflection_list_pending_respects_limit(tmp_path: Path) -> None:
@@ -763,7 +763,7 @@ def test_reflection_dismiss_success(tmp_path: Path) -> None:
         )
     )
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
-    result = _invoke_chat_tool(tool, {"index": 1})
+    result = _invoke_chat_tool(tool, {"index": 0})
     assert "Dismissed" in result
     assert "Explore recursion in habits" in result
     assert repo.list(status="pending") == []
@@ -774,7 +774,7 @@ def test_reflection_dismiss_out_of_range(tmp_path: Path) -> None:
 
     repo = ReflectionRepository(tmp_path)
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
-    result = _invoke_chat_tool(tool, {"index": 1})
+    result = _invoke_chat_tool(tool, {"index": 0})
     assert "out of range" in result
 
 
@@ -783,7 +783,6 @@ def test_reflection_dismiss_invalid_index(tmp_path: Path) -> None:
 
     repo = ReflectionRepository(tmp_path)
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
-    assert "Error" in _invoke_chat_tool(tool, {"index": 0})
     assert "Error" in _invoke_chat_tool(tool, {"index": -1})
 
 
@@ -811,7 +810,7 @@ def test_reflection_archive_success(tmp_path: Path) -> None:
         )
     )
     tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
-    result = _invoke_chat_tool(tool, {"index": 1})
+    result = _invoke_chat_tool(tool, {"index": 0})
     assert "Archived" in result
     assert "Explore recursion in habits" in result
     assert repo.list(status="pending") == []
@@ -824,7 +823,7 @@ def test_reflection_archive_out_of_range(tmp_path: Path) -> None:
 
     repo = ReflectionRepository(tmp_path)
     tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
-    result = _invoke_chat_tool(tool, {"index": 1})
+    result = _invoke_chat_tool(tool, {"index": 0})
     assert "out of range" in result
 
 
@@ -833,7 +832,6 @@ def test_reflection_archive_invalid_index(tmp_path: Path) -> None:
 
     repo = ReflectionRepository(tmp_path)
     tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
-    assert "Error" in _invoke_chat_tool(tool, {"index": 0})
     assert "Error" in _invoke_chat_tool(tool, {"index": -1})
 
 

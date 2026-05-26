@@ -60,7 +60,7 @@ tracelink-YYYYMMDDTHHMMSSffffffZ-<shorthex>
 Rules:
 
 - Full ids are stored in JSON.
-- CLI list output assigns temporary 1-based display indexes sorted by `created_at`.
+- CLI list output assigns temporary 0-based display indexes sorted by `created_at`.
 - Commands accepting `<id_or_index>` resolve an exact id first, then a visible list index.
 - Index resolution must respect the same filters as the command view when filters are supplied.
 
@@ -293,7 +293,7 @@ Required commands:
 
 ```text
 nuself trace list [--kind <kind>] [--visibility private|shareable|internal|all] [--json]
-nuself trace show <id_or_index> [--by-index] [--json]
+nuself trace show <id_or_index> [--json]
 nuself trace search <query> [--kind <kind>] [--visibility private|shareable|internal|all] [--json]
 ```
 

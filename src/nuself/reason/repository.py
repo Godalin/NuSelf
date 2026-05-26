@@ -88,9 +88,9 @@ class ReasonRepository:
         except ValueError as exc:
             raise ReasonNotFound(id_or_index) from exc
         threads = self.list_threads(status=status)
-        if index < 1 or index > len(threads):
+        if index < 0 or index >= len(threads):
             raise ReasonNotFound(id_or_index)
-        return threads[index - 1]
+        return threads[index]
 
     def delete_thread(self, thread_id: str) -> None:
         with _write_lock:

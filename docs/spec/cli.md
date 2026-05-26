@@ -38,7 +38,9 @@ Controlled by `TerminalTheme`. Default ON when `sys.stdout.isatty()` and `NO_COL
 
 - One line per item.
 - Left-to-right: primary identifier when useful → colored status tag → human title → `key=value` metadata.
-- Indexed only when `show` accepts a numeric index.
+- Human-readable object lists use temporary visible indexes when the object can be inspected or acted on later. Indexes are **0-based** and render as a leading `[0]`, `[1]`, ... marker.
+- Commands that accept an object handle resolve a compact numeric argument as the visible 0-based index from the corresponding default list view; nonnumeric arguments are stable IDs. JSON output keeps stable IDs and does not need visible indexes.
+- Commands that explicitly support batch index selections accept a compact expression with comma-separated indexes and inclusive ranges, e.g. `1,3-5,9`. Whitespace inside the expression is invalid. The compact expression itself implies index lookup.
 
 ## Detail View Contract
 
@@ -204,18 +206,18 @@ nuself inbox reflection list [--status pending|dismissed|archived] [--json]
 - **Default view**: All reflection entries.
 - **`--status`**: Filter to one entry status.
 - **Output**: Indexed record blocks. First line contains metadata only, e.g. `[<N>] [reflection] status=[<status>] created=<timestamp> type=<candidate_type> score=<composite>`; second line contains the reflection title as indented body text. The component tag and status tag are colored when color is enabled.
-- **ID display**: Plain-text list output does not print long `reflection-candidate-*` entry IDs. Use the visible index with `--by-index`, or use `--json` when the full ID is needed.
+- **ID display**: Plain-text list output does not print long `reflection-candidate-*` entry IDs. Use the visible index directly, or use `--json` when the full ID is needed.
 - **Empty**: `No reflection entries.`
 
 ```
-nuself inbox reflection show <id_or_index> [--by-index] [--json]
+nuself inbox reflection show <id_or_index> [--json]
 ```
 
 - Indexes into the same filtered list used by `reflection list`.
 - **Detail view**: One record header containing ID, status, candidate metadata, deep link, and timestamps; body text starts on the next indented line; discussion trace uses the indented discussion trace block.
 
 ```
-nuself inbox reflection promote <id_or_index> [--by-index]
+nuself inbox reflection promote <id_or_index>
 ```
 
 - Creates a reason thread from the selected reflection without dismissing or archiving the reflection.
@@ -259,8 +261,10 @@ nuself daemon start | stop | restart | status | list
 
 All memory subcommands follow the same list/detail/empty/error contracts.
 
-- **List**: `[mem] <state_color>reviewed</> <type> <id> Title #tags conf=...`
+- **List**: `[<N>] [mem] <state_color>reviewed</> <type> <id> Title #tags conf=...`, where `<N>` is a 0-based visible index.
 - **Detail**: Header + metadata + tags + evidence + wrapped body.
+- `memory show/edit/delete`, `memory review show/accept/reject/edit/merge`, `memory source show/delete/chunks/extract`, and `memory profile show/delete` accept either a stable ID or the 0-based index from their corresponding list command.
+- `memory review accept` and `memory review reject` also accept compact batch selections, such as `nuself memory review accept 1,3-5,9`.
 
 ## Discussion Trace Contract
 

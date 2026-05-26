@@ -15,13 +15,14 @@ from nuself.tui.render import TerminalTheme
 DEFAULT_TEXT_WIDTH = 88
 
 
-def render_memory_entry_row(entry: MemoryEntry, *, color: bool | None = None) -> str:
+def render_memory_entry_row(entry: MemoryEntry, *, index: int | None = None, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
     tags = _format_tags(entry.tags)
+    label = f"[{index}] {theme.tag('[mem]', 'memory')}" if index is not None else theme.tag("[mem]", "memory")
     return " ".join(
         _omit_empty(
             [
-                theme.tag("[mem]", "memory"),
+                label,
                 _state(theme, entry.review_state),
                 entry.type,
                 theme.muted(entry.id),
@@ -70,13 +71,14 @@ def render_memory_entry_detail(entry: MemoryEntry, *, color: bool | None = None)
     return "\n".join(lines)
 
 
-def render_candidate_row(candidate: MemoryCandidate, *, color: bool | None = None) -> str:
+def render_candidate_row(candidate: MemoryCandidate, *, index: int | None = None, color: bool | None = None) -> str:
     """Render a candidate as a compact card with body text."""
     theme = TerminalTheme(color=color)
+    label = f"[{index}] {theme.tag('[cand]', 'memory')}" if index is not None else theme.tag("[cand]", "memory")
     header = " ".join(
         _omit_empty(
             [
-                theme.tag("[cand]", "memory"),
+                label,
                 _state(theme, candidate.review_state),
                 f"{candidate.action} {candidate.type}:",
                 candidate.title,
@@ -117,12 +119,13 @@ def render_candidate_detail(candidate: MemoryCandidate, *, color: bool | None = 
     return "\n".join(lines)
 
 
-def render_profile_row(item: ProfileItem, *, color: bool | None = None) -> str:
+def render_profile_row(item: ProfileItem, *, index: int | None = None, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
+    label = f"[{index}] {theme.tag('[profile]', 'chat')}" if index is not None else theme.tag("[profile]", "chat")
     return " ".join(
         _omit_empty(
             [
-                theme.tag("[profile]", "chat"),
+                label,
                 item.type,
                 theme.muted(item.id),
                 item.title,
@@ -156,13 +159,20 @@ def render_profile_detail(item: ProfileItem, *, color: bool | None = None) -> st
     return "\n".join(lines)
 
 
-def render_source_row(document: SourceDocument, *, chunk_count: int | None = None, color: bool | None = None) -> str:
+def render_source_row(
+    document: SourceDocument,
+    *,
+    index: int | None = None,
+    chunk_count: int | None = None,
+    color: bool | None = None,
+) -> str:
     theme = TerminalTheme(color=color)
     chunks = f"chunks={chunk_count}" if chunk_count is not None else ""
+    label = f"[{index}] {theme.tag('[src]', 'outbox')}" if index is not None else theme.tag("[src]", "outbox")
     return " ".join(
         _omit_empty(
             [
-                theme.tag("[src]", "outbox"),
+                label,
                 theme.muted(document.id),
                 str(document.path),
                 document.title,

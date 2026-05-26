@@ -100,9 +100,9 @@ class TraceRepository:
         except ValueError as exc:
             raise TraceNotFound(id_or_index) from exc
         traces = self.list_traces(kind=kind, visibility=visibility)
-        if index < 1 or index > len(traces):
+        if index < 0 or index >= len(traces):
             raise TraceNotFound(id_or_index)
-        return traces[index - 1]
+        return traces[index]
 
     def save_link(self, link: TraceLink) -> TraceLink:
         self.ensure()

@@ -110,7 +110,7 @@ Later versions can record:
 
 ```text
 nuself trace list [--kind <kind>] [--visibility private|shareable|internal|all] [--json]
-nuself trace show <id_or_index> [--by-index] [--json]
+nuself trace show <id_or_index> [--json]
 nuself trace search <query> [--kind <kind>] [--json]
 ```
 

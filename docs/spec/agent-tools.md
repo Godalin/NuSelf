@@ -180,14 +180,14 @@ Each `StructuredTool` definition must set `metadata={"service_component": "<subs
 
 #### `reflection_dismiss`
 
-- **Args**: `index: int` (1-based index from `reflection_list_pending` output)
+- **Args**: `index: int` (0-based index from `reflection_list_pending` output)
 - **Behavior**: Looks up the pending entry at the given index, calls `ReflectionRepository.dismiss(entry.id)`, and returns confirmation.
 - **Returns**: Confirmation or error message.
 - **When to use**: After the user explicitly declines interest in a suggested reflection topic.
 
 #### `reflection_archive`
 
-- **Args**: `index: int` (1-based index from `reflection_list_pending` output)
+- **Args**: `index: int` (0-based index from `reflection_list_pending` output)
 - **Behavior**: Looks up the pending entry at the given index, calls `ReflectionRepository.archive(entry.id)`, and returns confirmation.
 - **Returns**: Confirmation with entry title, or error if not found.
 - **When to use**: After the user has engaged with a reflection idea and the discussion feels complete.

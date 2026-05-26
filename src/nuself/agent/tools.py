@@ -83,43 +83,43 @@ def build_langchain_chat_tools(
             return "No pending reflection ideas at the moment."
 
         lines: list[str] = ["Pending reflection ideas:"]
-        for i, entry in enumerate(entries[:limit_int], start=1):
+        for i, entry in enumerate(entries[:limit_int]):
             lines.append(f"[{i}] {entry.title} ({entry.candidate_type}, score={entry.composite_score:.2f})")
         return "\n".join(lines)
 
     def dismiss_reflection_by_index(index: int) -> str:
-        """Dismiss a pending reflection idea by 1-based list index."""
+        """Dismiss a pending reflection idea by 0-based list index."""
 
         try:
             idx = int(index)
         except (ValueError, TypeError):
             return "Error: index must be an integer"
-        if idx < 1:
-            return "Error: index must be a positive integer"
+        if idx < 0:
+            return "Error: index must be zero or a positive integer"
 
         entries = reflection_repository.list(status="pending")
-        if idx > len(entries):
+        if idx >= len(entries):
             return f"Error: index {idx} is out of range (only {len(entries)} pending ideas)"
 
-        entry = entries[idx - 1]
+        entry = entries[idx]
         reflection_repository.dismiss(entry.id)
         return f'Dismissed "{entry.title}".'
 
     def archive_reflection_by_index(index: int) -> str:
-        """Archive a pending reflection idea by 1-based list index."""
+        """Archive a pending reflection idea by 0-based list index."""
 
         try:
             idx = int(index)
         except (ValueError, TypeError):
             return "Error: index must be an integer"
-        if idx < 1:
-            return "Error: index must be a positive integer"
+        if idx < 0:
+            return "Error: index must be zero or a positive integer"
 
         entries = reflection_repository.list(status="pending")
-        if idx > len(entries):
+        if idx >= len(entries):
             return f"Error: index {idx} is out of range (only {len(entries)} pending ideas)"
 
-        entry = entries[idx - 1]
+        entry = entries[idx]
         reflection_repository.archive(entry.id)
         return f'Archived "{entry.title}". The discussion has been captured into memory through the conversation.'
 
@@ -180,7 +180,7 @@ def build_langchain_chat_tools(
         if not threads:
             return "No active or paused reasoning threads."
         lines = ["Active and paused reasoning threads:"]
-        for index, thread in enumerate(threads, start=1):
+        for index, thread in enumerate(threads):
             steps = service.list_steps(thread.id)
             row = render_reason_row(thread, index=index, color=False)
             lines.append(f"{row}\n  steps={len(steps)}")
@@ -277,7 +277,7 @@ def build_langchain_chat_tools(
         if not traces:
             return f"No trace records matched: {query_str}"
         lines = ["Matching trace records:"]
-        for index, trace in enumerate(traces, start=1):
+        for index, trace in enumerate(traces):
             lines.append(render_trace_row(trace, index=index, color=False))
         return "\n".join(lines)
 
@@ -344,7 +344,7 @@ def build_langchain_chat_tools(
                 "List pending proactive reflection ideas (questions, connections, contradictions) "
                 "generated from the user's memory and conversations. Use when the user seems open "
                 "to exploring new topics, or when the conversation naturally pauses. "
-                "Returns a numbered list with title, type, and confidence."
+                "Returns a 0-based numbered list with title, type, and confidence."
             ),
             tags=("readonly",),
         ),
@@ -363,7 +363,7 @@ def build_langchain_chat_tools(
             description=(
                 "Dismiss a pending reflection idea so it will no longer be suggested. "
                 "Use when the user explicitly says they are not interested in a topic. "
-                "The index corresponds to the numbered list from reflection_list_pending."
+                "The 0-based index corresponds to the numbered list from reflection_list_pending."
             ),
             tags=("write",),
         ),
@@ -373,7 +373,7 @@ def build_langchain_chat_tools(
             description=(
                 "Archive a pending reflection idea after the discussion is complete. "
                 "Use when the user has engaged with a reflection idea and the topic feels resolved. "
-                "The index corresponds to the numbered list shown in the pending reflections context."
+                "The 0-based index corresponds to the numbered list shown in the pending reflections context."
             ),
             tags=("write",),
         ),

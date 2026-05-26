@@ -54,7 +54,7 @@ def test_trace_repository_resolves_display_index(tmp_path: Path) -> None:
     first = repo.save_trace(ThoughtTrace(kind="decision", title="First", summary="First trace."))
     second = repo.save_trace(ThoughtTrace(kind="decision", title="Second", summary="Second trace."))
 
-    assert repo.resolve_trace("1", by_index=True) == first
-    assert repo.resolve_trace("2", by_index=True) == second
+    assert repo.resolve_trace("0", by_index=True) == first
+    assert repo.resolve_trace("1", by_index=True) == second
     with pytest.raises(TraceNotFound):
-        repo.resolve_trace("3", by_index=True)
+        repo.resolve_trace("2", by_index=True)

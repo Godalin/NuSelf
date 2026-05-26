@@ -68,7 +68,7 @@ def test_resolve_thread_by_index(tmp_path: Path) -> None:
     t2 = ReasoningThread(topic="Second")
     repo.save_thread(t1)
     repo.save_thread(t2)
-    resolved = repo.resolve_thread("2", by_index=True)
+    resolved = repo.resolve_thread("1", by_index=True)
     assert resolved.id == t2.id
 
 

@@ -528,13 +528,14 @@ def _status_color(status: str) -> str:
     return "0"
 
 
-def render_outbox_summary(entry: OutboxEntry, *, color: bool | None = None) -> str:
+def render_outbox_summary(entry: OutboxEntry, *, index: int | None = None, color: bool | None = None) -> str:
     """Render one outbox entry as a compact terminal line."""
     theme = TerminalTheme(color=color)
     status_tag = theme.paint(f"[{entry.status}]", _status_color(entry.status))
     created = format_display_timestamp(entry.created_at) if entry.created_at else "-"
+    label = f"[{index}] {entry.id}" if index is not None else entry.id
     return render_record_header(
-        f"{entry.id} {status_tag} {entry.title}",
+        f"{label} {status_tag} {entry.title}",
         _render_key_value_fields(
             [
                 ("created", created),
