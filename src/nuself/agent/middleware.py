@@ -105,8 +105,7 @@ class ToolCaptureMiddleware(AgentMiddleware):
         if self._log_callback is not None:
             self._log_callback(name, args, result=result_text)
         if self._captured is not None:
-            truncated = result_text[:197] + "..." if len(result_text) > 200 else result_text
-            self._captured.append((name, dict(args), truncated))
+            self._captured.append((name, dict(args), result_text))
 
         return result
 
