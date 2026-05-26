@@ -212,9 +212,9 @@ def build_langchain_chat_tools(
 
     def reason_propose(
         topic: str,
-        working_summary: str = "",
-        active_items: list[dict[str, object]] | None = None,
-        mandates: list[str] | None = None,
+        working_summary: str,
+        active_items: list[dict[str, object]],
+        mandates: list[str],
     ) -> str:
         """Propose creating a long-run reasoning thread. Does NOT create the thread — writes a pending proposal for user confirmation.
 
@@ -253,8 +253,8 @@ def build_langchain_chat_tools(
                 "proposal_id": proposal_id,
                 "topic": topic,
                 "working_summary": working_summary.strip(),
-                "active_items": list(active_items) if active_items else [],
-                "mandates": list(mandates) if mandates else [],
+                "active_items": active_items,
+                "mandates": mandates,
                 "evidence_refs": [],
             },
         )
