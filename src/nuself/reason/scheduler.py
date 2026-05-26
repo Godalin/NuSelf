@@ -9,12 +9,10 @@ from typing import Any
 
 from nuself.llm import LangChainLLMEndpoint
 from nuself.logs import log_context
-from nuself.memory.query import MemoryQueryService
 from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
-from nuself.reflection.repository import ReflectionRepository
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -28,8 +26,6 @@ class ReasonScheduler:
         service: ReasonService | None = None,
         interval_seconds: int = 600,
         *,
-        memory_query_service: MemoryQueryService | None = None,
-        reflection_repository: ReflectionRepository | None = None,
         readonly_tools: Sequence[Any] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
@@ -41,13 +37,8 @@ class ReasonScheduler:
         self._workspace_store = PrivateWorkspaceStore(project_root, scope="reason")
 
         if advancer is None and project_root is not None:
-            from nuself.llm import default_llm
-            llm = default_llm(project_root)
             self._advancer = ReasonAdvancer(
-                llm,
                 project_root=project_root,
-                memory_query_service=memory_query_service,
-                reflection_repository=reflection_repository,
                 workspace_store=self._workspace_store,
                 readonly_tools=readonly_tools,
                 langchain_models=langchain_models,

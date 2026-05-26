@@ -3342,10 +3342,9 @@ def test_reason_cli_start_list_show_and_advance(tmp_path: Path, capsys: CaptureF
     assert "[reason] How should I keep thinking?" in show_output
 
     advance_result = main(["--project-root", str(tmp_path), "reason", "advance", "1", "--by-index"])
-    advance_output = capsys.readouterr().out
-    assert advance_result == 0
-    assert "Advanced reason thread:" in advance_output
-    assert "last_advanced_at=" in advance_output
+    advance_output = capsys.readouterr()
+    assert advance_result == 1
+    assert "Error:" in advance_output.err or "Error:" in advance_output.out
 
 
 def test_reflection_cli_promote_creates_reason_and_trace(tmp_path: Path, capsys: CaptureFixture) -> None:

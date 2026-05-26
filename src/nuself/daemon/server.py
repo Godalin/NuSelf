@@ -149,8 +149,6 @@ class DaemonState:
     def start_background_reason_scheduler(self) -> None:
         if self._reason_scheduler_thread is not None:
             return
-        mq = getattr(self.chat_agent, "_memory_query_service", None)
-        rr = getattr(self.chat_agent, "_reflection_repo", None)
         tools_dict = getattr(self.chat_agent, "_tools", None)
         readonly_tools = (
             [t for t in tools_dict.values() if "readonly" in (t.tags or [])]
@@ -160,8 +158,6 @@ class DaemonState:
         self.reason_scheduler = ReasonScheduler(
             self.project_root,
             interval_seconds=self.reason_scheduler_interval_seconds,
-            memory_query_service=mq,
-            reflection_repository=rr,
             readonly_tools=readonly_tools,
             langchain_models=lc_models,
         )

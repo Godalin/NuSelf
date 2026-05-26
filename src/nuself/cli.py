@@ -1633,15 +1633,12 @@ def handle_reason_thread_action(args: argparse.Namespace) -> int:
     verb, method_name = _REASON_VERBS[args.action]
     service = ReasonService(args.project_root)
     if args.action == "advance":
-        try:
-            from nuself.llm import default_llm
-            from nuself.reason.advancer import ReasonAdvancer
-            from nuself.workspace import PrivateWorkspaceStore
+        from nuself.llm import configured_langchain_chat_models
+        from nuself.reason.advancer import ReasonAdvancer
+        from nuself.workspace import PrivateWorkspaceStore
 
-            advancer = ReasonAdvancer(default_llm(args.project_root), project_root=args.project_root, workspace_store=PrivateWorkspaceStore(args.project_root, scope="reason"))
-            service = ReasonService(args.project_root, advancer=advancer)
-        except RuntimeError:
-            pass
+        advancer = ReasonAdvancer(project_root=args.project_root, workspace_store=PrivateWorkspaceStore(args.project_root, scope="reason"), langchain_models=configured_langchain_chat_models(args.project_root))
+        service = ReasonService(args.project_root, advancer=advancer)
     method = getattr(service, method_name)
     try:
         thread = method(args.thread_id, by_index=args.by_index)
@@ -3424,16 +3421,13 @@ def _handle_interactive_reason_command(command: str, project_root: Path | None) 
         return f"Started reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("advance "):
         thread_id = command.removeprefix("advance ").strip()
-        try:
-            try:
-                from nuself.llm import default_llm
-                from nuself.reason.advancer import ReasonAdvancer
-                from nuself.workspace import PrivateWorkspaceStore
+        from nuself.llm import configured_langchain_chat_models
+        from nuself.reason.advancer import ReasonAdvancer
+        from nuself.workspace import PrivateWorkspaceStore
 
-                advancer = ReasonAdvancer(default_llm(project_root), project_root=project_root, workspace_store=PrivateWorkspaceStore(project_root, scope="reason"))
-                service = ReasonService(project_root, advancer=advancer)
-            except RuntimeError:
-                service = ReasonService(project_root)
+        advancer = ReasonAdvancer(project_root=project_root, workspace_store=PrivateWorkspaceStore(project_root, scope="reason"), langchain_models=configured_langchain_chat_models(project_root))
+        service = ReasonService(project_root, advancer=advancer)
+        try:
             thread = service.advance_thread(thread_id)
         except (ReasonNotFound, RuntimeError) as exc:
             return f"Error: {exc}"
