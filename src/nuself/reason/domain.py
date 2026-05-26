@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal, TypeAlias, cast
+from typing import Literal, TypeAlias, cast
 from uuid import uuid4
 
 ReasonStatus: TypeAlias = Literal["active", "paused", "resolved", "archived"]
@@ -318,11 +318,12 @@ def _optional_str_with_default(data: dict[str, object], field_name: str, default
 
 def _optional_tool_logs(data: dict[str, object], field_name: str) -> tuple[dict[str, object], ...]:
     value = data.get(field_name)
-    if value is None:
-        return ()
-    if not isinstance(value, list):
-        raise ValueError(f"field '{field_name}' must be a list")
-    return tuple(cast(dict[str, object], item) for item in value if isinstance(item, dict))
+    if value is not None:
+        if not isinstance(value, list):
+            raise ValueError(f"field '{field_name}' must be a list")
+        items = cast(list[dict[str, object]], value)
+        return tuple(items)
+    return ()
 
 
 def _optional_float(data: dict[str, object], field_name: str) -> float | None:
