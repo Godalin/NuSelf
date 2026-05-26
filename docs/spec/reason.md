@@ -271,7 +271,7 @@ When an explicit `step` is provided to `advance_thread`, the service uses it ins
 - Takes the thread's `topic`, `working_summary`, `active_items`, `pending_items`, `next_steps`, **mandates**, and `evidence_refs` as context.
 - Mandates are requirements the LLM MUST follow on every advance. The system prompt and advance prompt surface mandates prominently; they are not optional suggestions.
 - Calls `ChatLLM.complete()` (or LangGraph `create_agent` when tools are available) with a system prompt requesting a reasoning step.
-- Validates the response has required fields (`summary`, `delta`, `kind`) and a valid `kind`.
+- Validates the response has required fields (`summary`, `delta`, `kind`, `output`) and a valid `kind`.
 - Returns a `ReasoningStep` with parsed fields, or `None` if the LLM response is empty or unparseable.
 - Supports `kind` values: `progress`, `no_change`, `question`, `synthesis`, `contradiction`, `resolution`, `planning`.
 - Integrates `new_findings`, `new_pending`, `retired_findings`, and `evidence_refs` from the step into the updated thread state.
