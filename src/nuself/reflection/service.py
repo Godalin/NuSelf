@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.service import ReasonService
-from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+from nuself.reflection.repository import ReflectionEntry, ReflectionEntryNotFound, ReflectionRepository
 from nuself.trace.service import TraceRecorder
 
 
@@ -25,8 +26,8 @@ class ReflectionService:
         self._reason_service = reason_service or ReasonService(project_root)
         self._trace_recorder = trace_recorder or TraceRecorder(project_root)
 
-    def promote_to_reason(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
-        entry = self._resolve_entry(id_or_index, by_index=by_index)
+    def promote_to_reason(self, id_or_index: str) -> ReasoningThread:
+        entry = self._resolve_entry(id_or_index)
         if entry.status != "pending":
             raise RuntimeError(f"Cannot promote reflection {entry.id}: status is '{entry.status}', expected 'pending'")
 
@@ -46,14 +47,16 @@ class ReflectionService:
         )
         return thread
 
-    def _resolve_entry(self, id_or_index: str, *, by_index: bool = False) -> ReflectionEntry:
-        if not by_index:
-            return self._repository.get(id_or_index)
+    def _resolve_entry(self, id_or_index: str) -> ReflectionEntry:
         try:
-            index = int(id_or_index)
-        except ValueError as exc:
-            raise ValueError(f"invalid reflection index: {id_or_index}") from exc
+            return self._repository.get(id_or_index)
+        except ReflectionEntryNotFound:
+            pass
         entries = self._repository.list()
-        if index < 0 or index >= len(entries):
-            raise ValueError(f"invalid reflection index {index}. Valid range: 0-{len(entries) - 1}")
-        return entries[index]
+        try:
+            entry = resolve_visible_item(id_or_index, entries, label="reflection")
+        except VisibleHandleError as exc:
+            raise ValueError(str(exc)) from exc
+        if entry is None:
+            raise ValueError(f"invalid reflection index: {id_or_index}")
+        return entry

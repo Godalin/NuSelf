@@ -106,19 +106,19 @@ def test_reflection_show_by_id(project_root: Path, capsys: pytest.CaptureFixture
     import argparse
 
     entries = _seed_reflection_entries(project_root, 3)
-    args = argparse.Namespace(project_root=project_root, entry_id=entries[0].id, by_index=False, as_json=False)
+    args = argparse.Namespace(project_root=project_root, entry_id=entries[0].id, as_json=False)
     assert handle_reflection_show(args) == 0
     output = capsys.readouterr().out
     assert entries[0].title in output
     assert "[discussion]" in output
 
 
-def test_reflection_show_by_index(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_reflection_show_by_numeric_handle(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from nuself.cli import handle_reflection_show
     import argparse
 
     _seed_reflection_entries(project_root, 3)
-    args = argparse.Namespace(project_root=project_root, entry_id="0", by_index=True, as_json=False)
+    args = argparse.Namespace(project_root=project_root, entry_id="0", as_json=False)
     assert handle_reflection_show(args) == 0
     output = capsys.readouterr().out
     assert "Test idea 2" in output  # most recent (reverse order)
@@ -129,7 +129,7 @@ def test_reflection_show_json(project_root: Path, capsys: pytest.CaptureFixture[
     import argparse
 
     entries = _seed_reflection_entries(project_root, 1)
-    args = argparse.Namespace(project_root=project_root, entry_id=entries[0].id, by_index=False, as_json=True)
+    args = argparse.Namespace(project_root=project_root, entry_id=entries[0].id, as_json=True)
     assert handle_reflection_show(args) == 0
     output = capsys.readouterr().out
     parsed = json.loads(output.strip())
@@ -141,7 +141,7 @@ def test_reflection_show_invalid_index(project_root: Path) -> None:
     import argparse
 
     _seed_reflection_entries(project_root, 2)
-    args = argparse.Namespace(project_root=project_root, entry_id="99", by_index=True, as_json=False)
+    args = argparse.Namespace(project_root=project_root, entry_id="99", as_json=False)
     assert handle_reflection_show(args) == 1
 
 
@@ -149,7 +149,7 @@ def test_reflection_show_empty(project_root: Path) -> None:
     from nuself.cli import handle_reflection_show
     import argparse
 
-    args = argparse.Namespace(project_root=project_root, entry_id="0", by_index=True, as_json=False)
+    args = argparse.Namespace(project_root=project_root, entry_id="0", as_json=False)
     assert handle_reflection_show(args) == 1
 
 
@@ -158,7 +158,7 @@ def test_reflection_dismiss(project_root: Path, capsys: pytest.CaptureFixture[st
     import argparse
 
     entries = _seed_reflection_entries(project_root, 2)
-    args = argparse.Namespace(project_root=project_root, entry_id=entries[0].id, by_index=False)
+    args = argparse.Namespace(project_root=project_root, entry_id=entries[0].id)
     assert handle_reflection_dismiss(args) == 0
     output = capsys.readouterr().out
     assert f"Dismissed: {entries[0].id}" in output
@@ -166,12 +166,12 @@ def test_reflection_dismiss(project_root: Path, capsys: pytest.CaptureFixture[st
     assert repo.get(entries[0].id).status == "dismissed"
 
 
-def test_reflection_dismiss_by_index(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_reflection_dismiss_by_numeric_handle(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from nuself.cli import handle_reflection_dismiss
     import argparse
 
     _seed_reflection_entries(project_root, 2)
-    args = argparse.Namespace(project_root=project_root, entry_id="0", by_index=True)
+    args = argparse.Namespace(project_root=project_root, entry_id="0")
     assert handle_reflection_dismiss(args) == 0
     output = capsys.readouterr().out
     assert "Dismissed:" in output
@@ -182,7 +182,7 @@ def test_reflection_archive(project_root: Path, capsys: pytest.CaptureFixture[st
     import argparse
 
     entries = _seed_reflection_entries(project_root, 2)
-    args = argparse.Namespace(project_root=project_root, entry_id=entries[0].id, by_index=False)
+    args = argparse.Namespace(project_root=project_root, entry_id=entries[0].id)
     assert handle_reflection_archive(args) == 0
     output = capsys.readouterr().out
     assert f"Archived: {entries[0].id}" in output
@@ -194,7 +194,7 @@ def test_reflection_dismiss_missing(project_root: Path) -> None:
     from nuself.cli import handle_reflection_dismiss
     import argparse
 
-    args = argparse.Namespace(project_root=project_root, entry_id="missing", by_index=False)
+    args = argparse.Namespace(project_root=project_root, entry_id="missing")
     assert handle_reflection_dismiss(args) == 1
 
 
@@ -202,5 +202,5 @@ def test_reflection_archive_missing(project_root: Path) -> None:
     from nuself.cli import handle_reflection_archive
     import argparse
 
-    args = argparse.Namespace(project_root=project_root, entry_id="missing", by_index=False)
+    args = argparse.Namespace(project_root=project_root, entry_id="missing")
     assert handle_reflection_archive(args) == 1

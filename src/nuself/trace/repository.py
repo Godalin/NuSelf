@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 from nuself.config import runtime_paths
+from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
 
 TraceVisibilityFilter = Literal["default", "private", "shareable", "internal", "all"]
@@ -86,23 +87,21 @@ class TraceRepository:
         self,
         id_or_index: str,
         *,
-        by_index: bool = False,
         kind: TraceKind | None = None,
         visibility: TraceVisibilityFilter = "default",
     ) -> ThoughtTrace:
-        if not by_index:
-            try:
-                return self.get_trace(id_or_index)
-            except TraceNotFound:
-                pass
         try:
-            index = int(id_or_index)
-        except ValueError as exc:
-            raise TraceNotFound(id_or_index) from exc
+            return self.get_trace(id_or_index)
+        except TraceNotFound:
+            pass
         traces = self.list_traces(kind=kind, visibility=visibility)
-        if index < 0 or index >= len(traces):
+        try:
+            trace = resolve_visible_item(id_or_index, traces, label="trace")
+        except VisibleHandleError as exc:
+            raise TraceNotFound(id_or_index) from exc
+        if trace is None:
             raise TraceNotFound(id_or_index)
-        return traces[index]
+        return trace
 
     def save_link(self, link: TraceLink) -> TraceLink:
         self.ensure()

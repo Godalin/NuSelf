@@ -40,7 +40,8 @@ Controlled by `TerminalTheme`. Default ON when `sys.stdout.isatty()` and `NO_COL
 - Left-to-right: primary identifier when useful → colored status tag → human title → `key=value` metadata.
 - Human-readable object lists use temporary visible indexes when the object can be inspected or acted on later. Indexes are **0-based** and render as a leading `[0]`, `[1]`, ... marker.
 - Commands that accept an object handle resolve a compact numeric argument as the visible 0-based index from the corresponding default list view; nonnumeric arguments are stable IDs. JSON output keeps stable IDs and does not need visible indexes.
-- Commands that explicitly support batch index selections accept a compact expression with comma-separated indexes and inclusive ranges, e.g. `1,3-5,9`. Whitespace inside the expression is invalid. The compact expression itself implies index lookup.
+- Commands that explicitly support batch index selections accept a compact expression with comma-separated indexes and inclusive ranges, e.g. `1,3-5,9`. Whitespace inside the expression is invalid. The compact expression itself implies index lookup. Stable IDs that carry subsystem prefixes such as `mem_` do not conflict with this grammar.
+- CLI-visible handle parsing is shared infrastructure. Command handlers, repositories, and services that accept visible indexes must use `nuself.handles` rather than duplicating index/range parsing locally.
 
 ## Detail View Contract
 
@@ -180,6 +181,10 @@ Top-level help should group commands as:
 - Objects: `thread`, `memory`, `inbox`, `reason`, `trace`
 - System: `daemon`, `dev`
 
+Top-level help and command group help must show one-line descriptions for each listed command. Multi-layer groups must
+do the same at every level, including `memory review`, `memory source`, `memory profile`, `memory graph`,
+`inbox reflection`, and `inbox notify`, so users can choose commands without already knowing the subsystem vocabulary.
+
 REPL commands mirror the same model:
 
 | Command | Purpose |
@@ -261,10 +266,12 @@ nuself daemon start | stop | restart | status | list
 
 All memory subcommands follow the same list/detail/empty/error contracts.
 
+- **Help**: `nuself memory -h` and nested group help (`memory review -h`, `memory source -h`, `memory profile -h`,
+  `memory graph -h`) list every subcommand with a one-line purpose, following the shared command help contract.
 - **List**: `[<N>] [mem] <state_color>reviewed</> <type> <id> Title #tags conf=...`, where `<N>` is a 0-based visible index.
 - **Detail**: Header + metadata + tags + evidence + wrapped body.
 - `memory show/edit/delete`, `memory review show/accept/reject/edit/merge`, `memory source show/delete/chunks/extract`, and `memory profile show/delete` accept either a stable ID or the 0-based index from their corresponding list command.
-- `memory review accept` and `memory review reject` also accept compact batch selections, such as `nuself memory review accept 1,3-5,9`.
+- `memory delete`, `memory review accept`, and `memory review reject` also accept compact batch selections, such as `nuself memory delete 0-43` or `nuself memory review accept 1,3-5,9`.
 
 ## Discussion Trace Contract
 

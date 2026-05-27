@@ -201,14 +201,14 @@ Rules:
 | Method                   | Parameters                                                                 |
 | ------------------------ | -------------------------------------------------------------------------- |
 | `list_threads`           | `(status_filter?)`                                                         |
-| `show_thread`            | `(id_or_index, by_index?)`                                                 |
+| `show_thread`            | `(id_or_index)`                                                            |
 | `start_thread`           | `(topic, working_summary?, evidence_refs?, source_trace_ids?, priority?, active_items?, mandates?)`; requires generated `reasoning_prompt` |
-| `advance_thread`         | `(id_or_index, by_index?, step?)`                                          |
-| `pause_thread`           | `(id_or_index, by_index?)`                                                 |
-| `resume_thread`          | `(id_or_index, by_index?)`                                                 |
-| `resolve_thread`         | `(id_or_index, by_index?)`                                                 |
-| `archive_thread`         | `(id_or_index, by_index?)`                                                 |
-| `delete_thread`          | `(id_or_index, by_index?)`                                                 |
+| `advance_thread`         | `(id_or_index, step?)`                                                     |
+| `pause_thread`           | `(id_or_index)`                                                            |
+| `resume_thread`          | `(id_or_index)`                                                            |
+| `resolve_thread`         | `(id_or_index)`                                                            |
+| `archive_thread`         | `(id_or_index)`                                                            |
+| `delete_thread`          | `(id_or_index)`                                                            |
 | `promote_reflection`     | `(entry_id_or_index)`                                                      |
 
 ### Tool-Facing Methods

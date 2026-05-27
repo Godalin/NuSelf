@@ -246,8 +246,8 @@ class TraceQueryService:
     ) -> list[ThoughtTrace]:
         return self._repository.list_traces(kind=kind, visibility=visibility)
 
-    def show_trace(self, id_or_index: str, *, by_index: bool = False) -> ThoughtTrace:
-        return self._repository.resolve_trace(id_or_index, by_index=by_index)
+    def show_trace(self, id_or_index: str) -> ThoughtTrace:
+        return self._repository.resolve_trace(id_or_index)
 
     def search_traces(
         self,

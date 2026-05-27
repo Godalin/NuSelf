@@ -775,7 +775,7 @@ def test_reflection_dismiss_out_of_range(tmp_path: Path) -> None:
     repo = ReflectionRepository(tmp_path)
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
     result = _invoke_chat_tool(tool, {"index": 0})
-    assert "out of range" in result
+    assert "Invalid reflection index" in result
 
 
 def test_reflection_dismiss_invalid_index(tmp_path: Path) -> None:
@@ -824,7 +824,7 @@ def test_reflection_archive_out_of_range(tmp_path: Path) -> None:
     repo = ReflectionRepository(tmp_path)
     tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
     result = _invoke_chat_tool(tool, {"index": 0})
-    assert "out of range" in result
+    assert "Invalid reflection index" in result
 
 
 def test_reflection_archive_invalid_index(tmp_path: Path) -> None:

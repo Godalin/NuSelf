@@ -49,12 +49,12 @@ def test_trace_repository_hides_internal_records_by_default(tmp_path: Path) -> N
     assert repo.list_traces(visibility="all") == [private, internal]
 
 
-def test_trace_repository_resolves_display_index(tmp_path: Path) -> None:
+def test_trace_repository_resolves_numeric_handle(tmp_path: Path) -> None:
     repo = TraceRepository(tmp_path)
     first = repo.save_trace(ThoughtTrace(kind="decision", title="First", summary="First trace."))
     second = repo.save_trace(ThoughtTrace(kind="decision", title="Second", summary="Second trace."))
 
-    assert repo.resolve_trace("0", by_index=True) == first
-    assert repo.resolve_trace("1", by_index=True) == second
+    assert repo.resolve_trace("0") == first
+    assert repo.resolve_trace("1") == second
     with pytest.raises(TraceNotFound):
-        repo.resolve_trace("2", by_index=True)
+        repo.resolve_trace("2")

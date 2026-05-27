@@ -82,8 +82,8 @@ class ReasonService:
     def list_threads(self, status: str | None = None) -> list[ReasoningThread]:
         return self._repository.list_threads(status=status)
 
-    def show_thread(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
-        return self._repository.resolve_thread(id_or_index, by_index=by_index)
+    def show_thread(self, id_or_index: str) -> ReasoningThread:
+        return self._repository.resolve_thread(id_or_index)
 
     def list_steps(self, thread_id: str) -> list[ReasoningStep]:
         return self._repository.list_steps(thread_id)
@@ -167,10 +167,9 @@ class ReasonService:
         self,
         id_or_index: str,
         *,
-        by_index: bool = False,
         step: ReasoningStep | None = None,
     ) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
+        thread = self._repository.resolve_thread(id_or_index)
 
         if thread.status != "active":
             raise RuntimeError(f"Cannot advance thread {thread.id}: status is '{thread.status}', expected 'active'")
@@ -238,24 +237,24 @@ class ReasonService:
         )
         return updated
 
-    def pause_thread(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
+    def pause_thread(self, id_or_index: str) -> ReasoningThread:
+        thread = self._repository.resolve_thread(id_or_index)
         return self._transition(thread, "paused")
 
-    def resume_thread(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
+    def resume_thread(self, id_or_index: str) -> ReasoningThread:
+        thread = self._repository.resolve_thread(id_or_index)
         return self._transition(thread, "active")
 
-    def resolve_thread(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
+    def resolve_thread(self, id_or_index: str) -> ReasoningThread:
+        thread = self._repository.resolve_thread(id_or_index)
         return self._transition(thread, "resolved")
 
-    def archive_thread(self, id_or_index: str, *, by_index: bool = False) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
+    def archive_thread(self, id_or_index: str) -> ReasoningThread:
+        thread = self._repository.resolve_thread(id_or_index)
         return self._transition(thread, "archived")
 
-    def delete_thread(self, id_or_index: str, *, by_index: bool = False) -> str:
-        thread = self._repository.resolve_thread(id_or_index, by_index=by_index)
+    def delete_thread(self, id_or_index: str) -> str:
+        thread = self._repository.resolve_thread(id_or_index)
 
         write_log_event(
             "reasoning",

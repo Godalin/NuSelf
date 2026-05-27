@@ -8,6 +8,7 @@ from pathlib import Path
 from contextlib import contextmanager
 from typing import Generator, cast
 
+from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.config import runtime_paths
 from nuself.reason.domain import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
 
@@ -77,20 +78,19 @@ class ReasonRepository:
             threads.append(thread)
         return sorted(threads, key=lambda t: (t.created_at, t.id))
 
-    def resolve_thread(self, id_or_index: str, *, by_index: bool = False, status: str | None = None) -> ReasoningThread:
-        if not by_index:
-            try:
-                return self.get_thread(id_or_index)
-            except ReasonNotFound:
-                pass
+    def resolve_thread(self, id_or_index: str, *, status: str | None = None) -> ReasoningThread:
         try:
-            index = int(id_or_index)
-        except ValueError as exc:
-            raise ReasonNotFound(id_or_index) from exc
+            return self.get_thread(id_or_index)
+        except ReasonNotFound:
+            pass
         threads = self.list_threads(status=status)
-        if index < 0 or index >= len(threads):
+        try:
+            thread = resolve_visible_item(id_or_index, threads, label="reason")
+        except VisibleHandleError as exc:
+            raise ReasonNotFound(id_or_index) from exc
+        if thread is None:
             raise ReasonNotFound(id_or_index)
-        return threads[index]
+        return thread
 
     def delete_thread(self, thread_id: str) -> None:
         with _write_lock:

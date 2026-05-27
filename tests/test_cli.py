@@ -1114,8 +1114,118 @@ def test_incomplete_memory_command_shows_subcommand_help(capsys: CaptureFixture)
     assert result == 0
     assert "usage: nuself memory" in captured.out
     assert "list" in captured.out
+    assert "List memory entries with visible indexes." in captured.out
     assert "preview" in captured.out
+    assert "Show the memory preview used by chat context." in captured.out
+    assert "review" in captured.out
+    assert "Review pending memory candidates." in captured.out
     assert "reindex" in captured.out
+
+
+def test_memory_group_help_describes_nested_commands(capsys: CaptureFixture) -> None:
+    expected = {
+        ("memory", "review"): [
+            "accept",
+            "Accept review candidates by ID, index, or selection.",
+            "reject",
+            "Reject review candidates by ID, index, or selection.",
+        ],
+        ("memory", "source"): [
+            "ingest",
+            "Ingest a source document.",
+            "extract",
+            "Extract memory candidates from one source document.",
+        ],
+        ("memory", "profile"): [
+            "list",
+            "List profile entries with visible indexes.",
+            "delete",
+            "Delete one profile entry by ID or visible index.",
+        ],
+        ("memory", "graph"): [
+            "nodes",
+            "List graph nodes.",
+            "closure",
+            "Show reachable graph context from one node.",
+        ],
+    }
+
+    for argv, snippets in expected.items():
+        result = main(list(argv))
+        captured = capsys.readouterr()
+
+        assert result == 0
+        assert f"usage: nuself {' '.join(argv)}" in captured.out
+        for snippet in snippets:
+            assert snippet in captured.out
+
+
+def test_command_group_help_describes_subcommands(capsys: CaptureFixture) -> None:
+    expected = {
+        ("daemon",): [
+            "start",
+            "Start the background daemon.",
+            "logs",
+            "Show daemon logs.",
+        ],
+        ("thread",): [
+            "open",
+            "Open or create a thread for chat.",
+            "archived",
+            "List archived conversation threads.",
+        ],
+        ("inbox",): [
+            "reflection",
+            "Review reflection candidates.",
+            "notify",
+            "Manage notification outbox entries.",
+        ],
+        ("inbox", "reflection"): [
+            "promote",
+            "Promote one reflection into a reason thread.",
+            "organize",
+            "Merge similar pending reflection entries.",
+        ],
+        ("inbox", "notify"): [
+            "send",
+            "Send one pending notification now.",
+            "clear",
+            "Clear sent, failed, and dismissed notifications.",
+        ],
+        ("reason",): [
+            "start",
+            "Start a new reasoning thread.",
+            "watch",
+            "Watch reasoning threads for new steps.",
+        ],
+        ("trace",): [
+            "search",
+            "Search thought traces.",
+            "reindex",
+            "Rebuild thought trace indexes.",
+        ],
+        ("persona",): [
+            "list",
+            "List synthesized persona snapshots.",
+            "delete",
+            "Delete one persona snapshot.",
+        ],
+        ("dev",): [
+            "health",
+            "Run local health checks.",
+            "eval",
+            "Run evaluation fixtures.",
+        ],
+    }
+
+    for argv, snippets in expected.items():
+        result = main(list(argv))
+        captured = capsys.readouterr()
+
+        assert result == 0
+        assert f"usage: nuself {' '.join(argv)}" in captured.out
+        for snippet in snippets:
+            assert snippet in captured.out
 
 
 def test_memory_preview_limits_entries(tmp_path: Path, capsys: CaptureFixture) -> None:
@@ -3248,6 +3358,26 @@ def test_memory_delete_removes_entry(tmp_path: Path, capsys: CaptureFixture) -> 
     assert len(repo.list()) == 0
 
 
+def test_memory_delete_accepts_batch_index_selection(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.domain.memory import MemoryEntry
+
+    repo = MemoryEntryRepository(tmp_path)
+    for i in range(4):
+        repo.save(MemoryEntry(type="belief", title=f"Entry {i}", body=f"Body {i}."))
+    listed = repo.list()
+    deleted_ids = {listed[0].id, listed[2].id, listed[3].id}
+    remaining_id = listed[1].id
+
+    result = main(["--project-root", str(tmp_path), "memory", "delete", "0,2-3"])
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert output.count("Deleted memory entry:") == 3
+    assert {entry.id for entry in repo.list()} == {remaining_id}
+    assert deleted_ids.isdisjoint({entry.id for entry in repo.list()})
+
+
 def test_memory_edit_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
@@ -3377,6 +3507,7 @@ def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> Non
         ["inbox", "--help"],
         ["reason", "--help"],
         ["trace", "--help"],
+        ["persona", "--help"],
         ["dev", "--help"],
     ],
 )
@@ -3385,6 +3516,21 @@ def test_top_level_subcommand_help(argv: list[str]) -> None:
     with pytest.raises(SystemExit) as exc_info:
         parser.parse_args(argv)
     assert exc_info.value.code == 0
+
+
+def test_top_level_help_describes_commands(capsys: CaptureFixture) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--help"])
+    captured = capsys.readouterr()
+
+    assert exc_info.value.code == 0
+    assert "memory" in captured.out
+    assert "Manage memory entries, sources, profiles, reviews, and" in captured.out
+    assert "the memory graph." in captured.out
+    assert "reason" in captured.out
+    assert "Manage long-run reasoning threads." in captured.out
+    assert "dev" in captured.out
+    assert "Run diagnostics, logs, config inspection, and evals." in captured.out
 
 
 def test_reason_cli_start_list_show_and_advance(
@@ -3544,6 +3690,9 @@ def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
         ["thread", "delete", "--help"],
         ["thread", "unarchive", "--help"],
         ["thread", "archived", "--help"],
+        ["persona", "list", "--help"],
+        ["persona", "show", "--help"],
+        ["persona", "delete", "--help"],
     ],
 )
 def test_nested_subcommand_help(argv: list[str]) -> None:

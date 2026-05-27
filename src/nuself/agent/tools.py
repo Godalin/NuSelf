@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from langchain_core.tools import BaseTool, StructuredTool
 
+from nuself.handles import VisibleHandleError, parse_visible_index
 from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
@@ -87,37 +88,31 @@ def build_langchain_chat_tools(
             lines.append(f"[{i}] {entry.title} ({entry.candidate_type}, score={entry.composite_score:.2f})")
         return "\n".join(lines)
 
-    def dismiss_reflection_by_index(index: int) -> str:
+    def dismiss_reflection_by_numeric_handle(index: int) -> str:
         """Dismiss a pending reflection idea by 0-based list index."""
 
         try:
-            idx = int(index)
+            entries = reflection_repository.list(status="pending")
+            idx = parse_visible_index(str(index), count=len(entries), label="reflection")
+        except VisibleHandleError as exc:
+            return f"Error: {exc}"
         except (ValueError, TypeError):
             return "Error: index must be an integer"
-        if idx < 0:
-            return "Error: index must be zero or a positive integer"
-
-        entries = reflection_repository.list(status="pending")
-        if idx >= len(entries):
-            return f"Error: index {idx} is out of range (only {len(entries)} pending ideas)"
 
         entry = entries[idx]
         reflection_repository.dismiss(entry.id)
         return f'Dismissed "{entry.title}".'
 
-    def archive_reflection_by_index(index: int) -> str:
+    def archive_reflection_by_numeric_handle(index: int) -> str:
         """Archive a pending reflection idea by 0-based list index."""
 
         try:
-            idx = int(index)
+            entries = reflection_repository.list(status="pending")
+            idx = parse_visible_index(str(index), count=len(entries), label="reflection")
+        except VisibleHandleError as exc:
+            return f"Error: {exc}"
         except (ValueError, TypeError):
             return "Error: index must be an integer"
-        if idx < 0:
-            return "Error: index must be zero or a positive integer"
-
-        entries = reflection_repository.list(status="pending")
-        if idx >= len(entries):
-            return f"Error: index {idx} is out of range (only {len(entries)} pending ideas)"
 
         entry = entries[idx]
         reflection_repository.archive(entry.id)
@@ -358,7 +353,7 @@ def build_langchain_chat_tools(
             tags=("readonly",),
         ),
         tool_from_function(
-            dismiss_reflection_by_index,
+            dismiss_reflection_by_numeric_handle,
             name="reflection_dismiss",
             description=(
                 "Dismiss a pending reflection idea so it will no longer be suggested. "
@@ -368,7 +363,7 @@ def build_langchain_chat_tools(
             tags=("write",),
         ),
         tool_from_function(
-            archive_reflection_by_index,
+            archive_reflection_by_numeric_handle,
             name="reflection_archive",
             description=(
                 "Archive a pending reflection idea after the discussion is complete. "

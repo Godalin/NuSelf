@@ -7,7 +7,6 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
@@ -51,6 +50,11 @@ try:
     from nuself.agent.chat import ChatAgent, ThreadState, ThreadStore
     from nuself.daemon import client, lifecycle
     from nuself.daemon.protocol import JsonValue
+    from nuself.handles import (
+        VisibleHandleError,
+        resolve_visible_handle,
+        resolve_visible_handle_selection,
+    )
     from nuself.domain.memory import (
         MemoryCandidate,
         MemoryEntry,
@@ -233,56 +237,6 @@ def _normalize_reason_active_item(item: dict[str, object]) -> dict[str, object]:
     }
 
 
-def _parse_visible_index(value: str, *, count: int, label: str) -> int | None:
-    try:
-        index = int(value)
-    except ValueError:
-        print(f"Invalid {label} index: {value}", file=sys.stderr)
-        return None
-    if index < 0 or index >= count:
-        valid = f"0-{count - 1}" if count else "(none)"
-        print(f"Invalid {label} index {index}. Valid range: {valid}", file=sys.stderr)
-        return None
-    return index
-
-
-_INDEX_SELECTION_RE = re.compile(r"\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*")
-
-
-def _looks_like_visible_index(value: str) -> bool:
-    return value.isdigit()
-
-
-def _parse_visible_index_selection(value: str, *, count: int, label: str) -> list[int] | None:
-    """Parse a compact 0-based index selection such as `1,3-5,9`."""
-
-    if _INDEX_SELECTION_RE.fullmatch(value) is None:
-        print(f"Invalid {label} index selection: {value}. Expected compact form like 0,2-4,8.", file=sys.stderr)
-        return None
-    indexes: list[int] = []
-    seen: set[int] = set()
-    for token in value.split(","):
-        if "-" in token:
-            start_raw, end_raw = token.split("-", maxsplit=1)
-            start = int(start_raw)
-            end = int(end_raw)
-            if start > end:
-                print(f"Invalid {label} index range {token}. Range start must be <= end.", file=sys.stderr)
-                return None
-            expanded = range(start, end + 1)
-        else:
-            expanded = range(int(token), int(token) + 1)
-        for index in expanded:
-            if index < 0 or index >= count:
-                valid = f"0-{count - 1}" if count else "(none)"
-                print(f"Invalid {label} index {index}. Valid range: {valid}", file=sys.stderr)
-                return None
-            if index not in seen:
-                indexes.append(index)
-                seen.add(index)
-    return indexes
-
-
 def _print_ansi(text: str, **kwargs: Any) -> None:
     if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
         _print_ft(_ANSI(text), **kwargs)
@@ -447,53 +401,69 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--project-root", type=Path, default=None)
     parser.add_argument("--message", "-m", default=None)
     _add_handler(parser, handle_default_entrypoint)
-    subparsers = parser.add_subparsers(dest="command")
+    subparsers = parser.add_subparsers(dest="command", metavar="<command>")
 
-    daemon_parser = subparsers.add_parser("daemon")
+    daemon_parser = subparsers.add_parser(
+        "daemon",
+        help="Manage the NuSelf background daemon.",
+        description="Manage the NuSelf background daemon.",
+    )
     daemon_parser.set_defaults(handler=None, help_parser=daemon_parser)
-    daemon_subparsers = daemon_parser.add_subparsers(dest="daemon_command")
-    _add_handler(daemon_subparsers.add_parser("start"), handle_daemon_start)
-    _add_handler(daemon_subparsers.add_parser("stop"), handle_daemon_stop)
-    _add_handler(daemon_subparsers.add_parser("restart"), handle_daemon_restart)
-    _add_handler(daemon_subparsers.add_parser("status"), handle_daemon_status)
-    _add_handler(daemon_subparsers.add_parser("list"), handle_daemon_list)
-    daemon_logs_parser = daemon_subparsers.add_parser("logs")
+    daemon_subparsers = daemon_parser.add_subparsers(dest="daemon_command", metavar="<command>")
+    _add_handler(daemon_subparsers.add_parser("start", help="Start the background daemon."), handle_daemon_start)
+    _add_handler(daemon_subparsers.add_parser("stop", help="Stop the background daemon."), handle_daemon_stop)
+    _add_handler(daemon_subparsers.add_parser("restart", help="Restart the background daemon."), handle_daemon_restart)
+    _add_handler(daemon_subparsers.add_parser("status", help="Show daemon status."), handle_daemon_status)
+    _add_handler(daemon_subparsers.add_parser("list", help="List daemon status in table form."), handle_daemon_list)
+    daemon_logs_parser = daemon_subparsers.add_parser("logs", help="Show daemon logs.")
     _add_log_arguments(daemon_logs_parser)
     _add_handler(daemon_logs_parser, handle_logs)
-    daemon_attach_parser = daemon_subparsers.add_parser("attach")
+    daemon_attach_parser = daemon_subparsers.add_parser("attach", help="Attach chat to the running daemon.")
     daemon_attach_parser.add_argument("--message", "-m", default=None)
     _add_handler(daemon_attach_parser, handle_attach)
 
-    chat_parser = subparsers.add_parser("chat")
+    chat_parser = subparsers.add_parser(
+        "chat",
+        help="Start chat, using the daemon when available.",
+        description="Start chat, using the daemon when available.",
+    )
     chat_parser.add_argument("--message", "-m", default=None)
     chat_parser.add_argument("--require-daemon", action="store_true")
     _add_handler(chat_parser, handle_chat)
 
-    attach_parser = subparsers.add_parser("attach")
+    attach_parser = subparsers.add_parser(
+        "attach",
+        help="Attach to a running daemon chat session.",
+        description="Attach to a running daemon chat session.",
+    )
     attach_parser.add_argument("--message", "-m", default=None)
     _add_handler(attach_parser, handle_attach)
 
-    memory_parser = subparsers.add_parser("memory")
+    memory_parser = subparsers.add_parser(
+        "memory",
+        help="Manage memory entries, sources, profiles, reviews, and the memory graph.",
+        description="Manage memory entries, sources, profiles, reviews, and the memory graph.",
+    )
     memory_parser.set_defaults(handler=None, help_parser=memory_parser)
-    memory_subparsers = memory_parser.add_subparsers(dest="memory_command")
-    list_parser = memory_subparsers.add_parser("list")
+    memory_subparsers = memory_parser.add_subparsers(dest="memory_command", metavar="<command>")
+    list_parser = memory_subparsers.add_parser("list", help="List memory entries with visible indexes.")
     list_parser.add_argument("--sort-by", choices=["updated_at", "importance", "type"], default="updated_at")
     list_parser.add_argument("--review-state", choices=["draft", "reviewed", "rejected", "quarantined", "archived"], default=None)
     _add_handler(list_parser, handle_memory_list)
-    preview_parser = memory_subparsers.add_parser("preview")
+    preview_parser = memory_subparsers.add_parser("preview", help="Show the memory preview used by chat context.")
     preview_parser.add_argument("--limit", type=int, default=DEFAULT_MEMORY_PREVIEW_LIMIT)
     _add_handler(preview_parser, handle_memory_preview)
-    show_parser = memory_subparsers.add_parser("show")
+    show_parser = memory_subparsers.add_parser("show", help="Show one memory entry by ID or visible index.")
     show_parser.add_argument("entry_id")
     _add_handler(show_parser, handle_memory_show)
-    add_parser = memory_subparsers.add_parser("add")
+    add_parser = memory_subparsers.add_parser("add", help="Create a memory entry manually.")
     add_parser.add_argument("--type", choices=_memory_type_choices())
     add_parser.add_argument("--title", default=None)
     add_parser.add_argument("--body", "--text", required=True)
     add_parser.add_argument("--tag", action="append", default=[])
     add_parser.add_argument("--importance", type=float, default=None)
     _add_handler(add_parser, handle_memory_add)
-    edit_parser = memory_subparsers.add_parser("edit")
+    edit_parser = memory_subparsers.add_parser("edit", help="Edit one memory entry by ID or visible index.")
     edit_parser.add_argument("entry_id")
     edit_parser.add_argument("--title", default=None)
     edit_parser.add_argument("--body", "--text", default=None)
@@ -501,10 +471,10 @@ def build_parser() -> argparse.ArgumentParser:
     edit_parser.add_argument("--importance", type=float, default=None)
     edit_parser.add_argument("--review-state", choices=["draft", "reviewed", "rejected", "quarantined", "archived"], default=None)
     _add_handler(edit_parser, handle_memory_edit)
-    delete_parser = memory_subparsers.add_parser("delete")
+    delete_parser = memory_subparsers.add_parser("delete", help="Delete memory entries by ID, index, or selection.")
     delete_parser.add_argument("entry_id")
     _add_handler(delete_parser, handle_memory_delete)
-    search_parser = memory_subparsers.add_parser("search")
+    search_parser = memory_subparsers.add_parser("search", help="Search durable memory entries.")
     search_parser.add_argument("query", nargs="?", default="")
     search_parser.add_argument("--type", choices=_memory_type_choices(), default=None)
     search_parser.add_argument("--tag", default=None)
@@ -515,55 +485,63 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("--min-importance", type=float, default=None)
     search_parser.add_argument("--sort-by", choices=["score", "updated_at", "importance"], default="score")
     _add_handler(search_parser, handle_memory_search)
-    _add_handler(memory_subparsers.add_parser("stats"), handle_memory_stats)
-    relations_parser = memory_subparsers.add_parser("relations")
+    _add_handler(memory_subparsers.add_parser("stats", help="Show memory and review statistics."), handle_memory_stats)
+    relations_parser = memory_subparsers.add_parser("relations", help="List derived memory relations.")
     _relation_names = default_relation_descriptor_registry().names()
     relations_parser.add_argument("--relation", choices=_relation_names, default=None)
     relations_parser.add_argument("--source-id", default=None)
     relations_parser.add_argument("--target-id", default=None)
     _add_handler(relations_parser, handle_memory_relations)
-    graph_parser = memory_subparsers.add_parser("graph")
+    graph_parser = memory_subparsers.add_parser(
+        "graph",
+        help="Inspect symbolic memory graph nodes, edges, paths, and closure.",
+        description="Inspect symbolic memory graph nodes, edges, paths, and closure.",
+    )
     graph_parser.set_defaults(handler=None, help_parser=graph_parser)
-    graph_subparsers = graph_parser.add_subparsers(dest="graph_command")
-    graph_nodes_parser = graph_subparsers.add_parser("nodes")
+    graph_subparsers = graph_parser.add_subparsers(dest="graph_command", metavar="<command>")
+    graph_nodes_parser = graph_subparsers.add_parser("nodes", help="List graph nodes.")
     graph_nodes_parser.add_argument("--type", default=None)
     _add_handler(graph_nodes_parser, handle_memory_graph_nodes)
-    graph_edges_parser = graph_subparsers.add_parser("edges")
+    graph_edges_parser = graph_subparsers.add_parser("edges", help="List graph edges.")
     graph_edges_parser.add_argument("--relation", choices=_relation_names, default=None)
     graph_edges_parser.add_argument("--source-id", default=None)
     graph_edges_parser.add_argument("--target-id", default=None)
     _add_handler(graph_edges_parser, handle_memory_graph_edges)
-    graph_search_parser = graph_subparsers.add_parser("search")
+    graph_search_parser = graph_subparsers.add_parser("search", help="Search graph nodes and nearby context.")
     graph_search_parser.add_argument("query")
     graph_search_parser.add_argument("--type", default=None)
     graph_search_parser.add_argument("--limit", type=int, default=8)
     graph_search_parser.add_argument("--depth", type=int, default=1)
     _add_handler(graph_search_parser, handle_memory_graph_search)
-    graph_path_parser = graph_subparsers.add_parser("path")
+    graph_path_parser = graph_subparsers.add_parser("path", help="Find a path between two graph nodes.")
     graph_path_parser.add_argument("from_id")
     graph_path_parser.add_argument("to_id")
     _add_handler(graph_path_parser, handle_memory_graph_path)
-    graph_closure_parser = graph_subparsers.add_parser("closure")
+    graph_closure_parser = graph_subparsers.add_parser("closure", help="Show reachable graph context from one node.")
     graph_closure_parser.add_argument("node_id")
     graph_closure_parser.add_argument("--relation", choices=_relation_names, default=None)
     _add_handler(graph_closure_parser, handle_memory_graph_closure)
-    _add_handler(memory_subparsers.add_parser("update"), handle_memory_update)
-    optimize_parser = memory_subparsers.add_parser("optimize")
+    _add_handler(memory_subparsers.add_parser("update", help="Run the memory curator once."), handle_memory_update)
+    optimize_parser = memory_subparsers.add_parser("optimize", help="Run the memory optimizer once.")
     optimize_parser.add_argument("--limit", type=int, default=50)
     _add_handler(optimize_parser, handle_memory_optimize)
-    export_parser = memory_subparsers.add_parser("export")
+    export_parser = memory_subparsers.add_parser("export", help="Export memory entries to JSON.")
     export_parser.add_argument("--output", "-o", type=Path, required=True)
     _add_handler(export_parser, handle_memory_export)
-    import_parser = memory_subparsers.add_parser("import")
+    import_parser = memory_subparsers.add_parser("import", help="Import memory entries from JSON.")
     import_parser.add_argument("path", type=Path)
     _add_handler(import_parser, handle_memory_import)
-    profile_parser = memory_subparsers.add_parser("profile")
+    profile_parser = memory_subparsers.add_parser(
+        "profile",
+        help="Manage extracted profile facts and preferences.",
+        description="Manage extracted profile facts and preferences.",
+    )
     profile_parser.set_defaults(handler=None, help_parser=profile_parser)
-    profile_subparsers = profile_parser.add_subparsers(dest="profile_command")
-    profile_list_parser = profile_subparsers.add_parser("list")
+    profile_subparsers = profile_parser.add_subparsers(dest="profile_command", metavar="<command>")
+    profile_list_parser = profile_subparsers.add_parser("list", help="List profile entries with visible indexes.")
     profile_list_parser.add_argument("--sort-by", choices=["updated_at", "importance", "type"], default="updated_at")
     _add_handler(profile_list_parser, handle_memory_profile_list)
-    profile_search_parser = profile_subparsers.add_parser("search")
+    profile_search_parser = profile_subparsers.add_parser("search", help="Search profile entries.")
     profile_search_parser.add_argument("query", nargs="?", default="")
     profile_search_parser.add_argument("--type", default=None)
     profile_search_parser.add_argument("--tag", default=None)
@@ -571,56 +549,76 @@ def build_parser() -> argparse.ArgumentParser:
     profile_search_parser.add_argument("--observed-to", default=None)
     profile_search_parser.add_argument("--valid-on", default=None)
     _add_handler(profile_search_parser, handle_memory_profile_search)
-    profile_show_parser = profile_subparsers.add_parser("show")
+    profile_show_parser = profile_subparsers.add_parser("show", help="Show one profile entry by ID or visible index.")
     profile_show_parser.add_argument("profile_id")
     _add_handler(profile_show_parser, handle_memory_profile_show)
-    profile_delete_parser = profile_subparsers.add_parser("delete")
+    profile_delete_parser = profile_subparsers.add_parser(
+        "delete", help="Delete one profile entry by ID or visible index."
+    )
     profile_delete_parser.add_argument("profile_id")
     _add_handler(profile_delete_parser, handle_memory_profile_delete)
-    _add_handler(profile_subparsers.add_parser("reindex"), handle_memory_profile_reindex)
-    source_parser = memory_subparsers.add_parser("source")
+    _add_handler(profile_subparsers.add_parser("reindex", help="Rebuild derived profile entries."), handle_memory_profile_reindex)
+    source_parser = memory_subparsers.add_parser(
+        "source",
+        help="Manage source documents and extracted chunks.",
+        description="Manage source documents and extracted chunks.",
+    )
     source_parser.set_defaults(handler=None, help_parser=source_parser)
-    source_subparsers = source_parser.add_subparsers(dest="source_command")
-    source_ingest_parser = source_subparsers.add_parser("ingest")
+    source_subparsers = source_parser.add_subparsers(dest="source_command", metavar="<command>")
+    source_ingest_parser = source_subparsers.add_parser("ingest", help="Ingest a source document.")
     source_ingest_parser.add_argument("path", type=Path)
     source_ingest_parser.add_argument("--tag", action="append", default=[])
     source_ingest_parser.add_argument("--privacy", choices=["private", "shareable"], default="private")
     _add_handler(source_ingest_parser, handle_memory_source_ingest)
-    _add_handler(source_subparsers.add_parser("list"), handle_memory_source_list)
-    source_show_parser = source_subparsers.add_parser("show")
+    _add_handler(source_subparsers.add_parser("list", help="List source documents."), handle_memory_source_list)
+    source_show_parser = source_subparsers.add_parser("show", help="Show one source document by ID or visible index.")
     source_show_parser.add_argument("source_id")
     _add_handler(source_show_parser, handle_memory_source_show)
-    source_delete_parser = source_subparsers.add_parser("delete")
+    source_delete_parser = source_subparsers.add_parser(
+        "delete", help="Delete one source document by ID or visible index."
+    )
     source_delete_parser.add_argument("source_id")
     _add_handler(source_delete_parser, handle_memory_source_delete)
-    source_chunks_parser = source_subparsers.add_parser("chunks")
+    source_chunks_parser = source_subparsers.add_parser("chunks", help="List chunks for one source document.")
     source_chunks_parser.add_argument("source_id", nargs="?")
     _add_handler(source_chunks_parser, handle_memory_source_chunks)
-    source_search_parser = source_subparsers.add_parser("search")
+    source_search_parser = source_subparsers.add_parser("search", help="Search source chunks.")
     source_search_parser.add_argument("query")
     source_search_parser.add_argument("--limit", type=int, default=8)
     _add_handler(source_search_parser, handle_memory_source_search)
-    source_extract_parser = source_subparsers.add_parser("extract")
+    source_extract_parser = source_subparsers.add_parser(
+        "extract", help="Extract memory candidates from one source document."
+    )
     source_extract_parser.add_argument("source_id")
     _add_handler(source_extract_parser, handle_memory_source_extract)
-    candidate_parser = memory_subparsers.add_parser("review")
+    candidate_parser = memory_subparsers.add_parser(
+        "review",
+        help="Review pending memory candidates.",
+        description="Review pending memory candidates.",
+    )
     candidate_parser.set_defaults(handler=None, help_parser=candidate_parser)
-    candidate_subparsers = candidate_parser.add_subparsers(dest="candidate_command")
-    candidate_list_parser = candidate_subparsers.add_parser("list")
+    candidate_subparsers = candidate_parser.add_subparsers(dest="candidate_command", metavar="<command>")
+    candidate_list_parser = candidate_subparsers.add_parser("list", help="List memory review candidates.")
     candidate_list_parser.add_argument("--all", action="store_true")
     candidate_list_parser.add_argument("--review-state", choices=["pending", "accepted", "rejected"], default=None)
     candidate_list_parser.add_argument("--sort-by", choices=["updated_at", "importance", "type"], default="updated_at")
     _add_handler(candidate_list_parser, handle_memory_candidate_list)
-    candidate_show_parser = candidate_subparsers.add_parser("show")
+    candidate_show_parser = candidate_subparsers.add_parser(
+        "show", help="Show one review candidate by ID or visible index."
+    )
     candidate_show_parser.add_argument("candidate_id")
     _add_handler(candidate_show_parser, handle_memory_candidate_show)
-    candidate_accept_parser = candidate_subparsers.add_parser("accept")
+    candidate_accept_parser = candidate_subparsers.add_parser(
+        "accept", help="Accept review candidates by ID, index, or selection."
+    )
     candidate_accept_parser.add_argument("candidate_id")
     _add_handler(candidate_accept_parser, handle_memory_candidate_accept)
-    candidate_reject_parser = candidate_subparsers.add_parser("reject")
+    candidate_reject_parser = candidate_subparsers.add_parser(
+        "reject", help="Reject review candidates by ID, index, or selection."
+    )
     candidate_reject_parser.add_argument("candidate_id")
     _add_handler(candidate_reject_parser, handle_memory_candidate_reject)
-    candidate_edit_parser = candidate_subparsers.add_parser("edit")
+    candidate_edit_parser = candidate_subparsers.add_parser("edit", help="Edit one review candidate.")
     candidate_edit_parser.add_argument("candidate_id")
     candidate_edit_parser.add_argument("--title", default=None)
     candidate_edit_parser.add_argument("--body", "--text", default=None)
@@ -631,173 +629,209 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_edit_parser.add_argument("--valid-until", default=None)
     candidate_edit_parser.add_argument("--temporal-note", default=None)
     _add_handler(candidate_edit_parser, handle_memory_candidate_edit)
-    candidate_merge_parser = candidate_subparsers.add_parser("merge")
+    candidate_merge_parser = candidate_subparsers.add_parser("merge", help="Merge one candidate into a memory entry.")
     candidate_merge_parser.add_argument("candidate_id")
     candidate_merge_parser.add_argument("entry_id")
     _add_handler(candidate_merge_parser, handle_memory_candidate_merge)
-    types_parser = memory_subparsers.add_parser("types")
+    types_parser = memory_subparsers.add_parser("types", help="List registered memory types.")
     types_parser.add_argument("--json", action="store_true")
     _add_handler(types_parser, handle_memory_types)
-    _add_handler(memory_subparsers.add_parser("reindex"), handle_memory_reindex)
-    unquarantine_parser = memory_subparsers.add_parser("unquarantine")
+    _add_handler(memory_subparsers.add_parser("reindex", help="Rebuild memory derived indexes."), handle_memory_reindex)
+    unquarantine_parser = memory_subparsers.add_parser(
+        "unquarantine", help="Move one quarantined memory entry back to draft."
+    )
     unquarantine_parser.add_argument("entry_id")
     _add_handler(unquarantine_parser, handle_memory_unquarantine)
 
-    thread_parser = subparsers.add_parser("thread")
+    thread_parser = subparsers.add_parser(
+        "thread",
+        help="Manage conversation threads.",
+        description="Manage conversation threads.",
+    )
     thread_parser.set_defaults(handler=None, help_parser=thread_parser)
-    thread_subparsers = thread_parser.add_subparsers(dest="thread_command")
-    _add_handler(thread_subparsers.add_parser("list"), handle_thread_list)
-    thread_show_parser = thread_subparsers.add_parser("show")
+    thread_subparsers = thread_parser.add_subparsers(dest="thread_command", metavar="<command>")
+    _add_handler(thread_subparsers.add_parser("list", help="List conversation threads."), handle_thread_list)
+    thread_show_parser = thread_subparsers.add_parser("show", help="Show one conversation thread.")
     thread_show_parser.add_argument("thread_id")
     _add_handler(thread_show_parser, handle_thread_show)
-    thread_create_parser = thread_subparsers.add_parser("new")
+    thread_create_parser = thread_subparsers.add_parser("new", help="Create an empty conversation thread.")
     thread_create_parser.add_argument("thread_id")
     _add_handler(thread_create_parser, handle_thread_create)
-    thread_open_parser = thread_subparsers.add_parser("open")
+    thread_open_parser = thread_subparsers.add_parser("open", help="Open or create a thread for chat.")
     thread_open_parser.add_argument("thread_id", nargs="?", default=None)
     thread_open_parser.add_argument("--message", "-m", default=None)
     thread_open_parser.add_argument("--create", action="store_true")
     thread_open_parser.add_argument("--deep-link", default=None)
     _add_handler(thread_open_parser, handle_open)
-    thread_rename_parser = thread_subparsers.add_parser("rename")
+    thread_rename_parser = thread_subparsers.add_parser("rename", help="Rename a conversation thread.")
     thread_rename_parser.add_argument("old_thread_id")
     thread_rename_parser.add_argument("new_thread_id")
     _add_handler(thread_rename_parser, handle_thread_rename)
-    thread_branch_parser = thread_subparsers.add_parser("branch")
+    thread_branch_parser = thread_subparsers.add_parser("branch", help="Create a thread branch from an existing thread.")
     thread_branch_parser.add_argument("source_thread_id")
     thread_branch_parser.add_argument("new_thread_id")
     thread_branch_parser.add_argument("--index", type=int, default=None)
     _add_handler(thread_branch_parser, handle_thread_branch)
-    thread_archive_parser = thread_subparsers.add_parser("archive")
+    thread_archive_parser = thread_subparsers.add_parser("archive", help="Archive a conversation thread.")
     thread_archive_parser.add_argument("thread_id")
     _add_handler(thread_archive_parser, handle_thread_archive)
-    thread_delete_parser = thread_subparsers.add_parser("delete")
+    thread_delete_parser = thread_subparsers.add_parser("delete", help="Delete a conversation thread.")
     thread_delete_parser.add_argument("thread_id")
     _add_handler(thread_delete_parser, handle_thread_delete)
-    thread_unarchive_parser = thread_subparsers.add_parser("unarchive")
+    thread_unarchive_parser = thread_subparsers.add_parser("unarchive", help="Restore an archived conversation thread.")
     thread_unarchive_parser.add_argument("thread_id")
     _add_handler(thread_unarchive_parser, handle_thread_unarchive)
-    _add_handler(thread_subparsers.add_parser("archived"), handle_thread_archived)
+    _add_handler(thread_subparsers.add_parser("archived", help="List archived conversation threads."), handle_thread_archived)
 
-    inbox_parser = subparsers.add_parser("inbox")
+    inbox_parser = subparsers.add_parser(
+        "inbox",
+        help="Manage proactive reflection and notification items.",
+        description="Manage proactive reflection and notification items.",
+    )
     inbox_parser.set_defaults(handler=None, help_parser=inbox_parser)
-    inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
-    reflection_parser = inbox_subparsers.add_parser("reflection")
+    inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command", metavar="<command>")
+    reflection_parser = inbox_subparsers.add_parser(
+        "reflection",
+        help="Review reflection candidates.",
+        description="Review reflection candidates.",
+    )
     reflection_parser.set_defaults(handler=None, help_parser=reflection_parser)
-    reflection_subparsers = reflection_parser.add_subparsers(dest="reflection_command")
-    reflection_list_parser = reflection_subparsers.add_parser("list")
+    reflection_subparsers = reflection_parser.add_subparsers(dest="reflection_command", metavar="<command>")
+    reflection_list_parser = reflection_subparsers.add_parser("list", help="List reflection entries.")
     reflection_list_parser.add_argument("--tail", type=int, default=20)
     reflection_list_parser.add_argument("--status", choices=["pending", "dismissed", "archived"], default=None)
     reflection_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reflection_list_parser, handle_reflection_list)
-    reflection_show_parser = reflection_subparsers.add_parser("show")
+    reflection_show_parser = reflection_subparsers.add_parser("show", help="Show one reflection entry.")
     reflection_show_parser.add_argument("entry_id")
     reflection_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reflection_show_parser, handle_reflection_show)
-    reflection_dismiss_parser = reflection_subparsers.add_parser("dismiss")
+    reflection_dismiss_parser = reflection_subparsers.add_parser("dismiss", help="Dismiss one reflection entry.")
     reflection_dismiss_parser.add_argument("entry_id")
     _add_handler(reflection_dismiss_parser, handle_reflection_dismiss)
-    reflection_archive_parser = reflection_subparsers.add_parser("archive")
+    reflection_archive_parser = reflection_subparsers.add_parser("archive", help="Archive one reflection entry.")
     reflection_archive_parser.add_argument("entry_id")
     _add_handler(reflection_archive_parser, handle_reflection_archive)
-    reflection_promote_parser = reflection_subparsers.add_parser("promote")
+    reflection_promote_parser = reflection_subparsers.add_parser(
+        "promote", help="Promote one reflection into a reason thread."
+    )
     reflection_promote_parser.add_argument("entry_id")
     _add_handler(reflection_promote_parser, handle_reflection_promote)
-    _add_handler(reflection_subparsers.add_parser("organize"), handle_reflection_organize)
+    _add_handler(reflection_subparsers.add_parser("organize", help="Merge similar pending reflection entries."), handle_reflection_organize)
 
-    notify_parser = inbox_subparsers.add_parser("notify")
+    notify_parser = inbox_subparsers.add_parser(
+        "notify",
+        help="Manage notification outbox entries.",
+        description="Manage notification outbox entries.",
+    )
     notify_parser.set_defaults(handler=None, help_parser=notify_parser)
-    notify_subparsers = notify_parser.add_subparsers(dest="notify_command")
-    notify_list_parser = notify_subparsers.add_parser("list")
+    notify_subparsers = notify_parser.add_subparsers(dest="notify_command", metavar="<command>")
+    notify_list_parser = notify_subparsers.add_parser("list", help="List notification entries.")
     notify_list_parser.add_argument("--status", choices=["pending", "sent", "failed", "dismissed"], default=None)
     _add_handler(notify_list_parser, handle_notify_list)
-    notify_show_parser = notify_subparsers.add_parser("show")
+    notify_show_parser = notify_subparsers.add_parser("show", help="Show one notification entry.")
     notify_show_parser.add_argument("entry_id")
     _add_handler(notify_show_parser, handle_notify_show)
-    notify_send_parser = notify_subparsers.add_parser("send")
+    notify_send_parser = notify_subparsers.add_parser("send", help="Send one pending notification now.")
     notify_send_parser.add_argument("entry_id")
     _add_handler(notify_send_parser, handle_notify_send)
-    notify_dismiss_parser = notify_subparsers.add_parser("dismiss")
+    notify_dismiss_parser = notify_subparsers.add_parser("dismiss", help="Dismiss one notification entry.")
     notify_dismiss_parser.add_argument("entry_id")
     _add_handler(notify_dismiss_parser, handle_notify_dismiss)
-    _add_handler(notify_subparsers.add_parser("stats"), handle_notify_stats)
-    notify_watch_parser = notify_subparsers.add_parser("watch")
+    _add_handler(notify_subparsers.add_parser("stats", help="Show notification outbox statistics."), handle_notify_stats)
+    notify_watch_parser = notify_subparsers.add_parser("watch", help="Watch for pending notifications.")
     notify_watch_parser.add_argument("--interval", type=int, default=5, help="Poll interval in seconds")
     _add_handler(notify_watch_parser, handle_notify_watch)
-    _add_handler(notify_subparsers.add_parser("clear"), handle_notify_clear)
+    _add_handler(notify_subparsers.add_parser("clear", help="Clear sent, failed, and dismissed notifications."), handle_notify_clear)
 
-    reason_parser = subparsers.add_parser("reason")
+    reason_parser = subparsers.add_parser(
+        "reason",
+        help="Manage long-run reasoning threads.",
+        description="Manage long-run reasoning threads.",
+    )
     reason_parser.set_defaults(handler=None, help_parser=reason_parser)
-    reason_subparsers = reason_parser.add_subparsers(dest="reason_command")
-    reason_list_parser = reason_subparsers.add_parser("list")
+    reason_subparsers = reason_parser.add_subparsers(dest="reason_command", metavar="<command>")
+    reason_list_parser = reason_subparsers.add_parser("list", help="List reasoning threads.")
     reason_list_parser.add_argument("--status", choices=("active", "paused", "resolved", "archived", "all"), default=None)
     reason_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reason_list_parser, handle_reason_list)
-    reason_show_parser = reason_subparsers.add_parser("show")
+    reason_show_parser = reason_subparsers.add_parser("show", help="Show a reasoning thread and its steps.")
     reason_show_parser.add_argument("thread_id")
     reason_show_parser.add_argument("--full", "-f", action="store_true", default=False)
     reason_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reason_show_parser, handle_reason_show)
-    reason_start_parser = reason_subparsers.add_parser("start")
+    reason_start_parser = reason_subparsers.add_parser("start", help="Start a new reasoning thread.")
     reason_start_parser.add_argument("topic")
     reason_start_parser.add_argument("--priority", choices=("normal", "high"), default="normal")
     reason_start_parser.add_argument("--mandate", action="append", default=[], help="Required action the advancer must follow on every advance (repeatable)")
     _add_handler(reason_start_parser, handle_reason_start)
     for action_name in _REASON_VERBS:
-        p = reason_subparsers.add_parser(action_name)
+        p = reason_subparsers.add_parser(action_name, help=f"{action_name.title()} one reasoning thread.")
         p.add_argument("thread_id")
         p.set_defaults(action=action_name)
         _add_handler(p, handle_reason_thread_action)
-    reason_delete_parser = reason_subparsers.add_parser("delete")
+    reason_delete_parser = reason_subparsers.add_parser("delete", help="Delete one reasoning thread.")
     reason_delete_parser.add_argument("thread_id")
     reason_delete_parser.add_argument("--yes", "-y", action="store_true", default=False)
     _add_handler(reason_delete_parser, handle_reason_delete)
-    reason_watch_parser = reason_subparsers.add_parser("watch")
+    reason_watch_parser = reason_subparsers.add_parser("watch", help="Watch reasoning threads for new steps.")
     reason_watch_parser.add_argument("thread_id", nargs="?", default=None, help="Thread id or index to watch (default: all threads)")
     reason_watch_parser.add_argument("--interval", type=int, default=5, help="Poll interval in seconds")
     _add_handler(reason_watch_parser, handle_reason_watch)
-    trace_parser = subparsers.add_parser("trace")
+    trace_parser = subparsers.add_parser(
+        "trace",
+        help="Inspect thought provenance records.",
+        description="Inspect thought provenance records.",
+    )
     trace_parser.set_defaults(handler=None, help_parser=trace_parser)
-    trace_subparsers = trace_parser.add_subparsers(dest="trace_command")
-    trace_list_parser = trace_subparsers.add_parser("list")
+    trace_subparsers = trace_parser.add_subparsers(dest="trace_command", metavar="<command>")
+    trace_list_parser = trace_subparsers.add_parser("list", help="List thought traces.")
     trace_list_parser.add_argument("--kind", choices=TRACE_KINDS, default=None)
     trace_list_parser.add_argument("--visibility", choices=("private", "shareable", "internal", "all"), default=None)
     trace_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(trace_list_parser, handle_trace_list)
-    trace_show_parser = trace_subparsers.add_parser("show")
+    trace_show_parser = trace_subparsers.add_parser("show", help="Show one thought trace.")
     trace_show_parser.add_argument("trace_id")
     trace_show_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(trace_show_parser, handle_trace_show)
-    trace_search_parser = trace_subparsers.add_parser("search")
+    trace_search_parser = trace_subparsers.add_parser("search", help="Search thought traces.")
     trace_search_parser.add_argument("query")
     trace_search_parser.add_argument("--kind", choices=TRACE_KINDS, default=None)
     trace_search_parser.add_argument("--visibility", choices=("private", "shareable", "internal", "all"), default=None)
     trace_search_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(trace_search_parser, handle_trace_search)
-    _add_handler(trace_subparsers.add_parser("reindex"), handle_trace_reindex)
+    _add_handler(trace_subparsers.add_parser("reindex", help="Rebuild thought trace indexes."), handle_trace_reindex)
 
-    persona_parser = subparsers.add_parser("persona")
+    persona_parser = subparsers.add_parser(
+        "persona",
+        help="Manage synthesized persona snapshots.",
+        description="Manage synthesized persona snapshots.",
+    )
     persona_parser.set_defaults(handler=None, help_parser=persona_parser)
-    persona_subparsers = persona_parser.add_subparsers(dest="persona_command")
-    _add_handler(persona_subparsers.add_parser("list"), handle_persona_list)
-    persona_show_parser = persona_subparsers.add_parser("show")
+    persona_subparsers = persona_parser.add_subparsers(dest="persona_command", metavar="<command>")
+    _add_handler(persona_subparsers.add_parser("list", help="List synthesized persona snapshots."), handle_persona_list)
+    persona_show_parser = persona_subparsers.add_parser("show", help="Show one persona snapshot.")
     persona_show_parser.add_argument("name_or_id")
     _add_handler(persona_show_parser, handle_persona_show)
-    persona_delete_parser = persona_subparsers.add_parser("delete")
+    persona_delete_parser = persona_subparsers.add_parser("delete", help="Delete one persona snapshot.")
     persona_delete_parser.add_argument("name_or_id")
     persona_delete_parser.add_argument("--yes", "-y", action="store_true", default=False)
     _add_handler(persona_delete_parser, handle_persona_delete)
 
-    dev_parser = subparsers.add_parser("dev")
+    dev_parser = subparsers.add_parser(
+        "dev",
+        help="Run diagnostics, logs, config inspection, and evals.",
+        description="Run diagnostics, logs, config inspection, and evals.",
+    )
     dev_parser.set_defaults(handler=None, help_parser=dev_parser)
-    dev_subparsers = dev_parser.add_subparsers(dest="dev_command")
-    _add_handler(dev_subparsers.add_parser("status"), handle_status)
-    _add_handler(dev_subparsers.add_parser("health"), handle_health)
-    _add_handler(dev_subparsers.add_parser("config"), handle_config)
-    dev_logs_parser = dev_subparsers.add_parser("logs")
+    dev_subparsers = dev_parser.add_subparsers(dest="dev_command", metavar="<command>")
+    _add_handler(dev_subparsers.add_parser("status", help="Show runtime status summary."), handle_status)
+    _add_handler(dev_subparsers.add_parser("health", help="Run local health checks."), handle_health)
+    _add_handler(dev_subparsers.add_parser("config", help="Show effective configuration."), handle_config)
+    dev_logs_parser = dev_subparsers.add_parser("logs", help="Show structured logs.")
     _add_log_arguments(dev_logs_parser)
     _add_handler(dev_logs_parser, handle_logs)
-    dev_eval_parser = dev_subparsers.add_parser("eval")
+    dev_eval_parser = dev_subparsers.add_parser("eval", help="Run evaluation fixtures.")
     dev_eval_parser.add_argument("--fixtures", type=Path, default=None)
     dev_eval_parser.add_argument("--component", choices=["conversations", "notifications", "all"], default="all")
     _add_handler(dev_eval_parser, handle_eval)
@@ -1150,16 +1184,18 @@ def handle_memory_edit(args: argparse.Namespace) -> int:
 
 def handle_memory_delete(args: argparse.Namespace) -> int:
     repo = MemoryEntryRepository(args.project_root)
-    entry_id = _resolve_memory_entry_id(args)
-    if entry_id is None:
+    entry_ids = _resolve_memory_entry_ids(args)
+    if entry_ids is None:
         return 1
-    try:
-        repo.delete(entry_id)
-    except MemoryEntryNotFound:
-        print(f"Memory entry not found: {entry_id}", file=sys.stderr)
-        return 1
+    for entry_id in entry_ids:
+        try:
+            repo.delete(entry_id)
+        except MemoryEntryNotFound:
+            print(f"Memory entry not found: {entry_id}", file=sys.stderr)
+            return 1
     repo.reindex()
-    print(f"Deleted memory entry: {entry_id}")
+    for entry_id in entry_ids:
+        print(f"Deleted memory entry: {entry_id}")
     return 0
 
 
@@ -1202,13 +1238,21 @@ def _memory_entries_for_list(
 
 
 def _resolve_memory_entry_id(args: argparse.Namespace) -> str | None:
-    if not _looks_like_visible_index(args.entry_id):
-        return args.entry_id
     entries = _memory_entries_for_list(args.project_root)
-    index = _parse_visible_index(args.entry_id, count=len(entries), label="memory")
-    if index is None:
+    try:
+        return resolve_visible_handle(args.entry_id, entries, label="memory", get_id=lambda entry: entry.id)
+    except VisibleHandleError as exc:
+        print(str(exc), file=sys.stderr)
         return None
-    return entries[index].id
+
+
+def _resolve_memory_entry_ids(args: argparse.Namespace) -> list[str] | None:
+    entries = _memory_entries_for_list(args.project_root)
+    try:
+        return resolve_visible_handle_selection(args.entry_id, entries, label="memory", get_id=lambda entry: entry.id)
+    except VisibleHandleError as exc:
+        print(str(exc), file=sys.stderr)
+        return None
 
 
 def handle_memory_stats(args: argparse.Namespace) -> int:
@@ -1544,14 +1588,13 @@ def _resolve_notify_entry_id(args: argparse.Namespace) -> str | None:
     """Resolve a notification id or visible numeric index to the stored id."""
     from nuself.notification import NotificationOutbox
 
-    if not _looks_like_visible_index(args.entry_id):
-        return args.entry_id
     outbox = NotificationOutbox(args.project_root)
     entries = outbox.list()
-    idx = _parse_visible_index(args.entry_id, count=len(entries), label="notification")
-    if idx is None:
+    try:
+        return resolve_visible_handle(args.entry_id, entries, label="notification", get_id=lambda entry: entry.id)
+    except VisibleHandleError as exc:
+        print(str(exc), file=sys.stderr)
         return None
-    return entries[idx].id
 
 
 def handle_notify_show(args: argparse.Namespace) -> int:
@@ -1832,14 +1875,13 @@ def _resolve_reflection_entry_id(args: argparse.Namespace) -> str | None:
     """Resolve a reflection id or visible numeric index to the stored id."""
     from nuself.reflection.repository import ReflectionRepository
 
-    if not _looks_like_visible_index(args.entry_id):
-        return args.entry_id
     repo = ReflectionRepository(args.project_root)
     entries = repo.list()
-    idx = _parse_visible_index(args.entry_id, count=len(entries), label="reflection")
-    if idx is None:
+    try:
+        return resolve_visible_handle(args.entry_id, entries, label="reflection", get_id=lambda entry: entry.id)
+    except VisibleHandleError as exc:
+        print(str(exc), file=sys.stderr)
         return None
-    return entries[idx].id
 
 
 def handle_reflection_list(args: argparse.Namespace) -> int:
@@ -2121,24 +2163,31 @@ def _memory_candidates_for_list(
 
 
 def _resolve_memory_candidate_id(args: argparse.Namespace) -> str | None:
-    if not _looks_like_visible_index(args.candidate_id):
-        return args.candidate_id
     candidates = _memory_candidates_for_list(args.project_root)
-    index = _parse_visible_index(args.candidate_id, count=len(candidates), label="memory candidate")
-    if index is None:
+    try:
+        return resolve_visible_handle(
+            args.candidate_id,
+            candidates,
+            label="memory candidate",
+            get_id=lambda candidate: candidate.id,
+        )
+    except VisibleHandleError as exc:
+        print(str(exc), file=sys.stderr)
         return None
-    return candidates[index].id
 
 
 def _resolve_memory_candidate_ids(args: argparse.Namespace) -> list[str] | None:
-    uses_selection_syntax = "," in args.candidate_id or "-" in args.candidate_id
-    if not _looks_like_visible_index(args.candidate_id) and not uses_selection_syntax:
-        return [args.candidate_id]
     candidates = _memory_candidates_for_list(args.project_root)
-    indexes = _parse_visible_index_selection(args.candidate_id, count=len(candidates), label="memory candidate")
-    if indexes is None:
+    try:
+        return resolve_visible_handle_selection(
+            args.candidate_id,
+            candidates,
+            label="memory candidate",
+            get_id=lambda candidate: candidate.id,
+        )
+    except VisibleHandleError as exc:
+        print(str(exc), file=sys.stderr)
         return None
-    return [candidates[index].id for index in indexes]
 
 
 def handle_memory_source_ingest(args: argparse.Namespace) -> int:
@@ -2238,13 +2287,12 @@ def handle_memory_source_extract(args: argparse.Namespace) -> int:
 
 
 def _resolve_source_id(args: argparse.Namespace) -> str | None:
-    if not _looks_like_visible_index(args.source_id):
-        return args.source_id
     documents = SourceRepository(args.project_root).list_documents()
-    index = _parse_visible_index(args.source_id, count=len(documents), label="source")
-    if index is None:
+    try:
+        return resolve_visible_handle(args.source_id, documents, label="source", get_id=lambda document: document.id)
+    except VisibleHandleError as exc:
+        print(str(exc), file=sys.stderr)
         return None
-    return documents[index].id
 
 
 def handle_memory_profile_list(args: argparse.Namespace) -> int:
@@ -2322,13 +2370,12 @@ def _profile_items_for_list(project_root: Path | None, *, sort_by: str = "update
 
 
 def _resolve_profile_id(args: argparse.Namespace) -> str | None:
-    if not _looks_like_visible_index(args.profile_id):
-        return args.profile_id
     items = _profile_items_for_list(args.project_root)
-    index = _parse_visible_index(args.profile_id, count=len(items), label="profile")
-    if index is None:
+    try:
+        return resolve_visible_handle(args.profile_id, items, label="profile", get_id=lambda item: item.id)
+    except VisibleHandleError as exc:
+        print(str(exc), file=sys.stderr)
         return None
-    return items[index].id
 
 
 def handle_persona_list(args: argparse.Namespace) -> int:

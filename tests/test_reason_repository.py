@@ -62,13 +62,13 @@ def test_resolve_thread_by_id(tmp_path: Path) -> None:
     assert resolved.id == t.id
 
 
-def test_resolve_thread_by_index(tmp_path: Path) -> None:
+def test_resolve_thread_by_numeric_handle(tmp_path: Path) -> None:
     repo = ReasonRepository(tmp_path)
     t1 = ReasoningThread(topic="First")
     t2 = ReasoningThread(topic="Second")
     repo.save_thread(t1)
     repo.save_thread(t2)
-    resolved = repo.resolve_thread("1", by_index=True)
+    resolved = repo.resolve_thread("1")
     assert resolved.id == t2.id
 
 
