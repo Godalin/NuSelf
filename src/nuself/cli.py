@@ -4145,9 +4145,7 @@ def _format_memory_preview(project_root: Path | None, limit: int = DEFAULT_MEMOR
         return "No memory entries."
     shown = entries[:normalized_limit]
     lines: list[str] = []
-    for i, entry in enumerate(shown):
-        if i > 0:
-            lines.append("")
+    for entry in shown:
         lines.append(render_memory_entry_row(entry))
     lines.append("")
     lines.append(f"  {len(shown)}/{len(entries)} entries shown.")

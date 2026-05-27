@@ -271,7 +271,7 @@ All memory subcommands follow the same list/detail/empty/error contracts.
 - **Help**: `nuself memory -h` and nested group help (`memory review -h`, `memory source -h`, `memory profile -h`,
   `memory graph -h`) list every subcommand with a one-line purpose, following the shared command help contract.
 - **List**: `[memory] [<N>] state=<state> type=<type> id=<id> tags=[...] confidence=...`, followed by indented title/body text. `<N>` is a 0-based visible index.
-- **Preview**: `memory preview` and REPL `:mem` show the memory context preview used by chat. It is for reading context, not as the authoritative handle source for object operations.
+- **Preview**: `memory preview` and REPL `:mem` show memory entries with the same record-block style as `memory list`, but without visible indexes. It is for reading context, not as the authoritative handle source for object operations.
 - **Detail**: Same record-block style as list, with full title/body plus tags, temporal metadata, and evidence rendered as indented body sections.
 - `memory show/edit/delete`, `memory review show/accept/reject/edit/merge`, `memory source show/delete/chunks/extract`, and `memory profile show/delete` accept either a stable ID or the 0-based index from their corresponding list command.
 - `memory delete`, `memory review accept`, and `memory review reject` also accept compact batch selections, such as `nuself memory delete 0-43` or `nuself memory review accept 1,3-5,9`.

@@ -42,6 +42,7 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 - CLI and REPL list views now use consistent 0-based visible indexes; object commands accept numeric handles directly; and memory delete/review accept/reject support compact batch index selections such as `1,3-5,9`.
 - CLI command help now describes top-level commands and command-group actions, including nested memory and inbox groups.
 - Memory list/detail output now follows the shared record-block style with `[memory] [index] key=value` headers, lightly colored key/value values, and indented text bodies.
+- Memory preview now follows the same record-block style as memory list while omitting visible operation indexes.
 - Memory curator actions now require explicit tags for create/update candidates, and manual memory intake no longer creates heuristic fallback entries when LLM inference fails.
 - Reflection no longer blocks new cycles based on pending reflection count; duplicate pressure is handled by organization instead.
 - Competitive persona discussion logs now render as `[selves]` activity, and visible discussion notes follow the configured chat language preference.

@@ -1255,6 +1255,28 @@ def test_memory_preview_limits_entries(tmp_path: Path, capsys: CaptureFixture) -
     assert "to see more." in captured.out
 
 
+def test_memory_preview_uses_list_record_style_without_indexes(tmp_path: Path, capsys: CaptureFixture) -> None:
+    MemoryEntryRepository(tmp_path).save(
+        MemoryEntry(
+            type="belief",
+            title="Preview style",
+            body="Memory preview should use the same record body style as list.",
+            tags=["cli"],
+            review_state="reviewed",
+            confidence=0.8,
+        )
+    )
+
+    result = main(["--project-root", str(tmp_path), "memory", "preview"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[memory] state=reviewed type=belief" in captured.out
+    assert "[memory] [0]" not in captured.out
+    assert "  Preview style" in captured.out
+    assert "  Memory preview should use the same record body style as list." in captured.out
+
+
 def test_memory_update_defers_without_agent_decision(tmp_path: Path, capsys: CaptureFixture) -> None:
     ThreadStore(tmp_path).save(
         ThreadState(
