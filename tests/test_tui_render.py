@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from nuself.logs import LogEvent
+from nuself.domain.memory import MemoryEntry
+from nuself.domain.profile import ProfileItem
+from nuself.domain.source import SourceDocument
 from nuself.notification import OutboxEntry
 from nuself.reflection.repository import ReflectionEntry
+from nuself.tui.memory import render_memory_entry_detail, render_memory_entry_row, render_profile_row, render_source_row
 from nuself.tui.render import (
     format_display_timestamp,
     render_discussion_trace,
@@ -241,3 +245,55 @@ def test_render_reflection_records_use_shared_key_value_style() -> None:
         "    [turn-1]",
         "      [builder_self]     build it",
     ]
+
+
+def test_render_memory_records_use_subsystem_index_then_body_style() -> None:
+    entry = MemoryEntry(
+        id="mem_1",
+        type="belief",
+        title="Focus",
+        body="Deep work matters.",
+        tags=["work"],
+        confidence=0.82,
+        review_state="reviewed",
+    )
+    profile = ProfileItem(
+        id="profile_1",
+        type="preference",
+        title="Prefers concise output",
+        body="Keep CLI output scan-friendly.",
+        tags=["cli"],
+        confidence=0.9,
+    )
+    source = SourceDocument(
+        id="src_1",
+        path="notes.md",
+        title="Notes",
+        kind="text",
+        tags=["journal"],
+    )
+
+    assert render_memory_entry_row(entry, index=0, color=False).splitlines() == [
+        "[memory] [0] state=reviewed type=belief id=mem_1 tags=[work] confidence=0.82",
+        "  Focus",
+        "  Deep work matters.",
+    ]
+    assert render_memory_entry_detail(entry, color=False).splitlines() == [
+        "[memory] state=reviewed type=belief id=mem_1 tags=[work] confidence=0.82 privacy=private",
+        "  Focus",
+        "  Deep work matters.",
+    ]
+    assert render_profile_row(profile, index=1, color=False).splitlines() == [
+        "[profile] [1] type=preference id=profile_1 tags=[cli] confidence=0.90 importance=0.5",
+        "  Prefers concise output",
+        "  Keep CLI output scan-friendly.",
+    ]
+    assert render_source_row(source, index=2, chunk_count=3, color=False).splitlines() == [
+        "[source] [2] id=src_1 chunks=3 tags=[journal] privacy=private path=notes.md",
+        "  Notes",
+    ]
+    colored = render_memory_entry_row(entry, index=0, color=True).splitlines()[0]
+    assert colored.startswith("\033[32m[memory]\033[0m [0] state=\033[32mreviewed\033[0m")
+    assert "type=\033[36mbelief\033[0m" in colored
+    assert "id=\033[90mmem_1\033[0m" in colored
+    assert "tags=\033[90m[work]\033[0m" in colored

@@ -4145,8 +4145,6 @@ def _format_memory_preview(project_root: Path | None, limit: int = DEFAULT_MEMOR
         if i > 0:
             lines.append("")
         lines.append(render_memory_entry_row(entry))
-        if entry.body:
-            lines.extend(f"  {line}" for line in _wrap_body_preview(entry.body))
     lines.append("")
     lines.append(f"  {len(shown)}/{len(entries)} entries shown.")
     if len(entries) > normalized_limit:
@@ -4159,14 +4157,6 @@ def _compact_text(text: str, limit: int) -> str:
     if len(compact) <= limit:
         return compact
     return compact[: max(limit - 3, 0)].rstrip() + "..."
-
-
-def _wrap_body_preview(body: str, width: int = 88) -> list[str]:
-    import shutil
-    import textwrap
-
-    cols = shutil.get_terminal_size((width, 24)).columns
-    return textwrap.wrap(body, width=max(min(cols, width), 40)) or [""]
 
 
 def _memory_type_choices() -> list[str]:

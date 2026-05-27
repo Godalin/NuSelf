@@ -41,6 +41,7 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 - Replaced `readline` with `prompt_toolkit` for interactive input, styled prompts, persisted history, and tab completion.
 - CLI and REPL list views now use consistent 0-based visible indexes; object commands accept numeric handles directly; and memory delete/review accept/reject support compact batch index selections such as `1,3-5,9`.
 - CLI command help now describes top-level commands and command-group actions, including nested memory and inbox groups.
+- Memory list/detail output now follows the shared record-block style with `[memory] [index] key=value` headers, lightly colored key/value values, and indented text bodies.
 - Reflection no longer blocks new cycles based on pending reflection count; duplicate pressure is handled by organization instead.
 - Competitive persona discussion logs now render as `[selves]` activity, and visible discussion notes follow the configured chat language preference.
 - `[selves]` logs now render `status` as indented body text and avoid repeating `escalation_reason` in the header, so long activation text does not stretch the header.

@@ -10,152 +10,103 @@ from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.domain.profile import ProfileItem
 from nuself.domain.source import SourceDocument
 from nuself.memory.repository import MemoryRelationIndexRecord
-from nuself.tui.render import TerminalTheme
+from nuself.tui.render import TerminalTheme, render_key_value_field, render_record_block, render_record_header
 
 DEFAULT_TEXT_WIDTH = 88
 
 
 def render_memory_entry_row(entry: MemoryEntry, *, index: int | None = None, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
-    tags = _format_tags(entry.tags)
-    label = f"[{index}] {theme.tag('[mem]', 'memory')}" if index is not None else theme.tag("[mem]", "memory")
-    return " ".join(
-        _omit_empty(
-            [
-                label,
-                _state(theme, entry.review_state),
-                entry.type,
-                theme.muted(entry.id),
-                entry.title,
-                tags,
-                f"conf={entry.confidence:.2f}",
-            ]
-        )
+    return render_record_block(
+        _record_label(theme, "memory", index=index),
+        _memory_entry_fields(entry, theme=theme),
+        body=_list_body(entry.title, entry.body),
     )
 
 
 def render_memory_entry_detail(entry: MemoryEntry, *, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
-    lines = [
-        f"{theme.tag('[mem]', 'memory')} {entry.title}",
-        _metadata_line(
+    fields = [
+        *_memory_entry_fields(entry, theme=theme),
+        render_key_value_field("privacy", entry.privacy),
+        *_optional_fields(
             [
-                f"id={entry.id}",
-                f"type={entry.type}",
-                f"state={entry.review_state}",
-                f"confidence={entry.confidence:.2f}",
-                f"privacy={entry.privacy}",
-            ],
-            theme=theme,
+                ("observed_at", entry.observed_at),
+                ("valid_from", entry.valid_from),
+                ("valid_until", entry.valid_until),
+                ("temporal_note", entry.temporal_note),
+            ]
         ),
     ]
-    lines.extend(_optional_section("tags", ", ".join(entry.tags)))
-    lines.extend(
-        _optional_section(
-            "time",
-            " ".join(
-                _omit_empty(
-                    [
-                        _field("observed", entry.observed_at),
-                        _field("valid_from", entry.valid_from),
-                        _field("valid_until", entry.valid_until),
-                        _field("note", entry.temporal_note),
-                    ]
-                )
-            ),
-        )
-    )
+    lines = [render_record_header(_record_label(theme, "memory"), fields)]
+    lines.extend(f"  {line}" for line in _detail_body_lines(entry.title, entry.body))
     lines.extend(_evidence_section(entry.evidence, theme=theme))
-    lines.append("")
-    lines.extend(_wrap_body(entry.body))
     return "\n".join(lines)
 
 
 def render_candidate_row(candidate: MemoryCandidate, *, index: int | None = None, color: bool | None = None) -> str:
-    """Render a candidate as a compact card with body text."""
     theme = TerminalTheme(color=color)
-    label = f"[{index}] {theme.tag('[cand]', 'memory')}" if index is not None else theme.tag("[cand]", "memory")
-    header = " ".join(
-        _omit_empty(
-            [
-                label,
-                _state(theme, candidate.review_state),
-                f"{candidate.action} {candidate.type}:",
-                candidate.title,
-                theme.muted(f"conf={candidate.confidence:.2f}"),
-                theme.muted(candidate.id),
-            ]
-        )
+    fields = [
+        _state_field(theme, candidate.review_state),
+        _styled_field(theme, "action", candidate.action, "35"),
+        _type_field(theme, candidate.type),
+        _styled_field(theme, "id", candidate.id, "90"),
+        render_key_value_field("confidence", f"{candidate.confidence:.2f}"),
+    ]
+    return render_record_block(
+        _record_label(theme, "candidate", index=index),
+        fields,
+        body=_list_body(candidate.title, candidate.body),
     )
-    body_lines = _wrap_body(candidate.body)
-    if body_lines:
-        indented = "\n".join(f"  {line}" for line in body_lines)
-        return f"{header}\n{indented}"
-    return header
 
 
 def render_candidate_detail(candidate: MemoryCandidate, *, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
-    lines = [
-        f"{theme.tag('[cand]', 'memory')} {candidate.title}",
-        _metadata_line(
-            [
-                f"id={candidate.id}",
-                f"action={candidate.action}",
-                f"type={candidate.type}",
-                f"state={candidate.review_state}",
-                f"confidence={candidate.confidence:.2f}",
-                f"importance={candidate.importance}",
-            ],
-            theme=theme,
-        ),
+    fields = [
+        _state_field(theme, candidate.review_state),
+        _styled_field(theme, "action", candidate.action, "35"),
+        _type_field(theme, candidate.type),
+        _styled_field(theme, "id", candidate.id, "90"),
+        render_key_value_field("confidence", f"{candidate.confidence:.2f}"),
+        render_key_value_field("importance", candidate.importance),
     ]
-    lines.extend(_optional_section("target", candidate.target_entry_id))
+    fields.extend(_optional_fields([("target", candidate.target_entry_id), ("tags", list(candidate.tags))]))
+    lines = [render_record_header(_record_label(theme, "candidate"), fields)]
+    lines.extend(f"  {line}" for line in _detail_body_lines(candidate.title, candidate.body))
     lines.extend(_optional_section("reason", candidate.reason))
-    lines.extend(_optional_section("tags", ", ".join(candidate.tags)))
     lines.extend(_evidence_section(candidate.evidence, theme=theme))
-    lines.append("")
-    lines.extend(_wrap_body(candidate.body))
     return "\n".join(lines)
 
 
 def render_profile_row(item: ProfileItem, *, index: int | None = None, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
-    label = f"[{index}] {theme.tag('[profile]', 'chat')}" if index is not None else theme.tag("[profile]", "chat")
-    return " ".join(
-        _omit_empty(
-            [
-                label,
-                item.type,
-                theme.muted(item.id),
-                item.title,
-                _format_tags(item.tags),
-                f"conf={item.confidence:.2f}",
-                f"imp={item.importance}",
-            ]
-        )
+    fields = [
+        _type_field(theme, item.type),
+        _styled_field(theme, "id", item.id, "90"),
+        *_optional_fields([("tags", list(item.tags))], theme=theme),
+        render_key_value_field("confidence", f"{item.confidence:.2f}"),
+        render_key_value_field("importance", item.importance),
+    ]
+    return render_record_block(
+        _record_label(theme, "profile", index=index),
+        fields,
+        body=_list_body(item.title, item.body),
     )
 
 
 def render_profile_detail(item: ProfileItem, *, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
-    lines = [
-        f"{theme.tag('[profile]', 'chat')} {item.title}",
-        _metadata_line(
-            [
-                f"id={item.id}",
-                f"type={item.type}",
-                f"confidence={item.confidence:.2f}",
-                f"importance={item.importance}",
-                f"privacy={item.privacy}",
-            ],
-            theme=theme,
-        ),
+    fields = [
+        _type_field(theme, item.type),
+        _styled_field(theme, "id", item.id, "90"),
+        render_key_value_field("confidence", f"{item.confidence:.2f}"),
+        render_key_value_field("importance", item.importance),
+        render_key_value_field("privacy", item.privacy),
+        *_optional_fields([("tags", list(item.tags))], theme=theme),
     ]
-    lines.extend(_optional_section("tags", ", ".join(item.tags)))
+    lines = [render_record_header(_record_label(theme, "profile"), fields)]
+    lines.extend(f"  {line}" for line in _detail_body_lines(item.title, item.body))
     lines.extend(_evidence_section(item.evidence, theme=theme))
-    lines.append("")
-    lines.extend(_wrap_body(item.body))
     return "\n".join(lines)
 
 
@@ -167,42 +118,32 @@ def render_source_row(
     color: bool | None = None,
 ) -> str:
     theme = TerminalTheme(color=color)
-    chunks = f"chunks={chunk_count}" if chunk_count is not None else ""
-    label = f"[{index}] {theme.tag('[src]', 'outbox')}" if index is not None else theme.tag("[src]", "outbox")
-    return " ".join(
-        _omit_empty(
-            [
-                label,
-                theme.muted(document.id),
-                str(document.path),
-                document.title,
-                chunks,
-                _format_tags(document.tags),
-                document.privacy,
-            ]
-        )
+    fields = [
+        _styled_field(theme, "id", document.id, "90"),
+        *_optional_fields([("chunks", chunk_count)]),
+        *_optional_fields([("tags", list(document.tags))], theme=theme),
+        render_key_value_field("privacy", document.privacy),
+        _styled_field(theme, "path", str(document.path), "90"),
+    ]
+    return render_record_block(
+        _record_label(theme, "source", index=index),
+        fields,
+        body=document.title,
     )
 
 
 def render_source_detail(document: SourceDocument, *, chunk_count: int, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
-    lines = [
-        f"{theme.tag('[src]', 'outbox')} {document.title}",
-        _metadata_line(
-            [
-                f"id={document.id}",
-                f"kind={document.kind}",
-                f"privacy={document.privacy}",
-                f"chunks={chunk_count}",
-            ],
-            theme=theme,
-        ),
-        f"path: {document.path}",
+    fields = [
+        _styled_field(theme, "id", document.id, "90"),
+        _styled_field(theme, "kind", document.kind, "36"),
+        render_key_value_field("privacy", document.privacy),
+        render_key_value_field("chunks", chunk_count),
+        _styled_field(theme, "path", str(document.path), "90"),
+        *_optional_fields([("tags", list(document.tags))], theme=theme),
+        *_optional_fields([("origin", document.origin), ("source_date", document.source_date)]),
     ]
-    lines.extend(_optional_section("tags", ", ".join(document.tags)))
-    lines.extend(_optional_section("origin", document.origin))
-    lines.extend(_optional_section("source_date", document.source_date))
-    return "\n".join(lines)
+    return render_record_block(_record_label(theme, "source"), fields, body=document.title)
 
 
 def render_relation_row(record: MemoryRelationIndexRecord, *, color: bool | None = None) -> str:
@@ -214,37 +155,28 @@ def render_relation_row(record: MemoryRelationIndexRecord, *, color: bool | None
     )
 
 
-def _metadata_line(items: Sequence[str], *, theme: TerminalTheme) -> str:
-    return theme.muted("  ".join(items))
+def _record_label(theme: TerminalTheme, name: str, *, index: int | None = None) -> str:
+    label = theme.tag(f"[{name}]", "memory")
+    if index is None:
+        return label
+    return f"{label} [{index}]"
 
 
-def _evidence_section(evidence_items: Sequence[MemoryEvidence], *, theme: TerminalTheme) -> list[str]:
-    if not evidence_items:
-        return []
-    lines = ["evidence:"]
-    for evidence in evidence_items:
-        summary = f"  {evidence.summary}" if evidence.summary else ""
-        lines.append(theme.muted(f"  - {evidence.source_type}:{evidence.source_ref}{summary}"))
-    return lines
+def _memory_entry_fields(entry: MemoryEntry, *, theme: TerminalTheme) -> list[str]:
+    return [
+        _state_field(theme, entry.review_state),
+        _type_field(theme, entry.type),
+        _styled_field(theme, "id", entry.id, "90"),
+        *_optional_fields([("tags", list(entry.tags))], theme=theme),
+        render_key_value_field("confidence", f"{entry.confidence:.2f}"),
+    ]
 
 
-def _optional_section(label: str, value: str | None) -> list[str]:
-    if value is None or value.strip() == "":
-        return []
-    return [f"{label}: {value}"]
+def _state_field(theme: TerminalTheme, state: str) -> str:
+    return f"state={_state_value(theme, state)}"
 
 
-def _field(name: str, value: str | None) -> str:
-    if value is None or value == "":
-        return ""
-    return f"{name}={value}"
-
-
-def _format_tags(tags: Sequence[str]) -> str:
-    return " ".join(f"#{tag}" for tag in tags)
-
-
-def _state(theme: TerminalTheme, state: str) -> str:
+def _state_value(theme: TerminalTheme, state: str) -> str:
     if state in {"reviewed", "accepted"}:
         return theme.paint(state, "32")
     if state in {"rejected"}:
@@ -254,10 +186,72 @@ def _state(theme: TerminalTheme, state: str) -> str:
     return theme.paint(state, "33")
 
 
+def _type_field(theme: TerminalTheme, value: str) -> str:
+    return _styled_field(theme, "type", value, _type_color(value))
+
+
+def _styled_field(theme: TerminalTheme, key: str, value: object, color_code: str) -> str:
+    raw = render_key_value_field(key, value)
+    field_key, separator, field_value = raw.partition("=")
+    if not separator:
+        return theme.paint(raw, color_code)
+    return f"{field_key}={theme.paint(field_value, color_code)}"
+
+
+def _type_color(value: str) -> str:
+    if value in {"belief", "profile_fact", "fact"}:
+        return "36"
+    if value in {"preference"}:
+        return "35"
+    if value in {"goal"}:
+        return "32"
+    if value in {"concept"}:
+        return "34"
+    return "33"
+
+
+def _optional_fields(items: Sequence[tuple[str, object | None]], *, theme: TerminalTheme | None = None) -> list[str]:
+    fields: list[str] = []
+    for key, value in items:
+        if value is None or value == "" or value == []:
+            continue
+        if theme is not None and key in {"id", "path", "tags"}:
+            fields.append(_styled_field(theme, key, value, "90"))
+        else:
+            fields.append(render_key_value_field(key, value))
+    return fields
+
+
+def _evidence_section(evidence_items: Sequence[MemoryEvidence], *, theme: TerminalTheme) -> list[str]:
+    if not evidence_items:
+        return []
+    lines = ["  evidence:"]
+    for evidence in evidence_items:
+        summary = f"  {evidence.summary}" if evidence.summary else ""
+        lines.append(theme.muted(f"    - {evidence.source_type}:{evidence.source_ref}{summary}"))
+    return lines
+
+
+def _optional_section(label: str, value: str | None) -> list[str]:
+    if value is None or value.strip() == "":
+        return []
+    return [f"  {label}: {value}"]
+
+
+def _list_body(title: str, body: str) -> str:
+    lines = _detail_body_lines(title, body)
+    return "\n".join(lines)
+
+
+def _detail_body_lines(title: str, body: str) -> list[str]:
+    lines: list[str] = []
+    if title.strip():
+        lines.extend(_wrap_body(title))
+    if body.strip() and body.strip() != title.strip():
+        lines.extend(_wrap_body(body))
+    return lines
+
+
 def _wrap_body(body: str) -> list[str]:
     width = shutil.get_terminal_size((DEFAULT_TEXT_WIDTH, 24)).columns
     return textwrap.wrap(body, width=max(min(width, DEFAULT_TEXT_WIDTH), 40)) or [""]
-
-
-def _omit_empty(items: Sequence[str]) -> list[str]:
-    return [item for item in items if item != ""]

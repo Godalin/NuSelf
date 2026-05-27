@@ -190,10 +190,10 @@ def test_interactive_memory_search_uses_readable_rows(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "[mem] reviewed belief" in captured.out
+    assert "[memory] state=reviewed type=belief" in captured.out
     assert "Readable memory" in captured.out
-    assert "#display" in captured.out
-    assert "Terminal memory output should be easy to scan." not in captured.out
+    assert "tags=[display]" in captured.out
+    assert "Terminal memory output should be easy to scan." in captured.out
 
 
 def test_interactive_memory_show_uses_readable_detail(
@@ -214,7 +214,7 @@ def test_interactive_memory_show_uses_readable_detail(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "[mem] Readable detail" in captured.out
+    assert "[memory] state=draft type=belief" in captured.out
     assert f"id={entry.id}" in captured.out
     assert "evidence:" in captured.out
     assert "Detail views can show the full memory body." in captured.out
@@ -242,11 +242,11 @@ def test_interactive_memory_candidates_profile_and_sources(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "[cand] pending" in captured.out
+    assert "[candidate] [0] state=pending" in captured.out
     assert "Candidate display" in captured.out
-    assert "[profile] profile_fact" in captured.out
+    assert "[profile] type=profile_fact" in captured.out
     assert "Profile display" in captured.out
-    assert "[src]" in captured.out
+    assert "[source]" in captured.out
     assert "Source Display" in captured.out
 
 
@@ -1308,7 +1308,7 @@ def test_memory_add_list_show_delete(tmp_path: Path, capsys: CaptureFixture) -> 
         ]
     )
     add_output = capsys.readouterr().out
-    entry_id = add_output.split()[3]
+    entry_id = add_output.split()[3].removeprefix("id=")
 
     list_result = main(["--project-root", str(tmp_path), "memory", "list"])
     list_output = capsys.readouterr().out
@@ -1323,7 +1323,7 @@ def test_memory_add_list_show_delete(tmp_path: Path, capsys: CaptureFixture) -> 
     assert list_result == 0
     assert show_result == 0
     assert delete_result == 0
-    assert "[0] [mem]" in list_output
+    assert "[memory] [0]" in list_output
     assert "Clarity" in list_output
     assert "State assumptions explicitly." in show_output
     assert f"Deleted memory entry: {entry_id}" in delete_output
@@ -1341,7 +1341,7 @@ def test_memory_add_infers_type_without_manual_type(tmp_path: Path, capsys: Capt
         ]
     )
     add_output = capsys.readouterr().out
-    entry_id = add_output.split()[3]
+    entry_id = add_output.split()[3].removeprefix("id=")
 
     entry = MemoryEntryRepository(tmp_path).get(entry_id)
 
@@ -1423,7 +1423,7 @@ def test_memory_candidate_review_flow_accepts_temporal_candidate(tmp_path: Path,
     assert list_result == 0
     assert show_result == 0
     assert accept_result == 0
-    assert "[0] [cand]" in list_output
+    assert "[candidate] [0]" in list_output
     assert "Temporal memory" in list_output
     assert f"id={candidate.id}" in show_output
     assert "thread:thread:default:4-6" in show_output
@@ -1717,7 +1717,7 @@ def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: Captu
     ingest_output = capsys.readouterr().out
     list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
     list_output = capsys.readouterr().out
-    source_id = list_output.split()[2]
+    source_id = list_output.split()[2].removeprefix("id=")
     show_result = main(["--project-root", str(tmp_path), "memory", "source", "show", "0"])
     show_output = capsys.readouterr().out
     chunks_result = main(["--project-root", str(tmp_path), "memory", "source", "chunks", "0"])
@@ -1728,12 +1728,12 @@ def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: Captu
     assert show_result == 0
     assert chunks_result == 0
     assert "Source ingest: documents=1 chunks=1" in ingest_output
-    assert "[0] [src]" in list_output
+    assert "[source] [0]" in list_output
     assert "Source Essay" in list_output
-    assert "#mirror" in list_output
+    assert "tags=[mirror, imported]" in list_output
     assert "shareable" in list_output
-    assert "origin: notebook" in show_output
-    assert "source_date: 2026-05-07" in show_output
+    assert "origin=notebook" in show_output
+    assert "source_date=2026-05-07" in show_output
     assert f"source:{source_id}:0" in chunks_output
     assert "A durable source paragraph." in chunks_output
 
@@ -1831,7 +1831,7 @@ def test_memory_source_delete_cascades_profile_items(tmp_path: Path, capsys: Cap
     capsys.readouterr()
     list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
     list_output = capsys.readouterr().out
-    source_id = list_output.split()[2]
+    source_id = list_output.split()[2].removeprefix("id=")
     main(["--project-root", str(tmp_path), "memory", "source", "extract", source_id])
     capsys.readouterr()
 
@@ -1865,7 +1865,7 @@ def test_memory_profile_delete_removes_item_and_reindexes(tmp_path: Path, capsys
     capsys.readouterr()
     list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
     list_output = capsys.readouterr().out
-    source_id = list_output.split()[2]
+    source_id = list_output.split()[2].removeprefix("id=")
     main(["--project-root", str(tmp_path), "memory", "source", "extract", source_id])
     capsys.readouterr()
     candidate_repo = MemoryCandidateRepository(tmp_path)
@@ -2775,8 +2775,8 @@ def test_interactive_sources_lists_documents(
     result = main(["--project-root", str(tmp_path), "attach"])
     captured = capsys.readouterr()
     assert result == 0
-    assert "[0] [src]" in captured.out
-    assert "[src]" in captured.out
+    assert "[source] [0]" in captured.out
+    assert "[source]" in captured.out
     assert "Notes" in captured.out
 
 
@@ -2847,7 +2847,7 @@ def test_memory_list_shows_entries(tmp_path: Path, capsys: CaptureFixture) -> No
     result = main(["--project-root", str(tmp_path), "memory", "list"])
     captured = capsys.readouterr()
     assert result == 0
-    assert "[0] [mem]" in captured.out
+    assert "[memory] [0]" in captured.out
     assert "Focus" in captured.out
 
 
@@ -2947,7 +2947,7 @@ def test_memory_source_list_shows_documents(tmp_path: Path, capsys: CaptureFixtu
     result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
     captured = capsys.readouterr()
     assert result == 0
-    assert "[0] [src]" in captured.out
+    assert "[source] [0]" in captured.out
     assert "Test Source" in captured.out
 
 
@@ -3043,7 +3043,7 @@ def test_memory_profile_list_shows_items(tmp_path: Path, capsys: CaptureFixture)
     result = main(["--project-root", str(tmp_path), "memory", "profile", "list"])
     captured = capsys.readouterr()
     assert result == 0
-    assert "[0] [profile]" in captured.out
+    assert "[profile] [0]" in captured.out
     assert "Style" in captured.out
 
 
@@ -3193,7 +3193,7 @@ def test_memory_candidate_list_filters_by_review_state(tmp_path: Path, capsys: C
     result = main(["--project-root", str(tmp_path), "memory", "review", "list", "--review-state", "accepted", "--all"])
     captured = capsys.readouterr()
     assert result == 0
-    assert "[0] [cand]" in captured.out
+    assert "[candidate] [0]" in captured.out
     assert "Accepted" in captured.out
     assert "Pending" not in captured.out
     assert accepted.id in captured.out
