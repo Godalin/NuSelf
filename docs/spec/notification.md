@@ -80,6 +80,8 @@ any     ──► deleted   [clear(status)]  triggered by: CLI notify clear
 | `nuself://new-thread` | `new_thread` |
 | `nuself://new-thread?title=...&message=...&candidate_id=...` | `new_thread` with params |
 
+Thread IDs are encoded as a single path segment. Query values use standard URL encoding, so messages, titles, and candidate IDs may contain `/`, `&`, `=`, spaces, or non-ASCII text and round-trip through `DeepLink.to_url()` / `DeepLink.parse()`.
+
 ## CLI / REPL Contracts
 
 | Command | Exit Code | Output |

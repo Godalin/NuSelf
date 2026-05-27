@@ -67,9 +67,24 @@ def test_round_trip_open_thread() -> None:
     assert restored == original
 
 
+def test_round_trip_open_thread_escapes_path_and_query_characters() -> None:
+    original = DeepLink(action="open_thread", thread_id="thread/with slash", message="a/b&c=d")
+    url = original.to_url()
+
+    assert url == "nuself://thread/thread%2Fwith%20slash?message=a%2Fb%26c%3Dd"
+    assert DeepLink.parse(url) == original
+
+
 def test_round_trip_new_thread() -> None:
     original = DeepLink.for_new_thread(title="T", message="M", candidate_id="C")
     restored = DeepLink.parse(original.to_url())
+    assert restored == original
+
+
+def test_round_trip_new_thread_escapes_query_characters() -> None:
+    original = DeepLink.for_new_thread(title="T/A", message="M&x=1", candidate_id="cand/1")
+    restored = DeepLink.parse(original.to_url())
+
     assert restored == original
 
 

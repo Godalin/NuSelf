@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse
 
 
 @dataclass(frozen=True)
@@ -35,7 +35,7 @@ class DeepLink:
             path = "/" + parsed.netloc + path
 
         if path.startswith("/thread/"):
-            thread_id = path[len("/thread/") :]
+            thread_id = unquote(path[len("/thread/") :])
             if not thread_id:
                 raise ValueError("deep link missing thread id")
             query = parse_qs(parsed.query)
@@ -56,20 +56,21 @@ class DeepLink:
         if self.action == "open_thread":
             if self.thread_id is None:
                 raise ValueError("open_thread deep link requires thread_id")
+            thread_id = quote(self.thread_id, safe="")
             if self.message is not None:
-                return f"nuself://thread/{self.thread_id}?message={quote(self.message)}"
-            return f"nuself://thread/{self.thread_id}"
+                return f"nuself://thread/{thread_id}?{_encode_query({'message': self.message})}"
+            return f"nuself://thread/{thread_id}"
 
         if self.action == "new_thread":
-            params: list[str] = []
+            params: dict[str, str] = {}
             if self.title is not None:
-                params.append(f"title={quote(self.title)}")
+                params["title"] = self.title
             if self.message is not None:
-                params.append(f"message={quote(self.message)}")
+                params["message"] = self.message
             if self.candidate_id is not None:
-                params.append(f"candidate_id={quote(self.candidate_id)}")
+                params["candidate_id"] = self.candidate_id
             if params:
-                return "nuself://new-thread?" + "&".join(params)
+                return "nuself://new-thread?" + _encode_query(params)
             return "nuself://new-thread"
 
         raise ValueError(f"unsupported deep link action: {self.action}")
@@ -83,3 +84,7 @@ class DeepLink:
     ) -> "DeepLink":
         """Create a deep link that opens a new thread."""
         return cls(action="new_thread", title=title, message=message, candidate_id=candidate_id)
+
+
+def _encode_query(params: dict[str, str]) -> str:
+    return urlencode(params, quote_via=quote)

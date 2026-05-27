@@ -60,6 +60,7 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 - Fixed memory update trace coverage for curator auto-accept and manual memory operations.
 - Fixed reason logs to use the configured project root.
 - Fixed `:reason` with no arguments to show reason command help instead of listing threads.
+- Fixed notification deep links so thread IDs and query values round-trip with reserved URL characters.
 
 ### Docs
 
