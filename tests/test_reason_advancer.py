@@ -42,6 +42,20 @@ def teststep_from_data_accepts_valid() -> None:
     assert step.output == "out"
 
 
+def teststep_from_data_filters_non_string_evidence_refs() -> None:
+    data: dict[str, object] = {
+        "summary": "s",
+        "delta": "d",
+        "kind": "progress",
+        "output": "out",
+        "evidence_refs": ["mem_1", 3, None],
+    }
+    step = step_from_data(data, "test-thread")
+
+    assert step is not None
+    assert step.evidence_refs == ["mem_1"]
+
+
 def teststep_from_data_rejects_missing_fields() -> None:
     assert step_from_data({"kind": "progress"}, "t") is None  # type: ignore[reportArgumentType]
     assert step_from_data({"summary": "s", "delta": "d"}, "t") is None  # type: ignore[reportArgumentType]

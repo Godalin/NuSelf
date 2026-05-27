@@ -310,12 +310,16 @@ def _optional_str_with_default(data: dict[str, object], field_name: str, default
 
 def _optional_tool_logs(data: dict[str, object], field_name: str) -> tuple[dict[str, object], ...]:
     value = data.get(field_name)
-    if value is not None:
-        if not isinstance(value, list):
-            raise ValueError(f"field '{field_name}' must be a list")
-        items = cast(list[dict[str, object]], value)
-        return tuple(items)
-    return ()
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError(f"field '{field_name}' must be a list")
+    result: list[dict[str, object]] = []
+    for item in cast(list[object], value):
+        if not isinstance(item, dict):
+            raise ValueError(f"field '{field_name}' must contain objects")
+        result.append(cast(dict[str, object], item))
+    return tuple(result)
 
 
 def _optional_float(data: dict[str, object], field_name: str) -> float | None:

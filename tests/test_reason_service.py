@@ -157,6 +157,24 @@ def test_advance_thread_records_trace(tmp_path: Path) -> None:
     assert traces[0].metadata["step_kind"] == "progress"
 
 
+def test_reason_step_rejects_non_object_tool_logs() -> None:
+    try:
+        ReasoningStep.from_wire(
+            {
+                "id": "step-test",
+                "thread_id": "reason-test",
+                "kind": "progress",
+                "summary": "Advanced",
+                "delta": "Moved",
+                "tool_logs": ["not an object"],
+                "created_at": "2026-05-27T00:00:00+00:00",
+            }
+        )
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "tool_logs" in str(exc)
+
+
 def test_advance_without_advancer_or_step_raises(tmp_path: Path) -> None:
     service = _reason_service(repository=ReasonRepository(tmp_path))
     thread = service.start_thread("No fallback advance")

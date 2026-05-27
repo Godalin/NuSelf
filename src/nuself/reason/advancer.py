@@ -131,7 +131,7 @@ def step_from_data(data: dict[str, object], thread_id: str, *, tool_logs: tuple[
     if isinstance(conf_raw, int | float):
         confidence = max(0.0, min(float(conf_raw), 1.0))
 
-    evidence_refs_list: list[str] = list(cast(list[str], ev_refs)) if isinstance(ev_refs, list) else []
+    evidence_refs_list = _string_list(ev_refs)
 
     def _as_tracked_list(raw: object) -> tuple[dict[str, object], ...]:
         if not isinstance(raw, list):
@@ -157,6 +157,12 @@ def step_from_data(data: dict[str, object], thread_id: str, *, tool_logs: tuple[
         retired_findings_data=_as_tracked_list(data.get("retired_findings")),
         next_steps_data=_as_tracked_list(data.get("next_steps")),
     )
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in cast(list[object], value) if isinstance(item, str)]
 
 
 class ReasonAdvancer:
@@ -298,5 +304,4 @@ class ReasonAdvancer:
             global_project_root=self._project_root,
             get_thread_persona_root=_persona_root,
         )
-
 
