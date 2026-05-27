@@ -310,6 +310,38 @@ def test_memory_curator_rejects_create_without_tags(tmp_path: Path) -> None:
     assert repo.list() == []
 
 
+def test_memory_curator_rejects_unknown_memory_type(tmp_path: Path) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(role="user", content="Remember that unknown memory types should not be coerced."),
+                ThreadMessage(role="assistant", content="I will reject unsupported memory action types."),
+            ],
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"create","type":"made_up_type","title":"Unknown type",'
+        '"body":"Unknown memory types should not be silently coerced.",'
+        '"tags":["memory"],"confidence":0.9,"reason":"bad unknown type"}]}'
+    )
+    repo = MemoryEntryRepository(tmp_path)
+    curator = MemoryCurator(
+        tmp_path,
+        llm=llm,
+        thread_store=thread_store,
+        repository=repo,
+        settings=MemoryCuratorSettings(auto_accept=False),
+    )
+
+    result = curator.run_once()
+
+    assert result.processed_messages == 0
+    assert MemoryCandidateRepository(tmp_path).list() == []
+    assert repo.list() == []
+
+
 def test_memory_curator_accepts_fenced_json(tmp_path: Path) -> None:
     thread_store = ThreadStore(tmp_path)
     thread_store.save(

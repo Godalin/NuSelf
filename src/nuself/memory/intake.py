@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 import re
 from pathlib import Path
 from typing import cast
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
-from nuself.domain.memory import MemoryEntryType
+from nuself.domain.memory import MemoryEntryType, MemoryTypeRegistry, default_memory_type_registry
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.profile.repository import ProfileItemRepository
 
@@ -48,9 +47,11 @@ class MemoryIntakeAgent:
         *,
         llm: ChatLLM | None = None,
         profile_repository: ProfileItemRepository | None = None,
+        registry: MemoryTypeRegistry | None = None,
     ) -> None:
         self._profile_repository = profile_repository or ProfileItemRepository(project_root)
         self._llm = llm or default_llm(project_root)
+        self._registry = registry or default_memory_type_registry()
 
     def infer(
         self,
@@ -89,9 +90,9 @@ class MemoryIntakeAgent:
                 role="system",
                 content=(
                     "You are the NuSelf Memory Intake Agent. Classify a user-supplied memory note into a "
-                    "durable memory entry. Return only JSON. Allowed types are source_note, profile_fact, "
-                    "belief, preference, goal, concept, style_trait, episode, open_question, instruction. Write a concise "
-                    "title and 0-4 short tags. Do not copy raw chat transcript markers into the title. Consider "
+                    "durable memory entry. Return only JSON. "
+                    f"Allowed types are {', '.join(self._registry.names())}. Write a concise "
+                    "title and 1-4 short tags. Do not copy raw chat transcript markers into the title. Consider "
                     "existing profile items when the note is a duplicate or refinement of already-derived context."
                 ),
             ),
@@ -107,8 +108,8 @@ class MemoryIntakeAgent:
         ]
         try:
             raw = self._llm.complete(prompt)
-            return _parse_intake_result(raw)
-        except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            return _parse_intake_result(raw, allowed_types=self._registry.names())
+        except (RuntimeError, ValueError) as exc:
             raise ValueError("memory intake agent unavailable or returned invalid JSON") from exc
 
     def _existing_profile_context(self, body: str) -> str:
@@ -126,39 +127,25 @@ class MemoryIntakeAgent:
         return "\n".join(lines)
 
 
-def _parse_intake_result(raw: str) -> MemoryIntakeResult:
+def _parse_intake_result(raw: str, *, allowed_types: tuple[str, ...] | None = None) -> MemoryIntakeResult:
     extracted = _extract_json_object(raw)
-    try:
-        output = IntakeResultOutput.model_validate_json(extracted)
-        memory_type = _memory_type(output.type)
-        if output.title == "":
-            raise ValueError("memory intake response must include a title")
-        return MemoryIntakeResult(
-            type=memory_type,
-            title=output.title,
-            body="",
-            tags=tuple(t for t in output.tags if t.strip() != ""),
-            confidence=max(0.0, min(1.0, output.confidence)),
-            importance=max(0.0, min(1.0, output.importance)),
-        )
-    except (ValidationError, ValueError, json.JSONDecodeError):
-        pass
-    parsed: object = json.loads(extracted)
-    if not isinstance(parsed, dict):
-        raise ValueError("memory intake response must be an object")
-    data = cast(dict[str, object], parsed)
-    memory_type = _memory_type(data.get("type"))
-    title = _string_field(data, "title")
+    output = IntakeResultOutput.model_validate_json(extracted)
+    memory_type = _memory_type(output.type, allowed_types=allowed_types)
+    title = output.title.strip()
+    tags = _normalize_tags(output.tags)
     if title == "":
         raise ValueError("memory intake response must include a title")
+    if not tags:
+        raise ValueError("memory intake response must include tags")
     return MemoryIntakeResult(
         type=memory_type,
         title=title,
         body="",
-        tags=_string_tuple(data.get("tags")),
-        confidence=_clamp_confidence(_number_field(data, "confidence", 0.7)),
-        importance=_clamp_importance(_number_field(data, "importance", 0.5)),
+        tags=tags,
+        confidence=_clamp_confidence(output.confidence),
+        importance=_clamp_importance(output.importance),
     )
+
 
 def _extract_json_object(raw: str) -> str:
     stripped = raw.strip()
@@ -168,43 +155,23 @@ def _extract_json_object(raw: str) -> str:
     return stripped
 
 
-def _memory_type(value: object) -> MemoryEntryType:
-    if value in {
-        "source_note",
-        "profile_fact",
-        "belief",
-        "preference",
-        "goal",
-        "concept",
-        "style_trait",
-        "episode",
-        "open_question",
-        "instruction",
-    }:
+def _memory_type(value: str, *, allowed_types: tuple[str, ...] | None = None) -> MemoryEntryType:
+    names = allowed_types or default_memory_type_registry().names()
+    if value in names:
         return cast(MemoryEntryType, value)
     raise ValueError(f"unsupported memory type: {value}")
 
 
-def _string_field(raw: dict[str, object], field_name: str) -> str:
-    value = raw.get(field_name)
-    return value if isinstance(value, str) else ""
-
-
-def _string_tuple(value: object) -> tuple[str, ...]:
-    if not isinstance(value, list):
-        return ()
+def _normalize_tags(tags: list[str]) -> tuple[str, ...]:
     result: list[str] = []
-    for item in cast(list[object], value):
-        if isinstance(item, str) and item.strip() != "":
-            result.append(item.strip())
+    seen: set[str] = set()
+    for item in tags:
+        clean = item.strip()
+        if clean == "" or clean in seen:
+            continue
+        result.append(clean)
+        seen.add(clean)
     return tuple(result)
-
-
-def _number_field(raw: dict[str, object], field_name: str, default: float) -> float:
-    value = raw.get(field_name)
-    if isinstance(value, int | float):
-        return float(value)
-    return default
 
 
 def _clamp_confidence(value: float) -> float:

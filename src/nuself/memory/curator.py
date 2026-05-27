@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.config import ensure_runtime_dirs, runtime_paths
@@ -219,8 +219,9 @@ class MemoryCurator:
                     "Create only when the discussion contains a durable preference, goal, concept, decision, "
                     "open question, important episode, or instruction. Never copy raw chat transcripts into memory bodies; "
                     "Every create/update action must include one to four short tags. "
-                    "write compressed summaries with evidence-aware wording. Consider existing profile items before "
-                    "creating new profile facts or overlapping durable memories. Allowed actions are create, update, ignore."
+                    "Write compressed summaries with evidence-aware wording. Consider existing profile items before "
+                    "creating new profile facts or overlapping durable memories. Allowed actions are create, update, ignore. "
+                    f"Allowed memory types are {', '.join(self._registry.names())}."
                 ),
             ),
             ChatMessage(
@@ -241,7 +242,7 @@ class MemoryCurator:
         ]
         try:
             raw = self._llm.complete(prompt)
-            actions = _parse_actions(raw)
+            actions = _parse_actions(raw, allowed_types=self._registry.names())
         except (RuntimeError, ValueError):
             return MemoryDecision(status="deferred", reason="curator agent unavailable or returned invalid JSON")
         if actions:
@@ -464,99 +465,46 @@ def _has_memory_worthy_signal(messages: list[ThreadMessage], min_quality_chars: 
     return any(marker in normalized for marker in durable_markers)
 
 
-def _parse_actions(raw: str) -> list[MemoryAction]:
+def _parse_actions(raw: str, *, allowed_types: tuple[str, ...] | None = None) -> list[MemoryAction]:
     extracted = _extract_json_object(raw)
-    try:
-        output = CuratorActionsOutput.model_validate_json(extracted)
-        actions: list[MemoryAction] = []
-        for item in output.actions:
-            if item.action != "ignore" and (item.title == "" or item.body == ""):
-                continue
-            tags = _normalize_tags(item.tags)
-            if item.action != "ignore" and not tags:
-                continue
-            if item.action != "ignore" and _looks_like_raw_transcript(item.body):
-                continue
-            actions.append(MemoryAction(
-                action=item.action,
-                type=_memory_type(item.type),
-                title=item.title,
-                body=item.body,
-                tags=tags,
-                entry_id=item.entry_id,
-                confidence=max(0.0, min(1.0, item.confidence)),
-                reason=item.reason,
-            ))
-        return actions
-    except (ValidationError, json.JSONDecodeError):
-        pass
-    parsed: object = json.loads(extracted)
-    if not isinstance(parsed, dict):
-        return []
-    actions_value = cast(dict[str, object], parsed).get("actions")
-    if not isinstance(actions_value, list):
-        return []
+    output = CuratorActionsOutput.model_validate_json(extracted)
     actions: list[MemoryAction] = []
-    for item in cast(list[object], actions_value):
-        if not isinstance(item, dict):
-            continue
-        action = _parse_action(cast(dict[str, object], item))
+    for item in output.actions:
+        action = _action_from_item(item, allowed_types=allowed_types)
         if action is not None:
             actions.append(action)
     return actions
 
 
-def _parse_action(raw: dict[str, object]) -> MemoryAction | None:
-    action_value = raw.get("action")
-    if action_value not in {"create", "update", "ignore"}:
+def _action_from_item(item: CuratorActionItem, *, allowed_types: tuple[str, ...] | None = None) -> MemoryAction | None:
+    if item.action != "ignore" and (item.title == "" or item.body == ""):
         return None
-    title = _string_field(raw, "title")
-    body = _string_field(raw, "body")
-    if action_value != "ignore" and (title == "" or body == ""):
+    tags = _normalize_tags(item.tags)
+    if item.action != "ignore" and not tags:
         return None
-    tags = _string_tuple(raw.get("tags"))
-    if action_value != "ignore" and not tags:
+    if item.action != "ignore" and _looks_like_raw_transcript(item.body):
         return None
-    if action_value != "ignore" and _looks_like_raw_transcript(body):
+    try:
+        memory_type = _memory_type(item.type, allowed_types=allowed_types)
+    except ValueError:
         return None
-    memory_type = _memory_type(raw.get("type"))
     return MemoryAction(
-        action=cast(MemoryActionType, action_value),
+        action=item.action,
         type=memory_type,
-        title=title,
-        body=body,
+        title=item.title,
+        body=item.body,
         tags=tags,
-        entry_id=_optional_string_field(raw, "entry_id"),
-        confidence=_number_field(raw, "confidence", 0.6),
-        reason=_string_field(raw, "reason"),
+        entry_id=item.entry_id,
+        confidence=_clamp_confidence(item.confidence),
+        reason=item.reason,
     )
 
 
-def _memory_type(value: object) -> MemoryEntryType:
-    if value in {
-        "source_note",
-        "profile_fact",
-        "belief",
-        "preference",
-        "goal",
-        "concept",
-        "style_trait",
-        "episode",
-        "open_question",
-        "instruction",
-    }:
+def _memory_type(value: str, *, allowed_types: tuple[str, ...] | None = None) -> MemoryEntryType:
+    names = allowed_types or default_memory_type_registry().names()
+    if value in names:
         return cast(MemoryEntryType, value)
-    return "episode"
-
-
-def _string_field(raw: dict[str, object], field_name: str) -> str:
-    value = raw.get(field_name)
-    return value if isinstance(value, str) else ""
-
-
-def _optional_string_field(raw: dict[str, object], field_name: str) -> str | None:
-    value = raw.get(field_name)
-    return value if isinstance(value, str) and value != "" else None
+    raise ValueError(f"unsupported memory type: {value}")
 
 
 def _normalize_tags(tags: list[str]) -> tuple[str, ...]:
@@ -569,20 +517,6 @@ def _normalize_tags(tags: list[str]) -> tuple[str, ...]:
         normalized.append(clean)
         seen.add(clean)
     return tuple(normalized)
-
-
-def _string_tuple(value: object) -> tuple[str, ...]:
-    if not isinstance(value, list):
-        return ()
-    raw_items = cast(list[object], value)
-    return _normalize_tags([item for item in raw_items if isinstance(item, str)])
-
-
-def _number_field(raw: dict[str, object], field_name: str, default: float) -> float:
-    value = raw.get(field_name)
-    if isinstance(value, int | float):
-        return float(value)
-    return default
 
 
 def _clamp_confidence(value: float) -> float:

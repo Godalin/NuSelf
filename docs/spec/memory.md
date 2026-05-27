@@ -78,9 +78,10 @@ Rules:
 
 - Must return JSON with `actions` array. Allowed actions: `create`, `update`, `ignore`.
 - `create` and `update` actions must include `tags`: a non-empty list of short strings. Tags are part of the durable memory handle surface and must be copied to `MemoryCandidate` and any accepted `MemoryEntry`.
+- Action parsing is a typed boundary: JSON is parsed into the structured curator action schema, then converted to `MemoryAction`. The curator must not keep a parallel hand-written dict parser or coerce unknown memory types to a fallback type.
 - On LLM failure or invalid JSON → defer (status `deferred`).
-- `create`/`update` actions with empty `title`/`body`, empty `tags`, or raw-transcript bodies (`>=2` occurrences of `user:`/`assistant:`) → discarded.
-- LLM prompt includes: thread summary, up to 12 existing memory entries, up to 12 profile items.
+- `create`/`update` actions with empty `title`/`body`, empty `tags`, unknown `type`, or raw-transcript bodies (`>=2` occurrences of `user:`/`assistant:`) → discarded.
+- LLM prompt includes: thread summary, up to 12 existing memory entries, up to 12 profile items, and the current registered memory type names from `MemoryTypeRegistry`.
 
 ### Conflict Detection
 

@@ -45,6 +45,17 @@ def test_memory_intake_raises_on_invalid_llm_response() -> None:
         assert "invalid JSON" in str(exc)
 
 
+def test_memory_intake_requires_llm_tags() -> None:
+    llm = FakeIntakeLLM('{"type":"preference","title":"Concise CLI output","tags":[],"confidence":0.8}')
+    agent = MemoryIntakeAgent(llm=llm)
+
+    try:
+        agent.infer(body="I prefer concise CLI output.")
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "invalid JSON" in str(exc)
+
+
 def test_extract_json_object_strips_markdown_fences() -> None:
     raw = '```json\n{"type":"belief","title":"Test"}\n```'
     assert _extract_json_object(raw) == '{"type":"belief","title":"Test"}'
