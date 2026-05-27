@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry, now_iso
@@ -193,7 +192,7 @@ class MemoryOptimizer:
         ]
         try:
             raw = self._llm.complete(prompt)
-            actions = _parse_optimize_actions(raw)
+            actions = _parse_optimize_actions(raw, allowed_types=self._registry.names())
         except (RuntimeError, ValueError):
             return MemoryOptimizeDecision(
                 status="deferred",
@@ -312,107 +311,48 @@ def _render_entries(entries: list[MemoryEntry]) -> str:
     return "\n".join(lines).strip()
 
 
-def _parse_optimize_actions(raw: str) -> list[MemoryOptimizeAction]:
+def _parse_optimize_actions(raw: str, *, allowed_types: tuple[str, ...]) -> list[MemoryOptimizeAction]:
     extracted = _extract_json_object(raw)
-    try:
-        output = OptimizeActionsOutput.model_validate_json(extracted)
-        actions: list[MemoryOptimizeAction] = []
-        for item in output.actions:
-            if item.action == "update" and (item.title == "" or item.body == "" or _looks_like_raw_transcript(item.body)):
-                continue
-            actions.append(MemoryOptimizeAction(
-                action=item.action,
-                entry_id=item.entry_id,
-                title=item.title,
-                body=item.body,
-                type=_optional_memory_type(item.type) if item.type is not None else None,
-                tags=tuple(item.tags) if item.tags is not None else None,
-                confidence=item.confidence,
-                reason=item.reason,
-            ))
-        return actions
-    except (ValidationError, json.JSONDecodeError):
-        pass
-    parsed: object = json.loads(extracted)
-    if not isinstance(parsed, dict):
-        return []
-    actions_value = cast(dict[str, object], parsed).get("actions")
-    if not isinstance(actions_value, list):
-        return []
+    output = OptimizeActionsOutput.model_validate_json(extracted)
     actions: list[MemoryOptimizeAction] = []
-    for item in cast(list[object], actions_value):
-        if not isinstance(item, dict):
-            continue
-        action = _parse_optimize_action(cast(dict[str, object], item))
+    for item in output.actions:
+        action = _optimize_action_from_item(item, allowed_types=allowed_types)
         if action is not None:
             actions.append(action)
     return actions
 
-def _parse_optimize_action(raw: dict[str, object]) -> MemoryOptimizeAction | None:
-    action_value = raw.get("action")
-    if action_value not in {"update", "delete", "ignore"}:
+
+def _optimize_action_from_item(
+    item: OptimizeActionItem,
+    *,
+    allowed_types: tuple[str, ...],
+) -> MemoryOptimizeAction | None:
+    if item.entry_id == "":
         return None
-    entry_id = _optional_string_field(raw, "entry_id")
-    if entry_id is None:
+    if item.action == "update" and (item.title == "" or item.body == "" or _looks_like_raw_transcript(item.body)):
         return None
-    title = _string_field(raw, "title")
-    body = _string_field(raw, "body")
-    if action_value == "update" and (title == "" or body == "" or _looks_like_raw_transcript(body)):
+    try:
+        memory_type = _optional_memory_type(item.type, allowed_types=allowed_types)
+    except ValueError:
         return None
     return MemoryOptimizeAction(
-        action=cast(MemoryOptimizeActionType, action_value),
-        entry_id=entry_id,
-        title=title,
-        body=body,
-        type=_optional_memory_type(raw.get("type")),
-        tags=_optional_string_tuple(raw.get("tags")),
-        confidence=_optional_number_field(raw, "confidence"),
-        reason=_string_field(raw, "reason"),
+        action=item.action,
+        entry_id=item.entry_id,
+        title=item.title,
+        body=item.body,
+        type=memory_type,
+        tags=tuple(item.tags) if item.tags is not None else None,
+        confidence=item.confidence,
+        reason=item.reason,
     )
 
 
-def _optional_memory_type(value: object) -> MemoryEntryType | None:
-    if value in {
-        "source_note",
-        "profile_fact",
-        "belief",
-        "preference",
-        "goal",
-        "concept",
-        "style_trait",
-        "episode",
-        "open_question",
-        "instruction",
-    }:
-        return cast(MemoryEntryType, value)
-    return None
-
-
-def _string_field(raw: dict[str, object], field_name: str) -> str:
-    value = raw.get(field_name)
-    return value if isinstance(value, str) else ""
-
-
-def _optional_string_field(raw: dict[str, object], field_name: str) -> str | None:
-    value = raw.get(field_name)
-    return value if isinstance(value, str) and value != "" else None
-
-
-def _optional_string_tuple(value: object) -> tuple[str, ...] | None:
-    if not isinstance(value, list):
+def _optional_memory_type(value: str | None, *, allowed_types: tuple[str, ...]) -> MemoryEntryType | None:
+    if value is None:
         return None
-    result: list[str] = []
-    for item in cast(list[object], value):
-        if isinstance(item, str) and item != "":
-            result.append(item)
-    return tuple(result)
-
-
-def _optional_number_field(raw: dict[str, object], field_name: str) -> float | None:
-    value = raw.get(field_name)
-    if isinstance(value, int | float):
-        return float(value)
-    return None
+    if value in allowed_types:
+        return cast(MemoryEntryType, value)
+    raise ValueError(f"unsupported memory type: {value}")
 
 
 def _clamp_confidence(value: float) -> float:

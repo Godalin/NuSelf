@@ -143,6 +143,55 @@ def test_memory_optimizer_rejects_raw_transcript_body(tmp_path: Path) -> None:
     assert repo.get(entry.id).title == "Messy transcript"
 
 
+def test_memory_optimizer_uses_registry_memory_types(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    entry = repo.save(
+        MemoryEntry(
+            type="instruction",
+            title="Old instruction",
+            body="Old instruction body.",
+        )
+    )
+    llm = FakeOptimizerLLM(
+        '{"actions":[{"action":"update","entry_id":"'
+        + entry.id
+        + '","type":"persona_instruction","title":"Persona instruction",'
+        '"body":"Use persona instructions as durable behavior guidance.",'
+        '"tags":["persona"],"confidence":0.8,"reason":"new typed memory type"}]}'
+    )
+    optimizer = MemoryOptimizer(tmp_path, llm=llm, repository=repo)
+
+    result = optimizer.run_once()
+    candidates = MemoryCandidateRepository(tmp_path).list()
+
+    assert result.updated == 1
+    assert candidates[0].type == "persona_instruction"
+
+
+def test_memory_optimizer_rejects_unknown_memory_type(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    entry = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Known type",
+            body="Known type body.",
+        )
+    )
+    llm = FakeOptimizerLLM(
+        '{"actions":[{"action":"update","entry_id":"'
+        + entry.id
+        + '","type":"made_up_type","title":"Bad type",'
+        '"body":"Unknown memory types should not be silently accepted.",'
+        '"tags":["memory"],"confidence":0.8,"reason":"bad type"}]}'
+    )
+    optimizer = MemoryOptimizer(tmp_path, llm=llm, repository=repo)
+
+    result = optimizer.run_once()
+
+    assert result.reviewed == 0
+    assert MemoryCandidateRepository(tmp_path).list() == []
+
+
 def test_memory_optimizer_respects_limit(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     for title in ["First", "Second"]:
