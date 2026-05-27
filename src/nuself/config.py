@@ -6,6 +6,7 @@ Uses Pydantic for type coercion, validation, and nested model loading.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -18,28 +19,18 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # ============================================================================
 
 
+@dataclass(frozen=True)
 class RuntimePaths:
     """Filesystem paths used by the local daemon and CLI."""
 
-    def __init__(
-        self,
-        project_root: Path,
-        private_root: Path,
-        runtime_dir: Path,
-        logs_dir: Path,
-        socket_path: Path,
-        pid_path: Path,
-        daemon_log_path: Path,
-        outbox_log_path: Path,
-    ) -> None:
-        self.project_root = project_root
-        self.private_root = private_root
-        self.runtime_dir = runtime_dir
-        self.logs_dir = logs_dir
-        self.socket_path = socket_path
-        self.pid_path = pid_path
-        self.daemon_log_path = daemon_log_path
-        self.outbox_log_path = outbox_log_path
+    project_root: Path
+    private_root: Path
+    runtime_dir: Path
+    logs_dir: Path
+    socket_path: Path
+    pid_path: Path
+    daemon_log_path: Path
+    outbox_log_path: Path
 
 
 def find_project_root(start: Path | None = None) -> Path:

@@ -20,7 +20,13 @@ def looks_like_visible_index(value: str) -> bool:
 
 
 def uses_visible_selection_syntax(value: str) -> bool:
-    return "," in value or "-" in value
+    return "," in value or looks_like_visible_index_range(value)
+
+
+def looks_like_visible_index_range(value: str) -> bool:
+    """Return true when a value is trying to use the visible range syntax."""
+
+    return value[:1].isdigit() and "-" in value
 
 
 def parse_visible_index(value: str, *, count: int, label: str) -> int:
@@ -97,5 +103,7 @@ def resolve_visible_handle_selection(
 
     if not looks_like_visible_index(value) and not uses_visible_selection_syntax(value):
         return [value]
+    if looks_like_visible_index(value):
+        return [get_id(items[parse_visible_index(value, count=len(items), label=label)])]
     indexes = parse_visible_index_selection(value, count=len(items), label=label)
     return [get_id(items[index]) for index in indexes]

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from pathlib import Path
+
+import pytest
 
 from nuself.config import find_project_root, runtime_paths
 
@@ -11,6 +14,9 @@ def test_runtime_paths_are_under_private_root(tmp_path: Path) -> None:
     assert paths.runtime_dir == tmp_path / "private" / "runtime"
     assert paths.logs_dir == tmp_path / "private" / "logs"
     assert paths.socket_path == tmp_path / "private" / "runtime" / "nuself.sock"
+
+    with pytest.raises(FrozenInstanceError):
+        setattr(paths, "private_root", tmp_path)
 
 
 def test_find_project_root_finds_agents_md(tmp_path: Path) -> None:

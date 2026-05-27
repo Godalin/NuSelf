@@ -37,6 +37,20 @@ def test_resolve_visible_handle_selection_expands_ranges_and_deduplicates() -> N
     ]
 
 
+def test_resolve_visible_handle_selection_uses_single_numeric_index() -> None:
+    items = [Item("a"), Item("b")]
+
+    assert resolve_visible_handle_selection("1", items, label="item", get_id=lambda item: item.id) == ["b"]
+
+
+def test_resolve_visible_handle_selection_keeps_hyphenated_stable_id() -> None:
+    items = [Item("a")]
+
+    assert resolve_visible_handle_selection("reflection-candidate-1", items, label="item", get_id=lambda item: item.id) == [
+        "reflection-candidate-1",
+    ]
+
+
 def test_parse_visible_index_selection_rejects_whitespace() -> None:
     with pytest.raises(VisibleHandleError, match="Invalid item index selection"):
         parse_visible_index_selection("0, 1", count=2, label="item")
