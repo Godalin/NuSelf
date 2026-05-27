@@ -5,19 +5,19 @@ from pathlib import Path
 
 from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
-from nuself.memory.intake import MemoryIntakeAgent, _extract_json_object, _local_title
+from nuself.memory.intake import MemoryIntakeAgent, _extract_json_object
 from nuself.profile.repository import ProfileItemRepository
 
 
 def test_memory_intake_locally_infers_goal() -> None:
-    llm = FakeIntakeLLM('{"type":"goal","title":"Finish memory system planning","confidence":0.8}')
+    llm = FakeIntakeLLM('{"type":"goal","title":"Finish memory system planning","tags":["planning"],"confidence":0.8}')
     result = MemoryIntakeAgent(llm=llm).infer(body="My goal is to finish the memory system planning.")
 
     assert result.type == "goal"
 
 
 def test_memory_intake_locally_infers_concept() -> None:
-    llm = FakeIntakeLLM('{"type":"concept","title":"Temporal memory preserves change","confidence":0.7}')
+    llm = FakeIntakeLLM('{"type":"concept","title":"Temporal memory preserves change","tags":["memory"],"confidence":0.7}')
     result = MemoryIntakeAgent(llm=llm).infer(body="Temporal memory means preserving when a thought changed.")
 
     assert result.type == "concept"
@@ -32,54 +32,17 @@ def test_memory_intake_empty_body_raises() -> None:
         assert "must not be empty" in str(exc)
 
 
-def test_memory_intake_falls_back_on_invalid_llm_response() -> None:
+def test_memory_intake_raises_on_invalid_llm_response() -> None:
     class BrokenLLM:
         def complete(self, messages: list[ChatMessage]) -> str:
             return "not valid json"
 
     agent = MemoryIntakeAgent(llm=BrokenLLM())
-    result = agent.infer(body="I prefer dark mode.")
-
-    assert result.type == "preference"
-    assert result.confidence == 0.55
-
-
-def test_memory_intake_local_inference_preference() -> None:
-    from nuself.llm import LocalFallbackLLM
-    result = MemoryIntakeAgent(llm=LocalFallbackLLM()).infer(body="I like quiet mornings.")
-
-    assert result.type == "preference"
-
-
-def test_memory_intake_local_inference_belief() -> None:
-    from nuself.llm import LocalFallbackLLM
-    result = MemoryIntakeAgent(llm=LocalFallbackLLM()).infer(body="I believe testing is essential.")
-
-    assert result.type == "belief"
-
-
-def test_memory_intake_local_inference_open_question() -> None:
-    from nuself.llm import LocalFallbackLLM
-    result = MemoryIntakeAgent(llm=LocalFallbackLLM()).infer(body="What is the best way to organize memory?")
-
-    assert result.type == "open_question"
-
-
-def test_memory_intake_local_inference_importance_by_type() -> None:
-    from nuself.llm import LocalFallbackLLM
-    agent = MemoryIntakeAgent(llm=LocalFallbackLLM())
-
-    assert agent.infer(body="I like quiet mornings.").importance == 0.6  # preference
-    assert agent.infer(body="I believe testing is essential.").importance == 0.7  # belief
-    assert agent.infer(body="My goal is to finish planning.").importance == 0.8  # goal
-    assert agent.infer(body="What is the best way to organize memory?").importance == 0.3  # open_question
-
-
-def test_local_title_truncates_long_body() -> None:
-    long_body = "A" * 100
-    title = _local_title(long_body)
-    assert title.endswith("...")
-    assert len(title) == 48
+    try:
+        agent.infer(body="I prefer dark mode.")
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "invalid JSON" in str(exc)
 
 
 def test_extract_json_object_strips_markdown_fences() -> None:

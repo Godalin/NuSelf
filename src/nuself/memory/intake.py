@@ -108,8 +108,8 @@ class MemoryIntakeAgent:
         try:
             raw = self._llm.complete(prompt)
             return _parse_intake_result(raw)
-        except (RuntimeError, ValueError, json.JSONDecodeError):
-            return _infer_locally(body)
+        except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            raise ValueError("memory intake agent unavailable or returned invalid JSON") from exc
 
     def _existing_profile_context(self, body: str) -> str:
         matches = self._profile_repository.search(body)
@@ -159,53 +159,6 @@ def _parse_intake_result(raw: str) -> MemoryIntakeResult:
         confidence=_clamp_confidence(_number_field(data, "confidence", 0.7)),
         importance=_clamp_importance(_number_field(data, "importance", 0.5)),
     )
-
-
-def _infer_locally(body: str) -> MemoryIntakeResult:
-    normalized = body.casefold()
-    memory_type: MemoryEntryType = "episode"
-    if "prefer" in normalized or "like" in normalized or "rather" in normalized:
-        memory_type = "preference"
-    elif "goal" in normalized or "want to" in normalized or "plan to" in normalized:
-        memory_type = "goal"
-    elif "concept" in normalized or "means" in normalized or "definition" in normalized:
-        memory_type = "concept"
-    elif "remember to" in normalized or "always" in normalized or "never" in normalized or "should" in normalized:
-        memory_type = "instruction"
-    elif "believe" in normalized or "think" in normalized or "is true" in normalized:
-        memory_type = "belief"
-    elif "?" in body:
-        memory_type = "open_question"
-
-    type_defaults: dict[MemoryEntryType, float] = {
-        "profile_fact": 0.9,
-        "persona_instruction": 0.9,
-        "goal": 0.8,
-        "belief": 0.7,
-        "preference": 0.6,
-        "instruction": 0.6,
-        "concept": 0.5,
-        "style_trait": 0.5,
-        "episode": 0.4,
-        "source_note": 0.4,
-        "open_question": 0.3,
-    }
-    return MemoryIntakeResult(
-        type=memory_type,
-        title=_local_title(body),
-        body="",
-        tags=(),
-        confidence=0.55,
-        importance=type_defaults.get(memory_type, 0.5),
-    )
-
-
-def _local_title(body: str) -> str:
-    compact = " ".join(body.split())
-    if len(compact) <= 48:
-        return compact
-    return compact[:45].rstrip() + "..."
-
 
 def _extract_json_object(raw: str) -> str:
     stripped = raw.strip()

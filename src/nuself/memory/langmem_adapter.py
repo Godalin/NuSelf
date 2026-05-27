@@ -84,6 +84,7 @@ class LangMemCurator:
                 type=memory_type,
                 title=_title_from_body(content),
                 body=content,
+                tags=[memory_type],
                 source_refs=[source_ref],
                 evidence=[
                     MemoryEvidence(

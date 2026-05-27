@@ -17,6 +17,7 @@ from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.protocol import DaemonResponse
 from nuself.daemon.lifecycle import DaemonStatus
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
+from nuself.llm import ChatMessage
 
 
 def _mock_status(project_root: Path) -> DaemonStatus:
@@ -1329,7 +1330,20 @@ def test_memory_add_list_show_delete(tmp_path: Path, capsys: CaptureFixture) -> 
     assert f"Deleted memory entry: {entry_id}" in delete_output
 
 
-def test_memory_add_infers_type_without_manual_type(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_add_infers_type_without_manual_type(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    class FakeIntakeLLM:
+        def complete(self, messages: list[ChatMessage]) -> str:
+            return (
+                '{"type":"preference","title":"Terse CLI summaries",'
+                '"tags":["cli"],"confidence":0.8,"importance":0.6}'
+            )
+
+    def fake_default_llm(project_root: Path | None = None) -> FakeIntakeLLM:
+        return FakeIntakeLLM()
+
+    monkeypatch.setattr("nuself.memory.intake.default_llm", fake_default_llm)
     add_result = main(
         [
             "--project-root",
@@ -1347,8 +1361,8 @@ def test_memory_add_infers_type_without_manual_type(tmp_path: Path, capsys: Capt
 
     assert add_result == 0
     assert entry.type == "preference"
-    assert entry.title.startswith("I prefer terse CLI summaries")
-    assert entry.title.endswith("...")
+    assert entry.title == "Terse CLI summaries"
+    assert entry.tags == ["cli"]
     assert entry.body == "I prefer terse CLI summaries with concrete next steps."
 
 

@@ -6,11 +6,12 @@
 
 1. If both `--type` and `--title` are provided explicitly, skip LLM inference.
 2. Otherwise, `MemoryIntakeAgent.infer()` calls the LLM.
-3. On LLM failure (`RuntimeError`, `ValueError`, `JSONDecodeError`), fall back to `_infer_locally()` using keyword heuristics.
+3. On LLM failure or invalid JSON, the command fails. Manual memory addition must not synthesize a local heuristic fallback entry.
 4. The agent must normalize body by collapsing whitespace.
 5. The agent must raise `ValueError` if normalized body is empty.
 6. The agent must include up to 5 matching profile items in the LLM prompt.
-7. Result is written directly to `MemoryEntryRepository` (bypasses candidate queue), then `reindex()` is called.
+7. The LLM result must include `type`, `title`, `tags`, `confidence`, and `importance`.
+8. Result is written directly to `MemoryEntryRepository` (bypasses candidate queue), then `reindex()` is called.
 
 ## Temporal Memory Contract
 
@@ -76,8 +77,9 @@ Rules:
 ### Curator LLM Decision Contract
 
 - Must return JSON with `actions` array. Allowed actions: `create`, `update`, `ignore`.
+- `create` and `update` actions must include `tags`: a non-empty list of short strings. Tags are part of the durable memory handle surface and must be copied to `MemoryCandidate` and any accepted `MemoryEntry`.
 - On LLM failure or invalid JSON → defer (status `deferred`).
-- `create`/`update` actions with empty `title`/`body` or raw-transcript bodies (`>=2` occurrences of `user:`/`assistant:`) → discarded.
+- `create`/`update` actions with empty `title`/`body`, empty `tags`, or raw-transcript bodies (`>=2` occurrences of `user:`/`assistant:`) → discarded.
 - LLM prompt includes: thread summary, up to 12 existing memory entries, up to 12 profile items.
 
 ### Conflict Detection

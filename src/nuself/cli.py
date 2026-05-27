@@ -1138,12 +1138,16 @@ def handle_memory_show(args: argparse.Namespace) -> int:
 
 def handle_memory_add(args: argparse.Namespace) -> int:
     repo = MemoryEntryRepository(args.project_root)
-    inferred = MemoryIntakeAgent(args.project_root).infer(
-        body=args.body,
-        title=args.title,
-        memory_type=args.type,
-        tags=list(args.tag),
-    )
+    try:
+        inferred = MemoryIntakeAgent(args.project_root).infer(
+            body=args.body,
+            title=args.title,
+            memory_type=args.type,
+            tags=list(args.tag),
+        )
+    except (RuntimeError, ValueError) as exc:
+        print(f"Memory intake failed: {exc}", file=sys.stderr)
+        return 1
     entry = MemoryEntry(
         type=inferred.type,
         title=inferred.title,

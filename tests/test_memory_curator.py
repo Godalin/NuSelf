@@ -40,7 +40,7 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
     llm = FakeCuratorLLM(
         '{"actions":[{"action":"create","type":"episode","title":"Shared working memory",'
         '"body":"The user decided that terminals attached to one NuSelf mind should share short-term memory.",'
-        '"confidence":0.8,"reason":"important memory model decision"}]}'
+        '"tags":["memory"],"confidence":0.8,"reason":"important memory model decision"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
     curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
@@ -54,6 +54,7 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
     assert second_result.processed_messages == 0
     assert len(candidates) == 1
     assert candidates[0].type == "episode"
+    assert candidates[0].tags == ["memory"]
     assert candidates[0].review_state == "pending"
     assert candidates[0].source_refs == ["thread:default:0-2"]
     assert candidates[0].observed_at is not None
@@ -88,7 +89,7 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
         '{"actions":[{"action":"update","entry_id":"'
         + existing.id
         + '","title":"Memory preview style","body":"The user prefers concise memory previews.",'
-        '"confidence":0.75,"reason":"user clarified preview style"}]}'
+        '"tags":["memory","preview"],"confidence":0.75,"reason":"user clarified preview style"}]}'
     )
     curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
@@ -97,6 +98,7 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
 
     assert result.updated == 1
     assert candidates[0].body == "The user prefers concise memory previews."
+    assert candidates[0].tags == ["memory", "preview"]
     assert candidates[0].action == "update"
     assert candidates[0].target_entry_id == existing.id
     assert candidates[0].source_refs == ["thread:default:0-2"]
@@ -205,7 +207,7 @@ def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> No
     llm = FakeCuratorLLM(
         '{"actions":[{"action":"create","type":"belief","title":"Memory quality threshold",'
         '"body":"The user wants memory curation to depend on discussion depth and quality, not turn count.",'
-        '"confidence":0.85,"reason":"explicit memory-system decision"}]}'
+        '"tags":["memory"],"confidence":0.85,"reason":"explicit memory-system decision"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
     curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
@@ -242,7 +244,7 @@ def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: 
     llm = FakeCuratorLLM(
         '{"actions":[{"action":"create","type":"episode","title":"Compressed cursor continuity",'
         '"body":"Memory curation should continue after thread compression by using absolute message indexes.",'
-        '"confidence":0.8,"reason":"cursor correctness"}]}'
+        '"tags":["memory"],"confidence":0.8,"reason":"cursor correctness"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
     curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
@@ -271,7 +273,7 @@ def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:
     llm = FakeCuratorLLM(
         '{"actions":[{"action":"create","type":"episode","title":"Raw transcript",'
         '"body":"user: We need conservative memory updates. assistant: I will avoid raw transcript memory.",'
-        '"confidence":0.9,"reason":"bad raw transcript"}]}'
+        '"tags":["memory"],"confidence":0.9,"reason":"bad raw transcript"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
     curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
@@ -279,6 +281,32 @@ def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:
     result = curator.run_once()
 
     assert result.processed_messages == 0
+    assert repo.list() == []
+
+
+def test_memory_curator_rejects_create_without_tags(tmp_path: Path) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(role="user", content="Remember that memory entries need explicit tags."),
+                ThreadMessage(role="assistant", content="I will require tags on curated memory candidates."),
+            ],
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"create","type":"episode","title":"Missing tags",'
+        '"body":"Curated memory candidates should include tags.",'
+        '"confidence":0.9,"reason":"bad missing tags"}]}'
+    )
+    repo = MemoryEntryRepository(tmp_path)
+    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+
+    result = curator.run_once()
+
+    assert result.processed_messages == 0
+    assert MemoryCandidateRepository(tmp_path).list() == []
     assert repo.list() == []
 
 
@@ -296,7 +324,7 @@ def test_memory_curator_accepts_fenced_json(tmp_path: Path) -> None:
     llm = FakeCuratorLLM(
         '```json\n{"actions":[{"action":"create","type":"episode","title":"Structured memory decisions",'
         '"body":"The user wants memory updates to be decided by an agent and dispatched as structured actions.",'
-        '"confidence":0.82,"reason":"durable memory-system decision"}]}\n```'
+        '"tags":["memory"],"confidence":0.82,"reason":"durable memory-system decision"}]}\n```'
     )
     repo = MemoryEntryRepository(tmp_path)
     curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
@@ -358,7 +386,7 @@ def test_memory_curator_defers_descriptor_validation_until_candidate_acceptance(
     llm = FakeCuratorLLM(
         '{"actions":[{"action":"create","type":"episode","title":"Descriptor validation",'
         '"body":"Curator writes should pass descriptor validation before persistence.",'
-        '"confidence":0.8,"reason":"typed memory pipeline"}]}'
+        '"tags":["memory"],"confidence":0.8,"reason":"typed memory pipeline"}]}'
     )
     repo = MemoryEntryRepository(tmp_path, registry=MemoryTypeRegistry([RejectingEpisodeDescriptor()]))
     curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
@@ -400,7 +428,7 @@ def test_memory_curator_merges_duplicate_into_existing_entry(tmp_path: Path) -> 
     llm = FakeCuratorLLM(
         '{"actions":[{"action":"create","type":"episode","title":"Shared working memory",'
         '"body":"The user really likes shared working memory.",'
-        '"confidence":0.8,"reason":"duplicate detection test"}]}'
+        '"tags":["memory"],"confidence":0.8,"reason":"duplicate detection test"}]}'
     )
     curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
@@ -433,7 +461,7 @@ def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
     llm = FakeCuratorLLM(
         '{"actions":[{"action":"create","type":"belief","title":"Interest in Rust",'
         '"body":"The user wants to learn Rust for systems programming.",'
-        '"confidence":0.85,"reason":"explicit learning goal"}]}'
+        '"tags":["rust"],"confidence":0.85,"reason":"explicit learning goal"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
     curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
@@ -444,6 +472,7 @@ def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
     entries = repo.list()
     assert len(entries) == 1
     assert entries[0].title == "Interest in Rust"
+    assert entries[0].tags == ["rust"]
     assert entries[0].review_state == "reviewed"
     assert result.created == 1
 

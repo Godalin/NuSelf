@@ -59,6 +59,7 @@ class MemoryAction:
     title: str
     body: str
     type: MemoryEntryType = "episode"
+    tags: tuple[str, ...] = ()
     entry_id: str | None = None
     confidence: float = 0.6
     reason: str = ""
@@ -80,6 +81,7 @@ class CuratorActionItem(BaseModel):
     title: str = Field(default="", description="Memory entry title.")
     body: str = Field(default="", description="Memory entry body.")
     type: str = Field(default="episode", description="Memory entry type.")
+    tags: list[str] = Field(default_factory=list, description="One to four short tags.")
     entry_id: str | None = Field(default=None, description="Existing entry id to update.")
     confidence: float = Field(default=0.6, description="Confidence from 0.0 to 1.0.")
     reason: str = Field(default="", description="Reason for the action.")
@@ -216,6 +218,7 @@ class MemoryCurator:
                     "Prefer updating or refining an existing memory when the meaning is already represented. "
                     "Create only when the discussion contains a durable preference, goal, concept, decision, "
                     "open question, important episode, or instruction. Never copy raw chat transcripts into memory bodies; "
+                    "Every create/update action must include one to four short tags. "
                     "write compressed summaries with evidence-aware wording. Consider existing profile items before "
                     "creating new profile facts or overlapping durable memories. Allowed actions are create, update, ignore."
                 ),
@@ -230,7 +233,7 @@ class MemoryCurator:
                     f"New turns {cursor}-{cursor + len(messages)}:\n{_render_transcript(messages)}\n\n"
                     "Return JSON like: "
                     '{"actions":[{"action":"create","type":"episode","title":"...","body":"...",'
-                    '"confidence":0.7,"reason":"..."}]}\n'
+                    '"tags":["..."],"confidence":0.7,"reason":"..."}]}\n'
                     "For low-value chat, return: "
                     '{"actions":[{"action":"ignore","reason":"trivial greeting or no durable memory"}]}'
                 ),
@@ -248,7 +251,8 @@ class MemoryCurator:
     def _existing_memory_context(self) -> str:
         lines: list[str] = []
         for entry in self._repository.list()[: self._settings.existing_memory_limit]:
-            lines.append(f"- id={entry.id} type={entry.type} title={entry.title}: {entry.body}")
+            tags = f" tags={','.join(entry.tags)}" if entry.tags else ""
+            lines.append(f"- id={entry.id} type={entry.type} title={entry.title}{tags}: {entry.body}")
         return "\n".join(lines)
 
     def _existing_profile_context(self) -> str:
@@ -263,7 +267,7 @@ class MemoryCurator:
         observed_at = _source_observed_at(source_ref)
         incoming = MemoryObject(
             type=action.type,
-            payload={"title": action.title, "body": action.body},
+            payload={"title": action.title, "body": action.body, "tags": list(action.tags)},
             confidence=action.confidence,
         )
         for existing in self._repository.list()[: self._settings.existing_memory_limit]:
@@ -305,6 +309,7 @@ class MemoryCurator:
             type=action.type,
             title=action.title,
             body=action.body,
+            tags=list(action.tags),
             source_refs=[source_ref],
             evidence=[
                 MemoryEvidence(
@@ -338,7 +343,7 @@ class MemoryCurator:
             type=existing.type,
             title=action.title or existing.title,
             body=action.body or existing.body,
-            tags=existing.tags,
+            tags=list(action.tags),
             source_refs=[source_ref],
             evidence=[
                 MemoryEvidence(
@@ -467,6 +472,9 @@ def _parse_actions(raw: str) -> list[MemoryAction]:
         for item in output.actions:
             if item.action != "ignore" and (item.title == "" or item.body == ""):
                 continue
+            tags = _normalize_tags(item.tags)
+            if item.action != "ignore" and not tags:
+                continue
             if item.action != "ignore" and _looks_like_raw_transcript(item.body):
                 continue
             actions.append(MemoryAction(
@@ -474,6 +482,7 @@ def _parse_actions(raw: str) -> list[MemoryAction]:
                 type=_memory_type(item.type),
                 title=item.title,
                 body=item.body,
+                tags=tags,
                 entry_id=item.entry_id,
                 confidence=max(0.0, min(1.0, item.confidence)),
                 reason=item.reason,
@@ -505,6 +514,9 @@ def _parse_action(raw: dict[str, object]) -> MemoryAction | None:
     body = _string_field(raw, "body")
     if action_value != "ignore" and (title == "" or body == ""):
         return None
+    tags = _string_tuple(raw.get("tags"))
+    if action_value != "ignore" and not tags:
+        return None
     if action_value != "ignore" and _looks_like_raw_transcript(body):
         return None
     memory_type = _memory_type(raw.get("type"))
@@ -513,6 +525,7 @@ def _parse_action(raw: dict[str, object]) -> MemoryAction | None:
         type=memory_type,
         title=title,
         body=body,
+        tags=tags,
         entry_id=_optional_string_field(raw, "entry_id"),
         confidence=_number_field(raw, "confidence", 0.6),
         reason=_string_field(raw, "reason"),
@@ -544,6 +557,25 @@ def _string_field(raw: dict[str, object], field_name: str) -> str:
 def _optional_string_field(raw: dict[str, object], field_name: str) -> str | None:
     value = raw.get(field_name)
     return value if isinstance(value, str) and value != "" else None
+
+
+def _normalize_tags(tags: list[str]) -> tuple[str, ...]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for tag in tags:
+        clean = tag.strip()
+        if clean == "" or clean in seen:
+            continue
+        normalized.append(clean)
+        seen.add(clean)
+    return tuple(normalized)
+
+
+def _string_tuple(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    raw_items = cast(list[object], value)
+    return _normalize_tags([item for item in raw_items if isinstance(item, str)])
 
 
 def _number_field(raw: dict[str, object], field_name: str, default: float) -> float:
