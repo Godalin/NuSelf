@@ -75,7 +75,7 @@ skills/
   selves.md
 ```
 
-Each skill file starts with YAML frontmatter containing at least `name` and `description`, followed by Markdown instructions. NuSelf also uses `allowed-tools` to name the LangChain tools the skill may call.
+Each skill file starts with YAML frontmatter containing `name`, `description`, and `allowed-tools`, followed by Markdown instructions. `allowed-tools` names the exact LangChain tools the skill may call. A skill may omit `allowed-tools` only when it is intentionally advisory and does not call tools.
 
 Current chat runtime loads these Markdown files through the `load_skill` tool. Skill prose must stay file-backed rather than moving back into hard-coded prompt strings.
 
@@ -83,9 +83,12 @@ Rules:
 
 - A skill may require a tool call before answering a class of questions.
 - A skill may prohibit claims that would require service data unless a tool result or visible context supports them.
-- A skill should name the exact tools it depends on.
+- A skill that calls tools must name the exact tools it depends on in `allowed-tools`.
 - A skill should be reusable across ordinary response generation and persona-synthesized responses.
 - Skills must not invent hidden access. If the service data is not in visible context, the agent must call the relevant tool or state uncertainty.
+- Skills that can mutate state must state the confirmation boundary: direct user confirmation is required for destructive, archival, reprioritization, or proposal actions unless the corresponding tool contract explicitly says otherwise.
+- Skills should distinguish raw service output from final answer behavior. Tool results are evidence or private context; the final response should synthesize them naturally unless the user asks to inspect raw records.
+- Skills for durable operational state, such as reason workspaces, must describe data shape precisely enough for the agent to call tools correctly.
 - Skill instructions must live in `src/nuself/agent/skills/*.md`; do not hard-code service skill prose in `chat.py`.
 
 ### Tool Invocation Flow

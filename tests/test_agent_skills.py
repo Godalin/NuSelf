@@ -17,7 +17,14 @@ def test_load_agent_skills_from_flat_markdown_files() -> None:
     assert "Durable memory is not ambient context" in skills["memory"].instructions
     assert "memory_search" not in skills["memory"].instructions
     assert "{tool:search}" in skills["memory"].instructions
+    assert "memory_search" in skills["memory"].allowed_tools
+    assert "reflection_list_pending" in skills["reflection"].allowed_tools
+    assert "selves_consult" in skills["selves"].allowed_tools
+    assert "trace_search" in skills["trace"].allowed_tools
+    assert "workspace_put" in skills["workspace"].allowed_tools
     assert "reason_propose" in skills["reason_proposal"].allowed_tools
+    assert "advance at most one complete round per step" in skills["reason_proposal"].instructions
+    assert "valid JSON string" in skills["workspace"].instructions
 
 
 def test_render_agent_skill_sections_with_generated_allowed_tools() -> None:

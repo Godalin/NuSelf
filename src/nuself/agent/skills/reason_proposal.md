@@ -25,6 +25,11 @@ A reason proposal is an information design task. Before calling
   Mandates are architectural constraints, not suggestions. Ask the user before
   adding mandates.
 
+For simulations, debates, interviews, games, or staged discussions, include a
+pacing mandate such as "advance at most one complete round per step" unless the
+user explicitly wants larger batches. If the task has setup work, say whether
+setup is separate or may happen before the first round.
+
 Before proposing, consider whether the thread needs additional context from
 memory, trace, selves, or persona tools. Use the relevant skill first if that
 context is needed.

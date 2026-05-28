@@ -438,6 +438,9 @@ Parameters:
 - `working_summary` (required) — enriched context from the discussion. It may be an empty string only when there is genuinely no useful context.
 - `active_items` (required) — initial tracked items, each with `"label"` (required), `"description"` (optional), `"kind"` (optional free-text tag).
 - `mandates` (required) — required actions the advancer MUST follow on every advance. Use an empty list only when the thread truly has no mandates.
+- For simulations, debates, interviews, games, or staged discussions, proposals
+  should include a pacing mandate such as "advance at most one complete round
+  per step" unless the user explicitly wants larger batches.
 
 `reason_propose` does not accept arbitrary `evidence_refs` from chat. This prevents proposal ids, stale cross-thread refs, or unverified source refs from leaking into durable reason state. Evidence promotion should happen through explicit service paths.
 
