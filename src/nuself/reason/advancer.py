@@ -28,22 +28,23 @@ def _empty_dict_list() -> list[dict[str, object]]:
 
 def _log_tool_call(tool_name: str, args: dict[str, object], *, tool_service_map: dict[str, str] | None = None, project_root: Path | None, result: str | None = None, error: str | None = None) -> None:
     """Emit a service_tool_called log event for a reasoning tool invocation."""
-    from nuself.agent.tool_utils import format_tool_debug_body
+    from nuself.agent.tool_utils import tool_log_metadata
     from nuself.logs import write_log_event
 
-    body = format_tool_debug_body(args=args, result=result, error=error, full=True)
     service_component = (tool_service_map or {}).get(tool_name) or "reason_advancer"
     write_log_event(
         "reasoning",
         "service_tool_called",
-        body,
+        f"{tool_name} {'failed' if error is not None else 'completed'}",
         project_root=project_root,
         status="completed" if error is None else "failed",
-        metadata={
-            "service_component": service_component,
-            "tool": tool_name,
-            "message_body": body,
-        },
+        metadata=tool_log_metadata(
+            args=args,
+            result=result,
+            error=error,
+            service_component=service_component,
+            tool_name=tool_name,
+        ),
     )
 
 
@@ -240,7 +241,7 @@ class ReasonAdvancer:
             state = cast(dict[str, object], result) if isinstance(result, dict) else {}
             for name, args, tc_result in self._captured:
                 _log_tool_call(name, args, project_root=self._project_root, result=tc_result, tool_service_map=self._tool_service_map)
-            from nuself.agent.tool_utils import format_tool_debug_body
+            from nuself.agent.tool_utils import tool_log_metadata
 
             step_tool_logs = cast(
                 "tuple[dict[str, object], ...]",
@@ -248,9 +249,14 @@ class ReasonAdvancer:
                     {
                         "component": "reasoning",
                         "event": "service_tool_called",
-                        "message": format_tool_debug_body(args=dict(args), result=result, full=True),
+                        "message": f"{name} completed",
                         "status": "completed",
-                        "metadata": {"service_component": self._tool_service_map.get(name, ""), "tool": name},
+                        "metadata": tool_log_metadata(
+                            args=dict(args),
+                            result=result,
+                            service_component=self._tool_service_map.get(name, ""),
+                            tool_name=name,
+                        ),
                     }
                     for name, args, result in self._captured
                 ),

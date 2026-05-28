@@ -45,7 +45,7 @@ When one subsystem invokes another subsystem through an agent-facing service/too
 Example: chat calling a memory service tool writes a `chat` component event:
 
 ```json
-{"component":"chat","event":"service_tool_called","metadata":{"service_component":"memory","tool":"memory_archive"}}
+{"component":"chat","event":"service_tool_called","metadata":{"service_component":"memory","tool":"memory_archive","args":{"entry_id":"m1"},"result":"Archived \"Old memory\"."}}
 ```
 
 Human-readable rendering must show both tags at the front:
@@ -64,7 +64,13 @@ Rules:
 - Agent-facing chat tools for memory, reflection, reason, trace, and selves all write `chat/service_tool_called` with the corresponding service tag.
 - `selves_consult` also emits ordinary `persona` component logs for internal persona activity. The service-tool log records that chat called the selves service; the `persona` logs record what the selves service did.
 - All other log formatting rules remain unchanged.
-- Tool/service call body text is for debugging. It should include compact `args:` plus `result:` or `error:` lines, bounded in length so interactive output remains readable.
+- Tool/service call I/O is structured metadata, not formatted message text:
+  - `metadata.args` stores the structured tool arguments.
+  - `metadata.result` stores the structured result when available, otherwise the result text.
+  - `metadata.error` stores the error text when the call failed.
+- The log `message` for newly written `service_tool_called` events is not a display body. Renderers display tool I/O from structured metadata; for persisted pre-structured snapshots, renderers may normalize the legacy `args:` / `result:` / `error:` message body into the same display path so historical reason steps remain inspectable.
+- Renderers should use the same JSON block renderer for `args` and `result`, pretty-print JSON objects and arrays with the opening `{` or `[` on the section header line, expand JSON strings that contain nested JSON, and indent ordinary text consistently.
+
 ### Service Tag Rendering
 
 The log event itself is the single source of truth for the service tag. When a tool is invoked, the wrapper writes the `service_component` directly into `metadata`. No code derives the service tag from the tool name at render time.

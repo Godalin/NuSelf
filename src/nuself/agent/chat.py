@@ -22,7 +22,7 @@ from nuself.agent.middleware import ToolCaptureMiddleware
 from nuself.agent.skills import AgentSkill, load_agent_skills, render_tool_placeholders
 from nuself.agent.thread import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.tools import build_langchain_chat_tools
-from nuself.agent.tool_utils import format_tool_debug_body
+from nuself.agent.tool_utils import tool_log_metadata
 from nuself.domain.proactive import IdeaCandidate
 from nuself.config import ConfigSystem
 from nuself.llm import (
@@ -879,20 +879,20 @@ class ConversationGraphRuntime:
         result: str | None = None,
         error: str | None = None,
     ) -> None:
-        message = format_tool_debug_body(args=args, result=result, error=error)
-        full_body = format_tool_debug_body(args=args, result=result, error=error, full=True)
         write_log_event(
             "chat",
             "service_tool_called",
-            message,
+            f"{tool_name} {status}",
             project_root=self._project_root,
             status=status,
             error=error,
-            metadata={
-                "service_component": service_component,
-                "tool": tool_name,
-                "message_body": full_body,
-            },
+            metadata=tool_log_metadata(
+                args=args,
+                result=result,
+                error=error,
+                service_component=service_component,
+                tool_name=tool_name,
+            ),
         )
 
     # ------------------------------------------------------------------

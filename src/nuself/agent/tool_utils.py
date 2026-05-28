@@ -1,60 +1,29 @@
-"""Shared tool formatting utilities for agent subsystems."""
+"""Shared tool utilities for agent subsystems."""
 
 from __future__ import annotations
 
-import json
-from typing import Any, cast
+from typing import Any
 
 
-def format_tool_debug_body(
+def tool_log_metadata(
     *,
     args: dict[str, Any],
     result: str | None = None,
     error: str | None = None,
-    full: bool = False,
-) -> str:
-    """Format tool call args, result, and error into log body text."""
-    limit = 0 if full else 200
-    lines = [f"args: {_format_tool_debug_value(args, limit=limit)}"]
+    service_component: str,
+    tool_name: str,
+) -> dict[str, object]:
+    """Build structured metadata for a service tool call log."""
+    metadata: dict[str, object] = {
+        "service_component": service_component,
+        "tool": tool_name,
+        "args": dict(args),
+    }
     if result is not None:
-        lines.append(f"result: {_format_tool_debug_result(result, limit=limit)}")
+        metadata["result"] = result
     if error is not None:
-        lines.append(f"error: {_truncate_tool_debug_text(error, limit=limit)}")
-    return "\n".join(lines)
-
-
-def _format_tool_debug_value(value: object, limit: int = 200) -> str:
-    if isinstance(value, dict):
-        d: dict[str, object] = cast("dict[str, object]", value)
-        if len(d) == 1 and "_raw" in d:
-            raw = d["_raw"]
-            return _truncate_tool_debug_text(raw if isinstance(raw, str) else str(raw), limit=limit)
-        return _truncate_tool_debug_text(
-            json.dumps(d, indent=2, sort_keys=True, ensure_ascii=False, default=str), limit=limit
-        )
-    try:
-        return _truncate_tool_debug_text(
-            json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False, default=str), limit=limit
-        )
-    except (TypeError, ValueError):
-        return _truncate_tool_debug_text(str(value), limit=limit)
-
-
-def _format_tool_debug_result(text: str, limit: int = 200) -> str:
-    """Format result text — try JSON pretty-print, fall back to raw."""
-    try:
-        parsed = json.loads(text)
-    except (json.JSONDecodeError, ValueError):
-        return _truncate_tool_debug_text(text, limit=limit)
-    return _truncate_tool_debug_text(
-        json.dumps(parsed, indent=2, sort_keys=True, ensure_ascii=False, default=str), limit=limit
-    )
-
-
-def _truncate_tool_debug_text(text: str, limit: int = 200) -> str:
-    if limit <= 0 or len(text) <= limit:
-        return text
-    return text[: limit - 3].rstrip() + "..."
+        metadata["error"] = error
+    return metadata
 
 
 def tool_result_text(result: object) -> str:

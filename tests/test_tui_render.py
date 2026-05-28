@@ -47,12 +47,16 @@ def test_render_service_tool_log_uses_caller_and_service_tags() -> None:
         thread_id="default",
         turn_id="turn-1",
         status="completed",
-        metadata={"service_component": "memory", "tool": "memory_archive"},
+        metadata={"service_component": "memory", "tool": "memory_archive", "args": {"entry_id": "m1"}, "result": 'Archived "Old memory".'},
     )
 
     assert render_log_event(event, color=False).splitlines() == [
         "[chat] [memory] service_tool_called status=completed thread=default turn=turn-1 tool=memory_archive",
-        "  chat called memory service tool memory_archive",
+        "  args: {",
+        '    "entry_id": "m1"',
+        "  }",
+        "  result:",
+        '    Archived "Old memory".',
     ]
 
 
@@ -65,14 +69,73 @@ def test_render_workspace_service_tag_uses_256_color(monkeypatch: MonkeyPatch) -
         level="info",
         component="reasoning",
         event="service_tool_called",
-        message='args: {"key": "current_round", "value": "{\\"round\\":1}"}',
+        message="workspace_put completed",
         status="completed",
-        metadata={"service_component": "workspace", "tool": "workspace_put"},
+        metadata={
+            "service_component": "workspace",
+            "tool": "workspace_put",
+            "args": {"key": "current_round", "value": '{"round":1}'},
+            "result": "Stored current_round",
+        },
     )
 
     first_line = render_log_event(event, color=True).splitlines()[0]
 
     assert "\033[38;5;208m[workspace]\033[0m" in first_line
+
+
+def test_render_service_tool_log_expands_nested_json_string() -> None:
+    event = LogEvent(
+        time="2026-05-12T10:00:00Z",
+        level="info",
+        component="reasoning",
+        event="service_tool_called",
+        message="workspace_put completed",
+        status="completed",
+        metadata={
+            "service_component": "workspace",
+            "tool": "workspace_put",
+            "args": {"key": "current_round", "value": '{"round":1}'},
+            "result": '{"ok": true}',
+        },
+    )
+
+    assert render_log_event(event, color=False).splitlines() == [
+        "[reasoning] [workspace] service_tool_called status=completed tool=workspace_put",
+        "  args: {",
+        '    "key": "current_round",',
+        '    "value": {',
+        '      "round": 1',
+        "    }",
+        "  }",
+        "  result: {",
+        '    "ok": true',
+        "  }",
+    ]
+
+
+def test_render_service_tool_log_reads_legacy_message_body() -> None:
+    event = LogEvent(
+        time="2026-05-12T10:00:00Z",
+        level="info",
+        component="reasoning",
+        event="service_tool_called",
+        message='args: {\n  "key": "debate_state",\n  "value": "{\\"round\\":1}"\n}\nresult: Stored debate_state',
+        status="completed",
+        metadata={"service_component": "workspace", "tool": "workspace_put"},
+    )
+
+    assert render_log_event(event, color=False).splitlines() == [
+        "[reasoning] [workspace] service_tool_called status=completed tool=workspace_put",
+        "  args: {",
+        '    "key": "debate_state",',
+        '    "value": {',
+        '      "round": 1',
+        "    }",
+        "  }",
+        "  result:",
+        "    Stored debate_state",
+    ]
 
 
 def test_render_discussion_trace_formats_block() -> None:

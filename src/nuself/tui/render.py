@@ -64,13 +64,24 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
 def _render_service_tool_called(event: LogEvent, *, color: bool | None = None) -> str:
     """Render a service_tool_called log event via render_tool_call."""
     service: str | None = None
+    args: object = {}
+    result: object | None = None
+    error: object | None = event.error
     if event.metadata:
         raw_comp = event.metadata.get("service_component")
         if isinstance(raw_comp, str):
             service = raw_comp
-        else:
-            raw_tool = event.metadata.get("tool")
-            service = str(raw_tool) if isinstance(raw_tool, str) else None
+        if "args" in event.metadata:
+            args = event.metadata["args"]
+        if "result" in event.metadata:
+            result = event.metadata["result"]
+        if "error" in event.metadata:
+            error = event.metadata["error"]
+    if not _has_structured_tool_io(event):
+        legacy_args, legacy_result, legacy_error = _parse_legacy_tool_body(event.message)
+        args = legacy_args
+        result = legacy_result
+        error = legacy_error if legacy_error is not None else error
     extra: dict[str, object] = {}
     if event.thread_id:
         extra["thread"] = event.thread_id
@@ -83,11 +94,67 @@ def _render_service_tool_called(event: LogEvent, *, color: bool | None = None) -
     return render_tool_call(
         component=event.component,
         service=service or event.component,
-        args_text=event.message,
+        args=args,
+        result=result,
+        error=error,
         status=event.status or "completed",
         extra_fields=extra or None,
         color=color,
     )
+
+
+def _has_structured_tool_io(event: LogEvent) -> bool:
+    if not event.metadata:
+        return False
+    return any(key in event.metadata for key in ("args", "result", "error"))
+
+
+def _parse_legacy_tool_body(message: str) -> tuple[object, object | None, object | None]:
+    sections: dict[str, str] = {}
+    current: str | None = None
+    current_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal current, current_lines
+        if current is not None:
+            sections[current] = "\n".join(current_lines).strip()
+        current = None
+        current_lines = []
+
+    for line in message.splitlines():
+        stripped = line.strip()
+        label: str | None = None
+        rest = ""
+        if stripped == "args:" or stripped.startswith("args: "):
+            label = "args"
+            rest = stripped.removeprefix("args:").strip()
+        elif stripped == "result:" or stripped.startswith("result: "):
+            label = "result"
+            rest = stripped.removeprefix("result:").strip()
+        elif stripped == "error:" or stripped.startswith("error: "):
+            label = "error"
+            rest = stripped.removeprefix("error:").strip()
+        if label is not None:
+            flush()
+            current = label
+            current_lines = [rest] if rest else []
+        elif current is not None:
+            current_lines.append(line)
+    flush()
+
+    args: object = _legacy_tool_value(sections.get("args")) if "args" in sections else cast(dict[str, object], {})
+    result: object | None = _legacy_tool_value(sections.get("result")) if "result" in sections else None
+    error: object | None = _legacy_tool_value(sections.get("error")) if "error" in sections else None
+    return args, result, error
+
+
+def _legacy_tool_value(raw: str | None) -> object:
+    if raw is None:
+        return None
+    parsed = _parse_json_string(raw)
+    if parsed is not None:
+        return parsed
+    return raw
 
 
 def _render_persona_summary_event(event: LogEvent, *, color: bool | None = None) -> str:
@@ -172,75 +239,13 @@ def render_record_block(label: str, fields: Sequence[str] = (), *, body: str = "
     return "\n".join(lines)
 
 
-def _colorize_tool_body(body: str, theme: TerminalTheme) -> str:
-    """Apply Rich JSON syntax highlighting to a tool call body string.
-
-    Each line in *body* either starts a JSON section (``args:``, ``result:``,
-    ``error:``) or continues the previous one.  Valid JSON sections are
-    re-rendered through ``rich.json.JSON`` for colored display.
-    """
-    if not theme.color:
-        return body
-
-    from rich.console import Console
-    from rich.json import JSON as RichJSON
-    import io
-
-    lines = body.splitlines()
-    out: list[str] = []
-    section_tag: str | None = None
-    section_raw: list[str] = []
-
-    def flush() -> None:
-        nonlocal section_tag, section_raw
-        if section_tag is None:
-            return
-        content = "\n".join(section_raw)
-        try:
-            parsed = json.loads(content)
-        except (json.JSONDecodeError, ValueError):
-            out.append(f"{section_tag}: {content}")
-            section_tag = None
-            section_raw = []
-            return
-        buf = io.StringIO()
-        Console(file=buf, force_terminal=True, width=160).print(
-            RichJSON(json.dumps(parsed, indent=2), indent=2), end=""
-        )
-        hl = buf.getvalue().rstrip()
-        hl_lines = hl.splitlines()
-        out.append(f"{section_tag}: {hl_lines[0]}")
-        out.extend(hl_lines[1:])
-        section_tag = None
-        section_raw = []
-
-    for line in lines:
-        stripped = line.strip()
-        tag: str | None = None
-        if stripped.startswith("args:"):
-            tag = "args"
-        elif stripped.startswith("result:"):
-            tag = "result"
-        elif stripped.startswith("error:"):
-            tag = "error"
-        if tag is not None:
-            flush()
-            section_tag = tag
-            _, _, rest = stripped.partition(": ")
-            section_raw = [rest] if rest else []
-        elif section_tag is not None:
-            section_raw.append(stripped)
-        else:
-            out.append(line)
-    flush()
-    return "\n".join(out)
-
-
 def render_tool_call(
     *,
     component: str,
     service: str,
-    args_text: str,
+    args: object,
+    result: object | None = None,
+    error: object | None = None,
     status: str = "completed",
     extra_fields: dict[str, object] | None = None,
     color: bool | None = None,
@@ -262,11 +267,87 @@ def render_tool_call(
             if v is not None:
                 header_parts.append(theme.muted(_format_log_field(k, v)))
     lines = [" ".join(header_parts)]
-    colored_body = _colorize_tool_body(args_text, theme)
-    for line in colored_body.splitlines():
-        if line.strip():
-            lines.append(f"  {line}")
+    _append_tool_io_section(lines, "args", args, theme)
+    if result is not None:
+        _append_tool_io_section(lines, "result", result, theme)
+    if error is not None:
+        _append_tool_io_section(lines, "error", error, theme)
     return "\n".join(lines)
+
+
+def _append_tool_io_section(lines: list[str], label: str, value: object, theme: TerminalTheme) -> None:
+    rendered = _render_tool_io_value(value, theme=theme)
+    if not rendered:
+        lines.append(f"  {theme.muted(label + ':')}")
+        return
+    if rendered[0] in {"{", "["}:
+        lines.append(f"  {theme.muted(label + ':')} {rendered[0]}")
+        for line in rendered[1:]:
+            lines.append(f"  {line}")
+        return
+    lines.append(f"  {theme.muted(label + ':')}")
+    for line in rendered:
+        lines.append(f"    {line}")
+
+
+def _render_tool_io_value(value: object, *, theme: TerminalTheme) -> list[str]:
+    normalized = _normalize_tool_json(value)
+    if isinstance(normalized, dict):
+        return _render_tool_json(cast(dict[object, object], normalized), theme=theme)
+    if isinstance(normalized, list):
+        return _render_tool_json(cast(list[object], normalized), theme=theme)
+    if isinstance(value, str):
+        return value.splitlines() or [""]
+    return [_render_scalar(value)]
+
+
+def _normalize_tool_json(value: object) -> object:
+    parsed = _parse_json_string(value)
+    if parsed is not None:
+        return _normalize_tool_json(parsed)
+    if isinstance(value, dict):
+        value_dict = cast(dict[object, object], value)
+        return {str(key): _normalize_tool_json(item) for key, item in value_dict.items()}
+    if isinstance(value, list):
+        return [_normalize_tool_json(item) for item in cast(list[object], value)]
+    return value
+
+
+def _render_tool_json(value: object, *, theme: TerminalTheme) -> list[str]:
+    try:
+        text = json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return [_render_scalar(value)]
+    if not theme.color:
+        return text.splitlines()
+
+    from rich.console import Console
+    from rich.json import JSON as RichJSON
+    import io
+
+    buf = io.StringIO()
+    Console(file=buf, force_terminal=True, width=160).print(RichJSON(text, indent=2), end="")
+    return buf.getvalue().rstrip().splitlines()
+
+
+def _parse_json_string(value: object) -> object | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if not stripped or stripped[0] not in "[{":
+        return None
+    try:
+        return json.loads(stripped)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+
+def _render_scalar(value: object) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
 
 
 def _discussion_trace_metadata(event: LogEvent) -> list[object]:
@@ -302,7 +383,7 @@ def _render_log_fields(event: LogEvent, theme: TerminalTheme, *, include_status:
         fields.append(theme.error(_format_log_field("error", event.error)))
     if event.metadata:
         for key in sorted(event.metadata):
-            if key in {"message_body", "answer", "reply"}:
+            if key in {"answer", "reply"}:
                 continue
             if key == "discussion_trace":
                 continue

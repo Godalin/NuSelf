@@ -68,6 +68,9 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 - Fixed reason pacing prompts so round-based simulations and debates advance at most one complete round per step instead of skipping ahead through multiple rounds.
 - Clarified service skills with explicit allowed tools, confirmation boundaries for mutating actions, and correct workspace value shape.
 - Fixed `[workspace]` service tags in rendered tool logs so they use a valid 256-color ANSI foreground code.
+- Reworked service tool logs to store structured `args`, `result`, and `error` metadata and render tool I/O from those fields.
+- Unified tool `args` and `result` JSON rendering so both use the same pretty-printed block format.
+- Restored argument/result rendering for already persisted reason tool logs that still store tool I/O in the legacy message body.
 
 ### Docs
 

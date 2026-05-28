@@ -607,7 +607,7 @@ Both forms use the same event shape and MUST render through the shared log rende
 For the reason subsystem specifically:
 
 - The advancer emits `service_tool_called` log events with `component="reasoning"` for every captured tool invocation during step generation.
-- `ReasoningStep.tool_logs` stores the corresponding rendered event payloads as dictionaries.
+- `ReasoningStep.tool_logs` stores the corresponding log event snapshots as dictionaries, including structured `metadata.args`, `metadata.result`, or `metadata.error`.
 - `ReasoningStep` must not use a legacy `tool_calls` field.
 - Tool logs should not be truncated by the capture layer; user-facing renderers may choose their own display policy, but persisted step snapshots should preserve the full captured result.
 - Any CLI, REPL, transcript, watch, or detail renderer that displays reason tool logs must call the common log renderer so reason output stays visually and semantically consistent with chat, memory, reflection, trace, and daemon service logs.
