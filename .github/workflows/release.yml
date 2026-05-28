@@ -41,8 +41,10 @@ jobs:
           files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish to PyPI (optional)
-        if: secrets.PYPI_API_TOKEN != ''
-        uses: pypa/gh-action-pypi-publish@v1.5.1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+      # PyPI publication intentionally disabled here. To enable, add a
+      # `PYPI_API_TOKEN` secret and restore the following step:
+      # - name: Publish to PyPI (optional)
+      #   if: secrets.PYPI_API_TOKEN != ''
+      #   uses: pypa/gh-action-pypi-publish@v1.5.1
+      #   with:
+      #     password: ${{ secrets.PYPI_API_TOKEN }}
