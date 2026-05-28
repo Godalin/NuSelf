@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from nuself.reason.advancer import build_advance_prompt, step_from_data
+from nuself.reason.advancer import REASON_ADVANCE_SYSTEM_PROMPT, build_advance_prompt, build_system_prompt, step_from_data
 from nuself.reason.domain import ReasoningThread
 
 
@@ -20,6 +20,7 @@ def test_build_prompt_includes_thread_fields() -> None:
     assert "hyp1" in prompt
     assert "q1" in prompt
     assert "ref1" in prompt
+    assert "at most one complete round" in prompt
 
 
 def test_build_prompt_empty_lists_omitted() -> None:
@@ -28,6 +29,17 @@ def test_build_prompt_empty_lists_omitted() -> None:
     assert "Active items:" not in prompt
     assert "Pending items:" not in prompt
     assert "Evidence references:" not in prompt
+
+
+def test_build_system_prompt_keeps_invariant_contract_with_generated_prompt() -> None:
+    thread = ReasoningThread(topic="Q", reasoning_prompt="Move one debate turn at a time.")
+
+    prompt = build_system_prompt(thread)
+
+    assert REASON_ADVANCE_SYSTEM_PROMPT in prompt
+    assert "Move one debate turn at a time." in prompt
+    assert "ReasonStepOutput" in prompt
+    assert "at most one complete round" in prompt
 
 
 def teststep_from_data_accepts_valid() -> None:

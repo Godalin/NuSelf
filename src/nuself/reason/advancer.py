@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
+from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
@@ -70,7 +71,12 @@ REASON_ADVANCE_SYSTEM_PROMPT = (
     "- retired_findings: set aside completed or abandoned ideas.\n"
     "- delta: what changed in your thinking this step.\n"
     "- next_steps: what you plan to do next.\n"
-    "- mandates: constraints you must follow."
+    "- mandates: constraints you must follow.\n"
+    "Advance exactly one bounded unit. For round-based simulations, debates, "
+    "interviews, games, or staged discussions, produce at most one complete "
+    "round per advance. Setup may happen before the first round, but do not "
+    "skip ahead through multiple simulated rounds in one ReasoningStep.\n"
+    "Always finish by producing one structured ReasonStepOutput response."
 )
 
 
@@ -108,9 +114,15 @@ def build_advance_prompt(thread: ReasoningThread) -> str:
         for r in thread.evidence_refs:
             parts.append(f"  - {r}")
     parts.append("")
-    parts.append("Think one step forward. Write your current thoughts as output,")
-    parts.append("then update your notes for the next round.")
+    parts.append("Think one bounded step forward. For round-based topics, advance at most one complete round.")
+    parts.append("Write your current thoughts as output, then update your notes for the next advance.")
     return "\n".join(parts)
+
+
+def build_system_prompt(thread: ReasoningThread) -> str:
+    if not thread.reasoning_prompt:
+        return REASON_ADVANCE_SYSTEM_PROMPT
+    return f"{REASON_ADVANCE_SYSTEM_PROMPT}\n\nTopic-specific guidance:\n{thread.reasoning_prompt}"
 
 
 def step_from_data(data: dict[str, object], thread_id: str, *, tool_logs: tuple[dict[str, object], ...] = ()) -> ReasoningStep | None:
@@ -206,7 +218,7 @@ class ReasonAdvancer:
         return create_agent(
             model=endpoint.model,
             tools=all_tools,
-            response_format=ReasonStepOutput,
+            response_format=ToolStrategy(ReasonStepOutput),
             middleware=[self._middleware],
         )
 
@@ -222,7 +234,7 @@ class ReasonAdvancer:
         try:
             self._captured.clear()
             base = build_advance_prompt(thread)
-            system = SystemMessage(content=thread.reasoning_prompt) if thread.reasoning_prompt else SystemMessage(content=REASON_ADVANCE_SYSTEM_PROMPT)
+            system = SystemMessage(content=build_system_prompt(thread))
             messages = [system, HumanMessage(content=base)]
             result = self._agent.invoke({"messages": messages})
             state = cast(dict[str, object], result) if isinstance(result, dict) else {}
@@ -304,4 +316,3 @@ class ReasonAdvancer:
             global_project_root=self._project_root,
             get_thread_persona_root=_persona_root,
         )
-

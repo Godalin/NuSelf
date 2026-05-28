@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import threading
 from typing import Literal, cast
+from uuid import uuid4
 
 from nuself.config import runtime_paths
 from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
 
 TraceVisibilityFilter = Literal["default", "private", "shareable", "internal", "all"]
+_REPO_LOCKS_LOCK = threading.Lock()
+_REPO_LOCKS: dict[Path, threading.RLock] = {}
 
 
 class TraceNotFound(ValueError):
@@ -29,15 +33,17 @@ class TraceRepository:
         self._traces_dir = self._root / "traces"
         self._links_dir = self._root / "links"
         self._index_path = self._root / "index.json"
+        self._lock = _lock_for_root(self._root)
 
     def ensure(self) -> None:
         self._traces_dir.mkdir(parents=True, exist_ok=True)
         self._links_dir.mkdir(parents=True, exist_ok=True)
 
     def save_trace(self, trace: ThoughtTrace) -> ThoughtTrace:
-        self.ensure()
-        _write_json_atomic(self._trace_path(trace.id), trace.to_wire())
-        self.reindex()
+        with self._lock:
+            self.ensure()
+            _write_json_atomic(self._trace_path(trace.id), trace.to_wire())
+            self.reindex()
         return trace
 
     def get_trace(self, trace_id: str) -> ThoughtTrace:
@@ -104,9 +110,10 @@ class TraceRepository:
         return trace
 
     def save_link(self, link: TraceLink) -> TraceLink:
-        self.ensure()
-        _write_json_atomic(self._link_path(link.id), link.to_wire())
-        self.reindex()
+        with self._lock:
+            self.ensure()
+            _write_json_atomic(self._link_path(link.id), link.to_wire())
+            self.reindex()
         return link
 
     def links_for(self, trace_id: str) -> list[TraceLink]:
@@ -121,19 +128,20 @@ class TraceRepository:
         return sorted(links, key=lambda link: (link.created_at, link.id))
 
     def reindex(self) -> Path:
-        self.ensure()
-        traces = [_safe_read_trace_path(path) for path in sorted(self._traces_dir.glob("*.json"))]
-        links = [_safe_read_link_path(path) for path in sorted(self._links_dir.glob("*.json"))]
-        trace_ids = [trace.id for trace in traces if trace is not None]
-        link_ids = [link.id for link in links if link is not None]
-        payload: dict[str, object] = {
-            "schema": "NuSelfTraceIndex/v1",
-            "trace_count": len(trace_ids),
-            "link_count": len(link_ids),
-            "trace_ids": trace_ids,
-            "link_ids": link_ids,
-        }
-        _write_json_atomic(self._index_path, payload)
+        with self._lock:
+            self.ensure()
+            traces = [_safe_read_trace_path(path) for path in sorted(self._traces_dir.glob("*.json"))]
+            links = [_safe_read_link_path(path) for path in sorted(self._links_dir.glob("*.json"))]
+            trace_ids = [trace.id for trace in traces if trace is not None]
+            link_ids = [link.id for link in links if link is not None]
+            payload: dict[str, object] = {
+                "schema": "NuSelfTraceIndex/v1",
+                "trace_count": len(trace_ids),
+                "link_count": len(link_ids),
+                "trace_ids": trace_ids,
+                "link_ids": link_ids,
+            }
+            _write_json_atomic(self._index_path, payload)
         return self._index_path
 
     def _trace_path(self, trace_id: str) -> Path:
@@ -153,9 +161,26 @@ class TraceRepository:
 
 def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(f"{path.suffix}.tmp")
-    tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8")
-    tmp_path.replace(path)
+    tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
+    try:
+        tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8")
+        tmp_path.replace(path)
+    except Exception:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _lock_for_root(root: Path) -> threading.RLock:
+    key = root.resolve()
+    with _REPO_LOCKS_LOCK:
+        lock = _REPO_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _REPO_LOCKS[key] = lock
+        return lock
 
 
 def _safe_read_trace_path(path: Path) -> ThoughtTrace | None:

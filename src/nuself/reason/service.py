@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
+from nuself.config import runtime_paths
 from nuself.logs import write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus
 from nuself.reason.prompt import generate_reasoning_prompt
@@ -65,13 +66,13 @@ class ReasonService:
         advancer: ReasonAdvancerProtocol | None = None,
         prompt_generator: Callable[..., str] | None = None,
     ) -> None:
-        self._project_root = project_root
         self._repository = repository or ReasonRepository(project_root)
         repo_root = self._repository.project_root
-        effective_root = repo_root if repo_root is not None else project_root
+        effective_root = repo_root if repo_root is not None else runtime_paths(project_root).project_root
+        self._project_root = effective_root
         self._workspace_store = workspace_store or PrivateWorkspaceStore(effective_root, scope="reason")
-        self._trace_recorder = trace_recorder if trace_recorder is not None else (
-            TraceRecorder(effective_root) if effective_root is not None else None
+        self._trace_recorder: TraceRecorder | None = trace_recorder if trace_recorder is not None else (
+            TraceRecorder(effective_root)
         )
         self._workspace_cache: dict[str, ScopedWorkspace] = {}
         self._advancer = advancer

@@ -62,6 +62,10 @@ The prompt must cover:
    - retired_findings — when does something get set aside?
 
 3. The pace: how much should one step accomplish? Focused or broad?
+   Define the smallest bounded advance unit for this topic. For simulations,
+   debates, interviews, games, or staged discussions, one step must mean at
+   most one complete round. If setup is needed, setup may happen before the
+   first round, but the same step must not skip ahead through multiple rounds.
 
 4. Any special rules derived from the constraints.
 

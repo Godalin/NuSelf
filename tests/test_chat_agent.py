@@ -865,6 +865,23 @@ def test_chat_agent_includes_reason_and_trace_tools_and_skills(tmp_path: Path) -
     assert "load_skill" in system_prompt
 
 
+def test_load_reason_skills_have_separate_read_and_proposal_tools(tmp_path: Path) -> None:
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        llm=FakeLLM(),
+        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+    )
+    tools = cast(dict[str, BaseTool], getattr(runtime, "_tools"))
+
+    reason = _invoke_chat_tool(tools["load_skill"], {"skill_name": "reason"})
+    proposal = _invoke_chat_tool(tools["load_skill"], {"skill_name": "reason_proposal"})
+
+    assert "Allowed tools: reason_list_active, reason_count, reason_show" in reason
+    assert "reason_propose" not in reason
+    assert "Allowed tools: reason_propose" in proposal
+    assert "Call `reason_propose` only after" in proposal
+
+
 # --- Memory management tools ---
 
 def test_memory_archive_tool_success(tmp_path: Path) -> None:

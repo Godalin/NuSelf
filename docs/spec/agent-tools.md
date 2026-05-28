@@ -63,25 +63,21 @@ Every agent-facing service should be described by two prompt layers:
 
 Tools alone are not enough. A model may treat tools as optional buttons unless the prompt explains that a service is not ambient context. Skills tell the agent how the subsystem should participate in reasoning.
 
-Skills must follow the Agent Skills `SKILL.md` directory convention used by LangChain Deep Agents:
+Skills are stored as flat Markdown files under `src/nuself/agent/skills/`:
 
 ```text
 skills/
-  memory/
-    SKILL.md
-  reflection/
-    SKILL.md
-  reason/
-    SKILL.md
-  trace/
-    SKILL.md
-  selves/
-    SKILL.md
+  memory.md
+  reflection.md
+  reason.md
+  reason_proposal.md
+  trace.md
+  selves.md
 ```
 
-Each `SKILL.md` starts with YAML frontmatter containing at least `name` and `description`, followed by Markdown instructions. NuSelf also uses `allowed-tools` to name the LangChain tools the skill may call.
+Each skill file starts with YAML frontmatter containing at least `name` and `description`, followed by Markdown instructions. NuSelf also uses `allowed-tools` to name the LangChain tools the skill may call.
 
-Current chat runtime loads these `SKILL.md` files and injects their instructions into response-generation prompts. When NuSelf migrates chat to Deep Agents, the same skill directories should be passed to `create_deep_agent(..., skills=[...])` rather than converted back into hard-coded prompt strings.
+Current chat runtime loads these Markdown files through the `load_skill` tool. Skill prose must stay file-backed rather than moving back into hard-coded prompt strings.
 
 Rules:
 
@@ -90,7 +86,7 @@ Rules:
 - A skill should name the exact tools it depends on.
 - A skill should be reusable across ordinary response generation and persona-synthesized responses.
 - Skills must not invent hidden access. If the service data is not in visible context, the agent must call the relevant tool or state uncertainty.
-- Skill instructions must live in `SKILL.md`; do not hard-code service skill prose in `chat.py`.
+- Skill instructions must live in `src/nuself/agent/skills/*.md`; do not hard-code service skill prose in `chat.py`.
 
 ### Tool Invocation Flow
 
@@ -314,25 +310,31 @@ The system prompt should include:
 
 ### Memory Skill
 
-The memory skill lives in `src/nuself/agent/skills/memory/SKILL.md` and must include this behavioral contract:
+The memory skill lives in `src/nuself/agent/skills/memory.md` and must include this behavioral contract:
 
 > "Durable memory is not ambient context. If the user asks about past preferences, decisions, recurring patterns, previous discussions, stored memories, or what NuSelf remembers, use `{tool:search}` before answering unless the answer is fully present in the current visible conversation or already provided in `Relevant memory context`. Do not say you lack memory tools when `{tool:search}` is listed. If you do not call `{tool:search}`, do not claim that no memory exists."
 
 ### Reflection Skill
 
-The reflection skill lives in `src/nuself/agent/skills/reflection/SKILL.md` and must include this behavioral contract:
+The reflection skill lives in `src/nuself/agent/skills/reflection.md` and must include this behavioral contract:
 
 > "Reflection ideas are proactive suggestions, not facts about the user. Use `{tool:list_pending}` only when the user asks for ideas/thoughts/reflections, the conversation naturally pauses, or a topic strongly matches proactive exploration. Introduce at most one idea in natural language. Use `{tool:dismiss}` when the user declines a topic, and `{tool:archive}` when the user engages and the discussion feels complete."
 
 ### Reason Skill
 
-The reason skill lives in `src/nuself/agent/skills/reason/SKILL.md` and must include this behavioral contract:
+The reason skill lives in `src/nuself/agent/skills/reason.md` and must include this behavioral contract:
 
-> "Reason is NuSelf's durable long-run thinking space. If the user asks about active long-running topics, open threads, or what NuSelf is continuing to think about, use `{tool:list_active}` or `{tool:show}` before answering unless the answer is fully present in visible context. You may suggest creating or advancing a thread, but must not create, advance, resolve, or archive one without explicit user confirmation. When proposing a thread, provide a working summary, initial tracked items, and mandates."
+> "Reason is NuSelf's durable long-run thinking space. If the user asks about active long-running topics, open threads, or what NuSelf is continuing to think about, use `{tool:list_active}`, `{tool:count}`, or `{tool:show}` before answering unless the answer is fully present in visible context. This skill is read-only and must not call write tools."
+
+### Reason Proposal Skill
+
+The reason proposal skill lives in `src/nuself/agent/skills/reason_proposal.md` and must include this behavioral contract:
+
+> "Use this skill only after the user explicitly confirms they want a new long-run reasoning thread. Distill the current discussion into `topic`, `working_summary`, `active_items`, and `mandates`; ask before adding mandates; call `{tool:propose}` only after the user has already said yes. The CLI asks for final confirmation once more before creation."
 
 ### Trace Skill
 
-The trace skill lives in `src/nuself/agent/skills/trace/SKILL.md` and must include this behavioral contract:
+The trace skill lives in `src/nuself/agent/skills/trace.md` and must include this behavioral contract:
 
 > "Trace is NuSelf's thought provenance database. If the user asks where an idea came from, how a memory/belief/answer formed, or what prior records support a conclusion, use `{tool:search}` or `{tool:show}` before answering unless the provenance is fully visible in the current conversation."
 

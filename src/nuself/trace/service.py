@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceRelation, TraceVisibility
 from nuself.trace.repository import TraceRepository, TraceVisibilityFilter
+
+if TYPE_CHECKING:
+    from nuself.reason.domain import ReasoningStep, ReasoningThread
 
 
 class TraceRecorder:

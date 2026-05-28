@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
+from nuself.logs import read_log_events
 from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.repository import ReasonRepository
@@ -120,6 +121,36 @@ def test_run_once_respects_cooldown_after_advance(tmp_path: Path) -> None:
     assert updated.skip_next_advance_until is not None
     cooldown = datetime.fromisoformat(updated.skip_next_advance_until)
     assert cooldown > datetime.now(UTC)
+
+
+def test_run_once_logs_and_cools_down_failed_advance(tmp_path: Path) -> None:
+    service = _reason_service(repository=ReasonRepository(tmp_path))
+    thread = service.start_thread("Test failure")
+
+    class FailingAdvancer:
+        def advance(self, t: ReasoningThread) -> ReasoningStep | None:
+            raise FileNotFoundError("missing tmp")
+
+    scheduler = ReasonScheduler(
+        project_root=tmp_path,
+        advancer=cast(ReasonAdvancer, FailingAdvancer()),
+        service=service,
+        interval_seconds=600,
+    )
+    scheduler.run_once()
+
+    updated = service.show_thread(thread.id)
+    assert updated.skip_next_advance_until is not None
+    cooldown = datetime.fromisoformat(updated.skip_next_advance_until)
+    assert cooldown > datetime.now(UTC)
+    assert service.list_steps(thread.id) == []
+
+    events = read_log_events(project_root=tmp_path, component="reasoning")
+    failed = [event for event in events if event.event == "scheduler_advance_failed"]
+    assert len(failed) == 1
+    assert failed[0].thread_id == thread.id
+    assert failed[0].status == "error"
+    assert failed[0].metadata == {"error_type": "FileNotFoundError", "thread_id": thread.id}
 
 
 def _null_advancer() -> ReasonAdvancer:

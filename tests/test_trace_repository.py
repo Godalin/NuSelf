@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -58,3 +59,21 @@ def test_trace_repository_resolves_numeric_handle(tmp_path: Path) -> None:
     assert repo.resolve_trace("1") == second
     with pytest.raises(TraceNotFound):
         repo.resolve_trace("2")
+
+
+def test_trace_repository_concurrent_saves_preserve_index(tmp_path: Path) -> None:
+    traces = tuple(
+        ThoughtTrace(kind="decision", title=f"Trace {index}", summary=f"Summary {index}.")
+        for index in range(16)
+    )
+
+    def save_trace(index: int) -> None:
+        TraceRepository(tmp_path).save_trace(traces[index])
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(save_trace, range(len(traces))))
+
+    repo = TraceRepository(tmp_path)
+    stored = repo.list_traces()
+    assert {trace.id for trace in stored} == {trace.id for trace in traces}
+    assert (tmp_path / "private" / "traces" / "index.json").is_file()

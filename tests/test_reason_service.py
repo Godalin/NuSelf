@@ -21,6 +21,52 @@ def _test_prompt_generator(*args: object, **kwargs: object) -> str:
     return "Test-generated reasoning prompt."
 
 
+def test_start_thread_resolves_project_root_for_prompt_generator(tmp_path: Path, monkeypatch: Any) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "AGENTS.md").write_text("# test project\n", encoding="utf-8")
+    seen_project_roots: list[Path] = []
+
+    def prompt_generator(*args: object, **kwargs: object) -> str:
+        project_root = kwargs.get("project_root")
+        if isinstance(project_root, Path):
+            seen_project_roots.append(project_root)
+        return "Generated prompt."
+
+    service = ReasonService(prompt_generator=prompt_generator)
+
+    service.start_thread("Prompt root")
+
+    assert seen_project_roots == [tmp_path]
+
+
+def test_generated_prompt_request_defines_bounded_round_pacing(tmp_path: Path, monkeypatch: Any) -> None:
+    captured_prompt: dict[str, str] = {}
+
+    class FakeLLM:
+        def complete(self, messages: object) -> str:
+            message = messages[0]  # type: ignore[index]
+            captured_prompt["value"] = message.content  # type: ignore[attr-defined]
+            return "Generated prompt."
+
+    def fake_configured_models(project_root: Path | None) -> tuple[object, ...]:
+        return (object(),)
+
+    def fake_default_llm(project_root: Path | None) -> FakeLLM:
+        return FakeLLM()
+
+    monkeypatch.setattr("nuself.reason.prompt.configured_langchain_chat_models", fake_configured_models)
+    monkeypatch.setattr("nuself.reason.prompt.default_llm", fake_default_llm)
+
+    from nuself.reason.prompt import generate_reasoning_prompt
+
+    result = generate_reasoning_prompt("Round-based debate", project_root=tmp_path)
+
+    assert result == "Generated prompt."
+    assert "one step must mean at" in captured_prompt["value"]
+    assert "most one complete round" in captured_prompt["value"]
+    assert "must not skip ahead through multiple rounds" in captured_prompt["value"]
+
+
 def test_start_thread(tmp_path: Path) -> None:
     service = _reason_service(repository=ReasonRepository(tmp_path))
     thread = service.start_thread("What should I do?")

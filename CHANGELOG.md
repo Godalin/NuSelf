@@ -30,7 +30,8 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 ### Changed
 
 - Chat prompts now treat agent-facing services as tools plus skills, so memory and reflection tools include explicit usage policy instead of appearing only as optional commands.
-- Chat service skills now live in Agent Skills `SKILL.md` files instead of hard-coded prompt strings.
+- Chat service skills now live in flat Agent Skill Markdown files instead of hard-coded prompt strings.
+- Reason proposal policy now lives in a separate `reason_proposal` skill, while the main `reason` skill is read-only.
 - Service/tool calls now log caller and callee tags, such as `[chat] [memory]`, while preserving the existing key/value log format.
 - Chat agent tools now register only through LangChain `StructuredTool` objects, with the old NuSelf chat-tool protocol removed and the same loaded tool list visible in ordinary and persona-synthesized response prompts.
 - Reason is now generalized around `topic`, free-text tracked items, mandates, structured step `output`, and generated topic-specific prompts over one shared reasoning structure instead of hard-coded hypothesis/question fields.
@@ -62,6 +63,9 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 - Fixed reason logs to use the configured project root.
 - Fixed `:reason` with no arguments to show reason command help instead of listing threads.
 - Fixed notification deep links so thread IDs and query values round-trip with reserved URL characters.
+- Fixed chat-confirmed reason proposals so prompt generation uses the resolved project root when the CLI was started without `--project-root`.
+- Fixed background reason advances that use concurrent tools by serializing persona prompt and trace index writes, and keeping scheduler failures logged without killing later scheduling.
+- Fixed reason pacing prompts so round-based simulations and debates advance at most one complete round per step instead of skipping ahead through multiple rounds.
 
 ### Docs
 

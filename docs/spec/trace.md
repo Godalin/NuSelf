@@ -43,7 +43,10 @@ Rules:
 - `index.json` is derived and rebuildable from `traces/` and `links/`.
 - Record timestamps are timezone-aware ISO strings.
 - Human-readable output renders timestamps in the current system timezone per `cli.md`.
-- Repository writes must be atomic enough for local CLI use: write to a temporary sibling file, then replace the target file.
+- Repository writes must be atomic enough for local CLI and concurrent tool use:
+  write to a unique temporary sibling file, then replace the target file.
+- Writes in the same local process are serialized per trace repository root so
+  concurrent trace recording cannot race while rebuilding `index.json`.
 - Invalid JSON files are skipped by list/search but surfaced by a dev diagnostic later. First implementation may ignore invalid files silently in normal commands.
 
 ## IDs

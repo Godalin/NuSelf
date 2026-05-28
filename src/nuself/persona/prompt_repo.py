@@ -6,10 +6,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
 from pathlib import Path
+import threading
 from typing import cast
 from uuid import uuid4
 
 from nuself.config import runtime_paths
+
+_REPO_LOCKS_LOCK = threading.Lock()
+_REPO_LOCKS: dict[Path, threading.RLock] = {}
 
 
 @dataclass(frozen=True)
@@ -63,14 +67,16 @@ class PersonaPromptRepository:
             paths = runtime_paths(project_root)
             self._root = paths.private_root / "persona_prompts"
         self._is_scoped = root is not None
+        self._lock = _lock_for_root(self._root)
 
     # Public API ---------------------------------------------------------------
 
     def save(self, prompt: PersonaPrompt) -> None:
         """Persist a persona prompt (create or update)."""
-        self._ensure_dir()
-        self._write_prompt(prompt)
-        self._update_name_index(prompt)
+        with self._lock:
+            self._ensure_dir()
+            self._write_prompt(prompt)
+            self._update_name_index(prompt)
 
     def get(self, prompt_id: str) -> PersonaPrompt | None:
         """Load a prompt by id, or None if missing."""
@@ -107,10 +113,11 @@ class PersonaPromptRepository:
 
     def delete(self, prompt_id: str) -> None:
         """Remove a persona prompt by id."""
-        path = self._prompt_path(prompt_id)
-        if path.exists():
-            path.unlink()
-        self._rebuild_name_index()
+        with self._lock:
+            path = self._prompt_path(prompt_id)
+            if path.exists():
+                path.unlink()
+            self._rebuild_name_index()
 
     # Internals ----------------------------------------------------------------
 
@@ -169,11 +176,28 @@ def _read_prompt_file(path: Path) -> PersonaPrompt | None:
     return None
 
 
+def _lock_for_root(root: Path) -> threading.RLock:
+    key = root.resolve()
+    with _REPO_LOCKS_LOCK:
+        lock = _REPO_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _REPO_LOCKS[key] = lock
+        return lock
+
+
 def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(f"{path.suffix}.tmp")
-    tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8")
-    tmp_path.replace(path)
+    tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
+    try:
+        tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8")
+        tmp_path.replace(path)
+    except Exception:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def create_persona_prompt(name: str, prompt_text: str, *, project_root: Path | None = None) -> PersonaPrompt:

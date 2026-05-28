@@ -62,7 +62,10 @@ class PersonaPromptRepository:
 
 - `save()` writes `<id>.json` and updates `name_index.json`.
 - `resolve()` tries id first, then name lookup.
-- All writes are atomic (write temp file, rename).
+- All writes are atomic (write a unique temp file, rename).
+- Writes for the same local process are serialized per repository root, so
+  concurrent tool calls cannot race on `name_index.json` or leave stale temp
+  file state.
 - Deletion removes both the file and the index entry.
 
 ## Trace Recording

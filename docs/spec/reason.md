@@ -42,6 +42,12 @@ The reasoning structure is shared across all topics. Every thread advances throu
 
 Prompt generation is required for thread creation. If the prompt-generation agent/tool is unavailable, returns empty output, or fails, thread creation fails clearly and no partial thread is persisted. The v0.2.0 path is: create thread request -> generate and persist `reasoning_prompt` -> use that prompt for every advance of that thread.
 
+The generated prompt must define one bounded advance unit for the topic. For
+round-based simulations, debates, interviews, games, or staged discussions, one
+advance means at most one complete round. The advancer may do setup work during
+the first step, but must not skip ahead through multiple simulated rounds in one
+`ReasoningStep`.
+
 ### ReasoningThread
 
 | Field                     | Type           | Meaning                                                               |
@@ -281,7 +287,13 @@ When an explicit `step` is provided to `advance_thread`, the service persists th
 - Takes the thread's `topic`, `working_summary`, `active_items`, `pending_items`, `next_steps`, **mandates**, and `evidence_refs` as context.
 - Mandates are requirements the LLM MUST follow on every advance. The system prompt and advance prompt surface mandates prominently; they are not optional suggestions.
 - Uses LangChain/LangGraph `create_agent` with tools and `ReasonStepOutput` structured output.
-- Uses the thread's generated `reasoning_prompt` as system prompt. The generated prompt is produced by a separate prompt-generation agent/tool at thread creation time, not by the advancer itself.
+- The system prompt always includes the invariant `ReasonStepOutput` contract first,
+  then appends the thread's generated `reasoning_prompt` as topic-specific
+  guidance. The generated prompt is produced by a separate prompt-generation
+  agent/tool at thread creation time, not by the advancer itself.
+- The invariant contract enforces bounded progress: one advance produces one
+  coherent step only. For round-based topics, it must not advance more than one
+  complete round, even when tools are available and the model could continue.
 - Validates the response has required fields (`summary`, `delta`, `kind`, `output`) and a valid `kind`.
 - Returns a `ReasoningStep` with parsed fields, or `None` if the LLM response is empty or unparseable.
 - Supports `kind` values: `progress`, `no_change`, `question`, `synthesis`, `contradiction`, `resolution`, `planning`.
@@ -319,6 +331,7 @@ run_once()
   ├─ select the first eligible thread
   ├─ call ReasonAdvancer.advance(thread)
   ├─ if step returned, call ReasonService.advance_thread(id, step=step)
+  ├─ if advance raises, log scheduler_advance_failed and cool down the thread
   ├─ set skip_next_advance_until to now + interval_seconds
   └─ log the advance result
 ```
@@ -328,6 +341,9 @@ Config:
 - `daemon.reason_scheduler.interval_seconds` (default: 600) controls the check interval and per-thread cooldown.
 - The scheduler thread is daemonized and follows the same pattern as `memory_curator` and `reflection_scheduler`.
 - The scheduler is only active when the daemon is running. CLI and REPL manual advance use explicit user commands, not the scheduler loop.
+- A failed automatic advance must not kill the background scheduler. The failure
+  is logged under the reasoning component, the selected thread receives the
+  normal cooldown, and the scheduler can try again on a later pass.
 
 ---
 

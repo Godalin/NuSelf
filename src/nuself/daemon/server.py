@@ -188,7 +188,16 @@ class DaemonState:
             try:
                 if self.reason_scheduler is not None:
                     self.reason_scheduler.run_once()
-            except RuntimeError:
+            except Exception as e:
+                write_log_event(
+                    "daemon",
+                    "reason_scheduler_error",
+                    f"reason scheduler error: {str(e)}",
+                    project_root=self.project_root,
+                    level="error",
+                    status="error",
+                    error=str(e),
+                )
                 continue
 
     def start_background_notification_delivery(self) -> None:

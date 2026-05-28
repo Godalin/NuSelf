@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from nuself.llm import LangChainLLMEndpoint
-from nuself.logs import log_context
+from nuself.logs import log_context, write_log_event
 from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.repository import ReasonRepository
@@ -70,14 +70,27 @@ class ReasonScheduler:
             return
 
         with log_context(thread_id=candidate.id, source="reason_scheduler"):
-            step = self._advancer.advance(candidate)
+            try:
+                step = self._advancer.advance(candidate)
+            except Exception as exc:
+                self._apply_cooldown(candidate)
+                write_log_event(
+                    "reasoning",
+                    "scheduler_advance_failed",
+                    f"Background advance for thread {candidate.id} failed: {exc}",
+                    project_root=self._project_root,
+                    level="error",
+                    status="error",
+                    error=str(exc),
+                    metadata={"thread_id": candidate.id, "error_type": type(exc).__name__},
+                )
+                return
             if step is None:
                 self._apply_cooldown(candidate)
                 return
             updated = self._service.advance_thread(candidate.id, step=step)
             self._apply_cooldown(updated)
 
-        from nuself.logs import write_log_event
         write_log_event(
             "reasoning",
             "scheduler_advance",

@@ -14,7 +14,7 @@ TOOL_PLACEHOLDER_RE = re.compile(r"\{tool:([a-z0-9_]+)\}")
 
 @dataclass(frozen=True)
 class AgentSkill:
-    """One SKILL.md file following the Agent Skills directory convention."""
+    """One flat Markdown skill file."""
 
     name: str
     description: str
@@ -24,16 +24,13 @@ class AgentSkill:
 
 
 def load_agent_skills(root: Path | None = None) -> tuple[AgentSkill, ...]:
-    """Load Agent Skills from skill directories."""
+    """Load Agent Skills from flat Markdown files."""
 
     skills_root = root or Path(__file__).parent / "skills"
     if not skills_root.exists():
         return ()
     skills: list[AgentSkill] = []
-    for skill_dir in sorted(path for path in skills_root.iterdir() if path.is_dir()):
-        skill_path = skill_dir / "SKILL.md"
-        if not skill_path.is_file():
-            continue
+    for skill_path in sorted(skills_root.glob("*.md")):
         skills.append(_load_skill_file(skill_path))
     return tuple(skills)
 
@@ -46,7 +43,7 @@ def render_agent_skill_sections(
     """Render loaded Agent Skills for the current prompt builder.
 
     When *allowed_tools_by_skill* is provided, allowed-tool lines are
-    generated from the actual tool registry rather than from SKILL.md YAML
+    generated from the actual tool registry rather than from skill YAML
     frontmatter.
     """
 
@@ -55,7 +52,7 @@ def render_agent_skill_sections(
     lines = [
         "",
         "Service skills:",
-        "The following service skills are loaded from Agent Skills SKILL.md files.",
+        "The following service skills are loaded from Agent Skills Markdown files.",
     ]
     for skill in skills:
         lines.append(f"- {skill.name}: {skill.description}")

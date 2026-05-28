@@ -272,10 +272,7 @@ class ConversationGraphRuntime:
         self._tools: dict[str, BaseTool] = {tool.name: tool for tool in tools}
         self._skills: tuple[AgentSkill, ...] = load_agent_skills()
         self._tools_by_skill: dict[str, tuple[str, ...]] = {
-            skill.name: tuple(
-                name for name, tool in self._tools.items()
-                if tool.metadata and tool.metadata.get("service_component") == skill.name
-            )
+            skill.name: _tools_for_skill(skill, self._tools)
             for skill in self._skills
         }
         self._tools["load_skill"] = self._build_skill_loader_tool()
@@ -1151,6 +1148,17 @@ def _tool_prompt_sections(tools: "Iterable[BaseTool]") -> list[str]:
         args = _tool_args_signature(tool)
         lines.append(f"- {tool.name}({args}): {tool.description}")
     return lines
+
+
+def _tools_for_skill(skill: AgentSkill, tools: dict[str, BaseTool]) -> tuple[str, ...]:
+    explicit = tuple(name for name in skill.allowed_tools if name in tools)
+    if explicit:
+        return explicit
+    service_component = "reasoning" if skill.name == "reason" else skill.name
+    return tuple(
+        name for name, tool in tools.items()
+        if tool.metadata and tool.metadata.get("service_component") == service_component
+    )
 
 
 def _tool_args_signature(tool: BaseTool) -> str:
