@@ -74,6 +74,7 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 - Changed service tool log headers to show the colored `tool=...` field before the colored `status=...` field.
 - Tightened reason persona constraints so persona dialogue or judgments must be grounded by same-step `persona_think` calls instead of simulated directly in step output.
 - Added `reason_context` and `reason_step` read tools for agent-facing reason inspection, and omitted tool logs from agent-facing reason read outputs.
+- Added structured reason terminal recommendations so advances can automatically resolve or pause threads without parsing step prose.
 
 ### Docs
 

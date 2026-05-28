@@ -9,7 +9,7 @@ from typing import Protocol
 
 from nuself.config import runtime_paths
 from nuself.logs import write_log_event
-from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus
+from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
 from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
 from nuself.store import ScopedWorkspace, SqliteStore
@@ -196,10 +196,12 @@ class ReasonService:
             raise RuntimeError(f"Cannot advance thread {thread.id}: no reason advancer configured")
 
         now = datetime.now(UTC).isoformat()
+        terminal_status = step.terminal_status
+        final_status = _status_from_terminal_status(terminal_status) or thread.status
         updated = ReasoningThread(
             id=thread.id,
             topic=thread.topic,
-            status=thread.status,
+            status=final_status,
             working_summary=_pick_working_summary(step, thread),
             evidence_refs=_merge_str_lists(thread.evidence_refs, step.evidence_refs if step else [], max_items=_MAX_EVIDENCE_REFS),
             priority=thread.priority,
@@ -236,6 +238,22 @@ class ReasonService:
                 "next_steps": len(step.next_steps_data) if step else 0,
             },
         )
+        if final_status != thread.status:
+            write_log_event(
+                "reasoning",
+                "terminal_recommendation_applied",
+                f"Applied terminal recommendation for thread: {thread.topic[:80]}",
+                project_root=self._project_root,
+                status="updated",
+                metadata={
+                    "thread_id": thread.id,
+                    "step_id": step.id,
+                    "terminal_status": terminal_status,
+                    "terminal_reason": step.terminal_reason,
+                    "from_status": thread.status,
+                    "to_status": final_status,
+                },
+            )
         return updated
 
     def pause_thread(self, id_or_index: str) -> ReasoningThread:
@@ -299,3 +317,11 @@ class ReasonService:
             metadata={"thread_id": thread.id, "from_status": thread.status, "to_status": new_status},
         )
         return updated
+
+
+def _status_from_terminal_status(status: TerminalStatus) -> ReasonStatus | None:
+    if status == "suggest_resolved":
+        return "resolved"
+    if status == "suggest_paused":
+        return "paused"
+    return None

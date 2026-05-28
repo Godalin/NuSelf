@@ -181,6 +181,11 @@ def _render_step_body(
     if nxt:
         _append_multi_field(lines, body_pad, "next_steps", [s.label for s in nxt], theme, full=full)
     _append_multi_field(lines, body_pad, "evidence_refs", step.evidence_refs, theme, full=full)
+    if full or step.terminal_status != "continue":
+        status_text = step.terminal_status
+        if step.terminal_reason:
+            status_text = f"{status_text} — {step.terminal_reason}"
+        lines.append(f"{body_pad}{theme.tag('terminal:', 'reasoning')} {status_text}")
     if full or step.confidence is not None:
         conf = step.confidence
         if conf is not None:

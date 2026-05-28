@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from nuself.agent.middleware import ToolCaptureMiddleware
 
 from nuself.llm import LangChainLLMEndpoint
-from nuself.reason.domain import STEP_KINDS, ReasoningStep, ReasoningThread
+from nuself.reason.domain import STEP_KINDS, TERMINAL_STATUSES, ReasoningStep, ReasoningThread
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -59,6 +59,8 @@ class ReasonStepOutput(BaseModel):
     new_pending: list[dict[str, object]] = Field(default_factory=_empty_dict_list, description="New open questions or unresolved points, each with fields: label, description, kind")
     retired_findings: list[dict[str, object]] = Field(default_factory=_empty_dict_list, description="Previously tracked items that are now completed or abandoned, each with fields: label, description, kind")
     next_steps: list[dict[str, object]] = Field(default_factory=_empty_dict_list, description="Planned next actions, each with a label field")
+    terminal_status: str = Field(default="continue", description="One of: continue, suggest_resolved, suggest_paused")
+    terminal_reason: str = Field(default="", description="Why this terminal status was chosen; empty if continuing normally")
 
 
 REASON_ADVANCE_SYSTEM_PROMPT = (
@@ -72,6 +74,8 @@ REASON_ADVANCE_SYSTEM_PROMPT = (
     "- retired_findings: set aside completed or abandoned ideas.\n"
     "- delta: what changed in your thinking this step.\n"
     "- next_steps: what you plan to do next.\n"
+    "- terminal_status: one of continue, suggest_resolved, suggest_paused.\n"
+    "- terminal_reason: why the terminal status applies, or empty when continuing.\n"
     "- mandates: constraints you must follow.\n"
     "Advance exactly one bounded unit. For round-based simulations, debates, "
     "interviews, games, or staged discussions, produce at most one complete "
@@ -83,6 +87,11 @@ REASON_ADVANCE_SYSTEM_PROMPT = (
     "visible line on the tool result. You may create or update personas with "
     "persona_craft, but do not fabricate later persona speech directly in output. "
     "Use persona_list first if you are unsure which persona names or ids exist.\n"
+    "Use terminal_status=suggest_resolved only when the thread goal, staged "
+    "simulation, or explicit terminal condition is complete. Use "
+    "terminal_status=suggest_paused when progress should stop until user input, "
+    "external context, or a later time. Otherwise use terminal_status=continue. "
+    "Do not rely on prose alone to signal completion.\n"
     "Always finish by producing one structured ReasonStepOutput response."
 )
 
@@ -161,6 +170,10 @@ def step_from_data(data: dict[str, object], thread_id: str, *, tool_logs: tuple[
     output_raw = data.get("output")
     if not isinstance(output_raw, str):
         return None
+    terminal_status_raw = data.get("terminal_status")
+    terminal_status = terminal_status_raw if isinstance(terminal_status_raw, str) and terminal_status_raw in TERMINAL_STATUSES else "continue"
+    terminal_reason_raw = data.get("terminal_reason")
+    terminal_reason = terminal_reason_raw.strip() if isinstance(terminal_reason_raw, str) else ""
 
     return ReasoningStep(
         thread_id=thread_id,
@@ -175,6 +188,8 @@ def step_from_data(data: dict[str, object], thread_id: str, *, tool_logs: tuple[
         new_pending_data=_as_tracked_list(data.get("new_pending")),
         retired_findings_data=_as_tracked_list(data.get("retired_findings")),
         next_steps_data=_as_tracked_list(data.get("next_steps")),
+        terminal_status=terminal_status,
+        terminal_reason=terminal_reason,
     )
 
 

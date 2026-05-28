@@ -55,6 +55,8 @@ def test_thread_with_status() -> None:
 def test_step_defaults() -> None:
     s = ReasoningStep(thread_id="reason-abc", summary="Test step")
     assert s.kind == "progress"
+    assert s.terminal_status == "continue"
+    assert s.terminal_reason == ""
     assert s.new_findings == []
     assert s.retired_findings == []
 
@@ -91,9 +93,31 @@ def test_step_to_wire_roundtrip() -> None:
         delta="New evidence contradicts hypothesis A",
         evidence_refs=["mem-456"],
         confidence=0.8,
+        terminal_status="suggest_resolved",
+        terminal_reason="The contradiction resolves the thread.",
         new_findings_data=({"label": "New finding", "kind": "finding"},),
         new_pending_data=({"label": "Open question", "kind": "pending"},),
     )
     wire = s.to_wire()
     s2 = ReasoningStep.from_wire(wire)
     assert s2 == s
+
+
+def test_step_from_legacy_wire_defaults_terminal_status() -> None:
+    s = ReasoningStep(thread_id="reason-abc", summary="Legacy step")
+    wire = s.to_wire()
+    del wire["terminal_status"]
+    del wire["terminal_reason"]
+
+    parsed = ReasoningStep.from_wire(wire)
+
+    assert parsed.terminal_status == "continue"
+    assert parsed.terminal_reason == ""
+
+
+def test_step_invalid_terminal_status_raises() -> None:
+    try:
+        ReasoningStep(thread_id="reason-abc", summary="test", terminal_status="done")  # type: ignore[arg-type]
+        assert False, "expected ValueError"
+    except ValueError:
+        pass

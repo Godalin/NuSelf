@@ -74,7 +74,13 @@ The prompt must cover:
    calling persona_think for that persona in the same step. The reasoning agent
    must not simulate local persona speech directly in output.
 
-5. Any special rules derived from the constraints.
+5. Terminal recommendation: define when the reasoning agent should use
+   terminal_status=continue, suggest_resolved, or suggest_paused for this
+   specific topic. For debates, simulations, interviews, games, or staged
+   discussions, map explicit completion, collapse, victory, failure, or
+   waiting-for-user conditions to the appropriate terminal status.
+
+6. Any special rules derived from the constraints.
 
 Write in second person ("You are..."). Keep it concise but specific.
 Do NOT include field type/format descriptions — only explain meaning.

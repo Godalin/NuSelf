@@ -10,10 +10,12 @@ from uuid import uuid4
 ReasonStatus: TypeAlias = Literal["active", "paused", "resolved", "archived"]
 StepKind: TypeAlias = Literal["progress", "no_change", "question", "synthesis", "contradiction", "resolution", "planning"]
 ReasonPriority: TypeAlias = Literal["normal", "high"]
+TerminalStatus: TypeAlias = Literal["continue", "suggest_resolved", "suggest_paused"]
 
 REASON_STATUSES: tuple[ReasonStatus, ...] = ("active", "paused", "resolved", "archived")
 STEP_KINDS: tuple[StepKind, ...] = ("progress", "no_change", "question", "synthesis", "contradiction", "resolution", "planning")
 REASON_PRIORITIES: tuple[ReasonPriority, ...] = ("normal", "high")
+TERMINAL_STATUSES: tuple[TerminalStatus, ...] = ("continue", "suggest_resolved", "suggest_paused")
 
 ACTIVE_STATUSES: tuple[ReasonStatus, ...] = ("active", "paused")
 
@@ -185,10 +187,14 @@ class ReasoningStep:
     new_pending_data: tuple[dict[str, object], ...] = ()
     retired_findings_data: tuple[dict[str, object], ...] = ()
     next_steps_data: tuple[dict[str, object], ...] = ()
+    terminal_status: TerminalStatus = "continue"
+    terminal_reason: str = ""
 
     def __post_init__(self) -> None:
         if self.kind not in STEP_KINDS:
             raise ValueError(f"invalid step kind: {self.kind}")
+        if self.terminal_status not in TERMINAL_STATUSES:
+            raise ValueError(f"invalid terminal status: {self.terminal_status}")
         if self.thread_id.strip() == "":
             raise ValueError("step thread_id must not be empty")
         if self.summary.strip() == "":
@@ -226,6 +232,8 @@ class ReasoningStep:
             "new_pending_data": [t for t in self.new_pending_data],
             "retired_findings_data": [t for t in self.retired_findings_data],
             "next_steps_data": [t for t in self.next_steps_data],
+            "terminal_status": self.terminal_status,
+            "terminal_reason": self.terminal_reason,
         }
         return result
 
@@ -246,6 +254,8 @@ class ReasoningStep:
             new_pending_data=_optional_tracked_items(data, "new_pending_data"),
             retired_findings_data=_optional_tracked_items(data, "retired_findings_data"),
             next_steps_data=_optional_tracked_items(data, "next_steps_data"),
+            terminal_status=_optional_terminal_status(data, "terminal_status"),
+            terminal_reason=_optional_str_with_default(data, "terminal_reason"),
         )
 
 
@@ -329,6 +339,15 @@ def _optional_float(data: dict[str, object], field_name: str) -> float | None:
     if isinstance(value, int | float):
         return float(value)
     raise ValueError(f"field '{field_name}' must be a number or null")
+
+
+def _optional_terminal_status(data: dict[str, object], field_name: str) -> TerminalStatus:
+    value = data.get(field_name)
+    if value is None:
+        return "continue"
+    if isinstance(value, str) and value in TERMINAL_STATUSES:
+        return value  # pyright: ignore[reportReturnType]
+    raise ValueError(f"field '{field_name}' must be a terminal status")
 
 
 def _expect_reason_status(data: dict[str, object], field_name: str) -> ReasonStatus:

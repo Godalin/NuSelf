@@ -42,10 +42,19 @@ def test_build_system_prompt_keeps_invariant_contract_with_generated_prompt() ->
     assert "at most one complete round" in prompt
     assert "call persona_think for that persona" in prompt
     assert "do not fabricate later persona speech" in prompt
+    assert "terminal_status=suggest_resolved" in prompt
+    assert "Do not rely on prose alone to signal completion" in prompt
 
 
 def teststep_from_data_accepts_valid() -> None:
-    data: dict[str, object] = {"summary": "s", "delta": "d", "kind": "progress", "output": "out"}
+    data: dict[str, object] = {
+        "summary": "s",
+        "delta": "d",
+        "kind": "progress",
+        "output": "out",
+        "terminal_status": "suggest_resolved",
+        "terminal_reason": "done",
+    }
     step = step_from_data(data, "test-thread")
     assert step is not None
     assert step.id is not None
@@ -54,6 +63,23 @@ def teststep_from_data_accepts_valid() -> None:
     assert step.delta == "d"
     assert step.kind == "progress"
     assert step.output == "out"
+    assert step.terminal_status == "suggest_resolved"
+    assert step.terminal_reason == "done"
+
+
+def teststep_from_data_defaults_invalid_terminal_status_to_continue() -> None:
+    data: dict[str, object] = {
+        "summary": "s",
+        "delta": "d",
+        "kind": "progress",
+        "output": "out",
+        "terminal_status": "done",
+    }
+
+    step = step_from_data(data, "test-thread")
+
+    assert step is not None
+    assert step.terminal_status == "continue"
 
 
 def teststep_from_data_filters_non_string_evidence_refs() -> None:

@@ -120,6 +120,8 @@ The `kind` field is the extension point. Different tasks use different kinds wit
 | `next_steps_data`       | list[dict]           | Items to add to `next_steps`                                                                   |
 | `evidence_refs`         | list[string]         | Evidence used by this step                                                                     |
 | `confidence`            | float \| null        | Optional confidence estimate                                                                   |
+| `terminal_status`       | string               | `continue`, `suggest_resolved`, or `suggest_paused`                                            |
+| `terminal_reason`       | string               | Explanation for the terminal recommendation, empty when no meaningful reason exists            |
 | `created_at`            | string               | Step timestamp                                                                                 |
 
 Properties:
@@ -309,10 +311,34 @@ When an explicit `step` is provided to `advance_thread`, the service persists th
   same advance. It may create or update local personas with `persona_craft`, but
   creation alone does not authorize fabricated persona speech.
 - Validates the response has required fields (`summary`, `delta`, `kind`, `output`) and a valid `kind`.
+- Produces a structured terminal recommendation on every generated step:
+  `continue` keeps the thread active, `suggest_resolved` means the goal,
+  staged simulation, or terminal condition has completed, and `suggest_paused`
+  means the thread should stop advancing until user input, external context, or
+  a later time is available. The service must not parse natural-language
+  `output` to infer this status.
 - Returns a `ReasoningStep` with parsed fields, or `None` if the LLM response is empty or unparseable.
 - Supports `kind` values: `progress`, `no_change`, `question`, `synthesis`, `contradiction`, `resolution`, `planning`.
 - Integrates `new_findings`, `new_pending`, `retired_findings`, `next_steps`, and `evidence_refs` from the step into the updated thread state.
 - Captures each tool call through shared LangGraph middleware, emits a `service_tool_called` log event, and stores an explicit `tool_logs` snapshot on the persisted `ReasoningStep` so `reason show` and `reason watch` can render the step as a complete artifact later.
+
+### Terminal Recommendation Flow
+
+After persisting an advanced step, `ReasonService.advance_thread()` applies the
+step's terminal recommendation as a small state transition flow:
+
+- `continue`: leave the thread `active`.
+- `suggest_resolved`: mark the thread `resolved`.
+- `suggest_paused`: mark the thread `paused`.
+
+The applied transition writes the same thread file update as an explicit status
+change and emits a `terminal_recommendation_applied` log event. Automatic
+application only uses the structured `terminal_status` field. It must not scan
+step prose for phrases like "done", "resolved", "collapse", or "stop".
+
+The initial implementation applies terminal recommendations automatically.
+Future configuration may make this opt-in or confirmation-gated, but the
+persisted step field is the source of truth either way.
 
 ### Step Content Rules
 

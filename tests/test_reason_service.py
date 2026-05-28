@@ -68,6 +68,9 @@ def test_generated_prompt_request_defines_bounded_round_pacing(tmp_path: Path, m
     assert "every later persona utterance" in captured_prompt["value"]
     assert "calling persona_think for that persona" in captured_prompt["value"]
     assert "must not simulate local persona speech directly" in captured_prompt["value"]
+    assert "terminal_status=continue" in captured_prompt["value"]
+    assert "suggest_resolved" in captured_prompt["value"]
+    assert "suggest_paused" in captured_prompt["value"]
 
 
 def test_start_thread(tmp_path: Path) -> None:
@@ -190,6 +193,63 @@ def test_advance_thread(tmp_path: Path) -> None:
     steps = service.list_steps(t.id)
     assert len(steps) == 1
     assert steps[0] == step
+
+
+def test_advance_thread_applies_resolved_terminal_status(tmp_path: Path) -> None:
+    service = _reason_service(project_root=tmp_path)
+    thread = service.start_thread("Resolve after advance")
+    step = ReasoningStep(
+        thread_id=thread.id,
+        summary="Finished",
+        delta="Reached terminal condition",
+        output="The thread is complete.",
+        terminal_status="suggest_resolved",
+        terminal_reason="Terminal condition reached.",
+    )
+
+    advanced = service.advance_thread(thread.id, step=step)
+
+    assert advanced.status == "resolved"
+    assert service.show_thread(thread.id).status == "resolved"
+    events = read_log_events(project_root=tmp_path, component="reasoning")
+    applied = [event for event in events if event.event == "terminal_recommendation_applied"]
+    assert applied
+    assert applied[-1].metadata is not None
+    assert applied[-1].metadata["terminal_status"] == "suggest_resolved"
+    assert applied[-1].metadata["to_status"] == "resolved"
+
+
+def test_advance_thread_applies_paused_terminal_status(tmp_path: Path) -> None:
+    service = _reason_service(project_root=tmp_path)
+    thread = service.start_thread("Pause after advance")
+    step = ReasoningStep(
+        thread_id=thread.id,
+        summary="Need input",
+        delta="Blocked on user choice",
+        output="Which path should continue?",
+        terminal_status="suggest_paused",
+        terminal_reason="Needs user input.",
+    )
+
+    advanced = service.advance_thread(thread.id, step=step)
+
+    assert advanced.status == "paused"
+    assert service.show_thread(thread.id).status == "paused"
+
+
+def test_advance_thread_continues_by_default_even_if_output_mentions_done(tmp_path: Path) -> None:
+    service = _reason_service(project_root=tmp_path)
+    thread = service.start_thread("Do not parse prose")
+    step = ReasoningStep(
+        thread_id=thread.id,
+        summary="Looks complete",
+        delta="Text mentions completion",
+        output="This looks done, resolved, and should stop.",
+    )
+
+    advanced = service.advance_thread(thread.id, step=step)
+
+    assert advanced.status == "active"
 
 
 def test_advance_thread_records_trace(tmp_path: Path) -> None:

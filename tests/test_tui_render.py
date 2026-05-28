@@ -10,7 +10,9 @@ from nuself.domain.profile import ProfileItem
 from nuself.domain.source import SourceDocument
 from nuself.notification import OutboxEntry
 from nuself.reflection.repository import ReflectionEntry
+from nuself.reason.domain import ReasoningStep
 from nuself.tui.memory import render_memory_entry_detail, render_memory_entry_row, render_profile_row, render_source_row
+from nuself.tui.reason import render_reason_step_detail
 from nuself.tui.render import (
     format_display_timestamp,
     render_discussion_trace,
@@ -64,6 +66,19 @@ def test_render_service_tool_log_uses_caller_and_service_tags() -> None:
         "  result:",
         '    Archived "Old memory".',
     ]
+
+
+def test_render_reason_step_detail_shows_terminal_status() -> None:
+    step = ReasoningStep(
+        thread_id="reason-1",
+        summary="Terminal step",
+        delta="Finished",
+        output="Done.",
+        terminal_status="suggest_resolved",
+        terminal_reason="All explicit goals are complete.",
+    )
+
+    assert "terminal: suggest_resolved — All explicit goals are complete." in render_reason_step_detail(step, color=False)
 
 
 def test_render_workspace_service_tag_uses_256_color(monkeypatch: MonkeyPatch) -> None:
