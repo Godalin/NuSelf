@@ -3977,6 +3977,28 @@ def test_trace_cli_lists_shows_and_searches_records(tmp_path: Path, capsys: Capt
     assert "Temporal memory answer" in search_output
 
 
+def test_trace_cli_lists_records_related_to_artifact(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.trace import TraceRecorder
+
+    recorder = TraceRecorder(tmp_path)
+    trace = recorder.record(
+        kind="memory_update",
+        title="Related memory trace",
+        summary="Created a memory entry.",
+        outputs=["memory:mem_123"],
+    )
+    recorder.link("memory:mem_123", "reason:thread_1", "supports", "Memory supported a reason thread.")
+
+    result = main(["--project-root", str(tmp_path), "trace", "related", "memory:mem_123"])
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert trace.id not in output
+    assert "Related memory trace" in output
+    assert "Related links:" in output
+    assert "memory:mem_123 -> reason:thread_1" in output
+
+
 def test_trace_cli_hides_internal_records_by_default(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.trace import ThoughtTrace, TraceRepository
 

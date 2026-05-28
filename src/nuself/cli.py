@@ -800,6 +800,11 @@ def build_parser() -> argparse.ArgumentParser:
     trace_search_parser.add_argument("--visibility", choices=("private", "shareable", "internal", "all"), default=None)
     trace_search_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(trace_search_parser, handle_trace_search)
+    trace_related_parser = trace_subparsers.add_parser("related", help="List traces related to an artifact reference.")
+    trace_related_parser.add_argument("artifact_ref")
+    trace_related_parser.add_argument("--visibility", choices=("private", "shareable", "internal", "all"), default=None)
+    trace_related_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
+    _add_handler(trace_related_parser, handle_trace_related)
     _add_handler(trace_subparsers.add_parser("reindex", help="Rebuild thought trace indexes."), handle_trace_reindex)
 
     persona_parser = subparsers.add_parser(
@@ -1854,6 +1859,37 @@ def handle_trace_search(args: argparse.Namespace) -> int:
         return 0
     for index, trace in enumerate(traces):
         _print_ansi(render_trace_row(trace, index=index))
+    return 0
+
+
+def handle_trace_related(args: argparse.Namespace) -> int:
+    service = TraceQueryService(args.project_root)
+    traces = service.traces_for_artifact(
+        args.artifact_ref,
+        visibility=_trace_visibility_filter(args.visibility),
+    )
+    links = service.links_for_artifact(args.artifact_ref)
+    if not traces and not links:
+        print(f"No trace records or links related to: {args.artifact_ref}")
+        return 0
+    if args.as_json:
+        _print_json_wire(
+            {
+                "artifact_ref": args.artifact_ref,
+                "traces": [trace.to_wire() for trace in traces],
+                "links": [link.to_wire() for link in links],
+            }
+        )
+        return 0
+    if traces:
+        for index, trace in enumerate(traces):
+            _print_ansi(render_trace_row(trace, index=index))
+    if links:
+        if traces:
+            print()
+        print("Related links:")
+        for link in links:
+            print(f"  {link.relation}: {link.source_id} -> {link.target_id} ({link.summary})")
     return 0
 
 
@@ -3797,6 +3833,19 @@ def _handle_interactive_trace_command(command: str, project_root: Path | None) -
         if not traces:
             return "No matching trace records."
         return "\n".join(render_trace_row(trace, index=index) for index, trace in enumerate(traces))
+    if command.startswith("related "):
+        artifact_ref = command.removeprefix("related ").strip()
+        traces = service.traces_for_artifact(artifact_ref)
+        links = service.links_for_artifact(artifact_ref)
+        if not traces and not links:
+            return f"No trace records or links related to: {artifact_ref}"
+        lines = [render_trace_row(trace, index=index) for index, trace in enumerate(traces)]
+        if links:
+            if lines:
+                lines.append("")
+            lines.append("Related links:")
+            lines.extend(f"  {link.relation}: {link.source_id} -> {link.target_id} ({link.summary})" for link in links)
+        return "\n".join(lines)
     return _interactive_trace_help(command)
 
 
@@ -3830,6 +3879,7 @@ def _interactive_trace_help(command: str | None = None) -> str:
             "  :trace list",
             "  :trace show <id|index>",
             "  :trace search <query>",
+            "  :trace related <artifact_ref>",
         ]
     )
     return "\n".join(lines)

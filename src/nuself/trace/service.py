@@ -261,8 +261,19 @@ class TraceQueryService:
     ) -> list[ThoughtTrace]:
         return self._repository.search_traces(query, kind=kind, visibility=visibility)
 
+    def traces_for_artifact(
+        self,
+        artifact_ref: str,
+        *,
+        visibility: TraceVisibilityFilter = "default",
+    ) -> list[ThoughtTrace]:
+        return self._repository.traces_for_artifact(artifact_ref, visibility=visibility)
+
     def links_for(self, trace_id: str) -> list[TraceLink]:
         return self._repository.links_for(trace_id)
+
+    def links_for_artifact(self, artifact_ref: str) -> list[TraceLink]:
+        return self._repository.links_for_artifact(artifact_ref)
 
 
 def _short(value: str, limit: int = 80) -> str:

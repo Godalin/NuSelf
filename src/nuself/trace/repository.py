@@ -89,6 +89,21 @@ class TraceRepository:
                 scored.append((score, trace))
         return [trace for _, trace in sorted(scored, key=lambda item: (-item[0], item[1].created_at, item[1].id))]
 
+    def traces_for_artifact(
+        self,
+        artifact_ref: str,
+        *,
+        visibility: TraceVisibilityFilter = "default",
+    ) -> list[ThoughtTrace]:
+        normalized = artifact_ref.strip()
+        if normalized == "":
+            return []
+        return [
+            trace
+            for trace in self.list_traces(visibility=visibility)
+            if _trace_mentions_artifact(trace, normalized)
+        ]
+
     def resolve_trace(
         self,
         id_or_index: str,
@@ -124,6 +139,20 @@ class TraceRepository:
             if link is None:
                 continue
             if link.source_id == trace_id or link.target_id == trace_id:
+                links.append(link)
+        return sorted(links, key=lambda link: (link.created_at, link.id))
+
+    def links_for_artifact(self, artifact_ref: str) -> list[TraceLink]:
+        normalized = artifact_ref.strip()
+        if normalized == "":
+            return []
+        self.ensure()
+        links: list[TraceLink] = []
+        for path in sorted(self._links_dir.glob("*.json")):
+            link = _safe_read_link_path(path)
+            if link is None:
+                continue
+            if link.source_id == normalized or link.target_id == normalized:
                 links.append(link)
         return sorted(links, key=lambda link: (link.created_at, link.id))
 
@@ -238,3 +267,26 @@ def _trace_search_score(trace: ThoughtTrace, query: str) -> int:
         if query in field.casefold():
             score += 1
     return score
+
+
+def _trace_mentions_artifact(trace: ThoughtTrace, artifact_ref: str) -> bool:
+    fields = (
+        trace.inputs,
+        trace.evidence_refs,
+        trace.derived_from,
+        trace.outputs,
+    )
+    if any(artifact_ref in field for field in fields):
+        return True
+    return _metadata_mentions_artifact(trace.metadata, artifact_ref)
+
+
+def _metadata_mentions_artifact(value: object, artifact_ref: str) -> bool:
+    if isinstance(value, str):
+        return value == artifact_ref
+    if isinstance(value, list):
+        return any(_metadata_mentions_artifact(item, artifact_ref) for item in cast(list[object], value))
+    if isinstance(value, dict):
+        metadata = cast(dict[object, object], value)
+        return any(_metadata_mentions_artifact(item, artifact_ref) for item in metadata.values())
+    return False

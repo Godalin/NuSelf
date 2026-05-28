@@ -387,6 +387,32 @@ def build_langchain_chat_tools(
             return f"Error: {exc}"
         return render_trace_detail(trace, service.links_for(trace.id))
 
+    def related_traces(artifact_ref: str, limit: int = 5) -> str:
+        """List thought provenance records related to an artifact reference."""
+
+        artifact = artifact_ref.strip()
+        if not artifact:
+            return "Error: artifact_ref must be a non-empty string"
+        try:
+            limit_int = int(limit)
+        except (ValueError, TypeError):
+            return "Error: limit must be an integer"
+        if limit_int < 1:
+            return "Error: limit must be a positive integer"
+
+        service = TraceQueryService(project_root)
+        traces = service.traces_for_artifact(artifact)[:limit_int]
+        links = service.links_for_artifact(artifact)
+        if not traces and not links:
+            return f"No trace records or links related to: {artifact}"
+        lines = [f"Trace records related to {artifact}:"]
+        for index, trace in enumerate(traces):
+            lines.append(render_trace_row(trace, index=index, color=False))
+        if links:
+            lines.append("Related links:")
+            lines.extend(f"  {link.relation}: {link.source_id} -> {link.target_id} ({link.summary})" for link in links)
+        return "\n".join(lines)
+
     def consult_selves(topic: str, mode: str = "consult", context: str | None = None) -> str:
         """Invoke NuSelf's internal multi-persona subagent for perspective synthesis."""
 
@@ -573,6 +599,15 @@ def build_langchain_chat_tools(
             ),
             tags=("readonly",),
         ),
+        tool_from_function(
+            related_traces,
+            name="trace_related",
+            description=(
+                "List trace records and links that directly mention an artifact reference such as memory:<id>, "
+                "reflection:<id>, reason:<id>, reason_step:<id>, persona_prompt:<id>, or trace:<id>."
+            ),
+            tags=("readonly",),
+        ),
     ]
     if selves_consult is not None:
         tools.append(
@@ -607,6 +642,7 @@ def build_langchain_chat_tools(
         "trace_search": "trace",
         "trace_count": "trace",
         "trace_show": "trace",
+        "trace_related": "trace",
         "selves_consult": "selves",
     }
     for tool in tools:

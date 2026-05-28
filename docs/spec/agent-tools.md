@@ -257,6 +257,7 @@ Trace tools let the chat agent inspect thought provenance without mutating it.
 | `trace_search` | Query thought provenance records. |
 | `trace_count` | Count thought provenance records matched by an optional query. |
 | `trace_show` | Show a specific trace record with its links. |
+| `trace_related` | List trace records and direct links for an exact artifact reference. |
 
 #### `trace_count`
 
@@ -264,6 +265,13 @@ Trace tools let the chat agent inspect thought provenance without mutating it.
 - **Behavior**: Counts default-visible trace records, optionally using the same text query as `trace_search`.
 - **Returns**: A simple count string.
 - **When to use**: When the user asks how many provenance records exist or how many match a topic.
+
+#### `trace_related`
+
+- **Args**: `artifact_ref: str`, `limit: int = 5`
+- **Behavior**: Finds default-visible traces that directly mention an exact artifact reference, plus direct links whose source or target equals the artifact reference.
+- **Returns**: A concise record list and related links.
+- **When to use**: When the user asks what provenance exists for a specific `memory:<id>`, `reflection:<id>`, `reason:<id>`, `reason_step:<id>`, `persona_prompt:<id>`, or `trace:<id>`.
 
 ### Behavioral Guidelines for Reason Awareness (Prompt-Level)
 

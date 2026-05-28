@@ -188,8 +188,10 @@ save_trace(trace) -> ThoughtTrace
 get_trace(id_or_index, filters) -> ThoughtTrace
 list_traces(kind=None, visibility=default) -> list[ThoughtTrace]
 search_traces(query, kind=None, visibility=default) -> list[ThoughtTrace]
+traces_for_artifact(artifact_ref, visibility=default) -> list[ThoughtTrace]
 save_link(link) -> TraceLink
 links_for(trace_id) -> list[TraceLink]
+links_for_artifact(artifact_ref) -> list[TraceLink]
 reindex() -> Path
 ```
 
@@ -211,6 +213,13 @@ Search:
 - First implementation uses deterministic case-insensitive substring search.
 - Searchable fields: `title`, `summary`, `inputs`, `evidence_refs`, `derived_from`, `outputs`, `participants`, and `decision_points`.
 - Vector search and graph search are out of scope for v0.2.0.
+
+Artifact references:
+
+- `traces_for_artifact(artifact_ref)` returns traces that directly mention the exact artifact reference in `inputs`, `evidence_refs`, `derived_from`, `outputs`, or string metadata values.
+- `links_for_artifact(artifact_ref)` returns trace links whose `source_id` or `target_id` exactly equals the artifact reference.
+- Artifact references are stable strings such as `memory:<entry_id>`, `reflection:<entry_id>`, `reason:<thread_id>`, `reason_step:<step_id>`, `persona_prompt:<prompt_id>`, and `trace:<trace_id>`.
+- Artifact lookup is a read/query feature. It does not imply ownership or deletion authority.
 
 ## Service And Tool-Facing Interface
 
@@ -248,7 +257,9 @@ Required first read/query methods:
 list_traces(...)
 show_trace(...)
 search_traces(...)
+traces_for_artifact(...)
 links_for(...)
+links_for_artifact(...)
 ```
 
 ## Recording Requirements
@@ -298,6 +309,7 @@ Required commands:
 nuself trace list [--kind <kind>] [--visibility private|shareable|internal|all] [--json]
 nuself trace show <id_or_index> [--json]
 nuself trace search <query> [--kind <kind>] [--visibility private|shareable|internal|all] [--json]
+nuself trace related <artifact_ref> [--visibility private|shareable|internal|all] [--json]
 ```
 
 Output rules:
@@ -305,8 +317,21 @@ Output rules:
 - Human-readable output uses the shared record renderer style from `cli.md`.
 - List rows show index, kind tag, visibility, title, and local display timestamp.
 - Show output includes summary, inputs, evidence refs, derived_from, outputs, participants, decision points, and related links.
+- Related output lists traces and direct links that mention the exact artifact reference.
 - JSON output returns stable machine-readable objects using stored field names.
 - Empty lists/searches print a concise empty-state line.
+
+## Artifact Deletion And Trace Retention
+
+Trace records are provenance, not owned child data of memory, reflection, reason, persona, or chat artifacts.
+
+Rules:
+
+- Deleting or archiving a business artifact must not cascade-delete trace records.
+- A trace may continue to reference an artifact that has since been deleted, archived, dismissed, or otherwise made inactive.
+- User-facing trace renderers and agent-facing trace tools must tolerate tombstoned or missing artifact references.
+- Cleanup tooling, when added, must be explicit and dry-run first. It may hide, tombstone, or mark trace records, but it must not physically delete upstream evidence traces by default.
+- Physical trace deletion is a future maintenance operation, not part of normal artifact deletion in v0.2.0.
 
 ## REPL Contract
 
@@ -317,6 +342,7 @@ Required interactive commands:
 :trace list
 :trace show <id_or_index>
 :trace search <query>
+:trace related <artifact_ref>
 ```
 
 Rules:

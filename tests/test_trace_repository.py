@@ -36,6 +36,30 @@ def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None
     assert (tmp_path / "private" / "traces" / "index.json").is_file()
 
 
+def test_trace_repository_finds_related_artifact_references(tmp_path: Path) -> None:
+    repo = TraceRepository(tmp_path)
+    recorder = TraceRecorder(repository=repo)
+    memory_trace = recorder.record(
+        kind="memory_update",
+        title="Remembered preference",
+        summary="Captured a durable preference.",
+        outputs=["memory:mem_123"],
+        metadata={"primary_artifact": "memory:mem_123"},
+    )
+    reason_trace = recorder.record(
+        kind="reason_step",
+        title="Reason step",
+        summary="Advanced with memory evidence.",
+        inputs=["reason:abc"],
+        evidence_refs=["memory:mem_123"],
+        outputs=["reason:abc", "reason_step:step_1"],
+    )
+    link = recorder.link("memory:mem_123", "reason:abc", "supports", "Memory supported the reason thread.")
+
+    assert repo.traces_for_artifact("memory:mem_123") == [memory_trace, reason_trace]
+    assert repo.links_for_artifact("memory:mem_123") == [link]
+
+
 def test_trace_repository_hides_internal_records_by_default(tmp_path: Path) -> None:
     repo = TraceRepository(tmp_path)
     private = repo.save_trace(

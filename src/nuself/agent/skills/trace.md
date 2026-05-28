@@ -5,6 +5,7 @@ allowed-tools:
   - trace_search
   - trace_count
   - trace_show
+  - trace_related
 ---
 
 # Trace Skill
@@ -16,6 +17,8 @@ Use {tool:search} before answering when the user asks where an idea came from, h
 Use {tool:count} when the user asks how many trace records match a topic or query.
 
 Use {tool:show} when the user asks about a specific trace record.
+
+Use {tool:related} when the user asks what trace records mention a specific artifact reference such as `memory:<id>`, `reflection:<id>`, `reason:<id>`, or `reason_step:<id>`.
 
 Trace records summarize inspectable provenance. They are not raw hidden chain-of-thought.
 

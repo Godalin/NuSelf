@@ -21,6 +21,7 @@ def test_load_agent_skills_from_flat_markdown_files() -> None:
     assert "reflection_list_pending" in skills["reflection"].allowed_tools
     assert "selves_consult" in skills["selves"].allowed_tools
     assert "trace_search" in skills["trace"].allowed_tools
+    assert "trace_related" in skills["trace"].allowed_tools
     assert "workspace_put" in skills["workspace"].allowed_tools
     assert "reason_propose" in skills["reason_proposal"].allowed_tools
     assert "advance at most one complete round per step" in skills["reason_proposal"].instructions
@@ -37,7 +38,7 @@ def test_render_agent_skill_sections_with_generated_allowed_tools() -> None:
         "reflection": ("reflection_list_pending", "reflection_count", "reflection_dismiss", "reflection_archive"),
         "reason": ("reason_list_active", "reason_count", "reason_context", "reason_step", "reason_show"),
         "reason_proposal": ("reason_propose",),
-        "trace": ("trace_search", "trace_count", "trace_show"),
+        "trace": ("trace_search", "trace_count", "trace_show", "trace_related"),
         "selves": ("selves_consult",),
     }
     lines = render_agent_skill_sections(skills, allowed_tools_by_skill=allowed_tools_by_skill)
