@@ -48,6 +48,15 @@ advance means at most one complete round. The advancer may do setup work during
 the first step, but must not skip ahead through multiple simulated rounds in one
 `ReasoningStep`.
 
+For threads that use explicit personas as participants, reviewers, interviewees,
+or staged speakers, persona speech is tool-grounded. Creating or updating a
+thread-local persona may use `persona_craft`, but any step that presents a
+persona's own utterance, answer, critique, vote, judgment, or dialogue line must
+call `persona_think` for that persona during the same advance and base the
+visible line on the returned result. The advancer must not fabricate a local
+persona's later speech directly in `output`; `ReasoningStep.tool_logs` must make
+the persona consultation auditable.
+
 ### ReasoningThread
 
 | Field                     | Type           | Meaning                                                               |
@@ -294,6 +303,11 @@ When an explicit `step` is provided to `advance_thread`, the service persists th
 - The invariant contract enforces bounded progress: one advance produces one
   coherent step only. For round-based topics, it must not advance more than one
   complete round, even when tools are available and the model could continue.
+- The invariant contract enforces tool-grounded persona speech: if the step
+  presents a persona's own utterance, answer, critique, vote, judgment, or
+  dialogue line, the advancer must call `persona_think` for that persona in the
+  same advance. It may create or update local personas with `persona_craft`, but
+  creation alone does not authorize fabricated persona speech.
 - Validates the response has required fields (`summary`, `delta`, `kind`, `output`) and a valid `kind`.
 - Returns a `ReasoningStep` with parsed fields, or `None` if the LLM response is empty or unparseable.
 - Supports `kind` values: `progress`, `no_change`, `question`, `synthesis`, `contradiction`, `resolution`, `planning`.

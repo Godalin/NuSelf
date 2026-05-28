@@ -40,6 +40,8 @@ def test_build_system_prompt_keeps_invariant_contract_with_generated_prompt() ->
     assert "Move one debate turn at a time." in prompt
     assert "ReasonStepOutput" in prompt
     assert "at most one complete round" in prompt
+    assert "call persona_think for that persona" in prompt
+    assert "do not fabricate later persona speech" in prompt
 
 
 def teststep_from_data_accepts_valid() -> None:

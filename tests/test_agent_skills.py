@@ -24,6 +24,8 @@ def test_load_agent_skills_from_flat_markdown_files() -> None:
     assert "workspace_put" in skills["workspace"].allowed_tools
     assert "reason_propose" in skills["reason_proposal"].allowed_tools
     assert "advance at most one complete round per step" in skills["reason_proposal"].instructions
+    assert "persona-grounding mandate" in skills["reason_proposal"].instructions
+    assert "persona_think produces auditable persona speech" in skills["persona"].instructions
     assert "valid JSON string" in skills["workspace"].instructions
 
 

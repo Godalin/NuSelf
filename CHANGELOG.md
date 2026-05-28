@@ -72,6 +72,7 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 - Unified tool `args` and `result` JSON rendering so both use the same pretty-printed block format.
 - Restored argument/result rendering for already persisted reason tool logs that still store tool I/O in the legacy message body.
 - Changed service tool log headers to show the colored `tool=...` field before the colored `status=...` field.
+- Tightened reason persona constraints so persona dialogue or judgments must be grounded by same-step `persona_think` calls instead of simulated directly in step output.
 
 ### Docs
 

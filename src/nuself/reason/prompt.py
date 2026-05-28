@@ -67,7 +67,14 @@ The prompt must cover:
    most one complete round. If setup is needed, setup may happen before the
    first round, but the same step must not skip ahead through multiple rounds.
 
-4. Any special rules derived from the constraints.
+4. Persona tool grounding, when relevant: if the topic uses explicit personas
+   as participants, reviewers, interviewees, or staged speakers, state that
+   persona_craft may create local personas, but every later persona utterance,
+   answer, critique, vote, judgment, or dialogue line must be produced by
+   calling persona_think for that persona in the same step. The reasoning agent
+   must not simulate local persona speech directly in output.
+
+5. Any special rules derived from the constraints.
 
 Write in second person ("You are..."). Keep it concise but specific.
 Do NOT include field type/format descriptions — only explain meaning.

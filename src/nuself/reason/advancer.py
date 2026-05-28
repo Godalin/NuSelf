@@ -77,6 +77,12 @@ REASON_ADVANCE_SYSTEM_PROMPT = (
     "interviews, games, or staged discussions, produce at most one complete "
     "round per advance. Setup may happen before the first round, but do not "
     "skip ahead through multiple simulated rounds in one ReasoningStep.\n"
+    "Persona speech is tool-grounded. If your output presents a persona's own "
+    "utterance, answer, critique, vote, judgment, or dialogue line, you must "
+    "call persona_think for that persona during this same advance and base the "
+    "visible line on the tool result. You may create or update personas with "
+    "persona_craft, but do not fabricate later persona speech directly in output. "
+    "Use persona_list first if you are unsure which persona names or ids exist.\n"
     "Always finish by producing one structured ReasonStepOutput response."
 )
 

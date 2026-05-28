@@ -30,6 +30,13 @@ pacing mandate such as "advance at most one complete round per step" unless the
 user explicitly wants larger batches. If the task has setup work, say whether
 setup is separate or may happen before the first round.
 
+If the thread uses explicit personas as debate participants, interviewees,
+reviewers, judges, or staged speakers, include a persona-grounding mandate:
+persona_craft may create local personas, but every later persona utterance,
+answer, critique, vote, judgment, or dialogue line must come from persona_think
+in the same advance. Do not propose a persona-driven thread where the advancer
+is expected to invent local persona speech directly in output.
+
 Before proposing, consider whether the thread needs additional context from
 memory, trace, selves, or persona tools. Use the relevant skill first if that
 context is needed.

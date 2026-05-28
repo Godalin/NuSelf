@@ -65,6 +65,9 @@ def test_generated_prompt_request_defines_bounded_round_pacing(tmp_path: Path, m
     assert "one step must mean at" in captured_prompt["value"]
     assert "most one complete round" in captured_prompt["value"]
     assert "must not skip ahead through multiple rounds" in captured_prompt["value"]
+    assert "every later persona utterance" in captured_prompt["value"]
+    assert "calling persona_think for that persona" in captured_prompt["value"]
+    assert "must not simulate local persona speech directly" in captured_prompt["value"]
 
 
 def test_start_thread(tmp_path: Path) -> None:
