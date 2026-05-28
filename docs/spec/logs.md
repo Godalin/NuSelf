@@ -51,7 +51,7 @@ Example: chat calling a memory service tool writes a `chat` component event:
 Human-readable rendering must show both tags at the front:
 
 ```text
-[chat] [memory] service_tool_called status=completed tool=memory_archive
+[chat] [memory] service_tool_called tool=memory_archive status=completed
   args: {"entry_id": "m1"}
   result: Archived "Old memory".
 ```
@@ -61,6 +61,7 @@ Rules:
 - The first tag is the caller component and determines the log file.
 - The second tag is `metadata.service_component` and names the service being called.
 - `service_component` is a display tag, not a normal `key=value` header field.
+- Human-readable tool-call headers show `tool=...` before `status=...`; both fields are highlighted when color is enabled.
 - Agent-facing chat tools for memory, reflection, reason, trace, and selves all write `chat/service_tool_called` with the corresponding service tag.
 - `selves_consult` also emits ordinary `persona` component logs for internal persona activity. The service-tool log records that chat called the selves service; the `persona` logs record what the selves service did.
 - All other log formatting rules remain unchanged.

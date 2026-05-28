@@ -261,11 +261,14 @@ def render_tool_call(
     comp_tag = theme.tag(f"[{component}]", component)
     srv_tag = theme.tag(f"[{service}]", service)
     header_parts: list[str] = [f"{comp_tag} {srv_tag} service_tool_called"]
-    header_parts.append(theme.muted(_format_log_field("status", status)))
-    if extra_fields:
-        for k, v in extra_fields.items():
-            if v is not None:
-                header_parts.append(theme.muted(_format_log_field(k, v)))
+    remaining_fields = dict(extra_fields or {})
+    tool_name = remaining_fields.pop("tool", None)
+    if tool_name is not None:
+        header_parts.append(_render_tool_header_field("tool", tool_name, theme))
+    header_parts.append(_render_tool_header_field("status", status, theme))
+    for k, v in remaining_fields.items():
+        if v is not None:
+            header_parts.append(theme.muted(_format_log_field(k, v)))
     lines = [" ".join(header_parts)]
     _append_tool_io_section(lines, "args", args, theme)
     if result is not None:
@@ -273,6 +276,15 @@ def render_tool_call(
     if error is not None:
         _append_tool_io_section(lines, "error", error, theme)
     return "\n".join(lines)
+
+
+def _render_tool_header_field(key: str, value: object, theme: TerminalTheme) -> str:
+    field = _format_log_field(key, value)
+    if key == "tool":
+        return theme.paint(field, "36")
+    if key == "status":
+        return theme.paint(field, _status_color(str(value)))
+    return theme.muted(field)
 
 
 def _append_tool_io_section(lines: list[str], label: str, value: object, theme: TerminalTheme) -> None:
@@ -598,13 +610,14 @@ def _component_color(component: str) -> str:
 
 
 def _status_color(status: str) -> str:
-    if status == "pending":
-        return "33"
-    if status == "sent":
+    normalized = status.lower()
+    if normalized in {"completed", "ok", "success", "sent", "active", "approved"}:
         return "32"
-    if status == "failed":
+    if normalized in {"failed", "error"}:
         return "31"
-    if status == "dismissed":
+    if normalized in {"pending", "paused"}:
+        return "33"
+    if normalized == "dismissed":
         return "90"
     return "0"
 

@@ -636,7 +636,7 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
         include_all_logs=False,
     )
 
-    assert "> [chat] [reflection] service_tool_called status=completed thread=default tool=reflection_list_pending" in content
+    assert "> [chat] [reflection] service_tool_called tool=reflection_list_pending status=completed thread=default" in content
     assert ">   args: {" in content
     assert '>     "limit": 3' in content
     assert ">   result:" in content

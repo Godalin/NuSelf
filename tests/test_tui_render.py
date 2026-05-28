@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from _pytest.monkeypatch import MonkeyPatch
 
 from nuself.logs import LogEvent
@@ -21,6 +23,10 @@ from nuself.tui.render import (
     render_reflection_entry_summary,
     render_session_header,
 )
+
+
+def _strip_ansi(text: str) -> str:
+    return re.sub(r"\033\[[0-9;]*m", "", text)
 
 
 def test_render_record_block_splits_header_and_body() -> None:
@@ -51,7 +57,7 @@ def test_render_service_tool_log_uses_caller_and_service_tags() -> None:
     )
 
     assert render_log_event(event, color=False).splitlines() == [
-        "[chat] [memory] service_tool_called status=completed thread=default turn=turn-1 tool=memory_archive",
+        "[chat] [memory] service_tool_called tool=memory_archive status=completed thread=default turn=turn-1",
         "  args: {",
         '    "entry_id": "m1"',
         "  }",
@@ -82,6 +88,9 @@ def test_render_workspace_service_tag_uses_256_color(monkeypatch: MonkeyPatch) -
     first_line = render_log_event(event, color=True).splitlines()[0]
 
     assert "\033[38;5;208m[workspace]\033[0m" in first_line
+    assert "\033[36mtool=workspace_put\033[0m" in first_line
+    assert "\033[32mstatus=completed\033[0m" in first_line
+    assert _strip_ansi(first_line).startswith("[reasoning] [workspace] service_tool_called tool=workspace_put status=completed")
 
 
 def test_render_service_tool_log_expands_nested_json_string() -> None:
@@ -101,7 +110,7 @@ def test_render_service_tool_log_expands_nested_json_string() -> None:
     )
 
     assert render_log_event(event, color=False).splitlines() == [
-        "[reasoning] [workspace] service_tool_called status=completed tool=workspace_put",
+        "[reasoning] [workspace] service_tool_called tool=workspace_put status=completed",
         "  args: {",
         '    "key": "current_round",',
         '    "value": {',
@@ -150,7 +159,7 @@ def test_render_service_tool_log_reads_legacy_message_body() -> None:
     )
 
     assert render_log_event(event, color=False).splitlines() == [
-        "[reasoning] [workspace] service_tool_called status=completed tool=workspace_put",
+        "[reasoning] [workspace] service_tool_called tool=workspace_put status=completed",
         "  args: {",
         '    "key": "debate_state",',
         '    "value": {',
