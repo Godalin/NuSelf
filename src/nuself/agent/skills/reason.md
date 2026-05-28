@@ -19,6 +19,9 @@ Items carry free-text kind labels — choose whatever fits the task
 
 Use {tool:list_active} before answering when the user asks about active long-running thinking, open threads, ongoing thinking, or what NuSelf is still considering.
 
+Reason read tools return JSON strings for agent use. Read the fields directly;
+do not treat them as a human terminal rendering.
+
 Use {tool:context} when you need one thread's global setup and current state:
 topic, description, mandates, active_items, pending_items, next_steps,
 reasoning_prompt, evidence_refs, and step count.

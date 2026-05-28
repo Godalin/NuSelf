@@ -451,20 +451,22 @@ The CLI registers a handler at key `("reasoning", "proposal_created")` which cal
 
 Reason tools let the chat agent inspect, propose, and manage reasoning threads. Tools that create a thread (propose) use the turn-confirmation protocol; tools that change a thread's status act directly after the agent reports the action.
 
-Agent-facing reason read tools expose reasoning state and step content, not
-tool-call audit records. `ReasoningStep.tool_logs` remain available through CLI,
-watch, logs, and debug renderers, but chat tools omit them so agents read the
-thread's cognitive state instead of replaying service internals.
+Agent-facing reason read tools return JSON strings. They expose reasoning state
+and step content, not tool-call audit records. `ReasoningStep.tool_logs` remain
+available through CLI, watch, logs, and debug renderers, but chat tools omit
+them so agents read the thread's cognitive state instead of replaying service
+internals. These JSON payloads are the agent-facing contract; TUI formatting is
+reserved for human CLI surfaces.
 
 #### Read-Only Tools (No Confirmation)
 
 | Tool                              | Description                                                                                     |
 | --------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `reason_list_active()`            | List active and paused threads with step counts.                                                |
-| `reason_count()`                  | Return count of active and paused threads.                                                      |
-| `reason_context(thread_id)`       | Show one thread's global setup and current state, excluding step bodies and tool logs.          |
-| `reason_step(thread_id, step)`    | Show one concrete step by 0-based step index, step id, or `latest`, excluding tool logs.        |
-| `reason_show(thread_id)`          | Show a thread's current state and steps in one response, excluding tool logs.                   |
+| `reason_list_active()`            | Return JSON active and paused threads with 0-based index and step counts.                       |
+| `reason_count()`                  | Return JSON count of active and paused threads.                                                 |
+| `reason_context(thread_id)`       | Return JSON for one thread's global setup and current state, excluding step bodies and logs.    |
+| `reason_step(thread_id, step)`    | Return JSON for one concrete step by 0-based step index, step id, or `latest`, excluding logs.  |
+| `reason_show(thread_id)`          | Return JSON for one thread's current state and steps, excluding logs.                           |
 
 #### Write Tool (Turn-Confirmation): `reason_propose`
 

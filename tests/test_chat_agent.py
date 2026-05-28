@@ -991,9 +991,11 @@ def test_reason_list_active_tool(tmp_path: Path) -> None:
 
     result = _invoke_chat_tool(tool)
 
-    assert "Active and paused reasoning threads:" in result
-    assert "How should this be remembered?" in result
-    assert "steps=0" in result
+    data = json.loads(result)
+    assert data["count"] == 1
+    assert data["threads"][0]["index"] == 0
+    assert data["threads"][0]["topic"] == "How should this be remembered?"
+    assert data["threads"][0]["step_count"] == 0
 
 
 def test_reason_count_tool(tmp_path: Path) -> None:
@@ -1005,7 +1007,7 @@ def test_reason_count_tool(tmp_path: Path) -> None:
 
     result = _invoke_chat_tool(tool)
 
-    assert "Active and paused reasoning threads: 1 total" in result
+    assert json.loads(result) == {"by_status": {"active": 1}, "count": 1}
 
 
 def test_reason_show_tool(tmp_path: Path) -> None:
@@ -1016,8 +1018,11 @@ def test_reason_show_tool(tmp_path: Path) -> None:
 
     result = _invoke_chat_tool(tool, {"thread_id": thread.id})
 
-    assert "[reason] Inspect this reason thread" in result
-    assert thread.id in result
+    data = json.loads(result)
+    assert data["thread"]["topic"] == "Inspect this reason thread"
+    assert data["thread"]["id"] == thread.id
+    assert data["steps"] == []
+    assert data["tool_logs"] == "omitted"
 
 
 def test_reason_context_tool_shows_global_state_without_steps(tmp_path: Path) -> None:
@@ -1033,13 +1038,14 @@ def test_reason_context_tool_shows_global_state_without_steps(tmp_path: Path) ->
 
     result = _invoke_chat_tool(tool, {"thread_id": thread.id})
 
-    assert "[reason] Context-only reason thread" in result
-    assert "Current state summary" in result
-    assert "Tracked premise" in result
-    assert "Keep it bounded." in result
-    assert "steps: 0" in result
-    assert "output:" not in result
-    assert "tool_logs: omitted" in result
+    data = json.loads(result)
+    assert data["thread"]["topic"] == "Context-only reason thread"
+    assert data["thread"]["working_summary"] == "Current state summary"
+    assert data["thread"]["active_items"][0]["label"] == "Tracked premise"
+    assert data["thread"]["mandates"] == ["Keep it bounded."]
+    assert data["step_count"] == 0
+    assert "steps" not in data
+    assert data["tool_logs"] == "omitted"
 
 
 def test_reason_step_tool_shows_specific_step_without_tool_logs(tmp_path: Path) -> None:
@@ -1068,14 +1074,17 @@ def test_reason_step_tool_shows_specific_step_without_tool_logs(tmp_path: Path) 
 
     result = _invoke_chat_tool(tool, {"thread_id": thread.id, "step": "0"})
 
-    assert "[reason] Step reason thread" in result
-    assert "[0] [progress]" in result
-    assert "Step summary" in result
-    assert "Visible step output" in result
-    assert "Step delta" in result
+    data = json.loads(result)
+    assert data["thread"]["topic"] == "Step reason thread"
+    assert data["step"]["index"] == 0
+    assert data["step"]["kind"] == "progress"
+    assert data["step"]["summary"] == "Step summary"
+    assert data["step"]["output"] == "Visible step output"
+    assert data["step"]["delta"] == "Step delta"
+    assert data["step"]["terminal_status"] == "continue"
     assert "workspace_put" not in result
     assert "service_tool_called" not in result
-    assert "tool_logs: omitted" in result
+    assert data["tool_logs"] == "omitted"
 
 
 def test_reason_show_tool_omits_tool_logs(tmp_path: Path) -> None:
@@ -1106,8 +1115,10 @@ def test_reason_show_tool_omits_tool_logs(tmp_path: Path) -> None:
 
     result = _invoke_chat_tool(tool, {"thread_id": thread.id})
 
-    assert "Shown step summary" in result
-    assert "Shown output" in result
+    data = json.loads(result)
+    assert data["thread"]["topic"] == "Show reason thread"
+    assert data["steps"][0]["summary"] == "Shown step summary"
+    assert data["steps"][0]["output"] == "Shown output"
     assert "persona_think" not in result
     assert "service_tool_called" not in result
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import json
 from pathlib import Path
 from typing import cast
 from uuid import uuid4
@@ -13,13 +14,13 @@ from nuself.handles import VisibleHandleError, parse_visible_index
 from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
+from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.repository import ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.store import ScopedWorkspace
 from nuself.reflection.repository import ReflectionRepository
 from nuself.trace.repository import TraceNotFound
 from nuself.trace.service import TraceQueryService
-from nuself.tui.reason import render_reason_detail, render_reason_row, render_reason_step_detail
 from nuself.tui.trace import render_trace_detail, render_trace_row
 from nuself.persona.tools import build_persona_tools
 
@@ -173,18 +174,35 @@ def build_langchain_chat_tools(
         service = ReasonService(project_root)
         threads = service.list_threads()
         if not threads:
-            return "No active or paused reasoning threads."
-        lines = ["Active and paused reasoning threads:"]
-        for index, thread in enumerate(threads):
-            steps = service.list_steps(thread.id)
-            row = render_reason_row(thread, index=index, color=False)
-            lines.append(f"{row}\n  steps={len(steps)}")
-        return "\n".join(lines)
+            return _json_result({"threads": [], "count": 0})
+        return _json_result(
+            {
+                "threads": [
+                    {
+                        "index": index,
+                        "id": thread.id,
+                        "topic": thread.topic,
+                        "status": thread.status,
+                        "priority": thread.priority,
+                        "working_summary": thread.working_summary,
+                        "step_count": len(service.list_steps(thread.id)),
+                        "created_at": thread.created_at,
+                        "last_advanced_at": thread.last_advanced_at,
+                    }
+                    for index, thread in enumerate(threads)
+                ],
+                "count": len(threads),
+            }
+        )
 
     def count_reasoning_threads() -> str:
         """Count active and paused long-run reasoning threads."""
 
-        return f"Active and paused reasoning threads: {len(ReasonService(project_root).list_threads())} total"
+        threads = ReasonService(project_root).list_threads()
+        by_status: dict[str, int] = {}
+        for thread in threads:
+            by_status[thread.status] = by_status.get(thread.status, 0) + 1
+        return _json_result({"count": len(threads), "by_status": by_status})
 
     def show_reasoning_thread(thread_id: str) -> str:
         """Show one long-run reasoning thread. Use "current" to show the most recent active thread."""
@@ -196,39 +214,39 @@ def build_langchain_chat_tools(
         if tid.lower() == "current":
             threads = service.list_threads()
             if not threads:
-                return "No active reasoning threads."
+                return _json_error("No active reasoning threads.")
             thread = threads[-1]
-            return render_reason_detail(thread, service.list_steps(thread.id), color=False, include_tool_logs=False)
+            return _json_result(_reason_show_payload(thread, service.list_steps(thread.id)))
         try:
             thread = service.show_thread(tid)
         except ReasonNotFound as exc:
-            return f"Error: {exc}"
-        return render_reason_detail(thread, service.list_steps(thread.id), color=False, include_tool_logs=False)
+            return _json_error(str(exc))
+        return _json_result(_reason_show_payload(thread, service.list_steps(thread.id)))
 
     def show_reasoning_context(thread_id: str) -> str:
         """Show one reasoning thread's global settings and current state, excluding step bodies and tool logs."""
 
         tid = thread_id.strip()
         if not tid:
-            return "Error: thread_id must be a non-empty string"
+            return _json_error("thread_id must be a non-empty string")
         service = ReasonService(project_root)
         try:
             if tid.lower() == "current":
                 threads = service.list_threads()
                 if not threads:
-                    return "No active reasoning threads."
+                    return _json_error("No active reasoning threads.")
                 thread = threads[-1]
             else:
                 thread = service.show_thread(tid)
         except ReasonNotFound as exc:
-            return f"Error: {exc}"
+            return _json_error(str(exc))
         steps = service.list_steps(thread.id)
-        return "\n".join(
-            [
-                render_reason_detail(thread, None, color=False),
-                f"  steps: {len(steps)}",
-                "  tool_logs: omitted",
-            ]
+        return _json_result(
+            {
+                "thread": _reason_thread_payload(thread),
+                "step_count": len(steps),
+                "tool_logs": "omitted",
+            }
         )
 
     def show_reasoning_step(thread_id: str, step: str) -> str:
@@ -237,23 +255,23 @@ def build_langchain_chat_tools(
         tid = thread_id.strip()
         step_ref = step.strip()
         if not tid:
-            return "Error: thread_id must be a non-empty string"
+            return _json_error("thread_id must be a non-empty string")
         if not step_ref:
-            return "Error: step must be a non-empty string"
+            return _json_error("step must be a non-empty string")
         service = ReasonService(project_root)
         try:
             if tid.lower() == "current":
                 threads = service.list_threads()
                 if not threads:
-                    return "No active reasoning threads."
+                    return _json_error("No active reasoning threads.")
                 thread = threads[-1]
             else:
                 thread = service.show_thread(tid)
         except ReasonNotFound as exc:
-            return f"Error: {exc}"
+            return _json_error(str(exc))
         steps = service.list_steps(thread.id)
         if not steps:
-            return f"No reasoning steps for thread: {thread.id}"
+            return _json_error(f"No reasoning steps for thread: {thread.id}")
         if step_ref.lower() == "latest":
             index = len(steps) - 1
             selected = steps[index]
@@ -261,20 +279,20 @@ def build_langchain_chat_tools(
             try:
                 index = parse_visible_index(step_ref, count=len(steps), label="reason step")
             except VisibleHandleError as exc:
-                return f"Error: {exc}"
+                return _json_error(str(exc))
             selected = steps[index]
         else:
             matches = [candidate for candidate in steps if candidate.id == step_ref]
             if not matches:
-                return f"Error: reason step not found: {step_ref}"
+                return _json_error(f"reason step not found: {step_ref}")
             selected = matches[0]
             index = steps.index(selected)
-        return "\n".join(
-            [
-                f"[reason] {thread.topic} id={thread.id}",
-                render_reason_step_detail(selected, index=index, color=False, include_tool_logs=False),
-                "  tool_logs: omitted",
-            ]
+        return _json_result(
+            {
+                "thread": {"id": thread.id, "topic": thread.topic, "status": thread.status},
+                "step": _reason_step_payload(selected, index=index),
+                "tool_logs": "omitted",
+            }
         )
 
     def reason_propose(
@@ -680,6 +698,65 @@ def _build_workspace_tools_from_provider(
 
 def _structured_tool_factory() -> StructuredToolFactory:
     return cast(StructuredToolFactory, StructuredTool.from_function)  # pyright: ignore[reportUnknownMemberType]
+
+
+def _json_result(payload: dict[str, object]) -> str:
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+def _json_error(message: str) -> str:
+    return _json_result({"error": message})
+
+
+def _reason_thread_payload(thread: ReasoningThread) -> dict[str, object]:
+    return {
+        "id": thread.id,
+        "topic": thread.topic,
+        "status": thread.status,
+        "priority": thread.priority,
+        "working_summary": thread.working_summary,
+        "mandates": thread.mandates,
+        "active_items": [item.to_wire() for item in thread.active_items],
+        "pending_items": [item.to_wire() for item in thread.pending_items],
+        "next_steps": [item.to_wire() for item in thread.next_steps],
+        "reasoning_prompt": thread.reasoning_prompt,
+        "evidence_refs": list(thread.evidence_refs),
+        "created_at": thread.created_at,
+        "updated_at": thread.updated_at,
+        "last_advanced_at": thread.last_advanced_at,
+        "next_review_after": thread.next_review_after,
+        "skip_next_advance_until": thread.skip_next_advance_until,
+    }
+
+
+def _reason_step_payload(step: ReasoningStep, *, index: int) -> dict[str, object]:
+    return {
+        "index": index,
+        "id": step.id,
+        "thread_id": step.thread_id,
+        "kind": step.kind,
+        "summary": step.summary,
+        "output": step.output,
+        "delta": step.delta,
+        "new_findings": [item.to_wire() for item in step.new_findings],
+        "new_pending": [item.to_wire() for item in step.new_pending],
+        "retired_findings": [item.to_wire() for item in step.retired_findings],
+        "next_steps": [item.to_wire() for item in step.next_steps],
+        "evidence_refs": list(step.evidence_refs),
+        "confidence": step.confidence,
+        "terminal_status": step.terminal_status,
+        "terminal_reason": step.terminal_reason,
+        "created_at": step.created_at,
+    }
+
+
+def _reason_show_payload(thread: ReasoningThread, steps: list[ReasoningStep]) -> dict[str, object]:
+    return {
+        "thread": _reason_thread_payload(thread),
+        "step_count": len(steps),
+        "steps": [_reason_step_payload(step, index=index) for index, step in enumerate(steps)],
+        "tool_logs": "omitted",
+    }
 
 
 def _string_tuple_filter(value: list[str] | str | None) -> tuple[str, ...]:
