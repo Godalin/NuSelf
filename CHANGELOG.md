@@ -67,6 +67,7 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 - Fixed background reason advances that use concurrent tools by serializing persona prompt and trace index writes, and keeping scheduler failures logged without killing later scheduling.
 - Fixed reason pacing prompts so round-based simulations and debates advance at most one complete round per step instead of skipping ahead through multiple rounds.
 - Clarified service skills with explicit allowed tools, confirmation boundaries for mutating actions, and correct workspace value shape.
+- Fixed `[workspace]` service tags in rendered tool logs so they use a valid 256-color ANSI foreground code.
 
 ### Docs
 

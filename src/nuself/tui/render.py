@@ -485,7 +485,7 @@ _COLORS_256: dict[str, str] = {
     "outbox": "36",
     "trace": "96",
     "reflection": "33",
-    "workspace": "208",
+    "workspace": "38;5;208",
     "skill": "31",
 }
 

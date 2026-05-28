@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from _pytest.monkeypatch import MonkeyPatch
+
 from nuself.logs import LogEvent
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
@@ -52,6 +54,25 @@ def test_render_service_tool_log_uses_caller_and_service_tags() -> None:
         "[chat] [memory] service_tool_called status=completed thread=default turn=turn-1 tool=memory_archive",
         "  chat called memory service tool memory_archive",
     ]
+
+
+def test_render_workspace_service_tag_uses_256_color(monkeypatch: MonkeyPatch) -> None:
+    import nuself.tui.render as render_module
+
+    monkeypatch.setattr(render_module, "_color_depth_256", True)
+    event = LogEvent(
+        time="2026-05-12T10:00:00Z",
+        level="info",
+        component="reasoning",
+        event="service_tool_called",
+        message='args: {"key": "current_round", "value": "{\\"round\\":1}"}',
+        status="completed",
+        metadata={"service_component": "workspace", "tool": "workspace_put"},
+    )
+
+    first_line = render_log_event(event, color=True).splitlines()[0]
+
+    assert "\033[38;5;208m[workspace]\033[0m" in first_line
 
 
 def test_render_discussion_trace_formats_block() -> None:
