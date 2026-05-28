@@ -45,6 +45,7 @@ def render_reason_detail(
     *,
     color: bool | None = None,
     full: bool = False,
+    include_tool_logs: bool = True,
 ) -> str:
     theme = TerminalTheme(color=color)
     tag = theme.tag("[reason]", "reasoning")
@@ -90,13 +91,42 @@ def render_reason_detail(
             if i > 0:
                 lines.append("")
             step_header = f"[{i + 1}] " if len(steps) > 1 else ""
-            lines.append(_render_step_body(step, theme, indent=0, full=full, step_prefix=step_header))
+            lines.append(
+                _render_step_body(
+                    step,
+                    theme,
+                    indent=0,
+                    full=full,
+                    step_prefix=step_header,
+                    include_tool_logs=include_tool_logs,
+                )
+            )
     return "\n".join(lines)
+
+
+def render_reason_step_detail(
+    step: ReasoningStep,
+    *,
+    index: int | None = None,
+    color: bool | None = None,
+    full: bool = True,
+    include_tool_logs: bool = True,
+) -> str:
+    theme = TerminalTheme(color=color)
+    step_prefix = f"[{index}] " if index is not None else ""
+    return _render_step_body(
+        step,
+        theme,
+        indent=0,
+        full=full,
+        step_prefix=step_prefix,
+        include_tool_logs=include_tool_logs,
+    )
 
 
 def render_step_watch_entry(step: ReasoningStep, *, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
-    return _render_step_body(step, theme, indent=0, full=True)
+    return _render_step_body(step, theme, indent=0, full=True, include_tool_logs=True)
 
 
 
@@ -109,6 +139,7 @@ def _render_step_body(
     indent: int,
     full: bool = False,
     step_prefix: str = "",
+    include_tool_logs: bool = True,
 ) -> str:
     pad = " " * indent
     kind_tag = theme.paint(f"[{step.kind}]", _step_kind_color(step.kind))
@@ -121,7 +152,7 @@ def _render_step_body(
         lines.append(f"{body_pad}{theme.tag('output:', 'reasoning')}")
         for line in step.output.splitlines():
             lines.append(f"{body_pad}  {render_markdown(line, theme)}")
-    if step.tool_logs:
+    if include_tool_logs and step.tool_logs:
         for entry in step.tool_logs:
             inner_pad = " " * (indent + _TOOL_CALL_INDENT)
             log_event = LogEvent(

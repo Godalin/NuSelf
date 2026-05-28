@@ -858,6 +858,8 @@ def test_chat_agent_includes_reason_and_trace_tools_and_skills(tmp_path: Path) -
     system_prompt = llm.calls[0][0].content
     assert "reason_list_active" in system_prompt
     assert "reason_count" in system_prompt
+    assert "reason_context" in system_prompt
+    assert "reason_step" in system_prompt
     assert "reason_show" in system_prompt
     assert "trace_search" in system_prompt
     assert "trace_count" in system_prompt
@@ -876,7 +878,8 @@ def test_load_reason_skills_have_separate_read_and_proposal_tools(tmp_path: Path
     reason = _invoke_chat_tool(tools["load_skill"], {"skill_name": "reason"})
     proposal = _invoke_chat_tool(tools["load_skill"], {"skill_name": "reason_proposal"})
 
-    assert "Allowed tools: reason_list_active, reason_count, reason_show" in reason
+    assert "Allowed tools: reason_list_active, reason_count, reason_context, reason_step, reason_show" in reason
+    assert "Reason read tools omit tool logs" in reason
     assert "reason_propose" not in reason
     assert "Allowed tools: reason_propose" in proposal
     assert "Call `reason_propose` only after" in proposal
@@ -1015,6 +1018,98 @@ def test_reason_show_tool(tmp_path: Path) -> None:
 
     assert "[reason] Inspect this reason thread" in result
     assert thread.id in result
+
+
+def test_reason_context_tool_shows_global_state_without_steps(tmp_path: Path) -> None:
+    from nuself.reason.service import ReasonService
+
+    thread = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator).start_thread(
+        "Context-only reason thread",
+        working_summary="Current state summary",
+        active_items=({"label": "Tracked premise", "kind": "premise"},),
+        mandates=("Keep it bounded.",),
+    )
+    tool = _chat_tool(tmp_path, "reason_context")
+
+    result = _invoke_chat_tool(tool, {"thread_id": thread.id})
+
+    assert "[reason] Context-only reason thread" in result
+    assert "Current state summary" in result
+    assert "Tracked premise" in result
+    assert "Keep it bounded." in result
+    assert "steps: 0" in result
+    assert "output:" not in result
+    assert "tool_logs: omitted" in result
+
+
+def test_reason_step_tool_shows_specific_step_without_tool_logs(tmp_path: Path) -> None:
+    from nuself.reason.domain import ReasoningStep
+    from nuself.reason.service import ReasonService
+
+    service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
+    thread = service.start_thread("Step reason thread")
+    step = ReasoningStep(
+        thread_id=thread.id,
+        summary="Step summary",
+        delta="Step delta",
+        output="Visible step output",
+        tool_logs=(
+            {
+                "component": "reasoning",
+                "event": "service_tool_called",
+                "message": "workspace_put completed",
+                "status": "completed",
+                "metadata": {"service_component": "workspace", "tool": "workspace_put", "args": {"key": "x"}},
+            },
+        ),
+    )
+    service.advance_thread(thread.id, step=step)
+    tool = _chat_tool(tmp_path, "reason_step")
+
+    result = _invoke_chat_tool(tool, {"thread_id": thread.id, "step": "0"})
+
+    assert "[reason] Step reason thread" in result
+    assert "[0] [progress]" in result
+    assert "Step summary" in result
+    assert "Visible step output" in result
+    assert "Step delta" in result
+    assert "workspace_put" not in result
+    assert "service_tool_called" not in result
+    assert "tool_logs: omitted" in result
+
+
+def test_reason_show_tool_omits_tool_logs(tmp_path: Path) -> None:
+    from nuself.reason.domain import ReasoningStep
+    from nuself.reason.service import ReasonService
+
+    service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
+    thread = service.start_thread("Show reason thread")
+    service.advance_thread(
+        thread.id,
+        step=ReasoningStep(
+            thread_id=thread.id,
+            summary="Shown step summary",
+            delta="Shown step delta",
+            output="Shown output",
+            tool_logs=(
+                {
+                    "component": "reasoning",
+                    "event": "service_tool_called",
+                    "message": "persona_think completed",
+                    "status": "completed",
+                    "metadata": {"service_component": "persona", "tool": "persona_think", "args": {"persona": "critic"}},
+                },
+            ),
+        ),
+    )
+    tool = _chat_tool(tmp_path, "reason_show")
+
+    result = _invoke_chat_tool(tool, {"thread_id": thread.id})
+
+    assert "Shown step summary" in result
+    assert "Shown output" in result
+    assert "persona_think" not in result
+    assert "service_tool_called" not in result
 
 
 def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:

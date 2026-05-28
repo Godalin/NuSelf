@@ -35,7 +35,7 @@ def test_render_agent_skill_sections_with_generated_allowed_tools() -> None:
     allowed_tools_by_skill = {
         "memory": ("memory_search", "memory_count", "memory_archive", "memory_update_importance"),
         "reflection": ("reflection_list_pending", "reflection_count", "reflection_dismiss", "reflection_archive"),
-        "reason": ("reason_list_active", "reason_count", "reason_show"),
+        "reason": ("reason_list_active", "reason_count", "reason_context", "reason_step", "reason_show"),
         "reason_proposal": ("reason_propose",),
         "trace": ("trace_search", "trace_count", "trace_show"),
         "selves": ("selves_consult",),

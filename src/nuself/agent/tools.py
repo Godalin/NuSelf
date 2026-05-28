@@ -19,7 +19,7 @@ from nuself.store import ScopedWorkspace
 from nuself.reflection.repository import ReflectionRepository
 from nuself.trace.repository import TraceNotFound
 from nuself.trace.service import TraceQueryService
-from nuself.tui.reason import render_reason_detail, render_reason_row
+from nuself.tui.reason import render_reason_detail, render_reason_row, render_reason_step_detail
 from nuself.tui.trace import render_trace_detail, render_trace_row
 from nuself.persona.tools import build_persona_tools
 
@@ -198,12 +198,84 @@ def build_langchain_chat_tools(
             if not threads:
                 return "No active reasoning threads."
             thread = threads[-1]
-            return render_reason_detail(thread, service.list_steps(thread.id), color=False)
+            return render_reason_detail(thread, service.list_steps(thread.id), color=False, include_tool_logs=False)
         try:
             thread = service.show_thread(tid)
         except ReasonNotFound as exc:
             return f"Error: {exc}"
-        return render_reason_detail(thread, service.list_steps(thread.id), color=False)
+        return render_reason_detail(thread, service.list_steps(thread.id), color=False, include_tool_logs=False)
+
+    def show_reasoning_context(thread_id: str) -> str:
+        """Show one reasoning thread's global settings and current state, excluding step bodies and tool logs."""
+
+        tid = thread_id.strip()
+        if not tid:
+            return "Error: thread_id must be a non-empty string"
+        service = ReasonService(project_root)
+        try:
+            if tid.lower() == "current":
+                threads = service.list_threads()
+                if not threads:
+                    return "No active reasoning threads."
+                thread = threads[-1]
+            else:
+                thread = service.show_thread(tid)
+        except ReasonNotFound as exc:
+            return f"Error: {exc}"
+        steps = service.list_steps(thread.id)
+        return "\n".join(
+            [
+                render_reason_detail(thread, None, color=False),
+                f"  steps: {len(steps)}",
+                "  tool_logs: omitted",
+            ]
+        )
+
+    def show_reasoning_step(thread_id: str, step: str) -> str:
+        """Show one reasoning step by 0-based index, step id, or 'latest'. Tool logs are omitted."""
+
+        tid = thread_id.strip()
+        step_ref = step.strip()
+        if not tid:
+            return "Error: thread_id must be a non-empty string"
+        if not step_ref:
+            return "Error: step must be a non-empty string"
+        service = ReasonService(project_root)
+        try:
+            if tid.lower() == "current":
+                threads = service.list_threads()
+                if not threads:
+                    return "No active reasoning threads."
+                thread = threads[-1]
+            else:
+                thread = service.show_thread(tid)
+        except ReasonNotFound as exc:
+            return f"Error: {exc}"
+        steps = service.list_steps(thread.id)
+        if not steps:
+            return f"No reasoning steps for thread: {thread.id}"
+        if step_ref.lower() == "latest":
+            index = len(steps) - 1
+            selected = steps[index]
+        elif step_ref.isdigit():
+            try:
+                index = parse_visible_index(step_ref, count=len(steps), label="reason step")
+            except VisibleHandleError as exc:
+                return f"Error: {exc}"
+            selected = steps[index]
+        else:
+            matches = [candidate for candidate in steps if candidate.id == step_ref]
+            if not matches:
+                return f"Error: reason step not found: {step_ref}"
+            selected = matches[0]
+            index = steps.index(selected)
+        return "\n".join(
+            [
+                f"[reason] {thread.topic} id={thread.id}",
+                render_reason_step_detail(selected, index=index, color=False, include_tool_logs=False),
+                "  tool_logs: omitted",
+            ]
+        )
 
     def reason_propose(
         topic: str,
@@ -414,9 +486,28 @@ def build_langchain_chat_tools(
             show_reasoning_thread,
             name="reason_show",
             description=(
-                "Show details for a specific long-run reasoning thread, including summary, tracked items, "
-                "evidence refs, and recent steps. Pass 'current' to show the most recent "
-                "active thread."
+                "Show details for a specific long-run reasoning thread, including current state and steps, "
+                "but omitting tool logs. Pass 'current' to show the most recent active thread."
+            ),
+            tags=("readonly",),
+        ),
+        tool_from_function(
+            show_reasoning_context,
+            name="reason_context",
+            description=(
+                "Show one reasoning thread's global setup and current state only: topic, summary, mandates, "
+                "active items, pending items, next steps, reasoning prompt, evidence refs, and step count. "
+                "Does not include step bodies or tool logs. Pass 'current' to show the most recent active thread."
+            ),
+            tags=("readonly",),
+        ),
+        tool_from_function(
+            show_reasoning_step,
+            name="reason_step",
+            description=(
+                "Show one concrete reasoning step by 0-based step index, step id, or 'latest'. "
+                "Returns the step summary, output, delta, findings, pending items, next steps, confidence, "
+                "and evidence refs, but omits tool logs."
             ),
             tags=("readonly",),
         ),
@@ -491,6 +582,8 @@ def build_langchain_chat_tools(
         "reflection_archive": "reflection",
         "reason_list_active": "reasoning",
         "reason_count": "reasoning",
+        "reason_context": "reasoning",
+        "reason_step": "reasoning",
         "reason_show": "reasoning",
         "reason_propose": "reasoning",
         "trace_search": "trace",
