@@ -12,6 +12,7 @@ from typing import cast
 from nuself.logs import LogEvent
 from nuself.notification import OutboxEntry
 from nuself.reflection.repository import ReflectionEntry
+import re
 
 
 class TerminalTheme:
@@ -338,7 +339,22 @@ def _render_tool_json(value: object, *, theme: TerminalTheme) -> list[str]:
 
     buf = io.StringIO()
     Console(file=buf, force_terminal=True, width=160).print(RichJSON(text, indent=2), end="")
-    return buf.getvalue().rstrip().splitlines()
+    # Rich may wrap punctuation such as braces in ANSI styling (bold/color).
+    # Tests expect the opening/closing braces on the label line to be plain
+    # (not wrapped in extra SGR sequences). Post-process lines to unwrap any
+    # ANSI sequences that immediately surround a single brace character so
+    # the label + brace layout stays stable while preserving other coloring.
+    lines = buf.getvalue().rstrip().splitlines()
+    processed: list[str] = []
+    for line in lines:
+        # remove ANSI sequences immediately before a brace
+        line = re.sub(r"\x1b\[[0-9;]*m(?=\{)", "", line)
+        line = re.sub(r"\x1b\[[0-9;]*m(?=\})", "", line)
+        # remove reset codes immediately following a brace
+        line = re.sub(r"(?<=\{)\x1b\[0m", "", line)
+        line = re.sub(r"(?<=\})\x1b\[0m", "", line)
+        processed.append(line)
+    return processed
 
 
 def _parse_json_string(value: object) -> object | None:
