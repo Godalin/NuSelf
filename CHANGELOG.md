@@ -8,7 +8,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 No post-v0.2.0 changes yet. The current release-candidate fixes and small feature additions are tracked under `0.2.0`.
 
-## 0.2.0 - Unreleased
+## 0.2.0 - 2026-05-29
 
 ### Added
 
@@ -76,6 +76,7 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 - Added `reason_context` and `reason_step` read tools for agent-facing reason inspection, and omitted tool logs from agent-facing reason read outputs.
 - Added structured reason terminal recommendations so advances can automatically resolve or pause threads without parsing step prose.
 - Changed agent-facing reason read tools to return JSON strings instead of terminal-formatted text.
+- Added trace artifact lookup with `nuself trace related <artifact_ref>`, `:trace related <artifact_ref>`, and the read-only `trace_related` agent tool; artifact deletion keeps provenance traces instead of cascading through trace records.
 
 ### Docs
 
