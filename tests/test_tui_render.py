@@ -114,6 +114,30 @@ def test_render_service_tool_log_expands_nested_json_string() -> None:
     ]
 
 
+def test_render_service_tool_log_keeps_colored_json_brace_on_label_line() -> None:
+    event = LogEvent(
+        time="2026-05-12T10:00:00Z",
+        level="info",
+        component="reasoning",
+        event="service_tool_called",
+        message="workspace_get completed",
+        status="completed",
+        metadata={
+            "service_component": "workspace",
+            "tool": "workspace_get",
+            "args": {"key": "current_round"},
+            "result": {"round": 1},
+        },
+    )
+
+    rendered = render_log_event(event, color=True)
+
+    assert "\033[90margs:\033[0m {" in rendered
+    assert "\033[90margs:\033[0m\n" not in rendered
+    assert "\033[90mresult:\033[0m {" in rendered
+    assert "\033[90mresult:\033[0m\n" not in rendered
+
+
 def test_render_service_tool_log_reads_legacy_message_body() -> None:
     event = LogEvent(
         time="2026-05-12T10:00:00Z",

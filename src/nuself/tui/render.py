@@ -276,11 +276,12 @@ def render_tool_call(
 
 
 def _append_tool_io_section(lines: list[str], label: str, value: object, theme: TerminalTheme) -> None:
-    rendered = _render_tool_io_value(value, theme=theme)
+    normalized = _normalize_tool_json(value)
+    rendered = _render_tool_io_value(normalized, theme=theme)
     if not rendered:
         lines.append(f"  {theme.muted(label + ':')}")
         return
-    if rendered[0] in {"{", "["}:
+    if isinstance(normalized, dict | list):
         lines.append(f"  {theme.muted(label + ':')} {rendered[0]}")
         for line in rendered[1:]:
             lines.append(f"  {line}")
@@ -291,11 +292,10 @@ def _append_tool_io_section(lines: list[str], label: str, value: object, theme: 
 
 
 def _render_tool_io_value(value: object, *, theme: TerminalTheme) -> list[str]:
-    normalized = _normalize_tool_json(value)
-    if isinstance(normalized, dict):
-        return _render_tool_json(cast(dict[object, object], normalized), theme=theme)
-    if isinstance(normalized, list):
-        return _render_tool_json(cast(list[object], normalized), theme=theme)
+    if isinstance(value, dict):
+        return _render_tool_json(cast(dict[object, object], value), theme=theme)
+    if isinstance(value, list):
+        return _render_tool_json(cast(list[object], value), theme=theme)
     if isinstance(value, str):
         return value.splitlines() or [""]
     return [_render_scalar(value)]
