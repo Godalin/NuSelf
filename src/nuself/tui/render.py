@@ -279,12 +279,11 @@ def render_tool_call(
 
 
 def _render_tool_header_field(key: str, value: object, theme: TerminalTheme) -> str:
-    field = _format_log_field(key, value)
     if key == "tool":
-        return theme.paint(field, "36")
+        return f"{key}={theme.paint(_format_log_value(value), '36')}"
     if key == "status":
-        return theme.paint(field, _status_color(str(value)))
-    return theme.muted(field)
+        return f"{key}={theme.paint(_format_log_value(value), _status_color(str(value)))}"
+    return theme.muted(_format_log_field(key, value))
 
 
 def _append_tool_io_section(lines: list[str], label: str, value: object, theme: TerminalTheme) -> None:

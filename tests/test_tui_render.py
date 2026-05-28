@@ -88,8 +88,10 @@ def test_render_workspace_service_tag_uses_256_color(monkeypatch: MonkeyPatch) -
     first_line = render_log_event(event, color=True).splitlines()[0]
 
     assert "\033[38;5;208m[workspace]\033[0m" in first_line
-    assert "\033[36mtool=workspace_put\033[0m" in first_line
-    assert "\033[32mstatus=completed\033[0m" in first_line
+    assert "tool=\033[36mworkspace_put\033[0m" in first_line
+    assert "\033[36mtool=" not in first_line
+    assert "status=\033[32mcompleted\033[0m" in first_line
+    assert "\033[32mstatus=" not in first_line
     assert _strip_ansi(first_line).startswith("[reasoning] [workspace] service_tool_called tool=workspace_put status=completed")
 
 
