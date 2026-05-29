@@ -242,11 +242,9 @@ class ReasonOutputService:
                 "thread_id": thread.id,
                 "manifest": str(paths.manifest),
                 "created_at": manifest.created_at,
+                "attempts": 0,
             }
-            tmp = queue_dir / f"{job_id}.json.tmp"
-            final = queue_dir / f"{job_id}.json"
-            tmp.write_text(json.dumps(event, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8")
-            tmp.replace(final)
+            _write_json_atomic(queue_dir / f"{job_id}.json", event)
             write_log_event(
                 "daemon",
                 "export_job_enqueued",
@@ -369,10 +367,47 @@ class ReasonOutputService:
         for index, batch in enumerate(_partition(selected, manifest.segment_size)):
             filename = _chunk_filename(index)
             chunk_path = paths.chunks_dir / filename
+            # Emit chunk-level start event
+            write_log_event(
+                "reasoning",
+                "reason_output_chunk_started",
+                f"Starting chunk {index+1}/{total} for job {manifest.job_id}",
+                project_root=self._project_root,
+                metadata={"thread_id": thread.id, "job_id": manifest.job_id, "chunk_index": index},
+            )
+
             # Runner composes the chunk text (e.g., via a subagent/LLM)
-            composed_text = runner(thread, manifest, batch, index=index, total=total)
+            try:
+                start_ts = datetime.now(UTC).timestamp()
+                composed_text = runner(thread, manifest, batch, index=index, total=total)
+                duration_ms = int((datetime.now(UTC).timestamp() - start_ts) * 1000)
+            except Exception as exc:
+                # Log failure for this chunk and re-raise to allow caller to handle
+                write_log_event(
+                    "reasoning",
+                    "reason_output_chunk_failed",
+                    f"Chunk {index+1}/{total} failed for job {manifest.job_id}: {str(exc)}",
+                    project_root=self._project_root,
+                    level="error",
+                    status="error",
+                    error=str(exc),
+                    metadata={"thread_id": thread.id, "job_id": manifest.job_id, "chunk_index": index},
+                )
+                raise
+
             # persist chunk
             chunk_path.write_text(composed_text.rstrip() + "\n", encoding="utf-8")
+
+            # Emit chunk completed event
+            write_log_event(
+                "reasoning",
+                "reason_output_chunk_completed",
+                f"Completed chunk {index+1}/{total} for job {manifest.job_id}",
+                project_root=self._project_root,
+                status="ok",
+                duration_ms=duration_ms,
+                metadata={"thread_id": thread.id, "job_id": manifest.job_id, "chunk_index": index, "chunk_path": str(chunk_path)},
+            )
             chunk = ReasonOutputChunk(index=index, filename=filename, step_ids=tuple(step.id for step in batch))
             chunks.append(chunk)
 

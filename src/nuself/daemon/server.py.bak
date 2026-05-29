@@ -554,7 +554,7 @@ def run_daemon(project_root: Path | None = None) -> int:
         state.start_background_memory_curator()
         state.start_background_reflection_scheduler()
         state.start_background_reason_scheduler()
-        state.start_background_export_worker()
+            state.start_background_export_worker()
         state.start_background_notification_delivery()
         with NuSelfUnixServer(str(paths.socket_path), RequestHandler, state) as server:
             server.timeout = 0.2
@@ -565,7 +565,7 @@ def run_daemon(project_root: Path | None = None) -> int:
         state.stop_background_memory_curator()
         state.stop_background_reflection_scheduler()
         state.stop_background_reason_scheduler()
-        state.stop_background_export_worker()
+            state.stop_background_export_worker()
         state.stop_background_notification_delivery()
         if paths.socket_path.exists():
             paths.socket_path.unlink()

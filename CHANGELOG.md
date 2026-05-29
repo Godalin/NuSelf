@@ -12,6 +12,10 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 
 - Added the first `reason` output-composition infrastructure: export jobs now plan and persist manifests, chunks, progress, and combined Markdown artifacts inside the owning reason workspace, and the chat tool registry exposes `reason_export`.
 
+### Changed
+
+- `reason_export` now returns immediately after enqueueing a background export job instead of composing the long-form output inside the chat turn.
+
 ### Fixed
 
 - Approval-gated tool prompts now emit a visible live REPL log line before waiting for confirmation input, so the prompt is obvious before the user enters `y` or `n`.

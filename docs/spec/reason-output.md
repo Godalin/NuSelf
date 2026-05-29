@@ -147,6 +147,8 @@ The chat-facing interface must allow the caller to specify:
 
 Chat must not need to store the full long-form result in the chat context to complete the job.
 
+The first chat-facing export tool call must be fire-and-return: it plans the job, writes the manifest, enqueues the background work, and immediately returns the queued job metadata. The daemon worker is responsible for composing chunks and writing the final artifact.
+
 When the selected range is large, the job should be processed in batches and progress should be reported after each completed batch.
 
 ## Composition Workflow

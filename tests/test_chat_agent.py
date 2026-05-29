@@ -917,6 +917,36 @@ def test_reason_propose_creates_thread_after_confirmation(tmp_path: Path, monkey
     assert events[-1].event == "thread_started"
 
 
+def test_reason_export_tool_queues_and_returns_immediately(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from nuself.reason.output import ReasonOutputService
+    from nuself.reason.repository import ReasonRepository
+    from nuself.reason.service import ReasonService
+    from nuself.reason.domain import ReasoningStep
+
+    monkeypatch.setattr(
+        ReasonOutputService,
+        "compose_with_runner",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("reason_export should not compose synchronously")),
+    )
+
+    service = ReasonService(repository=ReasonRepository(tmp_path), project_root=tmp_path, prompt_generator=lambda *args, **kwargs: "Test-generated reasoning prompt.")
+    thread = service.start_thread("Queued export")
+    service.advance_thread(
+        thread.id,
+        step=ReasoningStep(thread_id=thread.id, summary="Step 1", output="Out 1", delta="Delta 1"),
+    )
+
+    tool = _chat_tool(tmp_path, "reason_export")
+    result = _invoke_chat_tool(tool, {"thread_id": thread.id, "segment_size": 1})
+    parsed = json.loads(result)
+
+    assert parsed.get("queued") is True
+    assert parsed.get("job", {}).get("thread_id") == thread.id
+    queue_file = Path(parsed["paths"]["root"]) / "queue" / f"{parsed['job']['job_id']}.json"
+    assert queue_file.is_file()
+    assert not Path(parsed["paths"]["combined"]).exists()
+
+
 # --- Memory management tools ---
 
 def test_memory_archive_tool_success(tmp_path: Path) -> None:
