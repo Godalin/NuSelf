@@ -231,6 +231,41 @@ class ReasonOutputService:
                 "step_count": len(selected),
             },
         )
+
+        # Enqueue a file-queue event so a background daemon can pick up this job.
+        try:
+            queue_dir = paths.root / "queue"
+            queue_dir.mkdir(parents=True, exist_ok=True)
+            event = {
+                "type": "reason_output_job",
+                "job_id": job_id,
+                "thread_id": thread.id,
+                "manifest": str(paths.manifest),
+                "created_at": manifest.created_at,
+            }
+            tmp = queue_dir / f"{job_id}.json.tmp"
+            final = queue_dir / f"{job_id}.json"
+            tmp.write_text(json.dumps(event, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8")
+            tmp.replace(final)
+            write_log_event(
+                "daemon",
+                "export_job_enqueued",
+                f"Enqueued export job {job_id} for thread {thread.id}",
+                project_root=self._project_root,
+                status="queued",
+                metadata={"thread_id": thread.id, "job_id": job_id, "manifest": str(paths.manifest)},
+            )
+        except Exception:
+            # Queue failures should not break planning; log and continue.
+            write_log_event(
+                "daemon",
+                "export_job_enqueue_failed",
+                f"Failed to enqueue export job {job_id} for thread {thread.id}",
+                project_root=self._project_root,
+                level="warning",
+                status="error",
+                metadata={"thread_id": thread.id, "job_id": job_id},
+            )
         return manifest
 
     def compose_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
