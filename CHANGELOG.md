@@ -8,6 +8,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 No post-v0.2.0 changes yet. The current release-candidate fixes and small feature additions are tracked under `0.2.0`.
 
+### Added
+
+- Added the first `reason` output-composition infrastructure: export jobs now plan and persist manifests, chunks, progress, and combined Markdown artifacts inside the owning reason workspace, and the chat tool registry exposes `reason_export`.
+
 ### Fixed
 
 - Approval-gated tool prompts now emit a visible live REPL log line before waiting for confirmation input, so the prompt is obvious before the user enters `y` or `n`.

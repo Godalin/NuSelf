@@ -16,6 +16,13 @@ from nuself.reason.repository import (
     ReasonRepository,
     REASON_STORAGE_VERSION,
 )
+from nuself.reason.output import (
+    REASON_OUTPUT_FORMATS,
+    REASON_OUTPUT_MODES,
+    REASON_OUTPUT_STORAGE_VERSION,
+    ReasonOutputManifest,
+    ReasonOutputService,
+)
 from nuself.reason.scheduler import ReasonScheduler
 from nuself.reason.service import ReasonService
 from nuself.store import ScopedWorkspace as ReasonWorkspace, SqliteStore as ReasonStore
@@ -36,5 +43,10 @@ __all__ = [
     "ReasoningStep",
     "ReasonStatus",
     "ReasonPriority",
+    "ReasonOutputManifest",
+    "ReasonOutputService",
     "StepKind",
+    "REASON_OUTPUT_FORMATS",
+    "REASON_OUTPUT_MODES",
+    "REASON_OUTPUT_STORAGE_VERSION",
 ]

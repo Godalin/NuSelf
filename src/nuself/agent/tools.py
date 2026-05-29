@@ -15,6 +15,7 @@ from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.reason.domain import ReasoningStep, ReasoningThread
+from nuself.reason.output import ReasonOutputService
 from nuself.reason.repository import ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.store import ScopedWorkspace
@@ -351,6 +352,46 @@ def build_langchain_chat_tools(
         )
         return thread.id
 
+    def reason_export(
+        thread_id: str,
+        mode: str = "narrative",
+        output_format: str = "markdown",
+        start_index: int = 0,
+        end_index: int | None = None,
+        segment_size: int = 5,
+    ) -> str:
+        """Start a reason output export job and compose the first artifact immediately."""
+
+        tid = thread_id.strip()
+        if not tid:
+            return "Error: thread_id must be a non-empty string"
+        try:
+            manifest = ReasonOutputService(project_root).start_job(
+                tid,
+                mode=mode,
+                output_format=output_format,
+                start_index=int(start_index),
+                end_index=int(end_index) if end_index is not None else None,
+                segment_size=int(segment_size),
+                compose=True,
+            )
+        except (ReasonNotFound, RuntimeError, ValueError, TypeError) as exc:
+            return _json_error(str(exc))
+        service = ReasonOutputService(project_root)
+        paths = service.job_paths(tid, manifest.job_id)
+        return _json_result(
+            {
+                "job": manifest.to_wire(),
+                "paths": {
+                    "root": str(paths.root),
+                    "manifest": str(paths.manifest),
+                    "progress": str(paths.progress),
+                    "combined": str(paths.combined),
+                    "chunks_dir": str(paths.chunks_dir),
+                },
+            }
+        )
+
     def search_trace(query: str, limit: int = 5) -> str:
         """Search thought provenance trace records."""
 
@@ -587,6 +628,16 @@ def build_langchain_chat_tools(
             tags=("write",),
         ),
         tool_from_function(
+            reason_export,
+            name="reason_export",
+            description=(
+                "Start a reason output export job for a thread and write the export workspace artifacts. "
+                "Use when the user wants a long-form report, narrative, outline, or summary derived from a reason thread. "
+                "Returns the export job manifest and workspace paths, while the full composed output is stored in the thread workspace."
+            ),
+            tags=("write",),
+        ),
+        tool_from_function(
             search_trace,
             name="trace_search",
             description=(
@@ -652,6 +703,7 @@ def build_langchain_chat_tools(
         "reason_step": "reasoning",
         "reason_show": "reasoning",
         "reason_propose": "reasoning",
+        "reason_export": "reasoning",
         "trace_search": "trace",
         "trace_count": "trace",
         "trace_show": "trace",
