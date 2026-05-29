@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from functools import wraps
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -143,43 +142,6 @@ _interactive_completer: _InteractiveCompleter | None = None
 _theme = TerminalTheme()
 _last_header_thread: str = ""
 _last_header_status: str = ""
-_handled_proposal_ids: set[str] = set()
-
-
-def _approval_proposal_handler(
-    *,
-    component: str,
-    event_name: str,
-    prompt_builder: Callable[[LogEvent], str],
-    tag_name: str,
-    tag_component: str,
-) -> Callable[[Callable[[LogEvent, Path | None], None]], Callable[[LogEvent, Path | None], None]]:
-    def decorator(handler: Callable[[LogEvent, Path | None], None]) -> Callable[[LogEvent, Path | None], None]:
-        @wraps(handler)
-        def wrapped(event: LogEvent, project_root: Path | None) -> None:
-            if event.component != component or event.event != event_name:
-                return
-            meta = event.metadata or {}
-            proposal_value = meta.get("proposal_id", "")
-            proposal_id = proposal_value if isinstance(proposal_value, str) else ""
-            if not proposal_id or proposal_id in _handled_proposal_ids:
-                return
-            prompt = prompt_builder(event)
-            if not prompt:
-                return
-            _handled_proposal_ids.add(proposal_id)
-            print()
-            tag = _theme.tag(f"[{tag_name}]", tag_component)
-            _print_ansi(f"{tag} {prompt} (y/n): ", end="", flush=True)
-            line = sys.stdin.readline().strip().lower()
-            if line not in ("y", "yes"):
-                _print_ansi(f"{tag} Cancelled")
-                return
-            handler(event, project_root)
-
-        return wrapped
-
-    return decorator
 
 
 def _maybe_show_session_update(project_root: Path | None, thread_id: str) -> None:
@@ -193,90 +155,10 @@ def _maybe_show_session_update(project_root: Path | None, thread_id: str) -> Non
 
 def _handle_proposals_after_turn(events: list[LogEvent], project_root: Path | None) -> None:
     """Check for turn-confirmation proposals and prompt the user."""
-    # Check the captured events first (one-shot mode where turn_ids match).
-    for event in events:
-        if event.component == "reasoning" and event.event == "proposal_created":
-            _confirm_reason_proposal(event, project_root)
-            return
-    # Daemon mode: turn_ids differ. Scan the tail of the shared log for
-    # the most recent unhandled proposal_created event.
-    try:
-        from nuself.logs import read_log_events
-
-        fresh = read_log_events(project_root=project_root, tail=50)
-    except Exception:
-        return
-    proposal: LogEvent | None = None
-    for event in reversed(fresh):
-        if event.component == "reasoning" and event.event == "proposal_created":
-            pid = (event.metadata or {}).get("proposal_id", "") or ""
-            if pid not in _handled_proposal_ids:
-                proposal = event
-                break
-    if proposal is not None:
-        _confirm_reason_proposal(proposal, project_root)
-
-
-def _reason_proposal_prompt(event: LogEvent) -> str:
-    meta = event.metadata or {}
-    topic_value = meta.get("topic", meta.get("question", ""))
-    topic = topic_value if isinstance(topic_value, str) else ""
-    if not topic:
-        return ""
-    return f"Start reason thread「{topic}」?"
-
-
-@_approval_proposal_handler(
-    component="reasoning",
-    event_name="proposal_created",
-    prompt_builder=_reason_proposal_prompt,
-    tag_name="reason",
-    tag_component="reasoning",
-)
-def _confirm_reason_proposal(event: LogEvent, project_root: Path | None) -> None:
-    from nuself.reason.service import ReasonService
-
-    service = ReasonService(project_root)
-    meta = event.metadata or {}
-    topic_value = meta.get("topic", meta.get("question", ""))
-    topic = topic_value if isinstance(topic_value, str) else ""
-    tag = _theme.tag("[reason]", "reasoning")
-    try:
-        raw_active_obj = meta.get("active_items")
-        raw_active: list[object] = cast(list[object], raw_active_obj) if isinstance(raw_active_obj, list) else []
-        active_items = [_normalize_reason_active_item(cast(dict[str, object], item)) for item in raw_active if isinstance(item, dict)]
-        raw_evidence_obj = meta.get("evidence_refs")
-        raw_evidence: list[object] = cast(list[object], raw_evidence_obj) if isinstance(raw_evidence_obj, list) else []
-        evidence_refs = tuple(item for item in raw_evidence if isinstance(item, str))
-        raw_mandates_obj = meta.get("mandates")
-        raw_mandates: list[object] = cast(list[object], raw_mandates_obj) if isinstance(raw_mandates_obj, list) else []
-        mandates = tuple(item for item in raw_mandates if isinstance(item, str))
-        summary_value = meta.get("working_summary", "")
-        working_summary = summary_value if isinstance(summary_value, str) else ""
-        thread = service.start_thread(
-            topic=topic,
-            working_summary=working_summary,
-            evidence_refs=evidence_refs,
-            active_items=tuple(active_items),
-            mandates=mandates,
-        )
-    except RuntimeError as exc:
-        _print_ansi(f"{tag} Failed to create: {exc}")
-        return
-    _print_ansi(f"{tag} Reason thread created: id={thread.id}")
-
-
-def _normalize_reason_active_item(item: dict[str, object]) -> dict[str, object]:
-    raw_label = item.get("label", item.get("content", ""))
-    raw_description = item.get("description", "")
-    raw_kind = item.get("kind", "")
-    raw_status = item.get("status", "active")
-    return {
-        "label": raw_label if isinstance(raw_label, str) else "",
-        "description": raw_description if isinstance(raw_description, str) else "",
-        "kind": raw_kind if isinstance(raw_kind, str) else "",
-        "status": raw_status if isinstance(raw_status, str) else "active",
-    }
+    # Reason proposals now confirm inside the decorated tool itself. The
+    # post-turn proposal path is kept for future subsystems, but reasoning
+    # proposal events remain audit/log records only.
+    return
 
 
 def _print_ansi(text: str, **kwargs: Any) -> None:
@@ -3330,6 +3212,8 @@ def _visible_interactive_activity_events(events: list[LogEvent]) -> list[LogEven
 
 
 def _is_interactive_activity_log(event: LogEvent) -> bool:
+    if event.event == "approval_prompted":
+        return True
     if event.component == "persona":
         return event.event in {
             "persona_summary",

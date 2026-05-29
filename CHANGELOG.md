@@ -8,6 +8,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 No post-v0.2.0 changes yet. The current release-candidate fixes and small feature additions are tracked under `0.2.0`.
 
+### Fixed
+
+- Approval-gated tool prompts now emit a visible live REPL log line before waiting for confirmation input, so the prompt is obvious before the user enters `y` or `n`.
+- Reason thread proposals now use the decorated `reason_propose` tool wrapper for confirmation instead of a post-turn CLI prompt, while `proposal_created` remains available as an audit log event.
+
 ## 0.2.0 - 2026-05-29
 
 ### Added

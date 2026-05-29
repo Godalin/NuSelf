@@ -1,0 +1,43 @@
+import pytest
+
+from nuself.decorators import approval_required, audit_log
+
+
+def test_approval_interactive(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Simulate user typing 'y' at the prompt and ensure stdin is a TTY.
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
+
+    @audit_log("test")
+    @approval_required("test")
+    def quick(x: str) -> str:
+        return f"done {x}"
+
+    res = quick("bob")
+    assert res == "EXECUTED:test:done bob"
+
+
+def test_approval_prompt_is_visible(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
+
+    events: list[tuple[str, str, str]] = []
+
+    def fake_write_log_event(component: str, event: str, message: str, **kwargs: object) -> object:
+        events.append((component, event, message))
+        return object()
+
+    monkeypatch.setattr("nuself.decorators.approval.write_log_event", fake_write_log_event)
+    monkeypatch.setattr("nuself.decorators.approval.getpass.getuser", lambda: "tester")
+
+    @approval_required("test")
+    def quick(x: str) -> str:
+        return f"done {x}"
+
+    res = quick("alice")
+    captured = capsys.readouterr()
+    assert "[approval_prompted] test: quick(alice)" in captured.out
+    assert "Confirm execute test: quick(alice) ? (y/n):" in captured.out
+    assert res == "EXECUTED:test:done alice"
+    assert any(event == "approval_prompted" for _, event, _ in events)
+    assert any(event == "service_tool_approved" for _, event, _ in events)

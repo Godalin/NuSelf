@@ -2,24 +2,24 @@
 
 ## LogEvent Structure
 
-| Field | Type | Required |
-|---|---|---|
-| `time` | `str` (ISO) | yes |
-| `level` | `"debug" \| "info" \| "warning" \| "error"` | yes |
-| `component` | `LogComponent` | yes |
-| `event` | `str` (slug) | yes |
-| `message` | `str` | yes |
-| `thread_id` | `str \| None` | no |
-| `request_id` | `str \| None` | no |
-| `turn_id` | `str \| None` | no |
-| `job_id` | `str \| None` | no |
-| `trace_id` | `str \| None` | no |
-| `source` | `str \| None` | no |
-| `node` | `str \| None` | no |
-| `duration_ms` | `int \| None` | no |
-| `status` | `str \| None` | no |
-| `error` | `str \| None` | no |
-| `metadata` | `dict[str, object] \| None` | no |
+| Field         | Type                                        | Required |
+| ------------- | ------------------------------------------- | -------- |
+| `time`        | `str` (ISO)                                 | yes      |
+| `level`       | `"debug" \| "info" \| "warning" \| "error"` | yes      |
+| `component`   | `LogComponent`                              | yes      |
+| `event`       | `str` (slug)                                | yes      |
+| `message`     | `str`                                       | yes      |
+| `thread_id`   | `str \| None`                               | no       |
+| `request_id`  | `str \| None`                               | no       |
+| `turn_id`     | `str \| None`                               | no       |
+| `job_id`      | `str \| None`                               | no       |
+| `trace_id`    | `str \| None`                               | no       |
+| `source`      | `str \| None`                               | no       |
+| `node`        | `str \| None`                               | no       |
+| `duration_ms` | `int \| None`                               | no       |
+| `status`      | `str \| None`                               | no       |
+| `error`       | `str \| None`                               | no       |
+| `metadata`    | `dict[str, object] \| None`                 | no       |
 
 Serialization (`to_record()`) omits `None`-valued optional fields.
 
@@ -88,13 +88,13 @@ Rules:
 
 Every chat turn writes lifecycle logs from the chat component:
 
-| Event | Status | Meaning |
-|---|---|---|
-| `turn_started` | `started` | Chat runtime accepted a logical user turn |
-| `turn_completed` | `completed` | Chat runtime produced and saved a final response |
-| `turn_reused` | `completed` | A repeated `turn_id` returned an already-saved assistant response |
-| `turn_failed` | `error` | Chat runtime failed before producing a final response |
-| `turn_retry` | `retry` | The interactive client is retrying the same logical turn after a retryable transport failure |
+| Event            | Status      | Meaning                                                                                      |
+| ---------------- | ----------- | -------------------------------------------------------------------------------------------- |
+| `turn_started`   | `started`   | Chat runtime accepted a logical user turn                                                    |
+| `turn_completed` | `completed` | Chat runtime produced and saved a final response                                             |
+| `turn_reused`    | `completed` | A repeated `turn_id` returned an already-saved assistant response                            |
+| `turn_failed`    | `error`     | Chat runtime failed before producing a final response                                        |
+| `turn_retry`     | `retry`     | The interactive client is retrying the same logical turn after a retryable transport failure |
 
 Rules:
 
@@ -106,18 +106,19 @@ Rules:
 - Interactive logs should show chat lifecycle and retry events so users can distinguish normal multi-tool execution from retry-driven repeated work.
 - Interactive log streaming must track already-seen event identities, not offsets into the timestamp-sorted global event list. Delayed daemon writes or concurrent background logs must not replay old turn events into the current REPL output.
 - Chat service-tool logs should include the active `thread_id` and, when available, the logical top-level `turn_id` so a tool call can be tied back to one chat turn.
+- Approval-gated tool execution writes an `approval_prompted` event before waiting for confirmation. The live REPL treats it as user-relevant interactive activity so the visible prompt appears before input is read.
 
 ## Log Components
 
-| Component | File | Responsibility |
-|---|---|---|
-| `daemon` | `daemon.log` | Daemon lifecycle |
-| `chat` | `chat.log` | Conversation turns |
-| `memory` | `memory.log` | Memory operations |
-| `persona` | `persona.log` | Persona activations, host decisions, competitive persona discussions |
-| `outbox` | `outbox.log` | Notification delivery attempts |
-| `reflection` | `reflection.log` | Reflection scheduling |
-| `reasoning` | `reasoning.log` | Long-run reasoning threads |
+| Component    | File             | Responsibility                                                       |
+| ------------ | ---------------- | -------------------------------------------------------------------- |
+| `daemon`     | `daemon.log`     | Daemon lifecycle                                                     |
+| `chat`       | `chat.log`       | Conversation turns                                                   |
+| `memory`     | `memory.log`     | Memory operations                                                    |
+| `persona`    | `persona.log`    | Persona activations, host decisions, competitive persona discussions |
+| `outbox`     | `outbox.log`     | Notification delivery attempts                                       |
+| `reflection` | `reflection.log` | Reflection scheduling                                                |
+| `reasoning`  | `reasoning.log`  | Long-run reasoning threads                                           |
 
 Display name mapping: `persona` → `selves`.
 
