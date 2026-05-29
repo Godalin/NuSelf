@@ -739,7 +739,7 @@ def test_reflection_count_tool(tmp_path: Path) -> None:
     assert "Pending reflection ideas: 1 total" in result
 
 
-def test_reflection_dismiss_success(tmp_path: Path) -> None:
+def test_reflection_dismiss_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
@@ -762,6 +762,8 @@ def test_reflection_dismiss_success(tmp_path: Path) -> None:
             reviewed_at=None,
         )
     )
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
     result = _invoke_chat_tool(tool, {"index": 0})
     assert "Dismissed" in result
@@ -769,19 +771,23 @@ def test_reflection_dismiss_success(tmp_path: Path) -> None:
     assert repo.list(status="pending") == []
 
 
-def test_reflection_dismiss_out_of_range(tmp_path: Path) -> None:
+def test_reflection_dismiss_out_of_range(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
     result = _invoke_chat_tool(tool, {"index": 0})
     assert "Invalid reflection index" in result
 
 
-def test_reflection_dismiss_invalid_index(tmp_path: Path) -> None:
+def test_reflection_dismiss_invalid_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
     repo = ReflectionRepository(tmp_path)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
     assert "Error" in _invoke_chat_tool(tool, {"index": -1})
 
@@ -883,6 +889,32 @@ def test_load_reason_skills_have_separate_read_and_proposal_tools(tmp_path: Path
     assert "reason_propose" not in reason
     assert "Allowed tools: reason_propose" in proposal
     assert "decorated tool wrapper will prompt for confirmation" in proposal.replace("\n", " ")
+
+
+def test_reason_propose_creates_thread_after_confirmation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
+    monkeypatch.setattr("nuself.reason.service.generate_reasoning_prompt", lambda *args, **kwargs: "Test-generated reasoning prompt.")
+
+    tool = _chat_tool(tmp_path, "reason_propose")
+    result = _invoke_chat_tool(
+        tool,
+        {
+            "topic": "What should I think about next?",
+            "working_summary": "We should keep the thread short.",
+            "active_items": [{"label": "next step", "kind": "decision"}],
+            "mandates": ["advance at most one complete round per step"],
+        },
+    )
+
+    events = read_log_events(project_root=tmp_path, component="reasoning")
+    # The composed approval wrapper now returns a structured JSON string.
+    parsed = json.loads(result)
+    assert parsed.get("approved") is True
+    assert parsed.get("component") == "reasoning"
+    assert parsed.get("result") is not None
+    assert any(event.event == "proposal_created" for event in events)
+    assert events[-1].event == "thread_started"
 
 
 # --- Memory management tools ---

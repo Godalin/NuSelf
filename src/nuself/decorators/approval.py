@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import getpass
+import json
 from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, cast
@@ -102,8 +103,10 @@ def approval_required(
                 # Also log an explicit approval record with the approver identity.
                 approver = getpass.getuser()
                 write_log_event(cast(LogComponent, component), "service_tool_approved", f"{component} approved by {approver}", metadata={"tool": fn.__name__, "approver": approver})
-                return f"EXECUTED:{component}:{result}"
-            return f"CANCELLED:{component}"
+                # Return a structured JSON string that preserves the underlying result
+                return json.dumps({"approved": True, "component": component, "approver": approver, "result": result})
+            # Cancellation also returns a structured JSON string indicating no approval
+            return json.dumps({"approved": False, "component": component, "result": None})
 
         return wrapper
 

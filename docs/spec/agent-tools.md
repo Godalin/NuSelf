@@ -127,10 +127,10 @@ Direct service-status queries, such as asking how many memory/reflection/reason/
 
 ### Current
 
-| Tool | Purpose |
-|---|---|
-| `memory_search` | Query durable memory, profiles, and source chunks. |
-| `memory_count` | Count durable memory entries with optional type/tag filters. |
+| Tool             | Purpose                                                               |
+| ---------------- | --------------------------------------------------------------------- |
+| `memory_search`  | Query durable memory, profiles, and source chunks.                    |
+| `memory_count`   | Count durable memory entries with optional type/tag filters.          |
 | `selves_consult` | Invoke the internal multi-persona subagent for perspective synthesis. |
 
 Tool names must start with the owning subsystem name. This keeps agent-visible tool calls readable in logs and avoids generic names such as `search_*`, `list_*`, or `show_*` becoming ambiguous as more subsystems are exposed.
@@ -156,12 +156,12 @@ Each `StructuredTool` definition must set `metadata={"service_component": "<subs
 
 ### New: Reflection Consumption Tools
 
-| Tool | Purpose |
-|---|---|
+| Tool                      | Purpose                                                         |
+| ------------------------- | --------------------------------------------------------------- |
 | `reflection_list_pending` | Return pending reflection ideas from the reflection repository. |
-| `reflection_count` | Count pending reflection ideas. |
-| `reflection_dismiss` | Mark a reflection idea as dismissed. |
-| `reflection_archive` | Archive a reflection idea after the discussion is complete. |
+| `reflection_count`        | Count pending reflection ideas.                                 |
+| `reflection_dismiss`      | Mark a reflection idea as dismissed.                            |
+| `reflection_archive`      | Archive a reflection idea after the discussion is complete.     |
 
 #### `reflection_list_pending`
 
@@ -193,10 +193,10 @@ Each `StructuredTool` definition must set `metadata={"service_component": "<subs
 
 ### New: Memory Management Tools
 
-| Tool | Purpose |
-|---|---|
-| `memory_archive` | Change a memory entry's review state to `archived`. Archived entries are excluded from default search. |
-| `memory_update_importance` | Adjust the importance score (0.0-1.0) of a memory entry. |
+| Tool                       | Purpose                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `memory_archive`           | Change a memory entry's review state to `archived`. Archived entries are excluded from default search. |
+| `memory_update_importance` | Adjust the importance score (0.0-1.0) of a memory entry.                                               |
 
 #### `memory_archive`
 
@@ -214,11 +214,11 @@ Each `StructuredTool` definition must set `metadata={"service_component": "<subs
 
 ### New: Reason Awareness Tools (Read-Only)
 
-| Tool | Purpose |
-|---|---|
-| `reason_list_active` | Return active/paused reasoning threads. |
-| `reason_count` | Count active/paused reasoning threads. |
-| `reason_show` | Show details of a specific reasoning thread. |
+| Tool                 | Purpose                                      |
+| -------------------- | -------------------------------------------- |
+| `reason_list_active` | Return active/paused reasoning threads.      |
+| `reason_count`       | Count active/paused reasoning threads.       |
+| `reason_show`        | Show details of a specific reasoning thread. |
 
 #### `reason_list_active`
 
@@ -244,19 +244,30 @@ Each `StructuredTool` definition must set `metadata={"service_component": "<subs
 #### `reason_propose`
 
 - **Args**: `topic: str`, `working_summary: str`, `active_items: list[dict]`, `mandates: list[str]`
-- **Behavior**: Proposes a reasoning thread through the approval-decorator path. The decorated tool is responsible for emitting the proposal record, awaiting approval, and then continuing the same tool lifecycle when approved.
-- **When to use**: Only after the user explicitly confirms that NuSelf should start a reason thread. The agent must provide initial tracked items and mandates, even if either list is empty.
+- **Behavior**: Proposes a reasoning thread through the approval-decorator path. The decorated tool emits the proposal record, awaits approval, and then creates the reasoning thread.
+- **Returns**: The composed tool returns a structured JSON string to chat agents. On approval it includes the original result and approver metadata, for example:
+
+```
+{"approved": true, "component": "reasoning", "approver": "<user>", "result": "<thread_id>"}
+```
+
+On cancellation it returns:
+
+```
+{"approved": false, "component": "reasoning", "result": null}
+```
+- **When to use**: When the user wants NuSelf to start a reason thread. The agent must provide initial tracked items and mandates, even if either list is empty. The tool wrapper handles the confirmation prompt.
 - **Evidence**: The tool does not accept arbitrary `evidence_refs`; durable evidence refs must be added through explicit service paths.
 
 ### New: Trace Awareness Tools (Read-Only)
 
 Trace tools let the chat agent inspect thought provenance without mutating it.
 
-| Tool | Purpose |
-|---|---|
-| `trace_search` | Query thought provenance records. |
-| `trace_count` | Count thought provenance records matched by an optional query. |
-| `trace_show` | Show a specific trace record with its links. |
+| Tool            | Purpose                                                              |
+| --------------- | -------------------------------------------------------------------- |
+| `trace_search`  | Query thought provenance records.                                    |
+| `trace_count`   | Count thought provenance records matched by an optional query.       |
+| `trace_show`    | Show a specific trace record with its links.                         |
 | `trace_related` | List trace records and direct links for an exact artifact reference. |
 
 #### `trace_count`
@@ -277,12 +288,12 @@ Trace tools let the chat agent inspect thought provenance without mutating it.
 
 The detailed tool catalog above should be read as grouped capability blocks, not a flat list of unrelated helpers:
 
-| Family | Typical tools | Decorator need |
-| --- | --- | --- |
-| Read-only discovery | `memory_search`, `memory_count`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | `log` only |
-| Durable mutation | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance` | `log` + sometimes `approval` |
-| Approval-gated proposal | `reason_propose` | `log` + `approval` |
-| Internal synthesis | `selves_consult` | `log` only |
+| Family                  | Typical tools                                                                                                                                                                                     | Decorator need               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Read-only discovery     | `memory_search`, `memory_count`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | `log` only                   |
+| Durable mutation        | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance`                                                                                                          | `log` + sometimes `approval` |
+| Approval-gated proposal | `reason_propose`                                                                                                                                                                                  | `log` + `approval`           |
+| Internal synthesis      | `selves_consult`                                                                                                                                                                                  | `log` only                   |
 
 This grouping is the preferred order for future code organization and for any registry builder that wants to assemble tools by capability instead of by file location.
 
@@ -381,7 +392,7 @@ The reason skill lives in `src/nuself/agent/skills/reason.md` and must include t
 
 The reason proposal skill lives in `src/nuself/agent/skills/reason_proposal.md` and must include this behavioral contract:
 
-> "Use this skill only after the user explicitly confirms they want a new long-run reasoning thread. Distill the current discussion into `topic`, `working_summary`, `active_items`, and `mandates`; ask before adding mandates; call `{tool:propose}` only after the user has already said yes. Tool approval and audit belong to the decorated tool wrapper, while the agent only assembles and invokes the already-composed tool registry."
+> "Use this skill when the user wants to start a new long-run reasoning thread. Distill the current discussion into `topic`, `working_summary`, `active_items`, and `mandates`; ask before adding mandates; call `{tool:propose}` once the user wants to start the thread. Tool approval and audit belong to the decorated tool wrapper, while the agent only assembles and invokes the already-composed tool registry."
 
 ### Trace Skill
 

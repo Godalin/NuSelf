@@ -301,7 +301,7 @@ def build_langchain_chat_tools(
         active_items: list[dict[str, object]],
         mandates: list[str],
     ) -> str:
-        """Propose creating a long-run reasoning thread. Does NOT create the thread — writes a pending proposal for user confirmation.
+        """Propose creating a long-run reasoning thread and start it after confirmation.
 
         Parameters:
           topic – the core topic for the thread.
@@ -343,7 +343,13 @@ def build_langchain_chat_tools(
                 "evidence_refs": [],
             },
         )
-        return f"PENDING:reason-proposal:{proposal_id}"
+        thread = service.start_thread(
+            topic=topic,
+            working_summary=working_summary,
+            active_items=tuple(active_items),
+            mandates=tuple(mandates),
+        )
+        return thread.id
 
     def search_trace(query: str, limit: int = 5) -> str:
         """Search thought provenance trace records."""

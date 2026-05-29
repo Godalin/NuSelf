@@ -7,9 +7,9 @@ allowed-tools:
 
 # Reason Proposal Skill
 
-Use this skill only after the user explicitly confirms they want a new
-long-running reasoning thread. Do not use it for ordinary questions about
-existing reason threads; load the `reason` skill for read-only inspection.
+Use this skill when the user wants to start a new long-running reasoning
+thread. Do not use it for ordinary questions about existing reason threads;
+load the `reason` skill for read-only inspection.
 
 A reason proposal is an information design task. Before calling
 {tool:propose}, distill the current discussion into:
@@ -41,7 +41,28 @@ Before proposing, consider whether the thread needs additional context from
 memory, trace, selves, or persona tools. Use the relevant skill first if that
 context is needed.
 
-Call {tool:propose} only after the user has already said yes. The decorated
-tool wrapper will prompt for confirmation before writing the proposal; the CLI
-may still surface the resulting `proposal_created` event as an audit log, but
-it should not ask for a second confirmation.
+Call {tool:propose} once the user has expressed the intent to start the
+thread. Call `reason_propose` only after the user explicitly confirms they
+want to start the thread. The decorated tool wrapper will prompt for
+confirmation before writing the proposal; the CLI may still surface the
+resulting `proposal_created` event as an audit log, but it should not ask for
+a second confirmation.
+
+Tool return values: The decorated proposal tool returns a structured JSON
+string that preserves the underlying callable's result while indicating the
+user approval state. Example formats:
+
+- On approval and creation:
+
+```
+{"approved": true, "component": "reasoning", "approver": "<user>", "result": "<thread_id>"}
+```
+
+- On cancellation:
+
+```
+{"approved": false, "component": "reasoning", "result": null}
+```
+
+The `result` field contains the original return value from `reason_propose`
+(the created thread id) when present.

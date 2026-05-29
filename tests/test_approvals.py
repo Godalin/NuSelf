@@ -14,7 +14,10 @@ def test_approval_interactive(monkeypatch: pytest.MonkeyPatch) -> None:
         return f"done {x}"
 
     res = quick("bob")
-    assert res == "EXECUTED:test:done bob"
+    payload = __import__("json").loads(res)
+    assert payload.get("approved") is True
+    assert payload.get("component") == "test"
+    assert payload.get("result") == "done bob"
 
 
 def test_approval_prompt_is_visible(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -38,6 +41,9 @@ def test_approval_prompt_is_visible(monkeypatch: pytest.MonkeyPatch, capsys: pyt
     captured = capsys.readouterr()
     assert "[approval_prompted] test: quick(alice)" in captured.out
     assert "Confirm execute test: quick(alice) ? (y/n):" in captured.out
-    assert res == "EXECUTED:test:done alice"
+    payload = __import__("json").loads(res)
+    assert payload.get("approved") is True
+    assert payload.get("component") == "test"
+    assert payload.get("result") == "done alice"
     assert any(event == "approval_prompted" for _, event, _ in events)
     assert any(event == "service_tool_approved" for _, event, _ in events)

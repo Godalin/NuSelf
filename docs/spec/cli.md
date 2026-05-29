@@ -385,7 +385,7 @@ decorated `reason_propose` tool wrapper instead.
 The CLI may wrap proposal handlers with an approval decorator instead of
 hand-writing a separate prompt function for each subsystem. The decorator is a
 small adapter around the turn-confirmation protocol, but reasoning uses the
-direct tool-wrapper path now:
+direct tool-wrapper path now for subsystems that still use post-turn proposal handlers:
 
 - it checks whether the incoming event is a `proposal_created` event for the registered component,
 - it deduplicates already-handled proposal IDs,

@@ -536,11 +536,9 @@ class ConversationGraphRuntime:
                 "with real depth that would benefit from sustained incremental reasoning, you should "
                 "suggest creating a reasoning thread. Help the user refine the question and add "
                 "initial tracked items with appropriate kind tags from your discussion. Call "
-                "reason_propose only when the user explicitly asks to start the thread; the "
-                "decorated tool will prompt for confirmation before writing the proposal. Do NOT "
-                "call reason_propose based on a user's mere agreement that a topic is 'interesting' "
-                "— wait for explicit confirmation like 'yes, start it', 'go ahead', or 'create the "
-                "thread'.",
+                "reason_propose when the user wants to start the thread; the decorated tool will "
+                "prompt for confirmation before writing the proposal. Do NOT call reason_propose "
+                "based on a user's mere agreement that a topic is 'interesting'.",
             ])
         return "\n".join(parts)
 
