@@ -41,5 +41,7 @@ Before proposing, consider whether the thread needs additional context from
 memory, trace, selves, or persona tools. Use the relevant skill first if that
 context is needed.
 
-Call {tool:propose} only after the user has already said yes. The CLI will ask
-for final confirmation once more before the thread is actually created.
+Call {tool:propose} only after the user has already said yes. The decorated
+tool wrapper will prompt for confirmation before writing the proposal; the CLI
+may still surface the resulting `proposal_created` event as an audit log, but
+it should not ask for a second confirmation.

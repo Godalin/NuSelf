@@ -882,7 +882,7 @@ def test_load_reason_skills_have_separate_read_and_proposal_tools(tmp_path: Path
     assert "Reason read tools omit tool logs" in reason
     assert "reason_propose" not in reason
     assert "Allowed tools: reason_propose" in proposal
-    assert "Call `reason_propose` only after" in proposal
+    assert "decorated tool wrapper will prompt for confirmation" in proposal.replace("\n", " ")
 
 
 # --- Memory management tools ---

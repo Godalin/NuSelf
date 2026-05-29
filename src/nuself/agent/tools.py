@@ -426,6 +426,16 @@ def build_langchain_chat_tools(
         return selves_consult(topic_str.strip(), mode_str.strip() or "consult", context_str)
 
     tool_from_function = _structured_tool_factory()
+
+    # Compose decorators at the tool-construction site so the runtime receives
+    # an already-decorated callable. Do this before constructing the `tools`
+    # list to avoid embedding decorator composition inside a list literal.
+    from importlib import import_module
+
+    _decorators = import_module("nuself.decorators")
+    _composed_reason_propose = _decorators.audit_log("reasoning")(_decorators.approval_required("reasoning")(reason_propose))
+    _composed_reflection_dismiss = _decorators.audit_log("reflection")(_decorators.approval_required("reflection")(dismiss_reflection_by_numeric_handle))
+
     tools: list[BaseTool] = [
         tool_from_function(
             search_memory,
@@ -469,7 +479,7 @@ def build_langchain_chat_tools(
             tags=("readonly",),
         ),
         tool_from_function(
-            dismiss_reflection_by_numeric_handle,
+            _composed_reflection_dismiss,
             name="reflection_dismiss",
             description=(
                 "Dismiss a pending reflection idea so it will no longer be suggested. "
@@ -556,18 +566,15 @@ def build_langchain_chat_tools(
             tags=("readonly",),
         ),
         tool_from_function(
-            reason_propose,
+            _composed_reason_propose,
             name="reason_propose",
             description=(
                 "Propose creating a new long-run thinking thread. "
-                "After discussing a topic with the user and getting explicit confirmation, "
-                "call this to submit the proposal. "
+                "Call this when the user explicitly wants to start a thread. "
+                "The decorated tool wrapper will prompt for confirmation before writing the proposal. "
                 "The thread tracks state as general-purpose tracked items (active_items, "
                 "pending_items, next_steps) with free-text kind labels that adapt to the task "
                 "— e.g. 'hypothesis', 'character', 'suspect', 'plot_thread', 'world_rule'. "
-                "The proposal will be presented to the user for final confirmation "
-                "before the thread is actually created. "
-                "Do NOT call this until the user explicitly says 'yes'. "
                 "Tip: before proposing, consider using persona_list and persona_think to "
                 "enrich the thread's initial context with different perspectives."
             ),

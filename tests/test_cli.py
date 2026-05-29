@@ -311,6 +311,15 @@ def test_interactive_turn_prints_activity_events_while_waiting(
     def fake_send(message: str, thread_id: str, turn_id: str | None) -> cli.InteractiveChatResult:
         assert turn_id is not None
         write_log_event(
+            "reasoning",
+            "approval_prompted",
+            "Confirm execute reasoning: reason_propose(topic=demo) ? (y/n): ",
+            project_root=tmp_path,
+            thread_id=thread_id,
+            turn_id=turn_id,
+            metadata={"tool": "reason_propose", "summary": "reason_propose(topic=demo)"},
+        )
+        write_log_event(
             "chat",
             "service_tool_called",
             "memory_search completed",
@@ -339,9 +348,35 @@ def test_interactive_turn_prints_activity_events_while_waiting(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Logs:\n[chat] [memory] service_tool_called" in captured.out
+    assert "[reasoning] approval_prompted" in captured.out
+    assert "Logs:" in captured.out
+    assert "[chat] [memory] service_tool_called" in captured.out
     assert "NuSelf:\n\nfinal reply" in captured.out
+    assert captured.out.index("[reasoning] approval_prompted") < captured.out.index("NuSelf:\n\nfinal reply")
+    assert captured.out.index("[reasoning] approval_prompted") < captured.out.index("[chat] [memory] service_tool_called")
     assert captured.out.index("[chat] [memory] service_tool_called") < captured.out.index("NuSelf:\n\nfinal reply")
+
+
+def test_reason_proposal_confirmation_is_tool_driven(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.cli import _handle_proposals_after_turn  # pyright: ignore[reportPrivateUsage]
+
+    _handle_proposals_after_turn(
+        [
+            LogEvent(
+                time="2026-05-29T00:00:00Z",
+                level="info",
+                component="reasoning",
+                event="proposal_created",
+                message="Reasoning thread proposal: demo",
+                metadata={"proposal_id": "abc123", "topic": "demo"},
+            )
+        ],
+        tmp_path,
+    )
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
 
 
 def test_interactive_turn_hides_background_activity_events(

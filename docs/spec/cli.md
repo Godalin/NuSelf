@@ -114,7 +114,7 @@ All interactive commands start with `:`.
 
 During each chat turn, before printing the assistant reply, the REPL polls for new log events as they are written and prints only interactive activity logs using `render_log_event()`. It does not wait for the final assistant reply before showing current-turn progress logs. Live REPL activity must be scoped to the current top-level `turn_id`; timestamp order alone is not enough to decide that a log belongs to the visible turn.
 
-Interactive activity logs are user-relevant events from the current chat path: direct chat service/tool calls, persona/self discussion progress, and chat/daemon failure or failover events. Background subsystem logs from reason, reflection, memory, trace, notification, or other autonomous services must not appear in the live REPL output only because they were written while a chat turn was waiting. They remain available through `nuself dev logs`, subsystem commands, and `:export all`.
+Interactive activity logs are user-relevant events from the current chat path: direct chat service/tool calls, approval prompts for gated tool execution, persona/self discussion progress, and chat/daemon failure or failover events. Background subsystem logs from reason, reflection, memory, trace, notification, or other autonomous services must not appear in the live REPL output only because they were written while a chat turn was waiting. They remain available through `nuself dev logs`, subsystem commands, and `:export all`.
 
 All human-readable logs use one metadata style: `[component] event key=value ...`. Standard event fields and displayable metadata fields must use this same `key=value` style; they must not mix colon labels, raw JSON blocks, or ad hoc Markdown fields. If a log has body text, render that text starting on the next indented line instead of mixing it into the key/value header.
 
@@ -342,46 +342,27 @@ write_log_event(
 
 ### CLI Dispatch
 
-After each chat turn, the CLI calls `_handle_proposals_after_turn` which scans for `proposal_created` events and dispatches to the appropriate handler:
+After each chat turn, the CLI may still inspect `proposal_created` events for
+future post-turn proposal flows. Reasoning proposals no longer confirm here:
+`reason_propose` is a decorated tool that prompts interactively before writing
+the proposal, and the resulting `proposal_created` event remains an audit log.
 
 ```python
 def _handle_proposals_after_turn(events, project_root):
-    # 1. Check in-band events from the turn (one-shot mode)
-    for event in events:
-        handler = _PROPOSAL_HANDLERS.get((event.component, event.event))
-        if handler:
-            handler(event, project_root)
-            return
-    # 2. Also scan the shared log (daemon mode — turn_ids differ)
-    for event in reversed(read_log_events(tail=50)):
-        handler = _PROPOSAL_HANDLERS.get((event.component, event.event))
-        if handler:
-            handler(event, project_root)
-            return
+    # Legacy/future proposal hooks may still live here.
+    return
 ```
 
 A dispatch registry maps `(component, event)` to handlers:
 
 ```python
 _PROPOSAL_HANDLERS: dict[tuple[str, str], Callable] = {
-    ("reasoning", "proposal_created"): _confirm_reason_proposal,
-    # ("memory",    "proposal_created"): _confirm_memory_candidate,  # future
+    # Reserved for future post-turn proposal flows.
 }
 ```
 
-Each handler follows the same pattern:
-
-```python
-def _confirm_reason_proposal(event, project_root):
-    meta = event.metadata
-    print()  # blank line before prompt
-    print(f"[tag] Start reason thread「{meta['topic']}」? (y/n): ", end="", flush=True)
-    line = sys.stdin.readline().strip().lower()
-    if line in ("y", "yes"):
-        # materialise: call domain service with meta fields
-        ...
-    # else: discard silently
-```
+Any future handler that does use this path should follow the same confirmation
+shape, but reasoning proposals no longer use it.
 
 ### Daemon Mode
 
@@ -393,15 +374,18 @@ One-shot chat (`nuself chat --message "..."`) does not enter the interactive loo
 
 ### Extending To Other Subsystems
 
-Any subsystem can use this protocol by:
-
-1. Writing a `proposal_created` event with its own component name and metadata.
-2. Adding a handler in `_PROPOSAL_HANDLERS` under its `(component, "proposal_created")` key.
-3. The handler reads subsystem-specific metadata from the event and calls the appropriate domain service on confirmation.
+Any subsystem can still write `proposal_created` events for audit or
+visibility. If a subsystem wants a post-turn confirmation flow, it may add a
+handler in `_PROPOSAL_HANDLERS` under its `(component, "proposal_created")`
+key. Reasoning does not use that path anymore; it confirms through the
+decorated `reason_propose` tool wrapper instead.
 
 ### Approval Decorator
 
-The CLI may wrap proposal handlers with an approval decorator instead of hand-writing a separate prompt function for each subsystem. The decorator is a small adapter around the turn-confirmation protocol:
+The CLI may wrap proposal handlers with an approval decorator instead of
+hand-writing a separate prompt function for each subsystem. The decorator is a
+small adapter around the turn-confirmation protocol, but reasoning uses the
+direct tool-wrapper path now:
 
 - it checks whether the incoming event is a `proposal_created` event for the registered component,
 - it deduplicates already-handled proposal IDs,
