@@ -137,6 +137,33 @@ Tool names must start with the owning subsystem name. This keeps agent-visible t
 
 Each `StructuredTool` definition must set `metadata={"service_component": "<subsystem>"}` — e.g., `metadata={"service_component": "memory"}` for a memory tool. The `service_component` is used by the log wrapper when writing `service_tool_called` events; the renderer reads it directly from the log event's metadata. No code should derive the service tag from the tool name.
 
+### Tool Composition Contract
+
+Tool definitions should stay as plain Python functions first, then be assembled into `StructuredTool` instances through a small composition pipeline. The preferred order is:
+
+1. define the underlying function
+2. apply one or more decorators from the shared tool-decorator model
+3. pass the composed callable into `StructuredTool.from_function(...)`
+
+### Decorator Categories
+
+Tool decorators are categorized by intent so the agent builder can combine them without hard-coding control flow into the graph runtime.
+
+Standard categories:
+
+- `log` — records `service_tool_called` and other operational audit data. It should not decide whether a tool is allowed to run.
+- `approval` — gates user-confirmed or otherwise durable actions. It may return a pending result, request confirmation, or resume the original callable after approval.
+
+Future categories may exist, such as rate limiting, metrics, caching, or tracing, but they must follow the same composable decorator contract.
+
+The shared ordering rule is: decorators may be stacked, but the builder must keep the approval boundary around the actual side-effecting work and the log boundary around the observable tool invocation. The exact stack order is chosen by the owning subsystem, not by the agent runtime.
+
+The logging decorator is responsible for operational audit. The approval decorator is responsible for user-confirmed state transitions. Neither decorator should live inside the agent graph itself; the agent builder chooses which decorators a tool needs, then passes the already-composed registry into the runtime.
+
+Approval decorators are intended for tools that change durable state or trigger expensive, user-visible actions. Read-only tools should remain undecorated except for shared logging.
+
+Reasoning thread creation is the first migration target for this pattern. The old post-turn confirmation flow remains documented below for compatibility, but the implementation goal is to move approval into the tool composition layer so the agent lifecycle does not depend on a separate after-turn replay step.
+
 #### `memory_count`
 
 - **Args**: `types: list[str] | str | None = None`, `tags: list[str] | str | None = None`
@@ -244,7 +271,7 @@ Each `StructuredTool` definition must set `metadata={"service_component": "<subs
 #### `reason_propose`
 
 - **Args**: `topic: str`, `working_summary: str`, `active_items: list[dict]`, `mandates: list[str]`
-- **Behavior**: Validates a user-approved proposal, writes a pending `proposal_created` log event, and returns a `PENDING:reason-proposal:<id>` signal. It does not create the thread directly.
+- **Behavior**: Proposes a reasoning thread through the approval-decorator path. The decorated tool is responsible for emitting the proposal record, awaiting approval, and then continuing the same tool lifecycle when approved.
 - **When to use**: Only after the user explicitly confirms that NuSelf should start a reason thread. The agent must provide initial tracked items and mandates, even if either list is empty.
 - **Evidence**: The tool does not accept arbitrary `evidence_refs`; durable evidence refs must be added through explicit service paths.
 
@@ -341,7 +368,7 @@ The reason skill lives in `src/nuself/agent/skills/reason.md` and must include t
 
 The reason proposal skill lives in `src/nuself/agent/skills/reason_proposal.md` and must include this behavioral contract:
 
-> "Use this skill only after the user explicitly confirms they want a new long-run reasoning thread. Distill the current discussion into `topic`, `working_summary`, `active_items`, and `mandates`; ask before adding mandates; call `{tool:propose}` only after the user has already said yes. The CLI asks for final confirmation once more before creation."
+> "Use this skill only after the user explicitly confirms they want a new long-run reasoning thread. Distill the current discussion into `topic`, `working_summary`, `active_items`, and `mandates`; ask before adding mandates; call `{tool:propose}` only after the user has already said yes. Tool approval and audit belong to the decorated tool wrapper, while the agent only assembles and invokes the already-composed tool registry."
 
 ### Trace Skill
 
