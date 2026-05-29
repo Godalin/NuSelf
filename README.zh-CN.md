@@ -20,6 +20,15 @@ LangGraph 现已支撑 conversation runtime。聊天 agent 可在对话中调用
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。
 
+## 分支与版本策略
+
+- `main` 是稳定、可发布的分支。
+- `dev/0.2.x` 是持续稳定化分支。
+- `feature/*` 是隔离的实验性分支。
+- `patch` 版本用于稳定化、重构和修复。
+- `minor` 版本用于新增子系统或认知能力。
+- `major` 版本用于架构成熟度里程碑。
+
 ## 环境要求
 
 - Python 3.12 或更新版本。

@@ -20,6 +20,15 @@ LangGraph now backs the conversation runtime. The chat agent can invoke tools to
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).
 
+## Branch And Version Policy
+
+- `main` is the stable, releasable branch.
+- `dev/0.2.x` is the ongoing stabilization branch.
+- `feature/*` branches are isolated experimental work.
+- `patch` versions cover stabilization, refactors, and fixes.
+- `minor` versions add new subsystems or cognitive capabilities.
+- `major` versions mark architecture maturity milestones.
+
 ## Requirements
 
 - Python 3.12 or newer.
