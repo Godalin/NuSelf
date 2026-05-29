@@ -137,46 +137,6 @@ Tool names must start with the owning subsystem name. This keeps agent-visible t
 
 Each `StructuredTool` definition must set `metadata={"service_component": "<subsystem>"}` — e.g., `metadata={"service_component": "memory"}` for a memory tool. The `service_component` is used by the log wrapper when writing `service_tool_called` events; the renderer reads it directly from the log event's metadata. No code should derive the service tag from the tool name.
 
-### Tool Composition Contract
-
-Tool definitions should stay as plain Python functions first, then be assembled into `StructuredTool` instances through a small composition pipeline. The preferred order is:
-
-1. define the underlying function
-2. apply one or more decorators from the shared tool-decorator model
-3. pass the composed callable into `StructuredTool.from_function(...)`
-
-### Decorator Categories
-
-Tool decorators are categorized by intent so the agent builder can combine them without hard-coding control flow into the graph runtime.
-
-Standard categories:
-
-- `log` — records `service_tool_called` and other operational audit data. It should not decide whether a tool is allowed to run.
-- `approval` — gates user-confirmed or otherwise durable actions. It may return a pending result, request confirmation, or resume the original callable after approval.
-
-Future categories may exist, such as rate limiting, metrics, caching, or tracing, but they must follow the same composable decorator contract.
-
-The shared ordering rule is: decorators may be stacked, but the builder must keep the approval boundary around the actual side-effecting work and the log boundary around the observable tool invocation. The exact stack order is chosen by the owning subsystem, not by the agent runtime.
-
-The logging decorator is responsible for operational audit. The approval decorator is responsible for user-confirmed state transitions. Neither decorator should live inside the agent graph itself; the agent builder chooses which decorators a tool needs, then passes the already-composed registry into the runtime.
-
-Approval decorators are intended for tools that change durable state or trigger expensive, user-visible actions. Read-only tools should remain undecorated except for shared logging.
-
-Reasoning thread creation is the first migration target for this pattern. The old post-turn confirmation flow remains documented below for compatibility, but the implementation goal is to move approval into the tool composition layer so the agent lifecycle does not depend on a separate after-turn replay step.
-
-### Concrete Tool Families
-
-The detailed tool catalog below should be read as grouped capability blocks, not a flat list of unrelated helpers:
-
-| Family | Typical tools | Decorator need |
-| --- | --- | --- |
-| Read-only discovery | `memory_search`, `memory_count`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | `log` only |
-| Durable mutation | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance` | `log` + sometimes `approval` |
-| Approval-gated proposal | `reason_propose` | `log` + `approval` |
-| Internal synthesis | `selves_consult` | `log` only |
-
-This grouping is the preferred order for future code organization and for any registry builder that wants to assemble tools by capability instead of by file location.
-
 #### `memory_count`
 
 - **Args**: `types: list[str] | str | None = None`, `tags: list[str] | str | None = None`
@@ -312,6 +272,46 @@ Trace tools let the chat agent inspect thought provenance without mutating it.
 - **Behavior**: Finds default-visible traces that directly mention an exact artifact reference, plus direct links whose source or target equals the artifact reference.
 - **Returns**: A concise record list and related links.
 - **When to use**: When the user asks what provenance exists for a specific `memory:<id>`, `reflection:<id>`, `reason:<id>`, `reason_step:<id>`, `persona_prompt:<id>`, or `trace:<id>`.
+
+### Concrete Tool Families
+
+The detailed tool catalog above should be read as grouped capability blocks, not a flat list of unrelated helpers:
+
+| Family | Typical tools | Decorator need |
+| --- | --- | --- |
+| Read-only discovery | `memory_search`, `memory_count`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | `log` only |
+| Durable mutation | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance` | `log` + sometimes `approval` |
+| Approval-gated proposal | `reason_propose` | `log` + `approval` |
+| Internal synthesis | `selves_consult` | `log` only |
+
+This grouping is the preferred order for future code organization and for any registry builder that wants to assemble tools by capability instead of by file location.
+
+### Tool Composition Contract
+
+Tool definitions should stay as plain Python functions first, then be assembled into `StructuredTool` instances through a small composition pipeline. The preferred order is:
+
+1. define the underlying function
+2. apply one or more decorators from the shared tool-decorator model
+3. pass the composed callable into `StructuredTool.from_function(...)`
+
+### Decorator Categories
+
+Tool decorators are categorized by intent so the agent builder can combine them without hard-coding control flow into the graph runtime.
+
+Standard categories:
+
+- `log` — records `service_tool_called` and other operational audit data. It should not decide whether a tool is allowed to run.
+- `approval` — gates user-confirmed or otherwise durable actions. It may return a pending result, request confirmation, or resume the original callable after approval.
+
+Future categories may exist, such as rate limiting, metrics, caching, or tracing, but they must follow the same composable decorator contract.
+
+The shared ordering rule is: decorators may be stacked, but the builder must keep the approval boundary around the actual side-effecting work and the log boundary around the observable tool invocation. The exact stack order is chosen by the owning subsystem, not by the agent runtime.
+
+The logging decorator is responsible for operational audit. The approval decorator is responsible for user-confirmed state transitions. Neither decorator should live inside the agent graph itself; the agent builder chooses which decorators a tool needs, then passes the already-composed registry into the runtime.
+
+Approval decorators are intended for tools that change durable state or trigger expensive, user-visible actions. Read-only tools should remain undecorated except for shared logging.
+
+Reasoning thread creation is the first migration target for this pattern. The old post-turn confirmation flow remains documented below for compatibility, but the implementation goal is to move approval into the tool composition layer so the agent lifecycle does not depend on a separate after-turn replay step.
 
 ### Behavioral Guidelines for Reason Awareness (Prompt-Level)
 
