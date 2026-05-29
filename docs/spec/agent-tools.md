@@ -164,6 +164,19 @@ Approval decorators are intended for tools that change durable state or trigger 
 
 Reasoning thread creation is the first migration target for this pattern. The old post-turn confirmation flow remains documented below for compatibility, but the implementation goal is to move approval into the tool composition layer so the agent lifecycle does not depend on a separate after-turn replay step.
 
+### Concrete Tool Families
+
+The detailed tool catalog below should be read as grouped capability blocks, not a flat list of unrelated helpers:
+
+| Family | Typical tools | Decorator need |
+| --- | --- | --- |
+| Read-only discovery | `memory_search`, `memory_count`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | `log` only |
+| Durable mutation | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance` | `log` + sometimes `approval` |
+| Approval-gated proposal | `reason_propose` | `log` + `approval` |
+| Internal synthesis | `selves_consult` | `log` only |
+
+This grouping is the preferred order for future code organization and for any registry builder that wants to assemble tools by capability instead of by file location.
+
 #### `memory_count`
 
 - **Args**: `types: list[str] | str | None = None`, `tags: list[str] | str | None = None`
