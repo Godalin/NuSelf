@@ -76,7 +76,7 @@ Deliverables:
 - Open typed memory design documented as `MemoryObject + MemoryTypeDescriptor`.
 - Review queue commands for accepting, editing, merging, and rejecting candidates.
 - Derived indexes under `private/derived/`.
-- Memory management design aligned with [docs/memory-management.md](memory-management.md).
+- Memory management design aligned with [docs/design/memory.md](design/memory.md).
 - Shared working-memory lock and automatic episode curation from recent chat turns.
 
 Validation:
@@ -333,4 +333,4 @@ Validation:
 - Keep LangGraph as the default runtime unless a documented milestone requires a different framework.
 - Keep persona discussion bounded and routed to avoid unnecessary cost and noisy outputs.
 - Keep notification delivery behind an outbox so tests never send real messages.
-- Update `docs/architecture.md` when implementation changes the intended boundaries.
+- Update `docs/design/architecture.md` when implementation changes the intended boundaries.

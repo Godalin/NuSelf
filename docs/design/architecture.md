@@ -97,7 +97,7 @@ User Interface
   -> Evaluation Suite
 ```
 
-The interaction layer is detailed in [docs/interaction-layer.md](interaction-layer.md). The product should be CLI-first, with a local daemon for long-lived state, background reflection, thread persistence, memory indexing, and notification dispatch.
+The interaction layer is detailed in [docs/design/interaction.md](interaction.md). The product should be CLI-first, with a local daemon for long-lived state, background reflection, thread persistence, memory indexing, and notification dispatch.
 
 ## Private Memory Layout
 
@@ -124,7 +124,7 @@ Private memory can also be used for sharing. Shareable subsets should be written
 
 NuSelf uses the LangChain ecosystem by default. LangGraph is the primary runtime for stateful agent workflows, durable execution, thread persistence, long-term memory, human-in-the-loop pauses, and conditional routing. LangChain provides model, tool, prompt, and provider abstractions.
 
-The detailed framework decision is tracked in [docs/agent-framework.md](agent-framework.md). The memory subsystem is detailed in [docs/memory-management.md](memory-management.md).
+The detailed framework decision is tracked in [docs/design/agent.md](agent.md). The memory subsystem is detailed in [docs/design/memory.md](memory.md).
 
 Framework boundaries:
 

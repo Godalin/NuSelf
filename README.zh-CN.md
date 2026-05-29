@@ -524,10 +524,10 @@ uv run nuself memory profile delete <profile-id>
 
 ## 项目文档
 
-- [架构](docs/architecture.md)
+- [架构](docs/design/architecture.md)
 - [开发计划](docs/development-plan.md)
-- [Agent 框架计划](docs/agent-framework.md)
-- [交互层计划](docs/interaction-layer.md)
+- [Agent 框架计划](docs/design/agent.md)
+- [交互层计划](docs/design/interaction.md)
 - [Agent 指令](AGENTS.md)
 
 ## 开发政策

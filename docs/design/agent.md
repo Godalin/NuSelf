@@ -49,7 +49,7 @@ LangGraph is the right center of gravity because NuSelf needs:
 - Human-in-the-loop pauses before committing sensitive memory or sending proactive messages.
 - Time-travel and checkpoint history for debugging why the mirror said or initiated something.
 
-NuSelf should use LangGraph checkpointers for graph execution state, not as the core product memory boundary. NuSelf intentionally does not model the person as separate sessions; durable memory should be managed by the memory subsystem described in [docs/memory-management.md](memory-management.md).
+NuSelf should use LangGraph checkpointers for graph execution state, not as the core product memory boundary. NuSelf intentionally does not model the person as separate sessions; durable memory should be managed by the memory subsystem described in [docs/design/memory.md](memory.md).
 
 ## Lightweight Multi-Agent Model
 

@@ -11,7 +11,7 @@ Build v0.2.0 around three stabilizing pillars:
 3. **Trace**: add a thought provenance database for tracing how important thoughts, answers, memories, reflections, and reason steps were derived.
 4. **Reason**: add durable, generalized long-run reasoning threads for explicit user-approved topics, with trace records, tool-aware advances, and complete rendered step output.
 
-The release design is in [`docs/v0.2.0-design.md`](v0.2.0-design.md). Trace design is in [`docs/trace-design.md`](trace-design.md). Reason behavior is governed by [`docs/spec/reason.md`](spec/reason.md).
+The release design is in [`docs/design/release.md`](design/release.md). Trace design is in [`docs/design/trace.md`](design/trace.md). Reason behavior is governed by [`docs/spec/reason.md`](spec/reason.md).
 
 ## Immediate Context
 

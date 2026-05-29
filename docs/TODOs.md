@@ -1,6 +1,6 @@
 # Project TODOs
 
-This checklist is the user-facing progress board for the project. It summarizes the detailed plans in [docs/development-plan.md](docs/development-plan.md), [docs/architecture.md](docs/architecture.md), [docs/agent-framework.md](docs/agent-framework.md), [docs/interaction-layer.md](docs/interaction-layer.md), and [docs/memory-management.md](docs/memory-management.md). When features are completed or the plan changes, update this file together with the implementation and planning docs.
+This checklist is the user-facing progress board for the project. It summarizes the detailed plans in [docs/development-plan.md](docs/development-plan.md), [docs/design/architecture.md](docs/design/architecture.md), [docs/design/agent.md](docs/design/agent.md), [docs/design/interaction.md](docs/design/interaction.md), and [docs/design/memory.md](docs/design/memory.md). When features are completed or the plan changes, update this file together with the implementation and planning docs.
 
 Short-term implementation focus lives in [docs/current-goal.md](docs/current-goal.md). Use it as the active development target before pulling work from the broader backlog below.
 

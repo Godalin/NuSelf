@@ -524,10 +524,10 @@ Supported entry types:
 
 ## Project Docs
 
-- [Architecture](docs/architecture.md)
+- [Architecture](docs/design/architecture.md)
 - [Development plan](docs/development-plan.md)
-- [Agent framework plan](docs/agent-framework.md)
-- [Interaction layer plan](docs/interaction-layer.md)
+- [Agent framework plan](docs/design/agent.md)
+- [Interaction layer plan](docs/design/interaction.md)
 - [System specifications](docs/spec/) — behavioral contracts for CLI, memory, reflection, notifications, etc.
 - [Agent instructions](AGENTS.md)
 
