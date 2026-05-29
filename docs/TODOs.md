@@ -4,22 +4,16 @@ This checklist is the user-facing progress board for the project. It summarizes 
 
 Short-term implementation focus lives in [docs/current-goal.md](docs/current-goal.md). Use it as the active development target before pulling work from the broader backlog below.
 
-## Next Release: v0.2.0
+## v0.2.x Stabilization Line
 
-- [x] Decide v0.2.0 theme: clean command model, reason, and trace.
-- [x] Draft v0.2.0 design plan.
-- [x] Draft trace design and TODO spec.
-- [x] Implement breaking CLI command cleanup.
-- [x] Implement trace repository, list/show/search, and REPL commands.
-- [x] Implement reason repository, manual commands, and trace recording.
-- [x] Wire reflection promotion into reason and trace.
-- [x] Let chat read active reason summaries without silently creating threads.
-- [x] Generalize reason threads around `topic`, free-text tracked items, and mandates instead of hard-coded hypothesis/question fields.
-- [x] Add LangGraph-backed reason advance with structured output and topic-specific reasoning prompts.
-- [x] Persist explicit reason step `tool_logs` and render them through the shared log renderer.
-- [x] Add daemon background reason scheduling with per-thread cooldown.
-- [ ] Stabilize reason usability for v0.2.0 release candidate review.
-- [x] Update release metadata.
+- [ ] v0.2.1 approval decorator.
+- [ ] v0.2.2 trace/reason schema cleanup.
+- [ ] v0.2.3 storage interface.
+- [ ] v0.2.4 sqlite backend.
+- [ ] v0.2.5 migration + export/import.
+- [ ] v0.2.6 regression tests + docs.
+- [ ] Stabilize reason usability for the release line review.
+- [ ] Update release metadata as each stabilization step lands.
 
 ## Post-0.2 Stabilization Backlog
 

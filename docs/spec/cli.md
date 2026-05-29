@@ -16,23 +16,23 @@ Controlled by `TerminalTheme`. Default ON when `sys.stdout.isatty()` and `NO_COL
 
 **Component tag colors:**
 
-| Component | ANSI |
-|---|---|
-| `daemon` | `90` (gray) |
-| `chat` | `34` (blue) |
-| `memory` | `32` (green) |
-| `persona` | `35` (magenta) |
-| `outbox` | `36` (cyan) |
-| `reflection` | `33` (yellow) |
+| Component    | ANSI           |
+| ------------ | -------------- |
+| `daemon`     | `90` (gray)    |
+| `chat`       | `34` (blue)    |
+| `memory`     | `32` (green)   |
+| `persona`    | `35` (magenta) |
+| `outbox`     | `36` (cyan)    |
+| `reflection` | `33` (yellow)  |
 
 **Semantic status colors:**
 
-| State | Color |
-|---|---|
-| `approved`, `sent`, `accepted`, `reviewed` | green (`32`) |
-| `rejected`, `failed`, `error` | red (`31`) |
-| `pending`, `started`, `draft` | yellow (`33`) |
-| `dismissed`, `skipped` | gray (`90`) |
+| State                                      | Color         |
+| ------------------------------------------ | ------------- |
+| `approved`, `sent`, `accepted`, `reviewed` | green (`32`)  |
+| `rejected`, `failed`, `error`              | red (`31`)    |
+| `pending`, `started`, `draft`              | yellow (`33`) |
+| `dismissed`, `skipped`                     | gray (`90`)   |
 
 ## List View Contract
 
@@ -73,12 +73,12 @@ Logs, `memory list/show`, `reflection list/show`, `notify list/show`, and REPL v
 
 ## Empty State Contract
 
-| Context | Output | Stream | Exit Code |
-|---|---|---|---|
-| `list` with no items | `No <items>.` | stdout | `0` |
-| `show` with invalid ID | `<Item> not found: <id>` | stderr | `1` |
-| `search` with no matches | `No matching <items>.` | stdout | `0` |
-| `delete` with invalid ID | `<Item> not found: <id>` | stderr | `1` |
+| Context                  | Output                   | Stream | Exit Code |
+| ------------------------ | ------------------------ | ------ | --------- |
+| `list` with no items     | `No <items>.`            | stdout | `0`       |
+| `show` with invalid ID   | `<Item> not found: <id>` | stderr | `1`       |
+| `search` with no matches | `No matching <items>.`   | stdout | `0`       |
+| `delete` with invalid ID | `<Item> not found: <id>` | stderr | `1`       |
 
 ## JSON Mode Contract
 
@@ -149,33 +149,33 @@ v0.2.0 reorganizes the command tree around user-facing concepts. This is a break
 
 Top-level commands:
 
-| Command | Purpose |
-|---|---|
-| `nuself` | Open interactive chat by default |
-| `nuself chat` | Explicit chat entry |
-| `nuself attach` | Attach to a running daemon |
-| `nuself daemon` | Background process lifecycle |
-| `nuself thread` | Conversation thread management |
-| `nuself memory` | Memory, sources, profile, review queue, graph |
-| `nuself inbox` | User-facing proactive items: reflection and notifications |
-| `nuself reason` | Long-run reasoning threads |
-| `nuself trace` | Thought provenance records |
-| `nuself dev` | Diagnostics, logs, config, health, eval, status |
+| Command         | Purpose                                                   |
+| --------------- | --------------------------------------------------------- |
+| `nuself`        | Open interactive chat by default                          |
+| `nuself chat`   | Explicit chat entry                                       |
+| `nuself attach` | Attach to a running daemon                                |
+| `nuself daemon` | Background process lifecycle                              |
+| `nuself thread` | Conversation thread management                            |
+| `nuself memory` | Memory, sources, profile, review queue, graph             |
+| `nuself inbox`  | User-facing proactive items: reflection and notifications |
+| `nuself reason` | Long-run reasoning threads                                |
+| `nuself trace`  | Thought provenance records                                |
+| `nuself dev`    | Diagnostics, logs, config, health, eval, status           |
 
 Breaking moves:
 
-| Removed path | New path |
-|---|---|
-| `nuself source ...` | `nuself memory source ...` |
-| `nuself reflection ...` | `nuself inbox reflection ...` |
-| `nuself notify ...` | `nuself inbox notify ...` |
-| `nuself logs ...` | `nuself dev logs ...` |
-| `nuself status` | `nuself dev status` or `nuself daemon status` |
-| `nuself health` | `nuself dev health` |
-| `nuself config` | `nuself dev config` |
-| `nuself eval` | `nuself dev eval` |
-| `nuself memory candidate ...` | `nuself memory review ...` |
-| `nuself thread create ...` | `nuself thread new ...` |
+| Removed path                  | New path                                      |
+| ----------------------------- | --------------------------------------------- |
+| `nuself source ...`           | `nuself memory source ...`                    |
+| `nuself reflection ...`       | `nuself inbox reflection ...`                 |
+| `nuself notify ...`           | `nuself inbox notify ...`                     |
+| `nuself logs ...`             | `nuself dev logs ...`                         |
+| `nuself status`               | `nuself dev status` or `nuself daemon status` |
+| `nuself health`               | `nuself dev health`                           |
+| `nuself config`               | `nuself dev config`                           |
+| `nuself eval`                 | `nuself dev eval`                             |
+| `nuself memory candidate ...` | `nuself memory review ...`                    |
+| `nuself thread create ...`    | `nuself thread new ...`                       |
 
 Top-level help should group commands as:
 
@@ -189,18 +189,18 @@ do the same at every level, including `memory review`, `memory source`, `memory 
 
 REPL commands mirror the same model:
 
-| Command | Purpose |
-|---|---|
-| `:inbox`, `:i` | List pending proactive items |
-| `:inbox reflection ...` | Reflection commands |
-| `:inbox notify ...` | Notification commands |
-| `:mem`, `:m` | Memory preview |
-| `:thread`, `:t` | Thread switching/listing |
-| `:reason` | Long-run reasoning commands |
-| `:trace` | Thought provenance commands |
-| `:dev status` | Session/system status |
-| `:restart`, `:r` | Restart daemon and reconnect |
-| `:export`, `:e` | Transcript export |
+| Command                 | Purpose                      |
+| ----------------------- | ---------------------------- |
+| `:inbox`, `:i`          | List pending proactive items |
+| `:inbox reflection ...` | Reflection commands          |
+| `:inbox notify ...`     | Notification commands        |
+| `:mem`, `:m`            | Memory preview               |
+| `:thread`, `:t`         | Thread switching/listing     |
+| `:reason`               | Long-run reasoning commands  |
+| `:trace`                | Thought provenance commands  |
+| `:dev status`           | Session/system status        |
+| `:restart`, `:r`        | Restart daemon and reconnect |
+| `:export`, `:e`         | Transcript export            |
 
 ## Command Group Reference
 
@@ -398,3 +398,16 @@ Any subsystem can use this protocol by:
 1. Writing a `proposal_created` event with its own component name and metadata.
 2. Adding a handler in `_PROPOSAL_HANDLERS` under its `(component, "proposal_created")` key.
 3. The handler reads subsystem-specific metadata from the event and calls the appropriate domain service on confirmation.
+
+### Approval Decorator
+
+The CLI may wrap proposal handlers with an approval decorator instead of hand-writing a separate prompt function for each subsystem. The decorator is a small adapter around the turn-confirmation protocol:
+
+- it checks whether the incoming event is a `proposal_created` event for the registered component,
+- it deduplicates already-handled proposal IDs,
+- it prompts the user with subsystem-specific confirmation text,
+- and it only calls the wrapped handler after the user explicitly confirms.
+
+The decorator must keep the transport rules of the turn-confirmation protocol unchanged. Proposal events still come from domain logic, the CLI still owns the prompt, and one-shot mode still ignores proposals because there is no interactive confirmation context.
+
+Approval decorators are intended for user-confirmed state transitions such as thread creation, archival, reprioritization, or similar destructive or durable actions. Pure read-only handlers should not use them.

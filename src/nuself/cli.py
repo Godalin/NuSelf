@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from functools import wraps
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -145,6 +146,42 @@ _last_header_status: str = ""
 _handled_proposal_ids: set[str] = set()
 
 
+def _approval_proposal_handler(
+    *,
+    component: str,
+    event_name: str,
+    prompt_builder: Callable[[LogEvent], str],
+    tag_name: str,
+    tag_component: str,
+) -> Callable[[Callable[[LogEvent, Path | None], None]], Callable[[LogEvent, Path | None], None]]:
+    def decorator(handler: Callable[[LogEvent, Path | None], None]) -> Callable[[LogEvent, Path | None], None]:
+        @wraps(handler)
+        def wrapped(event: LogEvent, project_root: Path | None) -> None:
+            if event.component != component or event.event != event_name:
+                return
+            meta = event.metadata or {}
+            proposal_value = meta.get("proposal_id", "")
+            proposal_id = proposal_value if isinstance(proposal_value, str) else ""
+            if not proposal_id or proposal_id in _handled_proposal_ids:
+                return
+            prompt = prompt_builder(event)
+            if not prompt:
+                return
+            _handled_proposal_ids.add(proposal_id)
+            print()
+            tag = _theme.tag(f"[{tag_name}]", tag_component)
+            _print_ansi(f"{tag} {prompt} (y/n): ", end="", flush=True)
+            line = sys.stdin.readline().strip().lower()
+            if line not in ("y", "yes"):
+                _print_ansi(f"{tag} Cancelled")
+                return
+            handler(event, project_root)
+
+        return wrapped
+
+    return decorator
+
+
 def _maybe_show_session_update(project_root: Path | None, thread_id: str) -> None:
     global _last_header_thread, _last_header_status
     status = _interactive_daemon_status(project_root) if project_root else "unknown"
@@ -159,7 +196,7 @@ def _handle_proposals_after_turn(events: list[LogEvent], project_root: Path | No
     # Check the captured events first (one-shot mode where turn_ids match).
     for event in events:
         if event.component == "reasoning" and event.event == "proposal_created":
-            _prompt_and_confirm_reason_proposal(event, project_root)
+            _confirm_reason_proposal(event, project_root)
             return
     # Daemon mode: turn_ids differ. Scan the tail of the shared log for
     # the most recent unhandled proposal_created event.
@@ -177,28 +214,33 @@ def _handle_proposals_after_turn(events: list[LogEvent], project_root: Path | No
                 proposal = event
                 break
     if proposal is not None:
-        _prompt_and_confirm_reason_proposal(proposal, project_root)
+        _confirm_reason_proposal(proposal, project_root)
 
 
-def _prompt_and_confirm_reason_proposal(event: LogEvent, project_root: Path | None) -> None:
+def _reason_proposal_prompt(event: LogEvent) -> str:
     meta = event.metadata or {}
     topic_value = meta.get("topic", meta.get("question", ""))
-    proposal_value = meta.get("proposal_id", "")
     topic = topic_value if isinstance(topic_value, str) else ""
-    proposal_id = proposal_value if isinstance(proposal_value, str) else ""
     if not topic:
-        return
-    _handled_proposal_ids.add(proposal_id)
-    print()
-    tag = _theme.tag("[reason]", "reasoning")
-    _print_ansi(f"{tag} Start reason thread「{topic}」? (y/n): ", end="", flush=True)
-    line = sys.stdin.readline().strip().lower()
-    if line not in ("y", "yes"):
-        _print_ansi(f"{tag} Cancelled")
-        return
+        return ""
+    return f"Start reason thread「{topic}」?"
+
+
+@_approval_proposal_handler(
+    component="reasoning",
+    event_name="proposal_created",
+    prompt_builder=_reason_proposal_prompt,
+    tag_name="reason",
+    tag_component="reasoning",
+)
+def _confirm_reason_proposal(event: LogEvent, project_root: Path | None) -> None:
     from nuself.reason.service import ReasonService
 
     service = ReasonService(project_root)
+    meta = event.metadata or {}
+    topic_value = meta.get("topic", meta.get("question", ""))
+    topic = topic_value if isinstance(topic_value, str) else ""
+    tag = _theme.tag("[reason]", "reasoning")
     try:
         raw_active_obj = meta.get("active_items")
         raw_active: list[object] = cast(list[object], raw_active_obj) if isinstance(raw_active_obj, list) else []

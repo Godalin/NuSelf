@@ -12,7 +12,8 @@
 
 - `main` is the stable, releasable branch.
 - `dev/0.2.x` is the ongoing stabilization branch for the current minor line.
-- `feature/*` branches are isolated experimental work and should stay off `main` until they are reviewable and releasable.
+- `feature/*` branches are isolated experimental work for a single feature or fix.
+- Each `feature/*` branch should merge back into `dev/0.2.x` before anything is promoted toward `main`.
 - Release work should land on the stabilization or stable branch first, then be tagged from the release commit.
 
 ## Commit And Push Policy

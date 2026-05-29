@@ -43,11 +43,11 @@ These ten principles guide every L2 decision in NuSelf. They are non-negotiable 
 
 Every system decision is classified into one of three layers:
 
-| Layer | Name | Responsibility | Implementation |
-|---|---|---|---|
-| **L0** | Infrastructure | Mechanical, stateless operations | Deterministic code |
-| **L1** | Policy | User-configurable system rules | Config-driven deterministic |
-| **L2** | Judgment | Context-aware qualitative decisions | **LLM-driven** |
+| Layer  | Name           | Responsibility                      | Implementation              |
+| ------ | -------------- | ----------------------------------- | --------------------------- |
+| **L0** | Infrastructure | Mechanical, stateless operations    | Deterministic code          |
+| **L1** | Policy         | User-configurable system rules      | Config-driven deterministic |
+| **L2** | Judgment       | Context-aware qualitative decisions | **LLM-driven**              |
 
 **L0 examples**: file I/O, JSON parsing, clamping values to [0, 1], time arithmetic, string tokenization.
 
