@@ -8,6 +8,13 @@
 - User-facing changes must update both `README.md` and `README.zh-CN.md`.
 - Track progress in [`docs/TODOs.md`](docs/TODOs.md); short-term focus in `docs/current-goal.md`.
 
+## Branch Strategy
+
+- `main` is the stable, releasable branch.
+- `dev/0.2.x` is the ongoing stabilization branch for the current minor line.
+- `feature/*` branches are isolated experimental work and should stay off `main` until they are reviewable and releasable.
+- Release work should land on the stabilization or stable branch first, then be tagged from the release commit.
+
 ## Commit And Push Policy
 
 - Separate commits:

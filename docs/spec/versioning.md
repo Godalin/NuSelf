@@ -19,9 +19,15 @@ While `MAJOR=0`, minor versions may contain behavior changes. Patch versions sho
 
 Guidance:
 
-- `PATCH`: bug fixes, log/output polish, test-only changes, documentation corrections.
-- `MINOR`: new user-facing features, new commands, new persisted objects, new config keys.
-- `MAJOR`: reserved for post-1.0 incompatible changes.
+- `PATCH`: stabilization work, refactors, bug fixes, log/output polish, test-only changes, and documentation corrections.
+- `MINOR`: a new subsystem or a new cognitive capability that expands the product surface.
+- `MAJOR`: a major architecture maturity milestone or an incompatible post-1.0 change.
+
+Branch intent follows the version line:
+
+- `main` tracks the stable, releasable state.
+- `dev/0.2.x` tracks stabilization work for the current minor line.
+- `feature/*` tracks isolated experiments and should not be treated as release candidates until merged into the stabilization or stable branch.
 
 ## Changelog
 
