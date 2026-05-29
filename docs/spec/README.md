@@ -11,6 +11,7 @@ This directory contains the authoritative behavioral specifications for NuSelf. 
 | [`memory.md`](memory.md) | Memory intake, curation, optimization, query, type system, symbolic graph |
 | [`reflection.md`](reflection.md) | Reflection scheduler event taxonomy, pipeline flow, discussion outcomes |
 | [`reason.md`](reason.md) | Long-run reasoning threads for sustained work on explicit topics |
+| [`reason-output.md`](reason-output.md) | Reason-scoped long-form export and output composition |
 | [`workspace.md`](workspace.md) | Isolated private scratch storage for agent-facing services |
 | [`trace.md`](trace.md) | TODO thought provenance records for tracing how important thoughts were derived |
 | [`notification.md`](notification.md) | Outbox state machine, delivery pipeline, adapters, deep links |
