@@ -469,6 +469,7 @@ def build_langchain_chat_tools(
 
     _decorators = import_module("nuself.decorators")
     _composed_reason_propose = _decorators.audit_log("reasoning")(_decorators.approval_required("reasoning")(reason_propose))
+    _composed_reason_export = _decorators.audit_log("reasoning")(_decorators.approval_required("reasoning")(reason_export))
     _composed_reflection_dismiss = _decorators.audit_log("reflection")(_decorators.approval_required("reflection")(dismiss_reflection_by_numeric_handle))
 
     tools: list[BaseTool] = [
@@ -616,12 +617,15 @@ def build_langchain_chat_tools(
             tags=("write",),
         ),
         tool_from_function(
-            reason_export,
+            _composed_reason_export,
             name="reason_export",
             description=(
                 "Start a reason output export job for a thread and write the export workspace artifacts. "
                 "Use when the user wants a long-form report, narrative, outline, or summary derived from a reason thread. "
-                "Returns the export job manifest and workspace paths, while the full composed output is stored in the thread workspace."
+                "Call this tool directly when the user asks for an export; do not wait for a separate confirmation turn. "
+                "This is an approval-gated tool: during the call, the decorated wrapper prompts the user for confirmation and the returned structured JSON shows whether the user approved. "
+                "If approved, the structured JSON includes the export job result. "
+                "On approval, the underlying result contains the export job manifest and workspace paths, while the full composed output is stored in the thread workspace."
             ),
             tags=("write", "log"),
         ),

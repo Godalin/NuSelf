@@ -107,7 +107,7 @@ Chat responsibilities:
 - choose the source thread
 - choose the output mode
 - choose the step range or batch size
-- launch the export worker
+- prompt for confirmation, then launch the export worker
 - surface progress and the final path
 
 Chat should avoid keeping the full long-form output in memory when that output can be stored on disk.

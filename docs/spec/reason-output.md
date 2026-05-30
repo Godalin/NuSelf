@@ -151,7 +151,7 @@ The chat-facing interface must allow the caller to specify:
 
 Chat must not need to store the full long-form result in the chat context to complete the job.
 
-The first chat-facing export tool call must be fire-and-return: it plans the job, writes the manifest, enqueues the background work, and immediately returns the queued job metadata. The daemon worker is a single process-global loop responsible for composing chunks and writing the final artifact.
+The first chat-facing export tool call must be approval-gated, but the agent should call it directly when the user asks for an export rather than waiting for a separate confirmation turn. During the call, it prompts the user for confirmation, then plans the job, writes the manifest, enqueues the background work, and returns structured JSON that includes whether the user approved and, when approved, the queued job metadata. The daemon worker is a single process-global loop responsible for composing chunks and writing the final artifact.
 
 Repeated calls with the same selected source range and export settings should be idempotent and rewrite the same fixed export root for the thread.
 

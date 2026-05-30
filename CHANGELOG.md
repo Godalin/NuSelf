@@ -14,13 +14,14 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 
 ### Changed
 
-- `reason_export` now returns immediately after enqueueing a background export job instead of composing the long-form output inside the chat turn.
+- `reason_export` now prompts for confirmation before enqueueing a background export job, then returns the queued export metadata instead of composing the long-form output inside the chat turn.
 - Reason output now writes into one fixed export root per thread instead of a new directory per export job, so repeated exports of the same source range reuse the same manifest, chunk files, and combined artifact.
 
 ### Fixed
 
 - Approval-gated tool prompts now emit a visible live REPL log line before waiting for confirmation input, so the prompt is obvious before the user enters `y` or `n`.
 - Reason thread proposals now use the decorated `reason_propose` tool wrapper for confirmation instead of a post-turn CLI prompt, while `proposal_created` remains available as an audit log event.
+- Reason export now has a dedicated agent skill that tells chat to call `reason_export` directly and read the approval-gated JSON result instead of treating export as a separate confirmation turn.
 
 ## 0.2.0 - 2026-05-29
 
