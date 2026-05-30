@@ -9,7 +9,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 import json
+import subprocess
 import shutil
+import textwrap
 from typing import cast, Callable
 
 from nuself.logs import write_log_event
@@ -27,6 +29,43 @@ def _now_iso() -> str:
     from datetime import datetime
 
     return datetime.now(UTC).isoformat()
+
+
+@dataclass(frozen=True)
+class ReasonOutputSection:
+    index: int
+    title: str
+    focus: str
+    step_ids: tuple[str, ...]
+    source_start_index: int
+    source_end_index: int
+    summary: str
+    created_at: str = field(default_factory=_now_iso)
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            "index": self.index,
+            "title": self.title,
+            "focus": self.focus,
+            "step_ids": list(self.step_ids),
+            "source_start_index": self.source_start_index,
+            "source_end_index": self.source_end_index,
+            "summary": self.summary,
+            "created_at": self.created_at,
+        }
+
+    @classmethod
+    def from_wire(cls, data: dict[str, object]) -> ReasonOutputSection:
+        return cls(
+            index=_expect_int(data, "index"),
+            title=_expect_str(data, "title"),
+            focus=_expect_str(data, "focus"),
+            step_ids=tuple(str(item) for item in _expect_list(data, "step_ids") if isinstance(item, str)),
+            source_start_index=_expect_int(data, "source_start_index"),
+            source_end_index=_expect_int(data, "source_end_index"),
+            summary=_expect_str(data, "summary"),
+            created_at=_optional_str(data, "created_at") or _now_iso(),
+        )
 
 
 @dataclass(frozen=True)
@@ -69,6 +108,7 @@ class ReasonOutputManifest:
     progress_filename: str = "progress.json"
     created_at: str = field(default_factory=_now_iso)
     updated_at: str = field(default_factory=_now_iso)
+    sections: tuple[ReasonOutputSection, ...] = ()
     chunks: tuple[ReasonOutputChunk, ...] = ()
 
     def to_wire(self) -> dict[str, object]:
@@ -87,6 +127,7 @@ class ReasonOutputManifest:
             "progress_filename": self.progress_filename,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "sections": [section.to_wire() for section in self.sections],
             "chunks": [chunk.to_wire() for chunk in self.chunks],
         }
 
@@ -106,6 +147,11 @@ class ReasonOutputManifest:
             progress_filename=_optional_str(data, "progress_filename") or "progress.json",
             created_at=_optional_str(data, "created_at") or _now_iso(),
             updated_at=_optional_str(data, "updated_at") or _now_iso(),
+            sections=tuple(
+                ReasonOutputSection.from_wire(cast(dict[str, object], section))
+                for section in _expect_list(data, "sections")
+                if isinstance(section, dict)
+            ) if "sections" in data else (),
             chunks=tuple(
                 ReasonOutputChunk.from_wire(cast(dict[str, object], chunk))
                 for chunk in _expect_list(data, "chunks")
@@ -118,6 +164,16 @@ class ReasonOutputManifest:
         payload.update(changes)
         payload["updated_at"] = _now_iso()
         # Normalize chunks to a list of wire-form dicts if present
+        if "sections" in payload:
+            raw_sections = cast(Sequence[object], payload.get("sections"))
+            if isinstance(raw_sections, (list, tuple)):
+                normalized_sections: list[object] = []
+                for item in raw_sections:
+                    if isinstance(item, ReasonOutputSection):
+                        normalized_sections.append(item.to_wire())
+                    elif isinstance(item, dict):
+                        normalized_sections.append(cast(dict[str, object], item))
+                payload["sections"] = normalized_sections
         if "chunks" in payload:
             raw_chunks = cast(Sequence[object], payload.get("chunks"))
             if isinstance(raw_chunks, (list, tuple)):
@@ -137,6 +193,7 @@ class ReasonOutputPaths:
     manifest: Path
     progress: Path
     combined: Path
+    pdf: Path
     chunks_dir: Path
 
 
@@ -202,6 +259,7 @@ class ReasonOutputService:
         mode = _validate_choice(mode, REASON_OUTPUT_MODES, label="mode")
         output_format = _validate_choice(output_format, REASON_OUTPUT_FORMATS, label="output format")
         segment_size = _validate_positive_int(segment_size, label="segment_size")
+        sections = _plan_sections(thread, list(selected), mode=mode)
         job_id = _export_job_id(
             thread.id,
             mode=mode,
@@ -241,6 +299,7 @@ class ReasonOutputService:
             source_end_index=end_index,
             source_step_ids=tuple(step.id for step in selected),
             segment_size=segment_size,
+            sections=tuple(sections),
         )
         self._write_manifest(paths.manifest, manifest)
         self._write_progress(
@@ -251,6 +310,8 @@ class ReasonOutputService:
                 "status": manifest.status,
                 "completed_chunks": [],
                 "total_chunks": _chunk_count(len(selected), segment_size),
+                "pdf_status": "pending",
+                "pdf_path": None,
                 "updated_at": manifest.updated_at,
             },
         )
@@ -317,20 +378,32 @@ class ReasonOutputService:
         paths = self._job_paths(thread.id, job_id)
         paths.root.mkdir(parents=True, exist_ok=True)
         chunks: list[ReasonOutputChunk] = []
+        section_plan = self._resolve_section_plan(thread, manifest, selected)
+        batch_start = 0
         for index, batch in enumerate(partition_steps(selected, manifest.segment_size)):
+            section = _section_for_position(section_plan, batch_start)
             chunk = ReasonOutputChunk(index=index, filename=_chunk_filename(index), step_ids=tuple(step.id for step in batch))
             chunk_path = paths.chunks_dir / chunk.filename
             if not chunk_path.exists():
                 chunk_path.write_text(
-                    _render_chunk(thread, manifest, batch, index=index, total=_chunk_count(len(selected), manifest.segment_size)),
+                    _render_chunk_document(
+                        thread,
+                        manifest,
+                        section=section,
+                        section_plan=section_plan,
+                        body=_render_chunk(thread, manifest, batch, index=index, total=_chunk_count(len(selected), manifest.segment_size)),
+                    ),
                     encoding="utf-8",
                 )
             chunks.append(chunk)
+            batch_start += len(batch)
 
-        combined_text = _combine_chunks(thread, manifest, paths, chunks)
+        combined_text = _combine_chunks(thread, manifest, paths, chunks, section_plan=section_plan)
         paths.combined.write_text(combined_text, encoding="utf-8")
-        updated = manifest.with_updates(status="complete", chunks=tuple(chunks))
+        updated = manifest.with_updates(status="complete", chunks=tuple(chunks), sections=section_plan)
         self._write_manifest(paths.manifest, updated)
+        pdf_path = self._generate_pdf(paths)
+        pdf_status = "generated" if pdf_path is not None else ("skipped" if not paths.pdf.exists() else "generated")
         self._write_progress(
             paths.progress,
             {
@@ -339,6 +412,8 @@ class ReasonOutputService:
                 "status": updated.status,
                 "completed_chunks": [chunk.index for chunk in chunks],
                 "total_chunks": len(chunks),
+                "pdf_status": pdf_status,
+                "pdf_path": str(pdf_path) if pdf_path is not None else (str(paths.pdf) if paths.pdf.exists() else None),
                 "updated_at": updated.updated_at,
             },
         )
@@ -387,7 +462,7 @@ class ReasonOutputService:
         """Compose the job using an injected runner callable for each segment.
 
         The runner callable is invoked for each segment with signature:
-            runner(thread: ReasoningThread, manifest: ReasonOutputManifest, steps: Sequence[ReasoningStep], *, index: int, total: int) -> str
+            runner(thread: ReasoningThread, manifest: ReasonOutputManifest, steps: Sequence[ReasoningStep], *, section: ReasonOutputSection, section_plan: Sequence[ReasonOutputSection], index: int, total: int) -> str
 
         The runner must return the final chunk text for that segment. This allows
         the caller to implement subagent-driven LLM composition while the
@@ -403,8 +478,11 @@ class ReasonOutputService:
         paths = self._job_paths(thread.id, job_id)
         paths.root.mkdir(parents=True, exist_ok=True)
         chunks: list[ReasonOutputChunk] = []
+        section_plan = self._resolve_section_plan(thread, manifest, selected)
         total = _chunk_count(len(selected), manifest.segment_size)
+        batch_start = 0
         for index, batch in enumerate(partition_steps(selected, manifest.segment_size)):
+            section = _section_for_position(section_plan, batch_start)
             filename = _chunk_filename(index)
             chunk_path = paths.chunks_dir / filename
             # Emit chunk-level start event
@@ -419,7 +497,7 @@ class ReasonOutputService:
             # Runner composes the chunk text (e.g., via a subagent/LLM)
             try:
                 start_ts = datetime.now(UTC).timestamp()
-                composed_text = runner(thread, manifest, batch, index=index, total=total)
+                composed_text = runner(thread, manifest, batch, section=section, section_plan=section_plan, index=index, total=total)
                 duration_ms = int((datetime.now(UTC).timestamp() - start_ts) * 1000)
             except Exception as exc:
                 # Log failure for this chunk and re-raise to allow caller to handle
@@ -436,7 +514,16 @@ class ReasonOutputService:
                 raise
 
             # persist chunk
-            chunk_path.write_text(composed_text.rstrip() + "\n", encoding="utf-8")
+            chunk_path.write_text(
+                _render_chunk_document(
+                    thread,
+                    manifest,
+                    section=section,
+                    section_plan=section_plan,
+                    body=composed_text,
+                ),
+                encoding="utf-8",
+            )
 
             # Emit chunk completed event
             write_log_event(
@@ -450,11 +537,14 @@ class ReasonOutputService:
             )
             chunk = ReasonOutputChunk(index=index, filename=filename, step_ids=tuple(step.id for step in batch))
             chunks.append(chunk)
+            batch_start += len(batch)
 
-        combined_text = _combine_chunks(thread, manifest, paths, chunks)
+        combined_text = _combine_chunks(thread, manifest, paths, chunks, section_plan=section_plan)
         paths.combined.write_text(combined_text, encoding="utf-8")
-        updated = manifest.with_updates(status="complete", chunks=tuple(chunks))
+        updated = manifest.with_updates(status="complete", chunks=tuple(chunks), sections=section_plan)
         self._write_manifest(paths.manifest, updated)
+        pdf_path = self._generate_pdf(paths)
+        pdf_status = "generated" if pdf_path is not None else ("skipped" if not paths.pdf.exists() else "generated")
         self._write_progress(
             paths.progress,
             {
@@ -463,6 +553,8 @@ class ReasonOutputService:
                 "status": updated.status,
                 "completed_chunks": [chunk.index for chunk in chunks],
                 "total_chunks": len(chunks),
+                "pdf_status": pdf_status,
+                "pdf_path": str(pdf_path) if pdf_path is not None else (str(paths.pdf) if paths.pdf.exists() else None),
                 "updated_at": updated.updated_at,
             },
         )
@@ -494,6 +586,7 @@ class ReasonOutputService:
             manifest=root / "manifest.json",
             progress=root / "progress.json",
             combined=root / "combined.md",
+            pdf=root / "combined.pdf",
             chunks_dir=root,
         )
 
@@ -518,6 +611,46 @@ class ReasonOutputService:
 
     def _write_progress(self, path: Path, payload: dict[str, object]) -> None:
         _write_json_atomic(path, payload)
+
+    def _resolve_section_plan(
+        self,
+        thread: ReasoningThread,
+        manifest: ReasonOutputManifest,
+        selected: Sequence[ReasoningStep],
+    ) -> tuple[ReasonOutputSection, ...]:
+        if manifest.sections:
+            return manifest.sections
+        return _plan_sections(thread, list(selected), mode=manifest.mode)
+
+    def _generate_pdf(self, paths: ReasonOutputPaths) -> Path | None:
+        script = self._project_root / "scripts" / "mdpdf.sh"
+        if not script.is_file() or not paths.combined.is_file():
+            return None
+        try:
+            subprocess.run(["bash", str(script), str(paths.combined)], cwd=self._project_root, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as exc:
+            write_log_event(
+                "reasoning",
+                "reason_output_pdf_failed",
+                f"Failed to generate PDF for {paths.combined.name}",
+                project_root=self._project_root,
+                level="warning",
+                status="error",
+                error=exc.stderr.strip() or exc.stdout.strip() or str(exc),
+                metadata={"combined": str(paths.combined), "pdf": str(paths.pdf)},
+            )
+            return None
+        if paths.pdf.is_file():
+            write_log_event(
+                "reasoning",
+                "reason_output_pdf_created",
+                f"Generated PDF for {paths.combined.name}",
+                project_root=self._project_root,
+                status="completed",
+                metadata={"combined": str(paths.combined), "pdf": str(paths.pdf)},
+            )
+            return paths.pdf
+        return None
 
 
 def _render_chunk(
@@ -562,18 +695,134 @@ def _combine_chunks(
     manifest: ReasonOutputManifest,
     paths: ReasonOutputPaths,
     chunks: Sequence[ReasonOutputChunk],
+    *,
+    section_plan: Sequence[ReasonOutputSection],
 ) -> str:
     lines = [f"# {thread.topic}", ""]
     lines.append(f"- thread: {thread.id}")
     lines.append(f"- job: {manifest.job_id}")
     lines.append(f"- mode: {manifest.mode}")
     lines.append(f"- format: {manifest.output_format}")
+    lines.append(f"- sections: {len(section_plan)}")
+    lines.append("")
+    lines.append("## Composition plan")
+    for section in section_plan:
+        lines.append(f"- {section.index + 1}. {section.title}: {section.focus}")
     lines.append("")
     for chunk in chunks:
         chunk_path = paths.chunks_dir / chunk.filename
         lines.append(chunk_path.read_text(encoding="utf-8").rstrip())
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_chunk_document(
+    thread: ReasoningThread,
+    manifest: ReasonOutputManifest,
+    *,
+    section: ReasonOutputSection,
+    section_plan: Sequence[ReasonOutputSection],
+    body: str,
+) -> str:
+    lines = [f"# {manifest.mode.title()}: {thread.topic}", ""]
+    lines.append(f"- thread: {thread.id}")
+    lines.append(f"- job: {manifest.job_id}")
+    lines.append(f"- section: {section.index + 1}/{len(section_plan)}")
+    lines.append(f"- title: {section.title}")
+    lines.append(f"- focus: {section.focus}")
+    lines.append(f"- step_range: {section.source_start_index + 1}-{section.source_end_index + 1}")
+    lines.append("")
+    lines.append("## Composition plan")
+    for planned in section_plan:
+        marker = " (current)" if planned.index == section.index else ""
+        lines.append(f"- {planned.index + 1}. {planned.title}: {planned.focus}{marker}")
+    lines.append("")
+    lines.append(f"## {section.title}")
+    lines.append("")
+    lines.append(body.rstrip())
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _plan_sections(
+    thread: ReasoningThread,
+    selected: list[ReasoningStep],
+    *,
+    mode: str,
+) -> tuple[ReasonOutputSection, ...]:
+    batches = tuple(partition_steps(selected, _section_window_size(mode, len(selected))))
+    prefix = _section_prefix(mode)
+    sections: list[ReasonOutputSection] = []
+    offset = 0
+    total_steps = len(selected)
+    for index, batch in enumerate(batches):
+        start_index = offset
+        end_index = offset + len(batch) - 1
+        offset += len(batch)
+        lead = _shorten(batch[0].summary)
+        tail = _shorten(batch[-1].summary)
+        title = f"{prefix} {index + 1}: {lead}"
+        if len(batch) > 1 and tail != lead:
+            title = f"{prefix} {index + 1}: {lead} → {tail}"
+        focus = f"Keep the section anchored to steps {start_index + 1}-{end_index + 1} of {total_steps}."
+        if index == 0:
+            focus += f" Establish the long-form voice for {thread.topic}."
+        elif index == len(batches) - 1:
+            focus += " Close the arc cleanly and preserve continuity with earlier sections."
+        else:
+            focus += " Preserve continuity with the sections before and after it."
+        sections.append(
+            ReasonOutputSection(
+                index=index,
+                title=title,
+                focus=focus,
+                step_ids=tuple(step.id for step in batch),
+                source_start_index=start_index,
+                source_end_index=end_index,
+                summary=f"{lead} → {tail}" if tail != lead else lead,
+            )
+        )
+    return tuple(sections)
+
+
+def _section_window_size(mode: str, item_count: int) -> int:
+    if item_count <= 0:
+        return 1
+    return min(
+        item_count,
+        {
+            "summary": 12,
+            "outline": 6,
+            "report": 8,
+            "narrative": 8,
+        }.get(mode, 8),
+    )
+
+
+def _section_for_position(
+    section_plan: Sequence[ReasonOutputSection],
+    position: int,
+) -> ReasonOutputSection:
+    if not section_plan:
+        raise ValueError("section plan must not be empty")
+    if position < 0:
+        return section_plan[0]
+    for section in section_plan:
+        if section.source_start_index <= position <= section.source_end_index:
+            return section
+    return section_plan[-1]
+
+
+def _section_prefix(mode: str) -> str:
+    return {
+        "narrative": "Chapter",
+        "outline": "Section",
+        "report": "Section",
+        "summary": "Digest",
+    }.get(mode, "Section")
+
+
+def _shorten(text: str, *, limit: int = 42) -> str:
+    return textwrap.shorten(" ".join(text.split()), width=limit, placeholder="...")
 
 
 def _select_steps(steps: Sequence[ReasoningStep], *, start_index: int, end_index: int | None) -> list[ReasoningStep]:

@@ -37,6 +37,7 @@ The subsystem sits beside the existing reason service:
 
 The critical boundary is that chat manages the task, but the task state lives in the reason workspace.
 The execution loop itself is daemon-global: one background worker scans the thread workspaces and processes export jobs for the whole process.
+Each export job also carries a section plan so chunk titles, global chapter order, and local section focus stay consistent across the whole artifact. That plan is derived from the selected source content, not from chunk size, so changing the chunking strategy does not rewrite the chapter structure.
 
 ## Core Concepts
 
@@ -118,9 +119,11 @@ The worker performs the heavy lifting:
 
 1. read the selected reason steps
 2. batch them into segments
-3. compose each segment into a chunk
-4. persist the chunk and manifest update
-5. combine chunks into the final artifact
+3. derive a stable section plan from the source content
+4. compose each segment into a chunk
+5. persist the chunk and manifest update
+6. combine chunks into the final artifact
+7. automatically render the final Markdown into PDF for sharing
 
 The worker should be able to run repeatedly over the same job id without redoing finished segments.
 
@@ -154,6 +157,8 @@ private/workspaces/reason/{thread_id}/
 The workspace is thread-local. It should not be used as a shared cross-thread cache.
 
 The export root is fixed for each thread so repeated exports with the same source range and settings reuse the same artifact location instead of creating a new per-job directory.
+The manifest should record the section plan so the worker can reuse the same chapter or section names if the export is resumed.
+The daemon worker should scan once immediately on startup, then continue polling at its configured interval, so queued exports do not wait for the first sleep cycle before work begins.
 
 ## Composition Pipeline
 

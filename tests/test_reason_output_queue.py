@@ -5,6 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 import json
 
+import pytest
+
+from nuself.reason.domain import ReasoningStep
+from nuself.reason.domain import ReasoningThread
+from nuself.reason.output import ReasonOutputManifest
+from nuself.reason.output import ReasonOutputPaths
+from nuself.reason.output import ReasonOutputSection
 from nuself.reason.output import ReasonOutputService
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
@@ -14,7 +21,7 @@ def _reason_service(tmp_path: Path) -> ReasonService:
     return ReasonService(repository=ReasonRepository(tmp_path), project_root=tmp_path, prompt_generator=lambda *a, **k: "P")
 
 
-def test_plan_enqueues_and_worker_processes(tmp_path: Path) -> None:
+def test_plan_enqueues_and_worker_processes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     service = _reason_service(tmp_path)
     thread = service.start_thread("Queue export")
     service.advance_thread(thread.id, step=_step(thread.id, "A", "Out A", "D A"))
@@ -23,6 +30,12 @@ def test_plan_enqueues_and_worker_processes(tmp_path: Path) -> None:
     output_service = ReasonOutputService(project_root=tmp_path, reason_service=service)
     manifest = output_service.plan_job(thread.id, segment_size=1)
     paths = output_service.job_paths(thread.id, manifest.job_id)
+
+    def _fake_generate_pdf(self: ReasonOutputService, paths: ReasonOutputPaths) -> Path:
+        paths.pdf.write_text("pdf", encoding="utf-8")
+        return paths.pdf
+
+    monkeypatch.setattr(ReasonOutputService, "_generate_pdf", _fake_generate_pdf)
 
     # Queue file should exist
     queue_file = paths.root / "queue" / f"{manifest.job_id}.json"
@@ -37,8 +50,18 @@ def test_plan_enqueues_and_worker_processes(tmp_path: Path) -> None:
     raw = json.loads(processing_path.read_text(encoding="utf-8"))
     assert raw.get("job_id") == manifest.job_id
 
-    def fake_runner(thread, manifest, steps, *, index, total):
-        lines = [f"Chunk {index+1}/{total} for {thread.topic}"]
+    def fake_runner(
+        thread: ReasoningThread,
+        manifest: ReasonOutputManifest,
+        steps: list[ReasoningStep],
+        *,
+        section: ReasonOutputSection,
+        section_plan: tuple[ReasonOutputSection, ...],
+        index: int,
+        total: int,
+    ) -> str:
+        lines = [f"Chunk {index + 1}/{total} for {getattr(thread, 'topic', 'thread')}"]
+        lines.append(f"Section: {section.title}")
         for s in steps:
             lines.append(f"- {s.id}: {s.output}")
         return "\n".join(lines) + "\n"

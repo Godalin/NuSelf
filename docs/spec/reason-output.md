@@ -78,6 +78,7 @@ It must record:
 - output format
 - segment size
 - completed chunk inventory
+- section plan derived from source content and reused across chunks
 - resume state
 - creation and update timestamps
 
@@ -97,6 +98,7 @@ private/workspaces/reason/{thread_id}/
       chunk-001.md
       chunk-002.md
       combined.md
+      combined.pdf
       progress.json
       queue/
       processing/
@@ -110,6 +112,7 @@ Rules:
 - Export data must not be written into another thread's workspace.
 - The export root is fixed for the thread, so repeated exports rewrite the same manifest and artifact files instead of creating a new per-job directory.
 - The manifest is the resumable source of truth for the export job.
+- The manifest stores a deterministic section plan derived from the selected source steps, not from chunk boundaries, so each chunk can reuse the same chapter or section names, focus, and ordering context across the full export.
 
 ## Output Modes
 
@@ -129,9 +132,11 @@ The service must be able to:
 - plan a job from a selected reason source
 - collect ordered items from the source
 - partition items into segments
+- derive a stable section plan from the source content and reuse it for every chunk
 - compose each segment into a chunk
 - persist chunk and manifest updates
 - combine completed chunks into a final artifact
+- generate a PDF artifact from the final Markdown output when the export completes
 - resume a partially completed job from the manifest
 
 The service may read reason state through reason service-facing methods or a dedicated adapter. It must not reinterpret reason state as chat history.
@@ -151,7 +156,9 @@ The chat-facing interface must allow the caller to specify:
 
 Chat must not need to store the full long-form result in the chat context to complete the job.
 
-The first chat-facing export tool call must be approval-gated, but the agent should call it directly when the user asks for an export rather than waiting for a separate confirmation turn. During the call, it prompts the user for confirmation, then plans the job, writes the manifest, enqueues the background work, and returns structured JSON that includes whether the user approved and, when approved, the queued job metadata. The daemon worker is a single process-global loop responsible for composing chunks and writing the final artifact.
+The first chat-facing export tool call must be approval-gated, but the agent should call it directly when the user asks for an export rather than waiting for a separate confirmation turn. During the call, it prompts the user for confirmation, then plans the job, writes the manifest, enqueues the background work, and returns structured JSON that includes whether the user approved and, when approved, the queued job metadata. The daemon worker is a single process-global loop responsible for composing chunks and writing the final artifact, and it must scan the queue immediately on startup before falling back to its normal polling interval.
+
+When the Markdown artifact is finished, the export pipeline should automatically invoke the PDF helper script so the thread can be shared as both Markdown and PDF.
 
 Repeated calls with the same selected source range and export settings should be idempotent and rewrite the same fixed export root for the thread.
 

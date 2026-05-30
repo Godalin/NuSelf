@@ -78,7 +78,7 @@ class DaemonState:
         self.reason_scheduler_interval_seconds = config.daemon.reason_scheduler.interval_seconds
         self._reason_scheduler_thread: threading.Thread | None = None
         self._export_worker_thread: threading.Thread | None = None
-        self.export_worker_interval_seconds: float = 30.0
+        self.export_worker_interval_seconds: float = 5.0
 
     def start_background_memory_curator(self) -> None:
         if self._memory_curator_thread is not None:
@@ -219,15 +219,34 @@ class DaemonState:
             manifest: ReasonOutputManifest,
             steps: Sequence[ReasoningStep],
             *,
+            section: object,
+            section_plan: Sequence[object],
             index: int,
             total: int,
         ) -> str:
+            section_title = getattr(section, "title", f"Section {index + 1}")
+            section_focus = getattr(section, "focus", "")
+            section_steps = getattr(section, "step_ids", ())
             sys = (
                 f"You are a writing assistant. Compose a {manifest.mode} in {manifest.output_format} format "
-                "from the provided reason steps. Produce Markdown suitable for direct display."
+                "from the provided reason steps. Produce Markdown suitable for direct display. "
+                "Follow the export plan exactly. Keep chapter names, terminology, and ordering stable across chunks."
             )
             pieces: list[ChatMessage] = [ChatMessage(role="system", content=sys)]
-            body_lines: list[str] = [f"Chunk {index+1}/{total} - compose from steps:"]
+            body_lines: list[str] = [f"Chunk {index + 1}/{total}: {section_title}"]
+            body_lines.append(f"Section focus: {section_focus}")
+            body_lines.append(f"Section step ids: {', '.join(str(step_id) for step_id in section_steps)}")
+            body_lines.append("")
+            body_lines.append("Global section plan:")
+            for planned in section_plan:
+                planned_title = getattr(planned, "title", f"Section {getattr(planned, 'index', 0) + 1}")
+                planned_focus = getattr(planned, "focus", "")
+                planned_index = getattr(planned, "index", 0)
+                marker = " (current)" if planned_index == index else ""
+                body_lines.append(f"- {planned_index + 1}. {planned_title}: {planned_focus}{marker}")
+            body_lines.append("")
+            body_lines.append("Compose the current section using its title as the heading and keeping the rest of the plan in view.")
+            body_lines.append("")
             for s in steps:
                 body_lines.append("---")
                 body_lines.append(f"Step: {s.summary}")
@@ -251,10 +270,12 @@ class DaemonState:
             # exponential backoff capped at MAX_BACKOFF
             return min(MAX_BACKOFF, BASE_BACKOFF * (2 ** (attempts - 1)))
 
-        while not self.shutdown_requested.wait(self.export_worker_interval_seconds):
+        while not self.shutdown_requested.is_set():
             try:
                 root = store._root  # type: ignore[reportPrivateUsage]
                 if not root.exists():
+                    if self.shutdown_requested.wait(self.export_worker_interval_seconds):
+                        break
                     continue
                 for owner in root.iterdir():
                     if not owner.is_dir():
@@ -370,6 +391,8 @@ class DaemonState:
                     error=str(e),
                 )
                 continue
+            if self.shutdown_requested.wait(self.export_worker_interval_seconds):
+                break
 
     def stop_background_reason_scheduler(self) -> None:
         if self._reason_scheduler_thread is not None:

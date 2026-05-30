@@ -11,6 +11,17 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 ### Added
 
 - Added the first `reason` output-composition infrastructure: export jobs now plan and persist manifests, chunks, progress, and combined Markdown artifacts inside the owning reason workspace, and the chat tool registry exposes `reason_export`.
+- Added `scripts/mdpdf.sh` to convert one or more Markdown files into PDFs with pandoc and xelatex for easy manual sharing.
+
+### Changed
+
+- Reason exports now persist a deterministic section plan derived from source content, so chunk size no longer determines chapter boundaries.
+- Reason exports now automatically generate a PDF from the final combined Markdown artifact after composition completes.
+- The export daemon now scans the queue immediately on startup instead of waiting for the first polling interval.
+
+### Fixed
+
+- `scripts/mdpdf.sh` now sets a CJK-capable default font pair and `zh-CN` metadata so Chinese Markdown renders correctly in the generated PDF.
 
 ### Changed
 
