@@ -1,17 +1,19 @@
 """Reason output composition service and export job storage."""
 
+
 from __future__ import annotations
 
-from collections.abc import Sequence
+from typing import Sequence
+import hashlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 import json
-from typing import cast
-from uuid import uuid4
+import shutil
+from typing import cast, Callable
 
 from nuself.logs import write_log_event
-from nuself.reason.domain import ReasoningStep, ReasoningThread
+from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
 from nuself.reason.repository import ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.workspace import PrivateWorkspaceStore
@@ -117,14 +119,14 @@ class ReasonOutputManifest:
         payload["updated_at"] = _now_iso()
         # Normalize chunks to a list of wire-form dicts if present
         if "chunks" in payload:
-            raw_chunks = payload.get("chunks")
+            raw_chunks = cast(Sequence[object], payload.get("chunks"))
             if isinstance(raw_chunks, (list, tuple)):
                 normalized: list[object] = []
-                for c in raw_chunks:
-                    if hasattr(c, "to_wire"):
-                        normalized.append(c.to_wire())
-                    elif isinstance(c, dict):
-                        normalized.append(c)
+                for item in raw_chunks:
+                    if isinstance(item, ReasonOutputChunk):
+                        normalized.append(item.to_wire())
+                    elif isinstance(item, dict):
+                        normalized.append(cast(dict[str, object], item))
                 payload["chunks"] = normalized
         return ReasonOutputManifest.from_wire(payload)
 
@@ -155,6 +157,11 @@ class ReasonOutputService:
         root = self._export_root(thread_id)
         if not root.exists():
             return []
+        root_manifest = root / "manifest.json"
+        if root_manifest.exists():
+            manifest = self._read_manifest(root_manifest)
+            if manifest is not None:
+                return [manifest]
         jobs: list[ReasonOutputManifest] = []
         for path in sorted(root.glob("*/manifest.json")):
             manifest = self._read_manifest(path)
@@ -163,13 +170,19 @@ class ReasonOutputService:
         return sorted(jobs, key=lambda manifest: (manifest.created_at, manifest.job_id))
 
     def get_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
-        path = self._job_paths(thread_id, job_id).manifest
-        if not path.exists():
-            raise ReasonNotFound(job_id)
-        manifest = self._read_manifest(path)
-        if manifest is None:
-            raise ValueError(f"invalid reason output manifest: {path}")
-        return manifest
+        root = self._export_root(thread_id)
+        root_manifest = root / "manifest.json"
+        if root_manifest.exists():
+            manifest = self._read_manifest(root_manifest)
+            if manifest is not None:
+                if manifest.job_id == job_id:
+                    return manifest
+                raise ReasonNotFound(job_id)
+        for path in sorted(root.glob("*/manifest.json")):
+            manifest = self._read_manifest(path)
+            if manifest is not None and manifest.job_id == job_id:
+                return manifest
+        raise ReasonNotFound(job_id)
 
     def plan_job(
         self,
@@ -189,8 +202,35 @@ class ReasonOutputService:
         mode = _validate_choice(mode, REASON_OUTPUT_MODES, label="mode")
         output_format = _validate_choice(output_format, REASON_OUTPUT_FORMATS, label="output format")
         segment_size = _validate_positive_int(segment_size, label="segment_size")
-        job_id = _new_job_id()
+        job_id = _export_job_id(
+            thread.id,
+            mode=mode,
+            output_format=output_format,
+            start_index=start_index,
+            end_index=end_index,
+            segment_size=segment_size,
+            source_step_ids=tuple(step.id for step in selected),
+        )
         paths = self._job_paths(thread.id, job_id)
+        existing = self._read_manifest(paths.manifest)
+        if existing is not None and existing.job_id == job_id:
+            queue_path = paths.root / "queue" / f"{job_id}.json"
+            if existing.status != "complete" and not queue_path.exists():
+                queue_path.parent.mkdir(parents=True, exist_ok=True)
+                _write_json_atomic(
+                    queue_path,
+                    {
+                        "type": "reason_output_job",
+                        "job_id": job_id,
+                        "thread_id": thread.id,
+                        "manifest": str(paths.manifest),
+                        "created_at": existing.created_at,
+                        "attempts": 0,
+                    },
+                )
+            return existing
+
+        _clear_directory(paths.root)
         paths.root.mkdir(parents=True, exist_ok=True)
         manifest = ReasonOutputManifest(
             job_id=job_id,
@@ -244,7 +284,7 @@ class ReasonOutputService:
                 "created_at": manifest.created_at,
                 "attempts": 0,
             }
-            _write_json_atomic(queue_dir / f"{job_id}.json", event)
+            _write_json_atomic(queue_dir / f"{job_id}.json", cast(dict[str, object], event))
             write_log_event(
                 "daemon",
                 "export_job_enqueued",
@@ -277,7 +317,7 @@ class ReasonOutputService:
         paths = self._job_paths(thread.id, job_id)
         paths.root.mkdir(parents=True, exist_ok=True)
         chunks: list[ReasonOutputChunk] = []
-        for index, batch in enumerate(_partition(selected, manifest.segment_size)):
+        for index, batch in enumerate(partition_steps(selected, manifest.segment_size)):
             chunk = ReasonOutputChunk(index=index, filename=_chunk_filename(index), step_ids=tuple(step.id for step in batch))
             chunk_path = paths.chunks_dir / chunk.filename
             if not chunk_path.exists():
@@ -343,7 +383,7 @@ class ReasonOutputService:
     def resume_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
         return self.compose_job(thread_id, job_id)
 
-    def compose_with_runner(self, thread_id: str, job_id: str, runner: callable) -> ReasonOutputManifest:
+    def compose_with_runner(self, thread_id: str, job_id: str, runner: Callable[..., str]) -> ReasonOutputManifest:
         """Compose the job using an injected runner callable for each segment.
 
         The runner callable is invoked for each segment with signature:
@@ -364,7 +404,7 @@ class ReasonOutputService:
         paths.root.mkdir(parents=True, exist_ok=True)
         chunks: list[ReasonOutputChunk] = []
         total = _chunk_count(len(selected), manifest.segment_size)
-        for index, batch in enumerate(_partition(selected, manifest.segment_size)):
+        for index, batch in enumerate(partition_steps(selected, manifest.segment_size)):
             filename = _chunk_filename(index)
             chunk_path = paths.chunks_dir / filename
             # Emit chunk-level start event
@@ -448,7 +488,7 @@ class ReasonOutputService:
         _validate_segment(thread_id, "thread id")
         _validate_segment(job_id, "job id")
         workspace = self._workspace_store.ensure(thread_id)
-        root = workspace.artifacts / "export" / job_id
+        root = workspace.artifacts / "export"
         return ReasonOutputPaths(
             root=root,
             manifest=root / "manifest.json",
@@ -546,13 +586,7 @@ def _select_steps(steps: Sequence[ReasoningStep], *, start_index: int, end_index
     return list(steps[start : end + 1])
 
 
-def _partition(items: Sequence[ReasoningStep], size: int) -> list[list[ReasoningStep]]:
-    if size < 1:
-        raise ValueError("segment_size must be a positive integer")
-    result: list[list[ReasoningStep]] = []
-    for index in range(0, len(items), size):
-        result.append(list(items[index : index + size]))
-    return result
+
 
 
 def _chunk_count(item_count: int, size: int) -> int:
@@ -565,12 +599,32 @@ def _chunk_filename(index: int) -> str:
     return f"chunk-{index + 1:03d}.md"
 
 
-def _new_job_id() -> str:
-    return f"reason-output-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}-{uuid4().hex[:8]}"
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+def _export_job_id(
+    thread_id: str,
+    *,
+    mode: str,
+    output_format: str,
+    start_index: int,
+    end_index: int | None,
+    segment_size: int,
+    source_step_ids: Sequence[str],
+) -> str:
+    payload = json.dumps(
+        {
+            "thread_id": thread_id,
+            "mode": mode,
+            "output_format": output_format,
+            "start_index": start_index,
+            "end_index": end_index,
+            "segment_size": segment_size,
+            "source_step_ids": list(source_step_ids),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    digest = hashlib.sha256(payload).hexdigest()[:16]
+    return f"reason-output-{digest}"
 
 
 def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
@@ -580,6 +634,11 @@ def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
     tmp_path.replace(path)
 
 
+def _clear_directory(path: Path) -> None:
+    if path.exists():
+        shutil.rmtree(path)
+
+
 def _validate_choice(value: str, allowed: Sequence[str], *, label: str) -> str:
     choice = value.strip()
     if choice not in allowed:
@@ -587,20 +646,20 @@ def _validate_choice(value: str, allowed: Sequence[str], *, label: str) -> str:
     return choice
 
 
-def _validate_positive_int(value: int, *, label: str) -> int:
+def _validate_positive_int(value: object, *, label: str) -> int:
     if not isinstance(value, int):
         raise ValueError(f"{label} must be an integer")
-    if value < 1:
+    if value < 1:  # type: ignore[comparison-overlap]
         raise ValueError(f"{label} must be a positive integer")
-    return value
+    return int(value)
 
 
-def _validate_non_negative_int(value: int, *, label: str) -> int:
+def _validate_non_negative_int(value: object, *, label: str) -> int:
     if not isinstance(value, int):
         raise ValueError(f"{label} must be an integer")
-    if value < 0:
+    if value < 0:  # type: ignore[comparison-overlap]
         raise ValueError(f"{label} must be a non-negative integer")
-    return value
+    return int(value)
 
 
 def _validate_segment(value: str, label: str) -> None:
@@ -628,7 +687,7 @@ def _expect_list(data: dict[str, object], field_name: str) -> list[object]:
     value = data.get(field_name)
     if not isinstance(value, list):
         raise ValueError(f"field '{field_name}' must be a list")
-    return value
+    return cast(list[object], value)
 
 
 def _expect_int(data: dict[str, object], field_name: str) -> int:

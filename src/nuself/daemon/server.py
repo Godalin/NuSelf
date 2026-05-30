@@ -9,9 +9,12 @@ import os
 import socketserver
 import threading
 import time
-from typing import override
+from collections.abc import Sequence
+from typing import override, cast
 
 from nuself.agent.chat import ChatAgent
+from nuself.reason.domain import ReasoningStep, ReasoningThread
+from nuself.reason.output import ReasonOutputManifest
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.config import ConfigSystem
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
@@ -36,6 +39,9 @@ def _format_exception_chain(exc: BaseException) -> str:
             messages.append(message)
         current = current.__cause__ or current.__context__
     return " <- ".join(messages) if messages else exc.__class__.__name__
+
+
+# Export chunk runner protocol intentionally omitted; inline runner typing used.
 
 
 class DaemonState:
@@ -202,7 +208,20 @@ class DaemonState:
         store = PrivateWorkspaceStore(self.project_root, scope="reason")
         service = ReasonOutputService(self.project_root)
 
-        def _llm_runner(thread, manifest, steps, *, index, total):
+        def _write_json_atomic_local(path: Path, payload: dict[str, object]) -> None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+            tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8")
+            tmp_path.replace(path)
+
+        def _llm_runner(
+            thread: ReasoningThread,
+            manifest: ReasonOutputManifest,
+            steps: Sequence[ReasoningStep],
+            *,
+            index: int,
+            total: int,
+        ) -> str:
             sys = (
                 f"You are a writing assistant. Compose a {manifest.mode} in {manifest.output_format} format "
                 "from the provided reason steps. Produce Markdown suitable for direct display."
@@ -234,7 +253,7 @@ class DaemonState:
 
         while not self.shutdown_requested.wait(self.export_worker_interval_seconds):
             try:
-                root = store._root
+                root = store._root  # type: ignore[reportPrivateUsage]
                 if not root.exists():
                     continue
                 for owner in root.iterdir():
@@ -243,104 +262,103 @@ class DaemonState:
                     export_root = owner / "artifacts" / "export"
                     if not export_root.exists():
                         continue
-                    for job_dir in export_root.iterdir():
-                        queue_dir = job_dir / "queue"
-                        if not queue_dir.exists():
+                    queue_dir = export_root / "queue"
+                    if not queue_dir.exists():
+                        continue
+                    for evt in sorted(queue_dir.glob("*.json")):
+                        # peek event to check next_attempt and attempts
+                        try:
+                            raw_peek = json.loads(evt.read_text(encoding="utf-8"))
+                        except Exception:
+                            # corrupt event; remove to avoid spin
+                            evt.unlink(missing_ok=True)
                             continue
-                        for evt in sorted(queue_dir.glob("*.json")):
-                            # peek event to check next_attempt and attempts
-                            try:
-                                raw_peek = json.loads(evt.read_text(encoding="utf-8"))
-                            except Exception:
-                                # corrupt event; remove to avoid spin
-                                evt.unlink(missing_ok=True)
-                                continue
-                            next_attempt = raw_peek.get("next_attempt")
-                            if isinstance(next_attempt, (int, float)) and next_attempt > time.time():
-                                # scheduled for future; skip
-                                continue
+                        next_attempt = raw_peek.get("next_attempt")
+                        if isinstance(next_attempt, (int, float)) and next_attempt > time.time():
+                            # scheduled for future; skip
+                            continue
 
-                            # Move to processing/ to claim the work
-                            processing_dir = job_dir / "processing"
-                            processing_dir.mkdir(parents=True, exist_ok=True)
-                            processing_path = processing_dir / evt.name
-                            try:
-                                evt.replace(processing_path)
-                            except OSError:
-                                continue
-                            try:
-                                raw = json.loads(processing_path.read_text(encoding="utf-8"))
-                                job_id = raw.get("job_id")
-                                thread_id = raw.get("thread_id")
-                                if not job_id or not thread_id:
-                                    processing_path.unlink(missing_ok=True)
-                                    continue
-                                write_log_event(
-                                    "daemon",
-                                    "export_job_dequeued",
-                                    f"Dequeued export job {job_id} for thread {thread_id}",
-                                    project_root=self.project_root,
-                                    metadata={"job_id": job_id, "thread_id": thread_id},
-                                )
-                                try:
-                                    # skip if already complete
-                                    manifest_path = job_dir / "manifest.json"
-                                    if manifest_path.exists():
-                                        with manifest_path.open(encoding="utf-8") as f:
-                                            manifest_raw = json.load(f)
-                                        if manifest_raw.get("status") == "complete":
-                                            processing_path.unlink(missing_ok=True)
-                                            continue
-                                    service.compose_with_runner(thread_id, job_id, _llm_runner)
-                                    # on success remove processing file
-                                    processing_path.unlink(missing_ok=True)
-                                except Exception as exc:
-                                    # handle retry/backoff
-                                    attempts = int(raw.get("attempts", 0)) + 1
-                                    if attempts >= MAX_ATTEMPTS:
-                                        write_log_event(
-                                            "daemon",
-                                            "export_job_failed",
-                                            f"Export job {job_id} exhausted retries: {str(exc)}",
-                                            project_root=self.project_root,
-                                            level="error",
-                                            status="error",
-                                            error=str(exc),
-                                            metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts},
-                                        )
-                                        # move to failed/
-                                        failed_dir = job_dir / "failed"
-                                        failed_dir.mkdir(parents=True, exist_ok=True)
-                                        ts = int(time.time())
-                                        failed_path = failed_dir / f"{job_id}-{ts}.json"
-                                        try:
-                                            processing_path.replace(failed_path)
-                                        except OSError:
-                                            processing_path.unlink(missing_ok=True)
-                                    else:
-                                        # schedule next attempt with backoff
-                                        backoff = _next_backoff(attempts)
-                                        next_ts = int(time.time()) + backoff
-                                        raw["attempts"] = attempts
-                                        raw["next_attempt"] = next_ts
-                                        write_log_event(
-                                            "daemon",
-                                            "export_job_retry",
-                                            f"Export job {job_id} will retry in {backoff}s (attempt {attempts})",
-                                            project_root=self.project_root,
-                                            status="retry",
-                                            metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts, "next_attempt": next_ts},
-                                        )
-                                        # write back to queue atomically
-                                        try:
-                                            _write_json_atomic(queue_dir / processing_path.name, raw)
-                                        except Exception:
-                                            # fallback: drop processing file
-                                            processing_path.unlink(missing_ok=True)
-                            except Exception:
-                                # If something went wrong parsing the event, remove it to avoid tight loop
+                        # Move to processing/ to claim the work
+                        processing_dir = export_root / "processing"
+                        processing_dir.mkdir(parents=True, exist_ok=True)
+                        processing_path = processing_dir / evt.name
+                        try:
+                            evt.replace(processing_path)
+                        except OSError:
+                            continue
+                        try:
+                            raw = json.loads(processing_path.read_text(encoding="utf-8"))
+                            job_id = raw.get("job_id")
+                            thread_id = raw.get("thread_id")
+                            if not job_id or not thread_id:
                                 processing_path.unlink(missing_ok=True)
                                 continue
+                            write_log_event(
+                                "daemon",
+                                "export_job_dequeued",
+                                f"Dequeued export job {job_id} for thread {thread_id}",
+                                project_root=self.project_root,
+                                metadata={"job_id": job_id, "thread_id": thread_id},
+                            )
+                            try:
+                                # skip if already complete
+                                manifest_path = export_root / "manifest.json"
+                                if manifest_path.exists():
+                                    with manifest_path.open(encoding="utf-8") as f:
+                                        manifest_raw = json.load(f)
+                                    if manifest_raw.get("status") == "complete":
+                                        processing_path.unlink(missing_ok=True)
+                                        continue
+                                service.compose_with_runner(thread_id, job_id, _llm_runner)
+                                # on success remove processing file
+                                processing_path.unlink(missing_ok=True)
+                            except Exception as exc:
+                                # handle retry/backoff
+                                attempts = int(raw.get("attempts", 0)) + 1
+                                if attempts >= MAX_ATTEMPTS:
+                                    write_log_event(
+                                        "daemon",
+                                        "export_job_failed",
+                                        f"Export job {job_id} exhausted retries: {str(exc)}",
+                                        project_root=self.project_root,
+                                        level="error",
+                                        status="error",
+                                        error=str(exc),
+                                        metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts},
+                                    )
+                                    # move to failed/
+                                    failed_dir = export_root / "failed"
+                                    failed_dir.mkdir(parents=True, exist_ok=True)
+                                    ts = int(time.time())
+                                    failed_path = failed_dir / f"{job_id}-{ts}.json"
+                                    try:
+                                        processing_path.replace(failed_path)
+                                    except OSError:
+                                        processing_path.unlink(missing_ok=True)
+                                else:
+                                    # schedule next attempt with backoff
+                                    backoff = _next_backoff(attempts)
+                                    next_ts = int(time.time()) + backoff
+                                    raw["attempts"] = attempts
+                                    raw["next_attempt"] = next_ts
+                                    write_log_event(
+                                        "daemon",
+                                        "export_job_retry",
+                                        f"Export job {job_id} will retry in {backoff}s (attempt {attempts})",
+                                        project_root=self.project_root,
+                                        status="retry",
+                                        metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts, "next_attempt": next_ts},
+                                    )
+                                    # write back to queue atomically
+                                    try:
+                                                            _write_json_atomic_local(queue_dir / processing_path.name, cast(dict[str, object], raw))
+                                    except Exception:
+                                        # fallback: drop processing file
+                                        processing_path.unlink(missing_ok=True)
+                        except Exception:
+                            # If something went wrong parsing the event, remove it to avoid tight loop
+                            processing_path.unlink(missing_ok=True)
+                            continue
             except Exception as e:
                 write_log_event(
                     "daemon",

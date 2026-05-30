@@ -84,6 +84,7 @@ It must record:
 ## Storage Contract
 
 Reason output composition jobs live in the owning reason workspace.
+Export execution is handled by one daemon-global worker loop that scans reason workspaces and processes queued export jobs across the process.
 
 Required workspace layout:
 
@@ -92,19 +93,22 @@ private/workspaces/reason/{thread_id}/
   workspace.sqlite
   artifacts/
     export/
-      {job_id}/
-        manifest.json
-        chunk-001.md
-        chunk-002.md
-        combined.md
-        progress.json
+      manifest.json
+      chunk-001.md
+      chunk-002.md
+      combined.md
+      progress.json
+      queue/
+      processing/
+      failed/
 ```
 
 Rules:
 
-- The workspace is thread-local and job-local.
+- The workspace is thread-local.
 - Export data must not be stored in transcript storage.
 - Export data must not be written into another thread's workspace.
+- The export root is fixed for the thread, so repeated exports rewrite the same manifest and artifact files instead of creating a new per-job directory.
 - The manifest is the resumable source of truth for the export job.
 
 ## Output Modes
@@ -147,7 +151,9 @@ The chat-facing interface must allow the caller to specify:
 
 Chat must not need to store the full long-form result in the chat context to complete the job.
 
-The first chat-facing export tool call must be fire-and-return: it plans the job, writes the manifest, enqueues the background work, and immediately returns the queued job metadata. The daemon worker is responsible for composing chunks and writing the final artifact.
+The first chat-facing export tool call must be fire-and-return: it plans the job, writes the manifest, enqueues the background work, and immediately returns the queued job metadata. The daemon worker is a single process-global loop responsible for composing chunks and writing the final artifact.
+
+Repeated calls with the same selected source range and export settings should be idempotent and rewrite the same fixed export root for the thread.
 
 When the selected range is large, the job should be processed in batches and progress should be reported after each completed batch.
 

@@ -259,6 +259,20 @@ class ReasoningStep:
         )
 
 
+# A concrete alias to help type inference in other modules
+ReasonStepList: TypeAlias = list[ReasoningStep]
+
+
+def partition_steps(items: ReasonStepList, size: int) -> list[ReasonStepList]:
+    """Partition a list of ReasoningStep into chunks of the given size."""
+    if size < 1:
+        raise ValueError("segment_size must be a positive integer")
+    result: list[ReasonStepList] = []
+    for i in range(0, len(items), size):
+        result.append(items[i : i + size])
+    return result
+
+
 def _optional_tracked_items(data: dict[str, object], field_name: str) -> tuple[dict[str, object], ...]:
     value = data.get(field_name)
     if value is None:

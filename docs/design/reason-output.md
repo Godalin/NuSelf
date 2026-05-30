@@ -36,6 +36,7 @@ The subsystem sits beside the existing reason service:
 - `reason workspace` stores intermediate artifacts, chunk files, and manifest data.
 
 The critical boundary is that chat manages the task, but the task state lives in the reason workspace.
+The execution loop itself is daemon-global: one background worker scans the thread workspaces and processes export jobs for the whole process.
 
 ## Core Concepts
 
@@ -140,16 +141,19 @@ private/workspaces/reason/{thread_id}/
   workspace.sqlite
   artifacts/
     export/
-      {job_id}/
-        manifest.json
-        chunk-001.md
-        chunk-002.md
-        combined.md
-        progress.json
-        logs/
+      manifest.json
+      chunk-001.md
+      chunk-002.md
+      combined.md
+      progress.json
+      queue/
+      processing/
+      failed/
 ```
 
-The workspace is thread-local and job-local. It should not be used as a shared cross-thread cache.
+The workspace is thread-local. It should not be used as a shared cross-thread cache.
+
+The export root is fixed for each thread so repeated exports with the same source range and settings reuse the same artifact location instead of creating a new per-job directory.
 
 ## Composition Pipeline
 
