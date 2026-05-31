@@ -137,6 +137,9 @@ The output composer may read reason steps through reason service-facing methods 
 
 Reason output writes intermediate files into the reason workspace.
 
+Each export job gets its own subdirectory under `export/jobs/{job_id}`.
+Queue, processing, and failed event metadata lives at the `export/` level.
+
 Recommended layout:
 
 ```text
@@ -144,21 +147,32 @@ private/workspaces/reason/{thread_id}/
   workspace.sqlite
   artifacts/
     export/
-      manifest.json
-      chunk-001.md
-      chunk-002.md
-      combined.md
-      progress.json
-      queue/
-      processing/
-      failed/
+      jobs/
+        {job_id}/
+          manifest.json
+          progress.json
+          chunk-001.md
+          chunk-002.md
+          combined.md
+          combined.pdf
+          .lock             # advisory compose lock
+      queue/                # {job_id}.json pending events
+      processing/           # {job_id}.json claimed events
+      failed/               # {job_id}-{ts}.json exhausted events
 ```
 
 The workspace is thread-local. It should not be used as a shared cross-thread cache.
 
-The export root is fixed for each thread so repeated exports with the same source range and settings reuse the same artifact location instead of creating a new per-job directory.
+Per-job subdirectories allow multiple export ranges or settings to coexist without destructive collision.
+Re-planning with different parameters does not delete pending queue events or in-progress processing claims for other jobs.
+Repeated exports with the same source range and settings produce the same deterministic `job_id` and reuse the same `jobs/{job_id}` directory (idempotent).
+
+A `.lock` file inside the job directory provides cooperative advisory locking between the daemon worker and synchronous compose calls (`resume_job`). Before composing, the caller atomically creates the lock file. If it already exists, the caller backs off.
+
 The manifest should record the section plan so the worker can reuse the same chapter or section names if the export is resumed.
+
 The daemon worker should scan once immediately on startup, then continue polling at its configured interval, so queued exports do not wait for the first sleep cycle before work begins.
+On startup, the worker must also reconcile: move any files in `processing/` back to `queue/` (crash recovery) and remove any stale `.lock` files under `jobs/`.
 
 ## Composition Pipeline
 

@@ -87,22 +87,27 @@ It must record:
 Reason output composition jobs live in the owning reason workspace.
 Export execution is handled by one daemon-global worker loop that scans reason workspaces and processes queued export jobs across the process.
 
-Required workspace layout:
+### Workspace layout
+
+Each export job occupies its own subdirectory under `export/jobs/{job_id}`.
+Queue, processing, and failed event files live at the `export/` level, keyed by `job_id`.
 
 ```text
 private/workspaces/reason/{thread_id}/
   workspace.sqlite
   artifacts/
     export/
-      manifest.json
-      chunk-001.md
-      chunk-002.md
-      combined.md
-      combined.pdf
-      progress.json
-      queue/
-      processing/
-      failed/
+      jobs/
+        {job_id}/
+          manifest.json
+          progress.json
+          chunk-001.md
+          chunk-002.md
+          combined.md
+          combined.pdf
+      queue/          # {job_id}.json  — pending events
+      processing/     # {job_id}.json  — claimed in-progress events
+      failed/         # {job_id}-{ts}.json — exhausted events
 ```
 
 Rules:
@@ -110,9 +115,49 @@ Rules:
 - The workspace is thread-local.
 - Export data must not be stored in transcript storage.
 - Export data must not be written into another thread's workspace.
-- The export root is fixed for the thread, so repeated exports rewrite the same manifest and artifact files instead of creating a new per-job directory.
+- Each export job has a deterministic `job_id` derived from its parameters. The job's data lives under `jobs/{job_id}/`, not in the root `export/` directory. This allows multiple export ranges or settings to coexist without destructive collision: re-planning with different parameters does not delete pending queue events or in-progress processing claims for other jobs.
 - The manifest is the resumable source of truth for the export job.
 - The manifest stores a deterministic section plan derived from the selected source steps, not from chunk boundaries, so each chunk can reuse the same chapter or section names, focus, and ordering context across the full export.
+- Repeated calls with the same selected source range and export settings are idempotent: they produce the same `job_id`, reuse the same `jobs/{job_id}` directory, and skip re-enqueueing if the job is already pending or complete.
+
+### Queue event schema
+
+A queue event is a JSON file named `{job_id}.json` in the `queue/` directory:
+
+```json
+{
+    "type": "reason_output_job",
+    "job_id": "reason-output-{sha256}",
+    "thread_id": "reason-...",
+    "created_at": "2026-01-01T00:00:00.000000+00:00",
+    "attempts": 0,
+    "next_attempt": null
+}
+```
+
+The worker does NOT read the manifest path from the queue event. It reconstructs `jobs/{job_id}/manifest.json` from the `thread_id` and `job_id`. This keeps the queue event lightweight and avoids stale path references.
+
+### File-level locking
+
+Because the export worker and the synchronous CLI (`resume_job`) can attempt to compose the same job concurrently, each job subdirectory carries an optional `.lock` file.
+
+Lock protocol:
+
+- Before composing a job, the caller attempts to create `jobs/{job_id}/.lock` atomically (`O_CREAT | O_EXCL`).
+- If creation succeeds, the caller owns the lock and may proceed with composition.
+- If creation fails (`.lock` already exists), the caller must assume another thread or process is already composing the job and must either skip or back off.
+- After composition completes (success or failure), the lock owner must remove `.lock`.
+- A stale lock (e.g., process crash while holding the lock) is detected by the owner: on daemon restart, the startup reconciliation step removes all `.lock` files under `jobs/` (see Startup Reconciliation below).
+- The lock is purely advisory and cooperative. It does not protect against malicious or incorrect callers.
+
+### Startup reconciliation
+
+When the daemon export worker starts, it must run a one-time reconciliation step before entering its polling loop:
+
+1. Scan `export/processing/` in every workspace. Any file found there was left by a worker that crashed or was killed while composing. Move each file back to `export/queue/` (preserving its `attempts` count) so the job can be retried.
+2. Scan `export/jobs/` in every workspace. Remove any `.lock` file found — these were held by crashed processes and are now stale.
+
+This ensures that no pending work is lost across daemon restarts and that no stale lock blocks future composition.
 
 ## Output Modes
 
@@ -138,6 +183,9 @@ The service must be able to:
 - combine completed chunks into a final artifact
 - generate a PDF artifact from the final Markdown output when the export completes
 - resume a partially completed job from the manifest
+- guard concurrent composition via the `.lock` file protocol (see Storage Contract)
+
+The service must not write a queue event when re-planning an existing job that is already pending (queue event exists) or complete. It must only enqueue on the initial plan for a new job.
 
 The service may read reason state through reason service-facing methods or a dedicated adapter. It must not reinterpret reason state as chat history.
 
@@ -160,7 +208,7 @@ The first chat-facing export tool call must be approval-gated, but the agent sho
 
 When the Markdown artifact is finished, the export pipeline should automatically invoke the PDF helper script so the thread can be shared as both Markdown and PDF.
 
-Repeated calls with the same selected source range and export settings should be idempotent and rewrite the same fixed export root for the thread.
+Repeated calls with the same selected source range and export settings should be idempotent. The same deterministic `job_id` is produced, and the same `jobs/{job_id}` directory is reused. If the earlier job is still pending or in progress, the plan step returns the existing manifest without re-enqueueing. The `plan_job` service must not write a queue event for an existing job that already has one pending, and must not write a duplicate queue event for a job that is already being processed or is complete.
 
 When the selected range is large, the job should be processed in batches and progress should be reported after each completed batch.
 
@@ -202,10 +250,14 @@ The export job must be resumable.
 
 If the job is interrupted, a later run must:
 
+- acquire the `.lock` file before starting
 - load the manifest
 - skip completed chunks
 - recompute only incomplete work
 - finalize the artifact once all chunks are present
+- release the `.lock` file after completion
+
+If the caller cannot acquire the lock (another thread or process is already composing this job), it must skip or back off rather than attempt concurrent writes.
 
 If the source thread changes after the job has begun, the export job must remain consistent with the source range recorded in the manifest.
 
