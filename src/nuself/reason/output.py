@@ -288,7 +288,7 @@ class ReasonOutputService:
                 )
             return existing
 
-        _clear_directory(paths.root)
+        _clear_job_artifacts(paths)
         paths.root.mkdir(parents=True, exist_ok=True)
         manifest = ReasonOutputManifest(
             job_id=job_id,
@@ -883,9 +883,24 @@ def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
     tmp_path.replace(path)
 
 
-def _clear_directory(path: Path) -> None:
-    if path.exists():
-        shutil.rmtree(path)
+def _clear_job_artifacts(paths: ReasonOutputPaths) -> None:
+    """Remove job artifact files while preserving queue/processing/failed dirs.
+
+    This prevents data loss when re-planning with different params: pending
+    queue events, in-progress worker claims, and historical failure records
+    are kept intact.
+    """
+    root = paths.root
+    if not root.exists():
+        return
+    _KEEP_DIRS = frozenset({"queue", "processing", "failed"})
+    for child in root.iterdir():
+        if child.name in _KEEP_DIRS:
+            continue
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink(missing_ok=True)
 
 
 def _validate_choice(value: str, allowed: Sequence[str], *, label: str) -> str:
