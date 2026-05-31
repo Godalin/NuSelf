@@ -78,7 +78,7 @@ class DaemonState:
         self.reason_scheduler_interval_seconds = config.daemon.reason_scheduler.interval_seconds
         self._reason_scheduler_thread: threading.Thread | None = None
         self._export_worker_thread: threading.Thread | None = None
-        self.export_worker_interval_seconds: float = 5.0
+        self.export_worker_interval_seconds: float = config.daemon.export_worker.interval_seconds
 
     def start_background_memory_curator(self) -> None:
         if self._memory_curator_thread is not None:
