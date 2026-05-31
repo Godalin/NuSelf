@@ -290,6 +290,15 @@ class DaemonState:
                 try:
                     raw = json.loads(manifest_path.read_text(encoding="utf-8"))
                 except Exception:
+                    write_log_event(
+                        "daemon",
+                        "export_reconciliation_skip",
+                        f"Skipping corrupted manifest: {manifest_path}",
+                        project_root=self.project_root,
+                        level="warning",
+                        status="error",
+                        metadata={"owner_id": owner_id, "path": str(manifest_path)},
+                    )
                     continue
                 status = raw.get("status")
                 if status in ("complete", "failed"):
@@ -316,7 +325,16 @@ class DaemonState:
                 thread_id, job_id = self._export_queue.get(timeout=1.0)
             except queue.Empty:
                 continue
-            except Exception:
+            except Exception as exc:
+                write_log_event(
+                    "daemon",
+                    "export_worker_get_error",
+                    f"export queue.get() error: {str(exc)}",
+                    project_root=self.project_root,
+                    level="warning",
+                    status="error",
+                    error=str(exc),
+                )
                 continue
 
             if self.shutdown_requested.is_set():
@@ -334,25 +352,29 @@ class DaemonState:
 
                 service.compose_with_runner(thread_id, job_id, _llm_runner)
             except Exception as exc:
-                from nuself.reason.output import write_json_atomic
+                from nuself.reason.output import ReasonOutputManifest, write_json_atomic
 
-                # Read manifest once, persist updated attempts on every failure.
+                # Persist attempts + error info on every failure using the
+                # typed manifest model, so crash recovery preserves counters.
                 attempts = 1
                 now_iso = datetime.now(UTC).isoformat()
                 if manifest_path.exists():
                     try:
-                        manifest_raw: dict[str, object] = json.loads(manifest_path.read_text(encoding="utf-8"))
-                        raw_attempts = manifest_raw.get("attempts", 0)
-                        attempts = (int(raw_attempts) + 1) if isinstance(raw_attempts, (int, str, float)) else 1
-                        # Persist attempts + error info so crash recovery
-                        # preserves the retry counter across restarts.
-                        manifest_raw["attempts"] = attempts
-                        manifest_raw["last_error"] = str(exc)
-                        manifest_raw["last_attempt_at"] = now_iso
-                        manifest_raw["updated_at"] = now_iso
+                        raw: dict[str, object] = json.loads(manifest_path.read_text(encoding="utf-8"))
+                        manifest = ReasonOutputManifest.from_wire(raw)
+                        raw_attempts = manifest.attempts
+                        attempts = raw_attempts + 1
                         if attempts >= MAX_ATTEMPTS:
-                            manifest_raw["status"] = "failed"
-                        write_json_atomic(manifest_path, manifest_raw)
+                            updated = manifest.with_updates(
+                                status="failed", attempts=attempts,
+                                last_error=str(exc), last_attempt_at=now_iso,
+                            )
+                        else:
+                            updated = manifest.with_updates(
+                                attempts=attempts,
+                                last_error=str(exc), last_attempt_at=now_iso,
+                            )
+                        write_json_atomic(manifest_path, updated.to_wire())
                     except Exception:
                         pass
 

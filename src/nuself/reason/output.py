@@ -8,7 +8,7 @@ import json
 import shutil
 import subprocess
 import textwrap
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Sequence, cast
@@ -123,6 +123,9 @@ class ReasonOutputManifest:
     updated_at: str = field(default_factory=_now_iso)
     sections: tuple[ReasonOutputSection, ...] = ()
     chunks: tuple[ReasonOutputChunk, ...] = ()
+    attempts: int = 0
+    last_error: str | None = None
+    last_attempt_at: str | None = None
 
     def to_wire(self) -> dict[str, object]:
         return {
@@ -142,6 +145,9 @@ class ReasonOutputManifest:
             "updated_at": self.updated_at,
             "sections": [section.to_wire() for section in self.sections],
             "chunks": [chunk.to_wire() for chunk in self.chunks],
+            "attempts": self.attempts,
+            "last_error": self.last_error,
+            "last_attempt_at": self.last_attempt_at,
         }
 
     @classmethod
@@ -170,34 +176,74 @@ class ReasonOutputManifest:
                 for chunk in _expect_list(data, "chunks")
                 if isinstance(chunk, dict)
             ),
+            attempts=_optional_int(data, "attempts") or 0,
+            last_error=_optional_str(data, "last_error"),
+            last_attempt_at=_optional_str(data, "last_attempt_at"),
         )
 
-    def with_updates(self, **changes: object) -> ReasonOutputManifest:
-        payload = self.to_wire()
-        payload.update(changes)
-        payload["updated_at"] = _now_iso()
-        # Normalize chunks to a list of wire-form dicts if present
-        if "sections" in payload:
-            raw_sections = cast(Sequence[object], payload.get("sections"))
-            if isinstance(raw_sections, (list, tuple)):
-                normalized_sections: list[object] = []
-                for item in raw_sections:
-                    if isinstance(item, ReasonOutputSection):
-                        normalized_sections.append(item.to_wire())
-                    elif isinstance(item, dict):
-                        normalized_sections.append(cast(dict[str, object], item))
-                payload["sections"] = normalized_sections
-        if "chunks" in payload:
-            raw_chunks = cast(Sequence[object], payload.get("chunks"))
-            if isinstance(raw_chunks, (list, tuple)):
-                normalized: list[object] = []
-                for item in raw_chunks:
-                    if isinstance(item, ReasonOutputChunk):
-                        normalized.append(item.to_wire())
-                    elif isinstance(item, dict):
-                        normalized.append(cast(dict[str, object], item))
-                payload["chunks"] = normalized
-        return ReasonOutputManifest.from_wire(payload)
+    def with_updates(
+        self,
+        *,
+        status: str | None = None,
+        chunks: tuple[ReasonOutputChunk, ...] | None = None,
+        sections: tuple[ReasonOutputSection, ...] | None = None,
+        attempts: int | None = None,
+        last_error: str | None = None,
+        last_attempt_at: str | None = None,
+    ) -> ReasonOutputManifest:
+        kw: dict[str, object] = {"updated_at": _now_iso()}
+        if status is not None:
+            kw["status"] = status
+        if chunks is not None:
+            kw["chunks"] = chunks
+        if sections is not None:
+            kw["sections"] = sections
+        if attempts is not None:
+            kw["attempts"] = attempts
+        if last_error is not None:
+            kw["last_error"] = last_error
+        if last_attempt_at is not None:
+            kw["last_attempt_at"] = last_attempt_at
+        return replace(self, **kw)  # pyright: ignore[reportArgumentType]
+
+
+@dataclass(frozen=True)
+class ReasonOutputProgress:
+    job_id: str
+    thread_id: str
+    status: str
+    completed_chunks: tuple[int, ...]
+    total_chunks: int
+    pdf_status: str
+    pdf_path: str | None
+    updated_at: str
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            "job_id": self.job_id,
+            "thread_id": self.thread_id,
+            "status": self.status,
+            "completed_chunks": list(self.completed_chunks),
+            "total_chunks": self.total_chunks,
+            "pdf_status": self.pdf_status,
+            "pdf_path": self.pdf_path,
+            "updated_at": self.updated_at,
+        }
+
+    @classmethod
+    def from_wire(cls, data: dict[str, object]) -> ReasonOutputProgress:
+        return cls(
+            job_id=_expect_str(data, "job_id"),
+            thread_id=_expect_str(data, "thread_id"),
+            status=_expect_str(data, "status"),
+            completed_chunks=tuple(
+                int(x) for x in _expect_list(data, "completed_chunks") if isinstance(x, (int, float))
+            ),
+            total_chunks=_expect_int(data, "total_chunks"),
+            pdf_status=_expect_str(data, "pdf_status"),
+            pdf_path=_optional_str(data, "pdf_path"),
+            updated_at=_expect_str(data, "updated_at"),
+        )
 
 
 @dataclass(frozen=True)
@@ -231,7 +277,7 @@ class ReasonOutputService:
         if not jobs_dir.exists():
             return []
         jobs: list[ReasonOutputManifest] = []
-        for job_dir in sorted(jobs_dir.iterdir()):
+        for job_dir in jobs_dir.iterdir():
             if not job_dir.is_dir():
                 continue
             manifest_path = job_dir / "manifest.json"
@@ -240,14 +286,14 @@ class ReasonOutputService:
             manifest = self._read_manifest(manifest_path)
             if manifest is not None:
                 jobs.append(manifest)
-        return sorted(jobs, key=lambda manifest: (manifest.created_at, manifest.job_id))
+        return sorted(jobs, key=lambda m: (m.created_at, m.job_id))
 
     def get_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
         root = self._export_root(thread_id)
         jobs_dir = root / "jobs"
         if not jobs_dir.exists():
             raise ReasonNotFound(job_id)
-        for job_dir in sorted(jobs_dir.iterdir()):
+        for job_dir in jobs_dir.iterdir():
             if not job_dir.is_dir():
                 continue
             manifest_path = job_dir / "manifest.json"
@@ -312,16 +358,16 @@ class ReasonOutputService:
         self._write_manifest(paths.manifest, manifest)
         self._write_progress(
             paths.progress,
-            {
-                "job_id": job_id,
-                "thread_id": thread.id,
-                "status": manifest.status,
-                "completed_chunks": [],
-                "total_chunks": _chunk_count(len(selected), segment_size),
-                "pdf_status": "pending",
-                "pdf_path": None,
-                "updated_at": manifest.updated_at,
-            },
+            ReasonOutputProgress(
+                job_id=job_id,
+                thread_id=thread.id,
+                status=manifest.status,
+                completed_chunks=(),
+                total_chunks=_chunk_count(len(selected), segment_size),
+                pdf_status="pending",
+                pdf_path=None,
+                updated_at=manifest.updated_at,
+            ),
         )
         write_log_event(
             "reasoning",
@@ -509,23 +555,21 @@ class ReasonOutputService:
     ) -> ReasonOutputManifest:
         combined_text = _combine_chunks(thread, manifest, paths, chunks, section_plan=section_plan)
         paths.combined.write_text(combined_text, encoding="utf-8")
-        updated = manifest.with_updates(status="complete", chunks=tuple(chunks), sections=section_plan)
+        updated = manifest.with_updates(status="complete", chunks=tuple(chunks), sections=tuple(section_plan))
         self._write_manifest(paths.manifest, updated)
         pdf_path = self._generate_pdf(paths)
         pdf_status = "generated" if pdf_path is not None else ("skipped" if not paths.pdf.exists() else "generated")
-        self._write_progress(
-            paths.progress,
-            {
-                "job_id": manifest.job_id,
-                "thread_id": thread.id,
-                "status": updated.status,
-                "completed_chunks": [chunk.index for chunk in chunks],
-                "total_chunks": len(chunks),
-                "pdf_status": pdf_status,
-                "pdf_path": str(pdf_path) if pdf_path is not None else (str(paths.pdf) if paths.pdf.exists() else None),
-                "updated_at": updated.updated_at,
-            },
+        progress = ReasonOutputProgress(
+            job_id=manifest.job_id,
+            thread_id=thread.id,
+            status=updated.status,
+            completed_chunks=tuple(chunk.index for chunk in chunks),
+            total_chunks=len(chunks),
+            pdf_status=pdf_status,
+            pdf_path=str(pdf_path) if pdf_path is not None else (str(paths.pdf) if paths.pdf.exists() else None),
+            updated_at=updated.updated_at,
         )
+        self._write_progress(paths.progress, progress)
         write_log_event(
             "reasoning",
             "reason_output_composed",
@@ -556,8 +600,8 @@ class ReasonOutputService:
     def _write_manifest(self, path: Path, manifest: ReasonOutputManifest) -> None:
         write_json_atomic(path, manifest.to_wire())
 
-    def _write_progress(self, path: Path, payload: dict[str, object]) -> None:
-        write_json_atomic(path, payload)
+    def _write_progress(self, path: Path, progress: ReasonOutputProgress) -> None:
+        write_json_atomic(path, progress.to_wire())
 
     def _resolve_section_plan(
         self,
@@ -671,7 +715,11 @@ def _combine_chunks(
     lines.append("")
     for chunk in chunks:
         chunk_path = paths.chunks_dir / chunk.filename
-        lines.append(chunk_path.read_text(encoding="utf-8").rstrip())
+        try:
+            text = chunk_path.read_text(encoding="utf-8").rstrip()
+        except FileNotFoundError:
+            text = f"*[Missing chunk {chunk.filename}]*"
+        lines.append(text)
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 

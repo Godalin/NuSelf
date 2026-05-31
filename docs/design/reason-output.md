@@ -169,6 +169,14 @@ A `.lock` file inside the job directory provides cooperative advisory locking be
 
 The manifest should record the section plan so the worker can reuse the same chapter or section names if the export is resumed.
 
+#### Typed domain model requirement
+
+All persistent export state (manifest, progress) must use typed dataclasses:
+
+- **`ReasonOutputManifest`** — frozen dataclass with `to_wire()` / `from_wire()`. Contains `attempts`, `last_error`, `last_attempt_at` for retry persistence. All mutations go through `dataclasses.replace()`.
+- **`ReasonOutputProgress`** — frozen dataclass with `to_wire()` / `from_wire()`. Read-friendly summary of manifest state.
+- Raw `dict[str, object]` manipulation of manifest or progress files is prohibited. The worker's failure handler uses `dataclasses.replace()` + `to_wire()` instead of inline JSON manipulation.
+
 #### Queue model: in-memory event bus
 
 The worker reads from a `queue.SimpleQueue` that carries `(thread_id, job_id)` tuples.

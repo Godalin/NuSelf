@@ -375,7 +375,7 @@ def build_langchain_chat_tools(
                 end_index=int(end_index) if end_index is not None else None,
                 segment_size=int(segment_size),
             )
-        except (ReasonNotFound, RuntimeError, ValueError, TypeError) as exc:
+        except (RuntimeError, ValueError, TypeError) as exc:
             return _json_error(str(exc))
         paths = service.job_paths(tid, manifest.job_id)
         return _json_result({"queued": True, "job": manifest.to_wire(), "paths": {"root": str(paths.root), "manifest": str(paths.manifest), "progress": str(paths.progress), "combined": str(paths.combined), "chunks_dir": str(paths.chunks_dir)}})

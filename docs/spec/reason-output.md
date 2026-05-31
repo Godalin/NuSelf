@@ -119,6 +119,59 @@ Rules:
 - The manifest is the resumable source of truth for the export job.
 - The manifest stores a deterministic section plan derived from the selected source steps, not from chunk boundaries, so each chunk can reuse the same chapter or section names, focus, and ordering context across the full export.
 - Repeated calls with the same selected source range and export settings are idempotent: they produce the same `job_id`, reuse the same `jobs/{job_id}` directory, and skip re-enqueueing if the job is already pending or complete.
+- **All persistent data must use typed domain models.** Raw `dict` manipulation (accessing `dict[str, object]` directly, setting fields via string keys) is prohibited for manifest and progress data. Only `dataclasses.replace()` and `to_wire()`/`from_wire()` are permitted for state mutations.
+
+### Manifest schema
+
+The manifest is a typed dataclass (`ReasonOutputManifest`) persisted as JSON via `to_wire()` / `from_wire()`:
+
+```json
+{
+    "schema": "NuSelfReasonOutput/v1",
+    "job_id": "reason-output-{sha256}",
+    "thread_id": "reason-...",
+    "mode": "narrative",
+    "output_format": "markdown",
+    "source_start_index": 0,
+    "source_end_index": null,
+    "source_step_ids": ["step-id-1", "step-id-2"],
+    "segment_size": 5,
+    "status": "planned",
+    "combined_filename": "combined.md",
+    "progress_filename": "progress.json",
+    "created_at": "2026-01-01T00:00:00.000000+00:00",
+    "updated_at": "2026-01-01T00:00:00.000000+00:00",
+    "sections": [...],
+    "chunks": [...],
+    "attempts": 0,
+    "last_error": null,
+    "last_attempt_at": null
+}
+```
+
+- `attempts` — number of failed compose attempts (persisted across daemon restarts to prevent infinite retry cycles).
+- `last_error` — error message from the most recent failed compose attempt, or `null`.
+- `last_attempt_at` — ISO timestamp of the most recent failed compose attempt, or `null`.
+- All field mutations go through `dataclasses.replace()` which enforces type checking at the model level. Direct dict mutation of the manifest file is prohibited.
+
+### Progress schema
+
+Progress is a typed dataclass (`ReasonOutputProgress`) persisted as JSON:
+
+```json
+{
+    "job_id": "reason-output-{sha256}",
+    "thread_id": "reason-...",
+    "status": "complete",
+    "completed_chunks": [0, 1],
+    "total_chunks": 2,
+    "pdf_status": "generated",
+    "pdf_path": "combined.pdf",
+    "updated_at": "2026-01-01T00:00:00.000000+00:00"
+}
+```
+
+Progress is a read-friendly summary of the manifest state. The manifest is always the authoritative source of truth.
 
 ### Queue model: in-memory event bus
 
