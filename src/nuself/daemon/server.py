@@ -337,8 +337,9 @@ class DaemonState:
                 # Handle retry/backoff
                 try:
                     if manifest_path.exists():
-                        manifest_raw = json.loads(manifest_path.read_text(encoding="utf-8"))
-                        attempts = int(manifest_raw.get("attempts", 0)) + 1
+                        manifest_raw: dict[str, object] = json.loads(manifest_path.read_text(encoding="utf-8"))
+                        raw_attempts = manifest_raw.get("attempts", 0)
+                        attempts = (int(raw_attempts) + 1) if isinstance(raw_attempts, (int, str, float)) else 1
                     else:
                         attempts = 1
                 except Exception:
@@ -358,7 +359,7 @@ class DaemonState:
                     # Mark manifest as failed
                     try:
                         if manifest_path.exists():
-                            manifest_raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+                            manifest_raw: dict[str, object] = json.loads(manifest_path.read_text(encoding="utf-8"))
                             manifest_raw["status"] = "failed"
                             manifest_raw["updated_at"] = datetime.now(UTC).isoformat()
                             manifest_path.write_text(

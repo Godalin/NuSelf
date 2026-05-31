@@ -230,29 +230,33 @@ class ReasonOutputService:
         root = self._export_root(thread_id)
         if not root.exists():
             return []
-        root_manifest = root / "manifest.json"
-        if root_manifest.exists():
-            manifest = self._read_manifest(root_manifest)
-            if manifest is not None:
-                return [manifest]
+        jobs_dir = root / "jobs"
+        if not jobs_dir.exists():
+            return []
         jobs: list[ReasonOutputManifest] = []
-        for path in sorted(root.glob("*/manifest.json")):
-            manifest = self._read_manifest(path)
+        for job_dir in sorted(jobs_dir.iterdir()):
+            if not job_dir.is_dir():
+                continue
+            manifest_path = job_dir / "manifest.json"
+            if not manifest_path.exists():
+                continue
+            manifest = self._read_manifest(manifest_path)
             if manifest is not None:
                 jobs.append(manifest)
         return sorted(jobs, key=lambda manifest: (manifest.created_at, manifest.job_id))
 
     def get_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
         root = self._export_root(thread_id)
-        root_manifest = root / "manifest.json"
-        if root_manifest.exists():
-            manifest = self._read_manifest(root_manifest)
-            if manifest is not None:
-                if manifest.job_id == job_id:
-                    return manifest
-                raise ReasonNotFound(job_id)
-        for path in sorted(root.glob("*/manifest.json")):
-            manifest = self._read_manifest(path)
+        jobs_dir = root / "jobs"
+        if not jobs_dir.exists():
+            raise ReasonNotFound(job_id)
+        for job_dir in sorted(jobs_dir.iterdir()):
+            if not job_dir.is_dir():
+                continue
+            manifest_path = job_dir / "manifest.json"
+            if not manifest_path.exists():
+                continue
+            manifest = self._read_manifest(manifest_path)
             if manifest is not None and manifest.job_id == job_id:
                 return manifest
         raise ReasonNotFound(job_id)
@@ -514,7 +518,7 @@ class ReasonOutputService:
         _validate_segment(thread_id, "thread id")
         _validate_segment(job_id, "job id")
         workspace = self._workspace_store.ensure(thread_id)
-        root = workspace.artifacts / "export"
+        root = workspace.artifacts / "export" / "jobs" / job_id
         return ReasonOutputPaths(
             root=root,
             manifest=root / "manifest.json",
