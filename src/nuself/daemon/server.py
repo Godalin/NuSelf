@@ -14,7 +14,7 @@ from typing import override, cast
 
 from nuself.agent.chat import ChatAgent
 from nuself.reason.domain import ReasoningStep, ReasoningThread
-from nuself.reason.output import ReasonOutputManifest
+from nuself.reason.output import ReasonOutputManifest, ReasonOutputSection
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.config import ConfigSystem
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
@@ -219,14 +219,14 @@ class DaemonState:
             manifest: ReasonOutputManifest,
             steps: Sequence[ReasoningStep],
             *,
-            section: object,
-            section_plan: Sequence[object],
+            section: ReasonOutputSection,
+            section_plan: Sequence[ReasonOutputSection],
             index: int,
             total: int,
         ) -> str:
-            section_title = getattr(section, "title", f"Section {index + 1}")
-            section_focus = getattr(section, "focus", "")
-            section_steps = getattr(section, "step_ids", ())
+            section_title = section.title
+            section_focus = section.focus
+            section_steps = section.step_ids
             sys = (
                 f"You are a writing assistant. Compose a {manifest.mode} in {manifest.output_format} format "
                 "from the provided reason steps. Produce Markdown suitable for direct display. "
@@ -239,9 +239,9 @@ class DaemonState:
             body_lines.append("")
             body_lines.append("Global section plan:")
             for planned in section_plan:
-                planned_title = getattr(planned, "title", f"Section {getattr(planned, 'index', 0) + 1}")
-                planned_focus = getattr(planned, "focus", "")
-                planned_index = getattr(planned, "index", 0)
+                planned_title = planned.title
+                planned_focus = planned.focus
+                planned_index = planned.index
                 marker = " (current)" if planned_index == index else ""
                 body_lines.append(f"- {planned_index + 1}. {planned_title}: {planned_focus}{marker}")
             body_lines.append("")
