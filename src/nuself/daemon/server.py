@@ -14,7 +14,7 @@ from typing import override, cast
 
 from nuself.agent.chat import ChatAgent
 from nuself.reason.domain import ReasoningStep, ReasoningThread
-from nuself.reason.output import ReasonOutputManifest, ReasonOutputSection
+from nuself.reason.output import ReasonOutputManifest, ReasonOutputSection, write_json_atomic
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.config import ConfigSystem
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
@@ -208,11 +208,7 @@ class DaemonState:
         store = PrivateWorkspaceStore(self.project_root, scope="reason")
         service = ReasonOutputService(self.project_root)
 
-        def _write_json_atomic_local(path: Path, payload: dict[str, object]) -> None:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = path.with_suffix(f"{path.suffix}.tmp")
-            tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8")
-            tmp_path.replace(path)
+        _write_json_atomic_local = write_json_atomic
 
         def _llm_runner(
             thread: ReasoningThread,

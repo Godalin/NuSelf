@@ -275,7 +275,7 @@ class ReasonOutputService:
             queue_path = paths.root / "queue" / f"{job_id}.json"
             if existing.status != "complete" and not queue_path.exists():
                 queue_path.parent.mkdir(parents=True, exist_ok=True)
-                _write_json_atomic(
+                write_json_atomic(
                     queue_path,
                     {
                         "type": "reason_output_job",
@@ -345,7 +345,7 @@ class ReasonOutputService:
                 "created_at": manifest.created_at,
                 "attempts": 0,
             }
-            _write_json_atomic(queue_dir / f"{job_id}.json", cast(dict[str, object], event))
+            write_json_atomic(queue_dir / f"{job_id}.json", cast(dict[str, object], event))
             write_log_event(
                 "daemon",
                 "export_job_enqueued",
@@ -585,10 +585,10 @@ class ReasonOutputService:
             return None
 
     def _write_manifest(self, path: Path, manifest: ReasonOutputManifest) -> None:
-        _write_json_atomic(path, manifest.to_wire())
+        write_json_atomic(path, manifest.to_wire())
 
     def _write_progress(self, path: Path, payload: dict[str, object]) -> None:
-        _write_json_atomic(path, payload)
+        write_json_atomic(path, payload)
 
     def _resolve_section_plan(
         self,
@@ -854,7 +854,8 @@ def _export_job_id(
     return f"reason-output-{digest}"
 
 
-def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
+def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
+    """Atomically write a JSON payload to a file using a temp-file + replace strategy."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(f"{path.suffix}.tmp")
     tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8")
