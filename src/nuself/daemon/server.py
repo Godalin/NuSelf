@@ -334,16 +334,27 @@ class DaemonState:
 
                 service.compose_with_runner(thread_id, job_id, _llm_runner)
             except Exception as exc:
-                # Handle retry/backoff
-                try:
-                    if manifest_path.exists():
+                from nuself.reason.output import write_json_atomic
+
+                # Read manifest once, persist updated attempts on every failure.
+                attempts = 1
+                now_iso = datetime.now(UTC).isoformat()
+                if manifest_path.exists():
+                    try:
                         manifest_raw: dict[str, object] = json.loads(manifest_path.read_text(encoding="utf-8"))
                         raw_attempts = manifest_raw.get("attempts", 0)
                         attempts = (int(raw_attempts) + 1) if isinstance(raw_attempts, (int, str, float)) else 1
-                    else:
-                        attempts = 1
-                except Exception:
-                    attempts = 1
+                        # Persist attempts + error info so crash recovery
+                        # preserves the retry counter across restarts.
+                        manifest_raw["attempts"] = attempts
+                        manifest_raw["last_error"] = str(exc)
+                        manifest_raw["last_attempt_at"] = now_iso
+                        manifest_raw["updated_at"] = now_iso
+                        if attempts >= MAX_ATTEMPTS:
+                            manifest_raw["status"] = "failed"
+                        write_json_atomic(manifest_path, manifest_raw)
+                    except Exception:
+                        pass
 
                 if attempts >= MAX_ATTEMPTS:
                     write_log_event(
@@ -356,18 +367,6 @@ class DaemonState:
                         error=str(exc),
                         metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts},
                     )
-                    # Mark manifest as failed
-                    try:
-                        if manifest_path.exists():
-                            manifest_raw: dict[str, object] = json.loads(manifest_path.read_text(encoding="utf-8"))
-                            manifest_raw["status"] = "failed"
-                            manifest_raw["updated_at"] = datetime.now(UTC).isoformat()
-                            manifest_path.write_text(
-                                json.dumps(manifest_raw, indent=2, sort_keys=True, ensure_ascii=True) + "\n",
-                                encoding="utf-8",
-                            )
-                    except Exception:
-                        pass
                 else:
                     backoff = _next_backoff(attempts)
                     write_log_event(

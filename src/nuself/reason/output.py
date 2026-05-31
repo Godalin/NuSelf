@@ -3,16 +3,15 @@
 
 from __future__ import annotations
 
-from typing import Sequence
 import hashlib
+import json
+import shutil
+import subprocess
+import textwrap
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-import json
-import subprocess
-import shutil
-import textwrap
-from typing import cast, Callable
+from typing import Callable, Sequence, cast
 
 from nuself.logs import write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
@@ -42,8 +41,6 @@ def set_enqueue_callback(cb: Callable[[str, str], None] | None) -> None:
 
 
 def _now_iso() -> str:
-    from datetime import datetime
-
     return datetime.now(UTC).isoformat()
 
 
@@ -89,7 +86,7 @@ class ReasonOutputChunk:
     index: int
     filename: str
     step_ids: tuple[str, ...]
-    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    created_at: str = field(default_factory=_now_iso)
 
     def to_wire(self) -> dict[str, object]:
         return {
@@ -370,37 +367,7 @@ class ReasonOutputService:
         return manifest
 
     def compose_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
-        manifest = self.get_job(thread_id, job_id)
-        thread = self._reason_service.show_thread(thread_id)
-        step_map = {step.id: step for step in self._reason_service.list_steps(thread.id)}
-        selected = [step_map[step_id] for step_id in manifest.source_step_ids if step_id in step_map]
-        if len(selected) != len(manifest.source_step_ids):
-            raise RuntimeError("Cannot compose export job: one or more source steps are missing")
-
-        paths = self._job_paths(thread.id, job_id)
-        paths.root.mkdir(parents=True, exist_ok=True)
-        chunks: list[ReasonOutputChunk] = []
-        section_plan = self._resolve_section_plan(thread, manifest, selected)
-        batch_start = 0
-        for index, batch in enumerate(partition_steps(selected, manifest.segment_size)):
-            section = _section_for_position(section_plan, batch_start)
-            chunk = ReasonOutputChunk(index=index, filename=_chunk_filename(index), step_ids=tuple(step.id for step in batch))
-            chunk_path = paths.chunks_dir / chunk.filename
-            if not chunk_path.exists():
-                chunk_path.write_text(
-                    _render_chunk_document(
-                        thread,
-                        manifest,
-                        section=section,
-                        section_plan=section_plan,
-                        body=_render_chunk(thread, manifest, batch, index=index, total=_chunk_count(len(selected), manifest.segment_size)),
-                    ),
-                    encoding="utf-8",
-                )
-            chunks.append(chunk)
-            batch_start += len(batch)
-
-        return self._finalize_job(thread, manifest, paths, chunks, section_plan)
+        return self.compose_with_runner(thread_id, job_id, _compose_runner)
 
     def start_job(
         self,
@@ -631,6 +598,19 @@ class ReasonOutputService:
             )
             return paths.pdf
         return None
+
+
+def _compose_runner(
+    thread: ReasoningThread,
+    manifest: ReasonOutputManifest,
+    steps: Sequence[ReasoningStep],
+    *,
+    index: int,
+    total: int,
+    **kw: object,
+) -> str:
+    """Default chunk runner used by compose_job."""
+    return _render_chunk(thread, manifest, steps, index=index, total=total)
 
 
 def _render_chunk(
