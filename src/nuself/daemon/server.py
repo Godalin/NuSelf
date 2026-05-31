@@ -6,15 +6,17 @@ import argparse
 import json
 from pathlib import Path
 import os
+import queue
 import socketserver
 import threading
 import time
 from collections.abc import Sequence
-from typing import override, cast
+from typing import override
 
 from nuself.agent.chat import ChatAgent
 from nuself.reason.domain import ReasoningStep, ReasoningThread
-from nuself.reason.output import ReasonOutputManifest, ReasonOutputSection, write_json_atomic
+from nuself.reason.output import ReasonOutputManifest, ReasonOutputSection
+from nuself.reason.output import set_enqueue_callback
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.config import ConfigSystem
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
@@ -77,8 +79,8 @@ class DaemonState:
         self.reason_scheduler: ReasonScheduler | None = None
         self.reason_scheduler_interval_seconds = config.daemon.reason_scheduler.interval_seconds
         self._reason_scheduler_thread: threading.Thread | None = None
+        self._export_queue: queue.SimpleQueue[tuple[str, str]] = queue.SimpleQueue()
         self._export_worker_thread: threading.Thread | None = None
-        self.export_worker_interval_seconds: float = config.daemon.export_worker.interval_seconds
 
     def start_background_memory_curator(self) -> None:
         if self._memory_curator_thread is not None:
@@ -180,6 +182,9 @@ class DaemonState:
     def start_background_export_worker(self) -> None:
         if self._export_worker_thread is not None:
             return
+        # Register the module-level callback so all ReasonOutputService
+        # instances push to this process's in-memory queue.
+        set_enqueue_callback(lambda tid, jid: self._export_queue.put((tid, jid)))
         self._export_worker_thread = threading.Thread(
             target=self._run_background_export_worker,
             name="nuself-export-worker",
@@ -192,6 +197,7 @@ class DaemonState:
             self._export_worker_thread.join(timeout=1.0)
 
     def _run_background_export_worker(self) -> None:
+        from datetime import UTC, datetime
         from nuself.logs import write_log_event
         from nuself.reason.output import ReasonOutputService
         from nuself.workspace import PrivateWorkspaceStore
@@ -207,8 +213,6 @@ class DaemonState:
 
         store = PrivateWorkspaceStore(self.project_root, scope="reason")
         service = ReasonOutputService(self.project_root)
-
-        _write_json_atomic_local = write_json_atomic
 
         def _llm_runner(
             thread: ReasoningThread,
@@ -263,130 +267,117 @@ class DaemonState:
         MAX_BACKOFF = 600  # seconds
 
         def _next_backoff(attempts: int) -> int:
-            # exponential backoff capped at MAX_BACKOFF
             return min(MAX_BACKOFF, BASE_BACKOFF * (2 ** (attempts - 1)))
 
+        # --- Startup reconciliation ---
+        # Re-enqueue any job whose manifest status is not complete/failed.
+        # Also clear stale .lock files from crashed runs.
+        reconciled = 0
+        for owner_id in store.list_owners():
+            jobs_dir = store.paths(owner_id).artifacts / "export" / "jobs"
+            if not jobs_dir.exists():
+                continue
+            for job_dir in sorted(jobs_dir.iterdir()):
+                if not job_dir.is_dir():
+                    continue
+                # Clear stale lock
+                lock_path = job_dir / ".lock"
+                if lock_path.exists():
+                    lock_path.unlink(missing_ok=True)
+                manifest_path = job_dir / "manifest.json"
+                if not manifest_path.exists():
+                    continue
+                try:
+                    raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                status = raw.get("status")
+                if status in ("complete", "failed"):
+                    continue
+                job_id = raw.get("job_id", job_dir.name)
+                if isinstance(job_id, str):
+                    self._export_queue.put((owner_id, job_id))
+                    reconciled += 1
+
+        write_log_event(
+            "daemon",
+            "export_queue_reconciled",
+            f"Export queue reconciled on startup; re-enqueued {reconciled} job(s)",
+            project_root=self.project_root,
+            metadata={"replayed_jobs": reconciled},
+        )
+
+        # --- Main event loop ---
+        # Block on queue.get() with a 1-second timeout to stay responsive
+        # to shutdown_requested. No polling interval needed — events arrive
+        # immediately via the in-memory queue.
         while not self.shutdown_requested.is_set():
             try:
-                owners = store.list_owners()
-                if not owners:
-                    if self.shutdown_requested.wait(self.export_worker_interval_seconds):
-                        break
-                    continue
-                for owner_id in owners:
-                    export_root = store.paths(owner_id).artifacts / "export"
-                    if not export_root.exists():
-                        continue
-                    queue_dir = export_root / "queue"
-                    if not queue_dir.exists():
-                        continue
-                    for evt in sorted(queue_dir.glob("*.json")):
-                        # peek event to check next_attempt and attempts
-                        try:
-                            raw_peek = json.loads(evt.read_text(encoding="utf-8"))
-                        except Exception:
-                            # corrupt event; remove to avoid spin
-                            evt.unlink(missing_ok=True)
-                            continue
-                        next_attempt = raw_peek.get("next_attempt")
-                        if isinstance(next_attempt, (int, float)) and next_attempt > time.time():
-                            # scheduled for future; skip
-                            continue
-
-                        # Move to processing/ to claim the work
-                        processing_dir = export_root / "processing"
-                        processing_dir.mkdir(parents=True, exist_ok=True)
-                        processing_path = processing_dir / evt.name
-                        try:
-                            evt.replace(processing_path)
-                        except OSError:
-                            continue
-                        try:
-                            raw = json.loads(processing_path.read_text(encoding="utf-8"))
-                            job_id = raw.get("job_id")
-                            thread_id = raw.get("thread_id")
-                            if not job_id or not thread_id:
-                                processing_path.unlink(missing_ok=True)
-                                continue
-                            write_log_event(
-                                "daemon",
-                                "export_job_dequeued",
-                                f"Dequeued export job {job_id} for thread {thread_id}",
-                                project_root=self.project_root,
-                                metadata={"job_id": job_id, "thread_id": thread_id},
-                            )
-                            try:
-                                # skip if already complete
-                                manifest_path = export_root / "manifest.json"
-                                if manifest_path.exists():
-                                    with manifest_path.open(encoding="utf-8") as f:
-                                        manifest_raw = json.load(f)
-                                    if manifest_raw.get("status") == "complete":
-                                        processing_path.unlink(missing_ok=True)
-                                        continue
-                                service.compose_with_runner(thread_id, job_id, _llm_runner)
-                                # on success remove processing file
-                                processing_path.unlink(missing_ok=True)
-                            except Exception as exc:
-                                # handle retry/backoff
-                                attempts = int(raw.get("attempts", 0)) + 1
-                                if attempts >= MAX_ATTEMPTS:
-                                    write_log_event(
-                                        "daemon",
-                                        "export_job_failed",
-                                        f"Export job {job_id} exhausted retries: {str(exc)}",
-                                        project_root=self.project_root,
-                                        level="error",
-                                        status="error",
-                                        error=str(exc),
-                                        metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts},
-                                    )
-                                    # move to failed/
-                                    failed_dir = export_root / "failed"
-                                    failed_dir.mkdir(parents=True, exist_ok=True)
-                                    ts = int(time.time())
-                                    failed_path = failed_dir / f"{job_id}-{ts}.json"
-                                    try:
-                                        processing_path.replace(failed_path)
-                                    except OSError:
-                                        processing_path.unlink(missing_ok=True)
-                                else:
-                                    # schedule next attempt with backoff
-                                    backoff = _next_backoff(attempts)
-                                    next_ts = int(time.time()) + backoff
-                                    raw["attempts"] = attempts
-                                    raw["next_attempt"] = next_ts
-                                    write_log_event(
-                                        "daemon",
-                                        "export_job_retry",
-                                        f"Export job {job_id} will retry in {backoff}s (attempt {attempts})",
-                                        project_root=self.project_root,
-                                        status="retry",
-                                        metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts, "next_attempt": next_ts},
-                                    )
-                                    # write back to queue atomically
-                                    try:
-                                                            _write_json_atomic_local(queue_dir / processing_path.name, cast(dict[str, object], raw))
-                                    except Exception:
-                                        # fallback: drop processing file
-                                        processing_path.unlink(missing_ok=True)
-                        except Exception:
-                            # If something went wrong parsing the event, remove it to avoid tight loop
-                            processing_path.unlink(missing_ok=True)
-                            continue
-            except Exception as e:
-                write_log_event(
-                    "daemon",
-                    "export_worker_error",
-                    f"export worker loop error: {str(e)}",
-                    project_root=self.project_root,
-                    level="error",
-                    status="error",
-                    error=str(e),
-                )
+                thread_id, job_id = self._export_queue.get(timeout=1.0)
+            except queue.Empty:
                 continue
-            if self.shutdown_requested.wait(self.export_worker_interval_seconds):
+            except Exception:
+                continue
+
+            if self.shutdown_requested.is_set():
                 break
+
+            manifest_path = store.paths(thread_id).artifacts / "export" / "jobs" / job_id / "manifest.json"
+            try:
+                if manifest_path.exists():
+                    try:
+                        raw: dict[str, object] = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        raw = {}
+                    if raw.get("status") == "complete":
+                        continue
+
+                service.compose_with_runner(thread_id, job_id, _llm_runner)
+            except Exception as exc:
+                # Handle retry/backoff
+                try:
+                    if manifest_path.exists():
+                        manifest_raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+                        attempts = int(manifest_raw.get("attempts", 0)) + 1
+                    else:
+                        attempts = 1
+                except Exception:
+                    attempts = 1
+
+                if attempts >= MAX_ATTEMPTS:
+                    write_log_event(
+                        "daemon",
+                        "export_job_failed",
+                        f"Export job {job_id} exhausted retries: {str(exc)}",
+                        project_root=self.project_root,
+                        level="error",
+                        status="error",
+                        error=str(exc),
+                        metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts},
+                    )
+                    # Mark manifest as failed
+                    try:
+                        if manifest_path.exists():
+                            manifest_raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+                            manifest_raw["status"] = "failed"
+                            manifest_raw["updated_at"] = datetime.now(UTC).isoformat()
+                            manifest_path.write_text(
+                                json.dumps(manifest_raw, indent=2, sort_keys=True, ensure_ascii=True) + "\n",
+                                encoding="utf-8",
+                            )
+                    except Exception:
+                        pass
+                else:
+                    backoff = _next_backoff(attempts)
+                    write_log_event(
+                        "daemon",
+                        "export_job_retry",
+                        f"Export job {job_id} will retry in {backoff}s (attempt {attempts})",
+                        project_root=self.project_root,
+                        status="retry",
+                        metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts, "next_backoff": backoff},
+                    )
+                    threading.Timer(backoff, self._export_queue.put, args=((thread_id, job_id),)).start()
 
     def stop_background_reason_scheduler(self) -> None:
         if self._reason_scheduler_thread is not None:

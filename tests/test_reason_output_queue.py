@@ -1,9 +1,9 @@
-"""Tests for file-queue based export job processing."""
+"""Tests for in-memory-queue based export job processing."""
 
 from __future__ import annotations
 
 from pathlib import Path
-import json
+import queue
 
 import pytest
 
@@ -13,6 +13,7 @@ from nuself.reason.output import ReasonOutputManifest
 from nuself.reason.output import ReasonOutputPaths
 from nuself.reason.output import ReasonOutputSection
 from nuself.reason.output import ReasonOutputService
+from nuself.reason.output import set_enqueue_callback
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 
@@ -21,9 +22,53 @@ def _reason_service(tmp_path: Path) -> ReasonService:
     return ReasonService(repository=ReasonRepository(tmp_path), project_root=tmp_path, prompt_generator=lambda *a, **k: "P")
 
 
-def test_plan_enqueues_and_worker_processes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_plan_enqueues_via_callback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """plan_job pushes to the in-memory queue when a callback is registered."""
     service = _reason_service(tmp_path)
     thread = service.start_thread("Queue export")
+    service.advance_thread(thread.id, step=_step(thread.id, "A", "Out A", "D A"))
+    service.advance_thread(thread.id, step=_step(thread.id, "B", "Out B", "D B"))
+
+    q: queue.SimpleQueue[tuple[str, str]] = queue.SimpleQueue()
+    set_enqueue_callback(lambda tid, jid: q.put((tid, jid)))
+
+    try:
+        output_service = ReasonOutputService(project_root=tmp_path, reason_service=service)
+        manifest = output_service.plan_job(thread.id, segment_size=1)
+        paths = output_service.job_paths(thread.id, manifest.job_id)
+
+        # No queue file exists
+        assert not (paths.root / "queue").exists()
+
+        # The event went to the in-memory queue instead
+        assert q.qsize() == 1
+        tid, jid = q.get()
+        assert tid == thread.id
+        assert jid == manifest.job_id
+    finally:
+        set_enqueue_callback(None)
+
+
+def test_plan_without_callback_skips_enqueue(tmp_path: Path) -> None:
+    """plan_job does not fail when no callback is registered (CLI / test mode)."""
+    set_enqueue_callback(None)  # ensure clean
+    service = _reason_service(tmp_path)
+    thread = service.start_thread("No callback")
+    service.advance_thread(thread.id, step=_step(thread.id, "A", "Out A", "D A"))
+
+    output_service = ReasonOutputService(project_root=tmp_path, reason_service=service)
+    manifest = output_service.plan_job(thread.id, segment_size=1)
+    paths = output_service.job_paths(thread.id, manifest.job_id)
+
+    # No queue file, no callback — but manifest was still written
+    assert not (paths.root / "queue").exists()
+    assert paths.manifest.is_file()
+
+
+def test_compose_from_enqueued_job(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Simulate the daemon worker: receive a queue event, then compose."""
+    service = _reason_service(tmp_path)
+    thread = service.start_thread("Compose from queue")
     service.advance_thread(thread.id, step=_step(thread.id, "A", "Out A", "D A"))
     service.advance_thread(thread.id, step=_step(thread.id, "B", "Out B", "D B"))
 
@@ -36,19 +81,6 @@ def test_plan_enqueues_and_worker_processes(tmp_path: Path, monkeypatch: pytest.
         return paths.pdf
 
     monkeypatch.setattr(ReasonOutputService, "_generate_pdf", _fake_generate_pdf)
-
-    # Queue file should exist
-    queue_file = paths.root / "queue" / f"{manifest.job_id}.json"
-    assert queue_file.is_file()
-
-    # Simulate daemon worker: atomically move to processing/ then process
-    processing_dir = paths.root / "processing"
-    processing_dir.mkdir(parents=True, exist_ok=True)
-    processing_path = processing_dir / queue_file.name
-    queue_file.replace(processing_path)
-
-    raw = json.loads(processing_path.read_text(encoding="utf-8"))
-    assert raw.get("job_id") == manifest.job_id
 
     def fake_runner(
         thread: ReasoningThread,
@@ -66,10 +98,8 @@ def test_plan_enqueues_and_worker_processes(tmp_path: Path, monkeypatch: pytest.
             lines.append(f"- {s.id}: {s.output}")
         return "\n".join(lines) + "\n"
 
-    # Process the job
+    # The daemon worker would dequeue and call compose_with_runner
     updated = output_service.compose_with_runner(thread.id, manifest.job_id, fake_runner)
-    # On success the processing file would be removed by the worker; simulate that
-    processing_path.unlink(missing_ok=True)
 
     # Combined output must exist and include both steps
     assert paths.combined.is_file()

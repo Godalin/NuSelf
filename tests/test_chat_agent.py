@@ -964,8 +964,8 @@ def test_reason_export_tool_requires_confirmation_before_queueing(tmp_path: Path
     assert parsed.get("component") == "reasoning"
     assert inner.get("queued") is True
     assert inner.get("job", {}).get("thread_id") == thread.id
-    queue_file = Path(inner["paths"]["root"]) / "queue" / f"{inner['job']['job_id']}.json"
-    assert queue_file.is_file()
+    # No file-based queue — the event went to the in-memory callback.
+    assert not (Path(inner["paths"]["root"]) / "queue").exists()
     assert not Path(inner["paths"]["combined"]).exists()
 
 

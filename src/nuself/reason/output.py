@@ -24,6 +24,22 @@ REASON_OUTPUT_STORAGE_VERSION = "NuSelfReasonOutput/v1"
 REASON_OUTPUT_MODES: tuple[str, ...] = ("outline", "narrative", "report", "summary")
 REASON_OUTPUT_FORMATS: tuple[str, ...] = ("markdown",)
 
+# Module-level export queue callback set by the daemon.
+# When set, plan_job pushes (thread_id, job_id) to this callback
+# instead of writing a file-based queue event. Tests and CLI-only
+# usage leave it unset, in which case plan_job skips enqueueing.
+_enqueue_callback: Callable[[str, str], None] | None = None
+
+
+def set_enqueue_callback(cb: Callable[[str, str], None] | None) -> None:
+    """Set the module-level enqueue callback used by plan_job.
+
+    Called once by the daemon during startup so all ReasonOutputService
+    instances share the same in-memory queue.
+    """
+    global _enqueue_callback  # noqa: PLW0603
+    _enqueue_callback = cb
+
 
 def _now_iso() -> str:
     from datetime import datetime
@@ -272,20 +288,11 @@ class ReasonOutputService:
         paths = self._job_paths(thread.id, job_id)
         existing = self._read_manifest(paths.manifest)
         if existing is not None and existing.job_id == job_id:
-            queue_path = paths.root / "queue" / f"{job_id}.json"
-            if existing.status != "complete" and not queue_path.exists():
-                queue_path.parent.mkdir(parents=True, exist_ok=True)
-                write_json_atomic(
-                    queue_path,
-                    {
-                        "type": "reason_output_job",
-                        "job_id": job_id,
-                        "thread_id": thread.id,
-                        "manifest": str(paths.manifest),
-                        "created_at": existing.created_at,
-                        "attempts": 0,
-                    },
-                )
+            # Idempotent: don't re-enqueue if already complete.
+            # Duplicate enqueues for pending/in-progress jobs are
+            # harmless — the worker checks manifest status first.
+            if existing.status != "complete" and _enqueue_callback is not None:
+                _enqueue_callback(thread.id, job_id)
             return existing
 
         _clear_job_artifacts(paths)
@@ -333,38 +340,29 @@ class ReasonOutputService:
             },
         )
 
-        # Enqueue a file-queue event so a background daemon can pick up this job.
-        try:
-            queue_dir = paths.root / "queue"
-            queue_dir.mkdir(parents=True, exist_ok=True)
-            event = {
-                "type": "reason_output_job",
-                "job_id": job_id,
-                "thread_id": thread.id,
-                "manifest": str(paths.manifest),
-                "created_at": manifest.created_at,
-                "attempts": 0,
-            }
-            write_json_atomic(queue_dir / f"{job_id}.json", cast(dict[str, object], event))
-            write_log_event(
-                "daemon",
-                "export_job_enqueued",
-                f"Enqueued export job {job_id} for thread {thread.id}",
-                project_root=self._project_root,
-                status="queued",
-                metadata={"thread_id": thread.id, "job_id": job_id, "manifest": str(paths.manifest)},
-            )
-        except Exception:
-            # Queue failures should not break planning; log and continue.
-            write_log_event(
-                "daemon",
-                "export_job_enqueue_failed",
-                f"Failed to enqueue export job {job_id} for thread {thread.id}",
-                project_root=self._project_root,
-                level="warning",
-                status="error",
-                metadata={"thread_id": thread.id, "job_id": job_id},
-            )
+        # Push to the daemon's in-memory queue if the callback is set.
+        if _enqueue_callback is not None:
+            try:
+                _enqueue_callback(thread.id, job_id)
+                write_log_event(
+                    "daemon",
+                    "export_job_enqueued",
+                    f"Enqueued export job {job_id} for thread {thread.id}",
+                    project_root=self._project_root,
+                    status="queued",
+                    metadata={"thread_id": thread.id, "job_id": job_id},
+                )
+            except Exception:
+                # Enqueue failures should not break planning; log and continue.
+                write_log_event(
+                    "daemon",
+                    "export_job_enqueue_failed",
+                    f"Failed to enqueue export job {job_id} for thread {thread.id}",
+                    project_root=self._project_root,
+                    level="warning",
+                    status="error",
+                    metadata={"thread_id": thread.id, "job_id": job_id},
+                )
         return manifest
 
     def compose_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
@@ -863,19 +861,15 @@ def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
 
 
 def _clear_job_artifacts(paths: ReasonOutputPaths) -> None:
-    """Remove job artifact files while preserving queue/processing/failed dirs.
+    """Remove all job artifact files under the export root.
 
-    This prevents data loss when re-planning with different params: pending
-    queue events, in-progress worker claims, and historical failure records
-    are kept intact.
+    The queue is no longer file-based, so there are no queue/processing/
+    failed directories to preserve.
     """
     root = paths.root
     if not root.exists():
         return
-    _KEEP_DIRS = frozenset({"queue", "processing", "failed"})
     for child in root.iterdir():
-        if child.name in _KEEP_DIRS:
-            continue
         if child.is_dir():
             shutil.rmtree(child)
         else:

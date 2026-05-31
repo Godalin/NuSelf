@@ -142,12 +142,6 @@ class DaemonReasonSchedulerConfig(BaseModel):
     interval_seconds: int = Field(default=600, ge=1)
 
 
-class DaemonExportWorkerConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    interval_seconds: int = Field(default=5, ge=1)
-
-
 class DaemonConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -155,7 +149,6 @@ class DaemonConfig(BaseModel):
     reflection_scheduler: DaemonReflectionSchedulerConfig = DaemonReflectionSchedulerConfig()
     notification_delivery: DaemonNotificationDeliveryConfig = DaemonNotificationDeliveryConfig()
     reason_scheduler: DaemonReasonSchedulerConfig = DaemonReasonSchedulerConfig()
-    export_worker: DaemonExportWorkerConfig = DaemonExportWorkerConfig()
 
 
 class ReflectionSchedulerConfig(BaseModel):
@@ -305,7 +298,6 @@ class ConfigSystem:
                 reflection_scheduler=DaemonReflectionSchedulerConfig(check_interval_seconds=1),
                 notification_delivery=DaemonNotificationDeliveryConfig(interval_seconds=1),
                 reason_scheduler=DaemonReasonSchedulerConfig(interval_seconds=1),
-                export_worker=DaemonExportWorkerConfig(interval_seconds=1),
             ),
             reflection=ReflectionSettings(
                 scheduler=ReflectionSchedulerConfig(
