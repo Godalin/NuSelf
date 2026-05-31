@@ -6,15 +6,19 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
-No post-v0.2.0 changes yet. The current release-candidate fixes and small feature additions are tracked under `0.2.0`.
-
 ### Added
 
+- Added cooperative file-level locking (`.lock`) to prevent concurrent writes to the same export job from the daemon worker and CLI.
+- Added daemon startup reconciliation: orphaned `processing/` files are re-queued and stale `.lock` files are cleaned up on worker start.
+- Added `DaemonExportWorkerConfig` so the export worker polling interval can be set via `private/config.yaml`.
 - Added the first `reason` output-composition infrastructure: export jobs now plan and persist manifests, chunks, progress, and combined Markdown artifacts inside the owning reason workspace, and the chat tool registry exposes `reason_export`.
 - Added `scripts/mdpdf.sh` to convert one or more Markdown files into PDFs with pandoc and xelatex for easy manual sharing.
 
 ### Changed
 
+- Export jobs now live under `export/jobs/{job_id}/` instead of the flat `export/` root, so re-planning with different parameters no longer destroys pending queue events or in-progress processing claims for other jobs.
+- Queue event schema no longer includes a `manifest` path field; the worker reconstructs it from `thread_id` and `job_id`.
+- `plan_job` no longer writes a duplicate queue event when an existing incomplete job is re-planned (idempotent for pending jobs too).
 - Reason exports now persist a deterministic section plan derived from source content, so chunk size no longer determines chapter boundaries.
 - Reason exports now automatically generate a PDF from the final combined Markdown artifact after composition completes.
 - The export daemon now scans the queue immediately on startup instead of waiting for the first polling interval.
@@ -22,17 +26,10 @@ No post-v0.2.0 changes yet. The current release-candidate fixes and small featur
 ### Fixed
 
 - `scripts/mdpdf.sh` now sets a CJK-capable default font pair and `zh-CN` metadata so Chinese Markdown renders correctly in the generated PDF.
-
-### Changed
-
-- `reason_export` now prompts for confirmation before enqueueing a background export job, then returns the queued export metadata instead of composing the long-form output inside the chat turn.
-- Reason output now writes into one fixed export root per thread instead of a new directory per export job, so repeated exports of the same source range reuse the same manifest, chunk files, and combined artifact.
-
-### Fixed
-
 - Approval-gated tool prompts now emit a visible live REPL log line before waiting for confirmation input, so the prompt is obvious before the user enters `y` or `n`.
 - Reason thread proposals now use the decorated `reason_propose` tool wrapper for confirmation instead of a post-turn CLI prompt, while `proposal_created` remains available as an audit log event.
 - Reason export now has a dedicated agent skill that tells chat to call `reason_export` directly and read the approval-gated JSON result instead of treating export as a separate confirmation turn.
+- `plan_job` no longer uses `_clear_directory` (rmtree on the entire export root), which destroyed pending queue events, in-progress processing claims, and failure records when re-planning with different parameters. Job artifacts are now cleaned per-job under `jobs/{job_id}` without affecting other jobs' state.
 
 ## 0.2.0 - 2026-05-29
 
