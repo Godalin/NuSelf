@@ -398,39 +398,7 @@ class ReasonOutputService:
             chunks.append(chunk)
             batch_start += len(batch)
 
-        combined_text = _combine_chunks(thread, manifest, paths, chunks, section_plan=section_plan)
-        paths.combined.write_text(combined_text, encoding="utf-8")
-        updated = manifest.with_updates(status="complete", chunks=tuple(chunks), sections=section_plan)
-        self._write_manifest(paths.manifest, updated)
-        pdf_path = self._generate_pdf(paths)
-        pdf_status = "generated" if pdf_path is not None else ("skipped" if not paths.pdf.exists() else "generated")
-        self._write_progress(
-            paths.progress,
-            {
-                "job_id": job_id,
-                "thread_id": thread.id,
-                "status": updated.status,
-                "completed_chunks": [chunk.index for chunk in chunks],
-                "total_chunks": len(chunks),
-                "pdf_status": pdf_status,
-                "pdf_path": str(pdf_path) if pdf_path is not None else (str(paths.pdf) if paths.pdf.exists() else None),
-                "updated_at": updated.updated_at,
-            },
-        )
-        write_log_event(
-            "reasoning",
-            "reason_output_composed",
-            f"Composed reason output job {job_id} for thread {thread.id}",
-            project_root=self._project_root,
-            status="completed",
-            metadata={
-                "thread_id": thread.id,
-                "job_id": job_id,
-                "chunk_count": len(chunks),
-                "combined": str(paths.combined),
-            },
-        )
-        return updated
+        return self._finalize_job(thread, manifest, paths, chunks, section_plan)
 
     def start_job(
         self,
@@ -539,39 +507,7 @@ class ReasonOutputService:
             chunks.append(chunk)
             batch_start += len(batch)
 
-        combined_text = _combine_chunks(thread, manifest, paths, chunks, section_plan=section_plan)
-        paths.combined.write_text(combined_text, encoding="utf-8")
-        updated = manifest.with_updates(status="complete", chunks=tuple(chunks), sections=section_plan)
-        self._write_manifest(paths.manifest, updated)
-        pdf_path = self._generate_pdf(paths)
-        pdf_status = "generated" if pdf_path is not None else ("skipped" if not paths.pdf.exists() else "generated")
-        self._write_progress(
-            paths.progress,
-            {
-                "job_id": job_id,
-                "thread_id": thread.id,
-                "status": updated.status,
-                "completed_chunks": [chunk.index for chunk in chunks],
-                "total_chunks": len(chunks),
-                "pdf_status": pdf_status,
-                "pdf_path": str(pdf_path) if pdf_path is not None else (str(paths.pdf) if paths.pdf.exists() else None),
-                "updated_at": updated.updated_at,
-            },
-        )
-        write_log_event(
-            "reasoning",
-            "reason_output_composed",
-            f"Composed reason output job {job_id} for thread {thread.id} via runner",
-            project_root=self._project_root,
-            status="completed",
-            metadata={
-                "thread_id": thread.id,
-                "job_id": job_id,
-                "chunk_count": len(chunks),
-                "combined": str(paths.combined),
-            },
-        )
-        return updated
+        return self._finalize_job(thread, manifest, paths, chunks, section_plan)
 
     def job_paths(self, thread_id: str, job_id: str) -> ReasonOutputPaths:
         return self._job_paths(thread_id, job_id)
@@ -593,6 +529,48 @@ class ReasonOutputService:
     def _export_root(self, thread_id: str) -> Path:
         workspace = self._workspace_store.ensure(thread_id)
         return workspace.artifacts / "export"
+
+    def _finalize_job(
+        self,
+        thread: ReasoningThread,
+        manifest: ReasonOutputManifest,
+        paths: ReasonOutputPaths,
+        chunks: Sequence[ReasonOutputChunk],
+        section_plan: Sequence[ReasonOutputSection],
+    ) -> ReasonOutputManifest:
+        combined_text = _combine_chunks(thread, manifest, paths, chunks, section_plan=section_plan)
+        paths.combined.write_text(combined_text, encoding="utf-8")
+        updated = manifest.with_updates(status="complete", chunks=tuple(chunks), sections=section_plan)
+        self._write_manifest(paths.manifest, updated)
+        pdf_path = self._generate_pdf(paths)
+        pdf_status = "generated" if pdf_path is not None else ("skipped" if not paths.pdf.exists() else "generated")
+        self._write_progress(
+            paths.progress,
+            {
+                "job_id": manifest.job_id,
+                "thread_id": thread.id,
+                "status": updated.status,
+                "completed_chunks": [chunk.index for chunk in chunks],
+                "total_chunks": len(chunks),
+                "pdf_status": pdf_status,
+                "pdf_path": str(pdf_path) if pdf_path is not None else (str(paths.pdf) if paths.pdf.exists() else None),
+                "updated_at": updated.updated_at,
+            },
+        )
+        write_log_event(
+            "reasoning",
+            "reason_output_composed",
+            f"Composed reason output job {manifest.job_id} for thread {thread.id}",
+            project_root=self._project_root,
+            status="completed",
+            metadata={
+                "thread_id": thread.id,
+                "job_id": manifest.job_id,
+                "chunk_count": len(chunks),
+                "combined": str(paths.combined),
+            },
+        )
+        return updated
 
     def _read_manifest(self, path: Path) -> ReasonOutputManifest | None:
         try:
