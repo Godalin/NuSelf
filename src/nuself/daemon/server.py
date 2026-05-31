@@ -272,15 +272,13 @@ class DaemonState:
 
         while not self.shutdown_requested.is_set():
             try:
-                root = store._root  # type: ignore[reportPrivateUsage]
-                if not root.exists():
+                owners = store.list_owners()
+                if not owners:
                     if self.shutdown_requested.wait(self.export_worker_interval_seconds):
                         break
                     continue
-                for owner in root.iterdir():
-                    if not owner.is_dir():
-                        continue
-                    export_root = owner / "artifacts" / "export"
+                for owner_id in owners:
+                    export_root = store.paths(owner_id).artifacts / "export"
                     if not export_root.exists():
                         continue
                     queue_dir = export_root / "queue"
