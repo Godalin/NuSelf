@@ -721,31 +721,14 @@ def _render_chunk(
     index: int,
     total: int,
 ) -> str:
-    heading = {
-        "outline": "Outline",
-        "summary": "Summary",
-        "report": "Report",
-        "narrative": "Narrative",
-    }[manifest.mode]
-    lines = [f"# {heading}: {thread.topic}", ""]
-    lines.append(f"- thread: {thread.id}")
-    lines.append(f"- job: {manifest.job_id}")
-    lines.append(f"- chunk: {index + 1}/{total}")
-    lines.append("")
+    lines: list[str] = []
     for step in steps:
         lines.append(f"## {step.summary}")
-        lines.append(f"- step_id: {step.id}")
-        lines.append(f"- kind: {step.kind}")
+        lines.append("")
         if step.output:
-            lines.append("")
             lines.append(step.output)
         elif step.delta:
-            lines.append("")
             lines.append(step.delta)
-        if step.evidence_refs:
-            lines.append("")
-            lines.append("Evidence:")
-            lines.extend(f"- {ref}" for ref in step.evidence_refs)
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -759,16 +742,6 @@ def _combine_chunks(
     section_plan: Sequence[ReasonOutputSection],
 ) -> str:
     lines = [f"# {thread.topic}", ""]
-    lines.append(f"- thread: {thread.id}")
-    lines.append(f"- job: {manifest.job_id}")
-    lines.append(f"- mode: {manifest.mode}")
-    lines.append(f"- format: {manifest.output_format}")
-    lines.append(f"- sections: {len(section_plan)}")
-    lines.append("")
-    lines.append("## Composition plan")
-    for section in section_plan:
-        lines.append(f"- {section.index + 1}. {section.title}: {section.focus}")
-    lines.append("")
     for chunk in chunks:
         chunk_path = paths.chunks_dir / chunk.filename
         try:
@@ -788,21 +761,7 @@ def _render_chunk_document(
     section_plan: Sequence[ReasonOutputSection],
     body: str,
 ) -> str:
-    lines = [f"# {manifest.mode.title()}: {thread.topic}", ""]
-    lines.append(f"- thread: {thread.id}")
-    lines.append(f"- job: {manifest.job_id}")
-    lines.append(f"- section: {section.index + 1}/{len(section_plan)}")
-    lines.append(f"- title: {section.title}")
-    lines.append(f"- focus: {section.focus}")
-    lines.append(f"- step_range: {section.source_start_index + 1}-{section.source_end_index + 1}")
-    lines.append("")
-    lines.append("## Composition plan")
-    for planned in section_plan:
-        marker = " (current)" if planned.index == section.index else ""
-        lines.append(f"- {planned.index + 1}. {planned.title}: {planned.focus}{marker}")
-    lines.append("")
-    lines.append(f"## {section.title}")
-    lines.append("")
+    lines = [f"## {section.title}", ""]
     lines.append(body.rstrip())
     return "\n".join(lines).rstrip() + "\n"
 

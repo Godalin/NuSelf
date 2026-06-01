@@ -56,7 +56,7 @@ def test_reason_output_plan_and_compose(tmp_path: Path, monkeypatch: pytest.Monk
     assert data["sections"][0]["title"].startswith("Chapter 1:")
 
     combined = paths.combined.read_text(encoding="utf-8")
-    assert "Composition plan" in combined
+    assert "Chapter 1: First" in combined
     assert "First output" in combined
     assert "Second output" in combined
 

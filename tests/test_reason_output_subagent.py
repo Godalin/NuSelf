@@ -61,8 +61,6 @@ def test_compose_with_runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     assert paths.pdf.is_file()
     assert updated.status == "complete"
     combined = paths.combined.read_text(encoding="utf-8")
-    assert "Chunk 1/2" in combined
-    assert "Composition plan" in combined
     assert "Out A" in combined
     assert "Out B" in combined
 

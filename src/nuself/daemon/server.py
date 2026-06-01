@@ -227,9 +227,13 @@ class DaemonState:
             section_title = section.title
             section_focus = section.focus
             section_steps = section.step_ids
+            from nuself.config import ConfigSystem
+            lang = ConfigSystem.load(project_root=self.project_root).chat.language_preference
             sys = (
                 f"You are a writing assistant. Compose a {manifest.mode} in {manifest.output_format} format "
-                "from the provided reason steps. Produce Markdown suitable for direct display. "
+                "from the provided reason steps. "
+                f"Write in {lang}. "
+                "Produce Markdown suitable for direct display. "
                 "Follow the export plan exactly. Keep chapter names, terminology, and ordering stable across chunks."
             )
             pieces: list[ChatMessage] = [ChatMessage(role="system", content=sys)]
