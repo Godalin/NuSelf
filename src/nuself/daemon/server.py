@@ -340,6 +340,14 @@ class DaemonState:
             if self.shutdown_requested.is_set():
                 break
 
+            write_log_event(
+                "daemon",
+                "export_job_dequeued",
+                f"Processing export job {job_id} for thread {thread_id}",
+                project_root=self.project_root,
+                metadata={"job_id": job_id, "thread_id": thread_id},
+            )
+
             manifest_path = store.paths(thread_id).artifacts / "export" / "jobs" / job_id / "manifest.json"
             try:
                 if manifest_path.exists():
@@ -349,6 +357,23 @@ class DaemonState:
                         raw = {}
                     if raw.get("status") == "complete":
                         continue
+                    progress_path = store.paths(thread_id).artifacts / "export" / "jobs" / job_id / "progress.json"
+                    total_chunks: int | str = "?"
+                    try:
+                        if progress_path.exists():
+                            progress_raw: dict[str, object] = json.loads(progress_path.read_text(encoding="utf-8"))
+                            val = progress_raw.get("total_chunks")
+                            if isinstance(val, int):
+                                total_chunks = val
+                    except Exception:
+                        pass
+                    write_log_event(
+                        "daemon",
+                        "export_job_composition_started",
+                        f"Composing {total_chunks} chunk(s) for job {job_id}",
+                        project_root=self.project_root,
+                        metadata={"job_id": job_id, "thread_id": thread_id, "chunks": total_chunks},
+                    )
 
                 service.compose_with_runner(thread_id, job_id, _llm_runner)
             except Exception as exc:
