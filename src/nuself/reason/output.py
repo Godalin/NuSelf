@@ -557,19 +557,19 @@ class ReasonOutputService:
         paths.combined.write_text(combined_text, encoding="utf-8")
         updated = manifest.with_updates(status="complete", chunks=tuple(chunks), sections=tuple(section_plan))
         self._write_manifest(paths.manifest, updated)
-        pdf_path = self._generate_pdf(paths)
-        pdf_status = "generated" if pdf_path is not None else ("skipped" if not paths.pdf.exists() else "generated")
-        progress = ReasonOutputProgress(
-            job_id=manifest.job_id,
-            thread_id=thread.id,
-            status=updated.status,
-            completed_chunks=tuple(chunk.index for chunk in chunks),
-            total_chunks=len(chunks),
-            pdf_status=pdf_status,
-            pdf_path=str(pdf_path) if pdf_path is not None else (str(paths.pdf) if paths.pdf.exists() else None),
-            updated_at=updated.updated_at,
+        self._write_progress(
+            paths.progress,
+            ReasonOutputProgress(
+                job_id=manifest.job_id,
+                thread_id=thread.id,
+                status=updated.status,
+                completed_chunks=tuple(chunk.index for chunk in chunks),
+                total_chunks=len(chunks),
+                pdf_status="pending",
+                pdf_path=None,
+                updated_at=updated.updated_at,
+            ),
         )
-        self._write_progress(paths.progress, progress)
         write_log_event(
             "reasoning",
             "reason_output_composed",
@@ -582,6 +582,30 @@ class ReasonOutputService:
                 "chunk_count": len(chunks),
                 "combined": str(paths.combined),
             },
+        )
+
+        # Generate PDF with timeout — combined.md is already written.
+        write_log_event(
+            "reasoning",
+            "reason_output_pdf_started",
+            f"Generating PDF for {paths.combined.name}",
+            project_root=self._project_root,
+            metadata={"combined": str(paths.combined), "pdf": str(paths.pdf)},
+        )
+        pdf_path = self._generate_pdf(paths)
+        pdf_status, pdf_path_str = self._pdf_result(pdf_path, paths)
+        self._write_progress(
+            paths.progress,
+            ReasonOutputProgress(
+                job_id=manifest.job_id,
+                thread_id=thread.id,
+                status=updated.status,
+                completed_chunks=tuple(chunk.index for chunk in chunks),
+                total_chunks=len(chunks),
+                pdf_status=pdf_status,
+                pdf_path=pdf_path_str,
+                updated_at=_now_iso(),
+            ),
         )
         return updated
 
@@ -618,7 +642,25 @@ class ReasonOutputService:
         if not script.is_file() or not paths.combined.is_file():
             return None
         try:
-            subprocess.run(["bash", str(script), str(paths.combined)], cwd=self._project_root, check=True, capture_output=True, text=True)
+            subprocess.run(
+                ["bash", str(script), str(paths.combined)],
+                cwd=self._project_root,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired:
+            write_log_event(
+                "reasoning",
+                "reason_output_pdf_timeout",
+                f"PDF generation timed out for {paths.combined.name}",
+                project_root=self._project_root,
+                level="warning",
+                status="error",
+                metadata={"combined": str(paths.combined), "pdf": str(paths.pdf)},
+            )
+            return None
         except subprocess.CalledProcessError as exc:
             write_log_event(
                 "reasoning",
@@ -642,6 +684,14 @@ class ReasonOutputService:
             )
             return paths.pdf
         return None
+
+    @staticmethod
+    def _pdf_result(pdf_path: Path | None, paths: ReasonOutputPaths) -> tuple[str, str | None]:
+        if pdf_path is not None:
+            return ("generated", str(pdf_path))
+        if paths.pdf.exists():
+            return ("generated", str(paths.pdf))
+        return ("failed", None)
 
 
 def _compose_runner(
