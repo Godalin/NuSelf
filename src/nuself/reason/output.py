@@ -29,6 +29,7 @@ REASON_OUTPUT_FORMATS: tuple[str, ...] = ("markdown",)
 # instead of writing a file-based queue event. Tests and CLI-only
 # usage leave it unset, in which case plan_job skips enqueueing.
 _enqueue_callback: Callable[[str, str], None] | None = None
+_section_planner: Callable[[ReasoningThread, Sequence[ReasoningStep], str], tuple[ReasonOutputSection, ...]] | None = None
 
 
 def set_enqueue_callback(cb: Callable[[str, str], None] | None) -> None:
@@ -39,6 +40,20 @@ def set_enqueue_callback(cb: Callable[[str, str], None] | None) -> None:
     """
     global _enqueue_callback  # noqa: PLW0603
     _enqueue_callback = cb
+
+
+def set_section_planner(
+    cb: Callable[[ReasoningThread, Sequence[ReasoningStep], str], tuple[ReasonOutputSection, ...]] | None,
+) -> None:
+    """Set the module-level section planner used by plan_job.
+
+    Called once by the daemon during startup. The planner receives
+    (thread, steps, mode) and returns a section plan (tuple of
+    ReasonOutputSection). When not set, the mechanical
+    plan_sections is used.
+    """
+    global _section_planner  # noqa: PLW0603
+    _section_planner = cb
 
 
 def _now_iso() -> str:
@@ -323,7 +338,10 @@ class ReasonOutputService:
         mode = _validate_choice(mode, REASON_OUTPUT_MODES, label="mode")
         output_format = _validate_choice(output_format, REASON_OUTPUT_FORMATS, label="output format")
         segment_size = _validate_positive_int(segment_size, label="segment_size")
-        sections = _plan_sections(thread, list(selected), mode=mode)
+        if _section_planner is not None:
+            sections = _section_planner(thread, list(selected), mode)
+        else:
+            sections = plan_sections(thread, list(selected), mode=mode)
         job_id = _export_job_id(
             thread.id,
             mode=mode,
@@ -641,7 +659,7 @@ class ReasonOutputService:
     ) -> tuple[ReasonOutputSection, ...]:
         if manifest.sections:
             return manifest.sections
-        return _plan_sections(thread, list(selected), mode=manifest.mode)
+        return plan_sections(thread, list(selected), mode=manifest.mode)
 
     def _generate_pdf(self, paths: ReasonOutputPaths) -> Path | None:
         script = self._project_root / "scripts" / "mdpdf.sh"
@@ -766,12 +784,13 @@ def _render_chunk_document(
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _plan_sections(
+def plan_sections(
     thread: ReasoningThread,
     selected: list[ReasoningStep],
     *,
     mode: str,
 ) -> tuple[ReasonOutputSection, ...]:
+    """Partition steps into sections based on mode and step count."""
     batches = tuple(partition_steps(selected, _section_window_size(mode, len(selected))))
     prefix = _section_prefix(mode)
     sections: list[ReasonOutputSection] = []

@@ -10,13 +10,13 @@ import queue
 import socketserver
 import threading
 import time
-from collections.abc import Sequence
-from typing import override
+from collections.abc import Callable, Sequence
+from typing import cast, override
 
 from nuself.agent.chat import ChatAgent
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.output import ReasonOutputManifest, ReasonOutputSection
-from nuself.reason.output import set_enqueue_callback
+from nuself.reason.output import set_enqueue_callback, set_section_planner
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.config import ConfigSystem
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
@@ -44,6 +44,82 @@ def _format_exception_chain(exc: BaseException) -> str:
 
 
 # Export chunk runner protocol intentionally omitted; inline runner typing used.
+
+
+def _llm_section_planner(project_root: Path) -> Callable[[ReasoningThread, Sequence[ReasoningStep], str], tuple[ReasonOutputSection, ...]]:
+    """Return a section planner that uses the LLM to organize steps into chapters.
+
+    The returned planner is registered via set_section_planner() so plan_job
+    uses it instead of the mechanical _plan_sections.
+    """
+    from nuself.config import ConfigSystem
+    from nuself.llm import default_llm, ChatMessage
+    from nuself.reason.output import ReasonOutputSection
+
+    lang = ConfigSystem.load(project_root=project_root).chat.language_preference
+
+    def planner(thread: ReasoningThread, steps: Sequence[ReasoningStep], mode: str) -> tuple[ReasonOutputSection, ...]:
+        step_lines: list[str] = []
+        for i, step in enumerate(steps):
+            step_lines.append(f"  {i}. summary: {step.summary}")
+            if step.output:
+                step_lines.append(f"     output: {step.output[:200]}")
+            elif step.delta:
+                step_lines.append(f"     delta: {step.delta[:200]}")
+        steps_text = "\n".join(step_lines)
+
+        prompt = (
+            f"You are planning a {mode} for thread '{thread.topic}'. "
+            f"Write in {lang}.\n\n"
+            "Organize the following reason steps into 2–8 chapters.\n"
+            "For each chapter provide:\n"
+            f'- "title" — a descriptive chapter title\n'
+            f'- "focus" — what this chapter should cover\n'
+            f'- "step_start" — index of the first step (0-based)\n'
+            f'- "step_end" — index of the last step (inclusive)\n\n'
+            "Return ONLY a valid JSON array (no markdown, no explanation):\n"
+            '[{"title": "...", "focus": "...", "step_start": 0, "step_end": 2}, ...]\n\n'
+            f"Steps:\n{steps_text}"
+        )
+
+        llm = default_llm(project_root)
+        raw = llm.complete([ChatMessage(role="user", content=prompt)])
+
+        import json
+        try:
+            data: list[object] = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            data = []
+
+        sections: list[ReasonOutputSection] = []
+        for i, entry in enumerate(data):
+            if not isinstance(entry, dict):
+                continue
+            e = cast(dict[str, object], entry)
+            title = str(e.get("title", f"{mode.title()} {i+1}"))
+            focus = str(e.get("focus", ""))
+            raw_start = e.get("step_start", 0)
+            raw_end = e.get("step_end", 0)
+            step_start = int(raw_start) if isinstance(raw_start, (int, float, str)) else 0
+            step_end = int(raw_end) if isinstance(raw_end, (int, float, str)) else 0
+            step_ids = tuple(steps[j].id for j in range(step_start, step_end + 1) if 0 <= j < len(steps))
+            sections.append(ReasonOutputSection(
+                index=i,
+                title=title,
+                focus=focus,
+                step_ids=step_ids,
+                source_start_index=step_start,
+                source_end_index=step_end,
+                summary=focus[:80] if focus else title[:80],
+            ))
+
+        if not sections:
+            from nuself.reason.output import plan_sections as fallback_plan
+            return fallback_plan(thread, list(steps), mode=mode)
+
+        return tuple(sections)
+
+    return planner
 
 
 class DaemonState:
@@ -182,9 +258,10 @@ class DaemonState:
     def start_background_export_worker(self) -> None:
         if self._export_worker_thread is not None:
             return
-        # Register the module-level callback so all ReasonOutputService
-        # instances push to this process's in-memory queue.
+        # Register module-level callbacks so all ReasonOutputService
+        # instances share the queue and section planner.
         set_enqueue_callback(lambda tid, jid: self._export_queue.put((tid, jid)))
+        set_section_planner(_llm_section_planner(self.project_root))
         self._export_worker_thread = threading.Thread(
             target=self._run_background_export_worker,
             name="nuself-export-worker",
