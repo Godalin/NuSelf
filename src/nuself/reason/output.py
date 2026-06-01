@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Sequence, cast
+from uuid import uuid4
 
 from nuself.logs import write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
@@ -333,15 +334,6 @@ class ReasonOutputService:
             source_step_ids=tuple(step.id for step in selected),
         )
         paths = self._job_paths(thread.id, job_id)
-        existing = self._read_manifest(paths.manifest)
-        if existing is not None and existing.job_id == job_id:
-            # Idempotent: don't re-enqueue if already complete.
-            # Duplicate enqueues for pending/in-progress jobs are
-            # harmless — the worker checks manifest status first.
-            if existing.status != "complete" and _enqueue_callback is not None:
-                _enqueue_callback(thread.id, job_id)
-            return existing
-
         _clear_job_artifacts(paths)
         paths.root.mkdir(parents=True, exist_ok=True)
         manifest = ReasonOutputManifest(
@@ -925,6 +917,7 @@ def _export_job_id(
             "end_index": end_index,
             "segment_size": segment_size,
             "source_step_ids": list(source_step_ids),
+            "nonce": uuid4().hex,
         },
         sort_keys=True,
         separators=(",", ":"),

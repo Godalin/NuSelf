@@ -120,12 +120,12 @@ def test_reason_output_list_jobs_and_resume(tmp_path: Path, monkeypatch: pytest.
 
     monkeypatch.setattr(ReasonOutputService, "_generate_pdf", _fake_generate_pdf)
     manifest = output_service.plan_job(thread.id, start_index=0, end_index=0)
-    repeat_manifest = output_service.plan_job(thread.id, start_index=0, end_index=0)
+    # Each plan_job call creates a unique job (non-deterministic job_id).
+    second = output_service.plan_job(thread.id, start_index=0, end_index=0)
 
     jobs = output_service.list_jobs(thread.id)
-    assert [job.job_id for job in jobs] == [manifest.job_id]
-    assert repeat_manifest.job_id == manifest.job_id
-    assert output_service.job_paths(thread.id, manifest.job_id).root == output_service.job_paths(thread.id, repeat_manifest.job_id).root
+    assert [job.job_id for job in jobs] == [manifest.job_id, second.job_id]
+    assert manifest.job_id != second.job_id
 
     resumed = output_service.resume_job(thread.id, manifest.job_id)
     assert resumed.status == "complete"
