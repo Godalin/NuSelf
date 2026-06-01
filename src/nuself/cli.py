@@ -3596,7 +3596,7 @@ def _handle_interactive_reason_command(command: str, project_root: Path | None) 
     if command == "":
         return _interactive_reason_help()
     if command == "list":
-        threads = service.list_threads()
+        threads = service.list_threads(status="all")
         if not threads:
             return "No reason threads."
         return "\n".join(render_reason_row(thread, index=index) for index, thread in enumerate(threads))
@@ -3701,7 +3701,7 @@ def _handle_interactive_reason_watch(project_root: Path | None, interval: int = 
     from nuself.tui.reason import render_reason_detail, render_step_watch_entry
 
     service = ReasonService(project_root)
-    threads = service.list_threads()
+    threads = service.list_threads(status="all")
     if thread_ref is not None:
         try:
             thread = service.show_thread(thread_ref)

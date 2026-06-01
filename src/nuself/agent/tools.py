@@ -170,10 +170,10 @@ def build_langchain_chat_tools(
         return f'Updated importance of "{updated.title}" to {importance_float:.2f}.'
 
     def list_active_reasoning_threads() -> str:
-        """List active and paused long-run reasoning threads."""
+        """List all long-run reasoning threads."""
 
         service = ReasonService(project_root)
-        threads = service.list_threads()
+        threads = service.list_threads(status="all")
         if not threads:
             return _json_result({"threads": [], "count": 0})
         return _json_result(
@@ -197,9 +197,9 @@ def build_langchain_chat_tools(
         )
 
     def count_reasoning_threads() -> str:
-        """Count active and paused long-run reasoning threads."""
+        """Count all long-run reasoning threads."""
 
-        threads = ReasonService(project_root).list_threads()
+        threads = ReasonService(project_root).list_threads(status="all")
         by_status: dict[str, int] = {}
         for thread in threads:
             by_status[thread.status] = by_status.get(thread.status, 0) + 1
@@ -213,9 +213,9 @@ def build_langchain_chat_tools(
             return "Error: thread_id must be a non-empty string"
         service = ReasonService(project_root)
         if tid.lower() == "current":
-            threads = service.list_threads()
+            threads = service.list_threads(status="all")
             if not threads:
-                return _json_error("No active reasoning threads.")
+                return _json_error("No reasoning threads.")
             thread = threads[-1]
             return _json_result(_reason_show_payload(thread, service.list_steps(thread.id)))
         try:
@@ -233,9 +233,9 @@ def build_langchain_chat_tools(
         service = ReasonService(project_root)
         try:
             if tid.lower() == "current":
-                threads = service.list_threads()
+                threads = service.list_threads(status="all")
                 if not threads:
-                    return _json_error("No active reasoning threads.")
+                    return _json_error("No reasoning threads.")
                 thread = threads[-1]
             else:
                 thread = service.show_thread(tid)
@@ -262,9 +262,9 @@ def build_langchain_chat_tools(
         service = ReasonService(project_root)
         try:
             if tid.lower() == "current":
-                threads = service.list_threads()
+                threads = service.list_threads(status="all")
                 if not threads:
-                    return _json_error("No active reasoning threads.")
+                    return _json_error("No reasoning threads.")
                 thread = threads[-1]
             else:
                 thread = service.show_thread(tid)
