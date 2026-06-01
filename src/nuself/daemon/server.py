@@ -236,6 +236,13 @@ class DaemonState:
             )
             pieces: list[ChatMessage] = [ChatMessage(role="system", content=sys)]
             body_lines: list[str] = [""]
+            body_lines.append(f"Current section: {section.title}")
+            body_lines.append(f"Section focus: {section.focus}")
+            body_lines.append("")
+            body_lines.append("Global section plan:")
+            for planned in section_plan:
+                marker = " (current)" if planned.index == section.index else ""
+                body_lines.append(f"  - {planned.index + 1}. {planned.title}: {planned.focus}{marker}")
             for s in steps:
                 body_lines.append("---")
                 body_lines.append(f"Step: {s.summary}")

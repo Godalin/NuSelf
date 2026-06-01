@@ -761,7 +761,7 @@ def _render_chunk_document(
     section_plan: Sequence[ReasonOutputSection],
     body: str,
 ) -> str:
-    lines = [f"## {section.title}", ""]
+    lines = [f"# {section.title}", ""]
     lines.append(body.rstrip())
     return "\n".join(lines).rstrip() + "\n"
 
