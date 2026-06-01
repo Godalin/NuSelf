@@ -676,7 +676,7 @@ def build_parser() -> argparse.ArgumentParser:
     reason_parser.set_defaults(handler=None, help_parser=reason_parser)
     reason_subparsers = reason_parser.add_subparsers(dest="reason_command", metavar="<command>")
     reason_list_parser = reason_subparsers.add_parser("list", help="List reasoning threads.")
-    reason_list_parser.add_argument("--status", choices=("active", "paused", "resolved", "archived", "all"), default=None)
+    reason_list_parser.add_argument("--status", choices=("active", "paused", "resolved", "archived", "all"), default="all")
     reason_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reason_list_parser, handle_reason_list)
     reason_show_parser = reason_subparsers.add_parser("show", help="Show a reasoning thread and its steps.")
