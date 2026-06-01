@@ -460,6 +460,22 @@ class ReasonOutputService:
             section = _section_for_position(section_plan, batch_start)
             filename = _chunk_filename(index)
             chunk_path = paths.chunks_dir / filename
+            batch_start += len(batch)
+
+            # Skip already-written chunks so a mid-export failure doesn't
+            # waste LLM calls on retry.
+            if chunk_path.exists():
+                chunk = ReasonOutputChunk(index=index, filename=filename, step_ids=tuple(step.id for step in batch))
+                chunks.append(chunk)
+                write_log_event(
+                    "reasoning",
+                    "reason_output_chunk_skipped",
+                    f"Chunk {index+1}/{total} already exists, skipping",
+                    project_root=self._project_root,
+                    metadata={"thread_id": thread.id, "job_id": manifest.job_id, "chunk_index": index},
+                )
+                continue
+
             # Emit chunk-level start event
             write_log_event(
                 "reasoning",
@@ -475,7 +491,6 @@ class ReasonOutputService:
                 composed_text = runner(thread, manifest, batch, section=section, section_plan=section_plan, index=index, total=total)
                 duration_ms = int((datetime.now(UTC).timestamp() - start_ts) * 1000)
             except Exception as exc:
-                # Log failure for this chunk and re-raise to allow caller to handle
                 write_log_event(
                     "reasoning",
                     "reason_output_chunk_failed",
@@ -512,7 +527,6 @@ class ReasonOutputService:
             )
             chunk = ReasonOutputChunk(index=index, filename=filename, step_ids=tuple(step.id for step in batch))
             chunks.append(chunk)
-            batch_start += len(batch)
 
         return self._finalize_job(thread, manifest, paths, chunks, section_plan)
 
