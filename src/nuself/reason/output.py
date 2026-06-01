@@ -760,13 +760,32 @@ def _combine_chunks(
     section_plan: Sequence[ReasonOutputSection],
 ) -> str:
     lines = [f"# {thread.topic}", ""]
+    step_order = list(manifest.source_step_ids)
+    prev_section_index = -1
     for chunk in chunks:
         chunk_path = paths.chunks_dir / chunk.filename
         try:
-            text = chunk_path.read_text(encoding="utf-8").rstrip()
+            raw = chunk_path.read_text(encoding="utf-8")
         except FileNotFoundError:
-            text = f"*[Missing chunk {chunk.filename}]*"
-        lines.append(text)
+            lines.append(f"*[Missing chunk {chunk.filename}]*")
+            lines.append("")
+            continue
+        # Chunk files start with '# {section.title}' — strip it since
+        # _combine_chunks manages section headings with dedup.
+        first_newline = raw.find("\n")
+        if first_newline != -1 and raw[:first_newline].startswith("#"):
+            body = raw[first_newline + 1 :].strip()
+        else:
+            body = raw.strip()
+
+        step_pos = next((i for i, sid in enumerate(step_order) if sid in chunk.step_ids), -1)
+        section = _section_for_position(section_plan, step_pos)
+        if section.index != prev_section_index:
+            lines.append(f"# {section.title}")
+            lines.append("")
+            prev_section_index = section.index
+
+        lines.append(body)
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
