@@ -78,7 +78,7 @@ class ReasonRepository:
             threads.append(thread)
         return sorted(threads, key=lambda t: (t.created_at, t.id))
 
-    def resolve_thread(self, id_or_index: str, *, status: str | None = None) -> ReasoningThread:
+    def resolve_thread(self, id_or_index: str, *, status: str | None = "all") -> ReasoningThread:
         try:
             return self.get_thread(id_or_index)
         except ReasonNotFound:
