@@ -224,33 +224,18 @@ class DaemonState:
             index: int,
             total: int,
         ) -> str:
-            section_title = section.title
-            section_focus = section.focus
-            section_steps = section.step_ids
             from nuself.config import ConfigSystem
             lang = ConfigSystem.load(project_root=self.project_root).chat.language_preference
             sys = (
                 f"You are a writing assistant. Compose a {manifest.mode} in {manifest.output_format} format "
                 "from the provided reason steps. "
                 f"Write in {lang}. "
-                "Produce Markdown suitable for direct display. "
-                "Follow the export plan exactly. Keep chapter names, terminology, and ordering stable across chunks."
+                "Produce plain Markdown paragraphs — do NOT include headings or section titles, "
+                "they will be added automatically. "
+                "Keep terminology and tone consistent across all chunks."
             )
             pieces: list[ChatMessage] = [ChatMessage(role="system", content=sys)]
-            body_lines: list[str] = [f"Chunk {index + 1}/{total}: {section_title}"]
-            body_lines.append(f"Section focus: {section_focus}")
-            body_lines.append(f"Section step ids: {', '.join(str(step_id) for step_id in section_steps)}")
-            body_lines.append("")
-            body_lines.append("Global section plan:")
-            for planned in section_plan:
-                planned_title = planned.title
-                planned_focus = planned.focus
-                planned_index = planned.index
-                marker = " (current)" if planned_index == index else ""
-                body_lines.append(f"- {planned_index + 1}. {planned_title}: {planned_focus}{marker}")
-            body_lines.append("")
-            body_lines.append("Compose the current section using its title as the heading and keeping the rest of the plan in view.")
-            body_lines.append("")
+            body_lines: list[str] = [""]
             for s in steps:
                 body_lines.append("---")
                 body_lines.append(f"Step: {s.summary}")
