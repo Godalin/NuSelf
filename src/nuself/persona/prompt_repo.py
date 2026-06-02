@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
@@ -25,25 +26,36 @@ class PersonaPrompt:
     prompt: str
     created_at: str
     updated_at: str
+    disabled: bool = False
 
     def to_wire(self) -> dict[str, object]:
         return {
             "id": self.id,
             "name": self.name,
             "prompt": self.prompt,
+            "disabled": self.disabled,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> PersonaPrompt:
+        disabled_val = data.get("disabled", False)
+        disabled = bool(disabled_val) if isinstance(disabled_val, bool) else False
         return cls(
             id=_expect_str(data, "id"),
             name=_expect_str(data, "name"),
             prompt=_expect_str(data, "prompt"),
+            disabled=disabled,
             created_at=_expect_str(data, "created_at"),
             updated_at=_expect_str(data, "updated_at"),
         )
+
+    def with_updates(self, *, disabled: bool | None = None) -> PersonaPrompt:
+        kw: dict[str, object] = {"updated_at": _now_iso()}
+        if disabled is not None:
+            kw["disabled"] = disabled
+        return dataclasses.replace(self, **kw)  # pyright: ignore[reportArgumentType]
 
 
 def _expect_str(data: dict[str, object], key: str) -> str:
@@ -118,6 +130,14 @@ class PersonaPromptRepository:
             if path.exists():
                 path.unlink()
             self._rebuild_name_index()
+
+    def set_disabled(self, prompt_id: str, disabled: bool) -> None:
+        """Enable or disable a persona prompt."""
+        prompt = self.get(prompt_id)
+        if prompt is None:
+            return
+        updated = prompt.with_updates(disabled=disabled)
+        self.save(updated)
 
     # Internals ----------------------------------------------------------------
 
@@ -200,9 +220,13 @@ def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
         raise
 
 
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+
 def create_persona_prompt(name: str, prompt_text: str, *, project_root: Path | None = None) -> PersonaPrompt:
     """Create a new PersonaPrompt with generated id and timestamps."""
-    now = datetime.now(UTC).isoformat()
+    now = _now_iso()
     return PersonaPrompt(
         id=uuid4().hex,
         name=name,

@@ -108,25 +108,24 @@ class ReasoningThread:
         return list(self.mandates_data)
 
     def to_wire(self) -> dict[str, object]:
-        result: dict[str, object] = {
+        return {
             "id": self.id,
             "topic": self.topic,
             "status": self.status,
             "working_summary": self.working_summary,
-            "evidence_refs": self.evidence_refs,
-            "priority": self.priority,
-            "last_advanced_at": self.last_advanced_at,
-            "next_review_after": self.next_review_after,
-            "skip_next_advance_until": self.skip_next_advance_until,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
             "active_items_data": [t for t in self.active_items_data],
             "pending_items_data": [t for t in self.pending_items_data],
             "next_steps_data": [t for t in self.next_steps_data],
             "mandates_data": [m for m in self.mandates_data],
+            "reasoning_prompt": self.reasoning_prompt,
+            "evidence_refs": self.evidence_refs,
+            "priority": self.priority,
+            "last_advanced_at": self.last_advanced_at,
+            "skip_next_advance_until": self.skip_next_advance_until,
+            "next_review_after": self.next_review_after,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
-        result["reasoning_prompt"] = self.reasoning_prompt
-        return result
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> ReasoningThread:

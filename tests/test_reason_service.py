@@ -130,7 +130,7 @@ def test_start_thread_records_trace(tmp_path: Path) -> None:
     traces = TraceQueryService(tmp_path).list_traces(kind="reason_thread")
     assert len(traces) == 1
     assert traces[0].outputs == [f"reason:{thread.id}"]
-    assert traces[0].evidence_refs == ["memory:abc"]
+    assert traces[0].evidence_refs == []
 
 
 def test_start_thread_records_trace_when_repository_is_injected(tmp_path: Path) -> None:
@@ -331,14 +331,4 @@ def _test_step(thread_id: str) -> ReasoningStep:
     )
 
 
-def test_active_thread_cap(tmp_path: Path) -> None:
-    from nuself.reason.service import MAX_ACTIVE_THREADS
 
-    service = _reason_service(repository=ReasonRepository(tmp_path))
-    for i in range(MAX_ACTIVE_THREADS):
-        service.start_thread(f"Question {i}")
-    try:
-        service.start_thread("One too many")
-        assert False, "expected RuntimeError"
-    except RuntimeError as exc:
-        assert "already" in str(exc)

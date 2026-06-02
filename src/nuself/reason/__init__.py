@@ -10,6 +10,7 @@ from nuself.reason.domain import (
     ReasonStatus,
     ReasonPriority,
     StepKind,
+    TerminalStatus,
 )
 from nuself.reason.repository import (
     ReasonNotFound,
@@ -43,6 +44,7 @@ __all__ = [
     "ReasoningStep",
     "ReasonStatus",
     "ReasonPriority",
+    "TerminalStatus",
     "ReasonOutputManifest",
     "ReasonOutputService",
     "StepKind",

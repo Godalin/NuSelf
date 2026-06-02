@@ -320,15 +320,7 @@ def build_langchain_chat_tools(
         if not topic:
             return "Error: topic must be a non-empty string"
 
-        # Validate active thread cap before creating a proposal.
         service = ReasonService(project_root)
-        active = service.list_threads()
-        if len(active) >= 5:
-            lines = [f"Cannot start new thread: already {len(active)} active threads (max 5). Please pause, resolve, or archive one first.", "Active threads:"]
-            for t in active:
-                lines.append(f"  - {t.id}: {t.topic[:60]}")
-            return "\n".join(lines)
-
         proposal_id = uuid4().hex[:12]
         write_log_event(
             "reasoning",

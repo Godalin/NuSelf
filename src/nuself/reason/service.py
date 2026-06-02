@@ -16,7 +16,6 @@ from nuself.store import ScopedWorkspace, SqliteStore
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 
-MAX_ACTIVE_THREADS = 5
 _MAX_EVIDENCE_REFS = 20
 
 
@@ -117,15 +116,6 @@ class ReasonService:
         active_items: tuple[dict[str, object], ...] = (),
         mandates: tuple[str, ...] = (),
     ) -> ReasoningThread:
-        active = self._repository.list_threads(status="active")
-        if len(active) >= MAX_ACTIVE_THREADS:
-            active_names = "\n".join(f"  - {t.id}: {t.topic[:60]}" for t in active)
-            raise RuntimeError(
-                f"Cannot start new thread: already {len(active)} active threads "
-                f"(max {MAX_ACTIVE_THREADS}). Please pause, resolve, or archive one first.\n"
-                f"Active threads:\n{active_names}"
-            )
-
         priority_value: ReasonPriority = "high" if priority == "high" else "normal"
         reasoning_prompt = self._prompt_generator(
             topic,

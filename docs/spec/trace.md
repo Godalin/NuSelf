@@ -118,6 +118,9 @@ Allowed `kind` values for v0.2.0:
 - `reason_step`
 - `promotion`
 - `decision`
+- `persona_prompt_created`
+- `persona_disabled`
+- `persona_enabled`
 
 Allowed `visibility` values:
 
@@ -271,7 +274,10 @@ v0.2.0 must record traces for:
 - reflection creation: `kind=reflection`;
 - reflection promotion into reason: `kind=promotion`;
 - important chat turns when the answer used memory, source, reflection, or reason context: `kind=chat_turn`;
-- memory curator auto-accept: `kind=memory_update`.
+- memory curator auto-accept: `kind=memory_update`;
+- persona prompt creation: `kind=persona_prompt_created`;
+- persona disable: `kind=persona_disabled`;
+- persona enable: `kind=persona_enabled`.
 
 Important chat turn rule:
 

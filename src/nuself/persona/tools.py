@@ -48,15 +48,20 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
         result = f"Created thinking persona '{name}' (id={persona.id}). Use persona_think to consult it."
         return result
 
-    def persona_list() -> str:
-        """List all available thinking personas with id and name."""
-        prompts = repo.list()
+    def persona_list(include_disabled: bool = False) -> str:
+        """List available thinking personas with id and name. Pass include_disabled=True to show disabled ones."""
+        all_prompts = repo.list()
+        prompts = all_prompts if include_disabled else [p for p in all_prompts if not p.disabled]
         if not prompts:
-            result = "No thinking personas available. Use persona_craft to create one."
+            if all_prompts:
+                result = "All thinking personas are disabled. Use persona_enable tool or :persona enable to reactivate one."
+            else:
+                result = "No thinking personas available. Use persona_craft to create one."
         else:
             lines = ["Available thinking personas:"]
             for p in prompts:
-                lines.append(f"  - {p.name} (id={p.id})")
+                tag = " [disabled]" if p.disabled else ""
+                lines.append(f"  - {p.name} (id={p.id}){tag}")
             result = "\n".join(lines)
         return result
 
@@ -81,6 +86,9 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
                 return f"No persona found for '{persona}'. Available: {', '.join(names)}"
             return f"No persona found for '{persona}'. Use persona_craft to create one first."
 
+        if prompt.disabled:
+            return f"Persona '{prompt.name}' is disabled. Use persona_enable tool or CLI to reactivate it."
+
         messages = [
             ChatMessage(role="system", content=prompt.prompt),
             ChatMessage(role="user", content=question),
@@ -93,6 +101,34 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
 
         return response
 
+    def persona_disable(persona: str) -> str:
+        """Disable a thinking persona by name or id. Disabled personas are hidden from persona_list and cannot be consulted."""
+        persona = persona.strip()
+        if not persona:
+            return "Error: persona must be a non-empty string (name or id)"
+        prompt = repo.resolve(persona)
+        if prompt is None:
+            return f"No persona found for '{persona}'."
+        if prompt.disabled:
+            return f"Persona '{prompt.name}' is already disabled."
+        repo.set_disabled(prompt.id, True)
+        _record_prompt_disabled_trace(prompt, project_root=project_root)
+        return f"Disabled persona: {prompt.name}"
+
+    def persona_enable(persona: str) -> str:
+        """Enable a thinking persona by name or id. Enabled personas appear in persona_list and can be consulted."""
+        persona = persona.strip()
+        if not persona:
+            return "Error: persona must be a non-empty string (name or id)"
+        prompt = repo.resolve(persona)
+        if prompt is None:
+            return f"No persona found for '{persona}'."
+        if not prompt.disabled:
+            return f"Persona '{prompt.name}' is already enabled."
+        repo.set_disabled(prompt.id, False)
+        _record_prompt_enabled_trace(prompt, project_root=project_root)
+        return f"Enabled persona: {prompt.name}"
+
     return (
         StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
             func=persona_craft,
@@ -103,7 +139,7 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
         StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
             func=persona_list,
             name="persona_list",
-            description="List all available thinking personas with id and name.",
+            description="List available thinking personas with id and name. Pass include_disabled=True to show disabled ones.",
             tags=("readonly",),
             metadata={"service_component": "persona"},
         ),
@@ -112,6 +148,18 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
             name="persona_think",
             description="Consult a thinking persona by name or id and get its response to a question.",
             tags=("readonly",),
+            metadata={"service_component": "persona"},
+        ),
+        StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
+            func=persona_disable,
+            name="persona_disable",
+            description="Disable a thinking persona by name or id. Disabled personas are hidden from persona_list and cannot be consulted.",
+            metadata={"service_component": "persona"},
+        ),
+        StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
+            func=persona_enable,
+            name="persona_enable",
+            description="Enable a thinking persona by name or id. Enabled personas appear in persona_list and can be consulted.",
             metadata={"service_component": "persona"},
         ),
     )
@@ -124,6 +172,32 @@ def _record_prompt_trace(prompt: PersonaPrompt, *, project_root: Path | None = N
         TraceRecorder(project_root=project_root).record_persona_prompt_created(
             persona_prompt_id=prompt.id,
             name=prompt.name,
+        )
+    except RuntimeError:
+        pass
+
+
+def _record_prompt_disabled_trace(prompt: PersonaPrompt, *, project_root: Path | None = None) -> None:
+    try:
+        from nuself.trace.service import TraceRecorder
+
+        TraceRecorder(project_root=project_root).record_persona_disabled(
+            persona_prompt_id=prompt.id,
+            name=prompt.name,
+            participants=["agent"],
+        )
+    except RuntimeError:
+        pass
+
+
+def _record_prompt_enabled_trace(prompt: PersonaPrompt, *, project_root: Path | None = None) -> None:
+    try:
+        from nuself.trace.service import TraceRecorder
+
+        TraceRecorder(project_root=project_root).record_persona_enabled(
+            persona_prompt_id=prompt.id,
+            name=prompt.name,
+            participants=["agent"],
         )
     except RuntimeError:
         pass
@@ -176,19 +250,24 @@ def build_reason_persona_tools(
         result = f"Created thinking persona '{name}' (id={persona.id}, scoped to this reason thread)."
         return result
 
-    def _list(scope: str = "") -> str:
+    def _list(scope: str = "", include_disabled: bool = False) -> str:
         repo = _thread_repo()
         thread_prompts = repo.list()
-        global_prompts = global_repo.list() if global_repo else ()
+        raw_global = global_repo.list() if global_repo else ()
+        global_prompts = [p for p in raw_global if include_disabled or not p.disabled]
         local_list = thread_prompts if scope in ("", "local") else ()
         global_list = global_prompts if scope in ("", "global") else ()
         all_prompts = list(global_list) + list(local_list)
         if not all_prompts:
-            result = "No thinking personas available. Use persona_craft to create one."
+            if raw_global and not include_disabled and scope in ("", "global"):
+                result = "All global personas are disabled. Use persona_enable tool or CLI to reactivate one."
+            else:
+                result = "No thinking personas available. Use persona_craft to create one."
         else:
             lines = ["Available thinking personas:"]
             for p in all_prompts:
                 tag = " [local]" if scope == "" and repo.get(p.id) is not None else ""
+                tag += " [disabled]" if p.disabled else ""
                 lines.append(f"  - {p.name} (id={p.id}){tag}")
             result = "\n".join(lines)
         return result
@@ -207,6 +286,8 @@ def build_reason_persona_tools(
             prompt = thread_repo_inst.resolve(persona)
         if prompt is None and scope in ("", "global") and global_repo is not None:
             prompt = global_repo.resolve(persona)
+        if prompt is not None and prompt.disabled and scope in ("", "global"):
+            return f"Persona '{prompt.name}' is disabled. Use persona_enable tool or CLI to reactivate it."
         if prompt is None:
             available: list[str] = []
             if global_repo:
@@ -230,6 +311,38 @@ def build_reason_persona_tools(
         result = raw.strip()
         return result
 
+    def _disable(persona: str) -> str:
+        """Disable a global thinking persona by name or id. Disabled personas are hidden from persona_list and cannot be consulted."""
+        persona = persona.strip()
+        if not persona:
+            return "Error: persona must be a non-empty string (name or id)"
+        if global_repo is None:
+            return "Error: no global persona repository available."
+        prompt = global_repo.resolve(persona)
+        if prompt is None:
+            return f"No global persona found for '{persona}'."
+        if prompt.disabled:
+            return f"Persona '{prompt.name}' is already disabled."
+        global_repo.set_disabled(prompt.id, True)
+        _record_prompt_disabled_trace(prompt, project_root=global_project_root)
+        return f"Disabled persona: {prompt.name}"
+
+    def _enable(persona: str) -> str:
+        """Enable a global thinking persona by name or id. Enabled personas appear in persona_list and can be consulted."""
+        persona = persona.strip()
+        if not persona:
+            return "Error: persona must be a non-empty string (name or id)"
+        if global_repo is None:
+            return "Error: no global persona repository available."
+        prompt = global_repo.resolve(persona)
+        if prompt is None:
+            return f"No global persona found for '{persona}'."
+        if not prompt.disabled:
+            return f"Persona '{prompt.name}' is already enabled."
+        global_repo.set_disabled(prompt.id, False)
+        _record_prompt_enabled_trace(prompt, project_root=global_project_root)
+        return f"Enabled persona: {prompt.name}"
+
     from langchain_core.tools import StructuredTool
 
     from_function = getattr(StructuredTool, "from_function")
@@ -237,4 +350,6 @@ def build_reason_persona_tools(
         from_function(func=_craft, name="persona_craft", description="Create or update a thinking persona scoped to the current reason thread. Also consults global personas when listing and thinking.", metadata={"service_component": "persona"}),
         from_function(func=_list, name="persona_list", description="List available thinking personas (global + current reason thread). Pass scope='local' for only thread-scoped personas, scope='global' for only global ones.", tags=("readonly",), metadata={"service_component": "persona"}),
         from_function(func=_think, name="persona_think", description="Consult a thinking persona by name or id. Searches local (thread-scoped) first then global by default. Pass scope='local' to search only local, scope='global' to search only global.", tags=("readonly",), metadata={"service_component": "persona"}),
+        from_function(func=_disable, name="persona_disable", description="Disable a global thinking persona by name or id. Disabled personas are hidden from persona_list and cannot be consulted.", metadata={"service_component": "persona"}),
+        from_function(func=_enable, name="persona_enable", description="Enable a global thinking persona by name or id. Enabled personas appear in persona_list and can be consulted.", metadata={"service_component": "persona"}),
     )
