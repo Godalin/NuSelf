@@ -8,7 +8,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 (No unreleased changes yet.)
 
-## 0.2.2 - 2026-06-02
+## v0.2.2 - 2026-06-02
 
 ### Added
 
@@ -57,7 +57,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   user approval, making the artificial limit unnecessary. Agent tool
   `reason_propose` no longer enforces a thread count check.
 
-## 0.2.1 - 2026-06-02
+## v0.2.1 - 2026-06-02
 
 ### Added
 
@@ -86,7 +86,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Reason export now has a dedicated agent skill that tells chat to call `reason_export` directly and read the approval-gated JSON result instead of treating export as a separate confirmation turn.
 - `plan_job` no longer uses `_clear_directory` (rmtree on the entire export root), which destroyed pending work when re-planning with different parameters. Job artifacts are now cleaned per-job under `jobs/{job_id}`.
 
-## 0.2.0 - 2026-05-29
+## v0.2.0 - 2026-05-29
 
 ### Added
 
@@ -161,7 +161,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Planned v0.2.0 around a breaking command cleanup, long-run reasoning, and traceable thought provenance.
 - Finalized the reason spec around generalized topics, structured step output, explicit tool logs, complete rendering, and reflection organization behavior.
 
-## 0.1.0 - 2026-05-16
+## v0.1.0 - 2026-05-16
 
 Initial development baseline.
 

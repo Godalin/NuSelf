@@ -45,7 +45,7 @@ Format:
 ### Fixed
 ### Docs
 
-## 0.1.0 - YYYY-MM-DD
+## v0.1.0 - YYYY-MM-DD
 ```
 
 Rules:
