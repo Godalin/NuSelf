@@ -6,8 +6,8 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 ## v0.2.x Stabilization Line
 
-- [ ] v0.2.1 approval decorator.
-- [ ] v0.2.2 trace/reason schema cleanup.
+- [x] v0.2.1 approval decorator.
+- [x] v0.2.2 trace/reason schema cleanup.
 - [ ] v0.2.3 storage interface.
 - [ ] v0.2.4 sqlite backend.
 - [ ] v0.2.5 migration + export/import.
