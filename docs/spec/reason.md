@@ -61,7 +61,7 @@ the persona consultation auditable.
 
 | Field                     | Type           | Meaning                                                                                               |
 | ------------------------- | -------------- | ----------------------------------------------------------------------------------------------------- |
-| `id`                      | string         | Stable thread id (uuid4 hex)                                                                          |
+| `id`                      | string         | Stable thread id (`reason-{timestamp}-{uuid[:8]}`)                                                    |
 | `topic`                   | string         | User-approved long-run topic                                                                          |
 | `status`                  | string         | `active`, `paused`, `resolved`, or `archived`                                                         |
 | `working_summary`         | string         | Current compact state of the reasoning                                                                |
@@ -107,7 +107,7 @@ The `kind` field is the extension point. Different tasks use different kinds wit
 
 | Field                   | Type          | Meaning                                                                                        |
 | ----------------------- | ------------- | ---------------------------------------------------------------------------------------------- |
-| `id`                    | string        | Stable step id (uuid4 hex)                                                                     |
+| `id`                      | string         | Stable step id (`step-{timestamp}-{uuid[:8]}`)                                                         |
 | `thread_id`             | string        | Parent reasoning thread                                                                        |
 | `kind`                  | string        | `progress`, `no_change`, `question`, `synthesis`, `contradiction`, `resolution`, or `planning` |
 | `summary`               | string        | User-readable step summary                                                                     |

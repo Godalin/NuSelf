@@ -130,7 +130,7 @@ def test_start_thread_records_trace(tmp_path: Path) -> None:
     traces = TraceQueryService(tmp_path).list_traces(kind="reason_thread")
     assert len(traces) == 1
     assert traces[0].outputs == [f"reason:{thread.id}"]
-    assert traces[0].evidence_refs == ["memory:abc"]
+    assert traces[0].evidence_refs == []
 
 
 def test_start_thread_records_trace_when_repository_is_injected(tmp_path: Path) -> None:

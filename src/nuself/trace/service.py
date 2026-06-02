@@ -88,7 +88,7 @@ class TraceRecorder:
             title=f"Reason thread created: {_short(thread.topic)}",
             summary=f"Created a durable reasoning thread for: {thread.topic}",
             inputs=[thread.topic],
-            evidence_refs=list(thread.evidence_refs),
+            evidence_refs=[],
             derived_from=source_trace_ids or [],
             outputs=[f"reason:{thread.id}"],
             participants=["reason"],
@@ -112,7 +112,7 @@ class TraceRecorder:
             evidence_refs=list(step.evidence_refs),
             outputs=[f"reason:{thread.id}", f"reason_step:{step.id}"],
             participants=["reason"],
-            decision_points=[step.delta] if step.delta else [],
+            decision_points=[f"{step.terminal_status}: {step.terminal_reason}"] if step.terminal_status != "continue" and step.terminal_reason else [],
             visibility="private",
             metadata={
                 "thread_id": thread.id,
