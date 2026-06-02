@@ -1210,6 +1210,15 @@ def _resolve_persona_id(args: argparse.Namespace) -> str | None:
         return None
 
 
+def _resolve_persona_ids(args: argparse.Namespace) -> list[str] | None:
+    prompts = _persona_prompts_for_list(args.project_root)
+    try:
+        return resolve_visible_handle_selection(args.persona_id, prompts, label="persona", get_id=lambda p: p.id)
+    except VisibleHandleError as exc:
+        print(str(exc), file=sys.stderr)
+        return None
+
+
 def _persona_prompts_for_list(project_root: Path | None) -> tuple[PersonaPrompt, ...]:
     return PersonaPromptRepository(project_root).list()
 
@@ -2432,20 +2441,26 @@ def handle_persona_show(args: argparse.Namespace) -> int:
 
 def handle_persona_delete(args: argparse.Namespace) -> int:
     repo = PersonaPromptRepository(args.project_root)
-    prompt_id = _resolve_persona_id(args)
-    if prompt_id is None:
-        return 1
-    prompt = repo.get(prompt_id)
-    if prompt is None:
-        print(f"Persona not found: {args.persona_id}", file=sys.stderr)
+    prompt_ids = _resolve_persona_ids(args)
+    if prompt_ids is None:
         return 1
     if not args.yes:
-        confirm = input(f"Delete persona '{prompt.name}'? [y/N] ").strip().lower()
+        names = [p.name for p in [repo.get(pid) for pid in prompt_ids] if p is not None]
+        if not names:
+            return 1
+        label = ", ".join(names)
+        confirm = input(f"Delete persona(s): {label}? [y/N] ").strip().lower()
         if confirm != "y":
             print("Aborted.")
             return 0
-    repo.delete(prompt.id)
-    _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.warning(f'Deleted: {prompt.name}')}")
+    deleted: list[str] = []
+    for pid in prompt_ids:
+        prompt = repo.get(pid)
+        if prompt is not None:
+            repo.delete(pid)
+            deleted.append(prompt.name)
+    for name in deleted:
+        _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.warning(f'Deleted: {name}')}")
     return 0
 
 
