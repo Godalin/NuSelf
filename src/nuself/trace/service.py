@@ -201,6 +201,42 @@ class TraceRecorder:
             metadata={"prompt_id": persona_prompt_id, "name": name, **(metadata or {})},
         )
 
+    def record_persona_disabled(
+        self,
+        *,
+        persona_prompt_id: str,
+        name: str,
+        participants: list[str] | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> ThoughtTrace:
+        return self.record(
+            kind="persona_disabled",
+            title=f"Persona disabled: {name}",
+            summary=f"Disabled dynamic thinking persona: {name}",
+            outputs=[f"persona_prompt:{persona_prompt_id}"],
+            participants=participants or ["cli"],
+            visibility="private",
+            metadata={"prompt_id": persona_prompt_id, "name": name, **(metadata or {})},
+        )
+
+    def record_persona_enabled(
+        self,
+        *,
+        persona_prompt_id: str,
+        name: str,
+        participants: list[str] | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> ThoughtTrace:
+        return self.record(
+            kind="persona_enabled",
+            title=f"Persona enabled: {name}",
+            summary=f"Enabled dynamic thinking persona: {name}",
+            outputs=[f"persona_prompt:{persona_prompt_id}"],
+            participants=participants or ["cli"],
+            visibility="private",
+            metadata={"prompt_id": persona_prompt_id, "name": name, **(metadata or {})},
+        )
+
     def record_reflection_promoted(
         self,
         *,

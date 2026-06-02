@@ -4,6 +4,27 @@ All notable user-visible changes to NuSelf are tracked here.
 
 This project follows the versioning rules in [`docs/spec/versioning.md`](docs/spec/versioning.md).
 
+## Unreleased
+
+### Added
+
+- Added persona management through unified handle panel: `persona list` now shows
+  `[0]`, `[1]` visible index markers; new `persona create <name> <prompt>`,
+  `persona disable <handle>`, `persona enable <handle>` CLI/REPL commands.
+- Added `:persona` / `:p` REPL command for managing personas without leaving the
+  chat session (supports list, show, create, delete, disable, enable).
+- Added `persona_disable` and `persona_enable` agent tools (chat + reason);
+  `persona_list` now excludes disabled personas by default; `persona_think`
+  rejects disabled personas with a clear error.
+- Added `persona_disabled` / `persona_enabled` trace kinds and recording.
+
+### Changed
+
+- `PersonaPrompt` gains a `disabled: bool = False` field (backward-compatible
+  via `from_wire` default); `PersonaPromptRepository.set_disabled()` added.
+- `persona show` and `persona delete` now accept visible index handles in
+  addition to name or id.
+
 ## 0.2.1 - 2026-06-02
 
 ### Added

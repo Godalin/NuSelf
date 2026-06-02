@@ -111,7 +111,7 @@ try:
     from nuself.tui.reason import render_reason_detail, render_reason_row
     from nuself.tui.render import TerminalTheme, format_display_timestamp, render_log_event, render_log_event_json, render_session_header
     from nuself.tui.trace import render_trace_detail, render_trace_row
-    from nuself.persona.prompt_repo import PersonaPromptRepository
+    from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
     from nuself.persona.definition import BUILTIN_PERSONAS, MODERATOR_PERSONA, SYNTHESIZER_PERSONA
 finally:
     warnings.warn = _original_warn
@@ -739,13 +739,25 @@ def build_parser() -> argparse.ArgumentParser:
     persona_parser.set_defaults(handler=None, help_parser=persona_parser)
     persona_subparsers = persona_parser.add_subparsers(dest="persona_command", metavar="<command>")
     _add_handler(persona_subparsers.add_parser("list", help="List synthesized persona snapshots."), handle_persona_list)
+    persona_create_parser = persona_subparsers.add_parser("create", help="Create a persona snapshot.")
+    persona_create_parser.add_argument("name")
+    persona_create_parser.add_argument("prompt")
+    _add_handler(persona_create_parser, handle_persona_create)
     persona_show_parser = persona_subparsers.add_parser("show", help="Show one persona snapshot.")
-    persona_show_parser.add_argument("name_or_id")
+    persona_show_parser.add_argument("persona_id")
     _add_handler(persona_show_parser, handle_persona_show)
     persona_delete_parser = persona_subparsers.add_parser("delete", help="Delete one persona snapshot.")
-    persona_delete_parser.add_argument("name_or_id")
+    persona_delete_parser.add_argument("persona_id")
     persona_delete_parser.add_argument("--yes", "-y", action="store_true", default=False)
     _add_handler(persona_delete_parser, handle_persona_delete)
+    persona_disable_parser = persona_subparsers.add_parser("disable", help="Disable a persona snapshot.")
+    persona_disable_parser.add_argument("persona_id")
+    persona_disable_parser.add_argument("--yes", "-y", action="store_true", default=False)
+    _add_handler(persona_disable_parser, handle_persona_disable)
+    persona_enable_parser = persona_subparsers.add_parser("enable", help="Enable a persona snapshot.")
+    persona_enable_parser.add_argument("persona_id")
+    persona_enable_parser.add_argument("--yes", "-y", action="store_true", default=False)
+    _add_handler(persona_enable_parser, handle_persona_enable)
 
     dev_parser = subparsers.add_parser(
         "dev",
@@ -1186,6 +1198,19 @@ def _resolve_memory_entry_ids(args: argparse.Namespace) -> list[str] | None:
     except VisibleHandleError as exc:
         print(str(exc), file=sys.stderr)
         return None
+
+
+def _resolve_persona_id(args: argparse.Namespace) -> str | None:
+    prompts = _persona_prompts_for_list(args.project_root)
+    try:
+        return resolve_visible_handle(args.persona_id, prompts, label="persona", get_id=lambda p: p.id)
+    except VisibleHandleError as exc:
+        print(str(exc), file=sys.stderr)
+        return None
+
+
+def _persona_prompts_for_list(project_root: Path | None) -> tuple[PersonaPrompt, ...]:
+    return PersonaPromptRepository(project_root).list()
 
 
 def handle_memory_stats(args: argparse.Namespace) -> int:
@@ -2347,24 +2372,57 @@ def handle_persona_list(args: argparse.Namespace) -> int:
     print("Built-in personas (static):")
     for p in static:
         print(f"  {p.id}: {p.description}")
-    prompts = PersonaPromptRepository(args.project_root).list()
+    repo = PersonaPromptRepository(args.project_root)
+    prompts = repo.list()
     if prompts:
         print()
         print("Custom personas (dynamic):")
-        for p in prompts:
-            print(f"  {p.name} (id={p.id})")
+        for i, p in enumerate(prompts):
+            tag = " [disabled]" if p.disabled else ""
+            print(f"  [{i}] {p.name} (id={p.id}){tag}")
     else:
         print("  (no custom personas yet — use persona_craft in chat to create one)")
     return 0
 
 
+def handle_persona_create(args: argparse.Namespace) -> int:
+    repo = PersonaPromptRepository(args.project_root)
+    persona = create_persona_prompt(args.name, args.prompt, project_root=args.project_root)
+    existing = repo.get_by_name(args.name)
+    if existing is not None:
+        persona = PersonaPrompt(
+            id=existing.id,
+            name=args.name,
+            prompt=args.prompt,
+            disabled=existing.disabled,
+            created_at=existing.created_at,
+            updated_at=persona.updated_at,
+        )
+    repo.save(persona)
+    try:
+        from nuself.trace.service import TraceRecorder
+        TraceRecorder(project_root=args.project_root).record_persona_prompt_created(
+            persona_prompt_id=persona.id,
+            name=persona.name,
+            participants=["cli"],
+        )
+    except RuntimeError:
+        pass
+    print(f"Created persona: {persona.name} (id={persona.id})")
+    return 0
+
+
 def handle_persona_show(args: argparse.Namespace) -> int:
     repo = PersonaPromptRepository(args.project_root)
-    prompt = repo.resolve(args.name_or_id)
-    if prompt is None:
-        print(f"Persona not found: {args.name_or_id}", file=sys.stderr)
+    prompt_id = _resolve_persona_id(args)
+    if prompt_id is None:
         return 1
-    print(f"Name: {prompt.name}")
+    prompt = repo.get(prompt_id)
+    if prompt is None:
+        print(f"Persona not found: {args.persona_id}", file=sys.stderr)
+        return 1
+    tag = " [disabled]" if prompt.disabled else ""
+    print(f"Name: {prompt.name}{tag}")
     print(f"ID:   {prompt.id}")
     print(f"Created: {prompt.created_at}")
     print(f"Updated: {prompt.updated_at}")
@@ -2375,9 +2433,12 @@ def handle_persona_show(args: argparse.Namespace) -> int:
 
 def handle_persona_delete(args: argparse.Namespace) -> int:
     repo = PersonaPromptRepository(args.project_root)
-    prompt = repo.resolve(args.name_or_id)
+    prompt_id = _resolve_persona_id(args)
+    if prompt_id is None:
+        return 1
+    prompt = repo.get(prompt_id)
     if prompt is None:
-        print(f"Persona not found: {args.name_or_id}", file=sys.stderr)
+        print(f"Persona not found: {args.persona_id}", file=sys.stderr)
         return 1
     if not args.yes:
         confirm = input(f"Delete persona '{prompt.name}'? [y/N] ").strip().lower()
@@ -2386,6 +2447,68 @@ def handle_persona_delete(args: argparse.Namespace) -> int:
             return 0
     repo.delete(prompt.id)
     print(f"Deleted persona: {prompt.name}")
+    return 0
+
+
+def handle_persona_disable(args: argparse.Namespace) -> int:
+    repo = PersonaPromptRepository(args.project_root)
+    prompt_id = _resolve_persona_id(args)
+    if prompt_id is None:
+        return 1
+    prompt = repo.get(prompt_id)
+    if prompt is None:
+        print(f"Persona not found: {args.persona_id}", file=sys.stderr)
+        return 1
+    if prompt.disabled:
+        print(f"Persona '{prompt.name}' is already disabled.")
+        return 0
+    if not args.yes:
+        confirm = input(f"Disable persona '{prompt.name}'? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("Aborted.")
+            return 0
+    repo.set_disabled(prompt.id, True)
+    try:
+        from nuself.trace.service import TraceRecorder
+        TraceRecorder(project_root=args.project_root).record_persona_disabled(
+            persona_prompt_id=prompt.id,
+            name=prompt.name,
+            participants=["cli"],
+        )
+    except RuntimeError:
+        pass
+    print(f"Disabled persona: {prompt.name}")
+    return 0
+
+
+def handle_persona_enable(args: argparse.Namespace) -> int:
+    repo = PersonaPromptRepository(args.project_root)
+    prompt_id = _resolve_persona_id(args)
+    if prompt_id is None:
+        return 1
+    prompt = repo.get(prompt_id)
+    if prompt is None:
+        print(f"Persona not found: {args.persona_id}", file=sys.stderr)
+        return 1
+    if not prompt.disabled:
+        print(f"Persona '{prompt.name}' is already enabled.")
+        return 0
+    if not args.yes:
+        confirm = input(f"Enable persona '{prompt.name}'? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("Aborted.")
+            return 0
+    repo.set_disabled(prompt.id, False)
+    try:
+        from nuself.trace.service import TraceRecorder
+        TraceRecorder(project_root=args.project_root).record_persona_enabled(
+            persona_prompt_id=prompt.id,
+            name=prompt.name,
+            participants=["cli"],
+        )
+    except RuntimeError:
+        pass
+    print(f"Enabled persona: {prompt.name}")
     return 0
 
 
@@ -2665,6 +2788,7 @@ _INTERACTIVE_COMMANDS = [
     ":t",
     ":reason",
     ":trace",
+    ":persona", ":p",
     ":restart",
     ":r",
     ":dev",
@@ -2984,6 +3108,16 @@ def _handle_interactive_command(
         body = command.removeprefix(":trace").strip()
         _print_ansi(_handle_interactive_trace_command(body, project_root))
         return ("", current_thread_id)
+    if command in {":persona", ":p"}:
+        print()
+        _print_ansi(_handle_interactive_persona_command("list", project_root))
+        return ("", current_thread_id)
+    if command.startswith(":persona ") or command.startswith(":p "):
+        print()
+        prefix = ":persona " if command.startswith(":persona ") else ":p "
+        body = command.removeprefix(prefix).strip()
+        _print_ansi(_handle_interactive_persona_command(body, project_root))
+        return ("", current_thread_id)
     if command in {":restart", ":r"}:
         print()
         _print_ansi(_handle_interactive_restart_command(project_root))
@@ -3111,6 +3245,7 @@ def _interactive_help(command: str | None = None) -> str:
             "  :thread, :t               list active threads",
             "  :thread <id>, :t <id>     switch to or create a thread",
             "  :reason                   long-run reasoning commands",
+            "  :persona, :p             list/manage custom personas",
             "  :trace                    list thought trace records",
             "  :trace show <id|index>    show one thought trace",
             "  :trace search <query>     search thought trace records",
@@ -3775,6 +3910,61 @@ def _handle_interactive_trace_command(command: str, project_root: Path | None) -
     return _interactive_trace_help(command)
 
 
+def _handle_interactive_persona_command(command: str, project_root: Path | None) -> str:
+    try:
+        from nuself.tui.render import format_display_timestamp
+
+        repo = PersonaPromptRepository(project_root)
+        if command in {"", "list"}:
+            prompts = repo.list()
+            if not prompts:
+                return "No custom personas. Use persona_craft in chat to create one."
+            lines: list[str] = ["Custom personas (dynamic):"]
+            for i, p in enumerate(prompts):
+                tag = " [disabled]" if p.disabled else ""
+                lines.append(f"  [{i}] {p.name} (id={p.id}){tag}")
+            return "\n".join(lines)
+        if command.startswith("show "):
+            persona_id = command.removeprefix("show ").strip()
+            args = argparse.Namespace(persona_id=persona_id, project_root=project_root)
+            resolved = _resolve_persona_id(args)
+            if resolved is None:
+                return f"Persona not found: {persona_id}"
+            prompt = repo.get(resolved)
+            if prompt is None:
+                return f"Persona not found: {persona_id}"
+            tag = " [disabled]" if prompt.disabled else ""
+            lines = [f"Name: {prompt.name}{tag}", f"ID:   {prompt.id}", f"Created: {format_display_timestamp(prompt.created_at)}", f"Updated: {format_display_timestamp(prompt.updated_at)}", "---", prompt.prompt]
+            return "\n".join(lines)
+        if command.startswith("delete "):
+            persona_id = command.removeprefix("delete ").strip()
+            args = argparse.Namespace(persona_id=persona_id, project_root=project_root, yes=False)
+            handle_persona_delete(args)
+            return ""
+        if command.startswith("disable "):
+            persona_id = command.removeprefix("disable ").strip()
+            args = argparse.Namespace(persona_id=persona_id, project_root=project_root, yes=False)
+            handle_persona_disable(args)
+            return ""
+        if command.startswith("enable "):
+            persona_id = command.removeprefix("enable ").strip()
+            args = argparse.Namespace(persona_id=persona_id, project_root=project_root, yes=False)
+            handle_persona_enable(args)
+            return ""
+        if command.startswith("create "):
+            rest = command.removeprefix("create ").strip()
+            parts = rest.split(" ", 1)
+            if len(parts) < 2:
+                return "Usage: :persona create <name> <prompt>"
+            name, prompt_text = parts
+            args = argparse.Namespace(name=name, prompt=prompt_text, project_root=project_root)
+            handle_persona_create(args)
+            return ""
+        return _interactive_persona_help(command)
+    except Exception as exc:
+        return f"Error: {exc}"
+
+
 def _handle_interactive_restart_command(project_root: Path | None) -> str:
     write_log_event("daemon", "restart_requested", "daemon restart requested", project_root=project_root)
     stop_result = lifecycle.stop(project_root)
@@ -3792,6 +3982,25 @@ def _handle_interactive_restart_command(project_root: Path | None) -> str:
     if not start_result.running:
         return f"Failed to restart daemon: {_format_status(start_result)}"
     return f"Restarted daemon: {_format_status(start_result)}"
+
+
+def _interactive_persona_help(command: str | None = None) -> str:
+    lines: list[str] = []
+    if command is not None:
+        lines.append(f"Unknown persona command: :persona {command}")
+    lines.extend(
+        [
+            "Persona commands:",
+            "  :persona",
+            "  :persona list",
+            "  :persona show <id|index>",
+            "  :persona create <name> <prompt>",
+            "  :persona delete <id|index>",
+            "  :persona disable <id|index>",
+            "  :persona enable <id|index>",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _interactive_trace_help(command: str | None = None) -> str:
