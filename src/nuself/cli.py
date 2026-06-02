@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 import shutil
 import subprocess
-import textwrap
+
 import sys
 import threading
 import time
@@ -1214,14 +1214,6 @@ def _persona_prompts_for_list(project_root: Path | None) -> tuple[PersonaPrompt,
     return PersonaPromptRepository(project_root).list()
 
 
-_DEFAULT_TEXT_WIDTH = 88
-
-
-def _wrap_text(text: str) -> list[str]:
-    width = shutil.get_terminal_size((_DEFAULT_TEXT_WIDTH, 24)).columns
-    return textwrap.wrap(text, width=max(min(width, _DEFAULT_TEXT_WIDTH), 40)) or [""]
-
-
 def handle_memory_stats(args: argparse.Namespace) -> int:
     print(_format_memory_stats(memory_stats(args.project_root)))
     return 0
@@ -2377,21 +2369,22 @@ def _resolve_profile_id(args: argparse.Namespace) -> str | None:
 
 
 def handle_persona_list(args: argparse.Namespace) -> int:
+    from nuself.tui.persona import render_persona_row
+
     static = list(BUILTIN_PERSONAS) + [MODERATOR_PERSONA, SYNTHESIZER_PERSONA]
-    lines: list[str] = [f"{_theme.tag('[persona]', 'persona')} Built-in personas (static):"]
+    all_lines: list[str] = [f"{_theme.tag('[persona]', 'persona')} Built-in personas (static):"]
     for p in static:
-        lines.append(f"  {_theme.muted(p.id)}: {p.description}")
+        all_lines.append(f"  {_theme.muted(p.id)}: {p.description}")
     repo = PersonaPromptRepository(args.project_root)
     prompts = repo.list()
     if prompts:
-        lines.append("")
-        lines.append(f"{_theme.tag('[persona]', 'persona')} Custom personas (dynamic):")
+        all_lines.append("")
+        all_lines.append(f"{_theme.tag('[persona]', 'persona')} Custom personas (dynamic):")
         for i, p in enumerate(prompts):
-            tag = f" {_theme.muted('[disabled]')}" if p.disabled else ""
-            lines.append(f"  [{i}] {p.name} (id={_theme.muted(p.id)}){tag}")
+            all_lines.append(render_persona_row(p, index=i))
     else:
-        lines.append(f"  {_theme.muted('(no custom personas yet — use persona_craft in chat to create one)')}")
-    _print_ansi("\n".join(lines))
+        all_lines.append(f"  {_theme.muted('(no custom personas yet — use persona_craft in chat to create one)')}")
+    _print_ansi("\n".join(all_lines))
     return 0
 
 
@@ -2423,6 +2416,8 @@ def handle_persona_create(args: argparse.Namespace) -> int:
 
 
 def handle_persona_show(args: argparse.Namespace) -> int:
+    from nuself.tui.persona import render_persona_detail
+
     repo = PersonaPromptRepository(args.project_root)
     prompt_id = _resolve_persona_id(args)
     if prompt_id is None:
@@ -2431,18 +2426,7 @@ def handle_persona_show(args: argparse.Namespace) -> int:
     if prompt is None:
         _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.error(f'Persona not found: {args.persona_id}')}")
         return 1
-    disabled_tag = f" {_theme.muted('[disabled]')}" if prompt.disabled else ""
-    prompt_lines = _wrap_text(prompt.prompt)
-    indented = "\n".join(f"  {line}" for line in prompt_lines) if prompt_lines else ""
-    lines = [
-        f"{_theme.tag('[persona]', 'persona')} {prompt.name}{disabled_tag}",
-        f"  id={_theme.muted(prompt.id)}",
-        f"  created={format_display_timestamp(prompt.created_at)}",
-        f"  updated={format_display_timestamp(prompt.updated_at)}",
-        "---",
-        indented,
-    ]
-    _print_ansi("\n".join(lines))
+    _print_ansi(render_persona_detail(prompt))
     return 0
 
 
@@ -3927,16 +3911,17 @@ def _handle_interactive_trace_command(command: str, project_root: Path | None) -
 
 def _handle_interactive_persona_command(command: str, project_root: Path | None) -> str:
     try:
+        from nuself.tui.persona import render_persona_detail, render_persona_row
+
         repo = PersonaPromptRepository(project_root)
         if command in {"", "list"}:
             prompts = repo.list()
             if not prompts:
                 return f"{_theme.tag('[persona]', 'persona')} {_theme.muted('No custom personas yet')}"
-            lines: list[str] = [f"{_theme.tag('[persona]', 'persona')} Custom personas (dynamic):"]
+            blocks: list[str] = [f"{_theme.tag('[persona]', 'persona')} Custom personas (dynamic):"]
             for i, p in enumerate(prompts):
-                tag = f" {_theme.muted('[disabled]')}" if p.disabled else ""
-                lines.append(f"  [{i}] {p.name} (id={_theme.muted(p.id)}){tag}")
-            return "\n".join(lines)
+                blocks.append(render_persona_row(p, index=i))
+            return "\n".join(blocks)
         if command.startswith("show "):
             persona_id = command.removeprefix("show ").strip()
             args = argparse.Namespace(persona_id=persona_id, project_root=project_root)
@@ -3946,18 +3931,7 @@ def _handle_interactive_persona_command(command: str, project_root: Path | None)
             prompt = repo.get(resolved)
             if prompt is None:
                 return f"{_theme.tag('[persona]', 'persona')} {_theme.error('Not found')}: {persona_id}"
-            disabled_tag = f" {_theme.muted('[disabled]')}" if prompt.disabled else ""
-            prompt_lines = _wrap_text(prompt.prompt)
-            indented = "\n".join(f"  {line}" for line in prompt_lines) if prompt_lines else ""
-            lines = [
-                f"{_theme.tag('[persona]', 'persona')} {prompt.name}{disabled_tag}",
-                f"  id={_theme.muted(prompt.id)}",
-                f"  created={format_display_timestamp(prompt.created_at)}",
-                f"  updated={format_display_timestamp(prompt.updated_at)}",
-                "---",
-                indented,
-            ]
-            return "\n".join(lines)
+            return render_persona_detail(prompt)
         if command.startswith("delete "):
             persona_id = command.removeprefix("delete ").strip()
             args = argparse.Namespace(persona_id=persona_id, project_root=project_root, yes=False)
