@@ -29,7 +29,8 @@ def render_persona_row(
 ) -> str:
     theme = TerminalTheme(color=color)
     tag = theme.tag("[persona]", "persona")
-    label = f"{tag} [{index}] {prompt.name}" if index is not None else f"{tag} {prompt.name}"
+    name = theme.paint(prompt.name, "38;5;208")
+    label = f"{tag} [{index}] {name}" if index is not None else f"{tag} {name}"
     fields: list[str] = [f"id={theme.muted(prompt.id)}"]
     if prompt.disabled:
         fields.append(theme.muted("[disabled]"))
@@ -48,7 +49,7 @@ def render_persona_detail(
     if prompt.disabled:
         fields.append(theme.muted("[disabled]"))
     return render_record_block(
-        f"{theme.tag('[persona]', 'persona')} {prompt.name}",
+        f"{theme.tag('[persona]', 'persona')} {theme.paint(prompt.name, '38;5;208')}",
         fields,
         body=_wrap_body(prompt.prompt),
     )
