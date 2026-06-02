@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 import shutil
 import subprocess
+import textwrap
 import sys
 import threading
 import time
@@ -1213,6 +1214,14 @@ def _persona_prompts_for_list(project_root: Path | None) -> tuple[PersonaPrompt,
     return PersonaPromptRepository(project_root).list()
 
 
+_DEFAULT_TEXT_WIDTH = 88
+
+
+def _wrap_text(text: str) -> list[str]:
+    width = shutil.get_terminal_size((_DEFAULT_TEXT_WIDTH, 24)).columns
+    return textwrap.wrap(text, width=max(min(width, _DEFAULT_TEXT_WIDTH), 40)) or [""]
+
+
 def handle_memory_stats(args: argparse.Namespace) -> int:
     print(_format_memory_stats(memory_stats(args.project_root)))
     return 0
@@ -2369,19 +2378,20 @@ def _resolve_profile_id(args: argparse.Namespace) -> str | None:
 
 def handle_persona_list(args: argparse.Namespace) -> int:
     static = list(BUILTIN_PERSONAS) + [MODERATOR_PERSONA, SYNTHESIZER_PERSONA]
-    print("Built-in personas (static):")
+    lines: list[str] = [f"{_theme.tag('[persona]', 'persona')} Built-in personas (static):"]
     for p in static:
-        print(f"  {p.id}: {p.description}")
+        lines.append(f"  {_theme.muted(p.id)}: {p.description}")
     repo = PersonaPromptRepository(args.project_root)
     prompts = repo.list()
     if prompts:
-        print()
-        print("Custom personas (dynamic):")
+        lines.append("")
+        lines.append(f"{_theme.tag('[persona]', 'persona')} Custom personas (dynamic):")
         for i, p in enumerate(prompts):
-            tag = " [disabled]" if p.disabled else ""
-            print(f"  [{i}] {p.name} (id={p.id}){tag}")
+            tag = f" {_theme.muted('[disabled]')}" if p.disabled else ""
+            lines.append(f"  [{i}] {p.name} (id={_theme.muted(p.id)}){tag}")
     else:
-        print("  (no custom personas yet — use persona_craft in chat to create one)")
+        lines.append(f"  {_theme.muted('(no custom personas yet — use persona_craft in chat to create one)')}")
+    _print_ansi("\n".join(lines))
     return 0
 
 
@@ -2408,7 +2418,7 @@ def handle_persona_create(args: argparse.Namespace) -> int:
         )
     except RuntimeError:
         pass
-    print(f"Created persona: {persona.name} (id={persona.id})")
+    _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.paint(f'Created: {persona.name}', '32')} (id={_theme.muted(persona.id)})")
     return 0
 
 
@@ -2419,15 +2429,20 @@ def handle_persona_show(args: argparse.Namespace) -> int:
         return 1
     prompt = repo.get(prompt_id)
     if prompt is None:
-        print(f"Persona not found: {args.persona_id}", file=sys.stderr)
+        _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.error(f'Persona not found: {args.persona_id}')}")
         return 1
-    tag = " [disabled]" if prompt.disabled else ""
-    print(f"Name: {prompt.name}{tag}")
-    print(f"ID:   {prompt.id}")
-    print(f"Created: {prompt.created_at}")
-    print(f"Updated: {prompt.updated_at}")
-    print("---")
-    print(prompt.prompt)
+    disabled_tag = f" {_theme.muted('[disabled]')}" if prompt.disabled else ""
+    prompt_lines = _wrap_text(prompt.prompt)
+    indented = "\n".join(f"  {line}" for line in prompt_lines) if prompt_lines else ""
+    lines = [
+        f"{_theme.tag('[persona]', 'persona')} {prompt.name}{disabled_tag}",
+        f"  id={_theme.muted(prompt.id)}",
+        f"  created={format_display_timestamp(prompt.created_at)}",
+        f"  updated={format_display_timestamp(prompt.updated_at)}",
+        "---",
+        indented,
+    ]
+    _print_ansi("\n".join(lines))
     return 0
 
 
@@ -2446,7 +2461,7 @@ def handle_persona_delete(args: argparse.Namespace) -> int:
             print("Aborted.")
             return 0
     repo.delete(prompt.id)
-    print(f"Deleted persona: {prompt.name}")
+    _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.warning(f'Deleted: {prompt.name}')}")
     return 0
 
 
@@ -2457,10 +2472,10 @@ def handle_persona_disable(args: argparse.Namespace) -> int:
         return 1
     prompt = repo.get(prompt_id)
     if prompt is None:
-        print(f"Persona not found: {args.persona_id}", file=sys.stderr)
+        _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.error(f'Persona not found: {args.persona_id}')}")
         return 1
     if prompt.disabled:
-        print(f"Persona '{prompt.name}' is already disabled.")
+        _print_ansi(f"{_theme.tag('[persona]', 'persona')} Persona '{prompt.name}' is already {_theme.muted('disabled')}.")
         return 0
     if not args.yes:
         confirm = input(f"Disable persona '{prompt.name}'? [y/N] ").strip().lower()
@@ -2477,7 +2492,7 @@ def handle_persona_disable(args: argparse.Namespace) -> int:
         )
     except RuntimeError:
         pass
-    print(f"Disabled persona: {prompt.name}")
+    _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.warning(f'Disabled: {prompt.name}')}")
     return 0
 
 
@@ -2488,10 +2503,10 @@ def handle_persona_enable(args: argparse.Namespace) -> int:
         return 1
     prompt = repo.get(prompt_id)
     if prompt is None:
-        print(f"Persona not found: {args.persona_id}", file=sys.stderr)
+        _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.error(f'Persona not found: {args.persona_id}')}")
         return 1
     if not prompt.disabled:
-        print(f"Persona '{prompt.name}' is already enabled.")
+        _print_ansi(f"{_theme.tag('[persona]', 'persona')} Persona '{prompt.name}' is already {_theme.muted('enabled')}.")
         return 0
     if not args.yes:
         confirm = input(f"Enable persona '{prompt.name}'? [y/N] ").strip().lower()
@@ -2508,7 +2523,7 @@ def handle_persona_enable(args: argparse.Namespace) -> int:
         )
     except RuntimeError:
         pass
-    print(f"Enabled persona: {prompt.name}")
+    _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.paint(f'Enabled: {prompt.name}', '32')}")
     return 0
 
 
@@ -3912,29 +3927,36 @@ def _handle_interactive_trace_command(command: str, project_root: Path | None) -
 
 def _handle_interactive_persona_command(command: str, project_root: Path | None) -> str:
     try:
-        from nuself.tui.render import format_display_timestamp
-
         repo = PersonaPromptRepository(project_root)
         if command in {"", "list"}:
             prompts = repo.list()
             if not prompts:
-                return "No custom personas. Use persona_craft in chat to create one."
-            lines: list[str] = ["Custom personas (dynamic):"]
+                return f"{_theme.tag('[persona]', 'persona')} {_theme.muted('No custom personas yet')}"
+            lines: list[str] = [f"{_theme.tag('[persona]', 'persona')} Custom personas (dynamic):"]
             for i, p in enumerate(prompts):
-                tag = " [disabled]" if p.disabled else ""
-                lines.append(f"  [{i}] {p.name} (id={p.id}){tag}")
+                tag = f" {_theme.muted('[disabled]')}" if p.disabled else ""
+                lines.append(f"  [{i}] {p.name} (id={_theme.muted(p.id)}){tag}")
             return "\n".join(lines)
         if command.startswith("show "):
             persona_id = command.removeprefix("show ").strip()
             args = argparse.Namespace(persona_id=persona_id, project_root=project_root)
             resolved = _resolve_persona_id(args)
             if resolved is None:
-                return f"Persona not found: {persona_id}"
+                return f"{_theme.tag('[persona]', 'persona')} {_theme.error('Not found')}: {persona_id}"
             prompt = repo.get(resolved)
             if prompt is None:
-                return f"Persona not found: {persona_id}"
-            tag = " [disabled]" if prompt.disabled else ""
-            lines = [f"Name: {prompt.name}{tag}", f"ID:   {prompt.id}", f"Created: {format_display_timestamp(prompt.created_at)}", f"Updated: {format_display_timestamp(prompt.updated_at)}", "---", prompt.prompt]
+                return f"{_theme.tag('[persona]', 'persona')} {_theme.error('Not found')}: {persona_id}"
+            disabled_tag = f" {_theme.muted('[disabled]')}" if prompt.disabled else ""
+            prompt_lines = _wrap_text(prompt.prompt)
+            indented = "\n".join(f"  {line}" for line in prompt_lines) if prompt_lines else ""
+            lines = [
+                f"{_theme.tag('[persona]', 'persona')} {prompt.name}{disabled_tag}",
+                f"  id={_theme.muted(prompt.id)}",
+                f"  created={format_display_timestamp(prompt.created_at)}",
+                f"  updated={format_display_timestamp(prompt.updated_at)}",
+                "---",
+                indented,
+            ]
             return "\n".join(lines)
         if command.startswith("delete "):
             persona_id = command.removeprefix("delete ").strip()
@@ -3955,14 +3977,14 @@ def _handle_interactive_persona_command(command: str, project_root: Path | None)
             rest = command.removeprefix("create ").strip()
             parts = rest.split(" ", 1)
             if len(parts) < 2:
-                return "Usage: :persona create <name> <prompt>"
+                return f"{_theme.tag('[persona]', 'persona')} {_theme.error('Usage')}: :persona create <name> <prompt>"
             name, prompt_text = parts
             args = argparse.Namespace(name=name, prompt=prompt_text, project_root=project_root)
             handle_persona_create(args)
             return ""
         return _interactive_persona_help(command)
     except Exception as exc:
-        return f"Error: {exc}"
+        return f"{_theme.tag('[persona]', 'persona')} {_theme.error(str(exc))}"
 
 
 def _handle_interactive_restart_command(project_root: Path | None) -> str:
