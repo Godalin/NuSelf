@@ -4,7 +4,7 @@ All notable user-visible changes to NuSelf are tracked here.
 
 This project follows the versioning rules in [`docs/spec/versioning.md`](docs/spec/versioning.md).
 
-## Unreleased
+## 0.2.1 - 2026-06-02
 
 ### Added
 
