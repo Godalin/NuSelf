@@ -17,6 +17,14 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   `persona_list` now excludes disabled personas by default; `persona_think`
   rejects disabled personas with a clear error.
 - Added `persona_disabled` / `persona_enabled` trace kinds and recording.
+- Added `persona delete` batch support: `nuself persona delete 0,2-4` deletes
+  multiple personas at once.
+- Added TUI renderers for persona prompts (`tui/persona.py`): terminal-width
+  detection, text wrapping, `[persona]` tag in magenta, name in orange.
+- Added `docs/spec/persona/management.md` — full design spec for persona
+  management via handles.
+- Added `docs/spec/hardcode.md` — central registry of all non-configurable
+  numeric constants across the codebase.
 
 ### Changed
 
@@ -24,6 +32,26 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   via `from_wire` default); `PersonaPromptRepository.set_disabled()` added.
 - `persona show` and `persona delete` now accept visible index handles in
   addition to name or id.
+- Persona list/show output now uses `render_record_block` format with colored
+  tags, wrapped text, and formatted timestamps (same style as memory entries).
+- `trace/service.py record_reason_thread_created`: evidence_refs is now `[]`
+  instead of passing the thread's accumulated evidence_refs (trace evidence
+  should reflect this trace event, not the thread's lifetime).
+- `trace/service.py record_reason_step`: decision_points now uses the step's
+  `terminal_status`/`terminal_reason` instead of `step.delta`.
+- `Spec/reason.md`: thread/step ID format corrected to
+  `reason-{timestamp}-{uuid[:8]}` / `step-{timestamp}-{uuid[:8]}`.
+- `reason/domain.py ReasoningThread.to_wire()`: field order aligned with spec
+  (active_items before evidence_refs, reasoning_prompt inlined).
+- `reason/__init__.py`: exported `TerminalStatus` (was missing from `__all__`).
+- `trace/domain.py`: added `persona_disabled` and `persona_enabled` to
+  `TraceKind` literal and `TRACE_KINDS` tuple.
+
+### Removed
+
+- `MAX_ACTIVE_THREADS = 5` cap removed. Reason thread creation already requires
+  user approval, making the artificial limit unnecessary. Agent tool
+  `reason_propose` no longer enforces a thread count check.
 
 ## 0.2.1 - 2026-06-02
 
