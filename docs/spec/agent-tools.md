@@ -137,6 +137,8 @@ Tool names must start with the owning subsystem name. This keeps agent-visible t
 
 Each `StructuredTool` definition must set `metadata={"service_component": "<subsystem>"}` — e.g., `metadata={"service_component": "memory"}` for a memory tool. The `service_component` is used by the log wrapper when writing `service_tool_called` events; the renderer reads it directly from the log event's metadata. No code should derive the service tag from the tool name.
 
+Tools that emit durable operational logs, such as export flows and other long-running side effects, should include a `log` tag in addition to their behavioral tag(s) so log-oriented tooling can classify them consistently.
+
 #### `memory_count`
 
 - **Args**: `types: list[str] | str | None = None`, `tags: list[str] | str | None = None`
@@ -288,11 +290,13 @@ Trace tools let the chat agent inspect thought provenance without mutating it.
 
 The detailed tool catalog above should be read as grouped capability blocks, not a flat list of unrelated helpers:
 
-| Family                  | Typical tools                                                                                                                                                                                     | Decorator need               |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Read-only discovery     | `memory_search`, `memory_count`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | `log` only                   |
-| Durable mutation        | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance`                                                                                                          | `log` + sometimes `approval` |
-| Approval-gated proposal | `reason_propose`                                                                                                                                                                                  | `log` + `approval`           |
+| Family                         | Typical tools                                                                                                                                                                                     | Decorator need               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Read-only discovery            | `memory_search`, `memory_count`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | `log` only                   |
+| Durable mutation               | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance`                                                                                                          | `log` + sometimes `approval` |
+| Approval-gated proposal/export | `reason_propose`, `reason_export`                                                                                                                                                                 | `log` + `approval`           |
+
+Approval-gated tools return structured JSON that records whether the user approved the action and, if approved, the underlying result payload.
 | Internal synthesis      | `selves_consult`                                                                                                                                                                                  | `log` only                   |
 
 This grouping is the preferred order for future code organization and for any registry builder that wants to assemble tools by capability instead of by file location.

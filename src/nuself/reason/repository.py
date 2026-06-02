@@ -63,7 +63,7 @@ class ReasonRepository:
             raise ReasonNotFound(thread_id)
         return self._read_thread_path(path)
 
-    def list_threads(self, status: str | None = None) -> list[ReasoningThread]:
+    def list_threads(self, status: str | None = "all") -> list[ReasoningThread]:
         self.ensure()
         threads: list[ReasoningThread] = []
         for path in sorted(self._threads_dir.glob("*.json")):
@@ -78,7 +78,7 @@ class ReasonRepository:
             threads.append(thread)
         return sorted(threads, key=lambda t: (t.created_at, t.id))
 
-    def resolve_thread(self, id_or_index: str, *, status: str | None = None) -> ReasoningThread:
+    def resolve_thread(self, id_or_index: str, *, status: str | None = "all") -> ReasoningThread:
         try:
             return self.get_thread(id_or_index)
         except ReasonNotFound:

@@ -676,7 +676,7 @@ def build_parser() -> argparse.ArgumentParser:
     reason_parser.set_defaults(handler=None, help_parser=reason_parser)
     reason_subparsers = reason_parser.add_subparsers(dest="reason_command", metavar="<command>")
     reason_list_parser = reason_subparsers.add_parser("list", help="List reasoning threads.")
-    reason_list_parser.add_argument("--status", choices=("active", "paused", "resolved", "archived", "all"), default=None)
+    reason_list_parser.add_argument("--status", choices=("active", "paused", "resolved", "archived", "all"), default="all")
     reason_list_parser.add_argument("--json", action="store_true", default=False, dest="as_json")
     _add_handler(reason_list_parser, handle_reason_list)
     reason_show_parser = reason_subparsers.add_parser("show", help="Show a reasoning thread and its steps.")
@@ -3596,7 +3596,7 @@ def _handle_interactive_reason_command(command: str, project_root: Path | None) 
     if command == "":
         return _interactive_reason_help()
     if command == "list":
-        threads = service.list_threads()
+        threads = service.list_threads(status="all")
         if not threads:
             return "No reason threads."
         return "\n".join(render_reason_row(thread, index=index) for index, thread in enumerate(threads))
@@ -3701,7 +3701,7 @@ def _handle_interactive_reason_watch(project_root: Path | None, interval: int = 
     from nuself.tui.reason import render_reason_detail, render_step_watch_entry
 
     service = ReasonService(project_root)
-    threads = service.list_threads()
+    threads = service.list_threads(status="all")
     if thread_ref is not None:
         try:
             thread = service.show_thread(thread_ref)

@@ -43,6 +43,14 @@ class PrivateWorkspaceStore:
             notes=root / "notes",
         )
 
+    def list_owners(self) -> list[str]:
+        if not self._root.exists():
+            return []
+        return sorted(
+            child.name for child in self._root.iterdir()
+            if child.is_dir() and not child.name.startswith(".")
+        )
+
     def ensure(self, owner_id: str) -> PrivateWorkspacePaths:
         workspace = self.paths(owner_id)
         workspace.artifacts.mkdir(parents=True, exist_ok=True)

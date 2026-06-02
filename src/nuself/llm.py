@@ -244,7 +244,7 @@ def _endpoint_langchain_chat_model(settings: LLMSettings) -> BaseChatModel:
         "api_key": settings.api_key,
         "timeout": settings.timeout_seconds,
         "max_retries": 0,
-        "temperature": 0.4,
+        "temperature": 0.1,
     }
     if settings.provider == "anthropic":
         anthropic_model = cast(Any, ChatAnthropic)

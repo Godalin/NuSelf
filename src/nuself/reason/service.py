@@ -80,7 +80,7 @@ class ReasonService:
 
     # ── Read ───────────────────────────────────────────────────────
 
-    def list_threads(self, status: str | None = None) -> list[ReasoningThread]:
+    def list_threads(self, status: str | None = "all") -> list[ReasoningThread]:
         return self._repository.list_threads(status=status)
 
     def show_thread(self, id_or_index: str) -> ReasoningThread:

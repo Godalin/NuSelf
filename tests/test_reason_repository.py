@@ -39,9 +39,10 @@ def test_list_threads(tmp_path: Path) -> None:
     assert len(all_threads) == 3
 
     default = repo.list_threads()
-    assert len(default) == 2
+    assert len(default) == 3
     assert default[0].id == t1.id
     assert default[1].id == t2.id
+    assert default[2].id == t3.id
 
     active = repo.list_threads(status="active")
     assert len(active) == 1

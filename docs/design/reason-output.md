@@ -36,6 +36,8 @@ The subsystem sits beside the existing reason service:
 - `reason workspace` stores intermediate artifacts, chunk files, and manifest data.
 
 The critical boundary is that chat manages the task, but the task state lives in the reason workspace.
+The execution loop itself is daemon-global: one background worker reads from an in-memory event queue (`queue.SimpleQueue`) and processes export jobs for the whole process.
+Each export job also carries a section plan so chunk titles, global chapter order, and local section focus stay consistent across the whole artifact. That plan is derived from the selected source content, not from chunk size, so changing the chunking strategy does not rewrite the chapter structure.
 
 ## Core Concepts
 
@@ -106,20 +108,22 @@ Chat responsibilities:
 - choose the source thread
 - choose the output mode
 - choose the step range or batch size
-- launch the export worker
+- prompt for confirmation, then launch the export worker
 - surface progress and the final path
 
 Chat should avoid keeping the full long-form output in memory when that output can be stored on disk.
 
 ### Export Worker Subagent
 
-The worker performs the heavy lifting:
+The worker dequeues `(thread_id, job_id)` tuples from the daemon-global in-memory queue and performs the heavy lifting:
 
 1. read the selected reason steps
 2. batch them into segments
-3. compose each segment into a chunk
-4. persist the chunk and manifest update
-5. combine chunks into the final artifact
+3. derive a stable section plan from the source content
+4. compose each segment into a chunk
+5. persist the chunk and manifest update
+6. combine chunks into the final artifact
+7. automatically render the final Markdown into PDF for sharing
 
 The worker should be able to run repeatedly over the same job id without redoing finished segments.
 
@@ -129,27 +133,60 @@ Reason remains the source of truth for thread state and step storage.
 
 The output composer may read reason steps through reason service-facing methods or a dedicated adapter, but it should not reinterpret reason state as chat history.
 
-### Workspace Storage
+### Two storage domains with different persistence
 
-Reason output writes intermediate files into the reason workspace.
+Export state is split between persistent per-thread job data and an in-memory event bus:
 
-Recommended layout:
+- **Job data** — per-thread, persistent in the owning reason workspace (`jobs/{job_id}/manifest.json` is the source of truth)
+- **Queue signal** — daemon-global, in-memory (`queue.SimpleQueue`)
+
+The queue is in-memory because the manifest is the real persistent state. A queue event is purely a "go check the manifest" signal. Eliminating the filesystem queue removes three directory trees (`queue/`, `processing/`, `failed/`), atomic file claims, partial write windows, and stale processing claims.
+
+#### Job data layout (per-thread)
 
 ```text
 private/workspaces/reason/{thread_id}/
   workspace.sqlite
   artifacts/
     export/
-      {job_id}/
-        manifest.json
-        chunk-001.md
-        chunk-002.md
-        combined.md
-        progress.json
-        logs/
+      jobs/
+        {job_id}/
+          manifest.json
+          progress.json
+          chunk-001.md
+          chunk-002.md
+          combined.md
+          combined.pdf
+          .lock             # advisory compose lock
 ```
 
-The workspace is thread-local and job-local. It should not be used as a shared cross-thread cache.
+The workspace is thread-local. It should not be used as a shared cross-thread cache.
+
+Per-job subdirectories allow multiple export ranges or settings to coexist without destructive collision.
+Repeated exports with the same source range and settings produce the same deterministic `job_id` and reuse the same `jobs/{job_id}` directory (idempotent).
+
+A `.lock` file inside the job directory provides cooperative advisory locking between the daemon worker and synchronous compose calls (`resume_job`). Before composing, the caller atomically creates the lock file. If it already exists, the caller backs off.
+
+The manifest should record the section plan so the worker can reuse the same chapter or section names if the export is resumed.
+
+#### Typed domain model requirement
+
+All persistent export state (manifest, progress) must use typed dataclasses:
+
+- **`ReasonOutputManifest`** — frozen dataclass with `to_wire()` / `from_wire()`. Contains `attempts`, `last_error`, `last_attempt_at` for retry persistence. All mutations go through `dataclasses.replace()`.
+- **`ReasonOutputProgress`** — frozen dataclass with `to_wire()` / `from_wire()`. Read-friendly summary of manifest state.
+- Raw `dict[str, object]` manipulation of manifest or progress files is prohibited. The worker's failure handler uses `dataclasses.replace()` + `to_wire()` instead of inline JSON manipulation.
+
+#### Queue model: in-memory event bus
+
+The worker reads from a `queue.SimpleQueue` that carries `(thread_id, job_id)` tuples.
+
+- **Enqueue**: `plan_job` pushes `(thread_id, job_id)` onto the queue (only for new jobs).
+- **Dequeue**: The worker thread calls `queue.get()` — blocking, zero CPU.
+- **Retry**: On failure, a `threading.Timer` fires after exponential backoff and re-enqueues.
+- **Startup**: The worker scans all workspaces for non-complete manifests and re-enqueues them (crash recovery).
+
+The daemon worker should run the startup reconciliation immediately on entry, then wait on `queue.get()` in a loop.
 
 ## Composition Pipeline
 

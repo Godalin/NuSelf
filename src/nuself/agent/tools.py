@@ -170,10 +170,10 @@ def build_langchain_chat_tools(
         return f'Updated importance of "{updated.title}" to {importance_float:.2f}.'
 
     def list_active_reasoning_threads() -> str:
-        """List active and paused long-run reasoning threads."""
+        """List all long-run reasoning threads."""
 
         service = ReasonService(project_root)
-        threads = service.list_threads()
+        threads = service.list_threads(status="all")
         if not threads:
             return _json_result({"threads": [], "count": 0})
         return _json_result(
@@ -197,9 +197,9 @@ def build_langchain_chat_tools(
         )
 
     def count_reasoning_threads() -> str:
-        """Count active and paused long-run reasoning threads."""
+        """Count all long-run reasoning threads."""
 
-        threads = ReasonService(project_root).list_threads()
+        threads = ReasonService(project_root).list_threads(status="all")
         by_status: dict[str, int] = {}
         for thread in threads:
             by_status[thread.status] = by_status.get(thread.status, 0) + 1
@@ -213,9 +213,9 @@ def build_langchain_chat_tools(
             return "Error: thread_id must be a non-empty string"
         service = ReasonService(project_root)
         if tid.lower() == "current":
-            threads = service.list_threads()
+            threads = service.list_threads(status="all")
             if not threads:
-                return _json_error("No active reasoning threads.")
+                return _json_error("No reasoning threads.")
             thread = threads[-1]
             return _json_result(_reason_show_payload(thread, service.list_steps(thread.id)))
         try:
@@ -233,9 +233,9 @@ def build_langchain_chat_tools(
         service = ReasonService(project_root)
         try:
             if tid.lower() == "current":
-                threads = service.list_threads()
+                threads = service.list_threads(status="all")
                 if not threads:
-                    return _json_error("No active reasoning threads.")
+                    return _json_error("No reasoning threads.")
                 thread = threads[-1]
             else:
                 thread = service.show_thread(tid)
@@ -262,9 +262,9 @@ def build_langchain_chat_tools(
         service = ReasonService(project_root)
         try:
             if tid.lower() == "current":
-                threads = service.list_threads()
+                threads = service.list_threads(status="all")
                 if not threads:
-                    return _json_error("No active reasoning threads.")
+                    return _json_error("No reasoning threads.")
                 thread = threads[-1]
             else:
                 thread = service.show_thread(tid)
@@ -360,7 +360,7 @@ def build_langchain_chat_tools(
         end_index: int | None = None,
         segment_size: int = 5,
     ) -> str:
-        """Start a reason output export job and compose artifacts using the LLM-driven runner."""
+        """Start a reason output export job and return immediately after enqueueing it."""
 
         tid = thread_id.strip()
         if not tid:
@@ -375,41 +375,10 @@ def build_langchain_chat_tools(
                 end_index=int(end_index) if end_index is not None else None,
                 segment_size=int(segment_size),
             )
-        except (ReasonNotFound, RuntimeError, ValueError, TypeError) as exc:
-            return _json_error(str(exc))
-
-        # Compose using an LLM-driven runner (one LLM call per segment). No template fallback.
-        from nuself.llm import default_llm, ChatMessage
-
-        def _llm_runner(thread, manifest, steps, *, index, total):
-            # Build a simple system + user prompt for composing a chunk from steps
-            sys = (
-                f"You are a writing assistant. Compose a {manifest.mode} in {manifest.output_format} format "
-                "from the provided reason steps. Produce Markdown suitable for direct display."
-            )
-            pieces: list[ChatMessage] = [ChatMessage(role="system", content=sys)]
-            body_lines: list[str] = [f"Chunk {index+1}/{total} - compose from steps:"]
-            for s in steps:
-                body_lines.append("---")
-                body_lines.append(f"Step: {s.summary}")
-                if s.output:
-                    body_lines.append(s.output)
-                elif s.delta:
-                    body_lines.append(s.delta)
-                if s.evidence_refs:
-                    body_lines.append("Evidence:")
-                    body_lines.extend(f"- {r}" for r in s.evidence_refs)
-            user = "\n".join(body_lines)
-            pieces.append(ChatMessage(role="user", content=user))
-            llm = default_llm(project_root)
-            return llm.complete(pieces)
-
-        try:
-            composed = service.compose_with_runner(tid, manifest.job_id, _llm_runner)
-        except Exception as exc:  # catch runtime issues from LLM/agent
+        except (RuntimeError, ValueError, TypeError) as exc:
             return _json_error(str(exc))
         paths = service.job_paths(tid, manifest.job_id)
-        return _json_result({"job": composed.to_wire(), "paths": {"root": str(paths.root), "manifest": str(paths.manifest), "progress": str(paths.progress), "combined": str(paths.combined), "chunks_dir": str(paths.chunks_dir)}})
+        return _json_result({"queued": True, "job": manifest.to_wire(), "paths": {"root": str(paths.root), "manifest": str(paths.manifest), "progress": str(paths.progress), "combined": str(paths.combined), "chunks_dir": str(paths.chunks_dir)}})
 
     def search_trace(query: str, limit: int = 5) -> str:
         """Search thought provenance trace records."""
@@ -500,6 +469,7 @@ def build_langchain_chat_tools(
 
     _decorators = import_module("nuself.decorators")
     _composed_reason_propose = _decorators.audit_log("reasoning")(_decorators.approval_required("reasoning")(reason_propose))
+    _composed_reason_export = _decorators.audit_log("reasoning")(_decorators.approval_required("reasoning")(reason_export))
     _composed_reflection_dismiss = _decorators.audit_log("reflection")(_decorators.approval_required("reflection")(dismiss_reflection_by_numeric_handle))
 
     tools: list[BaseTool] = [
@@ -647,14 +617,17 @@ def build_langchain_chat_tools(
             tags=("write",),
         ),
         tool_from_function(
-            reason_export,
+            _composed_reason_export,
             name="reason_export",
             description=(
                 "Start a reason output export job for a thread and write the export workspace artifacts. "
                 "Use when the user wants a long-form report, narrative, outline, or summary derived from a reason thread. "
-                "Returns the export job manifest and workspace paths, while the full composed output is stored in the thread workspace."
+                "Call this tool directly when the user asks for an export; do not wait for a separate confirmation turn. "
+                "This is an approval-gated tool: during the call, the decorated wrapper prompts the user for confirmation and the returned structured JSON shows whether the user approved. "
+                "If approved, the structured JSON includes the export job result. "
+                "On approval, the underlying result contains the export job manifest and workspace paths, while the full composed output is stored in the thread workspace."
             ),
-            tags=("write",),
+            tags=("write", "log"),
         ),
         tool_from_function(
             search_trace,

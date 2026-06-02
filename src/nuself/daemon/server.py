@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import os
+import queue
 import socketserver
 import threading
 import time
-from typing import override
+from collections.abc import Callable, Sequence
+from typing import cast, override
 
 from nuself.agent.chat import ChatAgent
+from nuself.reason.domain import ReasoningStep, ReasoningThread
+from nuself.reason.output import ReasonOutputManifest, ReasonOutputSection
+from nuself.reason.output import set_enqueue_callback, set_section_planner
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.config import ConfigSystem
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
@@ -35,6 +41,85 @@ def _format_exception_chain(exc: BaseException) -> str:
             messages.append(message)
         current = current.__cause__ or current.__context__
     return " <- ".join(messages) if messages else exc.__class__.__name__
+
+
+# Export chunk runner protocol intentionally omitted; inline runner typing used.
+
+
+def _llm_section_planner(project_root: Path) -> Callable[[ReasoningThread, Sequence[ReasoningStep], str], tuple[ReasonOutputSection, ...]]:
+    """Return a section planner that uses the LLM to organize steps into chapters.
+
+    The returned planner is registered via set_section_planner() so plan_job
+    uses it instead of the mechanical _plan_sections.
+    """
+    from nuself.config import ConfigSystem
+    from nuself.llm import default_llm, ChatMessage
+    from nuself.reason.output import ReasonOutputSection
+
+    lang = ConfigSystem.load(project_root=project_root).chat.language_preference
+
+    def planner(thread: ReasoningThread, steps: Sequence[ReasoningStep], mode: str) -> tuple[ReasonOutputSection, ...]:
+        step_lines: list[str] = []
+        for i, step in enumerate(steps):
+            step_lines.append(f"  {i}. summary: {step.summary}")
+            if step.output:
+                step_lines.append(f"     output: {step.output[:200]}")
+            elif step.delta:
+                step_lines.append(f"     delta: {step.delta[:200]}")
+        steps_text = "\n".join(step_lines)
+
+        prompt = (
+            f"You are planning a {mode} for thread '{thread.topic}'. "
+            f"Write in {lang}.\n\n"
+            "Organize the following reason steps into 2–8 chapters.\n"
+            "For each chapter provide:\n"
+            f'- "title" — a descriptive chapter title\n'
+            f'- "focus" — what this chapter should cover\n'
+            f'- "step_start" — index of the first step (0-based)\n'
+            f'- "step_end" — index of the last step (inclusive)\n\n'
+            "Return ONLY a valid JSON array (no markdown, no explanation):\n"
+            '[{"title": "...", "focus": "...", "step_start": 0, "step_end": 2}, ...]\n\n'
+            f"Steps:\n{steps_text}"
+        )
+
+        llm = default_llm(project_root)
+        raw = llm.complete([ChatMessage(role="user", content=prompt)])
+
+        import json
+        try:
+            data: list[object] = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            data = []
+
+        sections: list[ReasonOutputSection] = []
+        for i, entry in enumerate(data):
+            if not isinstance(entry, dict):
+                continue
+            e = cast(dict[str, object], entry)
+            title = str(e.get("title", f"{mode.title()} {i+1}"))
+            focus = str(e.get("focus", ""))
+            raw_start = e.get("step_start", 0)
+            raw_end = e.get("step_end", 0)
+            step_start = int(raw_start) if isinstance(raw_start, (int, float, str)) else 0
+            step_end = int(raw_end) if isinstance(raw_end, (int, float, str)) else 0
+            step_ids = tuple(steps[j].id for j in range(step_start, step_end + 1) if 0 <= j < len(steps))
+            sections.append(ReasonOutputSection(
+                index=i,
+                title=title,
+                focus=focus,
+                step_ids=step_ids,
+                source_start_index=step_start,
+                source_end_index=step_end,
+                summary=focus[:80] if focus else title[:80],
+            ))
+
+        if not sections:
+            from nuself.reason.output import plan_sections as fallback_plan
+            return fallback_plan(thread, list(steps), mode=mode)
+
+        return tuple(sections)
+
+    return planner
 
 
 class DaemonState:
@@ -70,6 +155,8 @@ class DaemonState:
         self.reason_scheduler: ReasonScheduler | None = None
         self.reason_scheduler_interval_seconds = config.daemon.reason_scheduler.interval_seconds
         self._reason_scheduler_thread: threading.Thread | None = None
+        self._export_queue: queue.SimpleQueue[tuple[str, str]] = queue.SimpleQueue()
+        self._export_worker_thread: threading.Thread | None = None
 
     def start_background_memory_curator(self) -> None:
         if self._memory_curator_thread is not None:
@@ -167,6 +254,250 @@ class DaemonState:
             daemon=True,
         )
         self._reason_scheduler_thread.start()
+
+    def start_background_export_worker(self) -> None:
+        if self._export_worker_thread is not None:
+            return
+        # Register module-level callbacks so all ReasonOutputService
+        # instances share the queue and section planner.
+        set_enqueue_callback(lambda tid, jid: self._export_queue.put((tid, jid)))
+        set_section_planner(_llm_section_planner(self.project_root))
+        self._export_worker_thread = threading.Thread(
+            target=self._run_background_export_worker,
+            name="nuself-export-worker",
+            daemon=True,
+        )
+        self._export_worker_thread.start()
+
+    def stop_background_export_worker(self) -> None:
+        if self._export_worker_thread is not None:
+            self._export_worker_thread.join(timeout=1.0)
+
+    def _run_background_export_worker(self) -> None:
+        from datetime import UTC, datetime
+        from nuself.logs import write_log_event
+        from nuself.reason.output import ReasonOutputService
+        from nuself.workspace import PrivateWorkspaceStore
+        from nuself.llm import default_llm, ChatMessage
+
+        write_log_event(
+            "daemon",
+            "export_worker_started",
+            "export queue worker thread started",
+            project_root=self.project_root,
+            status="started",
+        )
+
+        store = PrivateWorkspaceStore(self.project_root, scope="reason")
+        service = ReasonOutputService(self.project_root)
+
+        def _llm_runner(
+            thread: ReasoningThread,
+            manifest: ReasonOutputManifest,
+            steps: Sequence[ReasoningStep],
+            *,
+            section: ReasonOutputSection,
+            section_plan: Sequence[ReasonOutputSection],
+            index: int,
+            total: int,
+        ) -> str:
+            from nuself.config import ConfigSystem
+            lang = ConfigSystem.load(project_root=self.project_root).chat.language_preference
+            sys = (
+                f"You are a writing assistant. Compose a {manifest.mode} in {manifest.output_format} format "
+                "from the provided reason steps. "
+                f"Write in {lang}. "
+                "Produce plain Markdown paragraphs — do NOT include headings or section titles, "
+                "they will be added automatically. "
+                "Keep terminology and tone consistent across all chunks."
+            )
+            pieces: list[ChatMessage] = [ChatMessage(role="system", content=sys)]
+            body_lines: list[str] = [""]
+            body_lines.append(f"Current section: {section.title}")
+            body_lines.append(f"Section focus: {section.focus}")
+            body_lines.append("")
+            body_lines.append("Global section plan:")
+            for planned in section_plan:
+                marker = " (current)" if planned.index == section.index else ""
+                body_lines.append(f"  - {planned.index + 1}. {planned.title}: {planned.focus}{marker}")
+            for s in steps:
+                body_lines.append("---")
+                body_lines.append(f"Step: {s.summary}")
+                if s.output:
+                    body_lines.append(s.output)
+                elif s.delta:
+                    body_lines.append(s.delta)
+                if s.evidence_refs:
+                    body_lines.append("Evidence:")
+                    body_lines.extend(f"- {r}" for r in s.evidence_refs)
+            user = "\n".join(body_lines)
+            pieces.append(ChatMessage(role="user", content=user))
+            llm = default_llm(self.project_root)
+            return llm.complete(pieces)
+
+        MAX_ATTEMPTS = 5
+        BASE_BACKOFF = 10  # seconds
+        MAX_BACKOFF = 600  # seconds
+
+        def _next_backoff(attempts: int) -> int:
+            return min(MAX_BACKOFF, BASE_BACKOFF * (2 ** (attempts - 1)))
+
+        # --- Startup reconciliation ---
+        # Re-enqueue any job whose manifest status is not complete/failed.
+        # Also clear stale .lock files from crashed runs.
+        reconciled = 0
+        for owner_id in store.list_owners():
+            jobs_dir = store.paths(owner_id).artifacts / "export" / "jobs"
+            if not jobs_dir.exists():
+                continue
+            for job_dir in sorted(jobs_dir.iterdir()):
+                if not job_dir.is_dir():
+                    continue
+                # Clear stale lock
+                lock_path = job_dir / ".lock"
+                if lock_path.exists():
+                    lock_path.unlink(missing_ok=True)
+                manifest_path = job_dir / "manifest.json"
+                if not manifest_path.exists():
+                    continue
+                try:
+                    raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+                except Exception:
+                    write_log_event(
+                        "daemon",
+                        "export_reconciliation_skip",
+                        f"Skipping corrupted manifest: {manifest_path}",
+                        project_root=self.project_root,
+                        level="warning",
+                        status="error",
+                        metadata={"owner_id": owner_id, "path": str(manifest_path)},
+                    )
+                    continue
+                status = raw.get("status")
+                if status in ("complete", "failed"):
+                    continue
+                job_id = raw.get("job_id", job_dir.name)
+                if isinstance(job_id, str):
+                    self._export_queue.put((owner_id, job_id))
+                    reconciled += 1
+
+        write_log_event(
+            "daemon",
+            "export_queue_reconciled",
+            f"Export queue reconciled on startup; re-enqueued {reconciled} job(s)",
+            project_root=self.project_root,
+            metadata={"replayed_jobs": reconciled},
+        )
+
+        # --- Main event loop ---
+        # Block on queue.get() with a 1-second timeout to stay responsive
+        # to shutdown_requested. No polling interval needed — events arrive
+        # immediately via the in-memory queue.
+        while not self.shutdown_requested.is_set():
+            try:
+                thread_id, job_id = self._export_queue.get(timeout=1.0)
+            except queue.Empty:
+                continue
+            except Exception as exc:
+                write_log_event(
+                    "daemon",
+                    "export_worker_get_error",
+                    f"export queue.get() error: {str(exc)}",
+                    project_root=self.project_root,
+                    level="warning",
+                    status="error",
+                    error=str(exc),
+                )
+                continue
+
+            if self.shutdown_requested.is_set():
+                break
+
+            write_log_event(
+                "daemon",
+                "export_job_dequeued",
+                f"Processing export job {job_id} for thread {thread_id}",
+                project_root=self.project_root,
+                metadata={"job_id": job_id, "thread_id": thread_id},
+            )
+
+            manifest_path = store.paths(thread_id).artifacts / "export" / "jobs" / job_id / "manifest.json"
+            try:
+                if manifest_path.exists():
+                    try:
+                        raw: dict[str, object] = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        raw = {}
+                    if raw.get("status") == "complete":
+                        continue
+                    progress_path = store.paths(thread_id).artifacts / "export" / "jobs" / job_id / "progress.json"
+                    total_chunks: int | str = "?"
+                    try:
+                        if progress_path.exists():
+                            progress_raw: dict[str, object] = json.loads(progress_path.read_text(encoding="utf-8"))
+                            val = progress_raw.get("total_chunks")
+                            if isinstance(val, int):
+                                total_chunks = val
+                    except Exception:
+                        pass
+                    write_log_event(
+                        "daemon",
+                        "export_job_composition_started",
+                        f"Composing {total_chunks} chunk(s) for job {job_id}",
+                        project_root=self.project_root,
+                        metadata={"job_id": job_id, "thread_id": thread_id, "chunks": total_chunks},
+                    )
+
+                service.compose_with_runner(thread_id, job_id, _llm_runner)
+            except Exception as exc:
+                from nuself.reason.output import ReasonOutputManifest, write_json_atomic
+
+                # Persist attempts + error info on every failure using the
+                # typed manifest model, so crash recovery preserves counters.
+                attempts = 1
+                now_iso = datetime.now(UTC).isoformat()
+                if manifest_path.exists():
+                    try:
+                        raw: dict[str, object] = json.loads(manifest_path.read_text(encoding="utf-8"))
+                        manifest = ReasonOutputManifest.from_wire(raw)
+                        raw_attempts = manifest.attempts
+                        attempts = raw_attempts + 1
+                        if attempts >= MAX_ATTEMPTS:
+                            updated = manifest.with_updates(
+                                status="failed", attempts=attempts,
+                                last_error=str(exc), last_attempt_at=now_iso,
+                            )
+                        else:
+                            updated = manifest.with_updates(
+                                attempts=attempts,
+                                last_error=str(exc), last_attempt_at=now_iso,
+                            )
+                        write_json_atomic(manifest_path, updated.to_wire())
+                    except Exception:
+                        pass
+
+                if attempts >= MAX_ATTEMPTS:
+                    write_log_event(
+                        "daemon",
+                        "export_job_failed",
+                        f"Export job {job_id} exhausted retries: {str(exc)}",
+                        project_root=self.project_root,
+                        level="error",
+                        status="error",
+                        error=str(exc),
+                        metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts},
+                    )
+                else:
+                    backoff = _next_backoff(attempts)
+                    write_log_event(
+                        "daemon",
+                        "export_job_retry",
+                        f"Export job {job_id} will retry in {backoff}s (attempt {attempts})",
+                        project_root=self.project_root,
+                        status="retry",
+                        metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts, "next_backoff": backoff},
+                    )
+                    threading.Timer(backoff, self._export_queue.put, args=((thread_id, job_id),)).start()
 
     def stop_background_reason_scheduler(self) -> None:
         if self._reason_scheduler_thread is not None:
@@ -369,6 +700,7 @@ def run_daemon(project_root: Path | None = None) -> int:
         state.start_background_memory_curator()
         state.start_background_reflection_scheduler()
         state.start_background_reason_scheduler()
+        state.start_background_export_worker()
         state.start_background_notification_delivery()
         with NuSelfUnixServer(str(paths.socket_path), RequestHandler, state) as server:
             server.timeout = 0.2
@@ -379,6 +711,7 @@ def run_daemon(project_root: Path | None = None) -> int:
         state.stop_background_memory_curator()
         state.stop_background_reflection_scheduler()
         state.stop_background_reason_scheduler()
+        state.stop_background_export_worker()
         state.stop_background_notification_delivery()
         if paths.socket_path.exists():
             paths.socket_path.unlink()

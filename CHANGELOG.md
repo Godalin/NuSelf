@@ -4,18 +4,34 @@ All notable user-visible changes to NuSelf are tracked here.
 
 This project follows the versioning rules in [`docs/spec/versioning.md`](docs/spec/versioning.md).
 
-## Unreleased
-
-No post-v0.2.0 changes yet. The current release-candidate fixes and small feature additions are tracked under `0.2.0`.
+## 0.2.1 - 2026-06-02
 
 ### Added
 
+- Added cooperative file-level locking (`.lock`) to prevent concurrent writes to the same export job from the daemon worker and CLI.
+- Added daemon startup reconciliation: workspaces are scanned for non-complete job manifests and stale `.lock` files are cleaned up on worker start.
 - Added the first `reason` output-composition infrastructure: export jobs now plan and persist manifests, chunks, progress, and combined Markdown artifacts inside the owning reason workspace, and the chat tool registry exposes `reason_export`.
+- Added `scripts/mdpdf.sh` to convert one or more Markdown files into PDFs with pandoc and xelatex for easy manual sharing.
+
+### Changed
+
+- Export queue moved from filesystem directories (`queue/`, `processing/`, `failed/`) to a daemon-global in-memory `queue.SimpleQueue` event bus. The `manifest.json` is the sole source of truth; queue events are purely in-memory signals. This eliminates partial writes, stale processing claims, duplicate event files, and 80+ lines of file-management code from the daemon worker.
+- Export worker no longer polls at a fixed interval. It blocks on the in-memory queue and processes jobs as soon as they arrive, with `threading.Timer` for scheduled retries. The `DaemonExportWorkerConfig` and its `interval_seconds` setting have been removed.
+- Export jobs now live under `export/jobs/{job_id}/` instead of the flat `export/` root, so re-planning with different parameters no longer destroys pending work for other jobs.
+- Queue event schema removed entirely (in-memory only). The worker reconstructs job paths from `thread_id` and `job_id`.
+- `plan_job` pushes to an in-memory callback instead of writing file-based queue events.
+- `_clear_job_artifacts` no longer preserves `queue/`/`processing/`/`failed/` subdirectories.
+- Startup reconciliation now scans workspace manifests instead of a file-based processing directory. Incomplete manifests are re-enqueued to the in-memory queue.
+- Reason exports now persist a deterministic section plan derived from source content, so chunk size no longer determines chapter boundaries.
+- Reason exports now automatically generate a PDF from the final combined Markdown artifact after composition completes.
 
 ### Fixed
 
+- `scripts/mdpdf.sh` now sets a CJK-capable default font pair and `zh-CN` metadata so Chinese Markdown renders correctly in the generated PDF.
 - Approval-gated tool prompts now emit a visible live REPL log line before waiting for confirmation input, so the prompt is obvious before the user enters `y` or `n`.
 - Reason thread proposals now use the decorated `reason_propose` tool wrapper for confirmation instead of a post-turn CLI prompt, while `proposal_created` remains available as an audit log event.
+- Reason export now has a dedicated agent skill that tells chat to call `reason_export` directly and read the approval-gated JSON result instead of treating export as a separate confirmation turn.
+- `plan_job` no longer uses `_clear_directory` (rmtree on the entire export root), which destroyed pending work when re-planning with different parameters. Job artifacts are now cleaned per-job under `jobs/{job_id}`.
 
 ## 0.2.0 - 2026-05-29
 
