@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+(No unreleased changes yet.)
+
+## 0.2.2 - 2026-06-02
+
 ### Added
 
 - Added persona management through unified handle panel: `persona list` now shows
