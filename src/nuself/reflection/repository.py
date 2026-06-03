@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, cast
 
-from nuself.config import runtime_paths
+from nuself.storage import StorageBackend, create_file_backend
 
 
 @dataclass(frozen=True)
@@ -107,37 +106,34 @@ class ReflectionEntryNotFound(ValueError):
 class ReflectionRepository:
     """Store reflection ideas in private/reflections/."""
 
-    def __init__(self, project_root: Path | None = None) -> None:
-        paths = runtime_paths(project_root)
-        self._reflections_dir = paths.private_root / "reflections"
-
-    def ensure(self) -> None:
-        self._reflections_dir.mkdir(parents=True, exist_ok=True)
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        *,
+        backend: StorageBackend | None = None,
+    ) -> None:
+        be = backend if backend is not None else create_file_backend(project_root)
+        self._col = be.collection("reflection_entries")
 
     def list(self, status: str | None = None) -> list[ReflectionEntry]:
-        self.ensure()
         entries: list[ReflectionEntry] = []
-        for path in sorted(self._reflections_dir.glob("*.json")):
-            entry = self._read_path(path)
+        for wire in self._col.list():
+            try:
+                entry = ReflectionEntry.from_wire(wire)
+            except (ValueError, KeyError):
+                continue
             if status is None or entry.status == status:
                 entries.append(entry)
         return sorted(entries, key=lambda e: e.created_at, reverse=True)
 
     def get(self, entry_id: str) -> ReflectionEntry:
-        path = self._path_for(entry_id)
-        if not path.exists():
+        wire = self._col.get(entry_id)
+        if wire is None:
             raise ReflectionEntryNotFound(entry_id)
-        return self._read_path(path)
+        return ReflectionEntry.from_wire(wire)
 
     def add(self, entry: ReflectionEntry) -> ReflectionEntry:
-        self.ensure()
-        path = self._path_for(entry.id)
-        tmp_path = path.with_suffix(f"{path.suffix}.tmp")
-        tmp_path.write_text(
-            json.dumps(entry.to_wire(), indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        tmp_path.replace(path)
+        self._col.put(entry.id, entry.to_wire())
         return entry
 
     def update(self, entry: ReflectionEntry) -> ReflectionEntry:
@@ -154,14 +150,3 @@ class ReflectionRepository:
         updated = entry.with_status("archived")
         self.add(updated)
         return updated
-
-    def _path_for(self, entry_id: str) -> Path:
-        if "/" in entry_id or entry_id in {"", ".", ".."}:
-            raise ValueError(f"invalid entry id: {entry_id}")
-        return self._reflections_dir / f"{entry_id}.json"
-
-    def _read_path(self, path: Path) -> ReflectionEntry:
-        raw: object = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError(f"invalid reflection entry: {path}")
-        return ReflectionEntry.from_wire(cast(dict[str, object], raw))

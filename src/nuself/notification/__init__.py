@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, Protocol, cast
 
+from nuself.storage import StorageBackend
+
 OutboxStatus = Literal["pending", "sent", "failed", "dismissed"]
 
 
@@ -94,36 +96,44 @@ class LogOnlyNotificationAdapter:
 class NotificationOutbox:
     """File-backed notification outbox under private/outbox/."""
 
-    def __init__(self, project_root: Path | None = None) -> None:
-        from nuself.config import runtime_paths
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        *,
+        backend: StorageBackend | None = None,
+    ) -> None:
+        from nuself.storage import create_file_backend
 
-        paths = runtime_paths(project_root)
-        self._outbox_dir = paths.private_root / "outbox"
+        be = backend if backend is not None else create_file_backend(project_root)
+        self._col = be.collection("notification_outbox")
 
     def list(self, status: OutboxStatus | None = None) -> list[OutboxEntry]:
         entries: list[OutboxEntry] = []
-        if not self._outbox_dir.exists():
-            return entries
-        for path in sorted(self._outbox_dir.glob("*.json")):
-            entry = self._read_path(path)
+        for wire in self._col.list():
+            try:
+                entry = OutboxEntry.from_wire(wire)
+            except (ValueError, KeyError):
+                continue
             if status is None or entry.status == status:
                 entries.append(entry)
         return entries
 
     def get(self, entry_id: str) -> OutboxEntry:
-        path = self._path_for(entry_id)
-        if not path.exists():
+        wire = self._col.get(entry_id)
+        if wire is None:
             raise OutboxEntryNotFound(entry_id)
-        return self._read_path(path)
+        return OutboxEntry.from_wire(wire)
 
     def add(self, entry: OutboxEntry) -> OutboxEntry:
-        """Add an entry if its idempotency key is not already present."""
         if self._idempotency_key_exists(entry.idempotency_key):
             existing = self._find_by_idempotency_key(entry.idempotency_key)
             if existing is not None:
                 return existing
-        self._write_path(entry)
+        self._col.put(entry.id, entry.to_wire())
         return entry
+
+    def _write_entry(self, entry: OutboxEntry) -> None:
+        self._col.put(entry.id, entry.to_wire())
 
     def mark_sent(self, entry_id: str) -> OutboxEntry:
         entry = self.get(entry_id)
@@ -138,7 +148,7 @@ class NotificationOutbox:
             sent_at=datetime.now(UTC).isoformat(),
             attempts=entry.attempts + 1,
         )
-        self._write_path(updated)
+        self._write_entry(updated)
         return updated
 
     def mark_failed(self, entry_id: str) -> OutboxEntry:
@@ -154,7 +164,7 @@ class NotificationOutbox:
             sent_at=entry.sent_at,
             attempts=entry.attempts + 1,
         )
-        self._write_path(updated)
+        self._write_entry(updated)
         return updated
 
     def dismiss(self, entry_id: str) -> OutboxEntry:
@@ -170,34 +180,27 @@ class NotificationOutbox:
             sent_at=entry.sent_at,
             attempts=entry.attempts,
         )
-        self._write_path(updated)
+        self._write_entry(updated)
         return updated
 
     def clear(self, status: OutboxStatus) -> int:
-        """Remove all entries with the given status. Return count removed."""
         removed = 0
         for entry in self.list(status=status):
-            path = self._path_for(entry.id)
-            if path.exists():
-                path.unlink()
-                removed += 1
+            self._col.delete(entry.id)
+            removed += 1
         return removed
 
     def clear_dismissed_older_than(self, days: int) -> int:
-        """Remove dismissed entries older than the given number of days."""
         removed = 0
         cutoff = datetime.now(UTC).timestamp() - days * 86400
         for entry in self.list(status="dismissed"):
             try:
                 created = datetime.fromisoformat(entry.created_at)
                 if created.timestamp() < cutoff:
-                    path = self._path_for(entry.id)
-                    if path.exists():
-                        path.unlink()
-                        removed += 1
+                    self._col.delete(entry.id)
+                    removed += 1
             except (ValueError, OSError):
                 continue
-        return removed
         return removed
 
     def _idempotency_key_exists(self, key: str) -> bool:
@@ -208,28 +211,6 @@ class NotificationOutbox:
             if entry.idempotency_key == key:
                 return entry
         return None
-
-    def _path_for(self, entry_id: str) -> Path:
-        if "/" in entry_id or entry_id in {"", ".", ".."}:
-            raise ValueError(f"invalid entry id: {entry_id}")
-        return self._outbox_dir / f"{entry_id}.json"
-
-    def _read_path(self, path: Path) -> OutboxEntry:
-        import json
-
-        raw: object = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError(f"outbox file must contain an object: {path}")
-        return OutboxEntry.from_wire(cast(dict[str, object], raw))
-
-    def _write_path(self, entry: OutboxEntry) -> None:
-        import json
-
-        self._outbox_dir.mkdir(parents=True, exist_ok=True)
-        path = self._path_for(entry.id)
-        tmp_path = path.with_suffix(f"{path.suffix}.tmp")
-        tmp_path.write_text(json.dumps(entry.to_wire(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        tmp_path.replace(path)
 
 
 class NotificationDeliveryLoop:

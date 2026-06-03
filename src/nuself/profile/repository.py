@@ -6,11 +6,10 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
-from typing import cast
-
 from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryCandidate, merge_relations, now_iso
 from nuself.domain.profile import ProfileItem
+from nuself.storage import StorageBackend, create_file_backend
 
 
 def empty_str_counts() -> dict[str, int]:
@@ -44,20 +43,23 @@ class ProfileItemNotFound(KeyError):
 class ProfileItemRepository:
     """Stores one JSON file per derived profile item under private/profile/items."""
 
-    def __init__(self, project_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        *,
+        backend: StorageBackend | None = None,
+    ) -> None:
+        be = backend if backend is not None else create_file_backend(project_root)
+        self._col = be.collection("profile_items")
         self._paths = runtime_paths(project_root)
-        self._items_dir = self._paths.private_root / "profile" / "items"
-
-    @property
-    def items_dir(self) -> Path:
-        return self._items_dir
-
-    def ensure(self) -> None:
-        self._items_dir.mkdir(parents=True, exist_ok=True)
 
     def list(self) -> list[ProfileItem]:
-        self.ensure()
-        items = [self._read_path(path) for path in sorted(self._items_dir.glob("*.json"))]
+        items: list[ProfileItem] = []
+        for wire in self._col.list():
+            try:
+                items.append(ProfileItem.from_wire(wire))
+            except (ValueError, KeyError):
+                pass
         return sorted(items, key=lambda item: item.updated_at, reverse=True)
 
     def search(self, query: str, filters: ProfileSearchFilters | None = None) -> list[ProfileItem]:
@@ -65,22 +67,20 @@ class ProfileItemRepository:
         return [item for item in self.list() if _matches_text(item, normalized) and _matches_filters(item, filters)]
 
     def get(self, item_id: str) -> ProfileItem:
-        path = self._path_for(item_id)
-        if not path.exists():
+        wire = self._col.get(item_id)
+        if wire is None:
             raise ProfileItemNotFound(item_id)
-        return self._read_path(path)
+        return ProfileItem.from_wire(wire)
 
     def save(self, item: ProfileItem) -> ProfileItem:
-        self.ensure()
-        path = self._path_for(item.id)
-        path.write_text(json.dumps(item.to_wire(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        self._col.put(item.id, item.to_wire())
         return item
 
     def delete(self, item_id: str) -> None:
-        path = self._path_for(item_id)
-        if not path.exists():
+        wire = self._col.get(item_id)
+        if wire is None:
             raise ProfileItemNotFound(item_id)
-        path.unlink()
+        self._col.delete(item_id)
 
     def merge(self, candidate: MemoryCandidate, item_id: str) -> ProfileItem:
         existing = self.get(item_id)
@@ -127,17 +127,6 @@ class ProfileItemRepository:
         ]
         index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return index_path
-
-    def _path_for(self, item_id: str) -> Path:
-        if "/" in item_id or item_id in {"", ".", ".."}:
-            raise ValueError(f"invalid profile item id: {item_id}")
-        return self._items_dir / f"{item_id}.json"
-
-    def _read_path(self, path: Path) -> ProfileItem:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError(f"profile item file must contain an object: {path}")
-        return ProfileItem.from_wire(cast(dict[str, object], raw))
 
 
 def profile_stats(project_root: Path | None = None) -> ProfileStats:

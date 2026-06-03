@@ -10,6 +10,7 @@ import pytest
 
 from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.notification import NotificationOutbox, OutboxEntry
+from nuself.storage import FileStorageBackend
 from nuself.notification.deep_link import DeepLink
 from nuself.reflection import ReflectionScheduler
 
@@ -113,8 +114,8 @@ def test_outbox_delivery_fixture(tmp_path: Path) -> None:
         name = str(scenario.get("name"))
         outbox_dir = tmp_path / "outbox" / name
         outbox_dir.mkdir(parents=True, exist_ok=True)
-        outbox = NotificationOutbox.__new__(NotificationOutbox)
-        outbox._outbox_dir = outbox_dir  # pyright: ignore[reportPrivateUsage]
+        backend = FileStorageBackend(outbox_dir, {"notification_outbox": "."})
+        outbox = NotificationOutbox(backend=backend)
 
         actions_raw = scenario.get("actions")
         assert isinstance(actions_raw, list)
