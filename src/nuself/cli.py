@@ -113,6 +113,7 @@ try:
     from nuself.tui.render import TerminalTheme, format_display_timestamp, render_log_event, render_log_event_json, render_session_header
     from nuself.tui.trace import render_trace_detail, render_trace_row
     from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
+    from nuself.storage import create_file_backend
     from nuself.persona.definition import BUILTIN_PERSONAS, MODERATOR_PERSONA, SYNTHESIZER_PERSONA
 finally:
     warnings.warn = _original_warn
@@ -1220,7 +1221,7 @@ def _resolve_persona_ids(args: argparse.Namespace) -> list[str] | None:
 
 
 def _persona_prompts_for_list(project_root: Path | None) -> tuple[PersonaPrompt, ...]:
-    return PersonaPromptRepository(project_root).list()
+    return PersonaPromptRepository(backend=create_file_backend(project_root)).list()
 
 
 def handle_memory_stats(args: argparse.Namespace) -> int:
@@ -2384,7 +2385,7 @@ def handle_persona_list(args: argparse.Namespace) -> int:
     all_lines: list[str] = [f"{_theme.tag('[persona]', 'persona')} Built-in personas (static):"]
     for p in static:
         all_lines.append(f"  {_theme.muted(p.id)}: {p.description}")
-    repo = PersonaPromptRepository(args.project_root)
+    repo = PersonaPromptRepository(backend=create_file_backend(args.project_root))
     prompts = repo.list()
     if prompts:
         all_lines.append("")
@@ -2398,7 +2399,7 @@ def handle_persona_list(args: argparse.Namespace) -> int:
 
 
 def handle_persona_create(args: argparse.Namespace) -> int:
-    repo = PersonaPromptRepository(args.project_root)
+    repo = PersonaPromptRepository(backend=create_file_backend(args.project_root))
     persona = create_persona_prompt(args.name, args.prompt, project_root=args.project_root)
     existing = repo.get_by_name(args.name)
     if existing is not None:
@@ -2427,7 +2428,7 @@ def handle_persona_create(args: argparse.Namespace) -> int:
 def handle_persona_show(args: argparse.Namespace) -> int:
     from nuself.tui.persona import render_persona_detail
 
-    repo = PersonaPromptRepository(args.project_root)
+    repo = PersonaPromptRepository(backend=create_file_backend(args.project_root))
     prompt_id = _resolve_persona_id(args)
     if prompt_id is None:
         return 1
@@ -2440,7 +2441,7 @@ def handle_persona_show(args: argparse.Namespace) -> int:
 
 
 def handle_persona_delete(args: argparse.Namespace) -> int:
-    repo = PersonaPromptRepository(args.project_root)
+    repo = PersonaPromptRepository(backend=create_file_backend(args.project_root))
     prompt_ids = _resolve_persona_ids(args)
     if prompt_ids is None:
         return 1
@@ -2465,7 +2466,7 @@ def handle_persona_delete(args: argparse.Namespace) -> int:
 
 
 def handle_persona_disable(args: argparse.Namespace) -> int:
-    repo = PersonaPromptRepository(args.project_root)
+    repo = PersonaPromptRepository(backend=create_file_backend(args.project_root))
     prompt_id = _resolve_persona_id(args)
     if prompt_id is None:
         return 1
@@ -2496,7 +2497,7 @@ def handle_persona_disable(args: argparse.Namespace) -> int:
 
 
 def handle_persona_enable(args: argparse.Namespace) -> int:
-    repo = PersonaPromptRepository(args.project_root)
+    repo = PersonaPromptRepository(backend=create_file_backend(args.project_root))
     prompt_id = _resolve_persona_id(args)
     if prompt_id is None:
         return 1
@@ -3928,7 +3929,7 @@ def _handle_interactive_persona_command(command: str, project_root: Path | None)
     try:
         from nuself.tui.persona import render_persona_detail, render_persona_row
 
-        repo = PersonaPromptRepository(project_root)
+        repo = PersonaPromptRepository(backend=create_file_backend(project_root))
         if command in {"", "list"}:
             prompts = repo.list()
             if not prompts:

@@ -11,10 +11,17 @@ import threading
 from typing import cast
 from uuid import uuid4
 
-from nuself.config import runtime_paths
+from nuself.storage import StorageBackend, create_file_backend
 
 _REPO_LOCKS_LOCK = threading.Lock()
 _REPO_LOCKS: dict[Path, threading.RLock] = {}
+
+# ── Unified ID prefix for persona prompts ──────────────────────────────
+ID_PREFIX = "pp"
+
+
+def _generate_id() -> str:
+    return f"{ID_PREFIX}_{uuid4().hex}"
 
 
 @dataclass(frozen=True)
@@ -66,104 +73,136 @@ def _expect_str(data: dict[str, object], key: str) -> str:
 
 
 class PersonaPromptRepository:
-    """File-backed repository for dynamic thinking personas.
+    """Repository for dynamic thinking personas.
 
-    By default stores under ``private/persona_prompts/``.
-    Pass a custom *root* to scope to a thread workspace.
+    Two modes:
+    * **backend** (primary) — uses a ``StorageBackend`` collection.
+    * **legacy_file** (transitional, v0.2.4+) — uses a raw *root* directory
+      for thread-scoped workspace personas.
     """
 
-    def __init__(self, project_root: Path | None = None, *, root: Path | None = None) -> None:
+    def __init__(
+        self,
+        backend: StorageBackend | None = None,
+        *,
+        root: Path | None = None,
+    ) -> None:
         if root is not None:
+            self._mode = "legacy_file"
             self._root = root
+            self._lock = _lock_for_root(self._root)
+        elif backend is not None:
+            self._mode = "backend"
+            self._col = backend.collection("persona_prompts")
+            self._lock = threading.RLock()
         else:
-            paths = runtime_paths(project_root)
-            self._root = paths.private_root / "persona_prompts"
-        self._is_scoped = root is not None
-        self._lock = _lock_for_root(self._root)
+            self._mode = "backend"
+            self._col = create_file_backend().collection("persona_prompts")
+            self._lock = threading.RLock()
 
     # Public API ---------------------------------------------------------------
 
     def save(self, prompt: PersonaPrompt) -> None:
-        """Persist a persona prompt (create or update)."""
         with self._lock:
-            self._ensure_dir()
-            self._write_prompt(prompt)
-            self._update_name_index(prompt)
+            if self._mode == "legacy_file":
+                self._legacy_save(prompt)
+            else:
+                self._col.put(prompt.id, prompt.to_wire())
 
     def get(self, prompt_id: str) -> PersonaPrompt | None:
-        """Load a prompt by id, or None if missing."""
-        path = self._prompt_path(prompt_id)
-        if not path.exists():
+        if self._mode == "legacy_file":
+            return self._legacy_get(prompt_id)
+        wire = self._col.get(prompt_id)
+        if wire is None:
             return None
-        return _read_prompt_file(path)
+        return PersonaPrompt.from_wire(wire)
 
     def get_by_name(self, name: str) -> PersonaPrompt | None:
-        """Look up a prompt by name via the name index."""
-        index = self._load_name_index()
-        prompt_id = index.get(name)
-        if prompt_id is None:
-            return None
-        return self.get(prompt_id)
+        if self._mode == "legacy_file":
+            return self._legacy_get_by_name(name)
+        for p in self.list():
+            if p.name == name:
+                return p
+        return None
 
     def resolve(self, name_or_id: str) -> PersonaPrompt | None:
-        """Resolve by id first, then by name."""
         prompt = self.get(name_or_id)
         if prompt is not None:
             return prompt
         return self.get_by_name(name_or_id)
 
     def list(self) -> tuple[PersonaPrompt, ...]:
-        """Return all stored personas."""
-        self._ensure_dir()
+        if self._mode == "legacy_file":
+            return self._legacy_list()
         result: list[PersonaPrompt] = []
-        for path in sorted(self._root.iterdir()):
-            if path.suffix == ".json" and path.name != "name_index.json":
-                prompt = _read_prompt_file(path)
-                if prompt is not None:
-                    result.append(prompt)
-        return tuple(result)
+        for wire in self._col.list():
+            try:
+                result.append(PersonaPrompt.from_wire(wire))
+            except (ValueError, KeyError):
+                pass
+        return tuple(sorted(result, key=lambda p: p.name))
 
     def delete(self, prompt_id: str) -> None:
-        """Remove a persona prompt by id."""
         with self._lock:
-            path = self._prompt_path(prompt_id)
-            if path.exists():
-                path.unlink()
-            self._rebuild_name_index()
+            if self._mode == "legacy_file":
+                self._legacy_delete(prompt_id)
+            else:
+                self._col.delete(prompt_id)
 
     def set_disabled(self, prompt_id: str, disabled: bool) -> None:
-        """Enable or disable a persona prompt."""
         prompt = self.get(prompt_id)
         if prompt is None:
             return
         updated = prompt.with_updates(disabled=disabled)
         self.save(updated)
 
-    # Internals ----------------------------------------------------------------
 
-    def _ensure_dir(self) -> None:
+    # ── Legacy file-backed mode (root=) ──────────────────────────────────────
+
+    def _legacy_save(self, prompt: PersonaPrompt) -> None:
         self._root.mkdir(parents=True, exist_ok=True)
+        _write_json_atomic(self._root / f"{prompt.id}.json", prompt.to_wire())
+        self._legacy_update_name_index(prompt)
 
-    def _prompt_path(self, prompt_id: str) -> Path:
-        return self._root / f"{prompt_id}.json"
+    def _legacy_get(self, prompt_id: str) -> PersonaPrompt | None:
+        path = self._root / f"{prompt_id}.json"
+        if not path.exists():
+            return None
+        return _read_legacy_prompt_file(path)
 
-    def _index_path(self) -> Path:
-        return self._root / "name_index.json"
+    def _legacy_get_by_name(self, name: str) -> PersonaPrompt | None:
+        index = self._legacy_load_name_index()
+        prompt_id = index.get(name)
+        if prompt_id is None:
+            return None
+        return self._legacy_get(prompt_id)
 
-    def _write_prompt(self, prompt: PersonaPrompt) -> None:
-        path = self._prompt_path(prompt.id)
-        _write_json_atomic(path, prompt.to_wire())
+    def _legacy_list(self) -> tuple[PersonaPrompt, ...]:
+        if not self._root.exists():
+            return ()
+        result: list[PersonaPrompt] = []
+        for path in sorted(self._root.iterdir()):
+            if path.suffix == ".json" and path.name != "name_index.json":
+                prompt = _read_legacy_prompt_file(path)
+                if prompt is not None:
+                    result.append(prompt)
+        return tuple(result)
 
-    def _load_name_index(self) -> dict[str, str]:
-        path = self._index_path()
+    def _legacy_delete(self, prompt_id: str) -> None:
+        path = self._root / f"{prompt_id}.json"
+        if path.exists():
+            path.unlink()
+        self._legacy_rebuild_name_index()
+
+    def _legacy_load_name_index(self) -> dict[str, str]:
+        path = self._root / "name_index.json"
         if not path.exists():
             return {}
         try:
             raw: object = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(raw, dict):
-                raw_dict = cast(dict[str, object], raw)
                 result: dict[str, str] = {}
-                for k, v in raw_dict.items():
+                for k, v in cast("dict[str, object]", raw).items():
                     if isinstance(v, str):
                         result[k] = v
                 return result
@@ -171,29 +210,49 @@ class PersonaPromptRepository:
             pass
         return {}
 
-    def _update_name_index(self, prompt: PersonaPrompt) -> None:
-        index = self._load_name_index()
+    def _legacy_update_name_index(self, prompt: PersonaPrompt) -> None:
+        index = self._legacy_load_name_index()
         index[prompt.name] = prompt.id
-        _write_json_atomic(self._index_path(), cast(dict[str, object], dict(index)))
+        _write_json_atomic(self._root / "name_index.json", cast("dict[str, object]", dict(index)))
 
-    def _rebuild_name_index(self) -> None:
+    def _legacy_rebuild_name_index(self) -> None:
         index: dict[str, str] = {}
         for path in self._root.iterdir():
             if path.suffix == ".json" and path.name != "name_index.json":
-                prompt = _read_prompt_file(path)
+                prompt = _read_legacy_prompt_file(path)
                 if prompt is not None:
                     index[prompt.name] = prompt.id
-        _write_json_atomic(self._index_path(), cast(dict[str, object], dict(index)))
+        _write_json_atomic(self._root / "name_index.json", cast("dict[str, object]", dict(index)))
 
 
-def _read_prompt_file(path: Path) -> PersonaPrompt | None:
+# ── Helpers ──────────────────────────────────────────────────────────────
+
+
+def _read_legacy_prompt_file(path: Path) -> PersonaPrompt | None:
     try:
         raw: object = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(raw, dict):
-            return PersonaPrompt.from_wire(cast(dict[str, object], raw))
+            return PersonaPrompt.from_wire(cast("dict[str, object]", raw))
     except (OSError, json.JSONDecodeError, ValueError, KeyError):
         pass
     return None
+
+
+def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
+    try:
+        tmp_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n",
+            encoding="utf-8",
+        )
+        tmp_path.replace(path)
+    except Exception:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def _lock_for_root(root: Path) -> threading.RLock:
@@ -206,20 +265,6 @@ def _lock_for_root(root: Path) -> threading.RLock:
         return lock
 
 
-def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
-    try:
-        tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8")
-        tmp_path.replace(path)
-    except Exception:
-        try:
-            tmp_path.unlink()
-        except FileNotFoundError:
-            pass
-        raise
-
-
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -228,7 +273,7 @@ def create_persona_prompt(name: str, prompt_text: str, *, project_root: Path | N
     """Create a new PersonaPrompt with generated id and timestamps."""
     now = _now_iso()
     return PersonaPrompt(
-        id=uuid4().hex,
+        id=_generate_id(),
         name=name,
         prompt=prompt_text,
         created_at=now,
