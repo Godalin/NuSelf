@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
 from pathlib import Path
 import re
 from typing import cast
@@ -12,6 +12,7 @@ from uuid import NAMESPACE_URL, uuid5
 from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryCandidate, MemoryEvidence, PrivacyLevel, now_iso
 from nuself.domain.source import SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path
+from nuself.storage import StorageBackend, create_file_backend
 
 SUPPORTED_SOURCE_SUFFIXES = {".md", ".markdown", ".txt"}
 DEFAULT_CHUNK_TARGET_CHARS = 1200
@@ -43,15 +44,16 @@ class SourceChunkMatch:
 class SourceRepository:
     """Stores imported source documents and chunks under private/sources."""
 
-    def __init__(self, project_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        *,
+        backend: StorageBackend | None = None,
+    ) -> None:
+        be = backend if backend is not None else create_file_backend(project_root)
+        self._documents = be.collection("source_documents")
+        self._chunks = be.collection("source_chunks")
         self._paths = runtime_paths(project_root)
-        self._sources_dir = self._paths.private_root / "sources"
-        self._documents_dir = self._sources_dir / "documents"
-        self._chunks_dir = self._sources_dir / "chunks"
-
-    def ensure(self) -> None:
-        self._documents_dir.mkdir(parents=True, exist_ok=True)
-        self._chunks_dir.mkdir(parents=True, exist_ok=True)
 
     def ingest_path(self, path: Path, *, tags: list[str] | None = None, privacy: PrivacyLevel = "private") -> SourceIngestResult:
         paths = _source_paths(path)
@@ -66,45 +68,53 @@ class SourceRepository:
         return SourceIngestResult(documents=documents, chunks=chunks)
 
     def save_document(self, document: SourceDocument) -> SourceDocument:
-        self.ensure()
-        path = self._document_path(document.id)
-        path.write_text(json.dumps(document.to_wire(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        self._documents.put(document.id, document.to_wire())
         return document
 
     def get_document(self, source_id: str) -> SourceDocument:
-        path = self._document_path(source_id)
-        if not path.exists():
+        wire = self._documents.get(source_id)
+        if wire is None:
             raise SourceDocumentNotFound(source_id)
-        return self._read_document(path)
+        return SourceDocument.from_wire(wire)
 
     def delete_document(self, source_id: str) -> None:
         document = self.get_document(source_id)
         source_prefix = f"source:{document.id}:"
         self._delete_derived_candidates(source_prefix)
         self._delete_derived_profile_items(source_prefix)
-        self._delete_document_file(document.id)
+        self._documents.delete(document.id)
         self._delete_chunks(source_id)
 
     def replace_chunks(self, source_id: str, chunks: list[SourceChunk]) -> None:
-        self.ensure()
-        for path in self._chunks_dir.glob(f"{source_id}_chunk_*.json"):
-            path.unlink()
+        for wire in self._chunks.list():
+            try:
+                existing = SourceChunk.from_wire(wire)
+                if existing.source_id == source_id:
+                    self._chunks.delete(existing.id)
+            except (ValueError, KeyError):
+                pass
         for chunk in chunks:
-            self._chunk_path(chunk.id).write_text(
-                json.dumps(chunk.to_wire(), indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
+            self._chunks.put(chunk.id, chunk.to_wire())
 
     def list_documents(self) -> list[SourceDocument]:
-        self.ensure()
-        documents = [self._read_document(path) for path in sorted(self._documents_dir.glob("*.json"))]
-        return sorted(documents, key=lambda document: document.updated_at, reverse=True)
+        items: list[SourceDocument] = []
+        for wire in self._documents.list():
+            try:
+                items.append(SourceDocument.from_wire(wire))
+            except (ValueError, KeyError):
+                pass
+        return sorted(items, key=lambda d: d.updated_at, reverse=True)
 
     def list_chunks(self, source_id: str | None = None) -> list[SourceChunk]:
-        self.ensure()
-        pattern = f"{source_id}_chunk_*.json" if source_id is not None else "*.json"
-        chunks = [self._read_chunk(path) for path in sorted(self._chunks_dir.glob(pattern))]
-        return sorted(chunks, key=lambda chunk: (chunk.source_id, chunk.index))
+        items: list[SourceChunk] = []
+        for wire in self._chunks.list():
+            try:
+                chunk = SourceChunk.from_wire(wire)
+            except (ValueError, KeyError):
+                continue
+            if source_id is None or chunk.source_id == source_id:
+                items.append(chunk)
+        return sorted(items, key=lambda c: (c.source_id, c.index))
 
     def search(self, query: str, *, limit: int = DEFAULT_SOURCE_SEARCH_LIMIT) -> list[SourceChunkMatch]:
         tokens = _query_tokens(query)
@@ -157,32 +167,14 @@ class SourceRepository:
         chunks = self.list_chunks(source_id)
         return [self._candidate_for_chunk(document, chunk) for chunk in chunks]
 
-    def _document_path(self, source_id: str) -> Path:
-        return self._documents_dir / f"{source_id}.json"
-
-    def _chunk_path(self, chunk_id: str) -> Path:
-        return self._chunks_dir / f"{chunk_id}.json"
-
-    def _read_document(self, path: Path) -> SourceDocument:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError(f"source document file must contain an object: {path}")
-        return SourceDocument.from_wire(cast(dict[str, object], raw))
-
-    def _read_chunk(self, path: Path) -> SourceChunk:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError(f"source chunk file must contain an object: {path}")
-        return SourceChunk.from_wire(cast(dict[str, object], raw))
-
-    def _delete_document_file(self, source_id: str) -> None:
-        path = self._document_path(source_id)
-        if path.exists():
-            path.unlink()
-
     def _delete_chunks(self, source_id: str) -> None:
-        for path in self._chunks_dir.glob(f"{source_id}_chunk_*.json"):
-            path.unlink()
+        for wire in self._chunks.list():
+            try:
+                chunk = SourceChunk.from_wire(wire)
+                if chunk.source_id == source_id:
+                    self._chunks.delete(chunk.id)
+            except (ValueError, KeyError):
+                pass
 
     def _delete_derived_candidates(self, source_prefix: str) -> None:
         from nuself.memory.repository import MemoryCandidateRepository
