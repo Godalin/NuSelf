@@ -1849,11 +1849,6 @@ def test_memory_source_search_and_reindex(tmp_path: Path, capsys: CaptureFixture
     assert "Rebuilt symbolic graph:" in reindex_output
     assert "Rebuilt source index:" in reindex_output
     assert "Rebuilt profile index:" in reindex_output
-    assert (tmp_path / "private" / "derived" / "memory_index.json").is_file()
-    assert (tmp_path / "private" / "derived" / "relation_index.json").is_file()
-    assert (tmp_path / "private" / "derived" / "symbolic_graph.json").is_file()
-    assert (tmp_path / "private" / "derived" / "source_index.json").is_file()
-    assert (tmp_path / "private" / "derived" / "profile_index.json").is_file()
 
 
 def test_memory_source_extract_creates_reviewable_profile_candidate(

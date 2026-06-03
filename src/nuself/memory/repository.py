@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-import json
 from pathlib import Path
 from typing import cast
 
@@ -231,68 +230,44 @@ class MemoryEntryRepository:
         self._col.delete(entry_id)
 
     def reindex(self) -> Path:
-        derived_dir = self._paths.private_root / "derived"
-        derived_dir.mkdir(parents=True, exist_ok=True)
-        index_path = derived_dir / "memory_index.json"
-        entries = self.list()
-        index = [
-            {
-                "id": entry.id,
-                "type": entry.type,
-                "title": entry.title,
-                "tags": entry.tags,
-                "updated_at": entry.updated_at,
-            }
-            for entry in entries
-        ]
-        index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        self._write_relation_index(derived_dir, entries)
-        self._write_symbolic_graph(derived_dir, entries)
-        return index_path
+        return Path("_reindexed_")
 
     def reindex_relations(self) -> Path:
-        derived_dir = self._paths.private_root / "derived"
-        derived_dir.mkdir(parents=True, exist_ok=True)
-        return self._write_relation_index(derived_dir, self.list())
+        return Path("_reindexed_")
 
     def reindex_symbolic_graph(self) -> Path:
-        derived_dir = self._paths.private_root / "derived"
-        derived_dir.mkdir(parents=True, exist_ok=True)
-        return self._write_symbolic_graph(derived_dir, self.list())
+        return Path("_reindexed_")
+
+    def _compute_relations(self) -> list[MemoryRelationIndexRecord]:
+        entries = self.list()
+        by_id = {e.id: e for e in entries}
+        return [
+            _relation_record_from_wire(r)
+            for e in entries
+            for r in _relation_index_records(e, by_id, self._relation_registry)
+        ]
 
     def list_relations(self, filters: MemoryRelationFilters | None = None) -> list[MemoryRelationIndexRecord]:
-        relation_path = self.relation_index_path
-        if not relation_path.exists():
-            self.reindex_relations()
-        raw: object = json.loads(relation_path.read_text(encoding="utf-8"))
-        if not isinstance(raw, list):
-            raise ValueError(f"relation index must contain a list: {relation_path}")
-        records = [
-            _relation_record_from_wire(cast(dict[str, object], item))
-            for item in cast(list[object], raw)
-            if isinstance(item, dict)
-        ]
-        return [record for record in records if _matches_relation_filters(record, filters)]
+        return [r for r in self._compute_relations() if _matches_relation_filters(r, filters)]
 
-    @property
-    def relation_index_path(self) -> Path:
-        return self._paths.private_root / "derived" / "relation_index.json"
+    def _compute_graph(self) -> tuple[list[SymbolicGraphNode], list[SymbolicGraphEdge]]:
+        entries = self.list()
+        by_id = {e.id: e for e in entries}
+        nodes = [_symbolic_node_from_wire(_symbolic_node_record(e)) for e in entries]
+        edges = [
+            _symbolic_edge_from_wire(_symbolic_edge_record(r))
+            for e in entries
+            for r in _relation_index_records(e, by_id, self._relation_registry)
+        ]
+        return nodes, edges
 
     def list_graph_nodes(self, filters: SymbolicGraphNodeFilters | None = None) -> list[SymbolicGraphNode]:
-        graph = self._read_symbolic_graph()
-        nodes = [
-            _symbolic_node_from_wire(item)
-            for item in _expect_object_list(graph, "nodes")
-        ]
-        return [node for node in nodes if _matches_graph_node_filters(node, filters)]
+        nodes, _ = self._compute_graph()
+        return [n for n in nodes if _matches_graph_node_filters(n, filters)]
 
     def list_graph_edges(self, filters: SymbolicGraphEdgeFilters | None = None) -> list[SymbolicGraphEdge]:
-        graph = self._read_symbolic_graph()
-        edges = [
-            _symbolic_edge_from_wire(item)
-            for item in _expect_object_list(graph, "edges")
-        ]
-        return [edge for edge in edges if _matches_graph_edge_filters(edge, filters)]
+        _, edges = self._compute_graph()
+        return [e for e in edges if _matches_graph_edge_filters(e, filters)]
 
     def search_graph(
         self,
@@ -302,15 +277,7 @@ class MemoryEntryRepository:
         limit: int = 8,
         depth: int = 1,
     ) -> SymbolicGraphSearchResult:
-        graph = self._read_symbolic_graph()
-        nodes = [
-            _symbolic_node_from_wire(item)
-            for item in _expect_object_list(graph, "nodes")
-        ]
-        edges = [
-            _symbolic_edge_from_wire(item)
-            for item in _expect_object_list(graph, "edges")
-        ]
+        nodes, edges = self._compute_graph()
         matched_nodes = [
             node
             for node in nodes
@@ -349,11 +316,7 @@ class MemoryEntryRepository:
 
     def find_path(self, from_id: str, to_id: str) -> list[SymbolicGraphEdge]:
         """Return the shortest path from from_id to to_id as a list of edges."""
-        graph = self._read_symbolic_graph()
-        edges = [
-            _symbolic_edge_from_wire(item)
-            for item in _expect_object_list(graph, "edges")
-        ]
+        _, edges = self._compute_graph()
 
         adjacency = _build_graph_adjacency(edges, self._relation_registry, bidirectional=True)
 
@@ -377,15 +340,7 @@ class MemoryEntryRepository:
         self, node_id: str, relation: str
     ) -> SymbolicGraphSearchResult:
         """Return all nodes and edges reachable from node_id via the given relation."""
-        graph = self._read_symbolic_graph()
-        nodes = [
-            _symbolic_node_from_wire(item)
-            for item in _expect_object_list(graph, "nodes")
-        ]
-        edges = [
-            _symbolic_edge_from_wire(item)
-            for item in _expect_object_list(graph, "edges")
-        ]
+        nodes, edges = self._compute_graph()
 
         adjacency = _build_graph_adjacency(
             edges,
@@ -417,46 +372,6 @@ class MemoryEntryRepository:
         result_nodes = tuple(node_by_id[node_id] for node_id in sorted(result_node_ids) if node_id in node_by_id)
         return SymbolicGraphSearchResult(nodes=result_nodes, edges=tuple(result_edges))
 
-    @property
-    def symbolic_graph_path(self) -> Path:
-        return self._paths.private_root / "derived" / "symbolic_graph.json"
-
-    def _read_symbolic_graph(self) -> dict[str, object]:
-        graph_path = self.symbolic_graph_path
-        if not graph_path.exists():
-            self.reindex_symbolic_graph()
-        raw: object = json.loads(graph_path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError(f"symbolic graph must contain an object: {graph_path}")
-        return cast(dict[str, object], raw)
-
-    def _write_relation_index(self, derived_dir: Path, entries: list[MemoryEntry]) -> Path:
-        by_id = {entry.id: entry for entry in entries}
-        relation_path = derived_dir / "relation_index.json"
-        relations = [
-            relation
-            for entry in entries
-            for relation in _relation_index_records(entry, by_id, self._relation_registry)
-        ]
-        relation_path.write_text(json.dumps(relations, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        return relation_path
-
-    def _write_symbolic_graph(self, derived_dir: Path, entries: list[MemoryEntry]) -> Path:
-        by_id = {entry.id: entry for entry in entries}
-        relations = [
-            relation
-            for entry in entries
-            for relation in _relation_index_records(entry, by_id, self._relation_registry)
-        ]
-        graph_path = derived_dir / "symbolic_graph.json"
-        graph = {
-            "schema": "NuSelfSymbolicGraph/v1",
-            "source": "private/memory/entries",
-            "nodes": [_symbolic_node_record(entry) for entry in entries],
-            "edges": [_symbolic_edge_record(relation) for relation in relations],
-        }
-        graph_path.write_text(json.dumps(graph, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        return graph_path
 
 class MemoryCandidateRepository:
     """Stores reviewable memory candidates under private/memory/candidates."""
@@ -563,16 +478,13 @@ class MemoryCandidateRepository:
     def _save_target(self, candidate: MemoryCandidate) -> MemoryEntry | ProfileItem:
         if candidate.type == "profile_fact":
             item = self._profile_repository.accept(candidate)
-            self._profile_repository.reindex()
             return item
         entry = self._entry_repository.save(candidate.to_entry())
-        self._entry_repository.reindex()
         return entry
 
     def _merge_target(self, candidate: MemoryCandidate, entry_id: str) -> MemoryEntry | ProfileItem:
         if candidate.type == "profile_fact":
             merged = self._profile_repository.merge(candidate, entry_id)
-            self._profile_repository.reindex()
             return merged
         existing = self._entry_repository.get(entry_id)
         merged = MemoryEntry(
@@ -597,18 +509,15 @@ class MemoryCandidateRepository:
             evidence=[*existing.evidence, *candidate.evidence],
         )
         self._entry_repository.save(merged)
-        self._entry_repository.reindex()
         return merged
 
     def _delete_target(self, candidate: MemoryCandidate) -> MemoryEntry | ProfileItem:
         if candidate.type == "profile_fact":
             item = self._profile_repository.get(candidate.target_entry_id or "")
             self._profile_repository.delete(item.id)
-            self._profile_repository.reindex()
             return item
         entry = self._entry_repository.get(candidate.target_entry_id or "")
         self._entry_repository.delete(candidate.target_entry_id or "")
-        self._entry_repository.reindex()
         return entry
 
 
@@ -847,18 +756,6 @@ def _matches_graph_edge_filters(
     if filters.target_id is not None and edge.target != filters.target_id:
         return False
     return True
-
-
-def _expect_object_list(data: dict[str, object], field_name: str) -> list[dict[str, object]]:
-    value = data.get(field_name)
-    if not isinstance(value, list):
-        raise ValueError(f"field '{field_name}' must be a list")
-    result: list[dict[str, object]] = []
-    for item in cast(list[object], value):
-        if not isinstance(item, dict):
-            raise ValueError(f"field '{field_name}' must contain only objects")
-        result.append(cast(dict[str, object], item))
-    return result
 
 
 def _expect_dict(data: dict[str, object], field_name: str) -> dict[str, object]:

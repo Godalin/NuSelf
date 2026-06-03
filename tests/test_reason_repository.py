@@ -112,5 +112,5 @@ def test_reindex(tmp_path: Path) -> None:
     repo.save_thread(t)
     s = ReasoningStep(thread_id=t.id, summary="Step")
     repo.save_step(s)
-    index_path = repo.reindex()
-    assert index_path.exists()
+    repo.reindex()
+    # reindex is a no-op with StorageBackend; index.json no longer written

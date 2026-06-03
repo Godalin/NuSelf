@@ -7,7 +7,7 @@ from nuself.domain.profile import ProfileItem
 from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
 
 
-def test_profile_repository_crud_and_reindex(tmp_path: Path) -> None:
+def test_profile_repository_crud(tmp_path: Path) -> None:
     repo = ProfileItemRepository(tmp_path)
     item = repo.save(
         ProfileItem(
@@ -33,10 +33,8 @@ def test_profile_repository_crud_and_reindex(tmp_path: Path) -> None:
 
     updated = item.with_updates(title="Concise CLI output")
     repo.save(updated)
-    index_path = repo.reindex()
 
     assert repo.get(item.id).title == "Concise CLI output"
-    assert index_path.is_file()
 
     repo.delete(item.id)
     assert repo.list() == []
@@ -95,8 +93,7 @@ def test_profile_repository_delete_missing_raises(tmp_path: Path) -> None:
 
 def test_profile_repository_reindex_on_empty_repo(tmp_path: Path) -> None:
     repo = ProfileItemRepository(tmp_path)
-    index_path = repo.reindex()
-    assert index_path.is_file()
+    repo.reindex()
 
 
 def test_profile_repository_search_no_matches_returns_empty(tmp_path: Path) -> None:

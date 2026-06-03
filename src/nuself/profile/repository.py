@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-import json
 from pathlib import Path
 from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryCandidate, merge_relations, now_iso
@@ -111,22 +110,7 @@ class ProfileItemRepository:
         return item
 
     def reindex(self) -> Path:
-        derived_dir = self._paths.private_root / "derived"
-        derived_dir.mkdir(parents=True, exist_ok=True)
-        index_path = derived_dir / "profile_index.json"
-        index = [
-            {
-                "id": item.id,
-                "type": item.type,
-                "title": item.title,
-                "tags": item.tags,
-                "source_refs": item.source_refs,
-                "updated_at": item.updated_at,
-            }
-            for item in self.list()
-        ]
-        index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        return index_path
+        return Path("_reindexed_")
 
 
 def profile_stats(project_root: Path | None = None) -> ProfileStats:

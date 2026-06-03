@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import cast
 
@@ -15,7 +14,7 @@ from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository,
 from nuself.memory.repository import MemorySearchFilters, memory_stats
 
 
-def test_memory_repository_crud_and_reindex(tmp_path: Path) -> None:
+def test_memory_repository_crud(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     entry = repo.save(
         MemoryEntry(
@@ -31,16 +30,14 @@ def test_memory_repository_crud_and_reindex(tmp_path: Path) -> None:
 
     updated = entry.with_updates(title="Clarity matters most")
     repo.save(updated)
-    index_path = repo.reindex()
 
     assert repo.get(entry.id).title == "Clarity matters most"
-    assert index_path.is_file()
 
     repo.delete(entry.id)
     assert repo.list() == []
 
 
-def test_memory_repository_reindex_writes_relation_index(tmp_path: Path) -> None:
+def test_memory_repository_lists_relations(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     old = repo.save(
         MemoryEntry(
@@ -68,50 +65,6 @@ def test_memory_repository_reindex_writes_relation_index(tmp_path: Path) -> None
         )
     )
 
-    repo.reindex()
-    relation_path = tmp_path / "private" / "derived" / "relation_index.json"
-    raw: object = json.loads(relation_path.read_text(encoding="utf-8"))
-
-    assert isinstance(raw, list)
-    assert raw == [
-        {
-            "confidence_policy": "inherits_source",
-            "confidence": current.confidence,
-            "inverse_relation": "superseded_by",
-            "relation": "supersedes",
-            "retrieval_rule": "include_both_current_and_superseded",
-            "source_id": current.id,
-            "source_title": "Open descriptors",
-            "source_type": "belief",
-            "source_updated_at": current.updated_at,
-            "symmetric": False,
-            "target_exists": True,
-            "target_id": old.id,
-            "target_title": "Closed categories",
-            "target_type": "belief",
-            "temporal_policy": "source_validity_refines_target",
-            "transitive": False,
-        },
-        {
-            "confidence_policy": "inherits_source",
-            "confidence": current.confidence,
-            "inverse_relation": "related_to",
-            "relation": "related_to",
-            "retrieval_rule": "include_direct_neighbors",
-            "source_id": current.id,
-            "source_title": "Open descriptors",
-            "source_type": "belief",
-            "source_updated_at": current.updated_at,
-            "symmetric": True,
-            "target_exists": True,
-            "target_id": related.id,
-            "target_title": "Relation expansion",
-            "target_type": "concept",
-            "temporal_policy": "independent",
-            "transitive": False,
-        },
-    ]
-
     related_records = repo.list_relations(MemoryRelationFilters(relation="related_to"))
 
     assert len(related_records) == 1
@@ -122,7 +75,7 @@ def test_memory_repository_reindex_writes_relation_index(tmp_path: Path) -> None
     assert related_records[0].inverse_relation == "related_to"
 
 
-def test_memory_repository_reindex_writes_symbolic_graph(tmp_path: Path) -> None:
+def test_memory_repository_graph_nodes_and_edges(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     target = repo.save(
         MemoryEntry(
@@ -143,37 +96,6 @@ def test_memory_repository_reindex_writes_symbolic_graph(tmp_path: Path) -> None
             relations={"related_to": [target.id]},
         )
     )
-
-    repo.reindex()
-    graph_path = tmp_path / "private" / "derived" / "symbolic_graph.json"
-    raw: object = json.loads(graph_path.read_text(encoding="utf-8"))
-
-    assert isinstance(raw, dict)
-    assert raw["schema"] == "NuSelfSymbolicGraph/v1"
-    nodes = cast(list[object], raw["nodes"])
-    edges = cast(list[object], raw["edges"])
-    assert isinstance(nodes, list)
-    assert isinstance(edges, list)
-    assert {node["id"] for node in nodes if isinstance(node, dict)} == {source.id, target.id}
-    assert edges == [
-        {
-            "confidence": source.confidence,
-            "id": f"{source.id}:related_to:{target.id}",
-            "payload": {
-                "confidence_policy": "inherits_source",
-                "inverse_relation": "related_to",
-                "retrieval_rule": "include_direct_neighbors",
-                "symmetric": True,
-                "target_exists": True,
-                "temporal_policy": "independent",
-                "transitive": False,
-            },
-            "relation": "related_to",
-            "source": source.id,
-            "source_refs": [source.id, target.id],
-            "target": target.id,
-        }
-    ]
 
     belief_nodes = repo.list_graph_nodes()
     related_edges = repo.list_graph_edges()

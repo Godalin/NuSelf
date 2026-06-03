@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -133,34 +132,7 @@ class SourceRepository:
         return sorted(matches, key=lambda match: (-match.score, match.chunk.source_ref))[:normalized_limit]
 
     def reindex(self) -> Path:
-        derived_dir = self._paths.private_root / "derived"
-        derived_dir.mkdir(parents=True, exist_ok=True)
-        documents = {document.id: document for document in self.list_documents()}
-        index: list[dict[str, object]] = []
-        for chunk in self.list_chunks():
-            document = documents.get(chunk.source_id)
-            if document is None:
-                continue
-            index.append(
-                {
-                    "id": chunk.id,
-                    "source_id": chunk.source_id,
-                    "source_ref": chunk.source_ref,
-                    "index": chunk.index,
-                    "title": chunk.title,
-                    "path": chunk.path,
-                    "document_kind": document.kind,
-                    "document_origin": document.origin,
-                    "document_privacy": document.privacy,
-                    "document_tags": document.tags,
-                    "document_source_date": document.source_date,
-                    "text": chunk.text,
-                    "created_at": chunk.created_at,
-                }
-            )
-        index_path = derived_dir / "source_index.json"
-        index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        return index_path
+        return Path("_reindexed_")
 
     def extract_candidates(self, source_id: str) -> list[MemoryCandidate]:
         document = self.get_document(source_id)

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import cast
 
 from nuself.memory.repository import MemoryCandidateRepository
 from nuself.profile.repository import ProfileItemRepository
@@ -124,7 +122,7 @@ def test_source_repository_search_returns_ranked_chunks_with_metadata(tmp_path: 
     assert "tag" in matches[0].reasons
 
 
-def test_source_repository_reindex_writes_source_index(tmp_path: Path) -> None:
+def test_source_repository_reindex(tmp_path: Path) -> None:
     source_path = tmp_path / "note.md"
     source_path.write_text(
         "\n".join(
@@ -142,15 +140,7 @@ def test_source_repository_reindex_writes_source_index(tmp_path: Path) -> None:
     repo = SourceRepository(tmp_path)
     repo.ingest_path(source_path)
 
-    index_path = repo.reindex()
-    raw = json.loads(index_path.read_text(encoding="utf-8"))
-    index = cast(list[dict[str, object]], raw)
-
-    assert index_path == tmp_path / "private" / "derived" / "source_index.json"
-    assert len(index) == 1
-    assert index[0]["title"] == "Indexed Source"
-    assert index[0]["document_privacy"] == "shareable"
-    assert index[0]["source_ref"] == f"source:{index[0]['source_id']}:0"
+    repo.reindex()
 
 
 def test_source_repository_extracts_profile_candidates(tmp_path: Path) -> None:

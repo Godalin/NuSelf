@@ -33,7 +33,6 @@ def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None
     assert links == [link]
     assert (tmp_path / "private" / "traces" / "traces" / f"{trace.id}.json").is_file()
     assert (tmp_path / "private" / "traces" / "links" / f"{link.id}.json").is_file()
-    assert (tmp_path / "private" / "traces" / "index.json").is_file()
 
 
 def test_trace_repository_finds_related_artifact_references(tmp_path: Path) -> None:
@@ -85,7 +84,7 @@ def test_trace_repository_resolves_numeric_handle(tmp_path: Path) -> None:
         repo.resolve_trace("2")
 
 
-def test_trace_repository_concurrent_saves_preserve_index(tmp_path: Path) -> None:
+def test_trace_repository_concurrent_saves(tmp_path: Path) -> None:
     traces = tuple(
         ThoughtTrace(kind="decision", title=f"Trace {index}", summary=f"Summary {index}.")
         for index in range(16)
@@ -100,4 +99,3 @@ def test_trace_repository_concurrent_saves_preserve_index(tmp_path: Path) -> Non
     repo = TraceRepository(tmp_path)
     stored = repo.list_traces()
     assert {trace.id for trace in stored} == {trace.id for trace in traces}
-    assert (tmp_path / "private" / "traces" / "index.json").is_file()
