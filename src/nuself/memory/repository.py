@@ -23,6 +23,7 @@ from nuself.domain.memory import (
 )
 from nuself.domain.profile import ProfileItem
 from nuself.profile.repository import ProfileItemRepository
+from nuself.storage import StorageBackend, create_file_backend
 
 
 def empty_str_counts() -> dict[str, int]:
@@ -152,6 +153,12 @@ class MemoryCandidateNotFound(KeyError):
     """Raised when a memory candidate does not exist."""
 
 
+def _entry_from_wire(data: dict[str, object]) -> MemoryEntry:
+    if "metadata" in data:
+        return MemoryEntry.from_memory_object(MemoryObject.from_wire(data))
+    return MemoryEntry.from_wire(data)
+
+
 class MemoryEntryRepository:
     """Stores one JSON file per memory entry under private/memory/entries."""
 
@@ -159,28 +166,27 @@ class MemoryEntryRepository:
         self,
         project_root: Path | None = None,
         *,
+        backend: StorageBackend | None = None,
         registry: MemoryTypeRegistry | None = None,
         relation_registry: RelationDescriptorRegistry | None = None,
     ) -> None:
+        be = backend if backend is not None else create_file_backend(project_root)
+        self._col = be.collection("memory_entries")
         self._paths = runtime_paths(project_root)
-        self._entries_dir = self._paths.private_root / "memory" / "entries"
         self._registry = registry or default_memory_type_registry()
         self._relation_registry = relation_registry or default_relation_descriptor_registry()
-
-    @property
-    def entries_dir(self) -> Path:
-        return self._entries_dir
 
     @property
     def relation_registry(self) -> RelationDescriptorRegistry:
         return self._relation_registry
 
-    def ensure(self) -> None:
-        self._entries_dir.mkdir(parents=True, exist_ok=True)
-
     def list(self) -> list[MemoryEntry]:
-        self.ensure()
-        entries = [self._read_path(path) for path in sorted(self._entries_dir.glob("*.json"))]
+        entries: list[MemoryEntry] = []
+        for wire in self._col.list():
+            try:
+                entries.append(_entry_from_wire(wire))
+            except (ValueError, KeyError):
+                pass
         return sorted(entries, key=lambda entry: entry.updated_at, reverse=True)
 
     def search(self, query: str, filters: MemorySearchFilters | None = None) -> list[MemoryEntry]:
@@ -192,22 +198,17 @@ class MemoryEntryRepository:
         ]
 
     def get(self, entry_id: str) -> MemoryEntry:
-        path = self._path_for(entry_id)
-        if not path.exists():
+        wire = self._col.get(entry_id)
+        if wire is None:
             raise MemoryEntryNotFound(entry_id)
-        return self._read_path(path)
+        return _entry_from_wire(wire)
 
     def save(self, entry: MemoryEntry) -> MemoryEntry:
         if self._registry.get(entry.type) is None and entry.review_state == "draft":
             entry = entry.with_updates(review_state="quarantined")
         else:
             self._registry.validate(entry.to_memory_object())
-        self.ensure()
-        path = self._path_for(entry.id)
-        path.write_text(
-            json.dumps(entry.to_wire(), indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        self._col.put(entry.id, entry.to_wire())
         return entry
 
     def unquarantine(self, entry_id: str) -> MemoryEntry:
@@ -215,11 +216,7 @@ class MemoryEntryRepository:
         if entry.review_state != "quarantined":
             raise ValueError(f"entry is not quarantined: {entry_id}")
         updated = entry.with_updates(review_state="draft")
-        path = self._path_for(entry.id)
-        path.write_text(
-            json.dumps(updated.to_wire(), indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        self._col.put(updated.id, updated.to_wire())
         return updated
 
     def save_object(self, memory: MemoryObject) -> MemoryObject:
@@ -228,10 +225,10 @@ class MemoryEntryRepository:
         return memory
 
     def delete(self, entry_id: str) -> None:
-        path = self._path_for(entry_id)
-        if not path.exists():
+        wire = self._col.get(entry_id)
+        if wire is None:
             raise MemoryEntryNotFound(entry_id)
-        path.unlink()
+        self._col.delete(entry_id)
 
     def reindex(self) -> Path:
         derived_dir = self._paths.private_root / "derived"
@@ -461,21 +458,6 @@ class MemoryEntryRepository:
         graph_path.write_text(json.dumps(graph, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return graph_path
 
-    def _path_for(self, entry_id: str) -> Path:
-        if "/" in entry_id or entry_id in {"", ".", ".."}:
-            raise ValueError(f"invalid memory entry id: {entry_id}")
-        return self._entries_dir / f"{entry_id}.json"
-
-    def _read_path(self, path: Path) -> MemoryEntry:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError(f"memory entry file must contain an object: {path}")
-        data = cast(dict[str, object], raw)
-        if "metadata" in data:
-            return MemoryEntry.from_memory_object(MemoryObject.from_wire(data))
-        return MemoryEntry.from_wire(data)
-
-
 class MemoryCandidateRepository:
     """Stores reviewable memory candidates under private/memory/candidates."""
 
@@ -483,48 +465,41 @@ class MemoryCandidateRepository:
         self,
         project_root: Path | None = None,
         *,
+        backend: StorageBackend | None = None,
         entry_repository: MemoryEntryRepository | None = None,
         profile_repository: ProfileItemRepository | None = None,
     ) -> None:
-        self._paths = runtime_paths(project_root)
-        self._candidates_dir = self._paths.private_root / "memory" / "candidates"
+        be = backend if backend is not None else create_file_backend(project_root)
+        self._col = be.collection("memory_candidates")
         self._entry_repository = entry_repository or MemoryEntryRepository(project_root)
         self._profile_repository = profile_repository or ProfileItemRepository(project_root)
 
-    @property
-    def candidates_dir(self) -> Path:
-        return self._candidates_dir
-
-    def ensure(self) -> None:
-        self._candidates_dir.mkdir(parents=True, exist_ok=True)
-
     def list(self, *, include_reviewed: bool = False) -> list[MemoryCandidate]:
-        self.ensure()
-        candidates = [self._read_path(path) for path in sorted(self._candidates_dir.glob("*.json"))]
-        if not include_reviewed:
-            candidates = [candidate for candidate in candidates if candidate.review_state == "pending"]
-        return sorted(candidates, key=lambda candidate: candidate.updated_at, reverse=True)
+        candidates: list[MemoryCandidate] = []
+        for wire in self._col.list():
+            try:
+                candidate = MemoryCandidate.from_wire(wire)
+            except (ValueError, KeyError):
+                continue
+            if include_reviewed or candidate.review_state == "pending":
+                candidates.append(candidate)
+        return sorted(candidates, key=lambda c: c.updated_at, reverse=True)
 
     def get(self, candidate_id: str) -> MemoryCandidate:
-        path = self._path_for(candidate_id)
-        if not path.exists():
+        wire = self._col.get(candidate_id)
+        if wire is None:
             raise MemoryCandidateNotFound(candidate_id)
-        return self._read_path(path)
+        return MemoryCandidate.from_wire(wire)
 
     def save(self, candidate: MemoryCandidate) -> MemoryCandidate:
-        self.ensure()
-        path = self._path_for(candidate.id)
-        path.write_text(
-            json.dumps(candidate.to_wire(), indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        self._col.put(candidate.id, candidate.to_wire())
         return candidate
 
     def delete(self, candidate_id: str) -> None:
-        path = self._path_for(candidate_id)
-        if not path.exists():
+        wire = self._col.get(candidate_id)
+        if wire is None:
             raise MemoryCandidateNotFound(candidate_id)
-        path.unlink()
+        self._col.delete(candidate_id)
 
     def accept(self, candidate_id: str) -> MemoryEntry | ProfileItem:
         candidate = self.get(candidate_id)
@@ -635,17 +610,6 @@ class MemoryCandidateRepository:
         self._entry_repository.delete(candidate.target_entry_id or "")
         self._entry_repository.reindex()
         return entry
-
-    def _path_for(self, candidate_id: str) -> Path:
-        if "/" in candidate_id or candidate_id in {"", ".", ".."}:
-            raise ValueError(f"invalid memory candidate id: {candidate_id}")
-        return self._candidates_dir / f"{candidate_id}.json"
-
-    def _read_path(self, path: Path) -> MemoryCandidate:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError(f"memory candidate file must contain an object: {path}")
-        return MemoryCandidate.from_wire(cast(dict[str, object], raw))
 
 
 def memory_stats(project_root: Path | None = None) -> MemoryStats:
