@@ -102,9 +102,8 @@ class NotificationOutbox:
         *,
         backend: StorageBackend | None = None,
     ) -> None:
-        from nuself.storage import create_file_backend
-
-        be = backend if backend is not None else create_file_backend(project_root)
+        from nuself.storage import auto_backend
+        be = backend if backend is not None else auto_backend(project_root)
         self._col = be.collection("notification_outbox")
 
     def list(self, status: OutboxStatus | None = None) -> list[OutboxEntry]:

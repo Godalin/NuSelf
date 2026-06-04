@@ -7,7 +7,7 @@ import sqlite3
 
 import pytest
 
-from nuself.workspace import PRIVATE_WORKSPACE_SCHEMA_VERSION, PrivateWorkspaceStore
+from nuself.workspace import PrivateWorkspaceStore
 
 
 def test_private_workspace_store_initializes_sqlite(tmp_path: Path) -> None:
@@ -15,17 +15,23 @@ def test_private_workspace_store_initializes_sqlite(tmp_path: Path) -> None:
 
     workspace = store.ensure("reason-abc")
 
+    db_path = tmp_path / "private" / "nuself.sqlite"
     assert workspace.root == tmp_path / "private" / "workspaces" / "reason" / "reason-abc"
-    assert workspace.database.is_file()
+    assert workspace.database == db_path
     assert workspace.artifacts.is_dir()
     assert workspace.notes.is_dir()
-    conn = sqlite3.connect(workspace.database)
-    rows = dict(conn.execute("SELECT key, value FROM workspace_meta").fetchall())
-    conn.close()
-    assert rows["schema"] == PRIVATE_WORKSPACE_SCHEMA_VERSION
-    assert rows["scope"] == "reason"
-    assert rows["owner_id"] == "reason-abc"
-    assert rows["created_at"]
+
+    # nuself.sqlite is created lazily by SqliteStore on first use
+    from nuself.store import SqliteStore
+    s = SqliteStore(db_path)
+    s.put(("reason-abc",), "key", {"hello": "world"})
+    assert db_path.is_file()
+    conn = sqlite3.connect(str(db_path))
+    try:
+        tables = [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+        assert "workspace_entries" in tables
+    finally:
+        conn.close()
 
 
 def test_private_workspace_store_rejects_path_segments(tmp_path: Path) -> None:

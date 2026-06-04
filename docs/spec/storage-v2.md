@@ -5,7 +5,7 @@ Status: active design, implementation in v0.2.3–v0.2.5.
 ## Goal
 
 Replace scattered file-backed repositories with a unified storage abstraction,
-then migrate to a single SQLite database (`private/nuself.db`) that can be
+then migrate to a single SQLite database (`private/nuself.sqlite`) that can be
 copied and shared as a complete thought pack.
 
 ## Directory Architecture
@@ -16,8 +16,8 @@ private/                    ← durable, portable, version-controllable
   threads/                  ← chat conversations (semi-durable)
   exports/                  ← export jobs + output
   imports/                  ← import staging
-  backups/                  ← auto-backups of nuself.db
-  nuself.db                 ← v0.2.4+: all durable user data
+  backups/                  ← auto-backups of nuself.sqlite
+  nuself.sqlite                 ← v0.2.4+: all durable user data
 
 $TMPDIR/nuself/             ← ephemeral, auto-cleaned on reboot
   daemon.lock
@@ -29,7 +29,7 @@ $TMPDIR/nuself/             ← ephemeral, auto-cleaned on reboot
 ### 设计理由
 
 ```
-nuself.db 包含              — 所有可分享的持久数据
+nuself.sqlite 包含              — 所有可分享的持久数据
 ├─ Memory entries / candidates / relations
 ├─ Profile items
 ├─ Source documents + chunks
@@ -52,7 +52,7 @@ $TMPDIR/nuself/ 保留文件系统 — 运行时状态，重启即丢
 ├─ daemon.lock / .sock       — 进程生命周期
 ```
 
-Workspace 入 `nuself.db` 而非文件系统，因为它是 reason thread 的重要组成部分，
+Workspace 入 `nuself.sqlite` 而非文件系统，因为它是 reason thread 的重要组成部分，
 思想包应当包含推理中间产物。DB 连接在 reason step advance 期间保持打开，
 WAL 模式读写不阻塞，性能足够。
 
@@ -182,7 +182,7 @@ Repository 内部纯数据逻辑不变（`to_wire()` / `from_wire()` 已就绪�
 
 ### 目标
 
-将核心持久状态迁移到 `private/nuself.db`，引入 migration system + schema version
+将核心持久状态迁移到 `private/nuself.sqlite`，引入 migration system + schema version
 管理。
 
 ### 核心变更
@@ -348,7 +348,7 @@ v0.2.3  定义 StorageBackend 协议 + FileStorageBackend 适配
          行为不变，零迁移
 
 v0.2.4  加 SqliteStorageBackend
-         nuself.db schema + migration system
+         nuself.sqlite schema + migration system
          FTS5 搜索（可选）
          默认后端仍为 file；用户选择切换
          旧文件数据迁移到 db：nuself dev migrate
@@ -361,10 +361,10 @@ v0.2.5  思想包导出/导入基础设施
 
 ## 分享场景
 
-他人拿到 `nuself.db` 后：
+他人拿到 `nuself.sqlite` 后：
 
 ```python
-backend = SqliteStorageBackend("path/to/nuself.db")
+backend = SqliteStorageBackend("path/to/nuself.sqlite")
 repo = MemoryEntryRepository(backend)
 for entry in repo.list():
     print(entry.to_wire())

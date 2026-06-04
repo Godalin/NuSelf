@@ -97,15 +97,21 @@ def test_start_thread_initializes_private_workspace(tmp_path: Path) -> None:
     thread = service.start_thread("Where should scratch state live?")
 
     workspace = service.workspace_paths(thread.id)
+    db_path = tmp_path / "private" / "nuself.sqlite"
     assert workspace.root == tmp_path / "private" / "workspaces" / "reason" / thread.id
-    assert workspace.database.is_file()
+    assert workspace.database == db_path
     assert workspace.artifacts.is_dir()
     assert workspace.notes.is_dir()
-    conn = sqlite3.connect(workspace.database)
-    rows = dict(conn.execute("SELECT key, value FROM workspace_meta").fetchall())
-    conn.close()
-    assert rows["scope"] == "reason"
-    assert rows["owner_id"] == thread.id
+    # nuself.sqlite is created lazily by SqliteStore on first workspace access
+    ws = service.workspace(thread.id)
+    ws.put("meta", {"key": "value"})
+    assert db_path.is_file()
+    conn = sqlite3.connect(str(db_path))
+    try:
+        tables = [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+        assert "workspace_entries" in tables
+    finally:
+        conn.close()
 
 
 def test_start_and_list(tmp_path: Path) -> None:

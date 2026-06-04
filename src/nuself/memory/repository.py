@@ -22,7 +22,7 @@ from nuself.domain.memory import (
 )
 from nuself.domain.profile import ProfileItem
 from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import StorageBackend, create_file_backend
+from nuself.storage import StorageBackend, auto_backend
 
 
 def empty_str_counts() -> dict[str, int]:
@@ -169,7 +169,7 @@ class MemoryEntryRepository:
         registry: MemoryTypeRegistry | None = None,
         relation_registry: RelationDescriptorRegistry | None = None,
     ) -> None:
-        be = backend if backend is not None else create_file_backend(project_root)
+        be = backend if backend is not None else auto_backend(project_root)
         self._col = be.collection("memory_entries")
         self._paths = runtime_paths(project_root)
         self._registry = registry or default_memory_type_registry()
@@ -384,7 +384,7 @@ class MemoryCandidateRepository:
         entry_repository: MemoryEntryRepository | None = None,
         profile_repository: ProfileItemRepository | None = None,
     ) -> None:
-        be = backend if backend is not None else create_file_backend(project_root)
+        be = backend if backend is not None else auto_backend(project_root)
         self._col = be.collection("memory_candidates")
         self._entry_repository = entry_repository or MemoryEntryRepository(project_root)
         self._profile_repository = profile_repository or ProfileItemRepository(project_root)

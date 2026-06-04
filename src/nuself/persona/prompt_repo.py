@@ -11,7 +11,7 @@ import threading
 from typing import cast
 from uuid import uuid4
 
-from nuself.storage import StorageBackend, create_file_backend
+from nuself.storage import StorageBackend, auto_backend
 
 _REPO_LOCKS_LOCK = threading.Lock()
 _REPO_LOCKS: dict[Path, threading.RLock] = {}
@@ -97,7 +97,7 @@ class PersonaPromptRepository:
             self._lock = threading.RLock()
         else:
             self._mode = "backend"
-            self._col = create_file_backend().collection("persona_prompts")
+            self._col = auto_backend().collection("persona_prompts")
             self._lock = threading.RLock()
 
     # Public API ---------------------------------------------------------------

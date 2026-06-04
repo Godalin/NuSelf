@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, cast
 
-from nuself.storage import StorageBackend, create_file_backend
+from nuself.storage import StorageBackend, auto_backend
 
 
 @dataclass(frozen=True)
@@ -112,7 +112,7 @@ class ReflectionRepository:
         *,
         backend: StorageBackend | None = None,
     ) -> None:
-        be = backend if backend is not None else create_file_backend(project_root)
+        be = backend if backend is not None else auto_backend(project_root)
         self._col = be.collection("reflection_entries")
 
     def list(self, status: str | None = None) -> list[ReflectionEntry]:

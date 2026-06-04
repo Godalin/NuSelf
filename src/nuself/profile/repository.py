@@ -8,7 +8,7 @@ from pathlib import Path
 from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryCandidate, merge_relations, now_iso
 from nuself.domain.profile import ProfileItem
-from nuself.storage import StorageBackend, create_file_backend
+from nuself.storage import StorageBackend, auto_backend
 
 
 def empty_str_counts() -> dict[str, int]:
@@ -48,7 +48,7 @@ class ProfileItemRepository:
         *,
         backend: StorageBackend | None = None,
     ) -> None:
-        be = backend if backend is not None else create_file_backend(project_root)
+        be = backend if backend is not None else auto_backend(project_root)
         self._col = be.collection("profile_items")
         self._paths = runtime_paths(project_root)
 

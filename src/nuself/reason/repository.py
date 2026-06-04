@@ -9,7 +9,7 @@ from typing import Generator
 
 from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.reason.domain import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
-from nuself.storage import StorageBackend, create_file_backend
+from nuself.storage import StorageBackend, auto_backend
 
 REASON_STORAGE_VERSION = "NuSelfReasonStore/v1"
 
@@ -33,7 +33,7 @@ class ReasonRepository:
         backend: StorageBackend | None = None,
     ) -> None:
         self._project_root = project_root
-        effective = backend if backend is not None else create_file_backend(project_root)
+        effective = backend if backend is not None else auto_backend(project_root)
         self._threads = effective.collection("reason_threads")
         self._steps = effective.collection("reason_steps")
 

@@ -47,7 +47,7 @@ The `v0.2.x` line is the ongoing stabilization branch. `main` remains the stable
 ### P3 — v0.2.4 SQLite Backend
 
 - [ ] Implement `SqliteStorageBackend`.
-- [ ] Define full `nuself.db` schema with `structured fields + payload_json` principle.
+- [ ] Define full `nuself.sqlite` schema with `structured fields + payload_json` principle.
 - [ ] Add migration system + `PRAGMA user_version`.
 - [ ] Support transactional trace/reason operations.
 - [ ] Add workspace_entries table.

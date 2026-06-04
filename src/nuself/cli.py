@@ -113,7 +113,7 @@ try:
     from nuself.tui.render import TerminalTheme, format_display_timestamp, render_log_event, render_log_event_json, render_session_header
     from nuself.tui.trace import render_trace_detail, render_trace_row
     from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
-    from nuself.storage import create_file_backend
+    from nuself.storage import auto_backend
     from nuself.persona.definition import BUILTIN_PERSONAS, MODERATOR_PERSONA, SYNTHESIZER_PERSONA
 finally:
     warnings.warn = _original_warn
@@ -779,6 +779,14 @@ def build_parser() -> argparse.ArgumentParser:
     dev_eval_parser.add_argument("--component", choices=["conversations", "notifications", "all"], default="all")
     _add_handler(dev_eval_parser, handle_eval)
 
+    dev_migrate_parser = dev_subparsers.add_parser("migrate", help="Migrate file-based data to private/nuself.sqlite.")
+    dev_migrate_parser.add_argument("--db", type=Path, default=None, help="Destination database path (default: private/nuself.sqlite)")
+    dev_migrate_parser.add_argument("--clear", action="store_true", default=False, help="Clear existing data in destination before migration")
+    _add_handler(dev_migrate_parser, handle_dev_migrate)
+
+    _add_handler(dev_subparsers.add_parser("db-schema", help="Show SQLite database schema."), handle_dev_db_schema)
+    _add_handler(dev_subparsers.add_parser("storage", help="Show which storage backend is active."), handle_dev_storage)
+
     return parser
 
 
@@ -1221,7 +1229,7 @@ def _resolve_persona_ids(args: argparse.Namespace) -> list[str] | None:
 
 
 def _persona_prompts_for_list(project_root: Path | None) -> tuple[PersonaPrompt, ...]:
-    return PersonaPromptRepository(backend=create_file_backend(project_root)).list()
+    return PersonaPromptRepository(backend=auto_backend(project_root)).list()
 
 
 def handle_memory_stats(args: argparse.Namespace) -> int:
@@ -1481,6 +1489,71 @@ def handle_thread_archived(args: argparse.Namespace) -> int:
         return 0
     for thread_id in ids:
         print(thread_id)
+    return 0
+
+
+def handle_dev_migrate(args: argparse.Namespace) -> int:
+    from nuself.storage import create_file_backend, create_sqlite_backend, migrate_all
+    from nuself.storage_sqlite import SqliteStorageBackend
+
+    src = create_file_backend(args.project_root)
+    dst = create_sqlite_backend(args.project_root, db_path=args.db)
+    assert isinstance(dst, SqliteStorageBackend)
+    result = migrate_all(src, dst, clear_dst=args.clear)
+    if result:
+        for name, count in sorted(result.items()):
+            print(f"  {name}: {count} items")
+    else:
+        print("  (no data to migrate)")
+    total = sum(result.values())
+    print(f"Migrated {total} items across {len(result)} collections to {dst.db_path}")
+    return 0
+
+
+def handle_dev_db_schema(args: argparse.Namespace) -> int:
+    from nuself.storage import create_sqlite_backend
+    from nuself.storage_sqlite import SqliteStorageBackend
+
+    backend = create_sqlite_backend(args.project_root)
+    assert isinstance(backend, SqliteStorageBackend)
+    tables = backend.collection_names()
+    if not tables:
+        print("(no tables)")
+        return 0
+    for table in sorted(tables):
+        info = backend.table_info(table)
+        print(f"{table}:")
+        for col_name, col_type, notnull, default_val, pk in info:
+            nullable = "" if notnull else " NULL"
+            pk_flag = " PK" if pk else ""
+            default_str = f" DEFAULT {default_val}" if default_val is not None else ""
+            print(f"  {col_name}  {col_type}{nullable}{pk_flag}{default_str}")
+    return 0
+
+
+def handle_dev_storage(args: argparse.Namespace) -> int:
+    from nuself.storage import auto_backend
+    from nuself.storage_sqlite import SqliteStorageBackend
+
+    backend = auto_backend(args.project_root)
+
+    if isinstance(backend, SqliteStorageBackend):
+        print("Active backend: SqliteStorageBackend")
+        print(f"  database: {backend.db_path}")
+        tables = backend.collection_names()
+        print(f"  collections: {len(tables)}")
+        for name in sorted(tables):
+            count = len(backend.collection(name).list())
+            if count:
+                print(f"    {name}: {count} items")
+    else:
+        fbe = backend
+        fbe_root = getattr(fbe, "_root", None)
+        if fbe_root is not None:
+            print("Active backend: FileStorageBackend")
+            print(f"  file root: {fbe_root}")
+        else:
+            print(f"Active backend: {type(backend).__name__}")
     return 0
 
 
@@ -2385,7 +2458,7 @@ def handle_persona_list(args: argparse.Namespace) -> int:
     all_lines: list[str] = [f"{_theme.tag('[persona]', 'persona')} Built-in personas (static):"]
     for p in static:
         all_lines.append(f"  {_theme.muted(p.id)}: {p.description}")
-    repo = PersonaPromptRepository(backend=create_file_backend(args.project_root))
+    repo = PersonaPromptRepository(backend=auto_backend(args.project_root))
     prompts = repo.list()
     if prompts:
         all_lines.append("")
@@ -2399,7 +2472,7 @@ def handle_persona_list(args: argparse.Namespace) -> int:
 
 
 def handle_persona_create(args: argparse.Namespace) -> int:
-    repo = PersonaPromptRepository(backend=create_file_backend(args.project_root))
+    repo = PersonaPromptRepository(backend=auto_backend(args.project_root))
     persona = create_persona_prompt(args.name, args.prompt, project_root=args.project_root)
     existing = repo.get_by_name(args.name)
     if existing is not None:
@@ -2428,7 +2501,7 @@ def handle_persona_create(args: argparse.Namespace) -> int:
 def handle_persona_show(args: argparse.Namespace) -> int:
     from nuself.tui.persona import render_persona_detail
 
-    repo = PersonaPromptRepository(backend=create_file_backend(args.project_root))
+    repo = PersonaPromptRepository(backend=auto_backend(args.project_root))
     prompt_id = _resolve_persona_id(args)
     if prompt_id is None:
         return 1
@@ -2441,7 +2514,7 @@ def handle_persona_show(args: argparse.Namespace) -> int:
 
 
 def handle_persona_delete(args: argparse.Namespace) -> int:
-    repo = PersonaPromptRepository(backend=create_file_backend(args.project_root))
+    repo = PersonaPromptRepository(backend=auto_backend(args.project_root))
     prompt_ids = _resolve_persona_ids(args)
     if prompt_ids is None:
         return 1
@@ -2466,7 +2539,7 @@ def handle_persona_delete(args: argparse.Namespace) -> int:
 
 
 def handle_persona_disable(args: argparse.Namespace) -> int:
-    repo = PersonaPromptRepository(backend=create_file_backend(args.project_root))
+    repo = PersonaPromptRepository(backend=auto_backend(args.project_root))
     prompt_id = _resolve_persona_id(args)
     if prompt_id is None:
         return 1
@@ -2497,7 +2570,7 @@ def handle_persona_disable(args: argparse.Namespace) -> int:
 
 
 def handle_persona_enable(args: argparse.Namespace) -> int:
-    repo = PersonaPromptRepository(backend=create_file_backend(args.project_root))
+    repo = PersonaPromptRepository(backend=auto_backend(args.project_root))
     prompt_id = _resolve_persona_id(args)
     if prompt_id is None:
         return 1
@@ -3929,7 +4002,7 @@ def _handle_interactive_persona_command(command: str, project_root: Path | None)
     try:
         from nuself.tui.persona import render_persona_detail, render_persona_row
 
-        repo = PersonaPromptRepository(backend=create_file_backend(project_root))
+        repo = PersonaPromptRepository(backend=auto_backend(project_root))
         if command in {"", "list"}:
             prompts = repo.list()
             if not prompts:

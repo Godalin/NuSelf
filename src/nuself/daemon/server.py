@@ -695,6 +695,11 @@ def run_daemon(project_root: Path | None = None) -> int:
     paths.pid_path.write_text(f"{os.getpid()}\n", encoding="utf-8")
 
     state = DaemonState(paths.project_root)
+
+    import signal as _signal
+    _signal.signal(_signal.SIGTERM, lambda signum, frame: state.shutdown_requested.set())
+    _signal.signal(_signal.SIGINT, lambda signum, frame: state.shutdown_requested.set())
+
     try:
         write_log_event("daemon", "started", "daemon started", project_root=paths.project_root)
         state.start_background_memory_curator()
@@ -713,6 +718,8 @@ def run_daemon(project_root: Path | None = None) -> int:
         state.stop_background_reason_scheduler()
         state.stop_background_export_worker()
         state.stop_background_notification_delivery()
+        from nuself.storage import reset_default_backend
+        reset_default_backend()
         if paths.socket_path.exists():
             paths.socket_path.unlink()
         if paths.pid_path.exists():

@@ -25,16 +25,18 @@ from langgraph.store.base import (
     SearchOp,
 )
 
+from nuself.config import runtime_paths
+
 __all__ = [
     "SqliteStore",
     "ScopedWorkspace",
 ]
 
 
-def _create_items_table(conn: sqlite3.Connection) -> None:
+def _create_workspace_entries_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS items (
+        CREATE TABLE IF NOT EXISTS workspace_entries (
             namespace TEXT NOT NULL,
             key TEXT NOT NULL,
             value TEXT NOT NULL,
@@ -45,7 +47,7 @@ def _create_items_table(conn: sqlite3.Connection) -> None:
         """
     )
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_items_namespace ON items(namespace)"
+        "CREATE INDEX IF NOT EXISTS idx_workspace_entries_ns ON workspace_entries(namespace)"
     )
 
 
@@ -66,10 +68,21 @@ class SqliteStore(BaseStore):
         db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(db_path))
         try:
-            _create_items_table(conn)
+            _create_workspace_entries_table(conn)
             conn.commit()
         finally:
             conn.close()
+
+    @classmethod
+    def for_project(
+        cls,
+        project_root: Path | None = None,
+        *,
+        db_path: Path | None = None,
+    ) -> SqliteStore:
+        """Create a ``SqliteStore`` backed by the main project database."""
+        path = db_path if db_path is not None else runtime_paths(project_root).private_root / "nuself.sqlite"
+        return cls(path)
 
     def batch(self, ops: Iterable[Op]) -> list[Result]:
         conn = sqlite3.connect(str(self._db_path))
@@ -104,7 +117,7 @@ class SqliteStore(BaseStore):
     def _do_get(self, conn: sqlite3.Connection, op: GetOp) -> Item | None:
         nskey = self._ns_key(op.namespace)
         row = conn.execute(
-            "SELECT value, key, namespace, created_at, updated_at FROM items WHERE namespace = ? AND key = ?",
+            "SELECT value, key, namespace, created_at, updated_at FROM workspace_entries WHERE namespace = ? AND key = ?",
             (nskey, op.key),
         ).fetchone()
         if row is None:
@@ -121,24 +134,24 @@ class SqliteStore(BaseStore):
         if op.value is None:
             nskey = self._ns_key(op.namespace)
             conn.execute(
-                "DELETE FROM items WHERE namespace = ? AND key = ?",
+                "DELETE FROM workspace_entries WHERE namespace = ? AND key = ?",
                 (nskey, op.key),
             )
             return
         now = datetime.now(UTC).isoformat()
         nskey = self._ns_key(op.namespace)
         existing = conn.execute(
-            "SELECT created_at FROM items WHERE namespace = ? AND key = ?",
+            "SELECT created_at FROM workspace_entries WHERE namespace = ? AND key = ?",
             (nskey, op.key),
         ).fetchone()
         if existing is not None:
             conn.execute(
-                "UPDATE items SET value = ?, updated_at = ? WHERE namespace = ? AND key = ?",
+                "UPDATE workspace_entries SET value = ?, updated_at = ? WHERE namespace = ? AND key = ?",
                 (json.dumps(op.value, ensure_ascii=True), now, nskey, op.key),
             )
         else:
             conn.execute(
-                "INSERT INTO items (namespace, key, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO workspace_entries (namespace, key, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
                 (nskey, op.key, json.dumps(op.value, ensure_ascii=True), now, now),
             )
 
@@ -146,7 +159,7 @@ class SqliteStore(BaseStore):
         prefix = self._ns_key(op.namespace_prefix)
         like = prefix + "%" if prefix else "%"
         params: list[Any] = [like]
-        sql = "SELECT value, key, namespace, created_at, updated_at FROM items WHERE namespace LIKE ?"
+        sql = "SELECT value, key, namespace, created_at, updated_at FROM workspace_entries WHERE namespace LIKE ?"
         if op.filter:
             for fk, fv in op.filter.items():
                 sql += f" AND json_extract(value, '$.{fk}') = ?"
@@ -167,7 +180,7 @@ class SqliteStore(BaseStore):
         ]
 
     def _do_list_namespaces(self, conn: sqlite3.Connection, op: ListNamespacesOp) -> list[tuple[str, ...]]:
-        sql = "SELECT DISTINCT namespace FROM items"
+        sql = "SELECT DISTINCT namespace FROM workspace_entries"
         conditions: list[str] = []
         params: list[Any] = []
         match_conditions = op.match_conditions

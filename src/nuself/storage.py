@@ -35,12 +35,28 @@ class StorageBackend(Protocol):
     def collection(self, name: str) -> StorageCollection: ...
 
 
+# ── Known collection names ──────────────────────────────────────────────
+
+COLLECTION_NAMES: tuple[str, ...] = (
+    "memory_entries",
+    "memory_candidates",
+    "trace_nodes",
+    "trace_edges",
+    "reason_threads",
+    "reason_steps",
+    "persona_prompts",
+    "profile_items",
+    "source_documents",
+    "source_chunks",
+    "notification_outbox",
+    "reflection_entries",
+)
+
 # ── Collection → path mapping (v0.2.3 file layout) ──────────────────────
 
 COLLECTION_DIR_MAP: dict[str, str] = {
     "memory_entries": "memory/entries",
     "memory_candidates": "memory/candidates",
-    "memory_relations": "memory/relations",
     "trace_nodes": "traces/traces",
     "trace_edges": "traces/links",
     "reason_threads": "reasoning/threads",
@@ -113,11 +129,10 @@ class _FileCollection:
         if not self._dir.exists():
             return ()
         items: list[dict[str, object]] = []
-        for p in sorted(self._dir.iterdir()):
-            if p.suffix == ".json":
-                obj = _safe_read_json(p)
-                if obj is not None:
-                    items.append(obj)
+        for p in sorted(self._dir.rglob("*.json")):
+            obj = _safe_read_json(p)
+            if obj is not None:
+                items.append(obj)
         return tuple(items)
 
     def find(self, **filters: object) -> tuple[dict[str, object], ...]:
@@ -161,17 +176,35 @@ def create_file_backend(
     return FileStorageBackend(base)
 
 
+def create_sqlite_backend(
+    project_root: Path | None = None, *, db_path: Path | None = None
+) -> StorageBackend:
+    """Create a ``SqliteStorageBackend`` at ``private/nuself.sqlite`` (or *db_path*)."""
+    from nuself.storage_sqlite import SqliteStorageBackend
+    path = db_path if db_path is not None else runtime_paths(project_root).private_root / "nuself.sqlite"
+    return SqliteStorageBackend(path)
+
+
+def auto_backend(project_root: Path | None = None) -> StorageBackend:
+    """Return ``SqliteStorageBackend`` if *nuself.sqlite* exists, else ``FileStorageBackend``."""
+    paths = runtime_paths(project_root)
+    db_path = paths.private_root / "nuself.sqlite"
+    if db_path.exists():
+        return create_sqlite_backend(project_root=project_root)
+    return create_file_backend(project_root=project_root)
+
+
 _default_backend: StorageBackend | None = None
 _DEFAULT_BACKEND_LOCK = threading.Lock()
 
 
-def get_default_backend() -> StorageBackend:
+def get_default_backend(project_root: Path | None = None) -> StorageBackend:
     """Return the process-global default storage backend (lazily created)."""
     global _default_backend
     if _default_backend is None:
         with _DEFAULT_BACKEND_LOCK:
             if _default_backend is None:
-                _default_backend = create_file_backend()
+                _default_backend = auto_backend(project_root)
     return _default_backend
 
 
@@ -185,3 +218,51 @@ def reset_default_backend() -> None:
     """Reset the default backend so it is re-created on next access."""
     global _default_backend
     _default_backend = None
+
+
+# ── Migration tools ──────────────────────────────────────────────────────
+
+
+def migrate_collection(
+    src: StorageBackend,
+    dst: StorageBackend,
+    name: str,
+    *,
+    clear_dst: bool = False,
+) -> int:
+    """Copy all items in *name* from *src* to *dst*. Returns item count."""
+    src_col = src.collection(name)
+    dst_col = dst.collection(name)
+
+    if clear_dst:
+        for item in dst_col.list():
+            item_id = item.get("id")
+            if isinstance(item_id, str):
+                dst_col.delete(item_id)
+
+    count = 0
+    for item in src_col.list():
+        item_id = item.get("id")
+        if isinstance(item_id, str):
+            dst_col.put(item_id, item)
+            count += 1
+    return count
+
+
+def migrate_all(
+    src: StorageBackend,
+    dst: StorageBackend,
+    *,
+    collection_names: tuple[str, ...] | None = None,
+    clear_dst: bool = False,
+) -> dict[str, int]:
+    """Migrate all known collections from *src* to *dst*.
+    Returns ``{name: item_count}``.
+    """
+    names = collection_names or COLLECTION_NAMES
+    result: dict[str, int] = {}
+    for name in names:
+        count = migrate_collection(src, dst, name, clear_dst=clear_dst)
+        if count:
+            result[name] = count
+    return result

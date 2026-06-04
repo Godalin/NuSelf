@@ -7,7 +7,7 @@ import threading
 from typing import Literal, cast
 
 from nuself.handles import VisibleHandleError, resolve_visible_item
-from nuself.storage import StorageBackend, create_file_backend
+from nuself.storage import StorageBackend, auto_backend
 from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
 
 TraceVisibilityFilter = Literal["default", "private", "shareable", "internal", "all"]
@@ -29,7 +29,7 @@ class TraceRepository:
         *,
         backend: StorageBackend | None = None,
     ) -> None:
-        be = backend if backend is not None else create_file_backend(project_root)
+        be = backend if backend is not None else auto_backend(project_root)
         self._traces = be.collection("trace_nodes")
         self._links = be.collection("trace_edges")
         self._lock = threading.RLock()

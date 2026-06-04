@@ -9,13 +9,13 @@ from langchain_core.tools import StructuredTool
 
 from nuself.llm import ChatMessage, default_llm
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
-from nuself.storage import create_file_backend
+from nuself.storage import auto_backend
 
 
 def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredTool, ...]:
     """Build persona tools that any agent (chat, reason) can use."""
 
-    repo = PersonaPromptRepository(backend=create_file_backend(project_root))
+    repo = PersonaPromptRepository(backend=auto_backend(project_root))
 
     def persona_craft(name: str, prompt: str) -> str:
         """Create or update a reusable thinking persona.
@@ -223,7 +223,7 @@ def build_reason_persona_tools(
     def _thread_repo() -> PersonaPromptRepository:
         return PersonaPromptRepository(root=get_thread_persona_root())
 
-    global_repo = PersonaPromptRepository(backend=create_file_backend(global_project_root)) if global_project_root else None
+    global_repo = PersonaPromptRepository(backend=auto_backend(global_project_root)) if global_project_root else None
 
     def _craft(name: str, prompt: str) -> str:
         name = name.strip()
