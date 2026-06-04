@@ -156,6 +156,7 @@ class DaemonState:
         self.reason_scheduler_interval_seconds = config.daemon.reason_scheduler.interval_seconds
         self._reason_scheduler_thread: threading.Thread | None = None
         self._export_queue: queue.SimpleQueue[tuple[str, str]] = queue.SimpleQueue()
+        self._export_timers: list[threading.Timer] = []
         self._export_worker_thread: threading.Thread | None = None
 
     def start_background_memory_curator(self) -> None:
@@ -168,9 +169,17 @@ class DaemonState:
         )
         self._memory_curator_thread.start()
 
+    @staticmethod
+    def _join_thread(thread: threading.Thread | None, name: str, timeout: float = 5.0) -> None:
+        if thread is None:
+            return
+        from nuself.logs import write_log_event
+        thread.join(timeout=timeout)
+        if thread.is_alive():
+            write_log_event("daemon", "thread_timeout", f"{name} did not stop within {timeout}s", level="warning")
+
     def stop_background_memory_curator(self) -> None:
-        if self._memory_curator_thread is not None:
-            self._memory_curator_thread.join(timeout=1.0)
+        self._join_thread(self._memory_curator_thread, "memory_curator")
 
     def _run_background_memory_curator(self) -> None:
         from nuself.logs import write_log_event
@@ -201,8 +210,7 @@ class DaemonState:
         self._reflection_scheduler_thread.start()
 
     def stop_background_reflection_scheduler(self) -> None:
-        if self._reflection_scheduler_thread is not None:
-            self._reflection_scheduler_thread.join(timeout=1.0)
+        self._join_thread(self._reflection_scheduler_thread, "reflection_scheduler")
 
     def _run_background_reflection_scheduler(self) -> None:
         from nuself.logs import write_log_event
@@ -270,8 +278,21 @@ class DaemonState:
         self._export_worker_thread.start()
 
     def stop_background_export_worker(self) -> None:
-        if self._export_worker_thread is not None:
-            self._export_worker_thread.join(timeout=1.0)
+        for t in self._export_timers:
+            t.cancel()
+        self._export_timers.clear()
+        # Drain remaining queue items (they won't be processed)
+        drained = 0
+        while not self._export_queue.empty():
+            try:
+                self._export_queue.get_nowait()
+                drained += 1
+            except queue.Empty:
+                break
+        if drained:
+            from nuself.logs import write_log_event
+            write_log_event("daemon", "export_queue_drained", f"Drained {drained} unprocessed export jobs", level="warning")
+        self._join_thread(self._export_worker_thread, "export_worker")
 
     def _run_background_export_worker(self) -> None:
         from datetime import UTC, datetime
@@ -497,11 +518,12 @@ class DaemonState:
                         status="retry",
                         metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts, "next_backoff": backoff},
                     )
-                    threading.Timer(backoff, self._export_queue.put, args=((thread_id, job_id),)).start()
+                    t = threading.Timer(backoff, self._export_queue.put, args=((thread_id, job_id),))
+                    self._export_timers.append(t)
+                    t.start()
 
     def stop_background_reason_scheduler(self) -> None:
-        if self._reason_scheduler_thread is not None:
-            self._reason_scheduler_thread.join(timeout=1.0)
+        self._join_thread(self._reason_scheduler_thread, "reason_scheduler")
 
     def _run_background_reason_scheduler(self) -> None:
         from nuself.logs import write_log_event
@@ -542,8 +564,7 @@ class DaemonState:
         self._notification_delivery_thread.start()
 
     def stop_background_notification_delivery(self) -> None:
-        if self._notification_delivery_thread is not None:
-            self._notification_delivery_thread.join(timeout=1.0)
+        self._join_thread(self._notification_delivery_thread, "notification_delivery")
 
     def _run_background_notification_delivery(self) -> None:
         from nuself.logs import write_log_event
