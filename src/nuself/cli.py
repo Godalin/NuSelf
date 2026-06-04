@@ -787,6 +787,23 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(dev_subparsers.add_parser("db-schema", help="Show SQLite database schema."), handle_dev_db_schema)
     _add_handler(dev_subparsers.add_parser("storage", help="Show which storage backend is active."), handle_dev_storage)
 
+    pack_parser = subparsers.add_parser(
+        "pack",
+        help="Export, import, and inspect thought packs.",
+        description="Export, import, and inspect thought packs (nuself.sqlite snapshots).",
+    )
+    pack_parser.set_defaults(handler=None, help_parser=pack_parser)
+    pack_subparsers = pack_parser.add_subparsers(dest="pack_command", metavar="<command>")
+    pack_export_parser = pack_subparsers.add_parser("export", help="Export current thought pack to private/exports/.")
+    pack_export_parser.add_argument("name", type=str, help="Pack name (used as filename)")
+    _add_handler(pack_export_parser, handle_pack_export)
+    pack_import_parser = pack_subparsers.add_parser("import", help="Import a thought pack from a .sqlite file.")
+    pack_import_parser.add_argument("path", type=Path, help="Path to .sqlite file to import")
+    _add_handler(pack_import_parser, handle_pack_import)
+    pack_inspect_parser = pack_subparsers.add_parser("inspect", help="Show summary of a thought pack.")
+    pack_inspect_parser.add_argument("path", type=Path, nargs="?", default=None, help="Path to .sqlite file (default: main database)")
+    _add_handler(pack_inspect_parser, handle_pack_inspect)
+
     return parser
 
 
@@ -1554,6 +1571,78 @@ def handle_dev_storage(args: argparse.Namespace) -> int:
             print(f"  file root: {fbe_root}")
         else:
             print(f"Active backend: {type(backend).__name__}")
+    return 0
+
+
+def handle_pack_export(args: argparse.Namespace) -> int:
+    from nuself.config import runtime_paths
+    import shutil
+
+    paths = runtime_paths(args.project_root)
+    src = paths.private_root / "nuself.sqlite"
+    if not src.exists():
+        print("No nuself.sqlite found. Run 'nuself dev migrate' first.", file=sys.stderr)
+        return 1
+    exports_dir = paths.private_root / "exports"
+    exports_dir.mkdir(parents=True, exist_ok=True)
+    dst = (exports_dir / args.name).with_suffix(".sqlite")
+    shutil.copy2(src, dst)
+    print(f"Exported to {dst}")
+    return 0
+
+
+def handle_pack_import(args: argparse.Namespace) -> int:
+    from nuself.config import runtime_paths
+    import shutil
+
+    src = Path(args.path).resolve()
+    if not src.exists():
+        print(f"File not found: {src}", file=sys.stderr)
+        return 1
+    if src.suffix != ".sqlite":
+        print(f"Expected .sqlite file, got: {src.suffix}", file=sys.stderr)
+        return 1
+    paths = runtime_paths(args.project_root)
+    imports_dir = paths.private_root / "imports"
+    imports_dir.mkdir(parents=True, exist_ok=True)
+    dst = imports_dir / src.name
+    if dst.exists():
+        print(f"Already imported: {dst.name}", file=sys.stderr)
+        return 1
+    shutil.copy2(src, dst)
+    print(f"Imported to {dst}")
+    return 0
+
+
+def handle_pack_inspect(args: argparse.Namespace) -> int:
+    from nuself.config import runtime_paths
+    from nuself.storage_sqlite import SqliteStorageBackend
+
+    if args.path is not None:
+        db_path = Path(args.path).resolve()
+        if not db_path.exists():
+            print(f"File not found: {db_path}", file=sys.stderr)
+            return 1
+    else:
+        db_path = runtime_paths(args.project_root).private_root / "nuself.sqlite"
+        if not db_path.exists():
+            print("No nuself.sqlite found.", file=sys.stderr)
+            return 1
+
+    backend = SqliteStorageBackend(db_path)
+    try:
+        tables = backend.collection_names()
+        total_items = 0
+        print(f"Thought pack: {db_path}")
+        print(f"  collections: {len(tables)}")
+        for name in sorted(tables):
+            count = len(backend.collection(name).list())
+            if count:
+                print(f"    {name}: {count} items")
+                total_items += count
+        print(f"  total items: {total_items}")
+    finally:
+        backend.close()
     return 0
 
 

@@ -286,57 +286,42 @@ def _init_schema(self):
 
 建立思想包（Thought Pack）导出与导入基础设施，实现跨实例知识分享。
 
+### 包格式
+
+思想包就是一份 `nuself.sqlite`。导出 = cp，导入 = cp，不需要中间格式。
+
+```
+private/
+  nuself.sqlite             ← 当前思想（完整）
+  exports/
+    <name>.sqlite           ← 导出快照
+  imports/
+    <filename>.sqlite       ← 导入的他人思想
+```
+
 ### CLI 接口
 
 ```
-nuself pack export [--name <pack-name>] [--identity <identity>]
-nuself pack import <pack-file>
-nuself pack inspect <pack-file>
+nuself pack export <name>         → cp nuself.sqlite → exports/<name>.sqlite
+nuself pack import <path>         → cp <path> → imports/<filename>.sqlite
+nuself pack inspect [<path>]      → 展示 <path> 或主库的表统计
+                                   (默认展示主库)
 ```
 
 ### 导出约束
 
-导出的思想包应当：
-
-- **不包含 runtime state**（chat threads, daemon state, logs, cache）
-- **不包含本地配置**（config.yaml, API keys）
+- **不包含 runtime state**（chat threads, daemon state, logs, cache — 这些不在 nuself.sqlite 里）
+- **不包含本地配置**（config.yaml — 不在库里）
 - **保持 identity 来源信息**（出处可追溯）
-- **包含 manifest metadata**（版本、创建时间、identity、描述、包含的表清单）
-
-### 包格式
-
-```text
-thought-pack/<id>/
-├── manifest.json          ← 元数据
-├── identities/            ← 身份条目 JSON
-├── memories/
-│   ├── entries.jsonl
-│   ├── candidates.jsonl
-│   └── relations.jsonl
-├── reason/
-│   ├── threads.jsonl
-│   └── steps.jsonl
-├── traces/
-│   ├── nodes.jsonl
-│   └── edges.jsonl
-├── persona/
-│   └── prompts.jsonl
-├── reflections.jsonl
-├── sources/
-│   ├── documents.jsonl
-│   └── chunks.jsonl
-└── workspace.jsonl
-```
-
-可选 `.tar.gz` 压缩包或目录形式。
+- 导出的 `.sqlite` 可用 `SqliteStorageBackend` 直接打开
 
 ### 未来方向
 
-**NuHub** — 基于 GitHub Releases 分享思想包，无需中心化网站：
+**NuHub** — 基于 GitHub Releases 分享 `.sqlite` 文件：
 
 ```bash
-nuself pack publish <pack-name> --repo username/nuhub
-nuself pack install <identity>/<pack-name> --from github
+nuself pack publish <name> --repo username/nuhub
+nuself pack install <identity>/<name> --from github
 ```
 
 ## Migration 路径
