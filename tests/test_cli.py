@@ -726,26 +726,25 @@ def test_interactive_eof_auto_saves_unexported_transcript(
     assert "autosave eof" in exports[0].read_text(encoding="utf-8")
 
 
-def test_interactive_keyboard_interrupt_auto_saves_unexported_transcript(
+def test_interactive_keyboard_interrupt_cancels_turn_and_stays_open(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    inputs = ["autosave interrupt"]
+    steps = iter(["hello", KeyboardInterrupt, EOFError])
 
     def fake_input(_prompt: str) -> str:
-        if inputs:
-            return inputs.pop(0)
-        raise KeyboardInterrupt
+        step = next(steps)
+        if isinstance(step, str):
+            return step
+        raise step
 
     monkeypatch.setattr("builtins.input", fake_input)
 
     result = main(["--project-root", str(tmp_path), "chat"])
     captured = capsys.readouterr()
 
-    assert result == 130
+    assert result == 0
+    # Ctrl-C didn't exit — loop continued and Ctrl-D (EOF) exited normally
     assert "Saved transcript:" in captured.out
-    exports = sorted((tmp_path / "private" / "transcripts").glob("chat-default-*.md"))
-    assert len(exports) == 1
-    assert "autosave interrupt" in exports[0].read_text(encoding="utf-8")
 
 
 def test_interactive_quit_auto_saves_all_threads(

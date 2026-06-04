@@ -2700,8 +2700,7 @@ def _interactive_loop(
                 return 0
             except KeyboardInterrupt:
                 print()
-                _auto_save_interactive_transcripts(project_root, session)
-                return 130
+                continue
             message = line.strip()
             if message == "":
                 continue
@@ -2716,13 +2715,17 @@ def _interactive_loop(
                     _last_header_thread = current_thread_id
                     _print_ansi(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
                 continue
-            result = _send_interactive_chat_turn(
-                send_message,
-                project_root,
-                current_thread_id,
-                message,
-                session,
-            )
+            try:
+                result = _send_interactive_chat_turn(
+                    send_message,
+                    project_root,
+                    current_thread_id,
+                    message,
+                    session,
+                )
+            except KeyboardInterrupt:
+                print("\nInterrupted.")
+                continue
             _maybe_show_session_update(project_root, current_thread_id)
             if result != 0:
                 continue
@@ -2822,13 +2825,17 @@ def _run_interactive_send_with_live_logs(
     send_thread = threading.Thread(target=_target, daemon=True)
     send_thread.start()
     captured_events: list[LogEvent] = []
-    while send_thread.is_alive():
-        time.sleep(INTERACTIVE_LOG_POLL_INTERVAL_SECONDS)
-        new_events = _interactive_activity_events(project_root, log_cursor, turn_id=turn_id)
-        if new_events:
-            captured_events.extend(new_events)
-            printed_logs = _print_visible_interactive_activity_events(new_events, printed_logs=printed_logs)
-    send_thread.join()
+    try:
+        while send_thread.is_alive():
+            time.sleep(INTERACTIVE_LOG_POLL_INTERVAL_SECONDS)
+            new_events = _interactive_activity_events(project_root, log_cursor, turn_id=turn_id)
+            if new_events:
+                captured_events.extend(new_events)
+                printed_logs = _print_visible_interactive_activity_events(new_events, printed_logs=printed_logs)
+        send_thread.join()
+    except KeyboardInterrupt:
+        send_thread.join(timeout=0.5)
+        raise
     new_events = _interactive_activity_events(project_root, log_cursor, turn_id=turn_id)
     if new_events:
         captured_events.extend(new_events)
