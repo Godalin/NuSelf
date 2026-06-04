@@ -8,6 +8,86 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 (No unreleased changes yet.)
 
+## v0.2.4 - 2026-06-04
+
+### Added
+
+- Added `StorageBackend` / `StorageCollection` protocol abstraction — all repositories now accept a unified backend instead of direct file I/O.
+- Added `FileStorageBackend` — wraps existing `private/` directory layout behind the protocol, zero data migration.
+- Added `SqliteStorageBackend` — SQLite-backed implementation with dynamic columns (every top-level key becomes its own column for browsability).
+- Added `auto_backend()` — automatically selects SQLite when `private/nuself.sqlite` exists, otherwise falls back to file system.
+- Added `nuself dev migrate` — migrates all data from file system to SQLite.
+- Added `nuself dev db-schema` — shows database table structures.
+- Added `nuself dev storage` — shows current active backend and data counts.
+- Added `SqliteStorageBackend.close()` — WAL checkpoint + connection close on shutdown.
+- Added SIGTERM/SIGINT handlers in daemon — graceful shutdown via `shutdown_requested` event instead of `os.kill`.
+- Added thread timeout logging — background threads that fail to stop within 5s are logged as warnings.
+- Added export timer tracking — `threading.Timer` objects are cancelled on daemon shutdown; remaining queue items are drained and logged.
+
+### Changed
+
+- `PrivateWorkspaceStore` no longer eagerly creates `private/nuself.sqlite` on `ensure()` — database is created lazily by `SqliteStore` on first use, fixing a race where `auto_backend()` could switch to SQLite mid-operation.
+- All repository constructors now default to `auto_backend()` instead of `create_file_backend()`.
+- `_FileCollection.list()` uses `rglob("*.json")` instead of `iterdir()` — finds old nested step files (`steps/{tid}/{sid}.json`) during migration.
+- Background thread join timeout increased from 1s to 5s.
+- Interactive chat Ctrl-C no longer exits the REPL — cancels current turn and returns to prompt. Ctrl-D (`EOFError`) still exits.
+
+### Removed
+
+- Removed `atexit.register(self.close)` from `SqliteStorageBackend` (caused database corruption when background threads wrote during atexit shutdown).
+- Removed `_initialize_workspace_schema` from `PrivateWorkspaceStore` — table creation deferred to `SqliteStore`.
+- Removed `memory_relations` from `COLLECTION_NAMES` and `COLLECTION_DIR_MAP` (dead collection — relations are computed from entries).
+- Removed `reindex()` side effects — all `reindex()` methods are no-ops returning `Path("_reindexed_")`; derived index files (`memory_index.json`, `profile_index.json`, `source_index.json`, `relation_index.json`, `symbolic_graph.json`) are no longer written.
+- Removed file caching from `MemoryEntryRepository` relation index and symbolic graph methods — they compute from `self.list()` in real time.
+
+## v0.2.3 - 2026-06-04
+
+### Added
+
+- Added `docs/spec/storage-v2.md` — three-phase storage abstraction plan (protocol → SQLite → thought packs).
+
+### Changed
+
+- Storage layers refactored behind the `StorageBackend` protocol. All repositories now accept `backend: StorageBackend | None` and default to file-backed storage.
+- `PersonaPromptRepository` refactored to support dual mode: global via `StorageBackend` or legacy thread-scoped via `root` path.
+- `ProfileItemRepository`, `ReflectionRepository`, `NotificationOutbox`, `SourceRepository`, `MemoryEntryRepository`, `MemoryCandidateRepository`, `TraceRepository`, `ReasonRepository` all ported to `StorageBackend`.
+- Steps stored flat by `step.id` (no `{thread_id}/` subdirectory) — `list_steps(thread_id)` uses `collection.find(thread_id=...)`.
+- `get_step(step_id)` improved from O(n) directory scan to O(1) key lookup.
+
+### Removed
+
+- All module-level file I/O helpers (`_write_json_atomic`, `_safe_read_*`, `_validate_id`) from individual repositories — centralized in `storage.py`.
+
+### Added
+
+- Added `StorageBackend` / `StorageCollection` protocol abstraction — all repositories now accept a unified backend instead of direct file I/O.
+- Added `FileStorageBackend` — wraps existing `private/` directory layout behind the protocol, zero data migration.
+- Added `SqliteStorageBackend` — SQLite-backed implementation with dynamic columns (every top-level key becomes its own column for browsability).
+- Added `auto_backend()` — automatically selects SQLite when `private/nuself.sqlite` exists, otherwise falls back to file system.
+- Added `nuself dev migrate` — migrates all data from file system to SQLite.
+- Added `nuself dev db-schema` — shows database table structures.
+- Added `nuself dev storage` — shows current active backend and data counts.
+- Added `SqliteStorageBackend.close()` — WAL checkpoint + connection close on shutdown.
+- Added SIGTERM/SIGINT handlers in daemon — graceful shutdown via `shutdown_requested` event instead of `os.kill`.
+- Added thread timeout logging — background threads that fail to stop within 5s are logged as warnings.
+- Added export timer tracking — `threading.Timer` objects are cancelled on daemon shutdown; remaining queue items are drained and logged.
+
+### Changed
+
+- `PrivateWorkspaceStore` no longer eagerly creates `private/nuself.sqlite` on `ensure()` — database is created lazily by `SqliteStore` on first use, fixing a race where `auto_backend()` could switch to SQLite mid-operation.
+- All repository constructors now default to `auto_backend()` instead of `create_file_backend()`.
+- `_FileCollection.list()` uses `rglob("*.json")` instead of `iterdir()` — finds old nested step files (`steps/{tid}/{sid}.json`) during migration.
+- Background thread join timeout increased from 1s to 5s.
+- Interactive chat Ctrl-C no longer exits the REPL — cancels current turn and returns to prompt. Ctrl-D (`EOFError`) still exits.
+
+### Removed
+
+- Removed `atexit.register(self.close)` from `SqliteStorageBackend` (caused database corruption when background threads wrote during atexit shutdown).
+- Removed `_initialize_workspace_schema` from `PrivateWorkspaceStore` — table creation deferred to `SqliteStore`.
+- Removed `memory_relations` from `COLLECTION_NAMES` and `COLLECTION_DIR_MAP` (dead collection — relations are computed from entries).
+- Removed `reindex()` side effects — all `reindex()` methods are no-ops returning `Path("_reindexed_")`; derived index files (`memory_index.json`, `profile_index.json`, `source_index.json`, `relation_index.json`, `symbolic_graph.json`) are no longer written.
+- Removed file caching from `MemoryEntryRepository` relation index and symbolic graph methods — they compute from `self.list()` in real time.
+
 ## v0.2.2 - 2026-06-02
 
 ### Added
