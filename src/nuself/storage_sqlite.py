@@ -146,8 +146,6 @@ class SqliteStorageBackend:
         self._lock = threading.Lock()
         self._closed = False
         self._init_schema()
-        import atexit
-        atexit.register(self.close)
 
     @property
     def db_path(self) -> Path:
