@@ -800,8 +800,9 @@ def build_parser() -> argparse.ArgumentParser:
     pack_import_parser = pack_subparsers.add_parser("import", help="Import a thought pack from a .sqlite file.")
     pack_import_parser.add_argument("path", type=Path, help="Path to .sqlite file to import")
     _add_handler(pack_import_parser, handle_pack_import)
+    _add_handler(pack_subparsers.add_parser("list", help="List imported and exported thought packs."), handle_pack_list)
     pack_inspect_parser = pack_subparsers.add_parser("inspect", help="Show summary of a thought pack.")
-    pack_inspect_parser.add_argument("path", type=Path, nargs="?", default=None, help="Path to .sqlite file (default: main database)")
+    pack_inspect_parser.add_argument("name", type=str, nargs="?", default=None, help="Pack name (resolves to imports/, then exports/, then literal path; default: main database)")
     _add_handler(pack_inspect_parser, handle_pack_inspect)
 
     return parser
@@ -1614,14 +1615,42 @@ def handle_pack_import(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_pack_list(args: argparse.Namespace) -> int:
+    from nuself.config import runtime_paths
+
+    paths = runtime_paths(args.project_root)
+    for subdir, label in [("imports", "Imports"), ("exports", "Exports")]:
+        d = paths.private_root / subdir
+        if not d.exists():
+            continue
+        files = sorted(d.glob("*.sqlite"))
+        if not files:
+            continue
+        print(f"{label}:")
+        for f in files:
+            size = f.stat().st_size
+            size_str = f"{size / 1024:.0f}K" if size < 1024 * 1024 else f"{size / 1024 / 1024:.1f}M"
+            print(f"  {f.stem}  ({size_str})")
+    return 0
+
+
 def handle_pack_inspect(args: argparse.Namespace) -> int:
     from nuself.config import runtime_paths
     from nuself.storage_sqlite import SqliteStorageBackend
 
-    if args.path is not None:
-        db_path = Path(args.path).resolve()
-        if not db_path.exists():
-            print(f"File not found: {db_path}", file=sys.stderr)
+    if args.name is not None:
+        candidates = [
+            Path(args.name).resolve(),
+            runtime_paths(args.project_root).private_root / "imports" / f"{args.name}.sqlite",
+            runtime_paths(args.project_root).private_root / "exports" / f"{args.name}.sqlite",
+        ]
+        db_path: Path | None = None
+        for c in candidates:
+            if c.exists() and c.suffix == ".sqlite":
+                db_path = c
+                break
+        if db_path is None:
+            print(f"No pack found: {args.name}", file=sys.stderr)
             return 1
     else:
         db_path = runtime_paths(args.project_root).private_root / "nuself.sqlite"
@@ -1633,7 +1662,8 @@ def handle_pack_inspect(args: argparse.Namespace) -> int:
     try:
         tables = backend.collection_names()
         total_items = 0
-        print(f"Thought pack: {db_path}")
+        print(f"Thought pack: {db_path.name}")
+        print(f"  path: {db_path}")
         print(f"  collections: {len(tables)}")
         for name in sorted(tables):
             count = len(backend.collection(name).list())
