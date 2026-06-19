@@ -1586,7 +1586,8 @@ def handle_pack_export(args: argparse.Namespace) -> int:
         return 1
     exports_dir = paths.private_root / "exports"
     exports_dir.mkdir(parents=True, exist_ok=True)
-    dst = (exports_dir / args.name).with_suffix(".sqlite")
+    name = args.name.removesuffix(".sqlite")
+    dst = (exports_dir / name).with_suffix(".sqlite")
     shutil.copy2(src, dst)
     print(f"Exported to {dst}")
     return 0
@@ -1596,7 +1597,7 @@ def handle_pack_import(args: argparse.Namespace) -> int:
     from nuself.config import runtime_paths
     import shutil
 
-    src = Path(args.path).resolve()
+    src = args.path.resolve()
     if not src.exists():
         print(f"File not found: {src}", file=sys.stderr)
         return 1
