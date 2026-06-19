@@ -8,6 +8,22 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 (No unreleased changes yet.)
 
+## v0.2.5 - 2026-06-20
+
+### Added
+
+- Added `nuself pack` command group for thought pack management:
+  - `pack export <name>` — copy `private/nuself.sqlite` to `private/exports/<name>.sqlite`.
+  - `pack import <path>` — copy a `.sqlite` file into `private/imports/` for browsing.
+  - `pack inspect [<name>]` — show table and item counts for a pack (resolves `imports/`, then `exports/`, then literal path; defaults to main database).
+  - `pack list` — list imported and exported packs with file sizes.
+- Simplified thought pack format to direct `.sqlite` copies (removed `.tar.gz` / `.jsonl` plan from spec).
+
+### Changed
+
+- `SqliteStorageBackend.__init__` now auto-creates parent directory for the database path.
+- Updated `docs/spec/storage-v2.md` to reflect simplified thought pack design.
+
 ## v0.2.4 - 2026-06-04
 
 ### Added
