@@ -281,6 +281,9 @@ def _flatten_config(
     return result
 
 
+_CONFIG_CACHE: dict[tuple[str, int, int], SystemConfig] = {}
+
+
 class ConfigSystem:
     """Unified configuration loader."""
 
@@ -323,12 +326,43 @@ class ConfigSystem:
 
     @classmethod
     def load(cls, config_path: Path | None = None, project_root: Path | None = None) -> SystemConfig:
-        """Load configuration from YAML with defaults."""
+        """Load configuration from YAML with defaults.
+
+        Results are memoized per ``(path, mtime, size)`` so repeated loads in one
+        process (the chat path alone loads config several times per turn) do not
+        re-read and re-validate the file every call. A changed file invalidates its
+        entry; a missing file is never cached (so a later-created file is picked up).
+        The parsed ``SystemConfig`` is frozen, so sharing one instance is safe.
+        """
         if config_path is None and project_root is None:
             project_root = find_project_root()
         if config_path is None and project_root is not None:
             config_path = project_root / "private" / "config.yaml"
 
+        cache_key: tuple[str, int, int] | None = None
+        if config_path and config_path.exists():
+            try:
+                stat = config_path.stat()
+                cache_key = (str(config_path), stat.st_mtime_ns, stat.st_size)
+            except OSError:
+                cache_key = None
+            if cache_key is not None:
+                cached = _CONFIG_CACHE.get(cache_key)
+                if cached is not None:
+                    return cached
+
+        result = cls._build(config_path)
+        if cache_key is not None:
+            _CONFIG_CACHE[cache_key] = result
+        return result
+
+    @staticmethod
+    def clear_cache() -> None:
+        """Drop all memoized configs (test helper / explicit reload)."""
+        _CONFIG_CACHE.clear()
+
+    @classmethod
+    def _build(cls, config_path: Path | None) -> SystemConfig:
         yaml_data: dict[str, Any] = {}
         if config_path and config_path.exists():
             try:

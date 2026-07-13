@@ -420,7 +420,9 @@ class ProactivePersonaDiscussion:
             ),
             selected_personas=(MODERATOR_PERSONA,),
         )
-        result = self._driver.run(turn_state)
+        # Only the persona note is needed here; skip synthesis to avoid an unused
+        # synthesizer LLM call on every moderator turn (up to max_turns per debate).
+        result = self._driver.run_personas_only(turn_state)
         if result.contributions and result.contributions[0].notes:
             return result.contributions[0].notes[0]
         return "Moderator asks the discussion to converge."

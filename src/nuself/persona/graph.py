@@ -443,6 +443,15 @@ class PersonaGraphDriver:
         graph_state = cast(PersonaGraphState, output)
         return graph_state["turn_state"]
 
+    def run_personas_only(self, state: PersonaTurnState) -> PersonaTurnState:
+        """Run only the persona node, skipping synthesis.
+
+        For callers that need a single persona note (e.g. the moderator turn) and
+        would otherwise pay for an unused synthesizer LLM call on every invocation.
+        """
+        graph_state = self._run_personas({"turn_state": state})
+        return graph_state["turn_state"]
+
     def _run_personas(self, state: PersonaGraphState) -> PersonaGraphState:
         turn_state = state["turn_state"]
         contributions = tuple(

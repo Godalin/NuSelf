@@ -37,6 +37,13 @@ def build_langchain_chat_tools(
 ) -> tuple[BaseTool, ...]:
     """Build the LangChain tool registry for the chat runtime."""
 
+    # Shared per-registry service instances. Constructing these per tool call
+    # opened a fresh storage backend (SQLite connection) each time; a turn that
+    # invokes several reason/trace/memory tools reuses one instance instead.
+    memory_repo = MemoryEntryRepository(project_root)
+    reason_service = ReasonService(project_root)
+    trace_service = TraceQueryService(project_root)
+
     def search_memory(
         query: str,
         limit: int = 8,
@@ -123,7 +130,7 @@ def build_langchain_chat_tools(
     def count_memory(types: list[str] | str | None = None, tags: list[str] | str | None = None) -> str:
         """Count durable memory entries, optionally filtered by type or tag."""
 
-        repo = MemoryEntryRepository(project_root)
+        repo = memory_repo
         entries = repo.list()
         if types:
             type_set = set(_string_tuple_filter(types))
@@ -139,7 +146,7 @@ def build_langchain_chat_tools(
         if project_root is None:
             return "Error: project root is not configured"
         try:
-            repo = MemoryEntryRepository(project_root)
+            repo = memory_repo
             entry = repo.get(entry_id)
         except Exception as e:
             return f"Error: could not find memory entry: {e}"
@@ -160,7 +167,7 @@ def build_langchain_chat_tools(
         if not 0.0 <= importance_float <= 1.0:
             return "Error: importance must be between 0.0 and 1.0"
         try:
-            repo = MemoryEntryRepository(project_root)
+            repo = memory_repo
             entry = repo.get(entry_id)
         except Exception as e:
             return f"Error: could not find memory entry: {e}"
@@ -172,7 +179,7 @@ def build_langchain_chat_tools(
     def list_active_reasoning_threads() -> str:
         """List all long-run reasoning threads."""
 
-        service = ReasonService(project_root)
+        service = reason_service
         threads = service.list_threads(status="all")
         if not threads:
             return _json_result({"threads": [], "count": 0})
@@ -199,7 +206,7 @@ def build_langchain_chat_tools(
     def count_reasoning_threads() -> str:
         """Count all long-run reasoning threads."""
 
-        threads = ReasonService(project_root).list_threads(status="all")
+        threads = reason_service.list_threads(status="all")
         by_status: dict[str, int] = {}
         for thread in threads:
             by_status[thread.status] = by_status.get(thread.status, 0) + 1
@@ -211,7 +218,7 @@ def build_langchain_chat_tools(
         tid = thread_id.strip()
         if not tid:
             return "Error: thread_id must be a non-empty string"
-        service = ReasonService(project_root)
+        service = reason_service
         if tid.lower() == "current":
             threads = service.list_threads(status="all")
             if not threads:
@@ -230,7 +237,7 @@ def build_langchain_chat_tools(
         tid = thread_id.strip()
         if not tid:
             return _json_error("thread_id must be a non-empty string")
-        service = ReasonService(project_root)
+        service = reason_service
         try:
             if tid.lower() == "current":
                 threads = service.list_threads(status="all")
@@ -259,7 +266,7 @@ def build_langchain_chat_tools(
             return _json_error("thread_id must be a non-empty string")
         if not step_ref:
             return _json_error("step must be a non-empty string")
-        service = ReasonService(project_root)
+        service = reason_service
         try:
             if tid.lower() == "current":
                 threads = service.list_threads(status="all")
@@ -320,7 +327,7 @@ def build_langchain_chat_tools(
         if not topic:
             return "Error: topic must be a non-empty string"
 
-        service = ReasonService(project_root)
+        service = reason_service
         proposal_id = uuid4().hex[:12]
         write_log_event(
             "reasoning",
@@ -385,7 +392,7 @@ def build_langchain_chat_tools(
         if limit_int < 1:
             return "Error: limit must be a positive integer"
 
-        traces = TraceQueryService(project_root).search_traces(query_str.strip())[:limit_int]
+        traces = trace_service.search_traces(query_str.strip())[:limit_int]
         if not traces:
             return f"No trace records matched: {query_str}"
         lines = ["Matching trace records:"]
@@ -396,7 +403,7 @@ def build_langchain_chat_tools(
     def count_traces(query: str | None = None) -> str:
         """Count thought provenance trace records, optionally matching a query."""
 
-        service = TraceQueryService(project_root)
+        service = trace_service
         query_str = query.strip() if isinstance(query, str) else ""
         traces = service.search_traces(query_str) if query_str else service.list_traces()
         suffix = f' matching "{query_str}"' if query_str else ""
@@ -407,7 +414,7 @@ def build_langchain_chat_tools(
 
         if not trace_id.strip():
             return "Error: trace_id must be a non-empty string"
-        service = TraceQueryService(project_root)
+        service = trace_service
         try:
             trace = service.show_trace(trace_id.strip())
         except TraceNotFound as exc:
@@ -427,7 +434,7 @@ def build_langchain_chat_tools(
         if limit_int < 1:
             return "Error: limit must be a positive integer"
 
-        service = TraceQueryService(project_root)
+        service = trace_service
         traces = service.traces_for_artifact(artifact)[:limit_int]
         links = service.links_for_artifact(artifact)
         if not traces and not links:

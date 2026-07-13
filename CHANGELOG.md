@@ -14,6 +14,18 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   duplicated `[approval_prompted] ...` / `Confirm execute ... ? (y/n):` lines. The
   structured `approval_prompted` log event and the tool's JSON return contract are
   unchanged.
+- Persona structured-output generation now fails over across all configured LLM
+  endpoints on any error (not only availability errors) and logs each failure as
+  `persona/persona_structured_failed`, instead of silently returning no contribution.
+- A malformed or unreadable `private/config.yaml` now prints a one-line warning and
+  falls back to defaults; previously any load error was swallowed silently, which also
+  hid unrelated programming errors.
+- Performance: `ConfigSystem.load()` memoizes results per file `(path, mtime, size)`
+  so repeated loads in one process no longer re-parse the YAML; chat tools share one
+  reason/trace/memory service instance per turn instead of opening a new storage
+  backend per call; the persona moderator turn no longer makes an unused synthesizer
+  LLM call; and the notification outbox and reason `get_job` no longer rescan whole
+  collections for a single lookup.
 
 ### Fixed
 
@@ -26,15 +38,6 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   timers, fixing a shutdown-time race and unbounded growth over long uptime.
 - The macOS notification adapter now applies a 10s timeout to `osascript`, so a hung
   system dialog can no longer block the notification-delivery loop indefinitely.
-
-### Changed
-
-- Persona structured-output generation now fails over across all configured LLM
-  endpoints on any error (not only availability errors) and logs each failure as
-  `persona/persona_structured_failed`, instead of silently returning no contribution.
-- A malformed or unreadable `private/config.yaml` now prints a one-line warning and
-  falls back to defaults; previously any load error was swallowed silently, which also
-  hid unrelated programming errors.
 
 ## v0.2.5 - 2026-06-20
 

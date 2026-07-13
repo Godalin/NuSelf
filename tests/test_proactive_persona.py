@@ -46,6 +46,14 @@ class _FakePersonaDriver:
             ),
         )
 
+    def run_personas_only(self, turn_state: PersonaTurnState) -> PersonaTurnState:
+        full = self.run(turn_state)
+        return PersonaTurnState(
+            input=full.input,
+            selected_personas=full.selected_personas,
+            contributions=full.contributions,
+        )
+
 
 class _FakeLLM:
     """Multi-purpose fake LLM that returns different JSON based on prompt content."""

@@ -305,16 +305,13 @@ class ReasonOutputService:
         return sorted(jobs, key=lambda m: (m.created_at, m.job_id))
 
     def get_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
-        root = self._export_root(thread_id)
-        jobs_dir = root / "jobs"
-        if not jobs_dir.exists():
-            raise ReasonNotFound(job_id)
-        for job_dir in jobs_dir.iterdir():
-            if not job_dir.is_dir():
-                continue
-            manifest_path = job_dir / "manifest.json"
-            if not manifest_path.exists():
-                continue
+        # The job directory is named by job_id, so read its manifest directly
+        # instead of scanning and parsing every job manifest under the thread.
+        try:
+            manifest_path = self._job_paths(thread_id, job_id).manifest
+        except ValueError as exc:
+            raise ReasonNotFound(job_id) from exc
+        if manifest_path.exists():
             manifest = self._read_manifest(manifest_path)
             if manifest is not None and manifest.job_id == job_id:
                 return manifest

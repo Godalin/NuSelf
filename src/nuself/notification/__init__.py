@@ -124,10 +124,11 @@ class NotificationOutbox:
         return OutboxEntry.from_wire(wire)
 
     def add(self, entry: OutboxEntry) -> OutboxEntry:
-        if self._idempotency_key_exists(entry.idempotency_key):
-            existing = self._find_by_idempotency_key(entry.idempotency_key)
-            if existing is not None:
-                return existing
+        # Single scan for the idempotency key (the exists-check and the lookup
+        # were previously two separate full-collection scans per insert).
+        existing = self._find_by_idempotency_key(entry.idempotency_key)
+        if existing is not None:
+            return existing
         self._col.put(entry.id, entry.to_wire())
         return entry
 
@@ -201,9 +202,6 @@ class NotificationOutbox:
             except (ValueError, OSError):
                 continue
         return removed
-
-    def _idempotency_key_exists(self, key: str) -> bool:
-        return self._find_by_idempotency_key(key) is not None
 
     def _find_by_idempotency_key(self, key: str) -> OutboxEntry | None:
         for entry in self.list():
