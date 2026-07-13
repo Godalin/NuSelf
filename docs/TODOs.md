@@ -8,9 +8,9 @@ Short-term implementation focus lives in [docs/current-goal.md](docs/current-goa
 
 - [x] v0.2.1 approval decorator.
 - [x] v0.2.2 trace/reason schema cleanup.
-- [ ] v0.2.3 storage abstraction (StorageBackend protocol + FileStorageBackend + repo refactor).
-- [ ] v0.2.4 sqlite backend (nuself.sqlite + migration system + FTS5).
-- [ ] v0.2.5 thought pack infrastructure (export/import/inspect + NuHub prep).
+- [x] v0.2.3 storage abstraction (StorageBackend protocol + FileStorageBackend + repo refactor).
+- [x] v0.2.4 sqlite backend (nuself.sqlite + migration system + FTS5).
+- [x] v0.2.5 thought pack infrastructure (export/import/inspect + NuHub prep).
 - [ ] v0.2.6 regression tests + docs.
 - [ ] Stabilize reason usability for the release line review.
 - [ ] Update release metadata as each stabilization step lands.
