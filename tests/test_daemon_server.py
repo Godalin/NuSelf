@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+import pytest
+
 from nuself.agent.chat import ChatAgent
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.server import DaemonState, handle_request
@@ -181,6 +183,35 @@ def test_daemon_chat_rejects_non_string_message(tmp_path: Path) -> None:
     assert response.status == "error"
     assert response.error is not None
     assert "requires string payload field 'message'" in response.error
+
+
+def test_daemon_handle_backstops_unexpected_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An unexpected (non-ProtocolError) failure in request handling must still
+    return a failed response with the exception chain, not hang the client."""
+    import io
+    from types import SimpleNamespace
+
+    from nuself.daemon import server as server_mod
+    from nuself.daemon.protocol import DaemonResponse
+
+    raw = DaemonRequest(type="ping", payload={}, request_id="boom1").to_json_line()
+    fake = SimpleNamespace(
+        rfile=io.BytesIO(raw),
+        wfile=io.BytesIO(),
+        _daemon_state=lambda: SimpleNamespace(project_root=tmp_path),
+    )
+
+    def boom(request: DaemonRequest, state: object) -> DaemonResponse:
+        raise ValueError("kaboom")
+
+    monkeypatch.setattr(server_mod, "handle_request", boom)
+
+    server_mod.RequestHandler.handle(fake)  # type: ignore[arg-type]
+
+    response = DaemonResponse.from_json_line(fake.wfile.getvalue())
+    assert response.status == "error"
+    assert response.error is not None
+    assert "kaboom" in response.error
 
 
 def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: Path) -> None:

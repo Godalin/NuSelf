@@ -157,6 +157,7 @@ class DaemonState:
         self._reason_scheduler_thread: threading.Thread | None = None
         self._export_queue: queue.SimpleQueue[tuple[str, str]] = queue.SimpleQueue()
         self._export_timers: list[threading.Timer] = []
+        self._export_timers_lock = threading.Lock()
         self._export_worker_thread: threading.Thread | None = None
 
     def start_background_memory_curator(self) -> None:
@@ -278,9 +279,10 @@ class DaemonState:
         self._export_worker_thread.start()
 
     def stop_background_export_worker(self) -> None:
-        for t in self._export_timers:
-            t.cancel()
-        self._export_timers.clear()
+        with self._export_timers_lock:
+            for t in self._export_timers:
+                t.cancel()
+            self._export_timers.clear()
         # Drain remaining queue items (they won't be processed)
         drained = 0
         while not self._export_queue.empty():
@@ -518,9 +520,13 @@ class DaemonState:
                         status="retry",
                         metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts, "next_backoff": backoff},
                     )
-                    t = threading.Timer(backoff, self._export_queue.put, args=((thread_id, job_id),))
-                    self._export_timers.append(t)
-                    t.start()
+                    with self._export_timers_lock:
+                        # Drop timers that have already fired so the list cannot
+                        # grow unbounded over a long-lived daemon with many retries.
+                        self._export_timers = [x for x in self._export_timers if x.is_alive()]
+                        t = threading.Timer(backoff, self._export_queue.put, args=((thread_id, job_id),))
+                        self._export_timers.append(t)
+                        t.start()
 
     def stop_background_reason_scheduler(self) -> None:
         self._join_thread(self._reason_scheduler_thread, "reason_scheduler")
@@ -609,6 +615,27 @@ class RequestHandler(socketserver.StreamRequestHandler):
             response = handle_request(daemon_request, self._daemon_state())
         except ProtocolError as exc:
             response = DaemonResponse.fail(request_id, str(exc))
+        except Exception as exc:
+            # Backstop: any unhandled error in request handling must still return a
+            # failed response with the compact exception chain (errors.md daemon
+            # boundary contract), never leave the client hanging on a dead thread.
+            chain = _format_exception_chain(exc)
+            project_root: Path | None = None
+            try:
+                project_root = self._daemon_state().project_root
+            except Exception:
+                project_root = None
+            write_log_event(
+                "daemon",
+                "request_failed",
+                "daemon request handling failed",
+                project_root=project_root,
+                level="error",
+                status="error",
+                request_id=request_id,
+                error=chain,
+            )
+            response = DaemonResponse.fail(request_id, chain)
         self.wfile.write(response.to_json_line())
 
     def _daemon_state(self) -> DaemonState:

@@ -15,6 +15,27 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   structured `approval_prompted` log event and the tool's JSON return contract are
   unchanged.
 
+### Fixed
+
+- Daemon request handling no longer hangs the client on an unexpected error. Any
+  failure that is not a `ProtocolError` (e.g. a non-chat request raising) is now
+  caught at the connection boundary, logged as `daemon/request_failed`, and returned
+  as a failed response carrying the compact exception chain, instead of killing the
+  handler thread and leaving the client blocked until its socket timeout.
+- Guarded the daemon export-retry timer list with a lock and prune already-fired
+  timers, fixing a shutdown-time race and unbounded growth over long uptime.
+- The macOS notification adapter now applies a 10s timeout to `osascript`, so a hung
+  system dialog can no longer block the notification-delivery loop indefinitely.
+
+### Changed
+
+- Persona structured-output generation now fails over across all configured LLM
+  endpoints on any error (not only availability errors) and logs each failure as
+  `persona/persona_structured_failed`, instead of silently returning no contribution.
+- A malformed or unreadable `private/config.yaml` now prints a one-line warning and
+  falls back to defaults; previously any load error was swallowed silently, which also
+  hid unrelated programming errors.
+
 ## v0.2.5 - 2026-06-20
 
 ### Added

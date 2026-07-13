@@ -334,8 +334,13 @@ class ConfigSystem:
             try:
                 raw: Any = yaml.safe_load(config_path.read_text(encoding="utf-8"))  # type: ignore[no-untyped-call]
                 yaml_data = cast(dict[str, Any], raw if isinstance(raw, dict) else {})
-            except Exception:
-                pass
+            except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+                # A malformed/unreadable config falls back to defaults but must be
+                # visible, not silently indistinguishable from "no config". Any
+                # other exception is a real bug and is left to propagate.
+                import sys
+
+                print(f"nuself: ignoring unreadable config {config_path}: {exc}", file=sys.stderr)
 
         # Normalize llm: [...] (YAML list) to llm: {endpoints: [...]}
         llm_raw: object = yaml_data.get("llm")

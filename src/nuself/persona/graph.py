@@ -111,6 +111,8 @@ def _complete_persona_structured(
 ) -> StructuredPersonaT | None:
     if not endpoints:
         return None
+    from nuself.logs import write_log_event
+
     converted = _to_langchain_messages(messages)
     for position, endpoint in enumerate(endpoints):
         try:
@@ -124,8 +126,20 @@ def _complete_persona_structured(
                 return schema.model_validate(result)
             raise TypeError(f"structured persona output must be {schema.__name__}")
         except Exception as exc:
-            remaining = endpoints[position + 1 :]
-            if remaining and is_endpoint_availability_error(str(exc)):
+            # Fail visible: log every endpoint failure (including schema/validation
+            # errors) instead of silently returning None, and fail over to the next
+            # endpoint on any error, matching the chat runtime's failover policy.
+            write_log_event(
+                "persona",
+                "persona_structured_failed",
+                f"structured persona output failed on endpoint {endpoint.index} ({schema.__name__})",
+                project_root=project_root,
+                level="warning",
+                status="error",
+                error=str(exc),
+                metadata={"endpoint": endpoint.index, "availability": is_endpoint_availability_error(str(exc))},
+            )
+            if position + 1 < len(endpoints):
                 continue
             return None
     return None

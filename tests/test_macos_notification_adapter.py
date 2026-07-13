@@ -60,6 +60,17 @@ def test_send_osascript_failure_returns_false(tmp_path: Path, entry: OutboxEntry
         assert adapter.send(entry) is False
 
 
+def test_send_osascript_timeout_returns_false(tmp_path: Path, entry: OutboxEntry) -> None:
+    import subprocess
+
+    adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
+    adapter.has_osascript = True
+
+    with patch("nuself.notification.macos.subprocess.run") as mock_run:
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="osascript", timeout=10)
+        assert adapter.send(entry) is False
+
+
 def test_escape_quotes() -> None:
     assert MacOSNotificationAdapter.escape('say "hello"') == '"say \\"hello\\""'
 

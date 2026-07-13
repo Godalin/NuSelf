@@ -40,12 +40,24 @@ class MacOSNotificationAdapter:
             return True
 
         script = f'display notification {self.escape(entry.body)} with title {self.escape(entry.title)}'
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=10,
+            )
+        except subprocess.TimeoutExpired:
+            # A hung osascript must not block the notification-delivery thread.
+            self._write_log(
+                "outbox",
+                "macos_failed",
+                "osascript timed out",
+                project_root=self._project_root,
+                metadata={"entry_id": entry.id},
+            )
+            return False
         if result.returncode != 0:
             self._write_log(
                 "outbox",
