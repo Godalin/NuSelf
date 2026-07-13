@@ -261,6 +261,12 @@ class MemoryEntryRepository:
         ]
         return nodes, edges
 
+    def compute_graph(self) -> tuple[list[SymbolicGraphNode], list[SymbolicGraphEdge]]:
+        """Public one-shot graph projection, so callers that need several closures
+        (e.g. retrieval expansion) can compute the graph once and reuse it instead
+        of rebuilding it from ``list()`` per closure."""
+        return self._compute_graph()
+
     def list_graph_nodes(self, filters: SymbolicGraphNodeFilters | None = None) -> list[SymbolicGraphNode]:
         nodes, _ = self._compute_graph()
         return [n for n in nodes if _matches_graph_node_filters(n, filters)]
@@ -340,7 +346,17 @@ class MemoryEntryRepository:
         self, node_id: str, relation: str
     ) -> SymbolicGraphSearchResult:
         """Return all nodes and edges reachable from node_id via the given relation."""
-        nodes, edges = self._compute_graph()
+        return self.transitive_closure_from(self._compute_graph(), node_id, relation)
+
+    def transitive_closure_from(
+        self,
+        graph: tuple[list[SymbolicGraphNode], list[SymbolicGraphEdge]],
+        node_id: str,
+        relation: str,
+    ) -> SymbolicGraphSearchResult:
+        """Compute a transitive closure over an already-computed graph, so a caller
+        expanding many nodes reuses one graph instead of rebuilding it per call."""
+        nodes, edges = graph
 
         adjacency = _build_graph_adjacency(
             edges,

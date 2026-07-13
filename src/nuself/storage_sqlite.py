@@ -39,10 +39,19 @@ class SqliteCollection:
     so the schema adapts to whatever data is stored.
     """
 
-    def __init__(self, conn: sqlite3.Connection, table: str, lock: threading.Lock) -> None:
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        table: str,
+        lock: threading.Lock,
+        column_cache: dict[str, tuple[str, ...]],
+    ) -> None:
         self._conn = conn
         self._table = table
         self._lock = lock
+        # Shared across every collection object for this table (they share the
+        # backend connection), so an ALTER by one is seen by all.
+        self._column_cache = column_cache
 
     def _ensure_columns(self, keys: set[str]) -> None:
         existing = set(self._columns())
@@ -51,10 +60,31 @@ class SqliteCollection:
             return
         for k in new:
             self._conn.execute(f"ALTER TABLE [{self._table}] ADD COLUMN [{k}] TEXT")
+        # Invalidate so the next _columns() re-reads the widened schema.
+        self._column_cache.pop(self._table, None)
 
     def _columns(self) -> tuple[str, ...]:
+        cached = self._column_cache.get(self._table)
+        if cached is not None:
+            return cached
         rows = self._conn.execute(f"PRAGMA table_info([{self._table}])").fetchall()
-        return tuple(row[1] for row in rows)
+        cols = tuple(row[1] for row in rows)
+        self._column_cache[self._table] = cols
+        return cols
+
+    def _row_to_dict(self, cols: tuple[str, ...], row: tuple[object, ...]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for i, col in enumerate(cols):
+            val = row[i]
+            if val is None:
+                continue
+            if col == "id":
+                result[col] = val
+            else:
+                parsed = _from_json(val if isinstance(val, str) else None)
+                if parsed is not None:
+                    result[col] = parsed
+        return result
 
     def get(self, key: str) -> dict[str, object] | None:
         cols = self._columns()
@@ -64,18 +94,7 @@ class SqliteCollection:
         ).fetchone()
         if row is None:
             return None
-        result: dict[str, object] = {}
-        for i, col in enumerate(cols):
-            val = row[i]
-            if val is None:
-                continue
-            if col == "id":
-                result[col] = val
-            else:
-                parsed = _from_json(val)
-                if parsed is not None:
-                    result[col] = parsed
-        return result
+        return self._row_to_dict(cols, row)
 
     def put(self, key: str, value: dict[str, object]) -> None:
         with self._lock:
@@ -104,35 +123,38 @@ class SqliteCollection:
             return ()
         col_list = ", ".join(f"[{c}]" for c in cols)
         rows = self._conn.execute(f"SELECT {col_list} FROM [{self._table}]").fetchall()
-        items: list[dict[str, object]] = []
-        for row in rows:
-            d: dict[str, object] = {}
-            for i, col in enumerate(cols):
-                val = row[i]
-                if val is None:
-                    continue
-                if col == "id":
-                    d[col] = val
-                else:
-                    parsed = _from_json(val)
-                    if parsed is not None:
-                        d[col] = parsed
-            if d:
-                items.append(d)
-        return tuple(items)
+        items = [self._row_to_dict(cols, row) for row in rows]
+        return tuple(d for d in items if d)
 
     def find(self, **filters: object) -> tuple[dict[str, object], ...]:
-        items = self.list()
         if not filters:
-            return items
-        result: list[dict[str, object]] = []
-        for item in items:
-            for key, expected in filters.items():
-                if item.get(key) != expected:
-                    break
-            else:
-                result.append(item)
-        return tuple(result)
+            return self.list()
+        cols = self._columns()
+        if len(cols) <= 1:
+            return ()
+        colset = set(cols)
+        # None filters keep the original Python-side comparison semantics (a stored
+        # null round-trips to an absent key), so only push non-None filters to SQL.
+        if any(expected is None for expected in filters.values()):
+            return tuple(
+                item
+                for item in self.list()
+                if all(item.get(key) == expected for key, expected in filters.items())
+            )
+        where_parts: list[str] = []
+        params: list[object] = []
+        for key, expected in filters.items():
+            if key not in colset:
+                # Filtering on a column that does not exist matches nothing.
+                return ()
+            where_parts.append(f"[{key}] = ?")
+            # id is stored raw; every other value is stored as JSON text.
+            params.append(expected if key == "id" else _json(expected))
+        col_list = ", ".join(f"[{c}]" for c in cols)
+        sql = f"SELECT {col_list} FROM [{self._table}] WHERE " + " AND ".join(where_parts)
+        rows = self._conn.execute(sql, params).fetchall()
+        items = [self._row_to_dict(cols, row) for row in rows]
+        return tuple(d for d in items if d)
 
 
 class SqliteStorageBackend:
@@ -146,6 +168,9 @@ class SqliteStorageBackend:
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._lock = threading.Lock()
         self._closed = False
+        # Per-table column cache shared by all SqliteCollection objects, so a
+        # dynamic ALTER by one collection is visible to the others.
+        self._column_cache: dict[str, tuple[str, ...]] = {}
         self._init_schema()
 
     @property
@@ -205,7 +230,7 @@ class SqliteStorageBackend:
     def collection(self, name: str) -> SqliteCollection:
         table = _collection_table(name)
         _verify_table(self._conn, table, name)
-        return SqliteCollection(self._conn, table, self._lock)
+        return SqliteCollection(self._conn, table, self._lock, self._column_cache)
 
     def collection_names(self) -> tuple[str, ...]:
         result: list[str] = []

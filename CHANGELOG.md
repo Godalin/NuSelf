@@ -26,6 +26,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   backend per call; the persona moderator turn no longer makes an unused synthesizer
   LLM call; and the notification outbox and reason `get_job` no longer rescan whole
   collections for a single lookup.
+- Performance: memory retrieval expansion now projects the symbolic graph once per
+  `search()` instead of rebuilding it from `list()` for every transitive relation of
+  every match; the SQLite backend caches each table's columns (was a `PRAGMA` per
+  read/write) and `SqliteCollection.find()` filters with a SQL `WHERE` clause instead
+  of loading and deserializing the whole table.
 
 ### Fixed
 

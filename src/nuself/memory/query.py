@@ -7,7 +7,7 @@ import re
 
 from nuself.domain.memory import MemoryEntry, MemoryTypeRegistry, RelationDescriptor, RelationDescriptorRegistry, ReviewState, default_memory_type_registry
 from nuself.domain.profile import ProfileItem
-from nuself.memory.repository import MemoryEntryRepository
+from nuself.memory.repository import MemoryEntryRepository, SymbolicGraphEdge, SymbolicGraphNode
 from nuself.memory.source_repository import SourceChunkMatch, SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 
@@ -281,12 +281,16 @@ def _expand_related_matches(
     direct_ids = {match.entry.id for match in direct_matches}
     related_matches: dict[str, MemoryMatch] = {}
 
+    # Project the symbolic graph once for the whole expansion instead of rebuilding
+    # it from list() inside transitive_closure per (match, relation).
+    graph = repository.compute_graph() if any(descriptor.transitive for descriptor in registry) else None
+
     for match in direct_matches:
         for descriptor, entry_id in _outgoing_relation_refs(match.entry, registry):
             _add_related_match(related_matches, by_id, direct_ids, match, entry_id, descriptor, descriptor.name)
         for descriptor, entry in _incoming_relation_refs(match.entry, eligible_entries, registry):
             _add_related_match(related_matches, by_id, direct_ids, match, entry.id, descriptor, descriptor.inverse or descriptor.name)
-        for descriptor, entry_id in _transitive_relation_refs(match.entry, registry, repository):
+        for descriptor, entry_id in _transitive_relation_refs(match.entry, registry, repository, graph):
             _add_related_match(
                 related_matches,
                 by_id,
@@ -333,13 +337,16 @@ def _transitive_relation_refs(
     entry: MemoryEntry,
     registry: RelationDescriptorRegistry,
     repository: MemoryEntryRepository,
+    graph: tuple[list[SymbolicGraphNode], list[SymbolicGraphEdge]] | None = None,
 ) -> list[tuple[RelationDescriptor, str]]:
     refs: list[tuple[RelationDescriptor, str]] = []
     for descriptor in registry:
         if not descriptor.transitive:
             continue
         direct_targets = set(entry.relations.get(descriptor.source_field, []))
-        closure = repository.transitive_closure(entry.id, descriptor.name)
+        if graph is None:
+            graph = repository.compute_graph()
+        closure = repository.transitive_closure_from(graph, entry.id, descriptor.name)
         for node in closure.nodes:
             if node.id != entry.id and node.id not in direct_targets:
                 refs.append((descriptor, node.id))
