@@ -80,20 +80,20 @@ def approval_required(
             else:
                 summary = f"{fn.__name__}({', '.join(map(str, args))}{', ' if kwargs else ''}{', '.join(f'{k}={v}' for k, v in kwargs.items())})"
             # Always prompt the user synchronously and execute immediately on confirmation.
-            prompt = f"Confirm execute {component}: {summary} ? (y/n): "
-            # Record the prompt in the structured log, then also print a visible
-            # log-like line so interactive users (or shells) see the event before
-            # the confirmation prompt.
+            # Record the event first, then render a theme-consistent banner so
+            # interactive users see the pending action before the question.
             write_log_event(
                 cast(LogComponent, component),
                 "approval_prompted",
-                prompt,
+                summary,
                 metadata={"tool": fn.__name__, "summary": summary},
             )
+            from nuself.tui.render import render_approval_prompt
+
             try:
-                # Visible prompt-log for users
-                print(f"[approval_prompted] {component}: {summary}", flush=True)
-                print(prompt, end="", flush=True)
+                print(render_approval_prompt(component, summary, tool=fn.__name__), flush=True)
+                # Capital N signals the safe default: anything but an explicit yes cancels.
+                print("approve? [y/N] ", end="", flush=True)
                 resp = input()
             except Exception:
                 resp = "n"

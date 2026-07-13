@@ -240,6 +240,33 @@ def render_record_block(label: str, fields: Sequence[str] = (), *, body: str = "
     return "\n".join(lines)
 
 
+def render_approval_prompt(
+    component: str,
+    summary: str,
+    *,
+    tool: str | None = None,
+    color: bool | None = None,
+) -> str:
+    """Render the banner shown before a user-confirmed tool runs.
+
+    Produces a compact, theme-consistent block, for example:
+
+      [reasoning] approval required  tool=reason_propose
+        reason_propose(topic=demo)
+
+    The caller is responsible for printing the trailing "approve?" question
+    and reading the user's response.
+    """
+    theme = TerminalTheme(color=color)
+    tag = theme.tag(f"[{_display_component(component)}]", component)
+    header = f"{tag} {theme.warning('approval required')}"
+    if tool:
+        header = f"{header}  {theme.muted(_format_log_field('tool', tool))}"
+    lines = [header]
+    lines.extend(render_record_body(summary))
+    return "\n".join(lines)
+
+
 def render_tool_call(
     *,
     component: str,

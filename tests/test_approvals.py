@@ -39,8 +39,10 @@ def test_approval_prompt_is_visible(monkeypatch: pytest.MonkeyPatch, capsys: pyt
 
     res = quick("alice")
     captured = capsys.readouterr()
-    assert "[approval_prompted] test: quick(alice)" in captured.out
-    assert "Confirm execute test: quick(alice) ? (y/n):" in captured.out
+    assert "[test] approval required" in captured.out
+    assert "tool=quick" in captured.out
+    assert "quick(alice)" in captured.out
+    assert "approve? [y/N]" in captured.out
     payload = __import__("json").loads(res)
     assert payload.get("approved") is True
     assert payload.get("component") == "test"
