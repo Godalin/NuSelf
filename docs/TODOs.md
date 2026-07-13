@@ -4,16 +4,23 @@ This checklist is the user-facing progress board for the project. It summarizes 
 
 Short-term implementation focus lives in [docs/current-goal.md](docs/current-goal.md). Use it as the active development target before pulling work from the broader backlog below.
 
-## v0.2.x Stabilization Line
+## v0.2.x Stabilization Line (complete — merged to `main`)
 
 - [x] v0.2.1 approval decorator.
 - [x] v0.2.2 trace/reason schema cleanup.
 - [x] v0.2.3 storage abstraction (StorageBackend protocol + FileStorageBackend + repo refactor).
 - [x] v0.2.4 sqlite backend (nuself.sqlite + migration system + FTS5).
 - [x] v0.2.5 thought pack infrastructure (export/import/inspect + NuHub prep).
-- [ ] v0.2.6 regression tests + docs.
-- [ ] Stabilize reason usability for the release line review.
-- [ ] Update release metadata as each stabilization step lands.
+- [x] Merge `dev/v0.2.x` into `main` at v0.2.5 (regression coverage folded into v0.3).
+
+## v0.3 Optimization Line (active on `dev/v0.3.x`)
+
+Code-review-driven. See [docs/current-goal.md](current-goal.md) for per-item detail.
+
+- [x] Redesign the interactive tool-approval prompt (`render_approval_prompt`).
+- [ ] Batch A — correctness/concurrency fixes (daemon handler, export-timer race, persona failover, osascript timeout, config silent-except).
+- [ ] Batch B — caching/N+1 (config memoize, symbolic-graph cache, shared tool services, sqlite column/find/connection, misc N+1).
+- [ ] Batch C — dedup & dead-code (cli `_resolve_handle`/`_load_or_report`, memory helpers, persona tool builders, remove dead code).
 
 ## Post-0.2 Stabilization Backlog
 

@@ -4,56 +4,63 @@ This file is the short-term execution guide for NuSelf. Keep it focused on the a
 
 ## Focus
 
-Stabilize the `v0.2.x` line using the following release plan:
+The `v0.2.x` stabilization line is complete and merged into `main` (released at
+`v0.2.5`). The active line is now `v0.3`, focused on code-review-driven
+optimization: correctness/concurrency fixes, a caching layer over the post-v0.2.4
+"recompute derived data from `list()`" model, and CLI/subsystem deduplication.
 
-1. ✅ `v0.2.1` approval decorator.
-2. ✅ `v0.2.2` trace/reason schema cleanup + persona management.
-3. ✅ `v0.2.3` storage abstraction.
-4. ✅ `v0.2.4` sqlite backend.
-5. ✅ `v0.2.5` thought pack infrastructure.
-6. ☐ `v0.2.6` regression tests + docs.
+v0.3 optimization batches (do in order, each its own commit + tests):
 
-The `v0.2.x` line is the ongoing stabilization branch. `main` remains the stable, releasable branch, while `feature/*` stays isolated for one feature or fix at a time and then merges back into `dev/v0.2.x`.
+1. ☐ Batch A — correctness/concurrency bug fixes.
+2. ☐ Batch B — caching / N+1 performance.
+3. ☐ Batch C — dedup & dead-code cleanup.
+
+`main` remains the stable, releasable branch. `dev/v0.3.x` is the active line;
+`feature/*` stays isolated for one feature or fix at a time.
 
 ## Immediate Context
 
-- We are working on `dev/v0.2.x` for stabilization work.
-- `v0.2.5` is the current release; next target is `v0.2.6`.
-- `main` was reverted to pre-approval-decorator state; will merge `dev/v0.2.x` into `main` once the stabilization line is complete.
-- Specs remain the source of truth for behavior changes.
+- We are working on `dev/v0.3.x` (branched from `main` at `v0.2.5` + CLAUDE.md).
+- `v0.2.5` is the current release; next target is `v0.3.0`.
+- `main` now tracks the merged `v0.2.x` line and is pushed to origin.
+- First v0.3 commit: interactive tool-approval prompt redesign (`render_approval_prompt`).
+- Specs remain the source of truth for behavior changes; the daemon error-response
+  and config-load changes in Batch A/B touch `errors.md` / `config.md`.
 - User-visible changes should keep README, specs, TODOs, and changelog synchronized.
-- Working directly on `dev/v0.2.x`; use `feature/*` branches for isolated experiments.
 
 ## Next Steps
 
-### ✅ P0 — v0.2.1 Approval Decorator
+### ✅ Done — interactive tool-approval prompt redesign
 
-(Completed — released as v0.2.1.)
+(First v0.3 commit. `render_approval_prompt` replaces the duplicated
+`[approval_prompted]` / `Confirm execute ... ? (y/n):` lines.)
 
-### ✅ P1 — v0.2.2 Schema Cleanup
+### Batch A — correctness / concurrency bug fixes
 
-(Completed — released as v0.2.2.)
+- [ ] `daemon/server.py` `handle()`: catch non-`ProtocolError` exceptions and return `DaemonResponse.fail` (fixes `UnboundLocalError` that hangs the client).
+- [ ] `daemon/server.py` `_export_timers`: guard with a lock; drop fired timers to stop unbounded growth.
+- [ ] `persona/graph.py` `_complete_persona_structured`: mirror chat.py failover policy and log swallowed errors instead of silent `None`.
+- [ ] `notification/macos.py`: add a `timeout=` to the `osascript` subprocess.
+- [ ] `config.py`: narrow the broad `except Exception: pass` around config load so malformed config is not silently treated as "no config".
 
-### ✅ P2 — v0.2.3 Storage Abstraction
+### Batch B — caching / N+1 performance
 
-(Completed — released as v0.2.3.)
+- [ ] Memoize `ConfigSystem.load()` on `(config_path, mtime)`.
+- [ ] Compute the symbolic graph / transitive closure once per `MemoryQueryService.search`.
+- [ ] Share reason/trace/memory service instances in `agent/tools.py`; cache `auto_backend`.
+- [ ] SQLite backend: cache column tuple, push `find()` into a `WHERE` clause, reuse one connection in `SqliteStore.batch`.
+- [ ] Fix remaining N+1 reads (reason `get_job` direct read, notification single scan, reflection single `last_reflection` read, batched reasoning step counts, wasted moderator synthesizer call).
 
-### ✅ P3 — v0.2.4 SQLite Backend
+### Batch C — dedup & dead-code cleanup
 
-(Completed — released as v0.2.4.)
-
-### ✅ P4 — v0.2.5 Thought Pack Infrastructure
-
-(Completed — released as v0.2.5.)
-
-### P5 — v0.2.6 Regression Tests + Docs
-
-- [ ] Add regression coverage for the stabilized release line.
-- [ ] Refresh docs to match the final v0.2.x behavior.
+- [ ] `cli.py`: generic `_resolve_handle` + `_load_or_report` helpers.
+- [ ] Extract shared memory text/json/clamp helpers + a typed `list` helper.
+- [ ] Dedup `persona/tools.py` builders.
+- [ ] Remove dead code (reflection event-trigger mechanism, `reindex()` no-ops, `_handle_proposals_after_turn`).
 
 ## Completion Criteria
 
-- The v0.2.x stabilization line is implemented in order.
-- Specs are updated before code for each non-trivial step.
+- Batches A → B → C land in order, each as its own commit with `pytest` + `pyright` green.
+- Specs are updated before code for each non-trivial behavioral change.
 - README, specs, TODOs, and CHANGELOG stay synchronized for user-visible changes.
-- The branch remains aligned with `dev/v0.2.x` stabilization work and does not mix in unrelated feature experiments.
+- Work stays on `dev/v0.3.x`; `v0.3.0` is tagged when the batches are complete.
