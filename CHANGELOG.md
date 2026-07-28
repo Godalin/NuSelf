@@ -14,6 +14,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Private text/JSON state and internal chat transcripts now use owner-only
+  directories and files (`0700`/`0600`) at the shared atomic write boundary.
 - Every persisted audit projection now sanitizes credential-like message,
   error, and nested metadata fields at the canonical log sink, including
   runtime-event projections, without mutating the source envelope or weakening

@@ -1,9 +1,12 @@
 import json
 from pathlib import Path
+import stat
 import threading
+from types import SimpleNamespace
 
 import pytest
 
+import nuself.storage as storage
 from nuself.logs import read_log_events
 from nuself.storage import (
     AtomicWriteCleanupError,
@@ -59,6 +62,45 @@ def test_write_text_atomic_replaces_complete_destination(
     assert list(path.parent.glob("*.tmp")) == []
 
 
+def test_write_text_atomic_hardens_directory_and_file_before_content_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "private" / "traces" / "trace.json"
+    path.parent.mkdir(parents=True, mode=0o755)
+    path.parent.chmod(0o755)
+    path.write_text("old", encoding="utf-8")
+    path.chmod(0o644)
+    original_write_text = Path.write_text
+    temporary_modes: list[int] = []
+
+    def capture_temporary_mode(
+        target: Path,
+        text: str,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> int:
+        if target.suffix == ".tmp":
+            temporary_modes.append(stat.S_IMODE(target.stat().st_mode))
+        return original_write_text(
+            target,
+            text,
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+        )
+
+    monkeypatch.setattr(Path, "write_text", capture_temporary_mode)
+
+    write_text_atomic(path, "private content")
+
+    assert temporary_modes == [0o600]
+    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert path.read_text(encoding="utf-8") == "private content"
+
+
 def test_write_json_atomic_rejects_invalid_value_before_touching_destination(
     tmp_path: Path,
 ) -> None:
@@ -96,6 +138,28 @@ def test_write_text_atomic_failure_preserves_destination_and_cleans_temp(
 
     assert path.read_text(encoding="utf-8") == "old"
     assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_write_text_atomic_does_not_remove_unowned_temp_name_collision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "runtime" / "state.txt"
+    path.parent.mkdir()
+    path.write_text("old", encoding="utf-8")
+    collision = path.with_name(f"{path.name}.collision.tmp")
+    collision.write_text("not owned by this write", encoding="utf-8")
+    monkeypatch.setattr(
+        storage,
+        "uuid4",
+        lambda: SimpleNamespace(hex="collision"),
+    )
+
+    with pytest.raises(FileExistsError):
+        write_text_atomic(path, "new")
+
+    assert path.read_text(encoding="utf-8") == "old"
+    assert collision.read_text(encoding="utf-8") == "not owned by this write"
 
 
 def test_write_text_atomic_partial_write_failure_cleans_temp(

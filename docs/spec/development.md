@@ -93,6 +93,12 @@ Runtime JSON and text state uses `nuself.storage.write_json_atomic()` or
 file, atomically replaces the destination, and removes the temporary file on
 failure while preserving any prior destination.
 
+NuSelf-owned runtime state is private by default. The shared writer creates or
+hardens the destination directory to owner-only `0700`, creates the unique
+temporary file as owner-only `0600` before writing content, and therefore
+publishes a `0600` destination through atomic replacement. Sensitive content
+must never exist in a broader-permission temporary file, even briefly.
+
 A write or replace failure remains the propagated exception when temporary
 cleanup succeeds or the temporary file is already absent. If cleanup itself
 fails, `AtomicWriteCleanupError` exposes both `primary_error` and
@@ -109,8 +115,9 @@ creating a temporary artifact.
 
 Subsystems must not define parallel atomic writer helpers or use a fixed
 `.tmp` path. Direct `Path.write_text()` remains appropriate only for an
-explicit user-selected artifact whose partial-write behavior is documented, or
-inside the shared writer itself.
+explicit user-selected artifact whose partial-write and permission behavior is
+documented, or inside the shared writer after it securely creates the
+temporary file.
 
 ### Import Placement Policy
 

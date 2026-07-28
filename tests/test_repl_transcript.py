@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+import stat
 
 from _pytest.monkeypatch import MonkeyPatch
 
@@ -22,7 +23,10 @@ def test_transcript_module_owns_export_command_and_progress(
         ThreadState(
             thread_id="default",
             messages=[
-                ThreadMessage(role="user", content="hello"),
+                ThreadMessage(
+                    role="user",
+                    content="preserve literal token=example-value",
+                ),
                 ThreadMessage(role="assistant", content="hi"),
             ],
         )
@@ -45,7 +49,15 @@ def test_transcript_module_owns_export_command_and_progress(
     assert result.startswith("Saved transcript:")
     assert "Copied transcript to clipboard." in result
     assert len(copied) == 1
-    assert "hello" in copied[0]
+    assert "preserve literal token=example-value" in copied[0]
+    transcript_dir = tmp_path / "private" / "transcripts"
+    [transcript_path] = transcript_dir.iterdir()
+    assert stat.S_IMODE(transcript_dir.stat().st_mode) == 0o700
+    assert stat.S_IMODE(transcript_path.stat().st_mode) == 0o600
+    assert (
+        "preserve literal token=example-value"
+        in transcript_path.read_text(encoding="utf-8")
+    )
     assert session.thread_ids_with_unexported_messages(tmp_path) == []
 
 

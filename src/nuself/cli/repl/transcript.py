@@ -15,6 +15,7 @@ from nuself.cli.repl.registry import command_body
 from nuself.config import runtime_paths
 from nuself.logs import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.storage import write_text_atomic
 from nuself.tui.render import format_display_timestamp, render_log_event
 
 
@@ -182,7 +183,6 @@ def export_interactive_transcript(
         raise ValueError("no chat messages in this connection yet")
 
     export_dir = paths.private_root / "transcripts"
-    export_dir.mkdir(parents=True, exist_ok=True)
     filename = (
         f"chat-{_safe_filename_component(thread_id)}-"
         f"{_compact_timestamp(connected_at)}-{_compact_timestamp(exported_at)}.md"
@@ -197,7 +197,7 @@ def export_interactive_transcript(
         log_events_by_message=log_events_by_message or {},
         include_all_logs=include_all_logs,
     )
-    path.write_text(content, encoding="utf-8")
+    write_text_atomic(path, content)
     return path, content
 
 
