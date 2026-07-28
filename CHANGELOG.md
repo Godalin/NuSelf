@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Structured log append failures now distinguish a cleanly rolled-back write
+  from an uncertain close-time outcome. The reported lifecycle error preserves
+  write, rollback, and close causes and explicitly warns when the record may
+  already have persisted.
 - CLI one-shot and interactive invocations now release their shared SQLite
   storage backend on every exit path. Cleanup failures retain the original
   command error instead of silently leaking the connection or masking failure

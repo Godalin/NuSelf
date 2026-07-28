@@ -359,8 +359,16 @@ Structured component logs use `LogRetentionPolicy`. The production default is
   non-raising terminal warning reports only component plus rollback exception
   type; it never replaces the primary append error or includes event content,
   paths, or exception messages.
-- Successful writes are flushed to the operating system through an unbuffered
-  file handle but are not individually `fsync`-durable.
+- Successful writes pass through an unbuffered file handle but are not
+  individually `fsync`-durable. A successful handle close completes the
+  process-visible append contract. A close failure may report delayed I/O, so
+  it propagates as `LogAppendLifecycleError` with
+  `record_may_have_persisted=True`; the event is not delivered to observers.
+- `LogAppendLifecycleError` retains the append `primary_error`, rollback error,
+  and close error independently. The append error is its explicit cause when
+  present, otherwise the close error is. A failed rollback makes
+  `record_may_have_persisted=True`; a failed append followed by successful
+  rollback keeps the original append exception unchanged when close succeeds.
 - Readers include numbered backups in chronological sorting.
 - Incremental cursors track file identity as well as byte offset. If rotation
   replaces the active file, a cursor finishes the matching `.1` inode from its

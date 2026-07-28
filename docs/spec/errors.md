@@ -207,6 +207,13 @@ runtime warning boundary directly, never the structured log sink, so it cannot
 recurse or replace healthy/legacy read results. Raw lines and arbitrary values
 are excluded from the warning.
 
+Structured log append lifecycle failures preserve phase provenance.
+`LogAppendLifecycleError` is raised when rollback or active data-handle close
+fails. It retains the primary append error, rollback error, close error, and
+whether the record may already have persisted. The primary append error is the
+explicit cause when present; otherwise the close error is. A lone append error
+whose rollback and close both succeed remains the original exception.
+
 Reflection trace recording and organizer execution after a persisted
 reflection are secondary under this contract. Corrupt reflection schedule
 diagnostics are also secondary to the authoritative fail-closed block/cooldown

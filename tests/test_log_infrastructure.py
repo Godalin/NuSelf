@@ -14,6 +14,7 @@ import pytest
 import nuself.logs as logs
 from nuself.logs import (
     InteractiveLogCursor,
+    LogAppendLifecycleError,
     LogComponent,
     LogEvent,
     LogRetentionPolicy,
@@ -1154,6 +1155,125 @@ def test_partial_log_append_rolls_back_before_propagating(
         existing,
         recovered,
     ]
+
+
+def test_log_data_close_failure_reports_uncertain_persistence(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed: list[LogEvent] = []
+    open_log_data_file = (
+        logs._open_log_data_file  # pyright: ignore[reportPrivateUsage]
+    )
+    close_error = OSError("delayed close failure")
+
+    class CloseFailingFile:
+        def __init__(self, wrapped: BinaryIO) -> None:
+            self.wrapped = wrapped
+
+        def seek(self, offset: int, whence: int = 0) -> int:
+            return self.wrapped.seek(offset, whence)
+
+        def write(self, value: bytes) -> int:
+            return self.wrapped.write(value)
+
+        def truncate(self, size: int | None = None) -> int:
+            return self.wrapped.truncate(size)
+
+        def close(self) -> None:
+            self.wrapped.close()
+            raise close_error
+
+    def open_with_failing_close(path: Path) -> BinaryIO:
+        return cast(BinaryIO, CloseFailingFile(open_log_data_file(path)))
+
+    monkeypatch.setattr(
+        logs,
+        "_open_log_data_file",
+        open_with_failing_close,
+    )
+
+    with observe_log_events(observed.append):
+        with pytest.raises(LogAppendLifecycleError) as captured:
+            write_log_event(
+                "chat",
+                "turn_completed",
+                "possibly persisted",
+                project_root=tmp_path,
+            )
+
+    error = captured.value
+    assert error.primary_error is None
+    assert error.rollback_error is None
+    assert error.close_error is close_error
+    assert error.record_may_have_persisted is True
+    assert error.__cause__ is close_error
+    assert "record may have persisted" in str(error)
+    assert observed == []
+    assert [
+        event.message
+        for event in read_log_events(project_root=tmp_path, component="chat")
+    ] == ["possibly persisted"]
+
+
+def test_log_append_lifecycle_retains_write_rollback_and_close_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    open_log_data_file = (
+        logs._open_log_data_file  # pyright: ignore[reportPrivateUsage]
+    )
+    primary_error = OSError("primary write failure")
+    rollback_error = OSError("rollback failure")
+    close_error = OSError("close failure")
+
+    class CleanupFailingFile:
+        def __init__(self, wrapped: BinaryIO) -> None:
+            self.wrapped = wrapped
+
+        def seek(self, offset: int, whence: int = 0) -> int:
+            return self.wrapped.seek(offset, whence)
+
+        def write(self, value: bytes) -> int:
+            return self.wrapped.write(value)
+
+        def truncate(self, _size: int | None = None) -> int:
+            raise rollback_error
+
+        def close(self) -> None:
+            self.wrapped.close()
+            raise close_error
+
+    def open_with_cleanup_failures(path: Path) -> BinaryIO:
+        return cast(BinaryIO, CleanupFailingFile(open_log_data_file(path)))
+
+    def fail_write(log_file: BinaryIO, encoded_line: bytes) -> None:
+        assert log_file.write(encoded_line[:11]) == 11
+        raise primary_error
+
+    monkeypatch.setattr(
+        logs,
+        "_open_log_data_file",
+        open_with_cleanup_failures,
+    )
+    monkeypatch.setattr(logs, "_write_log_bytes", fail_write)
+
+    with pytest.warns(RuntimeWarning, match="append_rollback_failed"):
+        with pytest.raises(LogAppendLifecycleError) as captured:
+            write_log_event(
+                "chat",
+                "turn_completed",
+                "uncertain",
+                project_root=tmp_path,
+            )
+
+    error = captured.value
+    assert error.primary_error is primary_error
+    assert error.rollback_error is rollback_error
+    assert error.close_error is close_error
+    assert error.record_may_have_persisted is True
+    assert error.__cause__ is primary_error
+    assert "record may have persisted" in str(error)
 
 
 def test_log_byte_writer_retries_short_writes() -> None:

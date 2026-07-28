@@ -82,6 +82,29 @@ _CURRENT_LOG_EVENT_OBSERVERS: ContextVar[tuple[LogEventObserver, ...]] = Context
 )
 
 
+class LogAppendLifecycleError(RuntimeError):
+    """Retain append, rollback, and active-handle close failures."""
+
+    def __init__(
+        self,
+        *,
+        primary_error: BaseException | None,
+        rollback_error: BaseException | None,
+        close_error: BaseException | None,
+        record_may_have_persisted: bool,
+    ) -> None:
+        persistence = (
+            "record may have persisted"
+            if record_may_have_persisted
+            else "record was not persisted"
+        )
+        super().__init__(f"structured log append lifecycle failed; {persistence}")
+        self.primary_error = primary_error
+        self.rollback_error = rollback_error
+        self.close_error = close_error
+        self.record_may_have_persisted = record_may_have_persisted
+
+
 def _log_write_lock(path: Path) -> RLock:
     normalized = path.absolute()
     with _LOG_LOCKS_GUARD:
@@ -567,17 +590,48 @@ def _append_encoded_log_line(
     *,
     component: LogComponent,
 ) -> None:
-    with path.open("a+b", buffering=0) as log_file:
+    log_file = _open_log_data_file(path)
+    primary_error: BaseException | None = None
+    rollback_error: BaseException | None = None
+    record_may_have_persisted = False
+    try:
         record_boundary = log_file.seek(0, 2)
         try:
             _write_log_bytes(log_file, encoded_line)
-        except OSError:
-            _rollback_failed_log_append(
+            record_may_have_persisted = True
+        except BaseException as exc:
+            primary_error = exc
+            rollback_error = _rollback_failed_log_append(
                 log_file,
                 record_boundary,
                 component=component,
             )
-            raise
+            record_may_have_persisted = rollback_error is not None
+    except BaseException as exc:
+        if primary_error is None:
+            primary_error = exc
+
+    close_error: BaseException | None = None
+    try:
+        log_file.close()
+    except BaseException as exc:
+        close_error = exc
+
+    if rollback_error is not None or close_error is not None:
+        lifecycle_error = LogAppendLifecycleError(
+            primary_error=primary_error,
+            rollback_error=rollback_error,
+            close_error=close_error,
+            record_may_have_persisted=record_may_have_persisted,
+        )
+        cause = primary_error if primary_error is not None else close_error
+        raise lifecycle_error from cause
+    if primary_error is not None:
+        raise primary_error.with_traceback(primary_error.__traceback__)
+
+
+def _open_log_data_file(path: Path) -> BinaryIO:
+    return path.open("a+b", buffering=0)
 
 
 def _write_log_bytes(log_file: BinaryIO, encoded_line: bytes) -> None:
@@ -594,15 +648,17 @@ def _rollback_failed_log_append(
     record_boundary: int,
     *,
     component: LogComponent,
-) -> None:
+) -> BaseException | None:
     try:
         log_file.truncate(record_boundary)
-    except OSError as exc:
+    except BaseException as exc:
         emit_runtime_warning(
             "logs/append_rollback_failed: "
             f"component={component} error_type={type(exc).__name__}",
             stacklevel=4,
         )
+        return exc
+    return None
 
 
 def _report_log_rotation_failure(
