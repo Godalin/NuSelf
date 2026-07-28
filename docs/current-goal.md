@@ -51,7 +51,7 @@ Enforce owner-only permissions across NuSelf-owned persistence paths.
 
 ## Publication
 
-`dev/v0.3.x` is ready for publication through `7139497`.
+`dev/v0.3.x` is published through implementation commit `7139497`.
 
 ## Next Review Batch
 
