@@ -55,7 +55,7 @@ Give Reflection audit events one closed, validated domain contract.
 
 ## Publication
 
-The Reflection audit-contract batch is awaiting its implementation commit.
+`dev/v0.3.x` is ready to publish through implementation commit `236b9c8`.
 
 ## Next Review Batch
 
