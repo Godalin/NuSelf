@@ -51,7 +51,7 @@ Make daemon shutdown bounded without trusting stale PID metadata.
 
 ## Publication
 
-`dev/v0.3.x` is ready to publish through implementation commit `30822f1`.
+`dev/v0.3.x` is published through implementation commit `30822f1`.
 
 ## Next Review Batch
 
