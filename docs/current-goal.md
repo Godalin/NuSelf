@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The repository statistics ownership batch is complete.
+Idle. The Reason agent invocation ownership batch is complete.
 
 ## Active Branch
 
@@ -22,11 +22,12 @@ code.
 
 ## Completion Evidence
 
-- `MemoryStats` and `ProfileStats` detach and freeze all mapping fields.
-- Statistics formulas and CLI text remain unchanged while formatting accepts
-  abstract mappings.
-- Focused repository and CLI tests: 336 passed.
-- Full tests: 1239 passed.
+- One `ReasonAdvancer` serializes its shared LangGraph graph and middleware
+  capture buffer without imposing a global lock.
+- Concurrent reasoning threads retain isolated runtime context and tool logs.
+- Invocation ownership is released after an exception.
+- Focused Reason and middleware tests: 46 passed.
+- Full tests: 1241 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -36,4 +37,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Resume the shared infrastructure adoption audit beyond collection ownership.
+Continue auditing shared callback and event ownership after agent invocation
+isolation.

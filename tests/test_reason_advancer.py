@@ -4,7 +4,11 @@ from __future__ import annotations
 
 # pyright: reportPrivateUsage=false
 
+from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Mapping
 from pathlib import Path
+from threading import Lock
+import time
 from typing import Any, cast
 
 import pytest
@@ -45,9 +49,63 @@ class _FailingAgent:
         raise RuntimeError("agent failed")
 
 
+class _ConcurrentCaptureAgent:
+    def __init__(self) -> None:
+        self.advancer: ReasonAdvancer | None = None
+        self._lock = Lock()
+        self._active = 0
+        self.max_active = 0
+
+    def invoke(self, _input: object) -> dict[str, object]:
+        thread_id = _current_reason_thread_id()
+        advancer = self.advancer
+        assert advancer is not None
+        with self._lock:
+            self._active += 1
+            self.max_active = max(self.max_active, self._active)
+        try:
+            captured = cast(
+                list[tuple[str, dict[str, object], str | None]],
+                cast(Any, advancer)._captured,
+            )
+            captured.append(
+                (f"tool-{thread_id}", {"thread_id": thread_id}, thread_id)
+            )
+            time.sleep(0.03)
+            return {
+                "structured_response": {
+                    "summary": f"advanced {thread_id}",
+                    "delta": "changed",
+                    "kind": "progress",
+                    "output": "result",
+                }
+            }
+        finally:
+            with self._lock:
+                self._active -= 1
+
+
+class _FailOnceAgent:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def invoke(self, _input: object) -> dict[str, object]:
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("first call failed")
+        return {
+            "structured_response": {
+                "summary": "recovered",
+                "delta": "changed",
+                "kind": "progress",
+                "output": "result",
+            }
+        }
+
+
 def _advancer_with_agent(
     project_root: Path,
-    agent: _RecordingAgent | _FailingAgent,
+    agent: Any,
 ) -> ReasonAdvancer:
     advancer = ReasonAdvancer(project_root=project_root)
     dynamic = cast(Any, advancer)
@@ -129,6 +187,47 @@ def test_advance_failure_logs_shared_context_and_restores_caller(
     assert failure.thread_id == "reason-test"
     assert failure.request_id == "request-1"
     assert failure.source == "client"
+
+
+def test_concurrent_advances_isolate_invocation_tool_capture(
+    tmp_path: Path,
+) -> None:
+    agent = _ConcurrentCaptureAgent()
+    advancer = _advancer_with_agent(tmp_path, agent)
+    agent.advancer = advancer
+    threads = (
+        ReasoningThread(id="reason-a", topic="A"),
+        ReasoningThread(id="reason-b", topic="B"),
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        steps = tuple(executor.map(advancer.advance, threads))
+
+    assert agent.max_active == 1
+    for thread, step in zip(threads, steps, strict=True):
+        assert step is not None
+        assert len(step.tool_logs) == 1
+        metadata = step.tool_logs[0]["metadata"]
+        assert isinstance(metadata, Mapping)
+        assert metadata["tool"] == f"tool-{thread.id}"
+        assert metadata["result"] == thread.id
+
+
+def test_advance_failure_releases_invocation_owner(
+    tmp_path: Path,
+) -> None:
+    agent = _FailOnceAgent()
+    advancer = _advancer_with_agent(tmp_path, agent)
+
+    with pytest.raises(RuntimeError, match="first call failed"):
+        advancer.advance(ReasoningThread(id="reason-first", topic="First"))
+
+    step = advancer.advance(
+        ReasoningThread(id="reason-second", topic="Second")
+    )
+
+    assert step is not None
+    assert step.summary == "recovered"
 
 
 def test_workspace_tools_route_by_shared_reason_thread_context(

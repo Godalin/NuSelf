@@ -304,6 +304,14 @@ advance(thread)
 
 CLI, REPL, scheduler, and service-driven advance must converge on the same `ReasonAdvancer` path when a generated step is needed. Silent downgrade to a raw `ChatLLM.complete()` path, a placeholder step, or any other fake advance is not allowed. If no LangChain model is configured, or if the advancer fails to return a structured step, the operation fails clearly and no step is persisted.
 
+A `ReasonAdvancer` owns one compiled LangGraph agent and its middleware capture
+buffer. Invocation-local capture must not overlap across calls on that
+instance: the complete graph invocation, tool-log projection, and structured
+step extraction execute in one owned critical section. The critical section is
+released on success or exception. Separate advancer instances remain
+independent, while concurrent callers of one instance are serialized instead
+of mixing tool evidence between reasoning threads.
+
 ### LLM-Backed Advance (ReasonAdvancer)
 
 When an explicit `step` is provided to `advance_thread`, the service persists that checked step. Otherwise, a configured `ReasonAdvancer` must generate the step:

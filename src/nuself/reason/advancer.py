@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
+from threading import Lock
 from typing import Any, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
@@ -225,6 +226,7 @@ class ReasonAdvancer:
         self._readonly_tools = tuple(readonly_tools) if readonly_tools else ()
         self._langchain_models = langchain_models or ()
         self._captured: list[tuple[str, dict[str, object], str | None]] = []
+        self._invoke_lock = Lock()
         self._middleware = ToolCaptureMiddleware(captured=self._captured)
         self._agent = self._build_agent()
 
@@ -252,7 +254,8 @@ class ReasonAdvancer:
         """Generate a reasoning step for the given thread, or None on failure."""
         if self._agent is None:
             raise RuntimeError("No LangChain models configured — cannot advance reason thread")
-        return self._advance(thread)
+        with self._invoke_lock:
+            return self._advance(thread)
 
     def _advance(self, thread: ReasoningThread) -> ReasoningStep | None:
         assert self._agent is not None
