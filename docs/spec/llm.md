@@ -12,6 +12,14 @@ attribution are implemented once by the shared agent endpoint invocation
 primitive. Capability runners provide only the endpoint-specific framework
 call and result validation; they must not own another retry loop.
 
+Provider error diagnostics must remove credential-like values before applying
+the 500-character length bound. This includes case-insensitive labeled API
+keys, tokens, passwords, secrets, authorization values, bearer credentials,
+credential-bearing URL query parameters, and common raw provider-key prefixes.
+Retry and availability classification may inspect the original provider
+exception; only the diagnostic projection is sanitized. Redaction must retain
+non-sensitive context needed to identify the endpoint failure.
+
 `TextAgent` invokes the LangChain chat model directly because natural-language
 persona conclusions are the intended result. It must not create a fake
 single-field schema merely to reuse structured output, and it rejects an empty

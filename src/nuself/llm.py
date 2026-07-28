@@ -13,6 +13,10 @@ from langchain_openai import ChatOpenAI
 
 from nuself.config import ConfigSystem
 from nuself.config import runtime_paths
+from nuself.runtime.diagnostics import (
+    redact_sensitive_text,
+    safe_exception_message,
+)
 from nuself.runtime.observability import (
     report_corrupt_record,
     run_observed_best_effort,
@@ -142,11 +146,25 @@ def is_endpoint_availability_error(message: str) -> bool:
     return any(indicator in lowered for indicator in indicators)
 
 
-def redact_llm_error(message: str) -> str:
+def redact_llm_error(message: str | BaseException) -> str:
     """Redact and truncate an LLM error for logs."""
-    if len(message) <= 500:
-        return message
-    return message[:497] + "..."
+    text = (
+        message
+        if isinstance(message, str)
+        else safe_exception_message(message)
+    )
+    redacted = redact_sensitive_text(text)
+    if len(redacted) <= 500:
+        return redacted
+    return redacted[:497] + "..."
+
+
+def redacted_llm_diagnostic(error: BaseException) -> RuntimeError:
+    """Project a provider failure without retaining its sensitive context."""
+
+    diagnostic = RuntimeError(redact_llm_error(error))
+    diagnostic.__suppress_context__ = True
+    return diagnostic
 
 
 # ============================================================================

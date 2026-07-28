@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- LLM provider failure diagnostics now redact labeled credentials,
+  authorization and bearer values, credential-bearing query parameters, and
+  common raw provider keys before truncation and persistence.
 - Runtime event and daemon error reporting now share fail-safe compact
   exception-chain formatting. Duplicate cause messages are omitted, and an
   exception with a broken string renderer can no longer replace the original

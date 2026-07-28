@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make exception reporting unable to replace the failures it describes.
+Prevent credentials in provider failures from entering diagnostics.
 
 ## Active Branch
 
@@ -13,41 +13,44 @@ Make exception reporting unable to replace the failures it describes.
 
 ## Ordered Work
 
-1. Audit event aggregation and compact exception-chain formatting.
-2. Define one safe exception-text primitive for reporting boundaries.
-3. Use it in event delivery and shared observability.
-4. Remove the daemon request layer's duplicate chain formatter.
-5. Verify broken exception stringification cannot replace original failures.
+1. Audit exception text across response, log, warning, and CLI boundaries.
+2. Verify the declared LLM error redaction behavior.
+3. Define one shared sensitive-diagnostic text sanitizer.
+4. Apply redaction before LLM diagnostic truncation.
+5. Verify labeled, header, query, bearer, and raw provider keys are removed.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Exception objects and explicit cause/context links remain authoritative.
-- Normal exception messages and compact-chain deduplication remain unchanged.
-- Full traceback rendering remains outside normal diagnostics.
+- Provider exceptions still drive availability and retry classification before
+  their diagnostic projection is redacted.
+- Non-sensitive error context remains visible up to the existing length bound.
+- Arbitrary user content is not globally rewritten by this batch.
 
 ## Completion Evidence
 
-- `safe_exception_message(...)` provides one non-raising exception-text
-  primitive for diagnostic boundaries.
-- Compact exception-chain formatting uses the safe primitive, preserves normal
-  unique messages and cause/context rules, and falls back to the class name
-  when an exception renderer fails.
-- Runtime event aggregation retains the original failure object and emits a
-  stable fallback even when its `__str__` raises.
-- Daemon request errors now use the shared compact-chain formatter instead of
-  a divergent private implementation; duplicate messages are removed as the
-  error specification requires.
-- Focused event, observability, and daemon suites: `76 passed`.
-- Full test suite: `1624 passed`.
+- `redact_sensitive_text(...)` removes case-insensitive labeled credentials,
+  authorization values, bearer credentials, credential query parameters, raw
+  OpenAI/Anthropic-style keys, Slack tokens, GitHub tokens, and AWS access-key
+  IDs while retaining surrounding diagnostic context.
+- `redact_llm_error(...)` accepts either text or an exception, fails safely on
+  broken exception renderers, sanitizes before applying the 500-character
+  bound, and is used by every agent LLM diagnostic projection.
+- LLM diagnostic exceptions suppress the sensitive provider exception context;
+  retry and availability decisions continue using the original exception.
+- `report_observed_failure(...)` sanitizes the complete compact chain before
+  structured persistence and sanitizes its complete fallback warning again,
+  including ambient implicit exception context when logging itself fails.
+- Focused LLM, agent, chat, and observability suites: `82 passed`.
+- Full test suite: `1636 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `6e70aae`.
+`dev/v0.3.x` is published through `6f69634`.
 
 ## Next Review Batch
 
-Continue reviewing error serialization and diagnostic privacy after exception
-formatting is fail-safe and unified.
+Continue applying the shared diagnostic privacy boundary to non-LLM
+infrastructure after provider credentials are protected.

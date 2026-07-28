@@ -7,6 +7,93 @@ from nuself.logs import read_log_events
 
 
 @pytest.mark.parametrize(
+    ("message", "secret", "expected_fragment"),
+    [
+        (
+            "request failed api_key=sk-super-secret",
+            "sk-super-secret",
+            "api_key=***",
+        ),
+        (
+            'provider rejected {"password": "hunter2"}',
+            "hunter2",
+            '"password": "***"',
+        ),
+        (
+            "Authorization: Bearer abc.def-123",
+            "abc.def-123",
+            "Authorization: ***",
+        ),
+        (
+            "https://provider.invalid?access_token=query-secret&model=x",
+            "query-secret",
+            "access_token=***&model=x",
+        ),
+        (
+            "provider returned key sk-proj-1234567890abcdef",
+            "sk-proj-1234567890abcdef",
+            "provider returned key ***",
+        ),
+        (
+            "anthropic key sk-ant-api03-1234567890abcdef",
+            "sk-ant-api03-1234567890abcdef",
+            "anthropic key ***",
+        ),
+        (
+            "observer received xoxb-1234567890-secret",
+            "xoxb-1234567890-secret",
+            "observer received ***",
+        ),
+        (
+            "adapter returned ghp_1234567890abcdef",
+            "ghp_1234567890abcdef",
+            "adapter returned ***",
+        ),
+        (
+            "cloud response AKIAIOSFODNN7EXAMPLE",
+            "AKIAIOSFODNN7EXAMPLE",
+            "cloud response ***",
+        ),
+    ],
+)
+def test_llm_error_redaction_removes_credentials(
+    message: str,
+    secret: str,
+    expected_fragment: str,
+) -> None:
+    from nuself.llm import redact_llm_error
+
+    redacted = redact_llm_error(message)
+
+    assert secret not in redacted
+    assert expected_fragment in redacted
+
+
+def test_llm_error_redaction_happens_before_length_bound() -> None:
+    from nuself.llm import redact_llm_error
+
+    secret = "provider-secret-value"
+    message = f"{'x' * 480} api_key={secret} {'tail' * 40}"
+
+    redacted = redact_llm_error(message)
+
+    assert secret not in redacted
+    assert "api_key=***" in redacted
+    assert len(redacted) == 500
+    assert redacted.endswith("...")
+
+
+def test_llm_error_redaction_survives_broken_exception_renderer() -> None:
+    from nuself.llm import redact_llm_error
+
+    class BrokenMessageError(RuntimeError):
+        def __str__(self) -> str:
+            raise KeyboardInterrupt
+
+    assert redact_llm_error(BrokenMessageError()) == "BrokenMessageError"
+
+
+@pytest.mark.parametrize(
     "raw",
     [
         "not-json",

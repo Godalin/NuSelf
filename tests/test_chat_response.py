@@ -394,6 +394,7 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
     tmp_path: Path,
 ) -> None:
     endpoint_calls = 0
+    provider_secret = "provider-secret-value"
 
     def fail_endpoint(
         self: object,
@@ -401,7 +402,9 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
     ) -> None:
         nonlocal endpoint_calls
         endpoint_calls += 1
-        raise ValueError("invalid endpoint response")
+        raise ValueError(
+            f"invalid endpoint response api_key={provider_secret}"
+        )
 
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
@@ -440,6 +443,8 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
     assert "LLM API is not configured yet" in result.answer
     assert result.answer.endswith("Last message: hello")
     messages = [str(warning.message) for warning in captured]
+    assert provider_secret not in "\n".join(messages)
+    assert "api_key=***" in "\n".join(messages)
     assert any("chat/llm_endpoint_retry" in message for message in messages)
     assert any(
         "chat/llm_endpoints_exhausted" in message

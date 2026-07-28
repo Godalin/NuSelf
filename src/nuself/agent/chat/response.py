@@ -32,7 +32,7 @@ from nuself.agent.structured import require_structured_response
 from nuself.llm import (
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
-    redact_llm_error,
+    redacted_llm_diagnostic,
 )
 from nuself.runtime.observability import (
     report_observed_failure,
@@ -155,7 +155,7 @@ class ConversationResponseSynthesizer:
             if not is_recoverable_agent_failure(exc):
                 raise
             report_observed_failure(
-                RuntimeError(redact_llm_error(str(exc))),
+                redacted_llm_diagnostic(exc),
                 component="chat",
                 event="llm_endpoints_exhausted",
                 message=(
@@ -174,7 +174,7 @@ class ConversationResponseSynthesizer:
         error: Exception,
     ) -> None:
         report_observed_failure(
-            RuntimeError(redact_llm_error(str(error))),
+            redacted_llm_diagnostic(error),
             component="chat",
             event="llm_retry_suppressed_after_tool_call",
             message=(
@@ -193,7 +193,7 @@ class ConversationResponseSynthesizer:
         error: Exception,
     ) -> None:
         report_observed_failure(
-            RuntimeError(redact_llm_error(str(error))),
+            redacted_llm_diagnostic(error),
             component="chat",
             event="llm_endpoint_retry",
             message="LLM endpoint error; retrying",

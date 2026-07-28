@@ -10,6 +10,11 @@ NuSelf should fail in a way that preserves root-cause information, avoids repeat
 4. **Separate user view from audit trail**: User-facing errors are concise. Logs retain structured details needed for debugging.
 5. **Do not hide partial progress**: Logs produced before a failure must still be captured, printed, and exported.
 
+Diagnostic detail must not persist credentials. Shared diagnostic sanitization
+replaces credential-like labeled values, bearer credentials, and recognized
+raw provider keys with `***` while retaining surrounding failure context.
+Domain boundaries apply sanitization before truncation or persistence.
+
 ## Error Classes
 
 | Class | Examples | Retry | User behavior |
@@ -196,6 +201,10 @@ after a memory or persona update.
 - A secondary failure does not fail or roll back the primary operation.
 - The boundary writes a structured warning with the compact exception chain
   and JSON-safe context.
+- The shared observed-failure boundary sanitizes the complete compact chain
+  before structured persistence and sanitizes the complete fallback warning
+  again if structured logging fails. This includes implicit exception context
+  inherited from the operation being diagnosed.
 - If the structured log sink itself fails, the boundary emits one warning
   through Python's standard warning channel. It must not recursively attempt
   structured logging.

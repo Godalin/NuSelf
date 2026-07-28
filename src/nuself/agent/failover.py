@@ -10,6 +10,7 @@ from nuself.llm import (
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
     record_llm_endpoint_success,
+    redacted_llm_diagnostic,
     redact_llm_error,
 )
 from nuself.logs import LogComponent
@@ -95,7 +96,7 @@ def invoke_agent_endpoint(
     assert last_error is not None
     raise RuntimeError(
         "all configured LLM endpoints failed: "
-        f"{redact_llm_error(str(last_error))}"
+        f"{redact_llm_error(last_error)}"
     ) from last_error
 
 
@@ -112,7 +113,7 @@ def _report_endpoint_failure(
     component: LogComponent,
 ) -> None:
     report_observed_failure(
-        RuntimeError(redact_llm_error(str(exc))),
+        redacted_llm_diagnostic(exc),
         component=component,
         event=(
             "llm_endpoint_failed_over"

@@ -2,7 +2,53 @@
 
 from __future__ import annotations
 
+import re
 import warnings
+
+
+_BEARER_CREDENTIAL_RE = re.compile(
+    r"\bBearer\s+[A-Za-z0-9._~+/=-]+",
+    re.IGNORECASE,
+)
+_AUTHORIZATION_VALUE_RE = re.compile(
+    r"(?P<prefix>[\"']?authorization[\"']?\s*[:=]\s*)"
+    r"(?P<value>\"[^\"\r\n]*\"|'[^'\r\n]*'|[^\r\n,;]+)",
+    re.IGNORECASE,
+)
+_LABELED_CREDENTIAL_RE = re.compile(
+    r"(?P<prefix>[\"']?"
+    r"(?:api[_-]?key|access[_-]?token|client[_-]?secret|"
+    r"password|secret|token)"
+    r"[\"']?\s*[:=]\s*)"
+    r"(?P<value>\"[^\"\r\n]*\"|'[^'\r\n]*'|[^\s,;}&]+)",
+    re.IGNORECASE,
+)
+_RAW_CREDENTIAL_RE = re.compile(
+    r"\b(?:sk-(?:proj-|ant-)?|xox[baprs]-|gh[pousr]_)[A-Za-z0-9._-]{8,}\b"
+    r"|\bAKIA[0-9A-Z]{16}\b",
+)
+
+
+def redact_sensitive_text(message: str) -> str:
+    """Remove common credential forms from diagnostic text."""
+
+    redacted = _RAW_CREDENTIAL_RE.sub("***", message)
+    redacted = _BEARER_CREDENTIAL_RE.sub("Bearer ***", redacted)
+    redacted = _AUTHORIZATION_VALUE_RE.sub(
+        _redact_labeled_value,
+        redacted,
+    )
+    return _LABELED_CREDENTIAL_RE.sub(_redact_labeled_value, redacted)
+
+
+def _redact_labeled_value(match: re.Match[str]) -> str:
+    value = match.group("value")
+    replacement = (
+        f"{value[0]}***{value[-1]}"
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'"
+        else "***"
+    )
+    return f"{match.group('prefix')}{replacement}"
 
 
 def safe_exception_message(

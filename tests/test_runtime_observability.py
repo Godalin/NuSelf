@@ -103,6 +103,30 @@ def test_best_effort_returns_none_and_writes_structured_failure(
     assert event.metadata == {"memory_id": "m1"}
 
 
+def test_observed_failure_redacts_credentials_from_compact_chain(
+    tmp_path: Path,
+) -> None:
+    provider_secret = "provider-secret-value"
+
+    def fail() -> None:
+        raise RuntimeError(
+            f"provider failed api_key={provider_secret}"
+        )
+
+    result = run_observed_best_effort(
+        fail,
+        component="chat",
+        event="provider_failed",
+        message="Provider request failed",
+        project_root=tmp_path,
+    )
+
+    assert result is None
+    [event] = read_log_events(project_root=tmp_path, component="chat")
+    assert event.error == "provider failed api_key=***"
+    assert provider_secret not in str(event.to_record())
+
+
 def test_observed_log_reports_uncertain_write_without_retrying_record(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

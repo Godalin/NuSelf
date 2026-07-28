@@ -16,6 +16,7 @@ from nuself.logs import (
 )
 from nuself.runtime.diagnostics import (
     emit_runtime_warning,
+    redact_sensitive_text,
     safe_exception_message,
 )
 from nuself.runtime.events import EventDeliveryError, EventPublisher
@@ -220,7 +221,7 @@ def report_observed_failure(
 ) -> None:
     """Report an already-caught failure without replacing that failure."""
 
-    error = format_exception_chain(exc)
+    error = redact_sensitive_text(format_exception_chain(exc))
     try:
         write_log_event(
             component,
@@ -233,8 +234,11 @@ def report_observed_failure(
             metadata=metadata,
         )
     except Exception as log_exc:
-        emit_runtime_warning(
+        warning = (
             f"{component}/{event}: {error}; structured logging failed: "
-            f"{format_exception_chain(log_exc)}",
+            f"{format_exception_chain(log_exc)}"
+        )
+        emit_runtime_warning(
+            redact_sensitive_text(warning),
             stacklevel=3,
         )
