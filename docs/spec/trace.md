@@ -136,6 +136,20 @@ Validation rules:
 - `metadata` defaults to `{}`.
 - Unknown `kind` or `visibility` values are rejected by write APIs.
 
+### Read-Model Collection Ownership
+
+`ThoughtTrace` and `TraceLink` are immutable persisted read models. Their
+collection-valued fields must not retain aliases to caller-owned containers.
+Construction and wire decoding recursively freeze JSON mappings and sequences,
+including nested metadata.
+
+The persisted wire contract remains ordinary JSON lists and objects.
+`to_wire()` returns a recursively detached mutable-container tree; mutating
+that result must not affect the model or a later serialization. Repository
+reads inherit the same contract through `from_wire()`. Artifact lookup must
+traverse the immutable in-memory mappings and sequences as well as their wire
+representations.
+
 ## TraceLink
 
 Required JSON shape:

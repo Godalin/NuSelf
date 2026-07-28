@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias, cast
 from uuid import uuid4
 
 from nuself.clock import utc_now, utc_now_iso
+from nuself.runtime import freeze_json_value, thaw_json_value
 
 TraceKind: TypeAlias = Literal[
     "chat_turn",
@@ -67,10 +69,6 @@ def _timestamp_id() -> str:
     return utc_now().strftime("%Y%m%dT%H%M%S%fZ")
 
 
-def empty_str_list() -> list[str]:
-    return []
-
-
 def empty_metadata() -> dict[str, object]:
     return {}
 
@@ -83,16 +81,16 @@ class ThoughtTrace:
     title: str
     summary: str
     id: str = field(default_factory=new_trace_id)
-    inputs: list[str] = field(default_factory=empty_str_list)
-    evidence_refs: list[str] = field(default_factory=empty_str_list)
-    derived_from: list[str] = field(default_factory=empty_str_list)
-    outputs: list[str] = field(default_factory=empty_str_list)
-    participants: list[str] = field(default_factory=empty_str_list)
-    decision_points: list[str] = field(default_factory=empty_str_list)
+    inputs: Sequence[str] = ()
+    evidence_refs: Sequence[str] = ()
+    derived_from: Sequence[str] = ()
+    outputs: Sequence[str] = ()
+    participants: Sequence[str] = ()
+    decision_points: Sequence[str] = ()
     thread_id: str | None = None
     visibility: TraceVisibility = "private"
     created_at: str = field(default_factory=utc_now_iso)
-    metadata: dict[str, object] = field(default_factory=empty_metadata)
+    metadata: Mapping[str, object] = field(default_factory=empty_metadata)
 
     def __post_init__(self) -> None:
         if self.kind not in TRACE_KINDS:
@@ -103,9 +101,30 @@ class ThoughtTrace:
             raise ValueError("trace title must not be empty")
         if self.summary.strip() == "":
             raise ValueError("trace summary must not be empty")
+        for field_name in (
+            "inputs",
+            "evidence_refs",
+            "derived_from",
+            "outputs",
+            "participants",
+            "decision_points",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                _freeze_str_sequence(
+                    getattr(self, field_name),
+                    field_name=field_name,
+                ),
+            )
+        object.__setattr__(
+            self,
+            "metadata",
+            _freeze_metadata(self.metadata, field_name="metadata"),
+        )
 
     def to_wire(self) -> dict[str, object]:
-        return {
+        record = {
             "id": self.id,
             "kind": self.kind,
             "title": self.title,
@@ -121,6 +140,7 @@ class ThoughtTrace:
             "created_at": self.created_at,
             "metadata": self.metadata,
         }
+        return cast(dict[str, object], thaw_json_value(record))
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> "ThoughtTrace":
@@ -152,7 +172,7 @@ class TraceLink:
     summary: str
     id: str = field(default_factory=new_trace_link_id)
     created_at: str = field(default_factory=utc_now_iso)
-    metadata: dict[str, object] = field(default_factory=empty_metadata)
+    metadata: Mapping[str, object] = field(default_factory=empty_metadata)
 
     def __post_init__(self) -> None:
         if self.source_id.strip() == "":
@@ -163,9 +183,14 @@ class TraceLink:
             raise ValueError(f"invalid trace relation: {self.relation}")
         if self.summary.strip() == "":
             raise ValueError("trace link summary must not be empty")
+        object.__setattr__(
+            self,
+            "metadata",
+            _freeze_metadata(self.metadata, field_name="metadata"),
+        )
 
     def to_wire(self) -> dict[str, object]:
-        return {
+        record = {
             "id": self.id,
             "source_id": self.source_id,
             "target_id": self.target_id,
@@ -174,6 +199,7 @@ class TraceLink:
             "created_at": self.created_at,
             "metadata": self.metadata,
         }
+        return cast(dict[str, object], thaw_json_value(record))
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> "TraceLink":
@@ -216,14 +242,43 @@ def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
     return list(cast(list[str], raw))
 
 
-def _optional_dict(data: dict[str, object], field_name: str) -> dict[str, object]:
+def _optional_dict(
+    data: dict[str, object],
+    field_name: str,
+) -> Mapping[str, object]:
     value = data.get(field_name)
     if value is None:
         return {}
     if not isinstance(value, dict):
         raise ValueError(f"field '{field_name}' must be an object")
-    raw = cast(dict[object, object], value)
-    return {str(key): item for key, item in raw.items()}
+    return cast(dict[str, object], value)
+
+
+def _freeze_str_sequence(
+    value: object,
+    *,
+    field_name: str,
+) -> tuple[str, ...]:
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        raise TypeError(f"field '{field_name}' must be a sequence of strings")
+    items = cast(Sequence[object], value)
+    if not all(isinstance(item, str) for item in items):
+        raise TypeError(f"field '{field_name}' must be a sequence of strings")
+    return tuple(cast(Sequence[str], items))
+
+
+def _freeze_metadata(
+    value: object,
+    *,
+    field_name: str,
+) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise TypeError(f"field '{field_name}' must be a mapping")
+    mapping = cast(Mapping[object, object], value)
+    frozen = freeze_json_value(mapping)
+    if not isinstance(frozen, Mapping):
+        raise TypeError(f"field '{field_name}' must be a mapping")
+    return cast(Mapping[str, object], frozen)
 
 
 def _expect_trace_kind(data: dict[str, object], field_name: str) -> TraceKind:

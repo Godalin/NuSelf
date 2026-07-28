@@ -135,8 +135,8 @@ def test_start_thread_records_trace(tmp_path: Path) -> None:
 
     traces = TraceQueryService(tmp_path).list_traces(kind="reason_thread")
     assert len(traces) == 1
-    assert traces[0].outputs == [f"reason:{thread.id}"]
-    assert traces[0].evidence_refs == []
+    assert traces[0].outputs == (f"reason:{thread.id}",)
+    assert traces[0].evidence_refs == ()
 
 
 def test_start_thread_records_trace_when_repository_is_injected(tmp_path: Path) -> None:
@@ -146,7 +146,7 @@ def test_start_thread_records_trace_when_repository_is_injected(tmp_path: Path) 
 
     traces = TraceQueryService(tmp_path).list_traces(kind="reason_thread")
     assert len(traces) == 1
-    assert traces[0].outputs == [f"reason:{thread.id}"]
+    assert traces[0].outputs == (f"reason:{thread.id}",)
 
 
 def test_show_thread_by_id(tmp_path: Path) -> None:
@@ -268,7 +268,10 @@ def test_advance_thread_records_trace(tmp_path: Path) -> None:
     steps = service.list_steps(thread.id)
     traces = TraceQueryService(tmp_path).list_traces(kind="reason_step")
     assert len(traces) == 1
-    assert traces[0].outputs == [f"reason:{advanced.id}", f"reason_step:{steps[0].id}"]
+    assert traces[0].outputs == (
+        f"reason:{advanced.id}",
+        f"reason_step:{steps[0].id}",
+    )
     assert traces[0].metadata["step_kind"] == "progress"
 
 
@@ -335,5 +338,4 @@ def _test_step(thread_id: str) -> ReasoningStep:
         delta="Moved forward",
         output="Observable output",
     )
-
 

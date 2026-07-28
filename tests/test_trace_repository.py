@@ -43,7 +43,10 @@ def test_trace_repository_finds_related_artifact_references(tmp_path: Path) -> N
         title="Remembered preference",
         summary="Captured a durable preference.",
         outputs=["memory:mem_123"],
-        metadata={"primary_artifact": "memory:mem_123"},
+        metadata={
+            "primary_artifact": "memory:mem_123",
+            "nested": {"references": ["memory:mem_nested"]},
+        },
     )
     reason_trace = recorder.record(
         kind="reason_step",
@@ -56,6 +59,7 @@ def test_trace_repository_finds_related_artifact_references(tmp_path: Path) -> N
     link = recorder.link("memory:mem_123", "reason:abc", "supports", "Memory supported the reason thread.")
 
     assert repo.traces_for_artifact("memory:mem_123") == [memory_trace, reason_trace]
+    assert repo.traces_for_artifact("memory:mem_nested") == [memory_trace]
     assert repo.links_for_artifact("memory:mem_123") == [link]
 
 

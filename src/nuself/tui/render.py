@@ -856,7 +856,11 @@ def render_markdown(text: str, theme: TerminalTheme) -> str:
     return _rich_render_to_ansi(Markdown(text))
 
 
-def render_section(title: str, values: list[str], theme: TerminalTheme) -> list[str]:
+def render_section(
+    title: str,
+    values: Sequence[str],
+    theme: TerminalTheme,
+) -> list[str]:
     """Render a bulleted section with colored label and markdown items."""
     if not values:
         return []

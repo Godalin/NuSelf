@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 import threading
 from typing import Literal, cast
@@ -216,9 +217,13 @@ def _trace_mentions_artifact(trace: ThoughtTrace, artifact_ref: str) -> bool:
 def _metadata_mentions_artifact(value: object, artifact_ref: str) -> bool:
     if isinstance(value, str):
         return value == artifact_ref
-    if isinstance(value, list):
-        return any(_metadata_mentions_artifact(item, artifact_ref) for item in cast(list[object], value))
-    if isinstance(value, dict):
-        metadata = cast(dict[object, object], value)
+    if isinstance(value, Sequence):
+        items = cast(Sequence[object], value)
+        return any(
+            _metadata_mentions_artifact(item, artifact_ref)
+            for item in items
+        )
+    if isinstance(value, Mapping):
+        metadata = cast(Mapping[object, object], value)
         return any(_metadata_mentions_artifact(item, artifact_ref) for item in metadata.values())
     return False

@@ -57,8 +57,8 @@ def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:
     promotion_traces = query.list_traces(kind="promotion")
     assert len(reason_traces) == 1
     assert len(promotion_traces) == 1
-    assert promotion_traces[0].inputs == [f"reflection:{entry.id}"]
-    assert promotion_traces[0].outputs == [f"reason:{thread.id}"]
+    assert promotion_traces[0].inputs == (f"reflection:{entry.id}",)
+    assert promotion_traces[0].outputs == (f"reason:{thread.id}",)
     links = query.links_for(f"reflection:{entry.id}")
     assert len(links) == 1
     assert links[0].target_id == f"reason:{thread.id}"

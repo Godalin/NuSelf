@@ -468,11 +468,11 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
     assert len(traces) == 1
     trace = traces[0]
     assert trace.thread_id == "graph"
-    assert trace.evidence_refs == ["mem_graph"]
-    assert trace.inputs == ["graph runtime"]
-    assert trace.outputs == ["Graph driver reply."]
-    assert trace.participants == ["chat_agent"]
-    assert trace.metadata["node_trace"] == list(node_trace)
+    assert trace.evidence_refs == ("mem_graph",)
+    assert trace.inputs == ("graph runtime",)
+    assert trace.outputs == ("Graph driver reply.",)
+    assert trace.participants == ("chat_agent",)
+    assert trace.metadata["node_trace"] == tuple(node_trace)
 
 
 
