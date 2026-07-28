@@ -50,7 +50,7 @@ Make daemon startup failure and timeout reporting authoritative and actionable.
 
 ## Publication
 
-`dev/v0.3.x` is published through implementation commit `ff1cafc`.
+`dev/v0.3.x` is ready to publish through implementation commit `6871e22`.
 
 ## Next Review Batch
 
