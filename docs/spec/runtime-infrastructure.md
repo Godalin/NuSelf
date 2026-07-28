@@ -321,6 +321,24 @@ next tick never inherits correlation left by the previous one.
 The continuously blocking reason export worker is not tick-scoped: each of its
 operations is scoped by the dequeued `JobMessage` as specified above.
 
+## Client Chat Scope
+
+Every daemon-backed or one-shot client chat operation establishes one nested
+`RuntimeContext` containing its requested thread, optional turn ID, and
+`source="client"`. It preserves any caller-owned request, job, and trace
+identity, and restores the complete caller context on every return or
+exception.
+
+Client transport success/failure audits inherit that scope rather than
+repeating correlation fields on each write. If a successful daemon response
+names a different thread, only the completion projection may nest a narrower
+thread override for the response-owned identity.
+
+Each interactive retry attempt executes inside the same logical turn context,
+including the `turn_retry` marker and the send callback. The retry marker must
+not be written before entering that scope. All attempts reuse the same turn ID;
+attempt scoping changes correlation ownership, not retry count or idempotency.
+
 ## Deferred Callback Context
 
 `bind_runtime_context(callback)` captures the current immutable

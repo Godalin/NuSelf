@@ -182,6 +182,11 @@ thread starts and restores the thread's prior context after completion or
 failure. Long-lived daemon workers follow their separate runtime ownership
 contract and never inherit CLI context.
 
+Daemon-backed and one-shot client adapters establish one
+`source="client"` scope for the whole operation. Interactive retry markers and
+their send attempts execute inside the same thread/turn scope; individual
+audit writes inherit correlation instead of reconstructing it.
+
 When color is enabled, each known self label in a `persona_summary` or `discussion_trace` block uses a stable distinct color. Color applies only to the speaker label, not the thought text, and no-color mode preserves the same plain text without ANSI escapes.
 
 ### Transcript Export

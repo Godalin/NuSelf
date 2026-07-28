@@ -13,6 +13,7 @@ from nuself.config import ConfigSystem
 from nuself.daemon import client
 from nuself.logs import write_log_event
 from nuself.memory.curator import MemoryCurator
+from nuself.runtime.context import runtime_context
 from nuself.tui.render import TerminalTheme
 
 ReplyPrinter = Callable[[str], None]
@@ -54,48 +55,52 @@ def send_daemon_chat_interactive(
 ) -> InteractiveChatResult:
     """Translate one typed daemon chat operation to the REPL result contract."""
 
-    try:
-        response = client.chat(
-            message,
-            thread_id=thread_id,
-            turn_id=turn_id,
-            project_root=project_root,
-            timeout=chat_request_timeout_seconds(project_root),
-        )
-    except client.DaemonConnectionError as exc:
-        error = f"daemon request failed: {exc}"
-        print(error, file=sys.stderr)
-        return InteractiveChatResult(code=1, retryable=True, error=error)
-    except client.DaemonApplicationError as exc:
-        error = str(exc)
-        write_log_event(
-            "chat",
-            "daemon_chat_failed",
-            "daemon chat request failed",
-            project_root=project_root,
-            level="error",
-            thread_id=thread_id,
-            turn_id=turn_id,
-            source="client",
-            status="error",
-            error=error,
-        )
-        return InteractiveChatResult(code=1, error=error)
-    write_log_event(
-        "chat",
-        "daemon_chat_completed",
-        "daemon chat request completed",
-        project_root=project_root,
-        thread_id=response.thread_id,
+    with runtime_context(
+        thread_id=thread_id,
         turn_id=turn_id,
         source="client",
-        status="ok",
-    )
-    return InteractiveChatResult(
-        code=0,
-        reply=response.reply,
-        memory_update=response.memory_update or None,
-    )
+    ):
+        try:
+            response = client.chat(
+                message,
+                thread_id=thread_id,
+                turn_id=turn_id,
+                project_root=project_root,
+                timeout=chat_request_timeout_seconds(project_root),
+            )
+        except client.DaemonConnectionError as exc:
+            error = f"daemon request failed: {exc}"
+            print(error, file=sys.stderr)
+            return InteractiveChatResult(
+                code=1,
+                retryable=True,
+                error=error,
+            )
+        except client.DaemonApplicationError as exc:
+            error = str(exc)
+            write_log_event(
+                "chat",
+                "daemon_chat_failed",
+                "daemon chat request failed",
+                project_root=project_root,
+                level="error",
+                status="error",
+                error=error,
+            )
+            return InteractiveChatResult(code=1, error=error)
+        with runtime_context(thread_id=response.thread_id):
+            write_log_event(
+                "chat",
+                "daemon_chat_completed",
+                "daemon chat request completed",
+                project_root=project_root,
+                status="ok",
+            )
+        return InteractiveChatResult(
+            code=0,
+            reply=response.reply,
+            memory_update=response.memory_update or None,
+        )
 
 
 def chat_request_timeout_seconds(project_root: Path | None) -> float:
@@ -134,40 +139,39 @@ def send_one_shot_chat_interactive(
 ) -> InteractiveChatResult:
     """Run one local chat operation and translate expected runtime failure."""
 
-    try:
-        reply = one_shot_reply(
-            message,
-            project_root,
-            thread_id,
-            turn_id=turn_id,
-        )
-        write_log_event(
-            "chat",
-            "one_shot_chat_completed",
-            "one-shot chat turn completed",
-            project_root=project_root,
-            thread_id=thread_id,
-            turn_id=turn_id,
-            source="client",
-            status="ok",
-        )
-        run_memory_curator(project_root)
-        return InteractiveChatResult(code=0, reply=reply)
-    except RuntimeError as exc:
-        write_log_event(
-            "chat",
-            "one_shot_chat_failed",
-            "one-shot chat turn failed",
-            project_root=project_root,
-            level="error",
-            thread_id=thread_id,
-            turn_id=turn_id,
-            source="client",
-            status="error",
-            error=str(exc),
-        )
-        print(str(exc), file=sys.stderr)
-        return InteractiveChatResult(code=1)
+    with runtime_context(
+        thread_id=thread_id,
+        turn_id=turn_id,
+        source="client",
+    ):
+        try:
+            reply = one_shot_reply(
+                message,
+                project_root,
+                thread_id,
+                turn_id=turn_id,
+            )
+            write_log_event(
+                "chat",
+                "one_shot_chat_completed",
+                "one-shot chat turn completed",
+                project_root=project_root,
+                status="ok",
+            )
+            run_memory_curator(project_root)
+            return InteractiveChatResult(code=0, reply=reply)
+        except RuntimeError as exc:
+            write_log_event(
+                "chat",
+                "one_shot_chat_failed",
+                "one-shot chat turn failed",
+                project_root=project_root,
+                level="error",
+                status="error",
+                error=str(exc),
+            )
+            print(str(exc), file=sys.stderr)
+            return InteractiveChatResult(code=1)
 
 
 def run_memory_curator(project_root: Path | None) -> None:

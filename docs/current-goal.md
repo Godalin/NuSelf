@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Chat-turn lifecycle is now a production `EventPublisher` boundary whose
-completed event proves the thread update was durably saved.
+Idle. Each client chat operation now owns one runtime correlation scope instead
+of repeating thread, turn, and source fields on individual audit writes.
 
 ## Active Branch
 
@@ -23,21 +23,20 @@ code.
 
 ## Completion Evidence
 
-- `ChatAgent` accepts an instance-scoped publisher; `DaemonState` injects its
-  shared publisher and standalone agents compose an audit-backed publisher.
-- New turns publish `turn.started`; `turn.completed` is emitted only after
-  `ThreadStore.update()` saves; graph/load/persistence failures emit
-  `turn.failed` and re-raise the original exception; idempotent retries emit
-  only `turn.reused`.
-- A synchronous completed-event subscriber successfully reads the saved
-  assistant message, while a forced save failure proves completed is absent.
-- Event, audit, and daemon live-activity projections retain the same message ID
-  plus request/thread/turn correlation.
-- Subscriber failures neither replace a completed response nor mask the
-  original graph failure.
-- Worker and chat lifecycle owners share `publish_observed_event(...)`;
-  aggregate delivery diagnostics retain subscriber exception details.
-- Focused chat/daemon/runtime/log/REPL tests: 436 passed.
+- Daemon-backed and one-shot client adapters establish one nested
+  `source="client"` scope for transport, boundary audit, and post-turn
+  curation.
+- Daemon completion uses one narrower nested thread override only when the
+  response owns a different thread identity.
+- REPL retry markers execute inside the same exact thread/turn context as each
+  send attempt and no longer reconstruct correlation per event.
+- Tests prove request/job/trace inheritance and complete caller-context
+  restoration on connection failure and successful daemon/one-shot operations.
+- A real post-turn memory audit inherits the client thread, turn, trace, and
+  source; retry audit does not inherit unrelated ambient request/job identity.
+- Retry count, stable turn ID, output, protocol, and result contracts are
+  unchanged.
+- Focused CLI chat/REPL/runtime tests: 339 passed.
 - Final full tests: 1283 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
@@ -48,4 +47,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit remaining direct correlation overrides after chat lifecycle is unified.
+Continue auditing domain-state projection overrides after client scope
+ownership is explicit.

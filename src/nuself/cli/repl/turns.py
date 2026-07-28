@@ -59,27 +59,6 @@ def send_interactive_chat_turn(
         )
 
     for attempt in range(1, max_attempts + 1):
-        if attempt > 1:
-            write_log_event(
-                "chat",
-                "turn_retry",
-                "retrying chat turn after retryable transport failure",
-                project_root=project_root,
-                thread_id=thread_id,
-                turn_id=turn_id,
-                source="client",
-                status="retry",
-                metadata={
-                    "attempt": attempt,
-                    "max_attempts": max_attempts,
-                    "previous_error": result.error,
-                },
-            )
-            print()
-            print(
-                f"Retrying message after failed attempt "
-                f"({attempt}/{max_attempts})..."
-            )
         with use_runtime_context(
             RuntimeContext(
                 thread_id=thread_id,
@@ -87,6 +66,24 @@ def send_interactive_chat_turn(
                 source="client",
             )
         ):
+            if attempt > 1:
+                write_log_event(
+                    "chat",
+                    "turn_retry",
+                    "retrying chat turn after retryable transport failure",
+                    project_root=project_root,
+                    status="retry",
+                    metadata={
+                        "attempt": attempt,
+                        "max_attempts": max_attempts,
+                        "previous_error": result.error,
+                    },
+                )
+                print()
+                print(
+                    f"Retrying message after failed attempt "
+                    f"({attempt}/{max_attempts})..."
+                )
             result, events, printed_logs = run_live_activity_send(
                 send_message,
                 message,

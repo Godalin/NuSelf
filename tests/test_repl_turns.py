@@ -111,3 +111,7 @@ def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
         if event.event == "turn_retry"
     )
     assert retry.turn_id == turn_ids[0]
+    assert retry.thread_id == "default"
+    assert retry.source == "client"
+    assert retry.request_id is None
+    assert retry.job_id is None

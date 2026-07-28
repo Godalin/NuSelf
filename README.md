@@ -203,6 +203,11 @@ daemon live-activity projections retain the same event identity and
 correlation, while a failed subscriber cannot replace the reply or mask the
 original chat failure.
 
+Daemon-backed, one-shot, and interactive retry client operations use one
+`source="client"` runtime scope. Their transport, retry, completion, and
+post-turn curation logs therefore share thread/turn correlation, preserve any
+caller request/job/trace identity, and restore the caller context afterward.
+
 Thread-scoped dynamic persona prompt files are authoritative; their derived name index is validated and atomically rebuilt when missing, malformed, or stale, so damaged lookup metadata does not hide healthy personas or retain old names after a rename.
 
 Reflection relevance and candidate generation use strict typed response schemas. Malformed batches, string booleans, and unknown candidate types take the existing safe fallback instead of being coerced or partially accepted.

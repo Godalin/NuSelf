@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon-backed, one-shot, and interactive retry client chat operations now
+  establish one `source="client"` runtime scope. Transport, completion,
+  retry, and post-turn curation audits inherit thread/turn correlation instead
+  of reconstructing it per write, while caller request/job/trace context is
+  preserved and restored.
 - Chat lifecycle now publishes registered `turn.started`, `turn.completed`,
   `turn.failed`, and `turn.reused` runtime events. The completed event is
   emitted only after the thread update is durably saved; event subscriber
