@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The process-local log-observer ownership batch is complete.
+Idle. The immutable LogEvent metadata ownership batch is complete.
 
 ## Active Branch
 
@@ -22,14 +22,12 @@ code.
 
 ## Completion Evidence
 
-- Nested observation scopes deliver to every active observer in outer-to-inner
-  order and restore the outer scope.
-- One observer failure does not suppress later observers or fail the audit
-  writer's caller.
-- New threads do not accidentally inherit request-scoped observers.
-- Observer failures emit a non-recursive best-effort diagnostic.
-- Focused tests: 29 passed.
-- Full tests: 1211 passed.
+- LogEvent metadata is recursively immutable and detached from caller input.
+- Audit serialization returns a detached JSON-safe record.
+- Observers and activity queues see the same immutable event snapshot.
+- Non-string keys, non-finite floats, and non-JSON values fail before writing.
+- Focused tests: 91 passed.
+- Full tests: 1215 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -39,4 +37,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit mutable LogEvent payload ownership across audit and activity projections.
+Audit remaining direct JSON normalization helpers for shared-boundary drift.

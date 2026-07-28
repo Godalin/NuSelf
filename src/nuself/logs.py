@@ -20,7 +20,12 @@ from nuself.runtime.context import (
     current_runtime_context,
     runtime_context,
 )
-from nuself.runtime.messages import RUNTIME_SCHEMA_VERSION, RuntimeEnvelope
+from nuself.runtime.messages import (
+    RUNTIME_SCHEMA_VERSION,
+    RuntimeEnvelope,
+    freeze_json_value,
+    thaw_json_value,
+)
 
 LogLevel = Literal["debug", "info", "warning", "error"]
 LogComponent = Literal[
@@ -103,7 +108,21 @@ class LogEvent:
     duration_ms: int | None = None
     status: str | None = None
     error: str | None = None
-    metadata: dict[str, object] | None = None
+    metadata: Mapping[str, object] | None = None
+
+    def __post_init__(self) -> None:
+        if self.metadata is None:
+            return
+        if not isinstance(self.metadata, Mapping):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError("log event metadata must be a mapping")
+        object.__setattr__(
+            self,
+            "metadata",
+            cast(
+                Mapping[str, object],
+                freeze_json_value(self.metadata),
+            ),
+        )
 
     def to_record(self) -> dict[str, object]:
         record: dict[str, object] = {
@@ -129,7 +148,7 @@ class LogEvent:
             ("metadata", self.metadata),
         ):
             if value is not None:
-                record[key] = _safe_json_value(value)
+                record[key] = thaw_json_value(value)
         return record
 
     @classmethod
@@ -264,10 +283,12 @@ def write_runtime_event(
     if not isinstance(message, str):
         raise TypeError("runtime event log message must be a string")
     metadata_value = payload.get("metadata")
-    metadata: dict[str, object] | None = None
+    metadata: Mapping[str, object] | None = None
     if isinstance(metadata_value, Mapping):
-        metadata_mapping = cast(Mapping[object, object], metadata_value)
-        metadata = cast(dict[str, object], _safe_json_value(metadata_mapping))
+        metadata = cast(
+            Mapping[str, object],
+            metadata_value,
+        )
     event_record = LogEvent(
         time=envelope.created_at,
         level=cast(LogLevel, level),
@@ -510,20 +531,8 @@ def _parse_log_line(line: str, component: LogComponent) -> LogEvent | None:
         return None
     try:
         return LogEvent.from_record(cast(dict[str, object], parsed))
-    except ValueError:
+    except (TypeError, ValueError):
         return None
-
-
-def _safe_json_value(value: object) -> object:
-    if value is None or isinstance(value, str | int | float | bool):
-        return value
-    if isinstance(value, list | tuple):
-        sequence = cast(Iterable[object], value)
-        return [_safe_json_value(item) for item in sequence]
-    if isinstance(value, Mapping):
-        mapping = cast(Mapping[object, object], value)
-        return {str(key): _safe_json_value(item) for key, item in mapping.items()}
-    return str(value)
 
 
 def _optional_str(value: object) -> str | None:

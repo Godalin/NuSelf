@@ -71,6 +71,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   nested. A failed activity projection no longer suppresses later observers or
   turns an already-persisted audit event into a failed business operation;
   failures emit a non-recursive best-effort diagnostic.
+- Log metadata is now captured as one detached, recursively immutable JSON
+  snapshot before audit persistence and live projection. Caller or observer
+  mutation cannot change queued activity, and invalid keys, values, or
+  non-finite numbers fail before a partial record is written.
 - Daemon JSONL transport now uses a shared 1 MiB request/response frame limit,
   requires newline-complete UTF-8 JSON, times out stalled server reads, and
   rejects incomplete, extra, non-finite, or response-id-mismatched frames.

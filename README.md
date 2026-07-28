@@ -357,6 +357,9 @@ active durable reason thread.
 Process-local live log observers remain separate from correlation identity:
 nested observers compose in order, projection failures are isolated after the
 audit write, and observers are not implicitly carried into new worker threads.
+Runtime envelopes and log events share one strict JSON freeze/thaw boundary,
+so persisted audit data and live activity receive the same immutable metadata
+snapshot without retaining aliases to caller-owned containers.
 
 ## Notifications
 

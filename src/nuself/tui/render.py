@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 import json
 import os
@@ -344,11 +344,12 @@ def _normalize_tool_json(value: object) -> object:
     parsed = _parse_json_string(value)
     if parsed is not None:
         return _normalize_tool_json(parsed)
-    if isinstance(value, dict):
-        value_dict = cast(dict[object, object], value)
+    if isinstance(value, Mapping):
+        value_dict = cast(Mapping[object, object], value)
         return {str(key): _normalize_tool_json(item) for key, item in value_dict.items()}
-    if isinstance(value, list):
-        return [_normalize_tool_json(item) for item in cast(list[object], value)]
+    if isinstance(value, list | tuple):
+        items = cast(list[object] | tuple[object, ...], value)
+        return [_normalize_tool_json(item) for item in items]
     return value
 
 
@@ -408,9 +409,9 @@ def _discussion_trace_metadata(event: LogEvent) -> list[object]:
     if not event.metadata:
         return []
     raw = event.metadata.get("discussion_trace")
-    if not isinstance(raw, list) or not raw:
+    if not isinstance(raw, list | tuple) or not raw:
         return []
-    return cast(list[object], raw)
+    return list(cast(list[object] | tuple[object, ...], raw))
 
 
 def _render_log_fields(event: LogEvent, theme: TerminalTheme, *, include_status: bool = True) -> list[str]:
@@ -499,7 +500,10 @@ def _format_log_value(value: object) -> str:
         return "[" + ", ".join(_format_log_value(item) for item in items) + "]"
     if value is None:
         return "null"
-    return _quote_log_value(json.dumps(value, sort_keys=True, ensure_ascii=True))
+    normalized = _normalize_tool_json(value)
+    return _quote_log_value(
+        json.dumps(normalized, sort_keys=True, ensure_ascii=True)
+    )
 
 
 def _quote_log_value(value: str) -> str:

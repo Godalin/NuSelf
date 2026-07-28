@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import cast
@@ -32,6 +33,69 @@ def test_new_log_events_have_stable_envelope_identity(tmp_path: Path) -> None:
 
     assert read.event_id == written.event_id
     assert read.schema_version == RUNTIME_SCHEMA_VERSION
+
+
+def test_log_event_metadata_is_detached_and_recursively_immutable(
+    tmp_path: Path,
+) -> None:
+    metadata: dict[str, object] = {
+        "nested": {"items": ["original"]},
+    }
+    observed: list[LogEvent] = []
+
+    with observe_log_events(observed.append):
+        written = write_log_event(
+            "chat",
+            "metadata_test",
+            "immutable",
+            project_root=tmp_path,
+            metadata=metadata,
+        )
+
+    nested_input = cast(dict[str, object], metadata["nested"])
+    items_input = cast(list[str], nested_input["items"])
+    items_input.append("caller mutation")
+
+    assert observed == [written]
+    assert observed[0] is written
+    assert written.metadata is not None
+    nested = written.metadata["nested"]
+    assert isinstance(nested, Mapping)
+    items = cast(tuple[str, ...], nested["items"])
+    assert items == ("original",)
+    with pytest.raises(TypeError):
+        nested["extra"] = True  # type: ignore[index]
+
+    record = written.to_record()
+    record_metadata = cast(dict[str, object], record["metadata"])
+    record_nested = cast(dict[str, object], record_metadata["nested"])
+    record_items = cast(list[str], record_nested["items"])
+    record_items.append("record mutation")
+    assert nested["items"] == ("original",)
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    (
+        {1: "non-string key"},
+        {"value": float("nan")},
+        {"value": object()},
+    ),
+)
+def test_log_event_metadata_rejects_non_json_values_before_write(
+    tmp_path: Path,
+    metadata: object,
+) -> None:
+    with pytest.raises(TypeError):
+        write_log_event(
+            "chat",
+            "metadata_test",
+            "invalid",
+            project_root=tmp_path,
+            metadata=cast(dict[str, object], metadata),
+        )
+
+    assert not log_path("chat", project_root=tmp_path).exists()
 
 
 def test_nested_log_observers_compose_in_order_and_restore(

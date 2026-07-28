@@ -35,6 +35,8 @@ from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
     MessageKind,
     RuntimeEnvelope,
+    freeze_json_value,
+    thaw_json_value,
 )
 from nuself.runtime.workers import (
     OwnedWorker,
@@ -71,6 +73,8 @@ __all__ = [
     "build_event_definition_registry",
     "bind_runtime_context",
     "current_runtime_context",
+    "freeze_json_value",
     "runtime_context",
+    "thaw_json_value",
     "use_runtime_context",
 ]

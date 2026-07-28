@@ -336,6 +336,9 @@ tools 的活动持久 reason thread，同时保留 request/job correlation。
 进程内 live log observer 与 correlation identity 保持分离：嵌套 observer 会按
 顺序组合，projection failure 在 audit write 后被隔离，并且 observer 不会隐式进入
 新的 worker thread。
+Runtime envelope 与 log event 共用同一个严格 JSON freeze/thaw 边界，因此持久化
+audit data 和 live activity 会得到同一份不可变 metadata snapshot，不会保留对调用
+方容器的别名。
 
 ## 通知
 

@@ -373,6 +373,9 @@ Structured logs are an append-only sink and read model.
   Direct domain audit writes use stable validated slugs governed by the
   owning domain spec rather than a process-global definition registry.
 - Metadata must be JSON-safe before it reaches the sink.
+- Runtime envelopes and log events use the same recursive JSON freeze/thaw
+  boundary. Frozen payloads do not retain caller container aliases, while
+  serialized records are detached mutable dict/list trees.
 - File writes are serialized per project/component.
 - Readers use stable event ids and incremental cursors; complete-record hashing
   is a legacy compatibility fallback only.

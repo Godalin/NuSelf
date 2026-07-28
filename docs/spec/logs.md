@@ -21,9 +21,17 @@
 | `duration_ms` | `int \| None`                               | no       |
 | `status`      | `str \| None`                               | no       |
 | `error`       | `str \| None`                               | no       |
-| `metadata`    | `dict[str, object] \| None`                 | no       |
+| `metadata`    | `Mapping[str, JSON value] \| None`          | no       |
 
 Serialization (`to_record()`) omits `None`-valued optional fields.
+
+Metadata is validated and recursively frozen when a `LogEvent` is constructed.
+Mappings require string keys, floats must be finite, and arbitrary objects are
+rejected rather than stringified. Nested mappings become immutable mappings and
+lists/tuples become immutable tuples. Construction detaches from caller-owned
+containers; `to_record()` returns a separate ordinary JSON-safe dict/list tree.
+The audit sink, process-local observers, and live activity queues therefore
+observe one stable event snapshot.
 
 ## Log Context
 

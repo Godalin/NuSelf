@@ -65,7 +65,7 @@ class RuntimeEnvelope:
         object.__setattr__(
             self,
             "payload",
-            cast(Mapping[str, object], _freeze_json(self.payload)),
+            cast(Mapping[str, object], freeze_json_value(self.payload)),
         )
 
     def to_record(self) -> dict[str, object]:
@@ -79,7 +79,7 @@ class RuntimeEnvelope:
             "producer": self.producer,
             "created_at": self.created_at,
             "context": self.context.to_record(),
-            "payload": _thaw_json(self.payload),
+            "payload": thaw_json_value(self.payload),
         }
 
     @classmethod
@@ -125,34 +125,41 @@ class RuntimeEnvelope:
         )
 
 
-def _freeze_json(value: object) -> object:
+def freeze_json_value(value: object) -> object:
+    """Return one detached recursively immutable JSON value."""
+
     if value is None or isinstance(value, str | int | bool):
         return value
     if isinstance(value, float):
         if not isfinite(value):
-            raise TypeError("runtime payload floats must be finite")
+            raise TypeError("JSON value floats must be finite")
         return value
     if isinstance(value, Mapping):
         mapping = cast(Mapping[object, object], value)
         frozen: dict[str, object] = {}
         for key, item in mapping.items():
             if not isinstance(key, str):
-                raise TypeError("runtime payload mapping keys must be strings")
-            frozen[key] = _freeze_json(item)
+                raise TypeError("JSON value mapping keys must be strings")
+            frozen[key] = freeze_json_value(item)
         return MappingProxyType(frozen)
     if isinstance(value, list | tuple):
         items = cast(list[object] | tuple[object, ...], value)
-        return tuple(_freeze_json(item) for item in items)
-    raise TypeError(f"runtime payload value is not JSON-safe: {type(value).__name__}")
+        return tuple(freeze_json_value(item) for item in items)
+    raise TypeError(f"value is not JSON-safe: {type(value).__name__}")
 
 
-def _thaw_json(value: object) -> object:
+def thaw_json_value(value: object) -> object:
+    """Return one detached mutable-container JSON value."""
+
     if isinstance(value, Mapping):
         mapping = cast(Mapping[object, object], value)
-        return {str(key): _thaw_json(item) for key, item in mapping.items()}
+        return {
+            str(key): thaw_json_value(item)
+            for key, item in mapping.items()
+        }
     if isinstance(value, tuple):
         items = cast(tuple[object, ...], value)
-        return [_thaw_json(item) for item in items]
+        return [thaw_json_value(item) for item in items]
     return value
 
 
