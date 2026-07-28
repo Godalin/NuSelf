@@ -216,6 +216,13 @@ failure performs full cleanup without publishing either a successful `started`
 or `stopped` record. Failure of the `started` audit itself remains secondary and
 does not undo readiness.
 
+Daemon status observation combines typed ping readiness and instance-lock
+ownership into the phase model in `runtime-infrastructure.md`. Failure to
+inspect ownership raises a typed status error with an `unknown` partial
+snapshot and explicit cause. Start wraps it as `status_failed`; stop wraps it
+as `ownership_check_failed`. CLI status/list and launch entrypoints render one
+safe status-unavailable message and exit non-zero rather than guessing stopped.
+
 Daemon shutdown owns an ordered set of named cleanup steps. It signals
 shutdown, attempts each worker stop independently, resets only the current
 project's default storage backend, removes the socket and PID independently,

@@ -94,7 +94,7 @@ class RecordingCallbacks:
 
 def _status(tmp_path: Path, *, running: bool) -> DaemonStatus:
     return DaemonStatus(
-        running=running,
+        phase="ready" if running else "stopped",
         pid=123 if running else None,
         socket_path=tmp_path / "private/runtime/nuself.sock",
         pid_path=tmp_path / "private/runtime/nuself.pid",
@@ -183,7 +183,38 @@ def test_chat_require_daemon_rejects_local_fallback(
 
     assert result == 1
     assert callbacks.calls == []
-    assert "NuSelf daemon is not running." in capsys.readouterr().err
+    assert "NuSelf daemon is not ready: stopped." in capsys.readouterr().err
+
+
+def test_chat_owned_unready_never_falls_back_to_one_shot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    owned_unready = DaemonStatus(
+        phase="owned_unready",
+        pid=None,
+        socket_path=tmp_path / "private/runtime/nuself.sock",
+        pid_path=tmp_path / "private/runtime/nuself.pid",
+    )
+    monkeypatch.setattr(
+        entrypoints.lifecycle,
+        "status",
+        _return_status(owned_unready),
+    )
+    callbacks = RecordingCallbacks()
+
+    result = callbacks.controller().handle_chat(
+        argparse.Namespace(
+            project_root=tmp_path,
+            message="hello",
+            require_daemon=False,
+        )
+    )
+
+    assert result == 1
+    assert callbacks.calls == []
+    assert "not ready: owned_unready" in capsys.readouterr().err
 
 
 def test_running_chat_injects_daemon_sender_into_repl(

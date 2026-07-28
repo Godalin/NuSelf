@@ -376,7 +376,8 @@ nuself inbox notify show <id>
 nuself daemon start | stop | restart | status | health | list
 ```
 
-- **Output**: Plain text state lines (`daemon running pid=... socket=...`).
+- **Output**: Plain text state lines
+  (`daemon <stopped|owned_unready|ready|inconsistent> pid=... socket=...`).
 - `daemon health` queries the running process and prints one line per background
   worker with `alive`, consecutive failures, last success, and last error.
 - **Error**: State mismatch or typed startup failure printed to stderr with exit
@@ -385,6 +386,8 @@ nuself daemon start | stop | restart | status | health | list
 - Stop and restart failures distinguish shutdown rejection, ownership
   inspection failure, and ownership-release timeout. They never signal a PID
   obtained only from a runtime metadata file.
+- Status ownership-inspection failure prints a concise status-unavailable error
+  and exits non-zero; it is never rendered as `stopped`.
 
 ### Memory
 

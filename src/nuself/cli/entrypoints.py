@@ -81,7 +81,9 @@ class EntrypointController:
         self._callbacks = callbacks
 
     def handle_default(self, args: argparse.Namespace) -> int:
-        result = lifecycle.status(args.project_root)
+        result = self._status_or_report(args.project_root)
+        if result is None:
+            return 1
         if result.running:
             if args.message is not None:
                 print(f"Using current daemon: {format_status(result)}")
@@ -113,15 +115,21 @@ class EntrypointController:
         return self._run_daemon_interactive(args.project_root)
 
     def handle_chat(self, args: argparse.Namespace) -> int:
-        if lifecycle.status(args.project_root).running:
+        daemon_status = self._status_or_report(args.project_root)
+        if daemon_status is None:
+            return 1
+        if daemon_status.running:
             if args.message is not None:
                 return self._callbacks.send_daemon_chat(
                     args.message,
                     args.project_root,
                 )
             return self._run_daemon_interactive(args.project_root)
-        if args.require_daemon:
-            print("NuSelf daemon is not running.", file=sys.stderr)
+        if args.require_daemon or daemon_status.phase != "stopped":
+            print(
+                f"NuSelf daemon is not ready: {daemon_status.phase}.",
+                file=sys.stderr,
+            )
             return 1
         if args.message is not None:
             return self._callbacks.send_one_shot_chat(
@@ -131,8 +139,14 @@ class EntrypointController:
         return self._run_one_shot_interactive(args.project_root)
 
     def handle_attach(self, args: argparse.Namespace) -> int:
-        if not lifecycle.status(args.project_root).running:
-            print("NuSelf daemon is not running.", file=sys.stderr)
+        daemon_status = self._status_or_report(args.project_root)
+        if daemon_status is None:
+            return 1
+        if not daemon_status.running:
+            print(
+                f"NuSelf daemon is not ready: {daemon_status.phase}.",
+                file=sys.stderr,
+            )
             return 1
         if args.message is not None:
             return self._callbacks.send_daemon_chat(
@@ -147,7 +161,10 @@ class EntrypointController:
         if target is None:
             return 1
 
-        if lifecycle.status(args.project_root).running:
+        daemon_status = self._status_or_report(args.project_root)
+        if daemon_status is None:
+            return 1
+        if daemon_status.running:
             if target.message is not None:
                 result = self._callbacks.send_daemon_chat(
                     target.message,
@@ -160,6 +177,12 @@ class EntrypointController:
                 args.project_root,
                 initial_thread_id=target.thread_id,
             )
+        if daemon_status.phase != "stopped":
+            print(
+                f"NuSelf daemon is not ready: {daemon_status.phase}.",
+                file=sys.stderr,
+            )
+            return 1
         if target.message is not None:
             result = self._callbacks.send_one_shot_chat(
                 target.message,
@@ -172,6 +195,20 @@ class EntrypointController:
             args.project_root,
             initial_thread_id=target.thread_id,
         )
+
+    @staticmethod
+    def _status_or_report(
+        project_root: Path | None,
+    ) -> lifecycle.DaemonStatus | None:
+        try:
+            return lifecycle.status(project_root)
+        except lifecycle.DaemonStatusError as exc:
+            print(
+                "Daemon status unavailable: "
+                f"{diagnostic_exception_message(exc)}",
+                file=sys.stderr,
+            )
+            return None
 
     def _prepare_open_thread(
         self,

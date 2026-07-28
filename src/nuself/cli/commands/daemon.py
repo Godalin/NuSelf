@@ -16,18 +16,16 @@ from nuself.runtime.diagnostics import (
 
 
 def format_status(status: lifecycle.DaemonStatus) -> str:
-    state = "running" if status.running else "stopped"
     pid = status.pid if status.pid is not None else "-"
-    return f"daemon {state} pid={pid} socket={status.socket_path}"
+    return f"daemon {status.phase} pid={pid} socket={status.socket_path}"
 
 
 def format_daemon_list(status: lifecycle.DaemonStatus) -> str:
-    state = "running" if status.running else "stopped"
     pid = status.pid if status.pid is not None else "-"
     return "\n".join(
         [
             "name status pid socket",
-            f"local {state} {pid} {status.socket_path}",
+            f"local {status.phase} {pid} {status.socket_path}",
         ]
     )
 
@@ -61,7 +59,7 @@ def write_start_failure_audit(
         error=diagnostic_exception_chain(error),
         metadata={
             "reason": error.reason,
-            "running": error.status.running,
+            "phase": error.status.phase,
             "pid": error.status.pid,
             "socket": str(error.status.socket_path),
             "exit_code": error.exit_code,
@@ -95,7 +93,7 @@ def start_daemon_observed(
         f"{operation}_completed",
         f"daemon {operation} {'completed' if result.running else 'failed'}",
         project_root=project_root,
-        status="running" if result.running else "stopped",
+        status=result.phase,
         metadata={"pid": result.pid, "socket": str(result.socket_path)},
     )
     return result
@@ -126,7 +124,7 @@ def stop_daemon_observed(
             error=diagnostic_exception_chain(exc),
             metadata={
                 "reason": exc.reason,
-                "running": exc.status.running,
+                "phase": exc.status.phase,
                 "pid": exc.status.pid,
                 "socket": str(exc.status.socket_path),
                 "owner_active": exc.owner_active,
@@ -216,7 +214,15 @@ def handle_daemon_restart(args: argparse.Namespace) -> int:
 
 
 def handle_daemon_status(args: argparse.Namespace) -> int:
-    result = lifecycle.status(args.project_root)
+    try:
+        result = lifecycle.status(args.project_root)
+    except lifecycle.DaemonStatusError as exc:
+        print(
+            "Daemon status unavailable: "
+            f"{diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
+        return 1
     print(format_status(result))
     return 0 if result.running else 1
 
@@ -250,6 +256,14 @@ def handle_daemon_health(args: argparse.Namespace) -> int:
 
 
 def handle_daemon_list(args: argparse.Namespace) -> int:
-    result = lifecycle.status(args.project_root)
+    try:
+        result = lifecycle.status(args.project_root)
+    except lifecycle.DaemonStatusError as exc:
+        print(
+            "Daemon status unavailable: "
+            f"{diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
+        return 1
     print(format_daemon_list(result))
     return 0

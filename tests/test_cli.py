@@ -27,7 +27,7 @@ from nuself.memory.intake import IntakeResultOutput
 
 def _mock_status(project_root: Path) -> DaemonStatus:
     return DaemonStatus(
-        running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
+        phase="ready", pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
     )
 
 
@@ -735,7 +735,7 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     daemon_status = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=123,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -824,7 +824,7 @@ def test_interactive_daemon_application_error_does_not_retry(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     daemon_status = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=123,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -881,7 +881,7 @@ def test_interactive_malformed_daemon_payload_does_not_retry(
     monkeypatch: MonkeyPatchFixture,
 ) -> None:
     daemon_status = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=123,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -1217,7 +1217,7 @@ def test_default_entrypoint_uses_existing_daemon_with_message(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     daemon_status = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=123,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -1246,7 +1246,7 @@ def test_default_entrypoint_interactive_omits_redundant_startup_preamble(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     daemon_status = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=123,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -1274,13 +1274,13 @@ def test_default_entrypoint_creates_daemon_when_missing(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     stopped = DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
     )
     running = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=456,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -1315,7 +1315,7 @@ def test_daemon_chat_uses_long_timeout(
 ) -> None:
     captured_timeout = 0.0
     daemon_status = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=123,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -1367,7 +1367,7 @@ def test_daemon_chat_uses_configured_request_timeout(
     )
     captured_timeout = 0.0
     daemon_status = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=123,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -1412,7 +1412,7 @@ def test_daemon_chat_prints_memory_update(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     daemon_status = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=123,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -1458,7 +1458,7 @@ def test_daemon_chat_connection_error_is_reported(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     daemon_status = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=123,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -1652,7 +1652,7 @@ def test_daemon_attach_requires_running_daemon(
     captured = capsys.readouterr()
 
     assert result == 1
-    assert "NuSelf daemon is not running." in captured.err
+    assert "NuSelf daemon is not ready: stopped." in captured.err
 
 
 def test_incomplete_memory_command_shows_subcommand_help(
@@ -3543,13 +3543,13 @@ def test_daemon_restart_stops_then_starts(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     stopped = DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
     )
     running = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=789,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -3583,13 +3583,13 @@ def test_interactive_restart_restarts_daemon_and_keeps_session(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     stopped = DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
     )
     running = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=789,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -3636,7 +3636,7 @@ def test_daemon_start_with_mocked_lifecycle(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     running = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=456,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -3657,15 +3657,52 @@ def test_daemon_start_with_mocked_lifecycle(
         )
     captured = capsys.readouterr()
     assert result == 0
-    assert "daemon running" in captured.out
+    assert "daemon ready" in captured.out
     assert "pid=456" in captured.out
+
+
+def test_daemon_status_ownership_failure_is_safe(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    socket_path = tmp_path / "private" / "runtime" / "nuself.sock"
+    pid_path = tmp_path / "private" / "runtime" / "nuself.pid"
+    status_error = cli.lifecycle.DaemonStatusError(
+        DaemonStatus(
+            phase="unknown",
+            pid=None,
+            socket_path=socket_path,
+            pid_path=pid_path,
+        )
+    )
+
+    def fail_status(
+        project_root: Path | None = None,
+        *,
+        ping_timeout: float = 2.0,
+    ) -> DaemonStatus:
+        del project_root, ping_timeout
+        raise status_error
+
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fail_status)
+
+    result = main(
+        ["--project-root", str(tmp_path), "daemon", "status"]
+    )
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert (
+        "Daemon status unavailable: "
+        "daemon ownership status could not be observed"
+    ) in captured.err
+    assert captured.out == ""
 
 
 def test_daemon_start_failure_is_safe_and_audited(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     stopped = DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -3701,8 +3738,8 @@ def test_daemon_start_failure_is_safe_and_audited(
     assert events[-1].metadata == {
         "exit_code": 19,
         "pid": None,
+        "phase": "stopped",
         "reason": "process_exited",
-        "running": False,
         "socket": str(stopped.socket_path),
     }
 
@@ -3711,13 +3748,13 @@ def test_interactive_restart_start_failure_keeps_repl_alive(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     stopped = DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
     )
     running = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=789,
         socket_path=stopped.socket_path,
         pid_path=stopped.pid_path,
@@ -3762,7 +3799,7 @@ def test_daemon_stop_with_mocked_lifecycle(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     stopped = DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -3790,7 +3827,7 @@ def test_daemon_stop_failure_is_safe_and_audited(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     running = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=456,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
@@ -3827,8 +3864,8 @@ def test_daemon_stop_failure_is_safe_and_audited(
     assert events[-1].metadata == {
         "owner_active": True,
         "pid": 456,
+        "phase": "ready",
         "reason": "timeout",
-        "running": True,
         "socket": str(running.socket_path),
     }
 
@@ -3837,7 +3874,7 @@ def test_interactive_restart_stop_failure_keeps_repl_alive(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     running = DaemonStatus(
-        running=True,
+        phase="ready",
         pid=789,
         socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",

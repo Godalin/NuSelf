@@ -9,6 +9,7 @@ import pytest
 
 from nuself.config import runtime_paths
 from nuself.daemon import lifecycle
+from nuself.daemon.instance import DaemonInstanceLock
 from nuself.logs import read_log_events
 from nuself.private import ensure_private_root
 
@@ -33,8 +34,144 @@ def test_status_when_daemon_is_missing(tmp_path: Path) -> None:
     paths = runtime_paths(tmp_path)
 
     assert not status.running
+    assert status.phase == "stopped"
+    assert status.owner_active is False
     assert status.pid is None
     assert status.socket_path == paths.socket_path
+    assert not paths.daemon_lock_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("ready", "owned", "expected_phase", "expected_pid"),
+    [
+        (False, False, "stopped", None),
+        (False, True, "owned_unready", None),
+        (True, True, "ready", 4321),
+        (True, False, "inconsistent", None),
+    ],
+)
+def test_status_combines_ping_and_instance_ownership(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    ready: bool,
+    owned: bool,
+    expected_phase: lifecycle.DaemonPhase,
+    expected_pid: int | None,
+) -> None:
+    paths = runtime_paths(tmp_path)
+    paths.pid_path.parent.mkdir(parents=True)
+    paths.pid_path.write_text("4321\n", encoding="utf-8")
+
+    def ping(
+        project_root: Path | None = None,
+        *,
+        timeout: float = 2.0,
+    ) -> bool:
+        del project_root, timeout
+        return ready
+
+    def inspect(path: Path) -> bool:
+        assert path == paths.daemon_lock_path
+        return owned
+
+    monkeypatch.setattr(lifecycle.client, "ping", ping)
+    monkeypatch.setattr(lifecycle, "daemon_instance_owned", inspect)
+
+    snapshot = lifecycle.status(tmp_path)
+
+    assert snapshot.phase == expected_phase
+    assert snapshot.running is (expected_phase == "ready")
+    assert snapshot.owner_active is (
+        expected_phase in {"owned_unready", "ready"}
+    )
+    assert snapshot.pid == expected_pid
+
+
+def test_status_ownership_failure_retains_unknown_partial_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = runtime_paths(tmp_path)
+    failure = PermissionError("private lock detail")
+
+    def failed_ping(
+        project_root: Path | None = None,
+        *,
+        timeout: float = 2.0,
+    ) -> bool:
+        del project_root, timeout
+        return False
+
+    def fail_inspection(path: Path) -> bool:
+        assert path == paths.daemon_lock_path
+        raise failure
+
+    monkeypatch.setattr(lifecycle.client, "ping", failed_ping)
+    monkeypatch.setattr(
+        lifecycle,
+        "daemon_instance_owned",
+        fail_inspection,
+    )
+
+    with pytest.raises(lifecycle.DaemonStatusError) as captured:
+        lifecycle.status(tmp_path)
+
+    error = captured.value
+    assert error.status.phase == "unknown"
+    assert error.status.pid is None
+    assert error.status.owner_active is None
+    assert error.__cause__ is failure
+    assert "private lock detail" not in str(error)
+
+
+def test_non_ready_status_rejects_pid_identity(tmp_path: Path) -> None:
+    paths = runtime_paths(tmp_path)
+
+    with pytest.raises(ValueError, match="only a ready daemon"):
+        lifecycle.DaemonStatus(
+            phase="owned_unready",
+            pid=4321,
+            socket_path=paths.socket_path,
+            pid_path=paths.pid_path,
+        )
+
+
+def test_start_rejects_existing_unready_owner_without_spawning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = runtime_paths(tmp_path)
+    owned_unready = lifecycle.DaemonStatus(
+        phase="owned_unready",
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    spawned = False
+
+    def fake_status(
+        project_root: Path | None = None,
+        *,
+        ping_timeout: float = 2.0,
+    ) -> lifecycle.DaemonStatus:
+        del project_root, ping_timeout
+        return owned_unready
+
+    def unexpected_spawn(args: object, **kwargs: object) -> object:
+        nonlocal spawned
+        del args, kwargs
+        spawned = True
+        return object()
+
+    monkeypatch.setattr(lifecycle, "status", fake_status)
+    monkeypatch.setattr(lifecycle.subprocess, "Popen", unexpected_spawn)
+
+    with pytest.raises(lifecycle.DaemonStartError) as captured:
+        lifecycle.start(tmp_path)
+
+    assert captured.value.reason == "owner_unready"
+    assert captured.value.status is owned_unready
+    assert spawned is False
 
 
 def test_start_isolates_raw_process_output_from_structured_daemon_log(
@@ -43,13 +180,13 @@ def test_start_isolates_raw_process_output_from_structured_daemon_log(
 ) -> None:
     paths = runtime_paths(tmp_path)
     missing = lifecycle.DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
     )
     running = lifecycle.DaemonStatus(
-        running=True,
+        phase="ready",
         pid=42,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
@@ -108,13 +245,13 @@ def test_start_rotates_bounded_raw_process_log_before_spawn(
         path.write_text(content, encoding="utf-8")
         path.chmod(0o644)
     missing = lifecycle.DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
     )
     running = lifecycle.DaemonStatus(
-        running=True,
+        phase="ready",
         pid=42,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
@@ -184,13 +321,13 @@ def test_process_log_rotation_failure_warns_safely_and_continues_start(
 ) -> None:
     paths = runtime_paths(tmp_path)
     missing = lifecycle.DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
     )
     running = lifecycle.DaemonStatus(
-        running=True,
+        phase="ready",
         pid=42,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
@@ -284,7 +421,7 @@ def test_start_wraps_spawn_failure_and_preserves_cause(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stopped = lifecycle.DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=runtime_paths(tmp_path).socket_path,
         pid_path=runtime_paths(tmp_path).pid_path,
@@ -324,7 +461,7 @@ def test_start_reports_child_exit_before_readiness(
 ) -> None:
     paths = runtime_paths(tmp_path)
     stopped = lifecycle.DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
@@ -374,7 +511,7 @@ def test_start_uses_monotonic_deadline_without_oversleep(
 ) -> None:
     paths = runtime_paths(tmp_path)
     stopped = lifecycle.DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
@@ -514,7 +651,7 @@ def test_stop_uses_real_instance_lock_as_completion_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     paths = runtime_paths(tmp_path)
-    owner = lifecycle.DaemonInstanceLock(paths.daemon_lock_path)
+    owner = DaemonInstanceLock(paths.daemon_lock_path)
     owner.acquire()
     now = 10.0
     sleeps: list[float] = []
@@ -574,19 +711,18 @@ def test_stop_waits_for_ping_and_instance_ownership_release(
 ) -> None:
     paths = runtime_paths(tmp_path)
     running = lifecycle.DaemonStatus(
-        running=True,
+        phase="ready",
         pid=42,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
     )
     stopped = lifecycle.DaemonStatus(
-        running=False,
+        phase="stopped",
         pid=None,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
     )
     status_snapshots = iter([running, stopped])
-    ownership = iter([True, False])
     shutdown_timeouts: list[float] = []
 
     def fake_status(
@@ -598,13 +734,6 @@ def test_stop_waits_for_ping_and_instance_ownership_release(
         assert 0 < ping_timeout <= 2
         return next(status_snapshots)
 
-    def inspect_ownership(
-        runtime: object,
-        status_snapshot: lifecycle.DaemonStatus,
-    ) -> bool:
-        del runtime, status_snapshot
-        return next(ownership)
-
     def shutdown(
         project_root: Path | None = None,
         *,
@@ -614,11 +743,6 @@ def test_stop_waits_for_ping_and_instance_ownership_release(
         shutdown_timeouts.append(timeout)
 
     monkeypatch.setattr(lifecycle, "status", fake_status)
-    monkeypatch.setattr(
-        lifecycle,
-        "_inspect_daemon_ownership",
-        inspect_ownership,
-    )
     monkeypatch.setattr(lifecycle.client, "shutdown", shutdown)
 
     assert lifecycle.stop(tmp_path) is stopped
@@ -632,7 +756,7 @@ def test_stop_timeout_retains_ambiguous_transport_failure(
 ) -> None:
     paths = runtime_paths(tmp_path)
     stopped = lifecycle.DaemonStatus(
-        running=False,
+        phase="owned_unready",
         pid=None,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
@@ -653,13 +777,6 @@ def test_stop_timeout_retains_ambiguous_transport_failure(
         assert ping_timeout > 0
         return stopped
 
-    def owner_active(
-        runtime: object,
-        status_snapshot: lifecycle.DaemonStatus,
-    ) -> bool:
-        del runtime, status_snapshot
-        return True
-
     def fail_shutdown(
         project_root: Path | None = None,
         *,
@@ -678,11 +795,6 @@ def test_stop_timeout_retains_ambiguous_transport_failure(
         now += seconds
 
     monkeypatch.setattr(lifecycle, "status", fake_status)
-    monkeypatch.setattr(
-        lifecycle,
-        "_inspect_daemon_ownership",
-        owner_active,
-    )
     monkeypatch.setattr(lifecycle.client, "shutdown", fail_shutdown)
     monkeypatch.setattr(lifecycle.time, "monotonic", monotonic)
     monkeypatch.setattr(lifecycle.time, "sleep", sleep)
@@ -713,7 +825,7 @@ def test_stop_rejection_is_not_retried(
 ) -> None:
     paths = runtime_paths(tmp_path)
     running = lifecycle.DaemonStatus(
-        running=True,
+        phase="ready",
         pid=42,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
@@ -728,13 +840,6 @@ def test_stop_rejection_is_not_retried(
         del project_root, ping_timeout
         return running
 
-    def owner_active(
-        runtime: object,
-        status_snapshot: lifecycle.DaemonStatus,
-    ) -> bool:
-        del runtime, status_snapshot
-        return True
-
     def reject_shutdown(
         project_root: Path | None = None,
         *,
@@ -744,11 +849,6 @@ def test_stop_rejection_is_not_retried(
         raise rejection
 
     monkeypatch.setattr(lifecycle, "status", fake_status)
-    monkeypatch.setattr(
-        lifecycle,
-        "_inspect_daemon_ownership",
-        owner_active,
-    )
     monkeypatch.setattr(
         lifecycle.client,
         "shutdown",
@@ -771,28 +871,32 @@ def test_stop_wraps_instance_ownership_inspection_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     paths = runtime_paths(tmp_path)
-    stopped = lifecycle.DaemonStatus(
-        running=False,
+    unknown = lifecycle.DaemonStatus(
+        phase="unknown",
         pid=None,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
     )
     failure = PermissionError("private lock detail")
 
-    def fake_status(
+    def failed_ping(
         project_root: Path | None = None,
         *,
-        ping_timeout: float = 2.0,
-    ) -> lifecycle.DaemonStatus:
-        del project_root, ping_timeout
-        return stopped
+        timeout: float = 2.0,
+    ) -> bool:
+        del project_root, timeout
+        return False
 
-    def fail_acquire(lock: object) -> None:
-        del lock
+    def fail_inspection(path: Path) -> bool:
+        del path
         raise failure
 
-    monkeypatch.setattr(lifecycle, "status", fake_status)
-    monkeypatch.setattr(lifecycle.DaemonInstanceLock, "acquire", fail_acquire)
+    monkeypatch.setattr(lifecycle.client, "ping", failed_ping)
+    monkeypatch.setattr(
+        lifecycle,
+        "daemon_instance_owned",
+        fail_inspection,
+    )
 
     with pytest.raises(lifecycle.DaemonStopError) as captured:
         lifecycle.stop(tmp_path)
@@ -800,7 +904,9 @@ def test_stop_wraps_instance_ownership_inspection_failure(
     error = captured.value
     assert error.reason == "ownership_check_failed"
     assert error.owner_active is None
-    assert error.__cause__ is failure
+    assert isinstance(error.__cause__, lifecycle.DaemonStatusError)
+    assert error.__cause__.status == unknown
+    assert error.__cause__.__cause__ is failure
     assert str(error) == "daemon ownership could not be verified"
 
 

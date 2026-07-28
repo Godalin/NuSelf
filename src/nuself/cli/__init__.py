@@ -337,8 +337,13 @@ def _render_assistant_reply_rich(text: str) -> None:
 
 
 def _interactive_daemon_status(project_root: Path | None) -> str:
-    status = lifecycle.status(project_root)
-    return "running" if status.running else "one-shot"
+    try:
+        status = lifecycle.status(project_root)
+    except lifecycle.DaemonStatusError:
+        return "unknown"
+    return "running" if status.running else (
+        "one-shot" if status.phase == "stopped" else status.phase
+    )
 
 
 if __name__ == "__main__":

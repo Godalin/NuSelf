@@ -105,3 +105,16 @@ class DaemonInstanceLock:
         traceback: object,
     ) -> None:
         self.release()
+
+
+def daemon_instance_owned(path: Path) -> bool:
+    """Return whether another process currently owns the instance lock."""
+
+    if not path.exists():
+        return False
+    lock = DaemonInstanceLock(path)
+    try:
+        with lock:
+            return False
+    except DaemonInstanceLockContended:
+        return True

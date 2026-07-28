@@ -12,10 +12,7 @@ from typing import Literal, Never
 
 from nuself.config import RuntimePaths, ensure_runtime_dirs, runtime_paths
 from nuself.daemon import client
-from nuself.daemon.instance import (
-    DaemonInstanceLock,
-    DaemonInstanceLockContended,
-)
+from nuself.daemon.instance import daemon_instance_owned
 from nuself.private_fs import ensure_private_file
 from nuself.runtime.diagnostics import emit_runtime_warning
 from nuself.runtime.observability import report_corrupt_record
@@ -61,6 +58,8 @@ DEFAULT_DAEMON_SHUTDOWN_POLICY = DaemonWaitPolicy()
 
 DaemonStartFailureReason = Literal[
     "spawn_failed",
+    "status_failed",
+    "owner_unready",
     "process_exited",
     "timeout",
 ]
@@ -69,14 +68,43 @@ DaemonStopFailureReason = Literal[
     "ownership_check_failed",
     "timeout",
 ]
+DaemonPhase = Literal[
+    "stopped",
+    "owned_unready",
+    "ready",
+    "inconsistent",
+    "unknown",
+]
 
 
 @dataclass(frozen=True)
 class DaemonStatus:
-    running: bool
+    phase: DaemonPhase
     pid: int | None
     socket_path: Path
     pid_path: Path
+
+    def __post_init__(self) -> None:
+        if self.phase != "ready" and self.pid is not None:
+            raise ValueError("only a ready daemon status may carry a PID")
+
+    @property
+    def running(self) -> bool:
+        return self.phase == "ready"
+
+    @property
+    def owner_active(self) -> bool | None:
+        if self.phase == "unknown":
+            return None
+        return self.phase in {"owned_unready", "ready"}
+
+
+class DaemonStatusError(RuntimeError):
+    """Daemon ownership could not be observed authoritatively."""
+
+    def __init__(self, status: DaemonStatus) -> None:
+        super().__init__("daemon ownership status could not be observed")
+        self.status = status
 
 
 class DaemonStartError(RuntimeError):
@@ -92,6 +120,10 @@ class DaemonStartError(RuntimeError):
     ) -> None:
         if reason == "spawn_failed":
             message = "daemon process could not be spawned"
+        elif reason == "status_failed":
+            message = "daemon status could not be observed"
+        elif reason == "owner_unready":
+            message = "daemon owns the runtime but is not ready"
         elif reason == "process_exited":
             message = (
                 "daemon process exited before becoming ready "
@@ -146,9 +178,24 @@ def status(
         paths.project_root,
         timeout=ping_timeout,
     )
+    partial = DaemonStatus(
+        phase="unknown",
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    try:
+        owned = daemon_instance_owned(paths.daemon_lock_path)
+    except Exception as exc:
+        raise DaemonStatusError(partial) from exc
+    phase: DaemonPhase
+    if running:
+        phase = "ready" if owned else "inconsistent"
+    else:
+        phase = "owned_unready" if owned else "stopped"
     return DaemonStatus(
-        running=running,
-        pid=read_pid(paths) if running else None,
+        phase=phase,
+        pid=read_pid(paths) if phase == "ready" else None,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
     )
@@ -164,9 +211,19 @@ def start(
 ) -> DaemonStatus:
     paths = runtime_paths(project_root)
     ensure_runtime_dirs(paths)
-    current = status(paths.project_root)
+    current = _status_for_start(paths.project_root)
     if current.running:
         return current
+    if current.phase == "owned_unready":
+        raise DaemonStartError(
+            "owner_unready",
+            status=current,
+        )
+    if current.phase == "inconsistent":
+        raise DaemonStartError(
+            "status_failed",
+            status=current,
+        )
     try:
         _rotate_daemon_process_log_if_needed(
             paths.daemon_process_log_path,
@@ -208,7 +265,7 @@ def start(
                 status=current,
                 timeout_seconds=startup_policy.timeout_seconds,
             )
-        current = status(
+        current = _status_for_start(
             paths.project_root,
             ping_timeout=remaining,
         )
@@ -229,6 +286,20 @@ def start(
                 timeout_seconds=startup_policy.timeout_seconds,
             )
         time.sleep(min(startup_policy.poll_interval_seconds, remaining))
+
+
+def _status_for_start(
+    project_root: Path,
+    *,
+    ping_timeout: float = 2.0,
+) -> DaemonStatus:
+    try:
+        return status(project_root, ping_timeout=ping_timeout)
+    except DaemonStatusError as exc:
+        raise DaemonStartError(
+            "status_failed",
+            status=exc.status,
+        ) from exc
 
 
 def _rotate_daemon_process_log_if_needed(
@@ -262,11 +333,12 @@ def stop(
 ) -> DaemonStatus:
     paths = runtime_paths(project_root)
     deadline = time.monotonic() + shutdown_policy.timeout_seconds
-    current = status(
+    current = _status_for_stop(
         paths.project_root,
         ping_timeout=shutdown_policy.timeout_seconds,
     )
-    owner_active = _inspect_daemon_ownership(paths, current)
+    owner_active = current.owner_active
+    assert owner_active is not None
     if not current.running and not owner_active:
         return current
     request_error: client.DaemonConnectionError | None = None
@@ -300,11 +372,12 @@ def stop(
                 policy=shutdown_policy,
                 request_error=request_error,
             )
-        current = status(
+        current = _status_for_stop(
             paths.project_root,
             ping_timeout=remaining,
         )
-        owner_active = _inspect_daemon_ownership(paths, current)
+        owner_active = current.owner_active
+        assert owner_active is not None
         if not current.running and not owner_active:
             return current
         remaining = deadline - time.monotonic()
@@ -336,23 +409,19 @@ def _raise_daemon_stop_timeout(
     raise error
 
 
-def _inspect_daemon_ownership(
-    paths: RuntimePaths,
-    status_snapshot: DaemonStatus,
-) -> bool:
-    lock = DaemonInstanceLock(paths.daemon_lock_path)
+def _status_for_stop(
+    project_root: Path,
+    *,
+    ping_timeout: float,
+) -> DaemonStatus:
     try:
-        with lock:
-            pass
-    except DaemonInstanceLockContended:
-        return True
-    except Exception as exc:
+        return status(project_root, ping_timeout=ping_timeout)
+    except DaemonStatusError as exc:
         raise DaemonStopError(
             "ownership_check_failed",
-            status=status_snapshot,
+            status=exc.status,
             owner_active=None,
         ) from exc
-    return False
 
 
 def read_pid(paths: RuntimePaths) -> int | None:

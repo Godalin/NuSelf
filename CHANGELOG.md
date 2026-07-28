@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon status now exposes explicit `stopped`, `owned_unready`, `ready`,
+  `inconsistent`, and typed `unknown` phases; ambiguous ownership never falls
+  back to one-shot execution or masquerades as stopped.
 - Daemon `started`/`stopped` lifecycle records now represent actual readiness:
   `started` is published only after every background worker starts and before
   the first request can be accepted.
