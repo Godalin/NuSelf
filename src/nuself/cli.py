@@ -123,6 +123,12 @@ try:
         handle_pack_list,
     )
     from nuself.commands.eval import handle_eval
+    from nuself.commands.system import (
+        handle_config,
+        handle_health,
+        handle_logs,
+        handle_status,
+    )
     from nuself.commands.memory.profile import (
         handle_memory_profile_delete,
         handle_memory_profile_list,
@@ -194,7 +200,6 @@ try:
     from nuself.logs import (
         LOG_COMPONENTS,
         InteractiveLogCursor,
-        LogComponent,
         LogEvent,
         read_log_events,
         write_log_event,
@@ -212,7 +217,7 @@ try:
     from nuself.reason.service import ReasonService
     from nuself.reason.repository import ReasonNotFound
     from nuself.tui.reason import render_reason_detail, render_reason_row
-    from nuself.tui.render import TerminalTheme, format_display_timestamp, render_log_event, render_log_event_json, render_session_header
+    from nuself.tui.render import TerminalTheme, format_display_timestamp, render_log_event, render_session_header
     from nuself.tui.trace import render_trace_detail, render_trace_row
     from nuself.persona.prompt_repo import PersonaPromptRepository
     from nuself.storage import auto_backend
@@ -933,76 +938,6 @@ def handle_default_entrypoint(args: argparse.Namespace) -> int:
         ),
         args.project_root,
     )
-
-
-def handle_status(args: argparse.Namespace) -> int:
-    daemon = lifecycle.status(args.project_root)
-    threads = ThreadStore(args.project_root).list()
-    from nuself.notification import NotificationOutbox
-
-    pending = len(NotificationOutbox(args.project_root).list(status="pending"))
-    print(f"daemon: {'running' if daemon.running else 'stopped'} pid={daemon.pid or '-'}")
-    print(f"threads: {len(threads)}")
-    print(f"pending notifications: {pending}")
-    return 0
-
-
-def handle_health(args: argparse.Namespace) -> int:
-    issues: list[str] = []
-    paths = runtime_paths(args.project_root)
-    config_path = paths.private_root / "config.yaml"
-
-    if not paths.private_root.exists():
-        issues.append(f"private root missing: {paths.private_root}")
-    if paths.private_root.exists() and not config_path.exists():
-        issues.append(f"config file missing: {config_path}")
-
-    daemon = lifecycle.status(args.project_root)
-    if not daemon.running:
-        issues.append("daemon is not running")
-
-    if issues:
-        print("Health issues:")
-        for issue in issues:
-            print(f"  - {issue}")
-        return 1
-    print("All checks passed.")
-    return 0
-
-
-def handle_config(args: argparse.Namespace) -> int:
-    paths = runtime_paths(args.project_root)
-    config_path = paths.private_root / "config.yaml"
-    print(f"project_root: {paths.project_root}")
-    print(f"private_root: {paths.private_root}")
-    print(f"socket_path: {paths.socket_path}")
-    print(f"config_path: {config_path}")
-    print(f"config_file: {'found' if config_path.exists() else 'not found (using defaults)'}")
-
-    system_config = ConfigSystem.load(config_path, args.project_root)
-    print("config_effective:")
-    config_system = ConfigSystem()
-    for key, value in sorted(config_system.as_flat_dict(system_config).items()):
-        print(f"  {key}: {value}")
-    return 0
-
-
-def handle_logs(args: argparse.Namespace) -> int:
-    component = _log_component_arg(args.component)
-    tail = max(args.tail, 1)
-    events = read_log_events(project_root=args.project_root, component=component, tail=tail)
-    if not events:
-        target = component or "any component"
-        print(f"No logs found for {target}.")
-        return 0
-    for event in events:
-        if args.json:
-            _print_ansi(render_log_event_json(event))
-        else:
-            _print_ansi(render_log_event(event, color=False if args.no_color else None))
-    if args.follow:
-        print("Log follow is not streaming yet; showing current tail only.", file=sys.stderr)
-    return 0
 
 
 def handle_chat(args: argparse.Namespace) -> int:
@@ -1890,12 +1825,6 @@ def _render_assistant_reply_rich(text: str) -> None:
             visible_text += character
             live.update(Markdown(visible_text))
             time.sleep(TYPEWRITER_DELAY_SECONDS)
-
-
-def _log_component_arg(value: object) -> LogComponent | None:
-    if value in LOG_COMPONENTS:
-        return value
-    return None
 
 
 def _optional_payload_str(value: object) -> str | None:

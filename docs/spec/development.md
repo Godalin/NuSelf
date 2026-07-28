@@ -124,6 +124,9 @@ top-level application namespace stays focused on subsystem APIs.
   including pack path resolution and human-readable archive sizes.
 - `commands/eval.py` owns conversation and notification fixture evaluation
   orchestration for both the canonical and compatibility CLI routes.
+- `commands/system.py` owns one-shot status, health, effective-config, and log
+  tail commands. Interactive log views and default/chat session orchestration
+  remain in `nuself.cli`.
 - Memory CLI commands live together under the `commands/memory/` package and
   are split by subdomain instead of collected in one oversized module.
   `commands/memory/profile.py` owns profile list/search/show/delete/reindex
