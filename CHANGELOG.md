@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Memory curator and optimizer now use the shared LangChain structured-agent
+  boundary and accept only typed action batches. Their prompted-JSON,
+  fenced-text extraction, parser helpers, and legacy `llm=` injection paths
+  were removed.
 - Manual memory intake now runs through a shared LangChain structured-agent
   boundary and accepts only its typed `structured_response`. Prompted JSON,
   fenced-text extraction, dictionary state, and the legacy text-LLM injection

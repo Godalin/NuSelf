@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 import json
 from pathlib import Path
 
 import pytest
+from langchain_core.messages import BaseMessage
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.domain.memory import (
@@ -13,25 +15,34 @@ from nuself.domain.memory import (
     MemoryValidationIssue,
 )
 from nuself.domain.profile import ProfileItem
-from nuself.llm import ChatMessage
 from nuself.logs import read_log_events
 from nuself.memory.curator import (
+    CuratorActionsOutput,
     MemoryCurator,
     MemoryCuratorSettings,
-    _parse_actions,  # pyright: ignore[reportPrivateUsage]
+    _actions_from_output,  # pyright: ignore[reportPrivateUsage]
 )
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
 
 
-class FakeCuratorLLM:
-    def __init__(self, response: str) -> None:
-        self.response = response
-        self.calls: list[list[ChatMessage]] = []
+class FakeCuratorAgent:
+    def __init__(self, output: CuratorActionsOutput) -> None:
+        self.output = output
+        self.calls: list[Sequence[BaseMessage]] = []
 
-    def complete(self, messages: list[ChatMessage]) -> str:
+    def invoke(
+        self,
+        messages: Sequence[BaseMessage],
+    ) -> CuratorActionsOutput:
         self.calls.append(messages)
-        return self.response
+        return self.output
+
+
+def _curator_agent(response: str) -> FakeCuratorAgent:
+    return FakeCuratorAgent(
+        CuratorActionsOutput.model_validate_json(response)
+    )
 
 
 @pytest.mark.parametrize(
@@ -61,7 +72,8 @@ class FakeCuratorLLM:
 )
 def test_curator_action_schema_fails_closed(raw: str) -> None:
     with pytest.raises(ValueError):
-        _parse_actions(raw, allowed_types=("episode",))
+        output = CuratorActionsOutput.model_validate_json(raw)
+        _actions_from_output(output, allowed_types=("episode",))
 
 
 def test_curator_rejects_complete_batch_when_one_action_is_invalid(
@@ -82,7 +94,7 @@ def test_curator_rejects_complete_batch_when_one_action_is_invalid(
             ],
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":['
         '{"action":"create","type":"episode","title":"Valid sibling",'
         '"body":"This action must not be partially applied.",'
@@ -94,7 +106,7 @@ def test_curator_rejects_complete_batch_when_one_action_is_invalid(
     )
     curator = MemoryCurator(
         tmp_path,
-        llm=llm,
+        agent=agent,
         thread_store=thread_store,
         settings=MemoryCuratorSettings(auto_accept=False),
     )
@@ -116,13 +128,13 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
             ],
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode","title":"Shared working memory",'
         '"body":"The user decided that terminals attached to one NuSelf mind should share short-term memory.",'
         '"tags":["memory"],"confidence":0.8,"reason":"important memory model decision"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     second_result = curator.run_once()
@@ -207,10 +219,10 @@ def test_memory_curator_rejects_corrupt_cursor_without_replay(
     )
     cursor_path.parent.mkdir(parents=True)
     cursor_path.write_text(cursor_text, encoding="utf-8")
-    llm = FakeCuratorLLM('{"actions":[]}')
+    agent = _curator_agent('{"actions":[]}')
     curator = MemoryCurator(
         tmp_path,
-        llm=llm,
+        agent=agent,
         thread_store=thread_store,
         settings=MemoryCuratorSettings(auto_accept=False),
     )
@@ -221,7 +233,7 @@ def test_memory_curator_rejects_corrupt_cursor_without_replay(
     ):
         curator.run_once()
 
-    assert llm.calls == []
+    assert agent.calls == []
     assert MemoryCandidateRepository(tmp_path).list() == []
     event = read_log_events(
         project_root=tmp_path,
@@ -254,13 +266,13 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
             review_state="reviewed",
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"update","entry_id":"'
         + existing.id
         + '","title":"Memory preview style","body":"The user prefers concise memory previews.",'
         '"tags":["memory","preview"],"confidence":0.75,"reason":"user clarified preview style"}]}'
     )
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     candidates = MemoryCandidateRepository(tmp_path).list()
@@ -296,15 +308,15 @@ def test_memory_curator_includes_profile_context_in_prompt(tmp_path: Path) -> No
             source_refs=["source:profile:0"],
         )
     )
-    llm = FakeCuratorLLM('{"actions":[{"action":"ignore","reason":"no durable memory"}]}')
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, profile_repository=profile_repo, settings=MemoryCuratorSettings(auto_accept=False))
+    agent = _curator_agent('{"actions":[{"action":"ignore","reason":"no durable memory"}]}')
+    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, profile_repository=profile_repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     curator.run_once()
 
-    system_prompt, user_prompt = llm.calls[0]
-    assert "Consider existing profile items" in system_prompt.content
-    assert "Existing profile items:" in user_prompt.content
-    assert "Concise output" in user_prompt.content
+    system_prompt, user_prompt = agent.calls[0]
+    assert "Consider existing profile items" in system_prompt.text
+    assert "Existing profile items:" in user_prompt.text
+    assert "Concise output" in user_prompt.text
 
 
 def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None:
@@ -318,12 +330,15 @@ def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None
             ],
         )
     )
-    class FailingCuratorLLM:
-        def complete(self, messages: list[ChatMessage]) -> str:
+    class FailingCuratorAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> CuratorActionsOutput:
             raise RuntimeError("LLM unavailable")
 
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=FailingCuratorLLM(), thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=FailingCuratorAgent(), thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -343,9 +358,9 @@ def test_memory_curator_ignores_trivial_chat_when_agent_says_ignore(tmp_path: Pa
             ],
         )
     )
-    llm = FakeCuratorLLM('{"actions":[{"action":"ignore","reason":"trivial name ping"}]}')
+    agent = _curator_agent('{"actions":[{"action":"ignore","reason":"trivial name ping"}]}')
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     second_result = curator.run_once()
@@ -353,7 +368,7 @@ def test_memory_curator_ignores_trivial_chat_when_agent_says_ignore(tmp_path: Pa
     assert result.processed_messages == 0
     assert result.ignored == 0
     assert second_result.processed_messages == 0
-    assert llm.calls == []
+    assert agent.calls == []
     assert repo.list() == []
 
 
@@ -373,13 +388,13 @@ def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> No
             ],
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"belief","title":"Memory quality threshold",'
         '"body":"The user wants memory curation to depend on discussion depth and quality, not turn count.",'
         '"tags":["memory"],"confidence":0.85,"reason":"explicit memory-system decision"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     candidates = MemoryCandidateRepository(tmp_path).list()
@@ -410,13 +425,13 @@ def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: 
     cursor_path = tmp_path / "private" / "memory" / "cursors" / "default.json"
     cursor_path.parent.mkdir(parents=True)
     cursor_path.write_text('{"thread_id":"default","processed_message_count":4}\n', encoding="utf-8")
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode","title":"Compressed cursor continuity",'
         '"body":"Memory curation should continue after thread compression by using absolute message indexes.",'
         '"tags":["memory"],"confidence":0.8,"reason":"cursor correctness"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     second_result = curator.run_once()
@@ -439,13 +454,13 @@ def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:
             ],
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode","title":"Raw transcript",'
         '"body":"user: We need conservative memory updates. assistant: I will avoid raw transcript memory.",'
         '"tags":["memory"],"confidence":0.9,"reason":"bad raw transcript"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -464,13 +479,13 @@ def test_memory_curator_rejects_create_without_tags(tmp_path: Path) -> None:
             ],
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode","title":"Missing tags",'
         '"body":"Curated memory candidates should include tags.",'
         '"confidence":0.9,"reason":"bad missing tags"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -490,7 +505,7 @@ def test_memory_curator_rejects_unknown_memory_type(tmp_path: Path) -> None:
             ],
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"made_up_type","title":"Unknown type",'
         '"body":"Unknown memory types should not be silently coerced.",'
         '"tags":["memory"],"confidence":0.9,"reason":"bad unknown type"}]}'
@@ -498,7 +513,7 @@ def test_memory_curator_rejects_unknown_memory_type(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     curator = MemoryCurator(
         tmp_path,
-        llm=llm,
+        agent=agent,
         thread_store=thread_store,
         repository=repo,
         settings=MemoryCuratorSettings(auto_accept=False),
@@ -511,7 +526,9 @@ def test_memory_curator_rejects_unknown_memory_type(tmp_path: Path) -> None:
     assert repo.list() == []
 
 
-def test_memory_curator_accepts_fenced_json(tmp_path: Path) -> None:
+def test_memory_curator_accepts_typed_structured_output(
+    tmp_path: Path,
+) -> None:
     thread_store = ThreadStore(tmp_path)
     thread_store.save(
         ThreadState(
@@ -522,13 +539,13 @@ def test_memory_curator_accepts_fenced_json(tmp_path: Path) -> None:
             ],
         )
     )
-    llm = FakeCuratorLLM(
-        '```json\n{"actions":[{"action":"create","type":"episode","title":"Structured memory decisions",'
+    agent = _curator_agent(
+        '{"actions":[{"action":"create","type":"episode","title":"Structured memory decisions",'
         '"body":"The user wants memory updates to be decided by an agent and dispatched as structured actions.",'
-        '"tags":["memory"],"confidence":0.82,"reason":"durable memory-system decision"}]}\n```'
+        '"tags":["memory"],"confidence":0.82,"reason":"durable memory-system decision"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -584,13 +601,13 @@ def test_memory_curator_defers_descriptor_validation_until_candidate_acceptance(
             ],
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode","title":"Descriptor validation",'
         '"body":"Curator writes should pass descriptor validation before persistence.",'
         '"tags":["memory"],"confidence":0.8,"reason":"typed memory pipeline"}]}'
     )
     repo = MemoryEntryRepository(tmp_path, registry=MemoryTypeRegistry([RejectingEpisodeDescriptor()]))
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -626,12 +643,12 @@ def test_memory_curator_merges_duplicate_into_existing_entry(tmp_path: Path) -> 
             review_state="reviewed",
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode","title":"Shared working memory",'
         '"body":"The user really likes shared working memory.",'
         '"tags":["memory"],"confidence":0.8,"reason":"duplicate detection test"}]}'
     )
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     candidates = MemoryCandidateRepository(tmp_path).list()
@@ -659,13 +676,13 @@ def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
             ],
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"belief","title":"Interest in Rust",'
         '"body":"The user wants to learn Rust for systems programming.",'
         '"tags":["rust"],"confidence":0.85,"reason":"explicit learning goal"}]}'
     )
     repo = MemoryEntryRepository(tmp_path)
-    curator = MemoryCurator(tmp_path, llm=llm, thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo)
 
     result = curator.run_once()
 
@@ -702,7 +719,7 @@ def test_curator_audit_failure_cannot_replay_committed_candidate(
             ],
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode",'
         '"title":"Curator audit boundary",'
         '"body":"Curator audit writes are auxiliary.",'
@@ -723,7 +740,7 @@ def test_curator_audit_failure_cannot_replay_committed_candidate(
     )
     curator = MemoryCurator(
         tmp_path,
-        llm=llm,
+        agent=agent,
         thread_store=thread_store,
         settings=MemoryCuratorSettings(auto_accept=False),
     )
@@ -734,7 +751,7 @@ def test_curator_audit_failure_cannot_replay_committed_candidate(
     assert result.created == 1
     assert len(MemoryCandidateRepository(tmp_path).list()) == 1
     assert curator.run_once().processed_messages == 0
-    assert len(llm.calls) == 1
+    assert len(agent.calls) == 1
     assert any(
         "memory/curator_audit_write_failed" in str(warning.message)
         for warning in captured
@@ -762,7 +779,7 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
             ],
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode",'
         '"title":"Trace boundary","body":"Trace writes are auxiliary.",'
         '"tags":["trace"],"confidence":0.8,'
@@ -791,7 +808,7 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
     repository = MemoryEntryRepository(tmp_path)
     curator = MemoryCurator(
         tmp_path,
-        llm=llm,
+        agent=agent,
         thread_store=thread_store,
         repository=repository,
         trace_recorder=TraceRecorder(tmp_path),
@@ -842,7 +859,7 @@ def test_auto_accept_update_trace_retains_update_action(
             review_state="reviewed",
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"update","entry_id":"'
         + existing.id
         + '","type":"episode","title":"Curator trace policy",'
@@ -852,7 +869,7 @@ def test_auto_accept_update_trace_retains_update_action(
     )
     curator = MemoryCurator(
         tmp_path,
-        llm=llm,
+        agent=agent,
         thread_store=thread_store,
         repository=repository,
         trace_recorder=TraceRecorder(tmp_path),
@@ -885,7 +902,7 @@ def test_memory_curator_reports_recoverable_auto_accept_failure(
             ],
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode",'
         '"title":"Recoverable promotion","body":"Keep pending.",'
         '"tags":["memory"],"confidence":0.8,'
@@ -897,7 +914,7 @@ def test_memory_curator_reports_recoverable_auto_accept_failure(
     )
     curator = MemoryCurator(
         tmp_path,
-        llm=llm,
+        agent=agent,
         thread_store=thread_store,
         repository=repo,
     )
@@ -907,7 +924,7 @@ def test_memory_curator_reports_recoverable_auto_accept_failure(
 
     assert result.created == 1
     assert second.processed_messages == 0
-    assert len(llm.calls) == 1
+    assert len(agent.calls) == 1
     assert repo.list() == []
     candidates = MemoryCandidateRepository(tmp_path).list()
     assert len(candidates) == 1
@@ -949,7 +966,7 @@ def test_memory_curator_propagates_unexpected_auto_accept_failure(
             ],
         )
     )
-    llm = FakeCuratorLLM(
+    agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode",'
         '"title":"Storage boundary","body":"Do not suppress storage.",'
         '"tags":["memory"],"confidence":0.8,'
@@ -963,7 +980,7 @@ def test_memory_curator_propagates_unexpected_auto_accept_failure(
     monkeypatch.setattr(candidate_repo, "accept", fail_accept)
     curator = MemoryCurator(
         tmp_path,
-        llm=llm,
+        agent=agent,
         thread_store=thread_store,
         candidate_repository=candidate_repo,
     )

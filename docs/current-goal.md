@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. One framework-native structured-agent invocation boundary now owns typed
-output and failover, and manual memory intake no longer reparses model text.
+Idle. Memory curator, optimizer, and intake all use the shared
+framework-native structured-agent boundary with no text response protocol.
 
 ## Active Branch
 
@@ -23,16 +23,15 @@ code.
 
 ## Completion Evidence
 
-- Shared `LangChainStructuredAgent` builds no-tool agents through
-  `create_agent(..., response_format=ToolStrategy(schema))`.
-- The runner accepts only an actual requested schema instance from
-  `structured_response`; missing state, dictionaries, and wrong models fail.
-- Endpoint availability failures use the configured ordering and common
-  endpoint-success state. Protocol failures do not trigger another protocol.
-- Memory intake uses framework messages and the shared typed runner. Prompted
-  JSON, fenced-text extraction, `model_validate_json`, and `llm=` injection
-  are removed from this path.
-- Focused structured-agent/intake/CLI tests: 22 passed.
+- Curator and optimizer inject `StructuredAgent` with their exact output
+  schema and use LangChain `SystemMessage`/`HumanMessage` prompts.
+- Both accept only typed action batches from the shared runner before domain
+  conversion and candidate dispatch.
+- JSON instructions, fenced-text extraction, `model_validate_json`, parser
+  helpers, `ChatLLM`, and `llm=` injection are removed from production paths.
+- Existing strict schema, complete-batch rejection, cursor, auto-accept, and
+  pending optimizer candidate semantics remain covered.
+- Focused curator and optimizer tests: 44 passed.
 - Final full tests: 1453 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
@@ -44,4 +43,4 @@ their validated commit.
 
 ## Next Review Batch
 
-Migrate memory curator and optimizer to the shared structured-agent boundary.
+Audit reflection scheduler generated-output boundaries.

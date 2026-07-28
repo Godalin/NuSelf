@@ -1,29 +1,40 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
+from langchain_core.messages import BaseMessage
 
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
-from nuself.llm import ChatMessage
 from nuself.memory.optimizer import (
     MemoryOptimizer,
     MemoryOptimizerSettings,
-    _parse_optimize_actions,  # pyright: ignore[reportPrivateUsage]
+    OptimizeActionsOutput,
+    _optimize_actions_from_output,  # pyright: ignore[reportPrivateUsage]
 )
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
 
 
-class FakeOptimizerLLM:
-    def __init__(self, response: str) -> None:
-        self.response = response
-        self.calls: list[list[ChatMessage]] = []
+class FakeOptimizerAgent:
+    def __init__(self, output: OptimizeActionsOutput) -> None:
+        self.output = output
+        self.calls: list[Sequence[BaseMessage]] = []
 
-    def complete(self, messages: list[ChatMessage]) -> str:
+    def invoke(
+        self,
+        messages: Sequence[BaseMessage],
+    ) -> OptimizeActionsOutput:
         self.calls.append(messages)
-        return self.response
+        return self.output
+
+
+def _optimizer_agent(response: str) -> FakeOptimizerAgent:
+    return FakeOptimizerAgent(
+        OptimizeActionsOutput.model_validate_json(response)
+    )
 
 
 def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) -> None:
@@ -45,7 +56,7 @@ def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) 
             tags=["memory"],
         )
     )
-    llm = FakeOptimizerLLM(
+    agent = _optimizer_agent(
         '{"actions":[{"action":"update","entry_id":"'
         + keeper.id
         + '","type":"belief","title":"Memory strategy",'
@@ -58,7 +69,7 @@ def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) 
         + keeper.id
         + '"}]}'
     )
-    optimizer = MemoryOptimizer(tmp_path, llm=llm, repository=repo)
+    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
 
     result = optimizer.run_once()
     entries = repo.list()
@@ -92,15 +103,15 @@ def test_memory_optimizer_includes_profile_context_in_prompt(tmp_path: Path) -> 
             source_refs=["source:profile:0"],
         )
     )
-    llm = FakeOptimizerLLM('{"actions":[{"action":"ignore","entry_id":"unused","reason":"no changes"}]}')
-    optimizer = MemoryOptimizer(tmp_path, llm=llm, repository=repo, profile_repository=profile_repo)
+    agent = _optimizer_agent('{"actions":[{"action":"ignore","entry_id":"unused","reason":"no changes"}]}')
+    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo, profile_repository=profile_repo)
 
     optimizer.run_once()
 
-    system_prompt, user_prompt = llm.calls[0]
-    assert "Consider existing profile items" in system_prompt.content
-    assert "Existing profile items:" in user_prompt.content
-    assert "Concise output" in user_prompt.content
+    system_prompt, user_prompt = agent.calls[0]
+    assert "Consider existing profile items" in system_prompt.text
+    assert "Existing profile items:" in user_prompt.text
+    assert "Concise output" in user_prompt.text
 
 
 def test_memory_optimizer_defers_without_agent_decision(tmp_path: Path) -> None:
@@ -112,11 +123,14 @@ def test_memory_optimizer_defers_without_agent_decision(tmp_path: Path) -> None:
             body="The user wants concise memory entries.",
         )
     )
-    class FailingOptimizerLLM:
-        def complete(self, messages: list[ChatMessage]) -> str:
+    class FailingOptimizerAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> OptimizeActionsOutput:
             raise RuntimeError("LLM unavailable")
 
-    optimizer = MemoryOptimizer(tmp_path, llm=FailingOptimizerLLM(), repository=repo)
+    optimizer = MemoryOptimizer(tmp_path, agent=FailingOptimizerAgent(), repository=repo)
 
     result = optimizer.run_once()
 
@@ -135,13 +149,13 @@ def test_memory_optimizer_rejects_raw_transcript_body(tmp_path: Path) -> None:
             body="A messy memory entry.",
         )
     )
-    llm = FakeOptimizerLLM(
+    agent = _optimizer_agent(
         '{"actions":[{"action":"update","entry_id":"'
         + entry.id
         + '","title":"Raw transcript","body":"user: hello assistant: hi",'
         '"reason":"bad transcript"}]}'
     )
-    optimizer = MemoryOptimizer(tmp_path, llm=llm, repository=repo)
+    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
 
     result = optimizer.run_once()
 
@@ -158,14 +172,14 @@ def test_memory_optimizer_uses_registry_memory_types(tmp_path: Path) -> None:
             body="Old instruction body.",
         )
     )
-    llm = FakeOptimizerLLM(
+    agent = _optimizer_agent(
         '{"actions":[{"action":"update","entry_id":"'
         + entry.id
         + '","type":"persona_instruction","title":"Persona instruction",'
         '"body":"Use persona instructions as durable behavior guidance.",'
         '"tags":["persona"],"confidence":0.8,"reason":"new typed memory type"}]}'
     )
-    optimizer = MemoryOptimizer(tmp_path, llm=llm, repository=repo)
+    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
 
     result = optimizer.run_once()
     candidates = MemoryCandidateRepository(tmp_path).list()
@@ -183,14 +197,14 @@ def test_memory_optimizer_rejects_unknown_memory_type(tmp_path: Path) -> None:
             body="Known type body.",
         )
     )
-    llm = FakeOptimizerLLM(
+    agent = _optimizer_agent(
         '{"actions":[{"action":"update","entry_id":"'
         + entry.id
         + '","type":"made_up_type","title":"Bad type",'
         '"body":"Unknown memory types should not be silently accepted.",'
         '"tags":["memory"],"confidence":0.8,"reason":"bad type"}]}'
     )
-    optimizer = MemoryOptimizer(tmp_path, llm=llm, repository=repo)
+    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
 
     result = optimizer.run_once()
 
@@ -213,7 +227,11 @@ def test_memory_optimizer_rejects_unknown_memory_type(tmp_path: Path) -> None:
 )
 def test_parse_optimizer_actions_rejects_invalid_schema(response: str) -> None:
     with pytest.raises(ValueError):
-        _parse_optimize_actions(response, allowed_types=("belief", "episode"))
+        output = OptimizeActionsOutput.model_validate_json(response)
+        _optimize_actions_from_output(
+            output,
+            allowed_types=("belief", "episode"),
+        )
 
 
 def test_memory_optimizer_rejects_complete_mixed_valid_invalid_batch(tmp_path: Path) -> None:
@@ -225,13 +243,13 @@ def test_memory_optimizer_rejects_complete_mixed_valid_invalid_batch(tmp_path: P
             body="The user wants concise memory entries.",
         )
     )
-    llm = FakeOptimizerLLM(
+    agent = _optimizer_agent(
         '{"actions":[{"action":"update","entry_id":"'
         + entry.id
         + '","title":"Concise memory","body":"Keep durable memories concise.",'
         '"reason":"compress"},{"action":"delete","entry_id":"","reason":"invalid sibling"}]}'
     )
-    optimizer = MemoryOptimizer(tmp_path, llm=llm, repository=repo)
+    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
 
     result = optimizer.run_once()
 
@@ -245,10 +263,10 @@ def test_memory_optimizer_respects_limit(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     for title in ["First", "Second"]:
         repo.save(MemoryEntry(type="belief", title=title, body=f"{title} body."))
-    llm = FakeOptimizerLLM('{"actions":[{"action":"ignore","entry_id":"unused","reason":"no changes"}]}')
+    agent = _optimizer_agent('{"actions":[{"action":"ignore","entry_id":"unused","reason":"no changes"}]}')
     optimizer = MemoryOptimizer(
         tmp_path,
-        llm=llm,
+        agent=agent,
         repository=repo,
         settings=MemoryOptimizerSettings(memory_limit=1),
     )

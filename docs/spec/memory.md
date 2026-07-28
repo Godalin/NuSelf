@@ -136,16 +136,19 @@ errors are not degraded and continue to the daemon request backstop.
 - Inspect only `role=="user"` messages.
 - If concatenated user text `< 120` chars AND contains none of the durable markers (`prefer`, `remember`, `important`, `decide`, `decision`, `should`, `goal`, `plan`, `because`, `why`, `question`, `always`, `never`), return `processed_messages=0` without LLM call.
 
-### Curator LLM Decision Contract
+### Curator Agent Decision Contract
 
-- Must return JSON with `actions` array. Allowed actions: `create`, `update`, `ignore`.
+- Must return an actual typed `CuratorActionsOutput` through the shared
+  framework-native `structured_response` boundary. Allowed actions are
+  `create`, `update`, and `ignore`; curator does not prompt for JSON or parse
+  response text.
 - `create` and `update` actions must include `tags`: a non-empty list of short strings. Tags are part of the durable memory handle surface and must be copied to `MemoryCandidate` and any accepted `MemoryEntry`.
-- Action parsing is a typed boundary: JSON is parsed into a strict,
-  extra-forbid structured curator schema with confidence constrained from zero
-  through one, then every item is converted to `MemoryAction` before any item
-  is dispatched. The curator must not keep a parallel hand-written dict parser
-  or coerce unknown memory types to a fallback type.
-- On LLM failure or invalid JSON → defer (status `deferred`).
+- The typed response uses a strict, extra-forbid curator schema with confidence
+  constrained from zero through one, then every item is converted to
+  `MemoryAction` before any item is dispatched. The curator must not keep a
+  parallel text/dictionary parser or coerce unknown memory types to a fallback
+  type.
+- On agent failure or invalid structured output → defer (status `deferred`).
 - Any invalid action defers the complete decision; valid siblings are not
   partially dispatched. Invalid actions include unknown/extra/coercive fields,
   confidence outside `[0, 1]`, `create`/`update` with blank `title`/`body`,
@@ -189,9 +192,12 @@ errors are not degraded and continue to the daemon request backstop.
 - Load up to `memory_limit` (default `50`) most recently updated entries.
 - Empty repository → return `reviewed=0`.
 
-### Optimizer LLM Decision Contract
+### Optimizer Agent Decision Contract
 
-- Must return JSON with `actions` array. Allowed: `update`, `delete`, `ignore`.
+- Must return an actual typed `OptimizeActionsOutput` through the shared
+  framework-native `structured_response` boundary. Allowed actions are
+  `update`, `delete`, and `ignore`; optimizer does not prompt for JSON or parse
+  response text.
 - On failure → defer.
 - The response and action models use strict types, forbid unknown fields, and
   constrain present confidence values from zero through one.

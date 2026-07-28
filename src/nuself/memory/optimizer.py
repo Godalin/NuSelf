@@ -6,14 +6,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
+from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
-from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
-from nuself.memory.text import extract_json_object, looks_like_raw_transcript
+from nuself.memory.text import looks_like_raw_transcript
 from nuself.profile.repository import ProfileItemRepository
 
 MemoryOptimizeActionType: TypeAlias = Literal["update", "delete", "ignore"]
@@ -102,7 +103,7 @@ class MemoryOptimizer:
         self,
         project_root: Path | None = None,
         *,
-        llm: ChatLLM | None = None,
+        agent: StructuredAgent[OptimizeActionsOutput] | None = None,
         settings: MemoryOptimizerSettings | None = None,
         repository: MemoryEntryRepository | None = None,
         candidate_repository: MemoryCandidateRepository | None = None,
@@ -111,7 +112,11 @@ class MemoryOptimizer:
     ) -> None:
         paths = runtime_paths(project_root)
         self._paths = paths
-        self._llm = llm or default_llm(paths.project_root)
+        self._agent = agent or default_structured_agent(
+            OptimizeActionsOutput,
+            project_root=paths.project_root,
+            component="memory",
+        )
         self._settings = settings or MemoryOptimizerSettings()
         self._repository = repository or MemoryEntryRepository(paths.project_root)
         self._profile_repository = profile_repository or ProfileItemRepository(paths.project_root)
@@ -173,11 +178,10 @@ class MemoryOptimizer:
 
     def _decide_actions(self, entries: list[MemoryEntry]) -> MemoryOptimizeDecision:
         prompt = [
-            ChatMessage(
-                role="system",
+            SystemMessage(
                 content=(
                     "You are the NuSelf Memory Optimizer Agent. Clean up existing long-term memory entries. "
-                    "Return only JSON with an actions array. Allowed actions are update, delete, ignore. "
+                    "Allowed actions are update, delete, ignore. "
                     "Be conservative: preserve unique user preferences, goals, concepts, decisions, instructions, "
                     "beliefs, open questions, and important episodes. Prefer merging duplicate or overlapping entries by "
                     "updating the strongest entry and deleting only entries whose content is fully represented "
@@ -186,28 +190,29 @@ class MemoryOptimizer:
                     "new entries in this task and never copy raw chat transcripts into memory bodies."
                 ),
             ),
-            ChatMessage(
-                role="user",
+            HumanMessage(
                 content=(
                     "Existing memory entries:\n"
                     f"{_render_entries(entries)}\n\n"
                     "Existing profile items:\n"
                     f"{self._existing_profile_context()}\n\n"
-                    "Return JSON like: "
-                    '{"actions":[{"action":"update","entry_id":"mem_...","type":"belief",'
-                    '"title":"...","body":"...","tags":["..."],"confidence":0.8,"reason":"merged duplicates"},'
-                    '{"action":"delete","entry_id":"mem_...","reason":"fully merged into mem_..."},'
-                    '{"action":"ignore","entry_id":"mem_...","reason":"already clear"}]}'
+                    "Return the required structured action batch."
                 ),
             ),
         ]
         try:
-            raw = self._llm.complete(prompt)
-            actions = _parse_optimize_actions(raw, allowed_types=self._registry.names())
+            output = self._agent.invoke(prompt)
+            actions = _optimize_actions_from_output(
+                output,
+                allowed_types=self._registry.names(),
+            )
         except (RuntimeError, ValueError):
             return MemoryOptimizeDecision(
                 status="deferred",
-                reason="optimizer agent unavailable or returned invalid JSON",
+                reason=(
+                    "optimizer agent unavailable or returned invalid "
+                    "structured output"
+                ),
             )
         if actions:
             return MemoryOptimizeDecision(status="ready", actions=tuple(actions))
@@ -323,9 +328,11 @@ def _render_entries(entries: list[MemoryEntry]) -> str:
     return "\n".join(lines).strip()
 
 
-def _parse_optimize_actions(raw: str, *, allowed_types: tuple[str, ...]) -> list[MemoryOptimizeAction]:
-    extracted = _extract_json_object(raw)
-    output = OptimizeActionsOutput.model_validate_json(extracted)
+def _optimize_actions_from_output(
+    output: OptimizeActionsOutput,
+    *,
+    allowed_types: tuple[str, ...],
+) -> list[MemoryOptimizeAction]:
     return [
         _optimize_action_from_item(item, allowed_types=allowed_types)
         for item in output.actions
@@ -367,11 +374,5 @@ def _optional_memory_type(value: str | None, *, allowed_types: tuple[str, ...]) 
     if value in allowed_types:
         return cast(MemoryEntryType, value)
     raise ValueError(f"unsupported memory type: {value}")
-
-
-def _extract_json_object(raw: str) -> str:
-    return extract_json_object(raw)
-
-
 def _looks_like_raw_transcript(text: str) -> bool:
     return looks_like_raw_transcript(text)

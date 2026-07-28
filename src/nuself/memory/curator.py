@@ -7,17 +7,18 @@ import json
 from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
+from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
 from nuself.logs import LogLevel, write_log_event
 from nuself.profile.repository import ProfileItemRepository
-from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
-from nuself.memory.text import extract_json_object, looks_like_raw_transcript
+from nuself.memory.text import looks_like_raw_transcript
 from nuself.runtime.observability import (
     report_corrupt_record,
     run_observed_best_effort,
@@ -194,7 +195,7 @@ class MemoryCurator:
         self,
         project_root: Path | None = None,
         *,
-        llm: ChatLLM | None = None,
+        agent: StructuredAgent[CuratorActionsOutput] | None = None,
         settings: MemoryCuratorSettings | None = None,
         thread_store: ThreadStore | None = None,
         repository: MemoryEntryRepository | None = None,
@@ -205,7 +206,11 @@ class MemoryCurator:
     ) -> None:
         paths = runtime_paths(project_root)
         self._paths = paths
-        self._llm = llm or default_llm(paths.project_root)
+        self._agent = agent or default_structured_agent(
+            CuratorActionsOutput,
+            project_root=paths.project_root,
+            component="memory",
+        )
         self._settings = settings or MemoryCuratorSettings()
         self._thread_store = thread_store or ThreadStore(paths.project_root)
         self._repository = repository or MemoryEntryRepository(paths.project_root)
@@ -330,11 +335,10 @@ class MemoryCurator:
         messages: list[ThreadMessage],
     ) -> MemoryDecision:
         prompt = [
-            ChatMessage(
-                role="system",
+            SystemMessage(
                 content=(
                     "You are the NuSelf Memory Curator Agent. Decide whether new working-memory turns "
-                    "should create, update, or ignore long-term memory. Return only JSON with an actions array. "
+                    "should create, update, or ignore long-term memory. "
                     "Be conservative. Ignore trivial greetings, name pings, acknowledgements, and idle small talk. "
                     "Prefer updating or refining an existing memory when the meaning is already represented. "
                     "Create only when the discussion contains a durable preference, goal, concept, decision, "
@@ -345,27 +349,32 @@ class MemoryCurator:
                     f"Allowed memory types are {', '.join(self._registry.names())}."
                 ),
             ),
-            ChatMessage(
-                role="user",
+            HumanMessage(
                 content=(
                     f"Thread: {thread_id}\n"
                     f"Existing summary:\n{state.summary or '(none)'}\n\n"
                     f"Existing memories:\n{self._existing_memory_context() or '(none)'}\n\n"
                     f"Existing profile items:\n{self._existing_profile_context() or '(none)'}\n\n"
                     f"New turns {cursor}-{cursor + len(messages)}:\n{_render_transcript(messages)}\n\n"
-                    "Return JSON like: "
-                    '{"actions":[{"action":"create","type":"episode","title":"...","body":"...",'
-                    '"tags":["..."],"confidence":0.7,"reason":"..."}]}\n'
-                    "For low-value chat, return: "
-                    '{"actions":[{"action":"ignore","reason":"trivial greeting or no durable memory"}]}'
+                    "Return the required structured action batch. For "
+                    "low-value chat, choose one ignore action and explain why."
                 ),
             ),
         ]
         try:
-            raw = self._llm.complete(prompt)
-            actions = _parse_actions(raw, allowed_types=self._registry.names())
+            output = self._agent.invoke(prompt)
+            actions = _actions_from_output(
+                output,
+                allowed_types=self._registry.names(),
+            )
         except (RuntimeError, ValueError):
-            return MemoryDecision(status="deferred", reason="curator agent unavailable or returned invalid JSON")
+            return MemoryDecision(
+                status="deferred",
+                reason=(
+                    "curator agent unavailable or returned invalid "
+                    "structured output"
+                ),
+            )
         if actions:
             return MemoryDecision(status="ready", actions=tuple(actions))
         return MemoryDecision(status="deferred", reason="curator agent returned no valid actions")
@@ -650,9 +659,11 @@ def _has_memory_worthy_signal(messages: list[ThreadMessage], min_quality_chars: 
     return any(marker in normalized for marker in durable_markers)
 
 
-def _parse_actions(raw: str, *, allowed_types: tuple[str, ...] | None = None) -> list[MemoryAction]:
-    extracted = _extract_json_object(raw)
-    output = CuratorActionsOutput.model_validate_json(extracted)
+def _actions_from_output(
+    output: CuratorActionsOutput,
+    *,
+    allowed_types: tuple[str, ...] | None = None,
+) -> list[MemoryAction]:
     return [
         _action_from_item(item, allowed_types=allowed_types)
         for item in output.actions
@@ -707,11 +718,5 @@ def _normalize_tags(tags: list[str]) -> tuple[str, ...]:
         normalized.append(clean)
         seen.add(clean)
     return tuple(normalized)
-
-
-def _extract_json_object(raw: str) -> str:
-    return extract_json_object(raw)
-
-
 def _looks_like_raw_transcript(text: str) -> bool:
     return looks_like_raw_transcript(text)
