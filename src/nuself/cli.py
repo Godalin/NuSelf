@@ -114,6 +114,13 @@ try:
         handle_persona_show,
         resolve_persona_id as _resolve_persona_id,
     )
+    from nuself.commands.memory_profile import (
+        handle_memory_profile_delete,
+        handle_memory_profile_list,
+        handle_memory_profile_reindex,
+        handle_memory_profile_search,
+        handle_memory_profile_show,
+    )
     from nuself.domain.memory import (
         MemoryCandidate,
         MemoryEntry,
@@ -142,7 +149,7 @@ try:
         memory_stats,
     )
     from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
-    from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
+    from nuself.profile.repository import ProfileItemRepository
     from nuself.trace.domain import TRACE_KINDS
     from nuself.trace.repository import TraceNotFound
     from nuself.trace.service import TraceQueryService, TraceRecorder
@@ -160,7 +167,6 @@ try:
         render_candidate_row,
         render_memory_entry_detail,
         render_memory_entry_row,
-        render_profile_detail,
         render_profile_row,
         render_source_detail,
         render_source_row,
@@ -1896,89 +1902,6 @@ def _resolve_source_id(args: argparse.Namespace) -> str | None:
         SourceRepository(args.project_root).list_documents(),
         label="source",
         get_id=lambda document: document.id,
-    )
-
-
-def handle_memory_profile_list(args: argparse.Namespace) -> int:
-    items = _profile_items_for_list(args.project_root, sort_by=args.sort_by)
-    if not items:
-        print("No profile items.")
-        return 0
-    for index, item in enumerate(items):
-        _print_ansi(render_profile_row(item, index=index))
-    return 0
-
-
-def handle_memory_profile_search(args: argparse.Namespace) -> int:
-    repo = ProfileItemRepository(args.project_root)
-    items = repo.search(
-        args.query,
-        ProfileSearchFilters(
-            type=args.type,
-            tag=args.tag,
-            observed_from=args.observed_from,
-            observed_to=args.observed_to,
-            valid_on=args.valid_on,
-        ),
-    )
-    if not items:
-        print("No matching profile items.")
-        return 0
-    for item in items:
-        _print_ansi(render_profile_row(item))
-    return 0
-
-
-def handle_memory_profile_show(args: argparse.Namespace) -> int:
-    repo = ProfileItemRepository(args.project_root)
-    profile_id = _resolve_profile_id(args)
-    if profile_id is None:
-        return 1
-    try:
-        item = repo.get(profile_id)
-    except ProfileItemNotFound:
-        print(f"Profile item not found: {profile_id}", file=sys.stderr)
-        return 1
-    _print_ansi(render_profile_detail(item))
-    return 0
-
-
-def handle_memory_profile_delete(args: argparse.Namespace) -> int:
-    repo = ProfileItemRepository(args.project_root)
-    profile_id = _resolve_profile_id(args)
-    if profile_id is None:
-        return 1
-    try:
-        repo.delete(profile_id)
-    except ProfileItemNotFound:
-        print(f"Profile item not found: {profile_id}", file=sys.stderr)
-        return 1
-    repo.reindex()
-    print(f"Deleted profile item: {profile_id}")
-    return 0
-
-
-def handle_memory_profile_reindex(args: argparse.Namespace) -> int:
-    profile_index_path = ProfileItemRepository(args.project_root).reindex()
-    print(f"Rebuilt profile index: {profile_index_path}")
-    return 0
-
-
-def _profile_items_for_list(project_root: Path | None, *, sort_by: str = "updated_at") -> list[ProfileItem]:
-    items = ProfileItemRepository(project_root).list()
-    if sort_by == "importance":
-        return sorted(items, key=lambda item: (-item.importance, item.updated_at, item.id))
-    if sort_by == "type":
-        return sorted(items, key=lambda item: (item.type, item.updated_at, item.id))
-    return items
-
-
-def _resolve_profile_id(args: argparse.Namespace) -> str | None:
-    return _resolve_handle(
-        args.profile_id,
-        _profile_items_for_list(args.project_root),
-        label="profile",
-        get_id=lambda item: item.id,
     )
 
 
