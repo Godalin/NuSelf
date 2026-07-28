@@ -220,6 +220,80 @@ def test_daemon_chat_error_includes_root_cause(tmp_path: Path) -> None:
     assert "llm unavailable" in response.error
 
 
+def test_chat_failure_diagnostic_cannot_replace_original_response(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    state = DaemonState(tmp_path)
+    state.chat_agent = ChatAgent(tmp_path, llm=FailingLLM())
+    request = DaemonRequest(
+        type="chat",
+        payload={"message": "hello"},
+        request_id="chat-failure-audit",
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "daemon/chat_turn_failed: "
+            "conversation graph node 'respond' failed"
+        ),
+    ):
+        response = handle_request(request, state)
+
+    assert response.status == "error"
+    assert response.error is not None
+    assert "conversation graph node 'respond' failed" in response.error
+    assert "llm unavailable" in response.error
+    assert "audit store unavailable" not in response.error
+
+
+def test_chat_completion_audit_cannot_invalidate_response(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.daemon import request_handlers
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        request_handlers,
+        "write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    state = DaemonState(tmp_path)
+    state.chat_agent = ChatAgent(
+        tmp_path,
+        llm=StructuredFakeLLM(),
+    )
+    request = DaemonRequest(
+        type="chat",
+        payload={"message": "hello"},
+        request_id="chat-completion-audit",
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="daemon/request_audit_write_failed",
+    ):
+        response = handle_request(request, state)
+
+    assert response.status == "ok"
+    assert response.payload["answer"] == "stubbed: hello"
+
+
 def test_daemon_chat_error_preserves_repeated_exception_messages(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     state.chat_agent = ChatAgent(tmp_path, llm=RepeatedChainFailingLLM())
@@ -676,6 +750,42 @@ def test_daemon_shutdown_sets_flag(tmp_path: Path) -> None:
     request = DaemonRequest(type="shutdown", payload={}, request_id="shutdown1")
 
     response = handle_request(request, state)
+
+    assert response.status == "ok"
+    assert response.payload["message"] == "shutdown requested"
+    assert state.shutdown_requested.is_set()
+
+
+def test_shutdown_audit_failure_cannot_block_accepted_request(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.daemon import request_handlers
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        request_handlers,
+        "write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    state = DaemonState(tmp_path)
+    request = DaemonRequest(
+        type="shutdown",
+        payload={},
+        request_id="shutdown-audit",
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="daemon/request_audit_write_failed",
+    ):
+        response = handle_request(request, state)
 
     assert response.status == "ok"
     assert response.payload["message"] == "shutdown requested"

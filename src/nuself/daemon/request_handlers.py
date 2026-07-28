@@ -36,13 +36,17 @@ from nuself.daemon.protocol import (
 )
 from nuself.daemon.types import WorkerHealth
 from nuself.logs import (
+    LogLevel,
     observe_log_events,
     write_log_event,
 )
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.runtime.handlers import HandlerRegistry, UnknownHandlerError
 from nuself.runtime.context import runtime_context
-from nuself.runtime.observability import run_observed_best_effort
+from nuself.runtime.observability import (
+    report_observed_failure,
+    run_observed_best_effort,
+)
 
 
 class DaemonRequestState(Protocol):
@@ -60,6 +64,41 @@ DaemonRequestRegistry = HandlerRegistry[
     [DaemonRequest, DaemonRequestState],
     DaemonResponse,
 ]
+
+
+def _write_request_audit_event(
+    event: str,
+    message: str,
+    *,
+    project_root: Path,
+    level: LogLevel = "info",
+    status: str | None = None,
+    error: str | None = None,
+    duration_ms: int | None = None,
+    request_id: str | None = None,
+    metadata: dict[str, object] | None = None,
+) -> None:
+    """Project request lifecycle without changing response decisions."""
+
+    run_observed_best_effort(
+        lambda: write_log_event(
+            "daemon",
+            event,
+            message,
+            project_root=project_root,
+            level=level,
+            status=status,
+            error=error,
+            duration_ms=duration_ms,
+            request_id=request_id,
+            metadata=metadata,
+        ),
+        component="daemon",
+        event="request_audit_write_failed",
+        message=f"Could not record daemon request audit event {event}",
+        project_root=project_root,
+        metadata={"audit_event": event},
+    )
 
 
 def build_daemon_request_registry() -> DaemonRequestRegistry:
@@ -199,14 +238,15 @@ def _handle_chat(
             )
         except RuntimeError as exc:
             error_detail = _format_exception_chain(exc)
-            write_log_event(
-                "daemon",
-                "chat_turn_failed",
-                "daemon chat turn failed",
+            report_observed_failure(
+                exc,
+                component="daemon",
+                event="chat_turn_failed",
+                message="Daemon chat turn failed",
                 project_root=state.project_root,
                 level="error",
                 status="error",
-                error=error_detail,
+                metadata=None,
             )
             return DaemonResponse.fail(
                 request.request_id,
@@ -230,8 +270,7 @@ def _handle_chat(
         thread_id=result.thread_id,
         turn_id=chat_request.turn_id,
     ):
-        write_log_event(
-            "daemon",
+        _write_request_audit_event(
             "chat_turn_completed",
             "daemon chat turn completed",
             project_root=state.project_root,
@@ -252,14 +291,13 @@ def _handle_shutdown(
     state: DaemonRequestState,
 ) -> DaemonResponse:
     EmptyRequestPayload.from_wire(request.payload)
-    write_log_event(
-        "daemon",
+    state.shutdown_requested.set()
+    _write_request_audit_event(
         "shutdown_requested",
         "daemon shutdown requested",
         project_root=state.project_root,
         request_id=request.request_id,
     )
-    state.shutdown_requested.set()
     return DaemonResponse.ok(
         request,
         MessagePayload("shutdown requested").to_wire(),

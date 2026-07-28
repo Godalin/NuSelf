@@ -183,6 +183,10 @@ under the same package.
   writes, direct `ChatAgent` invocation, and post-turn memory curator
   coordination. `agent/chat/` remains the conversation domain/runtime; the CLI
   adapter only translates that capability to CLI result and output contracts.
+- `daemon/request_handlers.py` owns typed request dispatch and response
+  construction. Chat failure/completion and accepted-shutdown audit records
+  use shared observability and cannot replace the already-decided response or
+  shutdown flag.
 - `cli/commands/daemon.py` owns daemon lifecycle/health handlers and daemon status
   formatting.
 - `cli/commands/threads.py` owns one-shot thread list/show/create/rename/branch/archive

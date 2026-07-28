@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon chat failure/completion and shutdown-request audits now use shared
+  observable boundaries. Audit storage failure cannot replace the original
+  chat error, invalidate a completed response, or block the shutdown flag.
 - Email and macOS real-delivery failure diagnostics now use shared observable
   reporting. Diagnostic storage failure no longer replaces the adapter's
   `False` result or prevents the outbox from persisting a failed attempt.

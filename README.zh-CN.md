@@ -58,6 +58,9 @@ organizer completion audit 失败不会覆盖已持久化的 memory 或 reflecti
 Email 与 macOS delivery failure 诊断不会覆盖明确的 adapter 失败结果，也不会
 阻止 outbox 持久化失败 attempt。
 
+Daemon request 审计不会覆盖原始 chat 错误、使已完成 response 失效，或阻止
+已接受的 shutdown 请求。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

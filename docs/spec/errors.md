@@ -50,6 +50,14 @@ When daemon chat handling fails:
 - Return a failed daemon response whose `error` field is the same compact exception chain.
 - Do not save a partial assistant message for a failed turn.
 - Preserve pre-failure log events, including persona, reflection, memory, and chat logs.
+- `chat_turn_failed` is an auxiliary projection of that response decision. Its
+  failure or diagnostic failure cannot replace the original compact exception
+  chain returned to the client.
+- `chat_turn_completed` is auxiliary after a valid result/payload exists; its
+  failure cannot turn the completed turn into an error response.
+- An accepted shutdown request sets the shutdown flag authoritatively.
+  `shutdown_requested` audit failure cannot prevent the flag or success
+  response.
 
 ## Daemon Transport Failures
 
