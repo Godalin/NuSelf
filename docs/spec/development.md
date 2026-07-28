@@ -161,6 +161,8 @@ under the same package.
   importing the CLI composition root.
 - `cli/repl/transcript.py` owns transcript projection, Markdown normalization,
   persistence naming, shareable-log filtering, and clipboard integration.
+- `cli/repl/session.py` owns per-connection message/log capture and export
+  progress state.
 
 Conversation runtime types follow the same rule: `agent/chat_types.py` owns
 settings, structured response/result records, typed turn state, and graph error

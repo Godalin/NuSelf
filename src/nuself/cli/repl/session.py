@@ -1,0 +1,110 @@
+"""State owned by one interactive CLI connection."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+
+from nuself.agent.chat import ThreadStore
+from nuself.logs import LogEvent
+from nuself.cli.repl.transcript import (
+    is_shareable_transcript_log,
+    thread_messages_from_index,
+)
+
+
+def empty_thread_start_indexes() -> dict[str, int]:
+    return {}
+
+
+def empty_captured_thread_messages() -> dict[str, list[tuple[int, str, str]]]:
+    return {}
+
+
+def empty_captured_log_events() -> dict[str, list[LogEvent]]:
+    return {}
+
+
+def empty_captured_log_events_by_message() -> dict[str, dict[int, list[LogEvent]]]:
+    return {}
+
+
+@dataclass
+class InteractiveSession:
+    """State that belongs to one interactive CLI connection."""
+
+    connected_at: datetime
+    thread_start_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
+    captured_messages: dict[str, list[tuple[int, str, str]]] = field(default_factory=empty_captured_thread_messages)
+    captured_next_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
+    captured_log_events: dict[str, list[LogEvent]] = field(default_factory=empty_captured_log_events)
+    captured_log_events_by_message: dict[str, dict[int, list[LogEvent]]] = field(
+        default_factory=empty_captured_log_events_by_message
+    )
+    exported_next_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
+
+    def start_index_for(self, project_root: Path | None, thread_id: str) -> int:
+        if thread_id not in self.thread_start_indexes:
+            next_index = ThreadStore(project_root).load(thread_id).next_message_index
+            self.thread_start_indexes[thread_id] = next_index
+            self.captured_next_indexes[thread_id] = next_index
+        return self.thread_start_indexes[thread_id]
+
+    def capture_new_messages(self, project_root: Path | None, thread_id: str) -> None:
+        start_index = self.start_index_for(project_root, thread_id)
+        capture_start = self.captured_next_indexes.get(thread_id, start_index)
+        thread = ThreadStore(project_root).load(thread_id)
+        new_messages = thread_messages_from_index(thread, capture_start)
+        if not new_messages:
+            return
+        self.captured_messages.setdefault(thread_id, []).extend(new_messages)
+        self.captured_next_indexes[thread_id] = new_messages[-1][0] + 1
+
+    def transcript_messages(self, project_root: Path | None, thread_id: str) -> list[tuple[int, str, str]]:
+        self.capture_new_messages(project_root, thread_id)
+        return list(self.captured_messages.get(thread_id, []))
+
+    def capture_log_events(self, thread_id: str, events: list[LogEvent], *, message_index: int | None = None) -> None:
+        if not events:
+            return
+        if message_index is not None:
+            events_by_message = self.captured_log_events_by_message.setdefault(thread_id, {})
+            events_by_message.setdefault(message_index, []).extend(events)
+            return
+        self.captured_log_events.setdefault(thread_id, []).extend(events)
+
+    def transcript_log_events(self, thread_id: str, *, include_all: bool) -> list[LogEvent]:
+        events = list(self.captured_log_events.get(thread_id, []))
+        if include_all:
+            return events
+        return [event for event in events if is_shareable_transcript_log(event)]
+
+    def transcript_log_events_by_message(self, thread_id: str, *, include_all: bool) -> dict[int, list[LogEvent]]:
+        result: dict[int, list[LogEvent]] = {}
+        for message_index, events in self.captured_log_events_by_message.get(thread_id, {}).items():
+            filtered_events = events if include_all else [event for event in events if is_shareable_transcript_log(event)]
+            if filtered_events:
+                result[message_index] = list(filtered_events)
+        return result
+
+    def has_unexported_messages(self, project_root: Path | None, thread_id: str) -> bool:
+        self.capture_new_messages(project_root, thread_id)
+        next_index = self.captured_next_indexes.get(thread_id, self.start_index_for(project_root, thread_id))
+        exported_index = self.exported_next_indexes.get(thread_id, self.start_index_for(project_root, thread_id))
+        return next_index > exported_index
+
+    def mark_transcript_exported(self, project_root: Path | None, thread_id: str) -> None:
+        self.capture_new_messages(project_root, thread_id)
+        self.exported_next_indexes[thread_id] = self.captured_next_indexes.get(
+            thread_id, self.start_index_for(project_root, thread_id)
+        )
+
+    def thread_ids_with_unexported_messages(self, project_root: Path | None) -> list[str]:
+        thread_ids = set(self.thread_start_indexes)
+        thread_ids.update(self.captured_messages)
+        result: list[str] = []
+        for thread_id in sorted(thread_ids):
+            if self.has_unexported_messages(project_root, thread_id):
+                result.append(thread_id)
+        return result
