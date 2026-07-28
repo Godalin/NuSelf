@@ -54,7 +54,7 @@ Make daemon status observation single-use, reusable, and uniformly surfaced.
 
 ## Publication
 
-`dev/v0.3.x` is published through implementation commit `e032535`.
+`dev/v0.3.x` is ready to publish through implementation commit `b0b81ad`.
 
 ## Next Review Batch
 
