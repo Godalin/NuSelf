@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Styled interactive prompt capability and IO failures now emit
+  `chat/interactive_prompt_failed` before falling back to built-in input.
+  Unexpected prompt failures and user interrupts are no longer covered by a
+  silent local exception handler.
 - Reason export progress reads now distinguish a normally missing file from
   permission and other filesystem failures. Progress snapshots are decoded
   strictly instead of filtering or coercing invalid chunk indexes.

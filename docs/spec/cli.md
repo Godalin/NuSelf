@@ -107,6 +107,12 @@ interactive input state.
   suppression cannot leak between concurrent or sequential REPL connections.
 - Input fallback, command completion, and visible header behavior remain
   unchanged.
+- Non-TTY sessions use built-in `input()` without a degradation event. Terminal
+  capability `AttributeError` and terminal/prompt `OSError` failures emit one
+  payload-safe `chat/interactive_prompt_failed` warning through the shared
+  best-effort boundary, then use built-in input. Unexpected prompt failures,
+  `EOFError`, and `KeyboardInterrupt` are not fallback conditions and
+  propagate.
 - Dynamic thread/reason completion and persisted input history are optional UI
   effects. Their failure yields no storage-backed suggestions or skips the
   history write, but never rejects an already accepted input line. Each failure

@@ -185,6 +185,10 @@ uv run nuself daemon attach --message "continue"
 
 不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。动态补全和 history 持久化采用 best effort：存储失败会记录 degraded event，但不会阻止输入或接受已经输入的内容。以 `:` 开头的输入会被识别为交互指令。输入 `:dev status` 可以查看 daemon/thread 状态，输入 `:dev logs` 可以查看最近 activity events，输入 `:mem` 可以预览当前记忆条目。只读记忆 inspect 快捷命令包括 `:mem search <query>`、`:mem show <entry-id>`、`:mem review`、`:mem review <candidate-id>`、`:mem profile <query>`、`:mem sources` 和 `:mem source <source-id>`。输入 `:reason` 可查看长线推理线程，输入 `:trace` 可查看思维溯源记录，输入 `:inbox` 可查看反思和通知。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
 
+如果 styled terminal input 因已声明的终端能力或 IO 故障不可用，NuSelf 会记录
+`chat/interactive_prompt_failed` 并退回内置输入。EOF、键盘中断和未声明的 prompt
+异常仍保持原本的控制流，不会被当作可降级故障吞掉。
+
 当前聊天使用一个基于 LangGraph 的 conversation runtime。它会检索 memory entries、derived profile items 和 imported source chunks，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。Agent 还可以在对话中调用工具：`search_memory` 进行定向检索，`list_pending_reflections` / `dismiss_reflection` 检视和管理主动想法，`archive_memory` / `update_memory_importance` 整理长期记忆，`list_active_reasoning_threads` / `show_reasoning_thread` 查看长期 reason 状态，`search_trace` / `show_trace` 查看 thought provenance。当前记忆检索是确定性的词法检索，带有 descriptor-aware 类型提示、type/tag filters、基于现有 memory links 的 relation expansion 和排序原因；向量索引和图索引会作为后续派生检索层加入。
 
 thread-scoped dynamic persona prompt 文件是权威数据；其派生 name index 会在缺失、损坏或陈旧时被校验并原子重建，因此损坏的 lookup metadata 不会隐藏健康 persona，改名后也不会残留旧名称。

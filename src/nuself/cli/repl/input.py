@@ -180,6 +180,7 @@ class InteractiveInput:
     def __init__(self, project_root: Path | None) -> None:
         paths = runtime_paths(project_root)
         ensure_runtime_dirs(paths)
+        self._project_root = paths.project_root
         history_path = paths.runtime_dir / "interactive_history"
         self.history: FileHistory = DedupFileHistory(
             str(history_path),
@@ -190,19 +191,30 @@ class InteractiveInput:
     def read(self) -> str:
         """Read styled input, falling back to built-in input."""
 
-        try:
-            if sys.stdin.isatty():
-                return _prompt(
-                    _PROMPT_TEXT,
-                    style=_PROMPT_STYLE,
-                    history=self.history,
-                    completer=self.completer,
-                )
-        except (AttributeError, OSError):
-            pass
+        styled = run_observed_best_effort(
+            self._read_styled,
+            component="chat",
+            event="interactive_prompt_failed",
+            message="Styled interactive input failed; using built-in input",
+            project_root=self._project_root,
+            metadata={"fallback": "builtin_input"},
+            errors=(AttributeError, OSError),
+        )
+        if styled is not None:
+            return styled
         line = input("NuSelf> ")
         self.append_history(line)
         return line
+
+    def _read_styled(self) -> str | None:
+        if not sys.stdin.isatty():
+            return None
+        return _prompt(
+            _PROMPT_TEXT,
+            style=_PROMPT_STYLE,
+            history=self.history,
+            completer=self.completer,
+        )
 
     def append_history(self, line: str) -> None:
         if line:
