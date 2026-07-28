@@ -172,12 +172,21 @@ class SqliteCollection:
         if not new:
             return
         for k in new:
-            self._conn.execute(
-                f"ALTER TABLE {_identifier(self._table)} "
-                f"ADD COLUMN {_identifier(k)} TEXT"
-            )
-        # Invalidate so the next _columns() re-reads the widened schema.
-        self._column_cache.pop(self._table, None)
+            try:
+                self._conn.execute(
+                    f"ALTER TABLE {_identifier(self._table)} "
+                    f"ADD COLUMN {_identifier(k)} TEXT"
+                )
+            except sqlite3.OperationalError as exc:
+                self._column_cache.pop(self._table, None)
+                if (
+                    "duplicate column name" not in str(exc).lower()
+                    or k not in self._columns()
+                ):
+                    raise
+            finally:
+                # DDL may have succeeded locally or on a competing connection.
+                self._column_cache.pop(self._table, None)
 
     def _columns(self) -> tuple[str, ...]:
         cached = self._column_cache.get(self._table)

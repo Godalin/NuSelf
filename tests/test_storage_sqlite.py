@@ -625,6 +625,37 @@ def test_thread_safe_put(tmp_path: Path) -> None:
     assert len(items) == 32
 
 
+def test_concurrent_backends_expand_same_dynamic_schema_once(
+    tmp_path: Path,
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    db_path = tmp_path / "nuself.sqlite"
+    backends = tuple(SqliteStorageBackend(db_path) for _ in range(8))
+    barrier = Barrier(len(backends))
+
+    def put_item(index: int) -> None:
+        collection = backends[index].collection("persona_prompts")
+        barrier.wait()
+        collection.put(
+            f"persona-{index}",
+            {
+                "id": f"persona-{index}",
+                "name": f"Persona {index}",
+                "prompt": f"Prompt {index}",
+            },
+        )
+
+    with ThreadPoolExecutor(max_workers=len(backends)) as pool:
+        list(pool.map(put_item, range(len(backends))))
+
+    records = backends[0].collection("persona_prompts").list()
+    assert {record["id"] for record in records} == {
+        f"persona-{index}" for index in range(len(backends))
+    }
+
+
 def test_transaction_rolls_back_all_collection_writes(tmp_path: Path) -> None:
     backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
     entries = backend.collection("memory_entries")

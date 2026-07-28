@@ -288,6 +288,10 @@ dynamic-column `put()` 必须先编码完整 replacement，之后才能 `ALTER T
 - 事务内的动态 `ALTER TABLE` 也会被 SQLite rollback。每次 rollback（包括
   rollback 自身报错、数据库状态未知的情况）都必须清空共享 column cache，后续
   collection 操作重新读取真实 schema，不能使用已回滚的列集合。
+- 多个 backend 连接可能同时首次发现同一动态字段。`ALTER TABLE` 的
+  duplicate-column 失败只有在重新读取实际 schema 并确认目标列已经由竞争连接
+  创建后才可视为成功；其他 `OperationalError` 必须原样传播。每次 DDL 尝试后
+  都要使连接本地 column cache 失效。
 - 文件后端无法提供跨文件数据库事务；它至少序列化批次，并继续依赖单文件
   atomic replace。调用方不得把它描述为跨文件原子提交。
 
