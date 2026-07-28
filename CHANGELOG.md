@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reflection scheduling logs now use the shared auxiliary projection boundary.
+  Schedule blocks, filtering, discussion, fallback, and completed-cycle
+  records can no longer change reflection decisions when the log store fails.
 - Daemon-backed and one-shot chat results, curator status, and REPL transport
   retries no longer fail or change classification when their auxiliary audit
   record cannot be written. Uncertain audit persistence is reported separately

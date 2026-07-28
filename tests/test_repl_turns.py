@@ -12,7 +12,6 @@ from nuself.cli.repl.turns import send_interactive_chat_turn
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.logs import (
     InteractiveLogCursor,
-    LogAppendLifecycleError,
     LogEvent,
     read_log_events,
 )
@@ -128,7 +127,6 @@ def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(
     ThreadStore(tmp_path).save(ThreadState.empty("default"))
     session = InteractiveSession(connected_at=datetime.now(UTC))
     attempts = 0
-    close_error = OSError("retry audit close failed")
 
     def send(
         _message: str,
@@ -145,16 +143,10 @@ def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(
             )
         return InteractiveChatResult(code=0, reply="done")
 
-    def fail_audit(*args: object, **kwargs: object) -> None:
+    def drop_audit(*args: object, **kwargs: object) -> None:
         del args, kwargs
-        raise LogAppendLifecycleError(
-            primary_error=None,
-            rollback_error=None,
-            close_error=close_error,
-            record_may_have_persisted=True,
-        ) from close_error
 
-    monkeypatch.setattr(turns, "write_log_event", fail_audit)
+    monkeypatch.setattr(turns, "write_observed_log_event", drop_audit)
 
     result = send_interactive_chat_turn(
         send,
@@ -172,6 +164,4 @@ def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(
 
     assert result == 0
     assert attempts == 2
-    diagnostics = read_log_events(project_root=tmp_path, component="chat")
-    assert [event.event for event in diagnostics] == ["audit_projection_failed"]
-    assert diagnostics[0].metadata == {"audit_event": "turn_retry"}
+    assert read_log_events(project_root=tmp_path, component="chat") == []

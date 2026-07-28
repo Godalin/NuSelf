@@ -6,7 +6,14 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TypeVar
 
-from nuself.logs import LogComponent, LogLevel, write_log_event
+from nuself.logs import (
+    DEFAULT_LOG_RETENTION,
+    LogComponent,
+    LogEvent,
+    LogLevel,
+    LogRetentionPolicy,
+    write_log_event,
+)
 from nuself.runtime.diagnostics import emit_runtime_warning
 from nuself.runtime.events import EventDeliveryError, EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
@@ -61,6 +68,61 @@ def run_observed_best_effort(
             metadata=metadata,
         )
         return None
+
+
+def write_observed_log_event(
+    component: LogComponent,
+    event: str,
+    message: str,
+    *,
+    project_root: Path | None = None,
+    level: LogLevel = "info",
+    thread_id: str | None = None,
+    request_id: str | None = None,
+    turn_id: str | None = None,
+    job_id: str | None = None,
+    trace_id: str | None = None,
+    source: str | None = None,
+    node: str | None = None,
+    duration_ms: int | None = None,
+    status: str | None = None,
+    error: str | None = None,
+    metadata: dict[str, object] | None = None,
+    retention_policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION,
+    failure_event: str = "audit_projection_failed",
+    failure_message: str = "Structured audit projection failed",
+    failure_metadata: dict[str, object] | None = None,
+) -> LogEvent | None:
+    """Write one auxiliary log without changing its owning operation."""
+
+    diagnostic_metadata = dict(failure_metadata or {})
+    diagnostic_metadata["audit_event"] = event
+    return run_observed_best_effort(
+        lambda: write_log_event(
+            component,
+            event,
+            message,
+            project_root=project_root,
+            level=level,
+            thread_id=thread_id,
+            request_id=request_id,
+            turn_id=turn_id,
+            job_id=job_id,
+            trace_id=trace_id,
+            source=source,
+            node=node,
+            duration_ms=duration_ms,
+            status=status,
+            error=error,
+            metadata=metadata,
+            retention_policy=retention_policy,
+        ),
+        component=component,
+        event=failure_event,
+        message=failure_message,
+        project_root=project_root,
+        metadata=diagnostic_metadata,
+    )
 
 
 def publish_observed_event(

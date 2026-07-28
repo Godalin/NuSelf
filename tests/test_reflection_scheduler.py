@@ -308,6 +308,22 @@ def test_reflect_creates_reflection_entry(scheduler: ReflectionScheduler) -> Non
     assert entries[0].deep_link.startswith("nuself://thread/reflections")
 
 
+def test_reflect_result_survives_unavailable_auxiliary_logs(
+    scheduler: ReflectionScheduler,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def drop_log(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+
+    monkeypatch.setattr(
+        "nuself.reflection.scheduler.write_observed_log_event",
+        drop_log,
+    )
+
+    assert scheduler.reflect(datetime(2024, 1, 1, 12, tzinfo=UTC)) is True
+    assert len(scheduler._reflection_repo.list()) == 1
+
+
 def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
     scheduler: ReflectionScheduler,
     monkeypatch: pytest.MonkeyPatch,
@@ -318,6 +334,9 @@ def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
+    def drop_cycle_log(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+
     monkeypatch.setattr(
         "nuself.trace.service.TraceRecorder.record_reflection_created",
         fail_trace,
@@ -325,6 +344,10 @@ def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.reflection.scheduler.write_observed_log_event",
+        drop_cycle_log,
     )
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
 
@@ -340,11 +363,10 @@ def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
     assert result is True
     assert len(scheduler._reflection_repo.list()) == 1
     assert scheduler._read_last_reflection() == now
-    events = read_log_events(
+    assert read_log_events(
         project_root=scheduler._project_root,
         component="reflection",
-    )
-    assert events[-1].event == "cycle_completed"
+    ) == []
 
 
 def test_organizer_diagnostics_cannot_interrupt_best_effort_boundary(

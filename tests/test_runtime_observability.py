@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from nuself.logs import read_log_events
+import nuself.runtime.observability as observability
+from nuself.logs import LogAppendLifecycleError, read_log_events
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.event_definitions import UnknownEventDefinitionError
 from nuself.runtime.diagnostics import emit_runtime_warning
@@ -13,6 +14,7 @@ from nuself.runtime.observability import (
     publish_observed_event,
     report_observed_failure,
     run_observed_best_effort,
+    write_observed_log_event,
 )
 
 
@@ -58,6 +60,63 @@ def test_best_effort_returns_none_and_writes_structured_failure(
     assert event.status == "degraded"
     assert event.error == "trace unavailable"
     assert event.metadata == {"memory_id": "m1"}
+
+
+def test_observed_log_reports_uncertain_write_without_retrying_record(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_log_event = observability.write_log_event
+    close_error = OSError("uncertain close")
+    calls: list[str] = []
+
+    def fail_original_then_write_diagnostic(
+        component: object,
+        event: str,
+        message: object,
+        **kwargs: object,
+    ) -> object:
+        del component, message
+        calls.append(event)
+        if len(calls) == 1:
+            raise LogAppendLifecycleError(
+                primary_error=None,
+                rollback_error=None,
+                close_error=close_error,
+                record_may_have_persisted=True,
+            ) from close_error
+        return write_log_event(
+            "reflection",
+            event,
+            "diagnostic",
+            **kwargs,  # type: ignore[arg-type]
+        )
+
+    monkeypatch.setattr(
+        observability,
+        "write_log_event",
+        fail_original_then_write_diagnostic,
+    )
+
+    result = write_observed_log_event(
+        "reflection",
+        "cycle_completed",
+        "completed",
+        project_root=tmp_path,
+        failure_metadata={"owner": "scheduler"},
+    )
+
+    assert result is None
+    assert calls == ["cycle_completed", "audit_projection_failed"]
+    [diagnostic] = read_log_events(
+        project_root=tmp_path,
+        component="reflection",
+    )
+    assert diagnostic.event == "audit_projection_failed"
+    assert diagnostic.metadata == {
+        "audit_event": "cycle_completed",
+        "owner": "scheduler",
+    }
 
 
 def test_observed_event_reports_subscriber_failure_and_returns_envelope(

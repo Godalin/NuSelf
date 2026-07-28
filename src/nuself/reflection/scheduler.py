@@ -15,13 +15,15 @@ from nuself.config import runtime_paths
 from nuself.config import ConfigSystem, ReflectionSettings
 from nuself.clock import utc_now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
-from nuself.logs import write_log_event
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.notification.deep_link import DeepLink
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.persona import PersonaCompetitionResult, SharedPersonaDiscussionService
-from nuself.runtime.observability import report_observed_failure
+from nuself.runtime.observability import (
+    report_observed_failure,
+    write_observed_log_event,
+)
 from nuself.storage import write_json_atomic
 
 REFLECTION_SCHEDULE_STATE_VERSION = 1
@@ -150,7 +152,7 @@ class ReflectionScheduler:
         
         block_reason = self._schedule_block_reason(now)
         if block_reason is not None:
-            write_log_event(
+            write_observed_log_event(
                 "reflection",
                 "schedule_blocked",
                 "reflection cycle skipped by schedule limits",
@@ -161,7 +163,7 @@ class ReflectionScheduler:
             )
             return False
         
-        write_log_event(
+        write_observed_log_event(
             "reflection",
             "cycle_started",
             "reflection cycle triggered",
@@ -180,7 +182,7 @@ class ReflectionScheduler:
         best = candidates[0]
         score = gate.score(best)
         if not score.passes:
-            write_log_event(
+            write_observed_log_event(
                 "reflection",
                 "cycle_filtered",
                 f"best candidate filtered by relevance gate: {best.title}",
@@ -205,7 +207,7 @@ class ReflectionScheduler:
             discussion_approved = result.approved
             discussion_trace = result.discussion_trace
             if not result.approved:
-                write_log_event(
+                write_observed_log_event(
                     "reflection",
                     "cycle_discussion_rejected",
                     f"persona discussion rejected candidate: {best.title}",
@@ -271,7 +273,7 @@ class ReflectionScheduler:
             intent = self._candidate_to_notify_entry(entry)
             self._outbox.add(intent)
 
-        write_log_event(
+        write_observed_log_event(
             "reflection",
             "cycle_completed",
             f"reflection cycle published: {title}",
@@ -478,7 +480,7 @@ class ReflectionScheduler:
             "revised_body": result.revised_body,
         }
         status = "approved" if result.approved else "rejected"
-        write_log_event(
+        write_observed_log_event(
             "persona",
             "persona_discussion",
             f"{candidate.title} — {result.reason}",
@@ -520,7 +522,7 @@ class LLMRelevanceGate:
             return self._score_with_agent(candidate, cooldown_ok)
         except (RuntimeError, ValueError) as e:
 
-            write_log_event(
+            write_observed_log_event(
                 "reflection",
                 "relevance_gate_fallback",
                 f"Relevance agent failed, using fallback: {e}",
@@ -681,7 +683,7 @@ class IdeaCandidateGenerator:
         
         context = self._collect_context()
         if context.is_empty():
-            write_log_event(
+            write_observed_log_event(
                 "reflection",
                 "candidate_generation_skipped",
                 "no context available for idea generation",
@@ -694,7 +696,7 @@ class IdeaCandidateGenerator:
         try:
             candidates = self._generate_with_agent(context, max_candidates)
             if not candidates:
-                write_log_event(
+                write_observed_log_event(
                     "reflection",
                     "cycle_no_candidates",
                     "reflection cycle generated no candidates",
@@ -705,7 +707,7 @@ class IdeaCandidateGenerator:
                 )
             return candidates
         except (RuntimeError, ValueError) as e:
-            write_log_event(
+            write_observed_log_event(
                 "reflection",
                 "candidate_generation_failed",
                 f"failed to generate candidates: {type(e).__name__}",

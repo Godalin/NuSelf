@@ -249,8 +249,9 @@ Display name mapping: `persona` → `selves`.
   audit slugs are not forced into one process-global registry: their semantics
   remain governed by the owning domain specification and the shared lexical
   contract.
-- JSON Lines format (`sort_keys=True`, `ensure_ascii=True`).
-- Append mode (`"a"`, `encoding="utf-8"`).
+- JSON Lines format (`sort_keys=True`, `ensure_ascii=True`) encoded as UTF-8.
+- Active records use an unbuffered binary append handle so short writes and
+  record-boundary rollback remain explicit.
 - Directory creation before open.
 - New writes project a version-1 `RuntimeEnvelope`, including its stable
   `message_id` as `event_id`.
@@ -262,6 +263,11 @@ Display name mapping: `persona` → `selves`.
   envelope-to-`LogEvent` boundary, differing only in the required envelope
   kind. `write_log_event(...)` is the domain-facing convenience composition of
   those two audit operations.
+- Authoritative log persistence uses `write_log_event(...)` directly.
+  Auxiliary evidence uses
+  `write_observed_log_event(...)`, which mirrors the typed fields, returns the
+  event or `None`, never retries the original record, and reports failure as a
+  distinct `audit_projection_failed` record with `audit_event` metadata.
 - An `EventPublisher` may attach `runtime_event_log_sink(...)`; this projection
   retains the published event's ID and correlation context.
 - Writes are serialized by a per-path process lock and an advisory file lock;

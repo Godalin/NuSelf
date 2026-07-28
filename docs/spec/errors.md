@@ -181,6 +181,12 @@ after a memory or persona update.
 
 - These effects run through one shared observable best-effort boundary rather
   than local `try/except/pass` blocks.
+- Auxiliary structured logs use
+  `write_observed_log_event(component, event, message, ...)`, which mirrors the
+  typed log fields and returns the written `LogEvent` or `None`. It never
+  retries the original record. On failure it records the stable failure event
+  (default `audit_projection_failed`) with `audit_event` metadata through the
+  same non-recursive reporting boundary.
 - The caller supplies the owning component, a stable failure event name,
   operation context, and the secondary callable.
 - A secondary failure does not fail or roll back the primary operation.
