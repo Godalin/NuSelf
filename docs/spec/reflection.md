@@ -143,6 +143,26 @@ Quiet hours and daily caps are interpreted in the current system timezone. Inter
 
 If any schedule gate blocks a cycle, `reflect()` returns `false` before candidate generation and writes `schedule_blocked` with `status=skipped` and a short `reason` metadata value.
 
+### Schedule State
+
+The latest published-reflection state is stored at
+`private/runtime/last_reflection.json`. It is a versioned authoritative runtime
+record containing:
+
+- `schema_version`: supported record version;
+- `timestamp`: timezone-aware ISO timestamp of the latest publication;
+- `daily_count`: non-negative integer publication count for `daily_date`;
+- `daily_date`: valid local-system ISO date;
+- optional string `title` and `body` metadata.
+
+All scheduler and relevance-gate reads use one strict decode boundary. Missing
+state means no reflection has yet been published. Malformed, partial, or
+unsupported state must not be treated as missing: the scheduler fails closed,
+writes a payload-safe `schedule_state_corrupt` warning, and reports
+`schedule_blocked` with `reason="state_corrupt"`. The relevance gate treats the
+cooldown as active when the same state is corrupt. Successful publication
+updates the complete record through atomic file replacement.
+
 ## Optional Notify Bridge
 
 If `reflection.auto_notify` is `true`, a brief `OutboxEntry` is created **pointing to** the reflection:

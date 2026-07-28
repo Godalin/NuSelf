@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Reflection schedule state is now versioned, strictly validated, and written
+  atomically. Corrupt or partial state fails closed with a payload-safe
+  diagnostic instead of silently disabling cooldown, interval, or daily-cap
+  protection.
 - Persona activation and competitive discussion now use strict typed schemas as
   their sole prompted-JSON parse boundaries. String booleans, numeric strings,
   and partially malformed persona selections take the existing safe fallback

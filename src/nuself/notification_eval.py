@@ -46,7 +46,7 @@ def run_notification_eval(
                     )
                 elif component == "reflection_scheduler":
                     _evaluate_scheduler(
-                        project_root,
+                        project_root / path.stem / name.replace("/", "-"),
                         fixture,
                         scenario,
                     )
@@ -156,10 +156,12 @@ def _evaluate_scheduler(
     scheduler = ReflectionScheduler.__new__(ReflectionScheduler)
     scheduler._config = settings  # pyright: ignore[reportPrivateUsage]
     project_root.mkdir(parents=True, exist_ok=True)
+    scheduler._project_root = project_root  # pyright: ignore[reportPrivateUsage]
     scheduler._last_reflection_path = (  # pyright: ignore[reportPrivateUsage]
         project_root / "last_reflection.json"
     )
-    scheduler._read_last_reflection = lambda: last  # type: ignore[method-assign]  # pyright: ignore[reportUnknownLambdaType,reportPrivateUsage]
+    if last is not None:
+        scheduler._write_last_reflection(last)  # pyright: ignore[reportPrivateUsage]
     actual = scheduler.should_reflect(now)
     expected = _required_bool(
         scenario,

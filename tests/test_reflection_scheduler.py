@@ -15,6 +15,7 @@ from nuself.llm import ChatMessage
 from nuself.logs import read_log_events
 from nuself.reflection import IdeaCandidateGenerator, ReflectionScheduler
 from nuself.reflection.repository import ReflectionEntry
+from nuself.reflection.scheduler import ReflectionScheduleStateError
 
 
 def _local_datetime(year: int, month: int, day: int, hour: int, minute: int = 0) -> datetime:
@@ -344,12 +345,26 @@ def test_read_write_last_reflection_roundtrip(scheduler: ReflectionScheduler) ->
     loaded = scheduler._read_last_reflection()
     assert loaded is not None
     assert loaded.isoformat() == now.isoformat()
+    record = json.loads(
+        scheduler._last_reflection_path.read_text(encoding="utf-8")
+    )
+    assert record == {
+        "daily_count": 1,
+        "daily_date": "2024-01-01",
+        "schema_version": 1,
+        "timestamp": "2024-01-01T12:00:00Z",
+    }
+    assert list(scheduler._last_reflection_path.parent.glob("*.tmp")) == []
 
 
 def test_read_last_reflection_corrupt_file(scheduler: ReflectionScheduler) -> None:
     scheduler._last_reflection_path.parent.mkdir(parents=True, exist_ok=True)
     scheduler._last_reflection_path.write_text("not-json", encoding="utf-8")
-    assert scheduler._read_last_reflection() is None
+    with pytest.raises(
+        ReflectionScheduleStateError,
+        match="malformed or unsupported",
+    ):
+        scheduler._read_last_reflection()
 
 
 def test_read_last_reflection_invalid_timestamp(scheduler: ReflectionScheduler) -> None:
@@ -357,7 +372,83 @@ def test_read_last_reflection_invalid_timestamp(scheduler: ReflectionScheduler) 
     scheduler._last_reflection_path.write_text(
         json.dumps({"timestamp": "not-a-date"}), encoding="utf-8"
     )
-    assert scheduler._read_last_reflection() is None
+    with pytest.raises(
+        ReflectionScheduleStateError,
+        match="malformed or unsupported",
+    ):
+        scheduler._read_last_reflection()
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        {
+            "schema_version": 1,
+            "timestamp": "2024-01-01T12:00:00Z",
+            "daily_count": True,
+            "daily_date": "2024-01-01",
+        },
+        {
+            "schema_version": 1,
+            "timestamp": "2024-01-01T12:00:00Z",
+            "daily_count": -1,
+            "daily_date": "2024-01-01",
+        },
+        {
+            "schema_version": 1,
+            "timestamp": "2024-01-01T12:00:00Z",
+            "daily_count": 1,
+        },
+        {
+            "schema_version": 2,
+            "timestamp": "2024-01-01T12:00:00Z",
+            "daily_count": 1,
+            "daily_date": "2024-01-01",
+        },
+    ],
+)
+def test_corrupt_schedule_state_fails_closed(
+    scheduler: ReflectionScheduler,
+    record: dict[str, object],
+) -> None:
+    scheduler._last_reflection_path.write_text(
+        json.dumps(record),
+        encoding="utf-8",
+    )
+
+    assert scheduler.should_reflect(
+        datetime(2024, 1, 2, 12, tzinfo=UTC)
+    ) is False
+    events = read_log_events(
+        project_root=scheduler._project_root,
+        component="reflection",
+    )
+    assert events[-1].event == "schedule_state_corrupt"
+    assert events[-1].status == "degraded"
+    assert events[-1].metadata == {"record": "last_reflection.json"}
+    assert "2024-01-01" not in (events[-1].error or "")
+
+
+def test_reflect_reports_corrupt_schedule_state_as_blocked(
+    scheduler: ReflectionScheduler,
+) -> None:
+    scheduler._last_reflection_path.write_text(
+        '{"schema_version":1}',
+        encoding="utf-8",
+    )
+
+    assert scheduler.reflect(
+        datetime(2024, 1, 2, 12, tzinfo=UTC)
+    ) is False
+    events = read_log_events(
+        project_root=scheduler._project_root,
+        component="reflection",
+    )
+    assert [event.event for event in events[-2:]] == [
+        "schedule_state_corrupt",
+        "schedule_blocked",
+    ]
+    assert events[-1].metadata == {"reason": "state_corrupt"}
 
 
 def test_quiet_hours_non_wrapping_range() -> None:
@@ -669,8 +760,30 @@ def test_relevance_gate_cooldown_uses_config(tmp_path: Path) -> None:
     # Write a recent last_reflection to trigger cooldown
     last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
     last_path.parent.mkdir(parents=True, exist_ok=True)
-    last_path.write_text(json.dumps({"timestamp": datetime.now(UTC).isoformat()}))
+    now = datetime.now(UTC)
+    last_path.write_text(json.dumps({
+        "schema_version": 1,
+        "timestamp": now.isoformat(),
+        "daily_count": 1,
+        "daily_date": now.astimezone().date().isoformat(),
+    }))
     assert gate._cooldown_ok() is False
+
+
+def test_relevance_gate_corrupt_state_keeps_cooldown_active(
+    tmp_path: Path,
+) -> None:
+    from nuself.reflection import LLMRelevanceGate
+
+    gate = LLMRelevanceGate(tmp_path, llm=_FakeLLM())
+    last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
+    last_path.parent.mkdir(parents=True, exist_ok=True)
+    last_path.write_text('{"timestamp":"not-a-date"}', encoding="utf-8")
+
+    assert gate._cooldown_ok() is False
+    events = read_log_events(project_root=tmp_path, component="reflection")
+    assert events[-1].event == "schedule_state_corrupt"
+    assert events[-1].status == "degraded"
 
 
 def test_relevance_gate_no_cooldown_when_no_last_reflection(tmp_path: Path) -> None:

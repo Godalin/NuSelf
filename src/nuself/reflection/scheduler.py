@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from nuself.config import runtime_paths
 from nuself.config import ConfigSystem, ReflectionSettings
@@ -21,6 +21,53 @@ from nuself.notification.deep_link import DeepLink
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.persona import PersonaCompetitionResult, SharedPersonaDiscussionService
+from nuself.storage import write_json_atomic
+
+REFLECTION_SCHEDULE_STATE_VERSION = 1
+
+
+class ReflectionScheduleStateError(ValueError):
+    """Raised when persisted reflection schedule state is not trustworthy."""
+
+
+class ReflectionScheduleState(BaseModel):
+    """Strict persisted cooldown and daily-cap state."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    schema_version: Literal[1]
+    timestamp: datetime
+    daily_count: int = Field(ge=0)
+    daily_date: date
+    title: str | None = None
+    body: str | None = None
+
+    @field_validator("timestamp")
+    @classmethod
+    def _timestamp_must_be_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("timestamp must be timezone-aware")
+        return value
+
+    def to_record(self) -> dict[str, object]:
+        return cast(dict[str, object], self.model_dump(mode="json", exclude_none=True))
+
+
+def _read_reflection_schedule_state(path: Path) -> ReflectionScheduleState | None:
+    if not path.exists():
+        return None
+    try:
+        return ReflectionScheduleState.model_validate_json(
+            path.read_text(encoding="utf-8")
+        )
+    except OSError:
+        raise ReflectionScheduleStateError(
+            "reflection schedule state could not be read"
+        ) from None
+    except ValidationError:
+        raise ReflectionScheduleStateError(
+            "reflection schedule state is malformed or unsupported"
+        ) from None
 
 
 class RelevanceScoreOutput(BaseModel):
@@ -254,31 +301,40 @@ class ReflectionScheduler:
     def _schedule_block_reason(self, now: datetime) -> str | None:
         if self._in_quiet_hours(now):
             return "quiet_hours"
-        if not self._daily_cap_not_reached(now):
+        try:
+            state = _read_reflection_schedule_state(
+                self._last_reflection_path
+            )
+        except ReflectionScheduleStateError as exc:
+            self._report_schedule_state_corrupt(exc)
+            return "state_corrupt"
+        if not self._daily_cap_not_reached(now, state):
             return "daily_cap"
-        if self._in_cooldown(now):
+        if self._in_cooldown(now, state):
             return "cooldown"
-        if self._interval_not_elapsed(now):
+        if self._interval_not_elapsed(now, state):
             return "interval"
         return None
 
-    def _in_cooldown(self, now: datetime) -> bool:
-        last = self._read_last_reflection()
-        if last is None:
+    def _in_cooldown(
+        self,
+        now: datetime,
+        state: ReflectionScheduleState | None,
+    ) -> bool:
+        if state is None:
             return False
-        if last.tzinfo is None:
-            last = last.replace(tzinfo=UTC)
-        elapsed = (now - last).total_seconds()
+        elapsed = (now - state.timestamp).total_seconds()
         return elapsed < self._config.scheduler.cooldown_seconds
 
-    def _interval_not_elapsed(self, now: datetime) -> bool:
-        last = self._read_last_reflection()
-        if last is None:
+    def _interval_not_elapsed(
+        self,
+        now: datetime,
+        state: ReflectionScheduleState | None,
+    ) -> bool:
+        if state is None:
             return False
-        if last.tzinfo is None:
-            last = last.replace(tzinfo=UTC)
         jittered = self._jittered_interval()
-        elapsed = (now - last).total_seconds()
+        elapsed = (now - state.timestamp).total_seconds()
         return elapsed < jittered
 
     def _jittered_interval(self) -> int:
@@ -290,61 +346,59 @@ class ReflectionScheduler:
             return base
         return base + random.randint(-jitter, jitter)
 
-    def _daily_cap_not_reached(self, now: datetime) -> bool:
-        count = self._reflection_count_today(now)
+    def _daily_cap_not_reached(
+        self,
+        now: datetime,
+        state: ReflectionScheduleState | None,
+    ) -> bool:
+        count = self._reflection_count_today(now, state)
         return count < self._config.scheduler.daily_cap
 
-    def _reflection_count_today(self, now: datetime) -> int:
-        if not self._last_reflection_path.exists():
+    def _reflection_count_today(
+        self,
+        now: datetime,
+        state: ReflectionScheduleState | None,
+    ) -> int:
+        if state is None:
             return 0
-        try:
-            raw: object = json.loads(self._last_reflection_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return 0
-        if not isinstance(raw, dict):
-            return 0
-        data = cast(dict[str, object], raw)
-        count = data.get("daily_count")
-        date = data.get("daily_date")
-        if not isinstance(count, int) or not isinstance(date, str):
-            return 0
-        if date == now.astimezone().date().isoformat():
-            return count
+        if state.daily_date == now.astimezone().date():
+            return state.daily_count
         return 0
 
     def _read_last_reflection(self) -> datetime | None:
-        if not self._last_reflection_path.exists():
-            return None
-        try:
-            raw: object = json.loads(self._last_reflection_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return None
-        if not isinstance(raw, dict):
-            return None
-        data = cast(dict[str, object], raw)
-        ts_raw = data.get("timestamp")
-        if not isinstance(ts_raw, str):
-            return None
-        try:
-            return datetime.fromisoformat(ts_raw)
-        except ValueError:
-            return None
+        state = _read_reflection_schedule_state(
+            self._last_reflection_path
+        )
+        return state.timestamp if state is not None else None
 
     def _write_last_reflection(self, now: datetime, title: str | None = None, body: str | None = None) -> None:
-        self._last_reflection_path.parent.mkdir(parents=True, exist_ok=True)
-        count = self._reflection_count_today(now) + 1
-        payload: dict[str, object] = {
-            "timestamp": now.isoformat(),
-            "daily_count": count,
-            "daily_date": now.astimezone().date().isoformat(),
-        }
-        if title is not None:
-            payload["title"] = title
-        if body is not None:
-            payload["body"] = body
-        self._last_reflection_path.write_text(
-            json.dumps(payload, sort_keys=True) + "\n",
-            encoding="utf-8",
+        current = _read_reflection_schedule_state(
+            self._last_reflection_path
+        )
+        count = self._reflection_count_today(now, current) + 1
+        state = ReflectionScheduleState(
+            schema_version=REFLECTION_SCHEDULE_STATE_VERSION,
+            timestamp=now,
+            daily_count=count,
+            daily_date=now.astimezone().date(),
+            title=title,
+            body=body,
+        )
+        write_json_atomic(self._last_reflection_path, state.to_record())
+
+    def _report_schedule_state_corrupt(
+        self,
+        exc: ReflectionScheduleStateError,
+    ) -> None:
+        write_log_event(
+            "reflection",
+            "schedule_state_corrupt",
+            "reflection schedule state is invalid; scheduling is blocked",
+            project_root=self._project_root,
+            level="warning",
+            status="degraded",
+            error=str(exc),
+            metadata={"record": self._last_reflection_path.name},
         )
 
     def _candidate_to_reflection_entry(
@@ -560,34 +614,26 @@ class LLMRelevanceGate:
         )
 
     def _cooldown_ok(self) -> bool:
-        if not self._last_reflection_path.exists():
+        try:
+            state = _read_reflection_schedule_state(
+                self._last_reflection_path
+            )
+        except ReflectionScheduleStateError as exc:
+            write_log_event(
+                "reflection",
+                "schedule_state_corrupt",
+                "reflection schedule state is invalid; cooldown remains active",
+                project_root=self._project_root,
+                level="warning",
+                status="degraded",
+                error=str(exc),
+                metadata={"record": self._last_reflection_path.name},
+            )
+            return False
+        if state is None:
             return True
-        last = self._read_last_timestamp()
-        if last is None:
-            return True
-        now = datetime.now(UTC)
-        if last.tzinfo is None:
-            last = last.replace(tzinfo=UTC)
-        elapsed = (now - last).total_seconds()
+        elapsed = (datetime.now(UTC) - state.timestamp).total_seconds()
         return elapsed >= self._config.scheduler.cooldown_seconds
-
-    def _read_last_timestamp(self) -> datetime | None:
-        if not self._last_reflection_path.exists():
-            return None
-        try:
-            raw: object = json.loads(self._last_reflection_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return None
-        if not isinstance(raw, dict):
-            return None
-        data = cast(dict[str, object], raw)
-        ts_raw = data.get("timestamp")
-        if not isinstance(ts_raw, str):
-            return None
-        try:
-            return datetime.fromisoformat(ts_raw)
-        except ValueError:
-            return None
 
 
 class IdeaCandidateGenerator:

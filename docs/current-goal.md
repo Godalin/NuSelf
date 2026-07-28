@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make persona activation and competitive-discussion schemas authoritative so
-malformed LLM output cannot pass through looser handwritten parsers.
+Make reflection schedule state strictly validated, atomically persisted, and
+fail-closed so corruption cannot silently disable cooldown or daily-cap gates.
 
 ## Active Branch
 
@@ -14,33 +14,32 @@ malformed LLM output cannot pass through looser handwritten parsers.
 
 ## Ordered Work
 
-1. [x] Compare typed and handwritten persona parser behavior.
-2. [x] Specify authoritative activation, scoring, selection, and moderator schemas.
-3. [x] Reject string booleans, numeric strings, and mixed malformed selections.
-4. [x] Remove duplicate handwritten parsing paths.
-5. [x] Preserve the existing no-activation, default-participant, neutral-score,
-   and non-converged fallbacks.
+1. [x] Audit all readers and writers of `last_reflection.json`.
+2. [x] Specify a versioned authoritative schedule-state record.
+3. [x] Replace duplicate permissive readers with one strict decode boundary.
+4. [x] Fail closed with a payload-safe diagnostic when state is corrupt.
+5. [x] Write schedule state atomically after a reflection is published.
 6. [x] Run focused/full tests, type checking, and formatting checks.
 7. [x] Update user-facing docs/changelog and commit this stage.
 
 ## Out Of Scope
 
-- Changing activation policy, participant limits, score clamping, or moderator policy.
-- Changing valid persona identifiers or emergent-persona behavior.
-- Migrating model invocation to a different LangChain abstraction.
-- Tightening contribution or synthesis schemas in this same commit.
+- Changing quiet hours, cooldown, interval, jitter, or daily-cap policy.
+- Reconstructing a corrupt schedule record from reflection history.
+- Changing reflection candidate generation or relevance policy.
+- Migrating other runtime state records in this same commit.
 
 ## Completion Evidence
 
-- Valid activation, scoring, selection, and moderator JSON produces the same
-  domain values.
-- String booleans and numeric strings fail schema validation instead of being
-  coerced.
-- One malformed selected-persona item invalidates the selection instead of
-  being silently discarded.
-- Existing safe fallback behavior remains unchanged at each caller boundary.
-- No handwritten dict parser remains behind the four typed schemas.
-- Focused persona tests, full pytest, Pyright, and `git diff --check` pass.
+- Valid schedule state preserves cooldown, interval, and daily-cap behavior.
+- Missing state still means no reflection has yet been published.
+- Malformed JSON, invalid timestamps/dates, booleans as counts, negative counts,
+  partial records, and unsupported versions block scheduling with a structured
+  corruption diagnostic.
+- The relevance gate treats corrupt state as cooldown-active rather than
+  silently allowing a candidate.
+- State updates use atomic replacement and include a schema version.
+- Focused reflection tests, full pytest, Pyright, and `git diff --check` pass.
 
 ## Publication
 
@@ -48,5 +47,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit the remaining derived runtime state for validation, atomic recovery, and
-observable failure behavior.
+Continue auditing remaining runtime checkpoints and derived state for strict
+validation, atomic recovery, and observable failure behavior.
