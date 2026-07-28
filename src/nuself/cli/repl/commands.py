@@ -30,7 +30,7 @@ from nuself.memory.source_repository import (
 )
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.profile.repository import ProfileItemRepository
-from nuself.reason.repository import ReasonNotFound
+from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.runtime.observability import (
     format_exception_chain,
@@ -153,7 +153,7 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         question = command.removeprefix("start ").strip()
         try:
             thread = service.start_thread(question)
-        except RuntimeError as exc:
+        except ReasonError as exc:
             return f"Error: {exc}"
         return f"Started reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("advance "):
@@ -166,42 +166,42 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         service = ReasonService(project_root, advancer=advancer)
         try:
             thread = service.advance_thread(thread_id)
-        except (ReasonNotFound, RuntimeError) as exc:
+        except ReasonError as exc:
             return f"Error: {exc}"
         return f"Advanced reason thread: {thread.id}\n{render_reason_detail(thread, service.list_steps(thread.id))}"
     if command.startswith("pause "):
         thread_id = command.removeprefix("pause ").strip()
         try:
             thread = service.pause_thread(thread_id)
-        except (ReasonNotFound, RuntimeError) as exc:
+        except ReasonError as exc:
             return f"Error: {exc}"
         return f"Paused reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("resume "):
         thread_id = command.removeprefix("resume ").strip()
         try:
             thread = service.resume_thread(thread_id)
-        except (ReasonNotFound, RuntimeError) as exc:
+        except ReasonError as exc:
             return f"Error: {exc}"
         return f"Resumed reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("resolve "):
         thread_id = command.removeprefix("resolve ").strip()
         try:
             thread = service.resolve_thread(thread_id)
-        except (ReasonNotFound, RuntimeError) as exc:
+        except ReasonError as exc:
             return f"Error: {exc}"
         return f"Resolved reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("archive "):
         thread_id = command.removeprefix("archive ").strip()
         try:
             thread = service.archive_thread(thread_id)
-        except (ReasonNotFound, RuntimeError) as exc:
+        except ReasonError as exc:
             return f"Error: {exc}"
         return f"Archived reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("delete "):
         thread_id = command.removeprefix("delete ").strip()
         try:
             tid = service.delete_thread(thread_id)
-        except (ReasonNotFound, RuntimeError) as exc:
+        except ReasonError as exc:
             return f"Error: {exc}"
         return f"Deleted reason thread: {tid}"
     return interactive_reason_help(command)
@@ -238,7 +238,6 @@ def handle_interactive_reason_watch(project_root: Path | None, interval: int = 2
     import time
 
     from nuself.reason.service import ReasonService
-    from nuself.reason.repository import ReasonNotFound
     from nuself.tui.reason import render_reason_detail, render_step_watch_entry
 
     service = ReasonService(project_root)

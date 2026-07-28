@@ -10,6 +10,11 @@ import pytest
 
 from nuself.logs import read_log_events
 from nuself.reason.domain import ReasoningStep
+from nuself.reason.errors import (
+    ReasonAdvanceError,
+    ReasonPromptError,
+    ReasonTransitionError,
+)
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.trace.service import TraceQueryService
@@ -21,6 +26,113 @@ def _reason_service(**kwargs: Any) -> ReasonService:
 
 def _test_prompt_generator(*args: object, **kwargs: object) -> str:
     return "Test-generated reasoning prompt."
+
+
+def test_start_thread_rejects_empty_prompt_with_domain_error(
+    tmp_path: Path,
+) -> None:
+    service = ReasonService(
+        tmp_path,
+        prompt_generator=lambda *args, **kwargs: "",
+    )
+
+    with pytest.raises(
+        ReasonPromptError,
+        match="prompt generation returned empty output",
+    ):
+        service.start_thread("Empty prompt")
+
+
+def test_prompt_generation_requires_project_root_with_domain_error() -> None:
+    from nuself.reason.prompt import generate_reasoning_prompt
+
+    with pytest.raises(
+        ReasonPromptError,
+        match="project root is not configured",
+    ):
+        generate_reasoning_prompt("Missing project")
+
+
+def test_prompt_generation_wraps_declared_llm_runtime_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.reason.prompt import generate_reasoning_prompt
+
+    provider_error = RuntimeError("provider unavailable")
+
+    class FailingLLM:
+        def complete(self, messages: object) -> str:
+            raise provider_error
+
+    def configured_models(project_root: Path | None) -> tuple[object, ...]:
+        return (object(),)
+
+    def failing_llm(project_root: Path | None) -> FailingLLM:
+        return FailingLLM()
+
+    monkeypatch.setattr(
+        "nuself.reason.prompt.configured_langchain_chat_models",
+        configured_models,
+    )
+    monkeypatch.setattr(
+        "nuself.reason.prompt.default_llm",
+        failing_llm,
+    )
+
+    with pytest.raises(ReasonPromptError) as caught:
+        generate_reasoning_prompt("Provider failure", project_root=tmp_path)
+
+    assert caught.value.__cause__ is provider_error
+
+
+def test_prompt_generation_preserves_unexpected_llm_implementation_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.reason.prompt import generate_reasoning_prompt
+
+    unexpected = TypeError("LLM adapter implementation failed")
+
+    class BrokenLLM:
+        def complete(self, messages: object) -> str:
+            raise unexpected
+
+    def configured_models(project_root: Path | None) -> tuple[object, ...]:
+        return (object(),)
+
+    def broken_llm(project_root: Path | None) -> BrokenLLM:
+        return BrokenLLM()
+
+    monkeypatch.setattr(
+        "nuself.reason.prompt.configured_langchain_chat_models",
+        configured_models,
+    )
+    monkeypatch.setattr(
+        "nuself.reason.prompt.default_llm",
+        broken_llm,
+    )
+
+    with pytest.raises(TypeError) as caught:
+        generate_reasoning_prompt("Broken adapter", project_root=tmp_path)
+
+    assert caught.value is unexpected
+
+
+def test_start_thread_preserves_unexpected_prompt_generator_error(
+    tmp_path: Path,
+) -> None:
+    unexpected = RuntimeError("prompt implementation failed")
+
+    def fail_prompt(*args: object, **kwargs: object) -> str:
+        raise unexpected
+
+    service = ReasonService(tmp_path, prompt_generator=fail_prompt)
+
+    with pytest.raises(RuntimeError) as caught:
+        service.start_thread("Unexpected failure")
+
+    assert caught.value is unexpected
 
 
 def test_start_thread_resolves_project_root_for_prompt_generator(tmp_path: Path, monkeypatch: Any) -> None:
@@ -255,11 +367,8 @@ def test_invalid_transition_raises(tmp_path: Path) -> None:
     service = _reason_service(repository=ReasonRepository(tmp_path))
     t = service.start_thread("Test")
     service.resolve_thread(t.id)
-    try:
+    with pytest.raises(ReasonTransitionError):
         service.pause_thread(t.id)
-        assert False, "expected RuntimeError"
-    except RuntimeError:
-        pass
 
 
 def test_advance_thread(tmp_path: Path) -> None:
@@ -473,11 +582,11 @@ def test_advance_without_advancer_or_step_raises(tmp_path: Path) -> None:
     service = _reason_service(repository=ReasonRepository(tmp_path))
     thread = service.start_thread("No fallback advance")
 
-    try:
+    with pytest.raises(
+        ReasonAdvanceError,
+        match="no reason advancer configured",
+    ):
         service.advance_thread(thread.id)
-        assert False, "expected RuntimeError"
-    except RuntimeError as exc:
-        assert "no reason advancer configured" in str(exc)
 
 
 def test_advance_when_advancer_returns_none_raises(tmp_path: Path) -> None:
@@ -488,22 +597,19 @@ def test_advance_when_advancer_returns_none_raises(tmp_path: Path) -> None:
     service = _reason_service(repository=ReasonRepository(tmp_path), advancer=EmptyAdvancer())
     thread = service.start_thread("No fake steps")
 
-    try:
+    with pytest.raises(
+        ReasonAdvanceError,
+        match="did not produce a structured step",
+    ):
         service.advance_thread(thread.id)
-        assert False, "expected RuntimeError"
-    except RuntimeError as exc:
-        assert "did not produce a structured step" in str(exc)
 
 
 def test_advance_paused_thread_raises(tmp_path: Path) -> None:
     service = _reason_service(repository=ReasonRepository(tmp_path))
     t = service.start_thread("Test")
     service.pause_thread(t.id)
-    try:
+    with pytest.raises(ReasonAdvanceError):
         service.advance_thread(t.id)
-        assert False, "expected RuntimeError"
-    except RuntimeError:
-        pass
 
 
 def _test_step(thread_id: str) -> ReasoningStep:

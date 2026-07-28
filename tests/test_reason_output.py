@@ -13,7 +13,8 @@ from nuself.reason.output import (
     ReasonOutputPaths,
     ReasonOutputService,
 )
-from nuself.reason.repository import ReasonNotFound, ReasonRepository
+from nuself.reason.errors import ReasonNotFound
+from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.storage import write_json_atomic
 

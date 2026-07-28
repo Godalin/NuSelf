@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Daemon diagnostic project-root lookup now degrades only for an unowned
-server adapter and no longer hides failures in owned request state.
+Idle. Expected reason-domain failures now use one authoritative exception
+hierarchy, and CLI/REPL no longer relabel arbitrary `RuntimeError` values.
 
 ## Active Branch
 
@@ -23,15 +23,19 @@ code.
 
 ## Completion Evidence
 
-- `_request_project_root()` uses an explicit `NuSelfUnixServer` ownership
-  check instead of calling the strict state accessor under `except Exception`.
-- Owned server state supplies the diagnostic project root directly.
-- An unowned server adapter returns `None` without reading structurally
-  unrelated state.
-- Unexpected owned-state access failure propagates instead of being silently
-  erased.
-- Focused daemon transport tests: 37 passed.
-- Final full tests: 1379 passed.
+- `nuself.reason.errors` owns `ReasonError`, `ReasonNotFound`,
+  `ReasonPromptError`, `ReasonAdvanceError`, and `ReasonTransitionError`.
+- Repository, service, prompt, advancer, agent tools, output, CLI, REPL, and
+  tests migrated directly; no repository forwarding alias or legacy
+  `ValueError` base remains.
+- Expected reason failures retain concise CLI/REPL results through
+  `ReasonError`.
+- Unexpected prompt-generator, LLM-adapter, and handler `RuntimeError` or
+  `TypeError` objects propagate unchanged.
+- Provider `RuntimeError` from the LLM abstraction becomes
+  `ReasonPromptError` with the provider failure retained as explicit cause.
+- Focused reason/error-boundary tests: 90 passed.
+- Final full tests: 1387 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -41,6 +45,6 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit remaining CLI/REPL and daemon broad exception boundaries, prioritizing
-places that conflate expected domain failures with unexpected implementation
-or infrastructure errors.
+Audit previous refactors for forwarding modules, compatibility aliases,
+parallel protocols, and legacy entrypoints that can be removed through direct
+repository-wide migration.

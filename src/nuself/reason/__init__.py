@@ -12,8 +12,14 @@ from nuself.reason.domain import (
     StepKind,
     TerminalStatus,
 )
-from nuself.reason.repository import (
+from nuself.reason.errors import (
+    ReasonAdvanceError,
+    ReasonError,
     ReasonNotFound,
+    ReasonPromptError,
+    ReasonTransitionError,
+)
+from nuself.reason.repository import (
     ReasonRepository,
     REASON_STORAGE_VERSION,
 )
@@ -34,7 +40,10 @@ __all__ = [
     "ACTIVE_STATUSES",
     "REASON_STORAGE_VERSION",
     "ReasonAdvancer",
+    "ReasonAdvanceError",
+    "ReasonError",
     "ReasonNotFound",
+    "ReasonPromptError",
     "ReasonRepository",
     "ReasonScheduler",
     "ReasonService",
@@ -43,6 +52,7 @@ __all__ = [
     "ReasoningThread",
     "ReasoningStep",
     "ReasonStatus",
+    "ReasonTransitionError",
     "ReasonPriority",
     "TerminalStatus",
     "ReasonOutputManifest",

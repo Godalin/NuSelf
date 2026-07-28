@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 
 from nuself.reason.domain import ReasoningStep, ReasoningThread
-from nuself.reason.repository import ReasonNotFound, ReasonRepository
+from nuself.reason.errors import ReasonNotFound
+from nuself.reason.repository import ReasonRepository
 
 
 def test_save_and_get_thread(tmp_path: Path) -> None:

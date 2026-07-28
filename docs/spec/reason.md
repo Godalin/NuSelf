@@ -226,6 +226,28 @@ Rules:
 - Reason treats tool use as part of reasoning. Tool calls and tool results should become evidence refs, step metadata, or trace links when they materially change the reasoning state.
 - Chat may inspect active reason summaries through tools, but must not create or advance a reason thread without explicit user confirmation.
 
+### Domain Error Boundary
+
+Expected reason-service failures derive from `ReasonError`:
+
+- `ReasonNotFound` identifies an unresolved thread or step;
+- `ReasonPromptError` identifies declared prompt configuration, generation, or
+  empty-output failures; provider failures arrive through the LLM abstraction
+  as `RuntimeError` and remain its explicit cause;
+- `ReasonAdvanceError` identifies a rejected advance, including inactive
+  state, missing advancer, or missing structured step;
+- `ReasonTransitionError` identifies a disallowed status transition.
+
+CLI and REPL reason handlers catch `ReasonError`, render its concise message,
+and keep their existing exit/session behavior. They must not catch
+`RuntimeError` as a proxy for domain failure. Unexpected repository, injected
+implementation, renderer, or agent-runtime exceptions therefore propagate to
+their actual owner with their original type and chain.
+
+`nuself.reason.errors` is authoritative for the hierarchy. Repository modules
+must import these types rather than define or re-export compatibility aliases;
+callers migrate directly during active development.
+
 Reason repository writes, workspace creation/deletion, and repository batch
 writes are authoritative. Lifecycle audit records and trace records written
 after a successful domain mutation are auxiliary projections and use the

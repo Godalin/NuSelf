@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 
 import pytest
@@ -5,13 +6,17 @@ import pytest
 from nuself import cli
 from nuself.agent.chat import ThreadStore
 from nuself.cli.chat import chat_request_timeout_seconds
+from nuself.cli.commands.reason import handle_reason_start
 from nuself.cli.repl.commands import (
     handle_interactive_history_command,
     handle_interactive_persona_command,
+    handle_interactive_reason_command,
 )
 from nuself.config import ConfigSystem
 from nuself.logs import read_log_events
 from nuself.persona.prompt_repo import PersonaPromptRepository
+from nuself.reason.errors import ReasonPromptError
+from nuself.reason.service import ReasonService
 
 
 def test_chat_timeout_uses_default_after_malformed_yaml(
@@ -172,3 +177,75 @@ def test_persona_command_does_not_convert_control_flow(
 
     assert caught.value is interrupt
     assert read_log_events(project_root=tmp_path, component="persona") == []
+
+
+def test_reason_cli_renders_declared_domain_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def reject_start(
+        self: ReasonService,
+        topic: str,
+        **kwargs: object,
+    ) -> None:
+        raise ReasonPromptError("reason prompt unavailable")
+
+    monkeypatch.setattr(ReasonService, "start_thread", reject_start)
+    args = argparse.Namespace(
+        project_root=tmp_path,
+        topic="topic",
+        priority="normal",
+        mandate=[],
+    )
+
+    assert handle_reason_start(args) == 1
+    assert capsys.readouterr().err == "Error: reason prompt unavailable\n"
+
+
+def test_reason_cli_does_not_relabel_unexpected_runtime_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    unexpected = RuntimeError("reason implementation failed")
+
+    def fail_start(
+        self: ReasonService,
+        topic: str,
+        **kwargs: object,
+    ) -> None:
+        raise unexpected
+
+    monkeypatch.setattr(ReasonService, "start_thread", fail_start)
+    args = argparse.Namespace(
+        project_root=tmp_path,
+        topic="topic",
+        priority="normal",
+        mandate=[],
+    )
+
+    with pytest.raises(RuntimeError) as caught:
+        handle_reason_start(args)
+
+    assert caught.value is unexpected
+
+
+def test_reason_repl_does_not_relabel_unexpected_runtime_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    unexpected = RuntimeError("reason implementation failed")
+
+    def fail_start(
+        self: ReasonService,
+        topic: str,
+        **kwargs: object,
+    ) -> None:
+        raise unexpected
+
+    monkeypatch.setattr(ReasonService, "start_thread", fail_start)
+
+    with pytest.raises(RuntimeError) as caught:
+        handle_interactive_reason_command("start topic", tmp_path)
+
+    assert caught.value is unexpected

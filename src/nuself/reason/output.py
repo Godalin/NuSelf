@@ -17,7 +17,7 @@ from uuid import uuid4
 from nuself.clock import utc_now, utc_now_iso
 from nuself.logs import write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
-from nuself.reason.repository import ReasonNotFound
+from nuself.reason.errors import ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.runtime.jobs import JobMessage, JobSink
 from nuself.runtime.observability import (

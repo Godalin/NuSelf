@@ -312,6 +312,11 @@ Commands without an explicitly recoverable boundary continue to propagate
 unexpected failures to their owner. A broad catch must not be added merely to
 keep the prompt alive.
 
+Reason commands follow the declared reason-domain hierarchy rather than
+catching `RuntimeError`. Expected not-found, prompt, advance, and transition
+errors remain concise command results; undeclared implementation or
+infrastructure `RuntimeError` values are not relabeled as user mistakes.
+
 Retryable:
 
 - daemon connection timeout

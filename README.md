@@ -454,6 +454,9 @@ chat path and does not absorb concurrent background subsystem audit records.
 Reason advances also scope workspace and thread-local persona tools through
 this shared context, preserving request/job correlation while selecting the
 active durable reason thread.
+Reason commands distinguish declared not-found, prompt, advance, and
+transition outcomes from unexpected implementation failures, so only known
+domain errors are converted into concise CLI or REPL messages.
 Process-local live log observers remain separate from correlation identity:
 nested observers compose in order, projection failures are isolated after the
 audit write, and observers are not implicitly carried into new worker threads.

@@ -7,7 +7,7 @@ import json
 import sys
 
 from nuself.cli.commands.output import print_ansi
-from nuself.reason.repository import ReasonNotFound
+from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.tui.reason import render_reason_detail, render_reason_row
 
@@ -71,7 +71,7 @@ def handle_reason_start(args: argparse.Namespace) -> int:
         thread = service.start_thread(
             args.topic, priority=args.priority, mandates=mandates
         )
-    except RuntimeError as exc:
+    except ReasonError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     print(f"Started reasoning thread: {thread.id}")
@@ -100,7 +100,7 @@ def handle_reason_thread_action(args: argparse.Namespace) -> int:
     method = getattr(service, method_name)
     try:
         thread = method(args.thread_id)
-    except (ReasonNotFound, RuntimeError) as exc:
+    except ReasonError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     print(f"{verb} reason thread: {thread.id}")
@@ -118,7 +118,7 @@ def handle_reason_delete(args: argparse.Namespace) -> int:
         thread_id = ReasonService(args.project_root).delete_thread(
             args.thread_id
         )
-    except (ReasonNotFound, RuntimeError) as exc:
+    except ReasonError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     print(f"Deleted reason thread: {thread_id}")

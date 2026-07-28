@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reason not-found, prompt, advance, and transition failures now use a declared
+  domain exception hierarchy. CLI and REPL reason commands keep concise output
+  for those expected outcomes without relabeling unrelated `RuntimeError`
+  implementation failures as user errors.
 - Recoverable local REPL `:persona` and `:history` failures now write
   privacy-bounded structured diagnostics while preserving their concise
   command result. Diagnostic storage failure cannot terminate the session or

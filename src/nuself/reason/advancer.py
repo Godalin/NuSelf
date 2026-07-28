@@ -16,6 +16,7 @@ from nuself.agent.middleware import ToolCaptureMiddleware
 
 from nuself.llm import LangChainLLMEndpoint
 from nuself.reason.domain import STEP_KINDS, TERMINAL_STATUSES, ReasoningStep, ReasoningThread
+from nuself.reason.errors import ReasonAdvanceError
 from nuself.runtime import current_runtime_context, runtime_context
 from nuself.runtime.observability import report_observed_failure
 from nuself.workspace import PrivateWorkspaceStore
@@ -254,7 +255,9 @@ class ReasonAdvancer:
     def advance(self, thread: ReasoningThread) -> ReasoningStep | None:
         """Generate a reasoning step for the given thread, or None on failure."""
         if self._agent is None:
-            raise RuntimeError("No LangChain models configured — cannot advance reason thread")
+            raise ReasonAdvanceError(
+                "No LangChain models configured — cannot advance reason thread"
+            )
         with self._invoke_lock:
             return self._advance(thread)
 

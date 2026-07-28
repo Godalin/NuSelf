@@ -7,6 +7,7 @@ from pathlib import Path
 from langchain_core.tools import StructuredTool
 
 from nuself.llm import ChatMessage, configured_langchain_chat_models, default_llm
+from nuself.reason.errors import ReasonPromptError
 
 
 def generate_reasoning_prompt(
@@ -18,9 +19,13 @@ def generate_reasoning_prompt(
 ) -> str:
     """Generate a custom reasoning system prompt for a thread topic."""
     if project_root is None:
-        raise RuntimeError("Cannot generate reasoning prompt: project root is not configured")
+        raise ReasonPromptError(
+            "Cannot generate reasoning prompt: project root is not configured"
+        )
     if not configured_langchain_chat_models(project_root):
-        raise RuntimeError("Cannot generate reasoning prompt: no LangChain chat model is configured")
+        raise ReasonPromptError(
+            "Cannot generate reasoning prompt: no LangChain chat model is configured"
+        )
     parts = [
         "You are setting up a reasoning thread. The user's topic is:",
         topic,
@@ -90,11 +95,15 @@ Do NOT include field type/format descriptions — only explain meaning.
     try:
         llm = default_llm(project_root)
         raw = llm.complete([ChatMessage(role="user", content=prompt)])
-    except Exception as exc:
-        raise RuntimeError(f"Cannot generate reasoning prompt: {exc}") from exc
+    except RuntimeError as exc:
+        raise ReasonPromptError(
+            f"Cannot generate reasoning prompt: {exc}"
+        ) from exc
     rendered = raw.strip()
     if not rendered:
-        raise RuntimeError("Cannot generate reasoning prompt: model returned an empty prompt")
+        raise ReasonPromptError(
+            "Cannot generate reasoning prompt: model returned an empty prompt"
+        )
     return rendered
 
 

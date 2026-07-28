@@ -10,6 +10,11 @@ from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
 from nuself.logs import LogLevel, write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
+from nuself.reason.errors import (
+    ReasonAdvanceError,
+    ReasonPromptError,
+    ReasonTransitionError,
+)
 from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
 from nuself.store import ScopedWorkspace, SqliteStore
@@ -159,7 +164,10 @@ class ReasonService:
             project_root=self._project_root,
         ).strip()
         if not reasoning_prompt:
-            raise RuntimeError("Cannot start reason thread: reasoning prompt generation returned empty output")
+            raise ReasonPromptError(
+                "Cannot start reason thread: reasoning prompt generation "
+                "returned empty output"
+            )
 
         thread = ReasoningThread(
             topic=topic.strip(),
@@ -211,7 +219,10 @@ class ReasonService:
         thread = self._repository.resolve_thread(id_or_index)
 
         if thread.status != "active":
-            raise RuntimeError(f"Cannot advance thread {thread.id}: status is '{thread.status}', expected 'active'")
+            raise ReasonAdvanceError(
+                f"Cannot advance thread {thread.id}: status is "
+                f"'{thread.status}', expected 'active'"
+            )
 
         _write_reason_audit_event(
             "advance_started",
@@ -228,9 +239,14 @@ class ReasonService:
             if generated is not None:
                 step = generated
             else:
-                raise RuntimeError(f"Cannot advance thread {thread.id}: advancer did not produce a structured step")
+                raise ReasonAdvanceError(
+                    f"Cannot advance thread {thread.id}: advancer did not "
+                    "produce a structured step"
+                )
         else:
-            raise RuntimeError(f"Cannot advance thread {thread.id}: no reason advancer configured")
+            raise ReasonAdvanceError(
+                f"Cannot advance thread {thread.id}: no reason advancer configured"
+            )
 
         now = utc_now_iso()
         terminal_status = step.terminal_status
@@ -350,7 +366,10 @@ class ReasonService:
             "archived": (),
         }
         if thread.status not in allowed or new_status not in allowed[thread.status]:
-            raise RuntimeError(f"Cannot transition thread {thread.id} from '{thread.status}' to '{new_status}'")
+            raise ReasonTransitionError(
+                f"Cannot transition thread {thread.id} from "
+                f"'{thread.status}' to '{new_status}'"
+            )
 
         updated = thread.with_status(new_status)
         self._repository.save_thread(updated)

@@ -16,7 +16,7 @@ from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.output import ReasonOutputService, SectionPlanner
-from nuself.reason.repository import ReasonNotFound
+from nuself.reason.errors import ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.runtime.jobs import JobSink
 from nuself.store import ScopedWorkspace
