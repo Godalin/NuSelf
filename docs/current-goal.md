@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Give every top-level CLI invocation a symmetric default-backend teardown that
-runs after one-shot commands and after REPL cleanup.
+Make developer storage commands honor backend ownership: diagnostics reuse the
+CLI default backend while migration/schema commands close owned connections.
 
 ## Active Branch
 
@@ -14,39 +14,38 @@ runs after one-shot commands and after REPL cleanup.
 
 ## Ordered Work
 
-1. Audit CLI, REPL, and daemon lifecycle nesting.
-2. Specify the CLI storage teardown and failure precedence.
-3. Run backend reset once at the outer CLI boundary.
-4. Preserve primary exceptions and aggregate reset failures.
-5. Verify normal, exceptional, and cleanup-failure paths.
+1. Audit all developer storage backend creation.
+2. Specify diagnostic versus temporary backend ownership.
+3. Move storage inspection to the default backend.
+4. Close migration and schema SQLite backends on every return path.
+5. Verify reuse and close behavior at command level.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep REPL transcript/curator cleanup ordered before storage teardown.
-- Keep daemon-owned shutdown cleanup valid and reset idempotent.
-- Do not reset storage during nested command dispatch.
+- Do not close the shared default backend inside a command handler.
+- Keep migration source and destination behavior unchanged.
+- Preserve existing developer command output.
 
 ## Completion Evidence
 
-- `main()` runs one project-scoped `storage.default_backend.reset` after every
-  completed or failed dispatch.
-- REPL transcript and curator cleanup remain inside dispatch, so the outer
-  storage reset runs after both.
-- Successful reset preserves and re-raises the exact dispatch `BaseException`
-  object with its traceback.
-- Reset failure produces `CliLifecycleError` with the named shared
-  `CleanupFailure`; a simultaneous dispatch failure is retained as
-  `primary_error` and explicit cause.
-- Focused CLI tests cover normal return, `SystemExit`, and dual failure.
-- `.venv/bin/pytest -q`: `1479 passed`.
+- `dev storage` reads the project default backend and delegates closure to the
+  outer CLI lifecycle.
+- `dev migrate` closes its owned SQLite destination after success and after a
+  migration exception.
+- `dev db-schema` closes its owned SQLite backend, including the empty-schema
+  early return.
+- `create_sqlite_backend()` exposes its concrete closeable return type.
+- Production search finds `auto_backend()` only inside the storage factory and
+  default-registry implementation.
+- `.venv/bin/pytest -q`: `1483 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `e01d67b`.
+`dev/v0.3.x` is published through `169fe7e`.
 
 ## Next Review Batch
 
-Make the dev storage diagnostic explicitly close the backend it creates.
+Audit other low-level factory callers and temporary SQLite exports.

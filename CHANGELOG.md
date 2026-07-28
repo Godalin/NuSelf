@@ -17,7 +17,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - CLI one-shot and interactive invocations now release their shared SQLite
   storage backend on every exit path. Cleanup failures retain the original
   command error instead of silently leaking the connection or masking failure
-  provenance.
+  provenance. Developer migration and schema inspection also close their
+  temporary SQLite connections, while storage inspection reuses the shared
+  backend.
 - CLI, REPL, and background scheduling now use one reason-layer factory to
   compose `ReasonAdvancer` workspace and model dependencies. A directly
   constructed scheduler with a project root now loads configured endpoints

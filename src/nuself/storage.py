@@ -10,7 +10,7 @@ from contextlib import AbstractContextManager, contextmanager
 from collections.abc import Generator
 from pathlib import Path
 import threading
-from typing import Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 from uuid import uuid4
 
 from nuself.config import runtime_paths
@@ -20,6 +20,9 @@ from nuself.runtime.observability import (
     report_observed_failure,
 )
 from nuself.runtime import decode_json_value, encode_json_value
+
+if TYPE_CHECKING:
+    from nuself.storage_sqlite import SqliteStorageBackend
 
 
 # ── Protocols ─────────────────────────────────────────────────────────────
@@ -300,7 +303,7 @@ def create_file_backend(
 
 def create_sqlite_backend(
     project_root: Path | None = None, *, db_path: Path | None = None
-) -> StorageBackend:
+) -> SqliteStorageBackend:
     """Create a ``SqliteStorageBackend`` at ``private/nuself.sqlite`` (or *db_path*)."""
     from nuself.storage_sqlite import SqliteStorageBackend
     path = db_path if db_path is not None else runtime_paths(project_root).private_root / "nuself.sqlite"

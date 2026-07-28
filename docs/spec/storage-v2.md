@@ -202,6 +202,11 @@ once after dispatch finishes or raises. For interactive mode, this outer reset
 runs only after transcript and curator cleanup. Daemon server cleanup may have
 already reset the same backend; reset is idempotent when no backend remains.
 
+Developer storage inspection reads the project default backend and leaves
+closure to the outer CLI lifecycle. Developer migration and schema inspection
+create temporary SQLite backends for their operation and must close those
+owned connections before returning, including early-return paths.
+
 `close()` is lock-protected and idempotent after the underlying connection has
 closed successfully. It first requests a truncating WAL checkpoint and always
 attempts to close the connection even if that checkpoint fails. A checkpoint

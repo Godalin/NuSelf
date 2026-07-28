@@ -1,0 +1,144 @@
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import pytest
+
+from nuself.cli.commands.dev import (
+    handle_dev_db_schema,
+    handle_dev_migrate,
+    handle_dev_storage,
+)
+from nuself.storage import FileStorageBackend
+from nuself.storage_sqlite import SqliteStorageBackend
+
+
+def test_dev_migrate_closes_owned_destination(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = SqliteStorageBackend(
+        tmp_path / "migration.sqlite",
+        project_root=tmp_path,
+    )
+
+    def create_destination(
+        project_root: Path | None,
+        *,
+        db_path: Path | None = None,
+    ) -> SqliteStorageBackend:
+        del project_root, db_path
+        return destination
+
+    monkeypatch.setattr(
+        "nuself.cli.commands.dev.create_sqlite_backend",
+        create_destination,
+    )
+
+    assert handle_dev_migrate(
+        argparse.Namespace(
+            project_root=tmp_path,
+            db=destination.db_path,
+            clear=False,
+        )
+    ) == 0
+    assert getattr(destination, "_closed") is True
+
+
+def test_dev_migrate_closes_destination_after_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = SqliteStorageBackend(
+        tmp_path / "migration.sqlite",
+        project_root=tmp_path,
+    )
+
+    def create_destination(
+        project_root: Path | None,
+        *,
+        db_path: Path | None = None,
+    ) -> SqliteStorageBackend:
+        del project_root, db_path
+        return destination
+
+    primary = RuntimeError("migration failed")
+    monkeypatch.setattr(
+        "nuself.cli.commands.dev.create_sqlite_backend",
+        create_destination,
+    )
+
+    def fail_migration(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise primary
+
+    monkeypatch.setattr(
+        "nuself.cli.commands.dev.migrate_all",
+        fail_migration,
+    )
+
+    with pytest.raises(RuntimeError) as captured:
+        handle_dev_migrate(
+            argparse.Namespace(
+                project_root=tmp_path,
+                db=destination.db_path,
+                clear=False,
+            )
+        )
+
+    assert captured.value is primary
+    assert getattr(destination, "_closed") is True
+
+
+def test_dev_db_schema_closes_backend_on_early_return(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = SqliteStorageBackend(
+        tmp_path / "schema.sqlite",
+        project_root=tmp_path,
+    )
+    monkeypatch.setattr(backend, "collection_names", lambda: ())
+
+    def create_backend(
+        project_root: Path | None,
+        *,
+        db_path: Path | None = None,
+    ) -> SqliteStorageBackend:
+        del project_root, db_path
+        return backend
+
+    monkeypatch.setattr(
+        "nuself.cli.commands.dev.create_sqlite_backend",
+        create_backend,
+    )
+
+    assert handle_dev_db_schema(
+        argparse.Namespace(project_root=tmp_path)
+    ) == 0
+    assert getattr(backend, "_closed") is True
+
+
+def test_dev_storage_reuses_default_backend(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = FileStorageBackend(tmp_path / "private")
+    calls: list[Path | None] = []
+
+    def default_backend(
+        project_root: Path | None,
+    ) -> FileStorageBackend:
+        calls.append(project_root)
+        return backend
+
+    monkeypatch.setattr(
+        "nuself.cli.commands.dev.get_default_backend",
+        default_backend,
+    )
+
+    assert handle_dev_storage(
+        argparse.Namespace(project_root=tmp_path)
+    ) == 0
+    assert calls == [tmp_path]
