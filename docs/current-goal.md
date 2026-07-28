@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The Reason agent invocation ownership batch is complete.
+Idle. The runtime event subscription ownership batch is complete.
 
 ## Active Branch
 
@@ -22,12 +22,14 @@ code.
 
 ## Completion Evidence
 
-- One `ReasonAdvancer` serializes its shared LangGraph graph and middleware
-  capture buffer without imposing a global lock.
-- Concurrent reasoning threads retain isolated runtime context and tool logs.
-- Invocation ownership is released after an exception.
-- Focused Reason and middleware tests: 46 passed.
-- Full tests: 1241 passed.
+- Every `EventPublisher` creates a UUID lifetime identity independent of its
+  reusable process memory address.
+- Subscription removal rejects handles from another publisher even when both
+  publishers issued the same numeric subscription id.
+- Aggregate delivery failures retain the original lifetime-bound subscription
+  handle.
+- Focused event, log observer, and daemon activity tests: 34 passed.
+- Full tests: 1242 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -37,5 +39,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Continue auditing shared callback and event ownership after agent invocation
-isolation.
+Continue auditing shared callback and observer ownership after event
+subscription isolation.

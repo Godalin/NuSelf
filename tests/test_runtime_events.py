@@ -48,7 +48,7 @@ def test_event_publisher_delivers_independently_then_reports_failures() -> None:
     def fail(_event: RuntimeEnvelope) -> None:
         raise RuntimeError("subscriber failed")
 
-    publisher.subscribe(fail)
+    failed_subscription = publisher.subscribe(fail)
     publisher.subscribe(lambda event: received.append(event.name))
 
     with pytest.raises(EventDeliveryError) as exc_info:
@@ -56,6 +56,7 @@ def test_event_publisher_delivers_independently_then_reports_failures() -> None:
 
     assert received == ["worker.started"]
     assert len(exc_info.value.failures) == 1
+    assert exc_info.value.failures[0].subscription == failed_subscription
     assert str(exc_info.value.failures[0].error) == "subscriber failed"
 
 
@@ -69,6 +70,25 @@ def test_event_subscription_can_be_removed() -> None:
     publisher.publish(name="worker.started", producer="daemon")
 
     assert received == []
+
+
+def test_event_subscription_is_bound_to_one_publisher_lifetime() -> None:
+    earlier_publisher = EventPublisher()
+    current_publisher = EventPublisher()
+    earlier_subscription = earlier_publisher.subscribe(lambda _event: None)
+    received: list[str] = []
+    current_subscription = current_publisher.subscribe(
+        lambda event: received.append(event.name)
+    )
+
+    assert earlier_subscription.subscription_id == current_subscription.subscription_id
+    assert earlier_subscription.publisher_id != current_subscription.publisher_id
+    assert current_publisher.unsubscribe(earlier_subscription) is False
+
+    current_publisher.publish(name="worker.started", producer="daemon")
+
+    assert received == ["worker.started"]
+    assert current_publisher.unsubscribe(current_subscription) is True
 
 
 def test_runtime_event_log_sink_preserves_event_identity(tmp_path: Path) -> None:

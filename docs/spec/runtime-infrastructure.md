@@ -295,9 +295,15 @@ Ephemeral events use an in-process publisher/subscriber interface:
 
 `nuself.runtime.events.EventPublisher` implements this boundary. Subscriptions
 may target one event name or all events, preserve registration order, and are
-removed through publisher-scoped opaque handles. Delivery continues across
-subscriber failures and raises one `EventDeliveryError` containing every
-failure after all matching subscribers have run.
+removed through publisher-scoped opaque handles. Each publisher creates one
+non-address lifetime token and copies it into its handles; ownership checks
+must not use `id(publisher)` or another identity that can be reused after the
+publisher is destroyed. A handle from another or earlier publisher therefore
+cannot remove a current subscription, even if process memory addresses are
+reused. Delivery continues across subscriber failures and raises one
+`EventDeliveryError` containing every failure after all matching subscribers
+have run; each failure carries the same lifetime-bound handle as the failed
+registration.
 
 Every published event resolves through a sealed
 `EventDefinitionRegistry`. Core lifecycle definitions ship with the runtime;

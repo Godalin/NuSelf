@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from threading import RLock
+from uuid import UUID, uuid4
 
 from nuself.runtime.event_definitions import (
     EventDefinitionRegistry,
@@ -19,7 +20,7 @@ EventSubscriber = Callable[[RuntimeEnvelope], None]
 class EventSubscription:
     """Opaque subscription handle owned by one publisher."""
 
-    publisher_id: int
+    publisher_id: UUID
     subscription_id: int
 
 
@@ -59,6 +60,7 @@ class EventPublisher:
             if definitions is not None
             else build_event_definition_registry()
         )
+        self._publisher_id = uuid4()
         self._next_subscription_id = 1
         self._subscribers: dict[int, tuple[str | None, EventSubscriber]] = {}
 
@@ -76,12 +78,12 @@ class EventPublisher:
             subscription_id = self._next_subscription_id
             self._next_subscription_id += 1
             self._subscribers[subscription_id] = (name, subscriber)
-        return EventSubscription(id(self), subscription_id)
+        return EventSubscription(self._publisher_id, subscription_id)
 
     def unsubscribe(self, subscription: EventSubscription) -> bool:
         """Remove a subscription, returning whether it belonged to this publisher."""
 
-        if subscription.publisher_id != id(self):
+        if subscription.publisher_id != self._publisher_id:
             return False
         with self._lock:
             return self._subscribers.pop(subscription.subscription_id, None) is not None
@@ -122,7 +124,7 @@ class EventPublisher:
             except Exception as exc:  # noqa: BLE001 - isolate independent subscribers
                 failures.append(
                     EventDeliveryFailure(
-                        EventSubscription(id(self), subscription_id),
+                        EventSubscription(self._publisher_id, subscription_id),
                         exc,
                     )
                 )
