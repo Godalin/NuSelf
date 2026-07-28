@@ -232,16 +232,33 @@ def test_contended_daemon_preserves_owner_resources(
         "DaemonState",
         fail_if_constructed,
     )
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.daemon.audit.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
     try:
-        assert server_module.run_daemon(tmp_path) == 1
+        with pytest.warns(
+            RuntimeWarning,
+            match="daemon/lifecycle_audit_write_failed",
+        ):
+            assert server_module.run_daemon(tmp_path) == 1
     finally:
         owner.release()
 
     assert paths.socket_path.read_text(encoding="utf-8") == "owner-socket"
     assert paths.pid_path.read_text(encoding="utf-8") == "4321\n"
-    events = read_log_events(project_root=tmp_path, component="daemon")
-    assert events[-1].event == "instance_lock_contended"
-    assert events[-1].status == "skipped"
+    assert read_log_events(
+        project_root=tmp_path,
+        component="daemon",
+    ) == []
 
 
 class _UnstartedDaemonState:
@@ -524,6 +541,8 @@ def test_stopped_event_is_written_after_owned_cleanup(
         **kwargs: object,
     ) -> object:
         nonlocal stopped_observed
+        if event == "started":
+            raise OSError("audit store unavailable")
         if event == "stopped":
             assert states[0].stop_calls == [
                 "memory",
@@ -545,14 +564,32 @@ def test_stopped_event_is_written_after_owned_cleanup(
 
     monkeypatch.setattr(server_module, "DaemonState", make_state)
     monkeypatch.setattr(server_module, "NuSelfUnixServer", ImmediateServer)
-    monkeypatch.setattr(server_module, "write_log_event", capture_write)
+    monkeypatch.setattr(
+        "nuself.daemon.audit.write_log_event",
+        capture_write,
+    )
+
+    def fail_diagnostic(
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        raise OSError("diagnostic store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_diagnostic,
+    )
     monkeypatch.setattr(
         signal,
         "signal",
         ignore_signal,
     )
 
-    assert server_module._run_owned_daemon(paths) == 0
+    with pytest.warns(
+        RuntimeWarning,
+        match="daemon/lifecycle_audit_write_failed",
+    ):
+        assert server_module._run_owned_daemon(paths) == 0
     assert stopped_observed is True
 
 

@@ -58,6 +58,22 @@ class MonkeyPatchFixture(Protocol):
     def delenv(self, name: str, raising: bool = True) -> None: ...
 
 
+def _fail_lifecycle_audit_storage(
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.daemon.audit.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+
 class FakeChangedCuratorResult:
     changed = True
     log_path = Path("memory.log")
@@ -3425,8 +3441,15 @@ def test_daemon_restart_stops_then_starts(
 
     monkeypatch.setattr("nuself.cli.lifecycle.stop", fake_stop)
     monkeypatch.setattr("nuself.cli.lifecycle.start", fake_start)
+    _fail_lifecycle_audit_storage(monkeypatch)
 
-    result = main(["--project-root", str(tmp_path), "daemon", "restart"])
+    with pytest.warns(
+        RuntimeWarning,
+        match="daemon/lifecycle_audit_write_failed",
+    ):
+        result = main(
+            ["--project-root", str(tmp_path), "daemon", "restart"]
+        )
     captured = capsys.readouterr()
     assert result == 0
     assert "Stopped:" in captured.out
@@ -3471,8 +3494,14 @@ def test_interactive_restart_restarts_daemon_and_keeps_session(
     monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
     monkeypatch.setattr("nuself.cli.lifecycle.stop", fake_stop)
     monkeypatch.setattr("nuself.cli.lifecycle.start", fake_start)
+    _fail_lifecycle_audit_storage(monkeypatch)
 
-    result = main(["--project-root", str(tmp_path), "attach"])
+    with pytest.warns(RuntimeWarning) as captured_warnings:
+        result = main(["--project-root", str(tmp_path), "attach"])
+    assert any(
+        "daemon/lifecycle_audit_write_failed" in str(warning.message)
+        for warning in captured_warnings
+    )
     captured = capsys.readouterr()
     assert result == 0
     assert calls == ["stop", "start"]
@@ -3495,8 +3524,15 @@ def test_daemon_start_with_mocked_lifecycle(
         return running
 
     monkeypatch.setattr("nuself.cli.lifecycle.start", fake_start)
+    _fail_lifecycle_audit_storage(monkeypatch)
 
-    result = main(["--project-root", str(tmp_path), "daemon", "start"])
+    with pytest.warns(
+        RuntimeWarning,
+        match="daemon/lifecycle_audit_write_failed",
+    ):
+        result = main(
+            ["--project-root", str(tmp_path), "daemon", "start"]
+        )
     captured = capsys.readouterr()
     assert result == 0
     assert "daemon running" in captured.out
@@ -3517,8 +3553,15 @@ def test_daemon_stop_with_mocked_lifecycle(
         return stopped
 
     monkeypatch.setattr("nuself.cli.lifecycle.stop", fake_stop)
+    _fail_lifecycle_audit_storage(monkeypatch)
 
-    result = main(["--project-root", str(tmp_path), "daemon", "stop"])
+    with pytest.warns(
+        RuntimeWarning,
+        match="daemon/lifecycle_audit_write_failed",
+    ):
+        result = main(
+            ["--project-root", str(tmp_path), "daemon", "stop"]
+        )
     captured = capsys.readouterr()
     assert result == 0
     assert "daemon stopped" in captured.out

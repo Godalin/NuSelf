@@ -60,6 +60,13 @@ restore their ambient context before the next tick.
 
 Explicit arguments to `write_log_event(...)` override the inherited context for that one event. Context must be reset when the request/turn/job exits; persisted `LogEvent` records are not mutated or deleted as part of context teardown.
 
+Daemon lifecycle audit records are projected through the shared
+`nuself.daemon.audit` boundary. Server ownership events and CLI/REPL
+requested/completed events use the same failure event,
+`daemon/lifecycle_audit_write_failed`, with the intended audit event in
+metadata. A failed sink is observable but cannot alter the lifecycle decision
+that the record describes.
+
 ## Service Call Logs
 
 When one subsystem invokes another subsystem through an agent-facing service/tool boundary, write a caller-owned log event with a service tag in metadata.

@@ -61,6 +61,9 @@ Email 与 macOS delivery failure 诊断不会覆盖明确的 adapter 失败结�
 Daemon request 审计不会覆盖原始 chat 错误、使已完成 response 失效，或阻止
 已接受的 shutdown 请求。
 
+Daemon server、CLI 与交互式 restart 的生命周期审计共用一个可观察投影边界，
+不会改变生命周期执行结果。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

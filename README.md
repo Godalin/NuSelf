@@ -72,6 +72,9 @@ adapter failure or prevent the outbox from persisting the failed attempt.
 Daemon request audits cannot replace the original chat error, invalidate a
 completed response, or prevent an accepted shutdown request.
 
+Daemon lifecycle audits from the server, CLI, and interactive restart share
+one observable projection boundary and cannot alter lifecycle results.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).

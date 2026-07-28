@@ -13,6 +13,7 @@ from nuself.config import (
     ensure_runtime_dirs,
     runtime_paths,
 )
+from nuself.daemon.audit import write_lifecycle_audit
 from nuself.daemon.instance import (
     DaemonInstanceLock,
     DaemonInstanceLockContended,
@@ -23,11 +24,7 @@ from nuself.daemon.socket_server import (
     RequestHandler,
 )
 from nuself.daemon.state import DaemonState
-from nuself.logs import write_log_event
-from nuself.runtime.observability import (
-    report_observed_failure,
-    run_observed_best_effort,
-)
+from nuself.runtime.observability import report_observed_failure
 from nuself.storage import write_text_atomic
 
 
@@ -109,8 +106,7 @@ def run_daemon(project_root: Path | None = None) -> int:
     try:
         instance_lock.acquire()
     except DaemonInstanceLockContended as exc:
-        write_log_event(
-            "daemon",
+        write_lifecycle_audit(
             "instance_lock_contended",
             "daemon start rejected because this project already has an owner",
             project_root=paths.project_root,
@@ -155,8 +151,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
             RequestHandler,
             state,
         ) as server:
-            write_log_event(
-                "daemon",
+            write_lifecycle_audit(
                 "started",
                 "daemon started",
                 project_root=paths.project_root,
@@ -218,18 +213,10 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
     )
     cleanup_failures = _run_cleanup_steps(cleanup_steps)
     if started and not cleanup_failures:
-        run_observed_best_effort(
-            lambda: write_log_event(
-                "daemon",
-                "stopped",
-                "daemon stopped",
-                project_root=paths.project_root,
-            ),
-            component="daemon",
-            event="stopped_log_failed",
-            message="Could not record daemon stop",
+        write_lifecycle_audit(
+            "stopped",
+            "daemon stopped",
             project_root=paths.project_root,
-            metadata=None,
         )
     _finish_daemon_lifecycle(
         project_root=paths.project_root,

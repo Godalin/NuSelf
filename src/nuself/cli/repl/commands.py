@@ -17,6 +17,7 @@ from nuself.cli.commands.persona import (
     resolve_persona_id,
 )
 from nuself.daemon import lifecycle
+from nuself.daemon.audit import write_lifecycle_audit
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
     MemoryCandidateRepository,
@@ -27,7 +28,6 @@ from nuself.memory.source_repository import (
     SourceDocumentNotFound,
     SourceRepository,
 )
-from nuself.logs import write_log_event
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.repository import ReasonNotFound
@@ -369,13 +369,16 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
 
 
 def handle_interactive_restart_command(project_root: Path | None) -> str:
-    write_log_event("daemon", "restart_requested", "daemon restart requested", project_root=project_root)
+    write_lifecycle_audit(
+        "restart_requested",
+        "daemon restart requested",
+        project_root=project_root,
+    )
     stop_result = lifecycle.stop(project_root)
     if stop_result.running:
         return f"Failed to stop daemon: {format_status(stop_result)}"
     start_result = lifecycle.start(project_root)
-    write_log_event(
-        "daemon",
+    write_lifecycle_audit(
         "restart_completed",
         f"daemon restart {'completed' if start_result.running else 'failed'}",
         project_root=project_root,

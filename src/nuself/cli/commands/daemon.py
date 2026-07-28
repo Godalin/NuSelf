@@ -6,7 +6,7 @@ import argparse
 import sys
 
 from nuself.daemon import client, lifecycle
-from nuself.logs import write_log_event
+from nuself.daemon.audit import write_lifecycle_audit
 
 
 def format_status(status: lifecycle.DaemonStatus) -> str:
@@ -27,15 +27,13 @@ def format_daemon_list(status: lifecycle.DaemonStatus) -> str:
 
 
 def handle_daemon_start(args: argparse.Namespace) -> int:
-    write_log_event(
-        "daemon",
+    write_lifecycle_audit(
         "start_requested",
         "daemon start requested",
         project_root=args.project_root,
     )
     result = lifecycle.start(args.project_root)
-    write_log_event(
-        "daemon",
+    write_lifecycle_audit(
         "start_completed",
         f"daemon start {'completed' if result.running else 'failed'}",
         project_root=args.project_root,
@@ -47,15 +45,13 @@ def handle_daemon_start(args: argparse.Namespace) -> int:
 
 
 def handle_daemon_stop(args: argparse.Namespace) -> int:
-    write_log_event(
-        "daemon",
+    write_lifecycle_audit(
         "stop_requested",
         "daemon stop requested",
         project_root=args.project_root,
     )
     result = lifecycle.stop(args.project_root)
-    write_log_event(
-        "daemon",
+    write_lifecycle_audit(
         "stop_completed",
         f"daemon stop {'completed' if not result.running else 'failed'}",
         project_root=args.project_root,
@@ -67,8 +63,7 @@ def handle_daemon_stop(args: argparse.Namespace) -> int:
 
 
 def handle_daemon_restart(args: argparse.Namespace) -> int:
-    write_log_event(
-        "daemon",
+    write_lifecycle_audit(
         "restart_requested",
         "daemon restart requested",
         project_root=args.project_root,
@@ -82,8 +77,7 @@ def handle_daemon_restart(args: argparse.Namespace) -> int:
         return 1
     print(f"Stopped: {format_status(stop_result)}")
     start_result = lifecycle.start(args.project_root)
-    write_log_event(
-        "daemon",
+    write_lifecycle_audit(
         "restart_completed",
         f"daemon restart {'completed' if start_result.running else 'failed'}",
         project_root=args.project_root,

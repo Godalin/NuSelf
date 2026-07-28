@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon server, CLI, and interactive lifecycle audits now share one observable
+  projection boundary. Audit storage failure cannot alter lifecycle execution,
+  status output, or exit decisions.
 - Daemon chat failure/completion and shutdown-request audits now use shared
   observable boundaries. Audit storage failure cannot replace the original
   chat error, invalidate a completed response, or block the shutdown flag.

@@ -143,6 +143,14 @@ before instance-lock release succeed. Failed cleanup emits
 lifecycle error. Failure of that diagnostic does not alter the retained error
 set.
 
+Daemon lifecycle operations and their resulting `DaemonStatus` values are
+authoritative. The server's contention/started/stopped records and the
+one-shot or interactive CLI's requested/completed records are auxiliary
+projections through one daemon-owned observable boundary. Audit failure cannot
+replace a contention exit, abort a daemon after ownership and initialization
+succeed, skip a requested start/stop/restart operation, change its exit code or
+rendered status, or replace an interactive restart result.
+
 ## Best-Effort Side Effects
 
 Some secondary effects must not change the result of an already-successful
