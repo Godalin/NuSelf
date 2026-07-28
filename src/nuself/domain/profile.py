@@ -150,16 +150,19 @@ class ProfileItem:
             type=candidate.type,
             title=candidate.title,
             body=candidate.body,
-            tags=candidate.tags,
-            source_refs=candidate.source_refs,
+            tags=list(candidate.tags),
+            source_refs=list(candidate.source_refs),
             confidence=candidate.confidence,
             privacy=candidate.privacy,
             observed_at=candidate.observed_at,
             valid_from=candidate.valid_from,
             valid_until=candidate.valid_until,
             temporal_note=candidate.temporal_note,
-            relations=candidate.relations,
-            evidence=candidate.evidence,
+            relations={
+                key: list(values)
+                for key, values in candidate.relations.items()
+            },
+            evidence=list(candidate.evidence),
         )
 
 

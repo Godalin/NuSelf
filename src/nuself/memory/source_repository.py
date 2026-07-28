@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -441,5 +442,8 @@ def _compact_text(text: str, limit: int) -> str:
     return compact[: max(limit - 3, 0)].rstrip() + "..."
 
 
-def _has_source_prefix(source_refs: list[str], source_prefix: str) -> bool:
+def _has_source_prefix(
+    source_refs: Sequence[str],
+    source_prefix: str,
+) -> bool:
     return any(source_ref.startswith(source_prefix) for source_ref in source_refs)

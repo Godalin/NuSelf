@@ -32,6 +32,21 @@ Rules:
 - Retrieval context shown to chat must include available temporal fields so NuSelf can reason about whether a memory is old, recent, current, or historically bounded.
 - Missing temporal fields must be omitted from compact prompts rather than rendered as `None`.
 
+## Read-Model Collection Ownership
+
+`MemoryEntry`, `MemoryCandidate`, and `MemoryObject` are immutable persisted
+read models. They must not retain aliases to caller-owned containers.
+Construction and wire decoding recursively freeze tags, source references,
+relations, payload, metadata, and collection membership around immutable
+`MemoryEvidence` records.
+
+The persisted wire contract remains ordinary JSON lists and objects.
+`to_wire()` returns a recursively detached mutable-container tree; mutating
+that result must not affect the model or a later serialization. Descriptor
+validation, merge, conversion, retrieval, and relation traversal must accept
+the immutable in-memory `Mapping` and `Sequence` forms without weakening their
+existing wire-shape validation.
+
 ### Source Ingestion (`source ingest`)
 
 1. Accept single `.md`/`.txt` files or recurse into directories.

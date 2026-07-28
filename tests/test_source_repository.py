@@ -166,7 +166,7 @@ def test_source_repository_extracts_profile_candidates(tmp_path: Path) -> None:
 
     assert len(candidates) == 1
     assert candidates[0].type == "profile_fact"
-    assert candidates[0].source_refs == [f"source:{document.id}:0"]
+    assert candidates[0].source_refs == (f"source:{document.id}:0",)
     assert candidates[0].evidence[0].source_type == "source"
     assert candidates[0].evidence[0].source_ref == candidates[0].source_refs[0]
 

@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The persisted Trace read-model ownership batch is complete.
+Idle. The persisted Memory read-model ownership batch is complete.
 
 ## Active Branch
 
@@ -22,13 +22,15 @@ code.
 
 ## Completion Evidence
 
-- `ThoughtTrace` and `TraceLink` detach and recursively freeze collection
-  inputs, including nested metadata.
+- `MemoryEntry`, `MemoryCandidate`, and `MemoryObject` detach and recursively
+  freeze tags, source refs, relations, payload, metadata, and evidence
+  membership.
 - `to_wire()` returns detached standard list/dict containers without changing
   persisted fields.
-- Artifact lookup traverses immutable Mapping/Sequence metadata containers.
-- Focused Trace and integration tests: 106 passed.
-- Full tests: 1231 passed.
+- Descriptor validation, merge, graph projection, queries, conversions,
+  curator, and optimizer operate on immutable collection abstractions.
+- Focused Memory and integration tests: 103 passed.
+- Full tests: 1234 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -38,4 +40,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit Memory persisted read models for the same ownership contract.
+Audit remaining repository summary/index read models and source-domain records.

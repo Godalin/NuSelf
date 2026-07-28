@@ -67,7 +67,7 @@ def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) 
     assert {candidate.action for candidate in candidates} == {"update", "delete"}
     update_candidate = next(candidate for candidate in candidates if candidate.action == "update")
     assert update_candidate.body.startswith("NuSelf memory updates should be decided by an agent")
-    assert update_candidate.tags == ["memory", "curation"]
+    assert update_candidate.tags == ("memory", "curation")
     assert update_candidate.target_entry_id == keeper.id
     assert update_candidate.source_refs[0].startswith("memory_optimize:")
     assert "memory_optimizer reviewed=2 updated=1 deleted=1 ignored=0" in result.log_path.read_text(encoding="utf-8")

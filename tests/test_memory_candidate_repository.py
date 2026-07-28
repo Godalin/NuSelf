@@ -95,10 +95,13 @@ def test_memory_candidate_repository_merges_into_existing_entry(tmp_path: Path) 
 
     assert merged.id == existing.id
     assert merged.title == "Memory timing model"
-    assert merged.source_refs == ["thread:default:0-2", "thread:default:4-6"]
+    assert merged.source_refs == (
+        "thread:default:0-2",
+        "thread:default:4-6",
+    )
     assert merged.evidence[0].summary == "Follow-up"
     assert merged.observed_at == "2026-05-07"
-    assert merged.relations.get("related_to") == [existing.id]
+    assert merged.relations.get("related_to") == (existing.id,)
     assert candidate_repo.get(candidate.id).review_state == "accepted"
 
 
@@ -191,9 +194,9 @@ def test_memory_candidate_to_memory_object_round_trip() -> None:
     assert obj.type == "belief"
     assert obj.payload["title"] == "Test"
     assert obj.payload["body"] == "Body"
-    assert obj.payload["tags"] == ["tag1"]
+    assert obj.payload["tags"] == ("tag1",)
     assert obj.confidence == 0.8
-    assert obj.source_refs == ["ref1"]
+    assert obj.source_refs == ("ref1",)
     assert obj.metadata["candidate_schema"] == "MemoryCandidate/v1"
     assert len(cast(list[object], obj.payload.get("evidence", []))) == 1
 

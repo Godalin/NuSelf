@@ -442,9 +442,9 @@ def test_registry_merge_prefers_incoming_payload_and_preserves_metadata() -> Non
     assert merged.type == "belief"
     assert merged.payload["title"] == "New"
     assert merged.payload["body"] == "New body."
-    assert merged.payload["tags"] == ["a", "b", "c"]
+    assert merged.payload["tags"] == ("a", "b", "c")
     assert merged.confidence == 0.9
-    assert merged.source_refs == ["ref1", "ref2"]
+    assert merged.source_refs == ("ref1", "ref2")
     assert merged.review_state == "reviewed"
     assert merged.created_at == existing.created_at
     assert merged.updated_at == incoming.updated_at

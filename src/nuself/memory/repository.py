@@ -673,7 +673,7 @@ def _symbolic_node_record(entry: MemoryEntry) -> dict[str, object]:
         "label": entry.title,
         "payload": {
             "body": entry.body,
-            "tags": entry.tags,
+            "tags": list(entry.tags),
             "review_state": entry.review_state,
             "confidence": entry.confidence,
             "privacy": entry.privacy,
@@ -681,7 +681,7 @@ def _symbolic_node_record(entry: MemoryEntry) -> dict[str, object]:
             "valid_from": entry.valid_from,
             "valid_until": entry.valid_until,
         },
-        "source_refs": entry.source_refs,
+        "source_refs": list(entry.source_refs),
     }
 
 

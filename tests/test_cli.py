@@ -1787,7 +1787,7 @@ def test_memory_add_infers_type_without_manual_type(
     assert add_result == 0
     assert entry.type == "preference"
     assert entry.title == "Terse CLI summaries"
-    assert entry.tags == ["cli"]
+    assert entry.tags == ("cli",)
     assert entry.body == "I prefer terse CLI summaries with concrete next steps."
 
 

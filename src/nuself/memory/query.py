@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 import re
 
@@ -390,7 +391,11 @@ def _add_related_match(
         )
 
 
-def _matches_query_filters(memory_type: str, tags: list[str], query: MemoryQuery) -> bool:
+def _matches_query_filters(
+    memory_type: str,
+    tags: Sequence[str],
+    query: MemoryQuery,
+) -> bool:
     if query.memory_types and memory_type not in query.memory_types:
         return False
     if query.tags:

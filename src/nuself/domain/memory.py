@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, TypeAlias, cast
 from uuid import uuid4
 
 from nuself.clock import utc_now_iso
+from nuself.runtime import freeze_json_value, thaw_json_value
 
 MemoryEntryType: TypeAlias = Literal[
     "source_note",
@@ -55,7 +56,8 @@ def empty_relations_dict() -> dict[str, list[str]]:
 
 
 def merge_relations(
-    base: dict[str, list[str]], other: dict[str, list[str]]
+    base: Mapping[str, Sequence[str]],
+    other: Mapping[str, Sequence[str]],
 ) -> dict[str, list[str]]:
     """Merge two relations dicts, deduplicating target ids per relation."""
     merged = {k: list(v) for k, v in base.items()}
@@ -122,8 +124,8 @@ class MemoryEntry:
     type: MemoryEntryType
     title: str
     body: str
-    tags: list[str] = field(default_factory=empty_str_list)
-    source_refs: list[str] = field(default_factory=empty_str_list)
+    tags: Sequence[str] = field(default_factory=empty_str_list)
+    source_refs: Sequence[str] = field(default_factory=empty_str_list)
     confidence: float = 1.0
     importance: float = 0.5
     privacy: PrivacyLevel = "private"
@@ -136,9 +138,36 @@ class MemoryEntry:
     valid_from: str | None = None
     valid_until: str | None = None
     temporal_note: str = ""
-    relations: dict[str, list[str]] = field(default_factory=empty_relations_dict)
-    evidence: list[MemoryEvidence] = field(default_factory=empty_evidence_list)
-    payload: dict[str, object] = field(default_factory=empty_object_dict)
+    relations: Mapping[str, Sequence[str]] = field(default_factory=empty_relations_dict)
+    evidence: Sequence[MemoryEvidence] = field(default_factory=empty_evidence_list)
+    payload: Mapping[str, object] = field(default_factory=empty_object_dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "tags",
+            _freeze_str_sequence(self.tags, field_name="tags"),
+        )
+        object.__setattr__(
+            self,
+            "source_refs",
+            _freeze_str_sequence(self.source_refs, field_name="source_refs"),
+        )
+        object.__setattr__(
+            self,
+            "relations",
+            _freeze_relations(self.relations, field_name="relations"),
+        )
+        object.__setattr__(
+            self,
+            "evidence",
+            _freeze_evidence(self.evidence, field_name="evidence"),
+        )
+        object.__setattr__(
+            self,
+            "payload",
+            _freeze_mapping(self.payload, field_name="payload"),
+        )
 
     def with_updates(
         self,
@@ -203,7 +232,7 @@ class MemoryEntry:
         }
         if self.payload:
             wire["payload"] = self.payload
-        return wire
+        return cast(dict[str, object], thaw_json_value(wire))
 
     def to_memory_object(self) -> "MemoryObject":
         """Return the open typed-memory envelope for this legacy entry."""
@@ -311,8 +340,8 @@ class MemoryCandidate:
     title: str
     body: str
     action: MemoryCandidateAction = "create"
-    tags: list[str] = field(default_factory=empty_str_list)
-    source_refs: list[str] = field(default_factory=empty_str_list)
+    tags: Sequence[str] = field(default_factory=empty_str_list)
+    source_refs: Sequence[str] = field(default_factory=empty_str_list)
     confidence: float = 0.7
     importance: float = 0.5
     privacy: PrivacyLevel = "private"
@@ -327,8 +356,30 @@ class MemoryCandidate:
     valid_from: str | None = None
     valid_until: str | None = None
     temporal_note: str = ""
-    relations: dict[str, list[str]] = field(default_factory=empty_relations_dict)
-    evidence: list[MemoryEvidence] = field(default_factory=empty_evidence_list)
+    relations: Mapping[str, Sequence[str]] = field(default_factory=empty_relations_dict)
+    evidence: Sequence[MemoryEvidence] = field(default_factory=empty_evidence_list)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "tags",
+            _freeze_str_sequence(self.tags, field_name="tags"),
+        )
+        object.__setattr__(
+            self,
+            "source_refs",
+            _freeze_str_sequence(self.source_refs, field_name="source_refs"),
+        )
+        object.__setattr__(
+            self,
+            "relations",
+            _freeze_relations(self.relations, field_name="relations"),
+        )
+        object.__setattr__(
+            self,
+            "evidence",
+            _freeze_evidence(self.evidence, field_name="evidence"),
+        )
 
     def with_updates(
         self,
@@ -422,7 +473,7 @@ class MemoryCandidate:
         )
 
     def to_wire(self) -> dict[str, object]:
-        return {
+        wire = {
             "id": self.id,
             "action": self.action,
             "type": self.type,
@@ -448,6 +499,7 @@ class MemoryCandidate:
             "related_memory_ids": self.relations.get("related_to", []),
             "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
+        return cast(dict[str, object], thaw_json_value(wire))
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> "MemoryCandidate":
@@ -486,19 +538,39 @@ class MemoryObject:
     """
 
     type: str
-    payload: dict[str, object]
-    metadata: dict[str, object] = field(default_factory=empty_object_dict)
+    payload: Mapping[str, object]
+    metadata: Mapping[str, object] = field(default_factory=empty_object_dict)
     confidence: float = 1.0
     importance: float = 1.0
-    source_refs: list[str] = field(default_factory=empty_str_list)
+    source_refs: Sequence[str] = field(default_factory=empty_str_list)
     review_state: ReviewState = "draft"
     privacy: PrivacyLevel = "private"
     id: str = field(default_factory=new_memory_entry_id)
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
 
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "payload",
+            _freeze_mapping(self.payload, field_name="payload"),
+        )
+        object.__setattr__(
+            self,
+            "metadata",
+            _freeze_mapping(self.metadata, field_name="metadata"),
+        )
+        object.__setattr__(
+            self,
+            "source_refs",
+            _freeze_str_sequence(
+                self.source_refs,
+                field_name="source_refs",
+            ),
+        )
+
     def to_wire(self) -> dict[str, object]:
-        return {
+        wire = {
             "id": self.id,
             "type": self.type,
             "payload": self.payload,
@@ -511,6 +583,7 @@ class MemoryObject:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
+        return cast(dict[str, object], thaw_json_value(wire))
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> "MemoryObject":
@@ -545,6 +618,72 @@ class MemoryValidationError(ValueError):
         self.issues = issues
         detail = "; ".join(f"{issue.field}: {issue.message}" for issue in issues)
         super().__init__(f"invalid {memory_type} memory: {detail}")
+
+
+def _freeze_str_sequence(
+    value: object,
+    *,
+    field_name: str,
+) -> tuple[str, ...]:
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        raise TypeError(f"field '{field_name}' must be a sequence of strings")
+    items = cast(Sequence[object], value)
+    if not all(isinstance(item, str) for item in items):
+        raise TypeError(f"field '{field_name}' must contain only strings")
+    return tuple(cast(Sequence[str], items))
+
+
+def _freeze_relations(
+    value: object,
+    *,
+    field_name: str,
+) -> Mapping[str, Sequence[str]]:
+    if not isinstance(value, Mapping):
+        raise TypeError(f"field '{field_name}' must be a mapping")
+    relations = cast(Mapping[object, object], value)
+    normalized: dict[str, tuple[str, ...]] = {}
+    for key, targets in relations.items():
+        if not isinstance(key, str):
+            raise TypeError(f"field '{field_name}' keys must be strings")
+        normalized[key] = _freeze_str_sequence(
+            targets,
+            field_name=f"{field_name}.{key}",
+        )
+    frozen = freeze_json_value(normalized)
+    if not isinstance(frozen, Mapping):
+        raise TypeError(f"field '{field_name}' must be a mapping")
+    return cast(Mapping[str, Sequence[str]], frozen)
+
+
+def _freeze_evidence(
+    value: object,
+    *,
+    field_name: str,
+) -> tuple[MemoryEvidence, ...]:
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        raise TypeError(
+            f"field '{field_name}' must be a sequence of MemoryEvidence"
+        )
+    items = cast(Sequence[object], value)
+    if not all(isinstance(item, MemoryEvidence) for item in items):
+        raise TypeError(
+            f"field '{field_name}' must contain only MemoryEvidence"
+        )
+    return tuple(cast(Sequence[MemoryEvidence], items))
+
+
+def _freeze_mapping(
+    value: object,
+    *,
+    field_name: str,
+) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise TypeError(f"field '{field_name}' must be a mapping")
+    mapping = cast(Mapping[object, object], value)
+    frozen = freeze_json_value(mapping)
+    if not isinstance(frozen, Mapping):
+        raise TypeError(f"field '{field_name}' must be a mapping")
+    return cast(Mapping[str, object], frozen)
 
 
 class MemoryTypeDescriptor(Protocol):
@@ -695,7 +834,9 @@ def _default_merge(existing: MemoryObject, incoming: MemoryObject) -> MemoryObje
         payload=merged_payload,
         metadata=merged_metadata,
         confidence=incoming.confidence,
-        source_refs=list(dict.fromkeys(existing.source_refs + incoming.source_refs)),
+        source_refs=list(
+            dict.fromkeys((*existing.source_refs, *incoming.source_refs))
+        ),
         review_state=incoming.review_state,
         privacy=incoming.privacy,
         created_at=existing.created_at,
@@ -793,8 +934,14 @@ class EntryPayloadDescriptor:
         return f"{title}: {body}"
 
     def merge(self, existing: MemoryObject, incoming: MemoryObject) -> MemoryObject:
-        existing_tags = cast(list[str], existing.payload.get("tags", []))
-        incoming_tags = cast(list[str], incoming.payload.get("tags", []))
+        existing_tags = _optional_mapping_str_list(
+            existing.payload,
+            "tags",
+        )
+        incoming_tags = _optional_mapping_str_list(
+            incoming.payload,
+            "tags",
+        )
         merged_tags = list(dict.fromkeys(existing_tags + incoming_tags))
         merged_payload = dict(existing.payload)
         merged_payload.update(incoming.payload)
@@ -807,7 +954,9 @@ class EntryPayloadDescriptor:
             payload=merged_payload,
             metadata=merged_metadata,
             confidence=incoming.confidence,
-            source_refs=list(dict.fromkeys(existing.source_refs + incoming.source_refs)),
+            source_refs=list(
+                dict.fromkeys((*existing.source_refs, *incoming.source_refs))
+            ),
             review_state=incoming.review_state,
             privacy=incoming.privacy,
             created_at=existing.created_at,
@@ -867,7 +1016,14 @@ class PersonaInstructionDescriptor:
             issues.append(MemoryValidationIssue("payload.description", "must be a non-empty string"))
         routing_markers = payload.get("routing_markers")
         if routing_markers is not None:
-            if not isinstance(routing_markers, list) or any(not isinstance(item, str) for item in cast(list[object], routing_markers)):
+            if (
+                isinstance(routing_markers, str)
+                or not isinstance(routing_markers, Sequence)
+                or any(
+                    not isinstance(item, str)
+                    for item in cast(Sequence[object], routing_markers)
+                )
+            ):
                 issues.append(MemoryValidationIssue("payload.routing_markers", "must be a list of strings"))
         behavioral_notes = payload.get("behavioral_notes")
         if behavioral_notes is not None and not isinstance(behavioral_notes, str):
@@ -893,7 +1049,9 @@ class PersonaInstructionDescriptor:
             payload=merged_payload,
             metadata=merged_metadata,
             confidence=incoming.confidence,
-            source_refs=list(dict.fromkeys(existing.source_refs + incoming.source_refs)),
+            source_refs=list(
+                dict.fromkeys((*existing.source_refs, *incoming.source_refs))
+            ),
             review_state=incoming.review_state,
             privacy=incoming.privacy,
             created_at=existing.created_at,
@@ -1187,7 +1345,14 @@ def _validate_entry_payload(payload: Mapping[str, object]) -> list[MemoryValidat
     if not isinstance(body, str) or body.strip() == "":
         issues.append(MemoryValidationIssue("payload.body", "must be a non-empty string"))
     tags = payload.get("tags", [])
-    if not isinstance(tags, list) or any(not isinstance(item, str) for item in cast(list[object], tags)):
+    if (
+        isinstance(tags, str)
+        or not isinstance(tags, Sequence)
+        or any(
+            not isinstance(item, str)
+            for item in cast(Sequence[object], tags)
+        )
+    ):
         issues.append(MemoryValidationIssue("payload.tags", "must be a list of strings"))
     revisit_at = payload.get("revisit_at")
     if revisit_at is not None and not isinstance(revisit_at, str):
@@ -1197,18 +1362,32 @@ def _validate_entry_payload(payload: Mapping[str, object]) -> list[MemoryValidat
         if value is not None and not isinstance(value, str):
             issues.append(MemoryValidationIssue(f"payload.{field_name}", "must be a string or null"))
     relations = payload.get("relations", {})
-    if not isinstance(relations, dict):
+    if not isinstance(relations, Mapping):
         issues.append(MemoryValidationIssue("payload.relations", "must be an object"))
     else:
-        for key, value in cast(dict[str, object], relations).items():
-            if not isinstance(value, list) or any(not isinstance(item, str) for item in cast(list[object], value)):
+        for key, value in cast(Mapping[str, object], relations).items():
+            if (
+                isinstance(value, str)
+                or not isinstance(value, Sequence)
+                or any(
+                    not isinstance(item, str)
+                    for item in cast(Sequence[object], value)
+                )
+            ):
                 issues.append(MemoryValidationIssue(f"payload.relations.{key}", "must be a list of strings"))
     for field_name in ["supersedes", "related_memory_ids"]:
         value = payload.get(field_name, [])
-        if not isinstance(value, list) or any(not isinstance(item, str) for item in cast(list[object], value)):
+        if (
+            isinstance(value, str)
+            or not isinstance(value, Sequence)
+            or any(
+                not isinstance(item, str)
+                for item in cast(Sequence[object], value)
+            )
+        ):
             issues.append(MemoryValidationIssue(f"payload.{field_name}", "must be a list of strings"))
     evidence = payload.get("evidence", [])
-    if not isinstance(evidence, list):
+    if isinstance(evidence, str) or not isinstance(evidence, Sequence):
         issues.append(MemoryValidationIssue("payload.evidence", "must be a list"))
     return issues
 
@@ -1229,12 +1408,15 @@ def _expect_mapping_optional_str(data: Mapping[str, object], field_name: str) ->
     return value
 
 
-def _expect_mapping_str_list(data: Mapping[str, object], field_name: str) -> list[str]:
+def _expect_mapping_str_list(
+    data: Mapping[str, object],
+    field_name: str,
+) -> list[str]:
     value = data.get(field_name)
-    if not isinstance(value, list):
+    if isinstance(value, str) or not isinstance(value, Sequence):
         raise ValueError(f"field '{field_name}' must be a list")
     result: list[str] = []
-    for item in cast(list[object], value):
+    for item in cast(Sequence[object], value):
         if not isinstance(item, str):
             raise ValueError(f"field '{field_name}' must contain only strings")
         result.append(item)
@@ -1245,10 +1427,10 @@ def _optional_mapping_str_list(data: Mapping[str, object], field_name: str) -> l
     value = data.get(field_name)
     if value is None:
         return []
-    if not isinstance(value, list):
+    if isinstance(value, str) or not isinstance(value, Sequence):
         raise ValueError(f"field '{field_name}' must be a list")
     result: list[str] = []
-    for item in cast(list[object], value):
+    for item in cast(Sequence[object], value):
         if not isinstance(item, str):
             raise ValueError(f"field '{field_name}' must contain only strings")
         result.append(item)
@@ -1269,17 +1451,29 @@ def _optional_evidence_list(data: dict[str, object], field_name: str) -> list[Me
     return result
 
 
-def _optional_mapping_evidence_list(data: Mapping[str, object], field_name: str) -> list[MemoryEvidence]:
+def _optional_mapping_evidence_list(
+    data: Mapping[str, object],
+    field_name: str,
+) -> list[MemoryEvidence]:
     value = data.get(field_name)
     if value is None:
         return []
-    if not isinstance(value, list):
+    if isinstance(value, str) or not isinstance(value, Sequence):
         raise ValueError(f"field '{field_name}' must be a list")
     result: list[MemoryEvidence] = []
-    for item in cast(list[object], value):
-        if not isinstance(item, dict):
+    for item in cast(Sequence[object], value):
+        if not isinstance(item, Mapping):
             raise ValueError(f"field '{field_name}' must contain only objects")
-        result.append(MemoryEvidence.from_wire(cast(dict[str, object], item)))
+        result.append(
+            MemoryEvidence.from_wire(
+                cast(
+                    dict[str, object],
+                    thaw_json_value(
+                        cast(Mapping[object, object], item)
+                    ),
+                )
+            )
+        )
     return result
 
 
@@ -1305,14 +1499,14 @@ def _optional_mapping_relations_dict(data: Mapping[str, object], field_name: str
     value = data.get(field_name)
     if value is None:
         return {}
-    if not isinstance(value, dict):
+    if not isinstance(value, Mapping):
         raise ValueError(f"field '{field_name}' must be an object or null")
     result: dict[str, list[str]] = {}
-    for k, v in cast(dict[str, object], value).items():
-        if not isinstance(v, list):
+    for k, v in cast(Mapping[str, object], value).items():
+        if isinstance(v, str) or not isinstance(v, Sequence):
             raise ValueError(f"field '{field_name}.{k}' must be a list")
         result[k] = []
-        for item in cast(list[object], v):
+        for item in cast(Sequence[object], v):
             if not isinstance(item, str):
                 raise ValueError(f"field '{field_name}.{k}' must contain only strings")
             result[k].append(item)

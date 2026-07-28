@@ -67,4 +67,4 @@ def test_langmem_curator_extracts_candidates_with_fake_manager(tmp_path: Path) -
     assert candidates[0].type == "preference"
     assert candidates[0].body == "User prefers concise output."
     assert candidates[0].action == "create"
-    assert candidates[0].source_refs == ["langmem"]
+    assert candidates[0].source_refs == ("langmem",)

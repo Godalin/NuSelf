@@ -58,9 +58,9 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
     assert second_result.processed_messages == 0
     assert len(candidates) == 1
     assert candidates[0].type == "episode"
-    assert candidates[0].tags == ["memory"]
+    assert candidates[0].tags == ("memory",)
     assert candidates[0].review_state == "pending"
-    assert candidates[0].source_refs == ["thread:default:0-2"]
+    assert candidates[0].source_refs == ("thread:default:0-2",)
     assert candidates[0].observed_at is not None
     assert candidates[0].evidence[0].source_type == "thread"
     assert candidates[0].evidence[0].source_ref == "thread:default:0-2"
@@ -179,10 +179,10 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
 
     assert result.updated == 1
     assert candidates[0].body == "The user prefers concise memory previews."
-    assert candidates[0].tags == ["memory", "preview"]
+    assert candidates[0].tags == ("memory", "preview")
     assert candidates[0].action == "update"
     assert candidates[0].target_entry_id == existing.id
-    assert candidates[0].source_refs == ["thread:default:0-2"]
+    assert candidates[0].source_refs == ("thread:default:0-2",)
     assert candidates[0].observed_at is not None
     assert repo.get(existing.id).body == "The user likes memory previews."
 
@@ -299,7 +299,7 @@ def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> No
     assert result.processed_messages == 1
     assert result.created == 1
     assert candidates[0].type == "belief"
-    assert candidates[0].source_refs == ["thread:default:0-1"]
+    assert candidates[0].source_refs == ("thread:default:0-1",)
 
 
 def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: Path) -> None:
@@ -337,7 +337,7 @@ def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: 
     assert result.processed_messages == 2
     assert result.created == 1
     assert second_result.processed_messages == 0
-    assert candidates[0].source_refs == ["thread:default:4-6"]
+    assert candidates[0].source_refs == ("thread:default:4-6",)
 
 
 def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:
@@ -585,7 +585,7 @@ def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
     entries = repo.list()
     assert len(entries) == 1
     assert entries[0].title == "Interest in Rust"
-    assert entries[0].tags == ["rust"]
+    assert entries[0].tags == ("rust",)
     assert entries[0].review_state == "reviewed"
     assert result.created == 1
 

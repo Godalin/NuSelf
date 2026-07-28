@@ -95,7 +95,7 @@ class ProfileItemRepository:
             type=existing.type,
             title=candidate.title,
             body=candidate.body,
-            tags=candidate.tags or existing.tags,
+            tags=list(candidate.tags or existing.tags),
             source_refs=[*existing.source_refs, *candidate.source_refs],
             confidence=candidate.confidence,
             privacy=existing.privacy,
