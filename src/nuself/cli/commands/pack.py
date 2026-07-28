@@ -12,6 +12,7 @@ from nuself.storage_sqlite import (
     SqliteStorageBackend,
     ThoughtPackValidationError,
     import_sqlite_thought_pack,
+    inspect_sqlite_thought_pack,
 )
 
 
@@ -123,19 +124,16 @@ def handle_pack_inspect(args: argparse.Namespace) -> int:
     database = _resolve_pack_path(args.name, args.project_root)
     if database is None:
         return 1
-    backend = SqliteStorageBackend(database)
     try:
-        tables = backend.collection_names()
-        total = 0
-        print(f"Thought pack: {database.name}")
-        print(f"  path: {database}")
-        print(f"  collections: {len(tables)}")
-        for name in sorted(tables):
-            count = len(backend.collection(name).list())
-            if count:
-                print(f"    {name}: {count} items")
-                total += count
-        print(f"  total items: {total}")
-    finally:
-        backend.close()
+        inspection = inspect_sqlite_thought_pack(database)
+    except ThoughtPackValidationError as exc:
+        print(f"Invalid thought pack: {exc}", file=sys.stderr)
+        return 1
+    print(f"Thought pack: {database.name}")
+    print(f"  path: {database}")
+    print(f"  collections: {len(inspection.collection_counts)}")
+    for name, count in sorted(inspection.collection_counts):
+        if count:
+            print(f"    {name}: {count} items")
+    print(f"  total items: {inspection.total_items}")
     return 0

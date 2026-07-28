@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 import sqlite3
 
+import pytest
+
 from nuself.cli import main
 from nuself.storage import set_default_backend
 from nuself.storage_sqlite import COLLECTION_NAMES, SqliteStorageBackend
@@ -255,3 +257,61 @@ def test_pack_inspect_defaults_to_main_db(tmp_path: Path) -> None:
     # After migration, it should succeed
     assert main(["--project-root", str(tmp_path), "dev", "migrate"]) == 0
     assert main(["--project-root", str(tmp_path), "pack", "inspect"]) == 0
+
+
+def test_pack_inspect_preserves_legacy_schema(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "legacy-inspect.sqlite"
+    _create_pack_schema(source, version=1)
+    before = source.read_bytes()
+
+    assert main(
+        ["--project-root", str(tmp_path), "pack", "inspect", str(source)]
+    ) == 0
+
+    assert source.read_bytes() == before
+    assert "Thought pack: legacy-inspect.sqlite" in capsys.readouterr().out
+
+
+def test_pack_inspect_rejects_invalid_pack(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "invalid.sqlite"
+    source.write_bytes(b"invalid")
+
+    assert main(
+        ["--project-root", str(tmp_path), "pack", "inspect", str(source)]
+    ) == 1
+
+    assert "Invalid thought pack:" in capsys.readouterr().err
+
+
+def test_pack_inspect_counts_live_wal_data(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "live-inspect.sqlite"
+    backend = SqliteStorageBackend(source)
+    backend.collection("memory_entries").put(
+        "live",
+        {"id": "live", "title": "Live"},
+    )
+    try:
+        assert main(
+            [
+                "--project-root",
+                str(tmp_path),
+                "pack",
+                "inspect",
+                str(source),
+            ]
+        ) == 0
+    finally:
+        backend.close()
+
+    output = capsys.readouterr().out
+    assert "memory_entries: 1 items" in output
+    assert "total items: 1" in output

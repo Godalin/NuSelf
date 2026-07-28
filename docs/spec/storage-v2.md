@@ -473,6 +473,16 @@ nuself pack inspect [<path>]      → 展示 <path> 或主库的表统计
   backup so committed source WAL data is included. Validation failure leaves
   no destination file.
 
+### 检查约束
+
+- Inspect uses the same read-only connection and compatibility validator as
+  import. It never constructs a mutable backend for the inspected file.
+- The storage inspection API returns schema version and per-collection counts
+  from that validated connection. CLI rendering does not query SQLite
+  directly.
+- Supported legacy packs remain byte-for-byte unmodified; corrupt, foreign,
+  partial, and future schemas render a concise validation error and fail.
+
 ### 未来方向
 
 **NuHub** — 基于 GitHub Releases 分享 `.sqlite` 文件：

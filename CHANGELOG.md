@@ -25,6 +25,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Thought-pack import now rejects corrupt, foreign, partial, and unsupported
   future SQLite schemas before creating an imported file, while preserving
   supported legacy sources unchanged.
+- Thought-pack inspection now shares the same read-only validation rules and
+  no longer initializes or migrates the database being inspected.
 - CLI, REPL, and background scheduling now use one reason-layer factory to
   compose `ReasonAdvancer` workspace and model dependencies. A directly
   constructed scheduler with a project root now loads configured endpoints

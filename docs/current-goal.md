@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Validate external thought packs read-only before import and reject corrupt,
-foreign, or future-schema databases without mutating the source.
+Make thought-pack inspection share the read-only validator and report
+collection counts without initializing or migrating the inspected database.
 
 ## Active Branch
 
@@ -14,42 +14,38 @@ foreign, or future-schema databases without mutating the source.
 
 ## Ordered Work
 
-1. Audit schema identity, version handling, and current import behavior.
-2. Specify read-only integrity and compatibility validation.
-3. Share one schema-version constant with runtime initialization.
-4. Validate and backup from the same read-only source connection.
-5. Verify corrupt, foreign, future, legacy, WAL, and valid inputs.
+1. Audit inspect output and mutable backend side effects.
+2. Specify read-only inspection and validation reuse.
+3. Add a structured thought-pack inspection value.
+4. Migrate CLI rendering off mutable `SqliteStorageBackend`.
+5. Verify legacy, corrupt, WAL, count, and connection-close behavior.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Do not migrate or otherwise modify the external source file.
-- Keep imported packs inert under `private/imports`.
-- Do not accept partial NuSelf schemas.
+- Preserve existing inspect path resolution and output layout.
+- Do not migrate supported legacy packs during inspection.
+- Keep validation rules identical between import and inspect.
 
 ## Completion Evidence
 
-- Import opens the source through SQLite `mode=ro`; it never constructs a
-  mutable backend for the external file.
-- Validation requires `quick_check=ok`, a supported non-empty schema version,
-  all known collection tables, and an `id` primary key on every table.
-- Validation and online backup share one source connection; destination writes
-  use a unique temporary database and atomic rename.
-- Validation failure creates no imported file, while cleanup always attempts
-  removal of the temporary database.
-- Tests reject corrupt bytes, foreign SQLite, partial schemas, and future
-  versions; supported v1 sources and copies remain v1 and live WAL data is
-  preserved.
-- Ordinary `SqliteStorageBackend` initialization also rejects future versions.
-- `.venv/bin/pytest -q`: `1491 passed`.
+- `ThoughtPackInspection` carries immutable schema-version and per-collection
+  count data with a derived total.
+- `inspect_sqlite_thought_pack()` and import share the same read-only
+  connection owner and compatibility validator.
+- CLI inspection renders only the structured inspection value and never
+  creates `SqliteStorageBackend` for the inspected file.
+- Tests prove v1 database bytes remain unchanged, corrupt packs fail, committed
+  WAL rows are counted, and the read-only source connection closes once.
+- Existing pack path resolution and human-readable count layout remain intact.
+- `.venv/bin/pytest -q`: `1495 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `a1880da`.
+`dev/v0.3.x` is published through `30bc7db`.
 
 ## Next Review Batch
 
-Make thought-pack inspect use the same read-only validator instead of opening a
-mutable backend.
+Extract shared SQLite connection ownership helpers from pack operations.

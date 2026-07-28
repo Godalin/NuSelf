@@ -39,6 +39,7 @@ from nuself.storage_sqlite import (
     SqliteStorageUnsupportedVersionError,
     SqliteTransactionCleanupError,
     SqliteTransactionRollbackOnlyError,
+    inspect_sqlite_thought_pack,
 )
 
 
@@ -396,6 +397,42 @@ def test_backend_rejects_future_schema_version(
         match="newer than supported version",
     ):
         SqliteStorageBackend(database)
+
+
+def test_readonly_inspection_closes_source_connection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "inspect.sqlite"
+    SqliteStorageBackend(database).close()
+    original_connect = sqlite3.connect
+    connections: list[TrackingConnection] = []
+
+    def tracking_connect(
+        path: str,
+        *,
+        uri: bool = False,
+    ) -> sqlite3.Connection:
+        connection = original_connect(
+            path,
+            uri=uri,
+            factory=TrackingConnection,
+        )
+        connection.close_calls = 0
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(
+        "nuself.storage_sqlite.sqlite3.connect",
+        tracking_connect,
+    )
+
+    inspection = inspect_sqlite_thought_pack(database)
+
+    assert inspection.schema_version == 2
+    assert inspection.total_items == 0
+    assert len(connections) == 1
+    assert connections[0].close_calls == 1
 
 
 def test_checkpoint_failure_is_raised_after_connection_closes(

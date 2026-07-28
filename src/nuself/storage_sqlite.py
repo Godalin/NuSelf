@@ -10,6 +10,7 @@ import sqlite3
 import threading
 from collections.abc import Generator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
 from uuid import uuid4
@@ -156,6 +157,18 @@ class SqliteStorageUnsupportedVersionError(
 
 class ThoughtPackValidationError(ValueError):
     """Raised when an external SQLite file is not a compatible thought pack."""
+
+
+@dataclass(frozen=True)
+class ThoughtPackInspection:
+    """Read-only metadata for one validated thought pack."""
+
+    schema_version: int
+    collection_counts: tuple[tuple[str, int], ...]
+
+    @property
+    def total_items(self) -> int:
+        return sum(count for _, count in self.collection_counts)
 
 
 class _SqliteWalCheckpointBusyError(RuntimeError):
@@ -722,39 +735,83 @@ def import_sqlite_thought_pack(
     destination: Path,
 ) -> int:
     """Validate and atomically import one external thought-pack snapshot."""
+    temporary = destination.with_name(
+        f".{destination.name}.{uuid4().hex}.tmp"
+    )
+    with _readonly_thought_pack(source) as source_connection:
+        try:
+            version = _validate_thought_pack_connection(source_connection)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            backup = sqlite3.connect(str(temporary))
+            try:
+                source_connection.backup(backup)
+            except BaseException as backup_error:
+                try:
+                    backup.close()
+                except Exception as cleanup_error:
+                    raise SqliteStorageBackupCleanupError(
+                        backup_error=backup_error,
+                        cleanup_error=cleanup_error,
+                    ) from backup_error
+                raise
+            backup.close()
+            temporary.replace(destination)
+            return version
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def inspect_sqlite_thought_pack(source: Path) -> ThoughtPackInspection:
+    """Validate and inspect one thought pack without modifying it."""
+    with _readonly_thought_pack(source) as connection:
+        version = _validate_thought_pack_connection(connection)
+        counts = tuple(
+            (
+                collection_name,
+                _thought_pack_collection_count(
+                    connection,
+                    collection_name,
+                ),
+            )
+            for collection_name in COLLECTION_NAMES
+        )
+    return ThoughtPackInspection(
+        schema_version=version,
+        collection_counts=counts,
+    )
+
+
+@contextmanager
+def _readonly_thought_pack(
+    source: Path,
+) -> Generator[sqlite3.Connection, None, None]:
     source_uri = f"{source.resolve().as_uri()}?mode=ro"
     try:
-        source_connection = sqlite3.connect(source_uri, uri=True)
+        connection = sqlite3.connect(source_uri, uri=True)
     except sqlite3.DatabaseError as exc:
         raise ThoughtPackValidationError(
             "thought pack is not a readable SQLite database"
         ) from exc
-    temporary = destination.with_name(
-        f".{destination.name}.{uuid4().hex}.tmp"
-    )
     try:
-        version = _validate_thought_pack_connection(source_connection)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        backup = sqlite3.connect(str(temporary))
-        try:
-            source_connection.backup(backup)
-        except BaseException as backup_error:
-            try:
-                backup.close()
-            except Exception as cleanup_error:
-                raise SqliteStorageBackupCleanupError(
-                    backup_error=backup_error,
-                    cleanup_error=cleanup_error,
-                ) from backup_error
-            raise
-        backup.close()
-        temporary.replace(destination)
-        return version
+        yield connection
     finally:
-        try:
-            source_connection.close()
-        finally:
-            temporary.unlink(missing_ok=True)
+        connection.close()
+
+
+def _thought_pack_collection_count(
+    connection: sqlite3.Connection,
+    collection_name: str,
+) -> int:
+    table = _collection_table(collection_name)
+    row = connection.execute(
+        f"SELECT COUNT(*) FROM {_identifier(table)}"
+    ).fetchone()
+    count = row[0] if row is not None and len(row) == 1 else None
+    if type(count) is not int or count < 0:
+        raise ThoughtPackValidationError(
+            f"thought pack collection {table} has an invalid count"
+        )
+    return count
 
 
 def _validate_thought_pack_connection(
