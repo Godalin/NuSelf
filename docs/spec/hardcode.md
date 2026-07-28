@@ -63,8 +63,8 @@ behavior, grouped by subsystem. Configurable defaults live in
 | `EXPORT_QUEUE_POLL_SECONDS` | `daemon/reason_export.py` | 1 s | Export queue poll timeout |
 | startup readiness timeout | `daemon/lifecycle.py` | 2 s | Maximum monotonic wait for a spawned daemon to become ready |
 | startup poll interval | `daemon/lifecycle.py` | 0.05 s | Maximum sleep between readiness and child-exit checks |
-| shutdown poll iterations | `daemon/lifecycle.py` | 40 | Max graceful shutdown poll loops |
-| shutdown poll interval | `daemon/lifecycle.py` | 0.05 s | Graceful shutdown poll sleep |
+| shutdown ownership timeout | `daemon/lifecycle.py` | 2 s | Maximum monotonic wait for request delivery, cleanup, and instance-lock release |
+| shutdown poll interval | `daemon/lifecycle.py` | 0.05 s | Maximum sleep between readiness and instance-lock checks |
 | `timeout=2.0` | `daemon/client.py:21` | 2 s | Daemon socket connection timeout |
 | `MAX_DAEMON_FRAME_BYTES` | `daemon/protocol.py` | 1 MiB | Maximum request/response JSONL frame including newline |
 | `DAEMON_REQUEST_IO_TIMEOUT_SECONDS` | `daemon/socket_server.py` | 5 s | Server timeout for receiving one request frame and delivering its response |

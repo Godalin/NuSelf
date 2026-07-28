@@ -81,9 +81,7 @@ def run_daemon(project_root: Path | None = None) -> int:
 
     paths = runtime_paths(project_root)
     ensure_runtime_dirs(paths)
-    instance_lock = DaemonInstanceLock(
-        paths.runtime_dir / "nuself.lock"
-    )
+    instance_lock = DaemonInstanceLock(paths.daemon_lock_path)
     try:
         instance_lock.acquire()
     except DaemonInstanceLockContended as exc:

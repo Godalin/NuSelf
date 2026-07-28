@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon shutdown now uses bounded graceful request and instance-lock release
+  as its ownership boundary; stale PID metadata is never used for signal
+  escalation, and stop/restart failures are typed and consistently audited.
 - Daemon startup now distinguishes spawn failure, early child exit, and
   readiness timeout through one typed lifecycle error; every CLI surface uses
   the same safe message and failed-start audit projection.

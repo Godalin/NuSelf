@@ -382,6 +382,9 @@ nuself daemon start | stop | restart | status | health | list
 - **Error**: State mismatch or typed startup failure printed to stderr with exit
   code `1`. Startup failures distinguish spawn failure, early child exit, and
   readiness timeout without printing the raw daemon process log.
+- Stop and restart failures distinguish shutdown rejection, ownership
+  inspection failure, and ownership-release timeout. They never signal a PID
+  obtained only from a runtime metadata file.
 
 ### Memory
 

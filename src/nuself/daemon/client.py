@@ -233,10 +233,16 @@ def chat(
 
 def shutdown(
     project_root: Path | None = None,
+    *,
+    timeout: float = 2.0,
 ) -> None:
     """Request shutdown and validate the acknowledgement payload."""
 
-    response = request("shutdown", project_root=project_root)
+    response = request(
+        "shutdown",
+        project_root=project_root,
+        timeout=timeout,
+    )
     payload = decode_response(
         response,
         MessagePayload.from_wire,

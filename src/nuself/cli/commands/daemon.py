@@ -38,6 +38,12 @@ def format_start_failure(error: lifecycle.DaemonStartError) -> str:
     return diagnostic_exception_message(error)
 
 
+def format_stop_failure(error: lifecycle.DaemonStopError) -> str:
+    """Render one safe daemon-stop failure across CLI surfaces."""
+
+    return diagnostic_exception_message(error)
+
+
 def write_start_failure_audit(
     error: lifecycle.DaemonStartError,
     *,
@@ -95,6 +101,49 @@ def start_daemon_observed(
     return result
 
 
+def stop_daemon_observed(
+    project_root: Path | None,
+    *,
+    operation: Literal["stop", "restart"],
+) -> lifecycle.DaemonStatus:
+    """Run one daemon stop with shared lifecycle projections."""
+
+    if operation == "stop":
+        write_lifecycle_audit(
+            "stop_requested",
+            "daemon stop requested",
+            project_root=project_root,
+        )
+    try:
+        result = lifecycle.stop(project_root)
+    except lifecycle.DaemonStopError as exc:
+        write_lifecycle_audit(
+            f"{operation}_failed",
+            f"daemon {operation} failed",
+            project_root=project_root,
+            level="error",
+            status="error",
+            error=diagnostic_exception_chain(exc),
+            metadata={
+                "reason": exc.reason,
+                "running": exc.status.running,
+                "pid": exc.status.pid,
+                "socket": str(exc.status.socket_path),
+                "owner_active": exc.owner_active,
+            },
+        )
+        raise
+    if operation == "stop":
+        write_lifecycle_audit(
+            "stop_completed",
+            f"daemon stop {'completed' if not result.running else 'failed'}",
+            project_root=project_root,
+            status="stopped" if not result.running else "running",
+            metadata={"pid": result.pid, "socket": str(result.socket_path)},
+        )
+    return result
+
+
 def handle_daemon_start(args: argparse.Namespace) -> int:
     try:
         result = start_daemon_observed(
@@ -112,19 +161,17 @@ def handle_daemon_start(args: argparse.Namespace) -> int:
 
 
 def handle_daemon_stop(args: argparse.Namespace) -> int:
-    write_lifecycle_audit(
-        "stop_requested",
-        "daemon stop requested",
-        project_root=args.project_root,
-    )
-    result = lifecycle.stop(args.project_root)
-    write_lifecycle_audit(
-        "stop_completed",
-        f"daemon stop {'completed' if not result.running else 'failed'}",
-        project_root=args.project_root,
-        status="stopped" if not result.running else "running",
-        metadata={"pid": result.pid, "socket": str(result.socket_path)},
-    )
+    try:
+        result = stop_daemon_observed(
+            args.project_root,
+            operation="stop",
+        )
+    except lifecycle.DaemonStopError as exc:
+        print(
+            f"Failed to stop daemon: {format_stop_failure(exc)}",
+            file=sys.stderr,
+        )
+        return 1
     print(format_status(result))
     return 0 if not result.running else 1
 
@@ -135,7 +182,17 @@ def handle_daemon_restart(args: argparse.Namespace) -> int:
         "daemon restart requested",
         project_root=args.project_root,
     )
-    stop_result = lifecycle.stop(args.project_root)
+    try:
+        stop_result = stop_daemon_observed(
+            args.project_root,
+            operation="restart",
+        )
+    except lifecycle.DaemonStopError as exc:
+        print(
+            f"Failed to restart daemon: {format_stop_failure(exc)}",
+            file=sys.stderr,
+        )
+        return 1
     if stop_result.running:
         print(
             f"Failed to stop daemon: {format_status(stop_result)}",

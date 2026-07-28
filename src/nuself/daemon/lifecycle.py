@@ -5,15 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import isfinite
 from pathlib import Path
-import os
-import signal
 import subprocess
 import sys
 import time
-from typing import Literal
+from typing import Literal, Never
 
 from nuself.config import RuntimePaths, ensure_runtime_dirs, runtime_paths
 from nuself.daemon import client
+from nuself.daemon.instance import (
+    DaemonInstanceLock,
+    DaemonInstanceLockContended,
+)
 from nuself.private_fs import ensure_private_file
 from nuself.runtime.diagnostics import emit_runtime_warning
 from nuself.runtime.observability import report_corrupt_record
@@ -37,8 +39,8 @@ DEFAULT_DAEMON_PROCESS_LOG_RETENTION = DaemonProcessLogRetentionPolicy()
 
 
 @dataclass(frozen=True)
-class DaemonStartupPolicy:
-    """Monotonic readiness deadline for one spawned daemon."""
+class DaemonWaitPolicy:
+    """One positive finite monotonic lifecycle wait policy."""
 
     timeout_seconds: float = 2.0
     poll_interval_seconds: float = 0.05
@@ -50,15 +52,21 @@ class DaemonStartupPolicy:
         ):
             if isinstance(value, bool) or not isfinite(value) or value <= 0:
                 raise ValueError(
-                    f"daemon startup {name} must be positive and finite"
+                    f"daemon lifecycle {name} must be positive and finite"
                 )
 
 
-DEFAULT_DAEMON_STARTUP_POLICY = DaemonStartupPolicy()
+DEFAULT_DAEMON_STARTUP_POLICY = DaemonWaitPolicy()
+DEFAULT_DAEMON_SHUTDOWN_POLICY = DaemonWaitPolicy()
 
 DaemonStartFailureReason = Literal[
     "spawn_failed",
     "process_exited",
+    "timeout",
+]
+DaemonStopFailureReason = Literal[
+    "request_failed",
+    "ownership_check_failed",
     "timeout",
 ]
 
@@ -101,19 +109,46 @@ class DaemonStartError(RuntimeError):
         self.timeout_seconds = timeout_seconds
 
 
+class DaemonStopError(RuntimeError):
+    """A daemon could not complete graceful ownership release."""
+
+    def __init__(
+        self,
+        reason: DaemonStopFailureReason,
+        *,
+        status: DaemonStatus,
+        owner_active: bool | None,
+        timeout_seconds: float | None = None,
+    ) -> None:
+        if reason == "request_failed":
+            message = "daemon rejected the shutdown request"
+        elif reason == "ownership_check_failed":
+            message = "daemon ownership could not be verified"
+        else:
+            message = (
+                "daemon did not stop and release ownership within "
+                f"{timeout_seconds:g} seconds"
+            )
+        super().__init__(message)
+        self.reason = reason
+        self.status = status
+        self.owner_active = owner_active
+        self.timeout_seconds = timeout_seconds
+
+
 def status(
     project_root: Path | None = None,
     *,
     ping_timeout: float = 2.0,
 ) -> DaemonStatus:
     paths = runtime_paths(project_root)
-    pid = read_pid(paths)
+    running = client.ping(
+        paths.project_root,
+        timeout=ping_timeout,
+    )
     return DaemonStatus(
-        running=client.ping(
-            paths.project_root,
-            timeout=ping_timeout,
-        ),
-        pid=pid,
+        running=running,
+        pid=read_pid(paths) if running else None,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
     )
@@ -125,7 +160,7 @@ def start(
     process_log_retention: DaemonProcessLogRetentionPolicy = (
         DEFAULT_DAEMON_PROCESS_LOG_RETENTION
     ),
-    startup_policy: DaemonStartupPolicy = DEFAULT_DAEMON_STARTUP_POLICY,
+    startup_policy: DaemonWaitPolicy = DEFAULT_DAEMON_STARTUP_POLICY,
 ) -> DaemonStatus:
     paths = runtime_paths(project_root)
     ensure_runtime_dirs(paths)
@@ -220,25 +255,104 @@ def _daemon_process_log_backup(path: Path, index: int) -> Path:
     return path.with_name(f"{path.name}.{index}")
 
 
-def stop(project_root: Path | None = None) -> DaemonStatus:
+def stop(
+    project_root: Path | None = None,
+    *,
+    shutdown_policy: DaemonWaitPolicy = DEFAULT_DAEMON_SHUTDOWN_POLICY,
+) -> DaemonStatus:
     paths = runtime_paths(project_root)
-    if client.ping(paths.project_root):
-        try:
-            client.shutdown(paths.project_root)
-        except (
-            client.DaemonConnectionError,
-            client.DaemonApplicationError,
-        ):
-            pass
-    for _ in range(40):
-        time.sleep(0.05)
-        current = status(paths.project_root)
-        if not current.running:
+    deadline = time.monotonic() + shutdown_policy.timeout_seconds
+    current = status(
+        paths.project_root,
+        ping_timeout=shutdown_policy.timeout_seconds,
+    )
+    owner_active = _inspect_daemon_ownership(paths, current)
+    if not current.running and not owner_active:
+        return current
+    request_error: client.DaemonConnectionError | None = None
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        _raise_daemon_stop_timeout(
+            current,
+            owner_active=owner_active,
+            policy=shutdown_policy,
+            request_error=None,
+        )
+    try:
+        client.shutdown(
+            paths.project_root,
+            timeout=remaining,
+        )
+    except client.DaemonApplicationError as exc:
+        raise DaemonStopError(
+            "request_failed",
+            status=current,
+            owner_active=owner_active,
+        ) from exc
+    except client.DaemonConnectionError as exc:
+        request_error = exc
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            _raise_daemon_stop_timeout(
+                current,
+                owner_active=owner_active,
+                policy=shutdown_policy,
+                request_error=request_error,
+            )
+        current = status(
+            paths.project_root,
+            ping_timeout=remaining,
+        )
+        owner_active = _inspect_daemon_ownership(paths, current)
+        if not current.running and not owner_active:
             return current
-    pid = read_pid(paths)
-    if pid is not None:
-        os.kill(pid, signal.SIGTERM)
-    return status(paths.project_root)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            _raise_daemon_stop_timeout(
+                current,
+                owner_active=owner_active,
+                policy=shutdown_policy,
+                request_error=request_error,
+            )
+        time.sleep(min(shutdown_policy.poll_interval_seconds, remaining))
+
+
+def _raise_daemon_stop_timeout(
+    status_snapshot: DaemonStatus,
+    *,
+    owner_active: bool,
+    policy: DaemonWaitPolicy,
+    request_error: client.DaemonConnectionError | None,
+) -> Never:
+    error = DaemonStopError(
+        "timeout",
+        status=status_snapshot,
+        owner_active=owner_active,
+        timeout_seconds=policy.timeout_seconds,
+    )
+    if request_error is not None:
+        raise error from request_error
+    raise error
+
+
+def _inspect_daemon_ownership(
+    paths: RuntimePaths,
+    status_snapshot: DaemonStatus,
+) -> bool:
+    lock = DaemonInstanceLock(paths.daemon_lock_path)
+    try:
+        with lock:
+            pass
+    except DaemonInstanceLockContended:
+        return True
+    except Exception as exc:
+        raise DaemonStopError(
+            "ownership_check_failed",
+            status=status_snapshot,
+            owner_active=None,
+        ) from exc
+    return False
 
 
 def read_pid(paths: RuntimePaths) -> int | None:

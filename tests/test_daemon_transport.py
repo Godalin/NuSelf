@@ -782,6 +782,36 @@ def test_ping_forwards_readiness_timeout(
     assert captured_timeout == 0.125
 
 
+def test_shutdown_forwards_remaining_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_timeout = 0.0
+
+    def fake_request(
+        request_type: RequestType,
+        payload: dict[str, JsonValue] | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        nonlocal captured_timeout
+        del payload
+        assert request_type == "shutdown"
+        assert project_root == tmp_path
+        captured_timeout = timeout
+        return DaemonResponse(
+            request_id="shutdown-request",
+            status="ok",
+            payload=MessagePayload(message="shutdown requested").to_wire(),
+        )
+
+    monkeypatch.setattr(client, "request", fake_request)
+
+    client.shutdown(tmp_path, timeout=0.125)
+    assert captured_timeout == 0.125
+
+
 def test_typed_response_decoder_distinguishes_application_failure() -> None:
     with pytest.raises(
         DaemonApplicationError,

@@ -19,7 +19,7 @@ from nuself import cli
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.cli import build_parser, main
 from nuself.daemon.client import DaemonConnectionError
-from nuself.daemon.lifecycle import DaemonStartError, DaemonStatus
+from nuself.daemon.lifecycle import DaemonStartError, DaemonStatus, DaemonStopError
 from nuself.daemon.protocol import DaemonResponse
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.memory.intake import IntakeResultOutput
@@ -3784,6 +3784,94 @@ def test_daemon_stop_with_mocked_lifecycle(
     captured = capsys.readouterr()
     assert result == 0
     assert "daemon stopped" in captured.out
+
+
+def test_daemon_stop_failure_is_safe_and_audited(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    running = DaemonStatus(
+        running=True,
+        pid=456,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+    failure = DaemonStopError(
+        "timeout",
+        status=running,
+        owner_active=True,
+        timeout_seconds=2,
+    )
+
+    def fail_stop(project_root: Path | None) -> DaemonStatus:
+        raise failure
+
+    monkeypatch.setattr("nuself.cli.lifecycle.stop", fail_stop)
+
+    result = main(
+        ["--project-root", str(tmp_path), "daemon", "stop"]
+    )
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert (
+        "Failed to stop daemon: "
+        "daemon did not stop and release ownership within 2 seconds"
+    ) in captured.err
+    events = read_log_events(project_root=tmp_path, component="daemon")
+    assert [event.event for event in events] == [
+        "stop_requested",
+        "stop_failed",
+    ]
+    assert events[-1].status == "error"
+    assert events[-1].error == str(failure)
+    assert events[-1].metadata == {
+        "owner_active": True,
+        "pid": 456,
+        "reason": "timeout",
+        "running": True,
+        "socket": str(running.socket_path),
+    }
+
+
+def test_interactive_restart_stop_failure_keeps_repl_alive(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    running = DaemonStatus(
+        running=True,
+        pid=789,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+    failure = DaemonStopError(
+        "ownership_check_failed",
+        status=running,
+        owner_active=None,
+    )
+
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        return running
+
+    def fail_stop(project_root: Path | None) -> DaemonStatus:
+        raise failure
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":r\n:q\n"))
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.cli.lifecycle.stop", fail_stop)
+
+    result = main(["--project-root", str(tmp_path), "attach"])
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert (
+        "Failed to restart daemon: "
+        "daemon ownership could not be verified"
+    ) in captured.out
+    assert captured.out.endswith("NuSelf> ")
+    events = read_log_events(project_root=tmp_path, component="daemon")
+    assert [event.event for event in events] == [
+        "restart_requested",
+        "restart_failed",
+    ]
 
 
 def test_interactive_sources_lists_documents(

@@ -32,6 +32,7 @@ class RuntimePaths:
     logs_dir: Path
     socket_path: Path
     pid_path: Path
+    daemon_lock_path: Path
     daemon_log_path: Path
     daemon_process_log_path: Path
     outbox_log_path: Path
@@ -61,6 +62,7 @@ def runtime_paths(project_root: Path | None = None) -> RuntimePaths:
         logs_dir=logs_dir,
         socket_path=runtime_dir / "nuself.sock",
         pid_path=runtime_dir / "nuself.pid",
+        daemon_lock_path=runtime_dir / "nuself.lock",
         daemon_log_path=logs_dir / "daemon.log",
         daemon_process_log_path=logs_dir / "daemon-process.log",
         outbox_log_path=logs_dir / "outbox.log",

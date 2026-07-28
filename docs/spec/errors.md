@@ -163,9 +163,10 @@ the child process:
   reads or echoes the raw daemon process log. That stream may contain private
   provider or application output.
 - The startup timeout and polling interval are positive finite values owned by
-  an injectable lifecycle policy. Polling uses `time.monotonic()` and never
-  sleeps beyond the remaining deadline. Each readiness ping also receives no
-  more than the remaining budget, so socket I/O cannot silently extend it.
+  the shared injectable lifecycle wait policy. Polling uses `time.monotonic()`
+  and never sleeps beyond the remaining deadline. Each readiness ping also
+  receives no more than the remaining budget, so socket I/O cannot silently
+  extend it.
 - CLI start, default startup, restart, and interactive restart use the
   lifecycle failure's stable safe message. One-shot commands exit non-zero;
   interactive restart returns to the existing REPL.
@@ -173,6 +174,33 @@ the child process:
   with the reason, latest status, exit code when known, and sanitized compact
   exception chain. The terminal still receives only the stable outer message.
   Audit failure remains secondary and cannot replace the startup failure.
+
+Daemon shutdown has one lifecycle-owned ownership boundary:
+
+- The project instance lock is authoritative for whether a daemon still owns
+  the runtime. A successful ping is service readiness, not process ownership;
+  a PID file is diagnostic metadata only.
+- A stop is complete only when the daemon no longer responds and the instance
+  lock has been released. This keeps worker cleanup and runtime-file teardown
+  inside the daemon's ownership window.
+- The CLI never sends a signal to a numeric PID read from runtime metadata.
+  PID files may be stale and operating systems may reuse PIDs, so such a signal
+  could target an unrelated process.
+- Graceful shutdown uses the same injectable lifecycle wait-policy type with
+  its own default instance. The shutdown request, readiness probes, sleeps, and
+  final ownership check are all bounded by the same monotonic deadline.
+- An explicit shutdown rejection raises a typed stop failure immediately.
+  A transport failure may mean the request completed, so the lifecycle retains
+  it and continues observing ownership until success or timeout.
+- Failure to inspect the instance lock and expiry before both readiness and
+  ownership have cleared are typed stop failures. They retain the latest status
+  and original request or lock error as an explicit cause.
+- CLI stop, restart, and interactive restart use one shared observed stop
+  adapter for requested, completed, and failed audit projections. One-shot
+  failures exit non-zero; interactive failures keep the existing REPL alive.
+- `DaemonStatus.pid` is populated only for a daemon that answered the matching
+  project ping. A syntactically valid but stale PID file is never rendered as a
+  running-process identity.
 
 Daemon shutdown owns an ordered set of named cleanup steps. It signals
 shutdown, attempts each worker stop independently, resets only the current

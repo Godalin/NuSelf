@@ -9,8 +9,10 @@ from pathlib import Path
 from nuself.agent.chat import ThreadStore
 from nuself.cli.commands.daemon import (
     format_start_failure,
+    format_stop_failure,
     format_status,
     start_daemon_observed,
+    stop_daemon_observed,
 )
 from nuself.cli.commands.output import print_ansi
 from nuself.cli.commands.persona import (
@@ -410,7 +412,13 @@ def handle_interactive_restart_command(project_root: Path | None) -> str:
         "daemon restart requested",
         project_root=project_root,
     )
-    stop_result = lifecycle.stop(project_root)
+    try:
+        stop_result = stop_daemon_observed(
+            project_root,
+            operation="restart",
+        )
+    except lifecycle.DaemonStopError as exc:
+        return f"Failed to restart daemon: {format_stop_failure(exc)}"
     if stop_result.running:
         return f"Failed to stop daemon: {format_status(stop_result)}"
     try:
