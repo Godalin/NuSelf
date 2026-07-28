@@ -243,6 +243,11 @@ under the same package.
   best-effort close. The composition root supplies polling configuration and
   compatibility callbacks but does not implement thread or transport control
   flow.
+- `cli/repl/turns.py` owns one logical interactive chat turn: stable turn id,
+  bounded transport retry, exact runtime context, live activity coordination,
+  session message/log association, memory/reply presentation order, and error
+  deduplication. Configured retry/poll values and rendering effects are
+  injected by the composition root.
 - `cli/repl/runtime.py` owns the interactive session loop and receives
   application effects through `ReplCallbacks`.
 

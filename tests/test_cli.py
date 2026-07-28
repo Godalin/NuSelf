@@ -30,7 +30,13 @@ def _mock_status(project_root: Path) -> DaemonStatus:
 
 
 from nuself.domain.profile import ProfileItem
-from nuself.logs import LogEvent, log_context, read_log_events, write_log_event
+from nuself.logs import (
+    InteractiveLogCursor,
+    LogEvent,
+    log_context,
+    read_log_events,
+    write_log_event,
+)
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.service import ReasonService
@@ -501,7 +507,7 @@ def test_daemon_interactive_turn_uses_activity_transport_not_log_polling(
 
     def fail_log_poll(
         project_root: Path | None,
-        log_cursor: cli.InteractiveLogCursor,
+        log_cursor: InteractiveLogCursor,
         *,
         turn_id: str | None = None,
     ) -> list[LogEvent]:
@@ -1460,8 +1466,6 @@ def test_interactive_activity_cursor_does_not_replay_seen_events(
     tmp_path: Path,
 ) -> None:
     write_log_event("chat", "turn_started", "old turn", project_root=tmp_path)
-    from nuself.logs import InteractiveLogCursor
-
     cursor = InteractiveLogCursor.from_project(tmp_path)
 
     write_log_event(

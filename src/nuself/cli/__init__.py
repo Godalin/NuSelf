@@ -8,7 +8,6 @@ import time
 import warnings
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from uuid import uuid4
 
 _original_warn = warnings.warn
 
@@ -44,12 +43,6 @@ try:
     )
     from nuself.cli.repl.activity import (
         read_interactive_activity_events as _interactive_activity_events,
-    )
-    from nuself.cli.repl.activity import (
-        run_live_activity_send as _run_live_activity_send,
-    )
-    from nuself.cli.repl.activity import (
-        visible_interactive_activity_events as _visible_interactive_activity_events,
     )
     from nuself.cli.commands.reflections import (
         handle_reflection_archive as handle_reflection_archive,
@@ -92,19 +85,16 @@ try:
     from nuself.cli.repl.transcript import (
         render_chat_transcript as _render_chat_transcript,
     )
+    from nuself.cli.repl.turns import (
+        send_interactive_chat_turn as _run_interactive_chat_turn,
+    )
     from nuself.cli.repl.types import InteractiveChatResult
     from nuself.config import ConfigSystem
     from nuself.daemon import client, lifecycle
     from nuself.logs import (
-        InteractiveLogCursor,
-        LogEvent,
         write_log_event,
     )
     from nuself.memory.curator import MemoryCurator
-    from nuself.runtime.context import (
-        RuntimeContext,
-        use_runtime_context,
-    )
     from nuself.tui.render import TerminalTheme, render_session_header
 finally:
     warnings.warn = _original_warn
@@ -412,135 +402,19 @@ def _send_interactive_chat_turn(
     *,
     daemon_activity: bool = False,
 ) -> int:
-    log_cursor = InteractiveLogCursor.from_project(project_root)
-    result = InteractiveChatResult(code=1)
-    printed_logs = False
-    turn_id = f"turn-{uuid4().hex}"
-    for attempt in range(1, INTERACTIVE_CHAT_ATTEMPTS + 1):
-        if attempt > 1:
-            write_log_event(
-                "chat",
-                "turn_retry",
-                "retrying chat turn after retryable transport failure",
-                project_root=project_root,
-                thread_id=thread_id,
-                turn_id=turn_id,
-                source="client",
-                status="retry",
-                metadata={
-                    "attempt": attempt,
-                    "max_attempts": INTERACTIVE_CHAT_ATTEMPTS,
-                    "previous_error": result.error,
-                },
-            )
-            print()
-            print(
-                f"Retrying message after failed attempt ({attempt}/{INTERACTIVE_CHAT_ATTEMPTS})..."
-            )
-        with use_runtime_context(
-            RuntimeContext(
-                thread_id=thread_id,
-                turn_id=turn_id,
-                source="client",
-            )
-        ):
-            result, events, printed_logs = (
-                _run_interactive_send_with_live_logs(
-                    send_message,
-                    message,
-                    thread_id,
-                    turn_id,
-                    project_root,
-                    log_cursor,
-                    printed_logs=printed_logs,
-                    daemon_activity=daemon_activity,
-                )
-            )
-        previous_next_index = session.captured_next_indexes.get(
-            thread_id, session.start_index_for(project_root, thread_id)
-        )
-        session.capture_new_messages(project_root, thread_id)
-        current_next_index = session.captured_next_indexes.get(
-            thread_id, previous_next_index
-        )
-        message_index = (
-            current_next_index - 1 if current_next_index > previous_next_index else None
-        )
-        session.capture_log_events(thread_id, events, message_index=message_index)
-        if result.memory_update is not None:
-            if not printed_logs:
-                print()
-                _print_ansi(_theme.paint("Logs:", "93"))
-                printed_logs = True
-            _print_ansi(f"{_theme.tag('[memory]', 'memory')} {result.memory_update}")
-        if result.reply is not None:
-            print()
-            _print_ansi(_theme.paint("NuSelf:", "96"))
-            print()
-            _print_assistant_reply(result.reply)
-        if result.code == 0:
-            return 0
-        if not result.retryable:
-            if result.error is not None and not _events_include_error(
-                events, result.error
-            ):
-                print(result.error, file=sys.stderr)
-            break
-    if result.retryable:
-        print("Message failed after retry; REPL remains open.", file=sys.stderr)
-    return result.code
-
-
-def _run_interactive_send_with_live_logs(
-    send_message: Callable[[str, str, str | None], InteractiveChatResult],
-    message: str,
-    thread_id: str,
-    turn_id: str | None,
-    project_root: Path | None,
-    log_cursor: InteractiveLogCursor,
-    *,
-    printed_logs: bool,
-    daemon_activity: bool = False,
-) -> tuple[InteractiveChatResult, list[LogEvent], bool]:
-    return _run_live_activity_send(
+    return _run_interactive_chat_turn(
         send_message,
-        message,
-        thread_id,
-        turn_id,
         project_root,
-        log_cursor,
-        printed_logs=printed_logs,
+        thread_id,
+        message,
+        session,
         daemon_activity=daemon_activity,
+        max_attempts=INTERACTIVE_CHAT_ATTEMPTS,
         poll_interval_seconds=INTERACTIVE_LOG_POLL_INTERVAL_SECONDS,
-        read_events=_interactive_activity_events,
-        present_events=_print_visible_interactive_activity_events,
+        read_activity_events=_interactive_activity_events,
+        print_activity_events=_print_interactive_activity_events,
+        print_reply=_print_assistant_reply,
     )
-
-
-def _print_visible_interactive_activity_events(
-    events: list[LogEvent], *, printed_logs: bool
-) -> bool:
-    visible_events = _visible_interactive_activity_events(events)
-    if not visible_events:
-        return printed_logs
-    return _print_live_interactive_activity_events(
-        visible_events, printed_logs=printed_logs
-    )
-
-
-def _print_live_interactive_activity_events(
-    events: list[LogEvent], *, printed_logs: bool
-) -> bool:
-    if not printed_logs:
-        print()
-        _print_ansi(_theme.paint("Logs:", "93"))
-        printed_logs = True
-    _print_interactive_activity_events(events)
-    return printed_logs
-
-
-def _events_include_error(events: list[LogEvent], error: str) -> bool:
-    return any(event.error == error for event in events)
 
 
 def _send_one_shot_chat(

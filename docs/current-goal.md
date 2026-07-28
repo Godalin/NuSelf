@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The top-level REPL command dispatcher extraction is complete.
+Idle. The REPL interactive turn coordinator extraction is complete.
 
 ## Active Branch
 
@@ -22,14 +22,15 @@ code.
 
 ## Completion Evidence
 
-- `cli/repl/dispatcher.py` owns registry matching, subsystem routing, dev
-  status/logs, export routing, thread lifecycle, and unknown-command help.
-- The dispatcher does not import the CLI composition root; the root wires its
-  handler directly through `ReplCallbacks`.
-- Existing aliases, output placement, action tuples, active-thread transitions,
-  subsystem commands, export, and autosave remain covered.
-- Focused dispatcher, registry, session, transcript, and CLI tests: 310 passed.
-- Full tests: 1258 passed.
+- `cli/repl/turns.py` owns stable turn identity, bounded retry, exact runtime
+  context, live activity coordination, session capture, presentation order,
+  and duplicate error suppression.
+- The root supplies retry/poll settings plus activity/reply effects through one
+  thin adapter; the turns module does not import the CLI composition root.
+- Direct tests prove retry identity, ambient-context isolation/restoration,
+  transcript association, retry-log correlation, and reply presentation.
+- Focused turns, activity, session, and CLI tests: 312 passed.
+- Full tests: 1259 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -39,5 +40,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Extract the next complete CLI composition responsibility after command
-dispatch ownership is isolated.
+Extract the next complete CLI composition responsibility after turn
+coordination is isolated.
