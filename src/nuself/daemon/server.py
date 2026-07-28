@@ -12,6 +12,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import cast, override
+from uuid import uuid4
 
 from nuself.agent.chat import ChatAgent
 from nuself.clock import utc_now_iso
@@ -54,7 +55,11 @@ from nuself.reason.output import (
     ReasonOutputService,
 )
 from nuself.reflection import ReflectionScheduler
-from nuself.runtime.context import runtime_context, use_runtime_context
+from nuself.runtime.context import (
+    RuntimeContext,
+    runtime_context,
+    use_runtime_context,
+)
 from nuself.runtime.jobs import JobMessage
 from nuself.runtime.observability import (
     format_exception_chain,
@@ -475,23 +480,28 @@ class DaemonState:
         error_event: str,
         error_message: str,
     ) -> bool:
-        try:
-            operation()
-        except Exception as exc:
-            self._record_worker_failure(name, exc)
-            report_observed_failure(
-                exc,
-                component="daemon",
-                event=error_event,
-                message=error_message,
-                project_root=self.project_root,
-                metadata={"worker": name},
-                level="error",
-                status="error",
-            )
-            return False
-        self._record_worker_success(name)
-        return True
+        iteration_context = RuntimeContext(
+            job_id=uuid4().hex,
+            source=f"daemon.worker.{name}",
+        )
+        with use_runtime_context(iteration_context):
+            try:
+                operation()
+            except Exception as exc:
+                self._record_worker_failure(name, exc)
+                report_observed_failure(
+                    exc,
+                    component="daemon",
+                    event=error_event,
+                    message=error_message,
+                    project_root=self.project_root,
+                    metadata={"worker": name},
+                    level="error",
+                    status="error",
+                )
+                return False
+            self._record_worker_success(name)
+            return True
 
     def _run_scheduled_worker(
         self,

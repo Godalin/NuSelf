@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The notification outbox correlation stage is complete; no implementation
+Idle. The scheduled worker tick-isolation stage is complete; no implementation
 change is currently active.
 
 ## Active Branch
@@ -31,4 +31,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit scheduler tick context isolation and correlation ownership.
+Audit best-effort side-effect context capture across deferred callbacks.

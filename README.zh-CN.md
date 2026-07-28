@@ -325,6 +325,9 @@ source。
 持久化 notification intent 也会把来源 runtime context 直接保存在 outbox record
 上；每条 adapter chain 会在 notification worker source 下恢复该 context，旧的无
 context 记录仍可读取。
+每次定时 memory、reflection、reason 和 notification-delivery tick 也会获得新的
+job identity；嵌套工作与失败诊断共享该 identity，复用 worker thread 时每轮都会从
+隔离的 context 开始。
 
 ## 通知
 

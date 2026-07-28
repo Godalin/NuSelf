@@ -41,6 +41,12 @@ Runtime code may establish a `log_context(...)` around a daemon request, chat tu
 - `trace_id` for cross-service provenance;
 - `source` for the runtime boundary that wrote the event, such as `daemon`, `client`, or `chat_runtime`.
 
+Every scheduled memory-curator, reflection, reason, and notification-delivery
+tick owns a fresh `job_id`. Its worker source and job id are installed before
+domain code runs; nested domain context adds fields without replacing that tick
+identity. Iteration failure logs use the same job id, and reused worker threads
+restore their ambient context before the next tick.
+
 Explicit arguments to `write_log_event(...)` override the inherited context for that one event. Context must be reset when the request/turn/job exits; persisted `LogEvent` records are not mutated or deleted as part of context teardown.
 
 ## Service Call Logs

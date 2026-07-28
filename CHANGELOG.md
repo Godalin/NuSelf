@@ -80,6 +80,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   preserve it through state transitions, and restore it per delivery. Adapter
   logs retain origin correlation under the notification worker source; legacy
   entries without context remain readable with an empty context.
+- Every scheduled memory, reflection, reason, and notification-delivery tick
+  now runs in a fresh isolated job context. Nested domain work and failure logs
+  share that tick id, while reused worker threads cannot leak prior
+  request/thread/turn/trace identity into later iterations.
 - Daemon execution now borrows SIGINT/SIGTERM handlers explicitly and restores
   the exact previous process handlers on every exit path. Partial installation
   rolls back already-changed signals, and restoration failures remain

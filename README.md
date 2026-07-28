@@ -343,6 +343,10 @@ Durable notification intents likewise store their originating runtime context
 directly on the outbox record. Each adapter chain restores that context under
 the notification worker source, while older context-free records remain
 readable.
+Every scheduled memory, reflection, reason, and notification-delivery tick
+also receives a fresh job identity. Nested work and failure diagnostics share
+that identity, and reused worker threads begin each iteration with an isolated
+context.
 
 ## Notifications
 

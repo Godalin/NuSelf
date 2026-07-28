@@ -17,7 +17,11 @@ from nuself.llm import ChatMessage
 from nuself.logs import read_log_events
 from nuself.memory.curator import MemoryCuratorResult
 from nuself.notification import NotificationOutbox, OutboxEntry
-from nuself.runtime.context import RuntimeContext, current_runtime_context
+from nuself.runtime.context import (
+    RuntimeContext,
+    current_runtime_context,
+    runtime_context,
+)
 from nuself.runtime.workers import OwnedWorker
 
 
@@ -349,6 +353,90 @@ def test_worker_error_log_failure_does_not_stop_scheduled_loop(
     assert health.alive is False
     assert health.consecutive_failures == 0
     assert health.last_success_at is not None
+
+
+def test_worker_iterations_have_isolated_job_contexts(
+    tmp_path: Path,
+) -> None:
+    state = DaemonState(tmp_path)
+    observed: list[RuntimeContext] = []
+
+    def first_operation() -> None:
+        observed.append(current_runtime_context())
+        with runtime_context(thread_id="tick-thread"):
+            observed.append(current_runtime_context())
+
+    def second_operation() -> None:
+        observed.append(current_runtime_context())
+
+    with runtime_context(
+        request_id="ambient-request",
+        thread_id="ambient-thread",
+        trace_id="ambient-trace",
+        source="test",
+    ):
+        assert state._run_worker_iteration(  # pyright: ignore[reportPrivateUsage]
+            "memory_curator",
+            first_operation,
+            error_event="memory_curator_error",
+            error_message="memory curator iteration failed",
+        )
+        assert state._run_worker_iteration(  # pyright: ignore[reportPrivateUsage]
+            "memory_curator",
+            second_operation,
+            error_event="memory_curator_error",
+            error_message="memory curator iteration failed",
+        )
+        assert current_runtime_context() == RuntimeContext(
+            request_id="ambient-request",
+            thread_id="ambient-thread",
+            trace_id="ambient-trace",
+            source="test",
+        )
+
+    first, nested, second = observed
+    assert first.source == "daemon.worker.memory_curator"
+    assert first.job_id is not None
+    assert first.request_id is None
+    assert first.thread_id is None
+    assert first.trace_id is None
+    assert nested.job_id == first.job_id
+    assert nested.thread_id == "tick-thread"
+    assert second.source == "daemon.worker.memory_curator"
+    assert second.job_id is not None
+    assert second.job_id != first.job_id
+    assert second.thread_id is None
+
+
+def test_worker_failure_log_uses_iteration_job_context(
+    tmp_path: Path,
+) -> None:
+    state = DaemonState(tmp_path)
+    observed: list[RuntimeContext] = []
+
+    def fail() -> None:
+        observed.append(current_runtime_context())
+        raise ValueError("tick failed")
+
+    assert not state._run_worker_iteration(  # pyright: ignore[reportPrivateUsage]
+        "reflection_scheduler",
+        fail,
+        error_event="reflection_scheduler_error",
+        error_message="reflection scheduler iteration failed",
+    )
+
+    event = next(
+        item
+        for item in read_log_events(
+            project_root=tmp_path,
+            component="daemon",
+        )
+        if item.event == "reflection_scheduler_error"
+    )
+    assert observed[0].job_id is not None
+    assert event.job_id == observed[0].job_id
+    assert event.source == "daemon.worker.reflection_scheduler"
+    assert current_runtime_context() == RuntimeContext()
 
 
 def test_export_worker_initialization_fails_before_thread_start(
