@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import Any, cast
 
@@ -16,14 +15,19 @@ from nuself.agent.middleware import ToolCaptureMiddleware
 
 from nuself.llm import LangChainLLMEndpoint
 from nuself.reason.domain import STEP_KINDS, TERMINAL_STATUSES, ReasoningStep, ReasoningThread
+from nuself.runtime import current_runtime_context, runtime_context
 from nuself.workspace import PrivateWorkspaceStore
-
-
-_current_reason_thread_id: ContextVar[str] = ContextVar("reason_thread_id")
 
 
 def _empty_dict_list() -> list[dict[str, object]]:
     return []
+
+
+def _current_reason_thread_id() -> str:
+    thread_id = current_runtime_context().thread_id
+    if thread_id is None:
+        raise RuntimeError("reason tool requires an active reason thread context")
+    return thread_id
 
 
 def _log_tool_call(tool_name: str, args: dict[str, object], *, tool_service_map: dict[str, str] | None = None, project_root: Path | None, result: str | None = None, error: str | None = None) -> None:
@@ -204,8 +208,8 @@ class ReasonAdvancer:
 
     Uses a pre-built ``create_agent`` graph with structured output
     for tool-assisted reasoning.  Workspace tools resolve the current
-    thread from a ``ContextVar`` so that the same tool instances can
-    be reused across threads.
+    thread from the shared ``RuntimeContext`` so that the same tool
+    instances can be reused across threads.
     """
 
     def __init__(
@@ -252,64 +256,62 @@ class ReasonAdvancer:
 
     def _advance(self, thread: ReasoningThread) -> ReasoningStep | None:
         assert self._agent is not None
-        token: Token[str] = _current_reason_thread_id.set(thread.id)
-        try:
-            self._captured.clear()
-            base = build_advance_prompt(thread)
-            system = SystemMessage(content=build_system_prompt(thread))
-            messages = [system, HumanMessage(content=base)]
-            result = self._agent.invoke({"messages": messages})
-            state = cast(dict[str, object], result) if isinstance(result, dict) else {}
-            for name, args, tc_result in self._captured:
-                _log_tool_call(name, args, project_root=self._project_root, result=tc_result, tool_service_map=self._tool_service_map)
-            from nuself.agent.tool_utils import tool_log_metadata
+        with runtime_context(thread_id=thread.id):
+            try:
+                self._captured.clear()
+                base = build_advance_prompt(thread)
+                system = SystemMessage(content=build_system_prompt(thread))
+                messages = [system, HumanMessage(content=base)]
+                result = self._agent.invoke({"messages": messages})
+                state = cast(dict[str, object], result) if isinstance(result, dict) else {}
+                for name, args, tc_result in self._captured:
+                    _log_tool_call(name, args, project_root=self._project_root, result=tc_result, tool_service_map=self._tool_service_map)
+                from nuself.agent.tool_utils import tool_log_metadata
 
-            step_tool_logs = cast(
-                "tuple[dict[str, object], ...]",
-                tuple(
-                    {
-                        "component": "reasoning",
-                        "event": "service_tool_called",
-                        "message": f"{name} completed",
-                        "status": "completed",
-                        "metadata": tool_log_metadata(
-                            args=dict(args),
-                            result=result,
-                            service_component=self._tool_service_map.get(name, ""),
-                            tool_name=name,
-                        ),
-                    }
-                    for name, args, result in self._captured
-                ),
-            )
-            structured = state.get("structured_response")
-            if structured is None:
+                step_tool_logs = cast(
+                    "tuple[dict[str, object], ...]",
+                    tuple(
+                        {
+                            "component": "reasoning",
+                            "event": "service_tool_called",
+                            "message": f"{name} completed",
+                            "status": "completed",
+                            "metadata": tool_log_metadata(
+                                args=dict(args),
+                                result=result,
+                                service_component=self._tool_service_map.get(name, ""),
+                                tool_name=name,
+                            ),
+                        }
+                        for name, args, result in self._captured
+                    ),
+                )
+                structured = state.get("structured_response")
+                if structured is None:
+                    return None
+                if isinstance(structured, dict):
+                    return step_from_data(cast(dict[str, object], structured), thread.id, tool_logs=step_tool_logs)
+                pydantic_data = getattr(structured, "model_dump", None)
+                if pydantic_data is not None:
+                    data = pydantic_data()
+                    if isinstance(data, dict):
+                        return step_from_data(cast(dict[str, object], data), thread.id, tool_logs=step_tool_logs)
                 return None
-            if isinstance(structured, dict):
-                return step_from_data(cast(dict[str, object], structured), thread.id, tool_logs=step_tool_logs)
-            pydantic_data = getattr(structured, "model_dump", None)
-            if pydantic_data is not None:
-                data = pydantic_data()
-                if isinstance(data, dict):
-                    return step_from_data(cast(dict[str, object], data), thread.id, tool_logs=step_tool_logs)
-            return None
-        except Exception:
-            import traceback
-            from nuself.logs import write_log_event
-            write_log_event(
-                "reasoning",
-                "advance_tool_failed",
-                traceback.format_exc(),
-                project_root=self._project_root,
-                status="failed",
-                metadata={"thread_id": thread.id},
-            )
-            raise
-        finally:
-            _current_reason_thread_id.reset(token)
+            except Exception:
+                import traceback
+                from nuself.logs import write_log_event
+                write_log_event(
+                    "reasoning",
+                    "advance_tool_failed",
+                    traceback.format_exc(),
+                    project_root=self._project_root,
+                    status="failed",
+                    metadata={"thread_id": thread.id},
+                )
+                raise
 
     def _build_workspace_tools(self) -> tuple[Any, ...]:
-        """Build workspace tools once that resolve the thread from ContextVar."""
+        """Build workspace tools once that resolve the active reason thread."""
         ws_store = self._workspace_store
         if ws_store is None:
             return ()
@@ -317,7 +319,7 @@ class ReasonAdvancer:
         from nuself.store import ScopedWorkspace, SqliteStore
 
         def _resolve() -> ScopedWorkspace:
-            thread_id = _current_reason_thread_id.get()
+            thread_id = _current_reason_thread_id()
             wpath = ws_store.ensure(thread_id)
             sqlite = SqliteStore(wpath.database)
             return ScopedWorkspace(sqlite, ("workspace", thread_id))
@@ -333,7 +335,7 @@ class ReasonAdvancer:
         from nuself.persona.tools import build_reason_persona_tools
 
         def _persona_root() -> Path:
-            thread_id = _current_reason_thread_id.get()
+            thread_id = _current_reason_thread_id()
             wpath = ws_store.ensure(thread_id)
             root = wpath.root / "persona_prompts"
             root.mkdir(parents=True, exist_ok=True)

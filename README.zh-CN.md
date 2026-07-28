@@ -331,6 +331,8 @@ job identity；嵌套工作与失败诊断共享该 identity，复用 worker thr
 短生命周期的 deferred callback 可以显式绑定其所延续逻辑操作的不可变 runtime
 context。交互聊天的发送线程使用这一边界，同时 transcript capture 仍仅限当前 chat
 path，不会吸收并发后台子系统的 audit record。
+Reason advance 也通过这一共享 context 确定 workspace 与 thread-local persona
+tools 的活动持久 reason thread，同时保留 request/job correlation。
 
 ## 通知
 

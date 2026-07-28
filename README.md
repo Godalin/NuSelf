@@ -351,6 +351,9 @@ Short-lived deferred callbacks can explicitly bind the immutable runtime
 context of the logical operation they continue. Interactive chat uses this
 boundary for its send thread, while transcript capture remains limited to the
 chat path and does not absorb concurrent background subsystem audit records.
+Reason advances also scope workspace and thread-local persona tools through
+this shared context, preserving request/job correlation while selecting the
+active durable reason thread.
 
 ## Notifications
 

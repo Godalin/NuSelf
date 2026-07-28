@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The deferred callback context-propagation review batch is complete.
+Idle. The ReasonAdvancer runtime-context unification batch is complete.
 
 ## Active Branch
 
@@ -22,14 +22,14 @@ code.
 
 ## Completion Evidence
 
-- `bind_runtime_context()` captures one immutable context and restores the
-  invoker after success or failure.
-- Interactive sends receive an exact thread/turn/client context without stale
-  ambient identity.
-- Transcript capture distinguishes chat-path presentation ownership from
-  inherited correlation.
-- Focused tests: 324 passed.
-- Full tests: 1205 passed.
+- No reason-specific ContextVar remains.
+- Workspace and persona tool providers resolve the active reason thread from
+  RuntimeContext.
+- Reason advance logs inherit the reason thread plus existing request, turn,
+  job, trace, and source identity.
+- Caller context is restored after successful and failed advances.
+- Focused tests: 40 passed.
+- Full tests: 1208 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -39,4 +39,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit remaining direct thread/context primitives outside runtime ownership.
+Audit log-observer ContextVar ownership and propagation boundaries.

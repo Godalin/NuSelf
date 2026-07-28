@@ -269,6 +269,19 @@ Ownership rules:
 Implicit or blanket thread-context propagation is forbidden because it can
 attach startup requests or previous operations to unrelated background work.
 
+## Domain Execution Scopes
+
+A domain operation must not create a parallel `ContextVar` for an identity
+already represented by `RuntimeContext`. `ReasonAdvancer` establishes a nested
+runtime scope whose `thread_id` is the active durable reason thread. It
+preserves caller-owned request, turn, job, trace, and source fields, so manual
+commands and scheduled ticks retain their causal chain while reason workspace
+and persona tools resolve one authoritative thread identity.
+
+The reason scope is restored after agent completion or failure. Tool providers
+must fail clearly if invoked without an active reason thread rather than
+reading process-global mutable state or guessing a workspace.
+
 ## Event Delivery
 
 Ephemeral events use an in-process publisher/subscriber interface:

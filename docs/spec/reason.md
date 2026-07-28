@@ -321,6 +321,11 @@ When an explicit `step` is provided to `advance_thread`, the service persists th
 - Supports `kind` values: `progress`, `no_change`, `question`, `synthesis`, `contradiction`, `resolution`, `planning`.
 - Integrates `new_findings`, `new_pending`, `retired_findings`, `next_steps`, and `evidence_refs` from the step into the updated thread state.
 - Captures each tool call through shared LangGraph middleware, emits a `service_tool_called` log event, and stores an explicit `tool_logs` snapshot on the persisted `ReasoningStep` so `reason show` and `reason watch` can render the step as a complete artifact later.
+- Establishes the active durable reason thread as
+  `RuntimeContext.thread_id` for the complete agent invocation. Workspace and
+  thread-local persona tools resolve that shared context instead of a
+  reason-specific `ContextVar`; existing request, turn, job, trace, and source
+  correlation is preserved and the caller context is restored on every exit.
 
 ### Terminal Recommendation Flow
 

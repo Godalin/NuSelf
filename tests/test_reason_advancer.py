@@ -2,8 +2,58 @@
 
 from __future__ import annotations
 
-from nuself.reason.advancer import REASON_ADVANCE_SYSTEM_PROMPT, build_advance_prompt, build_system_prompt, step_from_data
+# pyright: reportPrivateUsage=false
+
+from pathlib import Path
+from typing import Any, cast
+
+import pytest
+
+from nuself.logs import read_log_events
+from nuself.reason.advancer import (
+    REASON_ADVANCE_SYSTEM_PROMPT,
+    ReasonAdvancer,
+    _current_reason_thread_id,
+    build_advance_prompt,
+    build_system_prompt,
+    step_from_data,
+)
 from nuself.reason.domain import ReasoningThread
+from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
+from nuself.workspace import PrivateWorkspaceStore
+
+
+class _RecordingAgent:
+    def __init__(self) -> None:
+        self.contexts: list[RuntimeContext] = []
+
+    def invoke(self, _input: object) -> dict[str, object]:
+        self.contexts.append(current_runtime_context())
+        return {
+            "structured_response": {
+                "summary": "advanced",
+                "delta": "changed",
+                "kind": "progress",
+                "output": "result",
+            }
+        }
+
+
+class _FailingAgent:
+    def invoke(self, _input: object) -> dict[str, object]:
+        assert _current_reason_thread_id() == "reason-test"
+        raise RuntimeError("agent failed")
+
+
+def _advancer_with_agent(
+    project_root: Path,
+    agent: _RecordingAgent | _FailingAgent,
+) -> ReasonAdvancer:
+    advancer = ReasonAdvancer(project_root=project_root)
+    dynamic = cast(Any, advancer)
+    dynamic._agent = agent
+    dynamic._tool_service_map = {}
+    return advancer
 
 
 def test_build_prompt_includes_thread_fields() -> None:
@@ -21,6 +71,92 @@ def test_build_prompt_includes_thread_fields() -> None:
     assert "q1" in prompt
     assert "ref1" in prompt
     assert "at most one complete round" in prompt
+
+
+def test_advance_uses_shared_reason_thread_context_and_restores_caller(
+    tmp_path: Path,
+) -> None:
+    agent = _RecordingAgent()
+    advancer = _advancer_with_agent(tmp_path, agent)
+    thread = ReasoningThread(id="reason-test", topic="Q")
+
+    with runtime_context(
+        request_id="request-1",
+        turn_id="turn-1",
+        job_id="job-1",
+        trace_id="trace-1",
+        source="reason_scheduler",
+    ):
+        step = advancer.advance(thread)
+        assert current_runtime_context() == RuntimeContext(
+            request_id="request-1",
+            turn_id="turn-1",
+            job_id="job-1",
+            trace_id="trace-1",
+            source="reason_scheduler",
+        )
+
+    assert step is not None
+    assert agent.contexts == [
+        RuntimeContext(
+            thread_id="reason-test",
+            request_id="request-1",
+            turn_id="turn-1",
+            job_id="job-1",
+            trace_id="trace-1",
+            source="reason_scheduler",
+        )
+    ]
+    assert current_runtime_context() == RuntimeContext()
+
+
+def test_advance_failure_logs_shared_context_and_restores_caller(
+    tmp_path: Path,
+) -> None:
+    advancer = _advancer_with_agent(tmp_path, _FailingAgent())
+    thread = ReasoningThread(id="reason-test", topic="Q")
+
+    with runtime_context(request_id="request-1", source="client"):
+        with pytest.raises(RuntimeError, match="agent failed"):
+            advancer.advance(thread)
+        assert current_runtime_context() == RuntimeContext(
+            request_id="request-1",
+            source="client",
+        )
+
+    events = read_log_events(project_root=tmp_path, component="reasoning")
+    failure = next(event for event in events if event.event == "advance_tool_failed")
+    assert failure.thread_id == "reason-test"
+    assert failure.request_id == "request-1"
+    assert failure.source == "client"
+
+
+def test_workspace_tools_route_by_shared_reason_thread_context(
+    tmp_path: Path,
+) -> None:
+    advancer = ReasonAdvancer(
+        project_root=tmp_path,
+        workspace_store=PrivateWorkspaceStore(tmp_path, scope="reason"),
+    )
+    tools = cast(Any, advancer)._build_workspace_tools()
+    tool_map = {tool.name: tool for tool in tools}
+    put = tool_map["workspace_put"]
+    get = tool_map["workspace_get"]
+
+    with runtime_context(thread_id="reason-a"):
+        assert put.invoke({"key": "item", "value": '{"owner": "a"}'}) == (
+            "Stored item"
+        )
+        assert '"owner": "a"' in get.invoke({"key": "item"})
+
+    with runtime_context(thread_id="reason-b"):
+        assert get.invoke({"key": "item"}) == "Key item not found"
+
+    with pytest.raises(
+        RuntimeError,
+        match="reason tool requires an active reason thread context",
+    ):
+        get.invoke({"key": "item"})
 
 
 def test_build_prompt_empty_lists_omitted() -> None:
