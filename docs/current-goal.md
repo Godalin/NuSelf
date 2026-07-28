@@ -76,8 +76,8 @@ without duplicating the existing runtime-event and service-tool registries.
 
 ## Publication
 
-Pending this batch's implementation commit and push.
+`dev/v0.3.x` is ready to publish through implementation commit `694e07c`.
 
 ## Next Review Batch
 
-Select after this batch is verified and published.
+Review remaining Memory/trace projection audit ownership.
