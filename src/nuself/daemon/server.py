@@ -17,11 +17,18 @@ from typing import cast, override
 from nuself.agent.chat import ChatAgent
 from nuself.clock import utc_now_iso
 from nuself.reason.domain import ReasoningStep, ReasoningThread
-from nuself.reason.output import ReasonOutputManifest, ReasonOutputSection
-from nuself.reason.output import set_enqueue_callback, set_section_planner
+from nuself.reason.output import (
+    ReasonOutputManifest,
+    ReasonOutputSection,
+    ReasonOutputService,
+    set_enqueue_callback,
+    set_section_planner,
+    write_json_atomic,
+)
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.config import ConfigSystem
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
+from nuself.llm import ChatMessage, default_llm
 from nuself.logs import log_context, write_log_event
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.notification import NotificationAdapter, NotificationDeliveryLoop
@@ -63,10 +70,6 @@ def _llm_section_planner(project_root: Path) -> Callable[[ReasoningThread, Seque
     The returned planner is registered via set_section_planner() so plan_job
     uses it instead of the mechanical _plan_sections.
     """
-    from nuself.config import ConfigSystem
-    from nuself.llm import default_llm, ChatMessage
-    from nuself.reason.output import ReasonOutputSection
-
     lang = ConfigSystem.load(project_root=project_root).chat.language_preference
 
     def planner(thread: ReasoningThread, steps: Sequence[ReasoningStep], mode: str) -> tuple[ReasonOutputSection, ...]:
@@ -241,7 +244,6 @@ class DaemonState:
     def _join_thread(thread: threading.Thread | None, name: str, timeout: float = 5.0) -> None:
         if thread is None:
             return
-        from nuself.logs import write_log_event
         thread.join(timeout=timeout)
         if thread.is_alive():
             write_log_event("daemon", "thread_timeout", f"{name} did not stop within {timeout}s", level="warning")
@@ -250,8 +252,6 @@ class DaemonState:
         self._join_thread(self._memory_curator_thread, "memory_curator")
 
     def _run_background_memory_curator(self) -> None:
-        from nuself.logs import write_log_event
-        
         write_log_event(
             "daemon",
             "memory_curator_started",
@@ -292,8 +292,6 @@ class DaemonState:
         self._join_thread(self._reflection_scheduler_thread, "reflection_scheduler")
 
     def _run_background_reflection_scheduler(self) -> None:
-        from nuself.logs import write_log_event
-        
         write_log_event(
             "daemon",
             "reflection_scheduler_started",
@@ -374,15 +372,11 @@ class DaemonState:
             except queue.Empty:
                 break
         if drained:
-            from nuself.logs import write_log_event
             write_log_event("daemon", "export_queue_drained", f"Drained {drained} unprocessed export jobs", level="warning")
         self._join_thread(self._export_worker_thread, "export_worker")
 
     def _run_background_export_worker(self) -> None:
-        from nuself.logs import write_log_event
-        from nuself.reason.output import ReasonOutputService
         from nuself.workspace import PrivateWorkspaceStore
-        from nuself.llm import default_llm, ChatMessage
 
         write_log_event(
             "daemon",
@@ -405,7 +399,6 @@ class DaemonState:
             index: int,
             total: int,
         ) -> str:
-            from nuself.config import ConfigSystem
             lang = ConfigSystem.load(project_root=self.project_root).chat.language_preference
             sys = (
                 f"You are a writing assistant. Compose a {manifest.mode} in {manifest.output_format} format "
@@ -555,8 +548,6 @@ class DaemonState:
                 service.compose_with_runner(thread_id, job_id, _llm_runner)
                 self._record_worker_success("export_worker")
             except Exception as exc:
-                from nuself.reason.output import ReasonOutputManifest, write_json_atomic
-
                 self._record_worker_failure("export_worker", exc)
                 # Persist attempts + error info on every failure using the
                 # typed manifest model, so crash recovery preserves counters.
@@ -615,8 +606,6 @@ class DaemonState:
         self._join_thread(self._reason_scheduler_thread, "reason_scheduler")
 
     def _run_background_reason_scheduler(self) -> None:
-        from nuself.logs import write_log_event
-
         write_log_event(
             "daemon",
             "reason_scheduler_started",
@@ -658,8 +647,6 @@ class DaemonState:
         self._join_thread(self._notification_delivery_thread, "notification_delivery")
 
     def _run_background_notification_delivery(self) -> None:
-        from nuself.logs import write_log_event
-        
         write_log_event(
             "daemon",
             "notification_delivery_started",

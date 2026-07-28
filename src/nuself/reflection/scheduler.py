@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -14,14 +14,13 @@ from nuself.config import runtime_paths
 from nuself.config import ConfigSystem, ReflectionSettings
 from nuself.clock import utc_now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
+from nuself.llm import ChatLLM, ChatMessage, default_llm
+from nuself.logs import write_log_event
 from nuself.notification import NotificationOutbox, OutboxEntry
+from nuself.notification.deep_link import DeepLink
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
-from nuself.llm import default_llm
-from nuself.persona import SharedPersonaDiscussionService
-
-if TYPE_CHECKING:
-    from nuself.llm import ChatLLM, ChatMessage
+from nuself.persona import PersonaCompetitionResult, SharedPersonaDiscussionService
 
 
 class RelevanceScoreOutput(BaseModel):
@@ -78,7 +77,6 @@ class ReflectionScheduler:
 
     def reflect(self, now: datetime | None = None) -> bool:
         """Run one reflection cycle if conditions pass."""
-        from nuself.logs import write_log_event
         
         if now is None:
             now = datetime.now(UTC)
@@ -190,7 +188,6 @@ class ReflectionScheduler:
                 decision_points=decision_points,
             )
         except Exception as exc:
-            from nuself.logs import write_log_event
 
             write_log_event(
                 "reflection",
@@ -220,7 +217,6 @@ class ReflectionScheduler:
         return True
 
     def _organize_pending_reflections(self) -> None:
-        from nuself.logs import write_log_event
 
         try:
             ReflectionOrganizer(self._project_root, repository=self._reflection_repo).organize_pending()
@@ -352,7 +348,6 @@ class ReflectionScheduler:
         discussion_approved: bool | None = None,
         discussion_trace: tuple[str, ...] = (),
     ) -> ReflectionEntry:
-        from nuself.notification.deep_link import DeepLink
 
         thread_id = candidate.suggested_thread_id or "reflections"
         deep_link = DeepLink(action="open_thread", thread_id=thread_id).to_url()
@@ -391,8 +386,6 @@ class ReflectionScheduler:
         result: object,
         now: datetime,
     ) -> None:
-        from nuself.logs import write_log_event
-        from nuself.persona import PersonaCompetitionResult
 
         if not isinstance(result, PersonaCompetitionResult):
             return
@@ -430,7 +423,7 @@ class LLMRelevanceGate:
         config: ReflectionSettings | None = None,
         llm: ChatLLM | None = None,
     ) -> None:
-        from nuself.config import runtime_paths
+        # Deferred factory lookup preserves runtime/test dependency injection.
         from nuself.llm import default_llm
 
         paths = runtime_paths(project_root)
@@ -451,7 +444,6 @@ class LLMRelevanceGate:
         try:
             return self._score_with_llm(candidate, cooldown_ok)
         except (RuntimeError, ValueError, json.JSONDecodeError, KeyError) as e:
-            from nuself.logs import write_log_event
 
             write_log_event(
                 "reflection",
@@ -478,7 +470,6 @@ class LLMRelevanceGate:
         recent: list[ReflectionEntry],
         cooldown_ok: bool,
     ) -> list[ChatMessage]:
-        from nuself.llm import ChatMessage
 
         system = (
             "You are the Relevance Gate for NuSelf, a private AI mirror. Your job is to judge "
@@ -636,7 +627,7 @@ class IdeaCandidateGenerator:
         llm: ChatLLM | None = None,
         config: ReflectionSettings | None = None,
     ) -> None:
-        from nuself.config import runtime_paths
+        # Deferred factory lookup preserves runtime/test dependency injection.
         from nuself.llm import default_llm
 
         paths = runtime_paths(project_root)
@@ -654,7 +645,6 @@ class IdeaCandidateGenerator:
         self._language_preference = system_config.chat.language_preference
 
     def generate(self, max_candidates: int = 3) -> list[IdeaCandidate]:
-        from nuself.logs import write_log_event
         
         context = self._collect_context()
         if context.is_empty():
@@ -706,7 +696,6 @@ class IdeaCandidateGenerator:
         )
 
     def _generate_with_llm(self, context: _ThinkingContext, max_candidates: int) -> list[IdeaCandidate]:
-        from nuself.llm import ChatMessage
 
         system_prompt = (
             "You are an independent thinker with access to someone's private memory, "

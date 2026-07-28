@@ -67,6 +67,24 @@ Do not tag unreleased feature commits directly. Tags mark release commits only.
   producer for persisted ISO-8601 timestamps. Domains may keep specialized ID
   or scheduling helpers, but must compose them from the neutral clock.
 
+### Import Placement Policy
+
+Module-level imports are the default for domain models, repositories, services,
+renderers, and reusable helpers. Function-local imports are limited to these
+composition boundaries:
+
+- optional integrations whose dependencies may not be installed;
+- `TYPE_CHECKING`-guarded imports used only for annotations;
+- CLI command handlers and daemon/background-worker factories that deliberately
+  defer loading a heavy subsystem until the command or worker is used;
+- a documented cycle boundary where moving the import would create an actual
+  package initialization cycle.
+
+Local imports must not be used merely to hide an unclear dependency. Repeated
+imports of ordinary lightweight modules belong at module scope. New local
+imports outside the allowed boundaries require a nearby comment stating the
+optional dependency, deferred-loading reason, or cycle being avoided.
+
 ## Framework-Native Agent Architecture
 
 NuSelf uses LangChain/LangGraph as the agent infrastructure layer. When the framework has a current recommended API for an agent concern, NuSelf must use that API rather than maintain an equivalent private protocol.
