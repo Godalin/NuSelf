@@ -1,26 +1,31 @@
 from __future__ import annotations
 
-import json
+from collections.abc import Sequence
 
-from nuself.persona import LLMBackedActivationPolicy
+from langchain_core.messages import BaseMessage
+from nuself.persona import AgentBackedActivationPolicy
 from nuself.persona.definition import (
     ANALYST_PERSONA,
     BUILDER_PERSONA,
+    PersonaActivationOutput,
     PersonaInput,
 )
 
 
-class _FakeActivationLLM:
+class _FakeActivationAgent:
     def __init__(self, response: dict[str, object]) -> None:
         self._response = response
 
-    def complete(self, messages: object) -> str:
-        return json.dumps(self._response)
+    def invoke(
+        self,
+        messages: Sequence[BaseMessage],
+    ) -> PersonaActivationOutput:
+        return PersonaActivationOutput.model_validate(self._response)
 
 
 def test_host_escalation_for_explicit_request() -> None:
-    policy = LLMBackedActivationPolicy(
-        llm=_FakeActivationLLM({
+    policy = AgentBackedActivationPolicy(
+        agent=_FakeActivationAgent({
             "activated": True,
             "selected_persona_ids": ["analyst_self"],
             "trigger": "explicit request",
@@ -36,13 +41,13 @@ def test_host_escalation_for_explicit_request() -> None:
 
 
 def test_host_skips_plain_request() -> None:
-    policy = LLMBackedActivationPolicy(
-        llm=_FakeActivationLLM({
+    policy = AgentBackedActivationPolicy(
+        agent=_FakeActivationAgent({
             "activated": False,
             "selected_persona_ids": [],
             "trigger": "no signal",
             "should_escalate": False,
-            "escalation_reason": "",
+            "escalation_reason": "no escalation needed",
         })
     )
 
@@ -52,8 +57,8 @@ def test_host_skips_plain_request() -> None:
 
 
 def test_host_escalates_for_tradeoff_with_multiple_personas() -> None:
-    policy = LLMBackedActivationPolicy(
-        llm=_FakeActivationLLM({
+    policy = AgentBackedActivationPolicy(
+        agent=_FakeActivationAgent({
             "activated": True,
             "selected_persona_ids": ["analyst_self", "builder_self"],
             "trigger": "architecture tradeoff",

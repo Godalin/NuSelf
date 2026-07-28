@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Persona graph activation, contribution, and synthesis now share
+  `PersonaGraphAgents` and the common exact-schema LangChain runner. The graph's
+  private endpoint loop, direct structured-output binding, prompted JSON/text
+  parsing, and legacy LLM-backed class protocol were removed; deterministic
+  no-agent and failure fallbacks remain.
 - Persona discussion scoring, participant selection, and moderator judgment now
   use three exact-schema agents through the shared LangChain boundary.
   Prompted/fenced JSON, generated defaults, extra fields, score clamping, and

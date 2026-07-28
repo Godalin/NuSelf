@@ -13,17 +13,17 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import ConfigSystem, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
-from nuself.llm import ChatLLM
 from nuself.persona.definition import (
     BUILTIN_PERSONAS,
     MODERATOR_PERSONA,
     PersonaContribution,
     PersonaDefinition,
     PersonaInput,
+    PersonaSynthesisOutput,
     PersonaTurnState,
 )
 from nuself.persona.graph import (
-    LLMBackedSynthesizerNode,
+    AgentBackedSynthesizerNode,
     PersonaGraphDriver,
 )
 from nuself.runtime.observability import report_observed_failure
@@ -199,7 +199,7 @@ class ProactivePersonaDiscussion:
         consensus_spread_threshold: float = 0.15,
         config: ReflectionSettings | None = None,
         agents: PersonaDiscussionAgents | None = None,
-        synthesis_llm: ChatLLM | None = None,
+        synthesis_agent: StructuredAgent[PersonaSynthesisOutput] | None = None,
         language_preference: str = "en",
         project_root: Path | None = None,
     ) -> None:
@@ -226,12 +226,12 @@ class ProactivePersonaDiscussion:
 
         if agents is not None:
             synthesizer_node = (
-                LLMBackedSynthesizerNode(
-                    synthesis_llm,
+                AgentBackedSynthesizerNode(
+                    synthesis_agent,
                     language_preference=language_preference,
                     project_root=project_root,
                 )
-                if synthesis_llm is not None
+                if synthesis_agent is not None
                 else None
             )
             self._driver = PersonaGraphDriver(
@@ -557,7 +557,7 @@ class SharedPersonaDiscussionService:
         config: ReflectionSettings | None = None,
         discussion: ProactivePersonaDiscussion | None = None,
         agents: PersonaDiscussionAgents | None = None,
-        synthesis_llm: ChatLLM | None = None,
+        synthesis_agent: StructuredAgent[PersonaSynthesisOutput] | None = None,
         language_preference: str | None = None,
     ) -> None:
         if discussion is not None:
@@ -570,10 +570,16 @@ class SharedPersonaDiscussionService:
             language_preference = system_config.chat.language_preference
         if agents is None:
             agents = default_persona_discussion_agents(project_root)
+        if synthesis_agent is None:
+            synthesis_agent = default_structured_agent(
+                PersonaSynthesisOutput,
+                project_root=project_root,
+                component="persona",
+            )
         self._discussion = ProactivePersonaDiscussion(
             config=config,
             agents=agents,
-            synthesis_llm=synthesis_llm,
+            synthesis_agent=synthesis_agent,
             language_preference=language_preference,
             project_root=project_root,
         )

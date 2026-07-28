@@ -1,7 +1,7 @@
 # Persona Discussion Spec
 
 See [static.md](static.md) for the builtin persona data models, graph,
-activation policy, and node implementations (LLMBackedPersonaNode,
+activation policy, and node implementations (AgentBackedPersonaNode,
 PersonaGraphDriver, etc.).
 
 ## Competitive Discussion Flow
@@ -44,7 +44,7 @@ Rules:
 
 Internally, the `selves_consult` subagent may reuse the existing persona LangGraph subgraph and competitive discussion service. The public boundary is still the LangChain tool/subagent contract; the old fixed chat graph nodes are transitional plumbing and must not be the primary activation path.
 
-`persona_summary` logs are ordinary activated self passes. They are not proof that competitive discussion ran. Competitive chat discussion only runs when `LLMBackedActivationPolicy.should_escalate` is true; otherwise the host decision log is `status=skipped`.
+`persona_summary` logs are ordinary activated self passes. They are not proof that competitive discussion ran. Competitive chat discussion only runs when `AgentBackedActivationPolicy.should_escalate` is true; otherwise the host decision log is `status=skipped`.
 
 ## User-Facing Boundary
 
@@ -73,8 +73,10 @@ selection. Generated values are not defaulted or clamped.
 
 Discussion prompts use LangChain framework messages. They do not request JSON,
 parse response text, or retain a secondary dictionary/fenced-text protocol.
-Natural-language synthesis remains a separate capability because it is not a
-structured host decision.
+Natural-language synthesis uses the graph's exact-schema
+`PersonaSynthesisOutput` agent; it is a separate capability from the three
+competitive host-decision agents but follows the same shared invocation
+boundary.
 
 Malformed output keeps the existing caller-owned safety behavior:
 

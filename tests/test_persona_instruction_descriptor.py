@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
-import json
+from langchain_core.messages import BaseMessage
 
 from nuself.persona import (
-    LLMBackedActivationPolicy,
+    AgentBackedActivationPolicy,
     load_persona_definitions,
 )
 from nuself.persona.definition import (
+    PersonaActivationOutput,
     PersonaDefinition,
     PersonaInput,
 )
@@ -115,24 +117,27 @@ def test_load_persona_definitions_from_memory(tmp_path: Path) -> None:
     assert custom.description == "A custom persona."
 
 
-class _FakeActivationLLM:
+class _FakeActivationAgent:
     def __init__(self, response: dict[str, object]) -> None:
         self._response = response
 
-    def complete(self, messages: object) -> str:
-        return json.dumps(self._response)
+    def invoke(
+        self,
+        messages: Sequence[BaseMessage],
+    ) -> PersonaActivationOutput:
+        return PersonaActivationOutput.model_validate(self._response)
 
 
 def test_activation_policy_uses_custom_personas() -> None:
     custom = PersonaDefinition(id="custom_self", description="Custom.")
-    policy = LLMBackedActivationPolicy(
+    policy = AgentBackedActivationPolicy(
         personas=(custom,),
-        llm=_FakeActivationLLM({
+        agent=_FakeActivationAgent({
             "activated": False,
             "selected_persona_ids": [],
             "trigger": "not relevant",
             "should_escalate": False,
-            "escalation_reason": "",
+            "escalation_reason": "no escalation needed",
         }),
     )
     activation = policy.decide(PersonaInput(user_message="What are the risks?"))
@@ -140,14 +145,14 @@ def test_activation_policy_uses_custom_personas() -> None:
 
 
 def test_activation_policy_skips_missing_builtin_personas() -> None:
-    policy = LLMBackedActivationPolicy(
+    policy = AgentBackedActivationPolicy(
         personas=(),
-        llm=_FakeActivationLLM({
+        agent=_FakeActivationAgent({
             "activated": True,
             "selected_persona_ids": ["ghost_self"],
             "trigger": "test",
             "should_escalate": False,
-            "escalation_reason": "",
+            "escalation_reason": "no escalation needed",
         }),
     )
     activation = policy.decide(PersonaInput(user_message="What are the risks?"))
@@ -157,14 +162,14 @@ def test_activation_policy_skips_missing_builtin_personas() -> None:
 
 def test_activation_policy_explicit_request_with_partial_personas() -> None:
     analyst = PersonaDefinition(id="analyst_self", description="Analyst.")
-    policy = LLMBackedActivationPolicy(
+    policy = AgentBackedActivationPolicy(
         personas=(analyst,),
-        llm=_FakeActivationLLM({
+        agent=_FakeActivationAgent({
             "activated": True,
             "selected_persona_ids": ["analyst_self"],
             "trigger": "explicit request",
             "should_escalate": False,
-            "escalation_reason": "",
+            "escalation_reason": "no escalation needed",
         }),
     )
     activation = policy.decide(PersonaInput(user_message="Discuss this from multiple perspectives"))

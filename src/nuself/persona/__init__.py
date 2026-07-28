@@ -11,10 +11,13 @@ from nuself.persona.definition import (
     load_persona_definitions,
 )
 from nuself.persona.graph import (
-    LLMBackedActivationPolicy,
-    LLMBackedPersonaNode,
-    LLMBackedSynthesizerNode,
+    AgentBackedActivationPolicy,
+    AgentBackedPersonaNode,
+    AgentBackedSynthesizerNode,
+    PersonaGraphAgents,
     PersonaGraphDriver,
+    default_persona_graph_agents,
+    persona_graph_agents,
 )
 from nuself.persona.discussion import (
     AgentBackedScoringPersonaNode,
@@ -30,9 +33,9 @@ from nuself.persona.tools import build_persona_tools
 __all__ = [
     "BUILTIN_PERSONAS",
     "AgentBackedScoringPersonaNode",
-    "LLMBackedActivationPolicy",
-    "LLMBackedPersonaNode",
-    "LLMBackedSynthesizerNode",
+    "AgentBackedActivationPolicy",
+    "AgentBackedPersonaNode",
+    "AgentBackedSynthesizerNode",
     "MODERATOR_PERSONA",
     "PersonaActivation",
     "PersonaCompetitionResult",
@@ -40,6 +43,7 @@ __all__ = [
     "PersonaDefinition",
     "PersonaDiscussionAgents",
     "PersonaGraphDriver",
+    "PersonaGraphAgents",
     "PersonaInput",
     "PersonaPrompt",
     "PersonaPromptRepository",
@@ -48,5 +52,7 @@ __all__ = [
     "SharedPersonaDiscussionService",
     "build_persona_tools",
     "default_persona_discussion_agents",
+    "default_persona_graph_agents",
     "load_persona_definitions",
+    "persona_graph_agents",
 ]

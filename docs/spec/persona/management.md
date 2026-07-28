@@ -163,9 +163,9 @@ unaffected by global disable/enable.
 
 ## Activation Policy
 
-### LLMBackedActivationPolicy
+### AgentBackedActivationPolicy
 
-The activation policy (`persona/graph.py`, `LLMBackedActivationPolicy`) should
+The activation policy (`persona/graph.py`, `AgentBackedActivationPolicy`) should
 **not** present disabled personas to the LLM for selection. The `decide` method
 receives only `BUILTIN_PERSONAS` (static) unless dynamic personas are loaded
 via `load_persona_definitions`.

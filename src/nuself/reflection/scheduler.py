@@ -15,7 +15,6 @@ from nuself.config import runtime_paths
 from nuself.config import ConfigSystem, ReflectionSettings
 from nuself.clock import utc_now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
-from nuself.llm import default_llm
 from nuself.logs import write_log_event
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.notification.deep_link import DeepLink
@@ -201,7 +200,6 @@ class ReflectionScheduler:
             result = SharedPersonaDiscussionService(
                 project_root=self._project_root,
                 config=self._config,
-                synthesis_llm=default_llm(self._project_root),
             ).discuss(best)
             self._write_discussion_log(best, score, result, now)
             discussion_approved = result.approved

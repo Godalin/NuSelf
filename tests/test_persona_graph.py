@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, cast
+from typing import Generic, Never, TypeVar
 
 import pytest
+from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, ValidationError
 
-from nuself.llm import ChatMessage, LangChainLLMEndpoint, LLMSettings
 from nuself.logs import read_log_events
 from nuself.persona import (
-    LLMBackedActivationPolicy,
-    LLMBackedPersonaNode,
-    LLMBackedSynthesizerNode,
+    AgentBackedActivationPolicy,
+    AgentBackedPersonaNode,
+    AgentBackedSynthesizerNode,
     PersonaGraphDriver,
 )
-from nuself.persona.graph import _complete_persona_structured  # pyright: ignore[reportPrivateUsage]
 from nuself.persona.definition import (
     ANALYST_PERSONA,
     BUILDER_PERSONA,
@@ -33,8 +32,21 @@ from nuself.persona.definition import (
 )
 
 
-class _FakeActivationLLM:
-    """Deterministic LLM that returns activation JSON responses."""
+OutputT = TypeVar("OutputT", bound=BaseModel)
+
+
+class _StaticAgent(Generic[OutputT]):
+    def __init__(self, output: OutputT) -> None:
+        self.output = output
+        self.calls: list[Sequence[BaseMessage]] = []
+
+    def invoke(self, messages: Sequence[BaseMessage]) -> OutputT:
+        self.calls.append(messages)
+        return self.output
+
+
+class _FakeActivationAgent:
+    """Deterministic typed activation agent."""
 
     def __init__(self, response: dict[str, object] | None = None) -> None:
         self._response = response or {
@@ -42,11 +54,14 @@ class _FakeActivationLLM:
             "selected_persona_ids": ["skeptic_self"],
             "trigger": "risk detected",
             "should_escalate": False,
-            "escalation_reason": "",
+            "escalation_reason": "no escalation needed",
         }
 
-    def complete(self, messages: object) -> str:
-        return json.dumps(self._response)
+    def invoke(
+        self,
+        messages: Sequence[BaseMessage],
+    ) -> PersonaActivationOutput:
+        return PersonaActivationOutput.model_validate(self._response)
 
 
 @pytest.mark.parametrize(
@@ -78,54 +93,8 @@ def test_persona_output_models_reject_coercion_bounds_and_extra_fields(
         schema.model_validate(payload)
 
 
-def test_persona_structured_output_rejects_dictionary_result(
-    tmp_path: Path,
-) -> None:
-    class DictionaryStructuredModel:
-        def with_structured_output(
-            self,
-            schema: object,
-        ) -> DictionaryStructuredModel:
-            return self
-
-        def invoke(self, messages: object) -> dict[str, object]:
-            return {
-                "note": "Dictionary compatibility",
-                "questions": [],
-                "confidence": 0.8,
-            }
-
-    settings = LLMSettings(
-        base_url="https://example.invalid/v1",
-        api_key="test",
-        model="test",
-    )
-    endpoint = LangChainLLMEndpoint(
-        index=0,
-        settings=settings,
-        model=cast(Any, DictionaryStructuredModel()),
-    )
-
-    result = _complete_persona_structured(
-        (endpoint,),
-        [ChatMessage(role="user", content="Review this")],
-        PersonaContributionOutput,
-        project_root=tmp_path,
-    )
-
-    assert result is None
-    event = read_log_events(
-        project_root=tmp_path,
-        component="persona",
-    )[-1]
-    assert event.event == "persona_structured_failed"
-    assert event.error == (
-        "structured persona output must be PersonaContributionOutput"
-    )
-
-
-class _BrokenLLM:
-    def complete(self, messages: object) -> str:
+class _BrokenAgent:
+    def invoke(self, messages: Sequence[BaseMessage]) -> Never:
         raise RuntimeError("simulated LLM failure")
 
 
@@ -258,15 +227,24 @@ def test_persona_graph_runs_analyst_and_skeptic_together() -> None:
 
 
 def test_persona_graph_with_llm_backed_nodes() -> None:
-    from nuself.llm import ChatLLM
-
-    class FakeLLM(ChatLLM):
-        def complete(self, messages: list[ChatMessage]) -> str:
-            return "fake note"
-
     driver = PersonaGraphDriver(
-        persona_node=LLMBackedPersonaNode(llm=FakeLLM()),
-        synthesizer_node=LLMBackedSynthesizerNode(llm=FakeLLM()),
+        persona_node=AgentBackedPersonaNode(
+            _StaticAgent(
+                PersonaContributionOutput(
+                    note="fake note",
+                    questions=[],
+                    confidence=0.5,
+                )
+            )
+        ),
+        synthesizer_node=AgentBackedSynthesizerNode(
+            _StaticAgent(
+                PersonaSynthesisOutput(
+                    summary="fake note",
+                    confidence=0.5,
+                )
+            )
+        ),
     )
     state = PersonaTurnState(
         input=PersonaInput(user_message="What is consciousness?"),
@@ -280,11 +258,11 @@ def test_persona_graph_with_llm_backed_nodes() -> None:
     assert result.synthesis.summary == "fake note"
 
 
-# --- LLMBackedActivationPolicy tests ---
+# --- AgentBackedActivationPolicy tests ---
 
 
 def test_llm_backed_activation_selects_personas() -> None:
-    policy = LLMBackedActivationPolicy(llm=_FakeActivationLLM())
+    policy = AgentBackedActivationPolicy(agent=_FakeActivationAgent())
 
     activation = policy.decide(PersonaInput(user_message="What are the biggest risks?"))
 
@@ -294,8 +272,8 @@ def test_llm_backed_activation_selects_personas() -> None:
 
 
 def test_llm_backed_activation_escalates() -> None:
-    policy = LLMBackedActivationPolicy(
-        llm=_FakeActivationLLM({
+    policy = AgentBackedActivationPolicy(
+        agent=_FakeActivationAgent({
             "activated": True,
             "selected_persona_ids": ["analyst_self", "skeptic_self"],
             "trigger": "deep tradeoff",
@@ -313,13 +291,13 @@ def test_llm_backed_activation_escalates() -> None:
 
 
 def test_llm_backed_activation_no_match_returns_empty() -> None:
-    policy = LLMBackedActivationPolicy(
-        llm=_FakeActivationLLM({
+    policy = AgentBackedActivationPolicy(
+        agent=_FakeActivationAgent({
             "activated": False,
             "selected_persona_ids": [],
             "trigger": "not relevant",
             "should_escalate": False,
-            "escalation_reason": "",
+            "escalation_reason": "no escalation needed",
         })
     )
 
@@ -331,15 +309,15 @@ def test_llm_backed_activation_no_match_returns_empty() -> None:
 
 
 def test_llm_backed_activation_fallback_on_failure(tmp_path: Path) -> None:
-    policy = LLMBackedActivationPolicy(
-        llm=_BrokenLLM(),
+    policy = AgentBackedActivationPolicy(
+        agent=_BrokenAgent(),
         project_root=tmp_path,
     )
 
     activation = policy.decide(PersonaInput(user_message="What are the risks?"))
 
     assert activation.activated is False
-    assert activation.trigger == "llm_fallback"
+    assert activation.trigger == "agent_fallback"
     assert activation.should_escalate is False
     [event] = read_log_events(
         project_root=tmp_path,
@@ -351,13 +329,13 @@ def test_llm_backed_activation_fallback_on_failure(tmp_path: Path) -> None:
 
 
 def test_llm_backed_activation_ignores_unknown_persona_ids() -> None:
-    policy = LLMBackedActivationPolicy(
-        llm=_FakeActivationLLM({
+    policy = AgentBackedActivationPolicy(
+        agent=_FakeActivationAgent({
             "activated": True,
             "selected_persona_ids": ["unknown_self", "skeptic_self"],
             "trigger": "mixed",
             "should_escalate": False,
-            "escalation_reason": "",
+            "escalation_reason": "no escalation needed",
         })
     )
 
@@ -367,8 +345,8 @@ def test_llm_backed_activation_ignores_unknown_persona_ids() -> None:
 
 
 def test_llm_backed_activation_rejects_string_bool() -> None:
-    policy = LLMBackedActivationPolicy(
-        llm=_FakeActivationLLM({
+    policy = AgentBackedActivationPolicy(
+        agent=_FakeActivationAgent({
             "activated": "true",
             "selected_persona_ids": ["builder_self"],
             "trigger": "planning",
@@ -380,25 +358,25 @@ def test_llm_backed_activation_rejects_string_bool() -> None:
     activation = policy.decide(PersonaInput(user_message="Plan this"))
 
     assert activation.activated is False
-    assert activation.trigger == "llm_fallback"
+    assert activation.trigger == "agent_fallback"
     assert activation.should_escalate is False
     assert activation.selected_personas == ()
 
 
 def test_llm_backed_activation_no_llm_returns_safe_fallback() -> None:
-    policy = LLMBackedActivationPolicy(llm=None)
+    policy = AgentBackedActivationPolicy(agent=None)
 
     activation = policy.decide(PersonaInput(user_message="Anything"))
 
     assert activation.activated is False
-    assert activation.trigger == "no_llm"
+    assert activation.trigger == "no_agent"
 
 
 def test_llm_backed_persona_failure_is_observed_before_fallback(
     tmp_path: Path,
 ) -> None:
-    node = LLMBackedPersonaNode(
-        llm=_BrokenLLM(),
+    node = AgentBackedPersonaNode(
+        agent=_BrokenAgent(),
         project_root=tmp_path,
     )
 
@@ -423,8 +401,8 @@ def test_llm_backed_persona_failure_is_observed_before_fallback(
 def test_llm_backed_synthesis_failure_is_observed_before_fallback(
     tmp_path: Path,
 ) -> None:
-    node = LLMBackedSynthesizerNode(
-        llm=_BrokenLLM(),
+    node = AgentBackedSynthesizerNode(
+        agent=_BrokenAgent(),
         project_root=tmp_path,
     )
     state = PersonaTurnState(
@@ -451,91 +429,6 @@ def test_llm_backed_synthesis_failure_is_observed_before_fallback(
     assert event.metadata == {"stage": "synthesis"}
 
 
-def test_structured_diagnostic_failure_does_not_stop_endpoint_failover(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    calls: list[str] = []
-
-    class _StructuredModel:
-        def __init__(
-            self,
-            label: str,
-            result: object | None,
-        ) -> None:
-            self._label = label
-            self._result = result
-
-        def with_structured_output(self, schema: object) -> _StructuredModel:
-            return self
-
-        def invoke(self, messages: object) -> object:
-            calls.append(self._label)
-            if self._result is None:
-                raise RuntimeError("primary endpoint failed")
-            return self._result
-
-    class _UnusedFallbackLLM:
-        def complete(self, messages: object) -> str:
-            raise AssertionError("structured backup should satisfy the call")
-
-    def fail_log(*args: object, **kwargs: object) -> None:
-        raise OSError("diagnostic store unavailable")
-
-    settings = LLMSettings(
-        base_url="https://example.invalid/v1",
-        api_key="test",
-        model="test",
-    )
-    endpoints = (
-        LangChainLLMEndpoint(
-            index=0,
-            settings=settings,
-            model=cast(Any, _StructuredModel("primary", None)),
-        ),
-        LangChainLLMEndpoint(
-            index=1,
-            settings=settings,
-            model=cast(
-                Any,
-                _StructuredModel(
-                    "backup",
-                    PersonaContributionOutput(
-                        note="Backup perspective.",
-                        questions=[],
-                        confidence=0.8,
-                    ),
-                ),
-            ),
-        ),
-    )
-    monkeypatch.setattr(
-        "nuself.runtime.observability.write_log_event",
-        fail_log,
-    )
-    node = LLMBackedPersonaNode(
-        llm=cast(Any, _UnusedFallbackLLM()),
-        langchain_models=endpoints,
-        project_root=tmp_path,
-    )
-
-    with pytest.warns(
-        RuntimeWarning,
-        match=(
-            "persona/persona_structured_failed: primary endpoint failed; "
-            "structured logging failed: diagnostic store unavailable"
-        ),
-    ):
-        result = node(
-            ANALYST_PERSONA,
-            PersonaInput(user_message="Review this"),
-        )
-
-    assert calls == ["primary", "backup"]
-    assert result.notes == ("Backup perspective.",)
-    assert result.confidence == 0.8
-
-
 def test_completion_diagnostic_failure_does_not_replace_fallback(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -547,8 +440,8 @@ def test_completion_diagnostic_failure_does_not_replace_fallback(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
-    node = LLMBackedPersonaNode(
-        llm=_BrokenLLM(),
+    node = AgentBackedPersonaNode(
+        agent=_BrokenAgent(),
         project_root=tmp_path,
     )
 

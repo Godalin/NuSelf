@@ -110,56 +110,49 @@ class PersonaSynthesizerNode(Protocol):
 - **MinimalPersonaNode**: Generates a deterministic template utterance per persona id
 - **MinimalSynthesizerNode**: Concatenates first notes from each contribution
 
-### LLM-Backed
+### Agent-Backed
 
-- **LLMBackedPersonaNode**: Probes the LLM with persona `id` + `description` + topic +
-  prior discussion. Uses LangChain structured output (`PersonaContributionOutput`) when
-  available; falls back to `ChatLLM.complete()` + prompted JSON parsing.
-- **LLMBackedSynthesizerNode**: Distills a turn's contributions into 1–2 sentences.
-  Uses `PersonaSynthesisOutput` structured output when available.
-- **LLMBackedScoringPersonaNode** (discussion only): Returns both a note and a 0–1
-support score. Used by `ProactivePersonaDiscussion`, not by the standard graph.
+`PersonaGraphAgents` composes exact-schema activation, contribution, and
+synthesis agents through the shared framework-native structured-agent runner.
 
-LangChain `with_structured_output(...)` calls must return an instance of the
-declared persona output model. Dictionary results are protocol failures and
-participate in endpoint failover; they are not revalidated into a model.
-Activation, contribution, and synthesis output models use strict types,
-forbid unknown fields, and constrain present confidence values to the inclusive
-zero-to-one range.
+- **AgentBackedPersonaNode**: generates a distinct typed contribution for a
+  persona id, description, topic, and prior discussion.
+- **AgentBackedSynthesizerNode**: distills contributions into a typed one- or
+  two-sentence synthesis.
+- **AgentBackedActivationPolicy**: decides which personas activate and whether
+  competitive discussion should run.
+- **AgentBackedScoringPersonaNode** (discussion only): returns both a typed note
+  and a support score.
 
-Every failed standard-graph LLM path is observable. Structured endpoint
-failures write `persona_structured_failed` and continue to the next endpoint
-or existing `ChatLLM` fallback. A failed contribution or synthesis
-`ChatLLM.complete()` writes `persona_completion_failed` with its stage and,
-for contributions, persona id before returning the existing deterministic
-fallback. Diagnostic persistence is secondary and cannot replace fallback
-output or stop endpoint continuation; terminal warning behavior follows the
-shared runtime observability contract.
+The graph does not own endpoint iteration, call `with_structured_output`
+directly, request JSON, parse final message text, or accept dictionaries.
+Shared runner failures are observable at that boundary; each graph node then
+records its stage-specific fallback and returns the existing deterministic
+domain result. Diagnostic persistence cannot replace fallback output.
 
 ### Activation Policy
 
-`LLMBackedActivationPolicy` decides whether persona work should run for a turn:
+`AgentBackedActivationPolicy` decides whether persona work should run for a turn:
 
 ```
 decide(persona_input) → PersonaActivation
 ```
 
 The policy:
-1. Checks if an LLM is available (no LLM → `trigger="no_llm"`, no activation)
-2. Tries structured output (`PersonaActivationOutput`) via LangChain endpoints
-3. Falls back to prompted JSON via `ChatLLM.complete()`, validated by the same
-   strict `PersonaActivationOutput` schema
-4. On any error, returns safe fallback (`trigger="llm_fallback"`, no activation)
+1. Checks if an agent is available (`trigger="no_agent"` when absent).
+2. Invokes the exact `PersonaActivationOutput` agent.
+3. On any error, returns safe fallback (`trigger="agent_fallback"`, no
+   activation).
 
 Activation errors also write `persona_activation_failed` before returning that
 safe fallback. Diagnostic failure cannot replace or alter the activation
 result.
 
-`PersonaActivationOutput` is the sole activation parse boundary. JSON booleans
-must be booleans, persona IDs must be strings, and all declared field types must
-validate as written. The prompted-JSON fallback must not use a second
-handwritten parser, coerce string booleans, or partially accept malformed
-lists.
+The three output models are strict, extra-forbid, and complete: contribution
+and synthesis confidence is required in `[0, 1]`; activation requires every
+decision field; text and persona ids are normalized non-blank strings; and
+activation state must be internally consistent. A dictionary or malformed
+item cannot cross the shared typed boundary.
 
 The activation result surfaces:
 - **`selected_personas`**: Which built-in personas should respond

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-import json
 from pathlib import Path
 from typing import Generic, Never, TypeVar
 
@@ -13,7 +12,6 @@ from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
 from nuself.domain.proactive import IdeaCandidate
-from nuself.llm import ChatMessage
 from nuself.logs import read_log_events
 from nuself.persona import (
     PersonaCompetitionResult,
@@ -35,6 +33,7 @@ from nuself.persona.definition import (
     PersonaDefinition,
     PersonaInput,
     PersonaSynthesis,
+    PersonaSynthesisOutput,
     PersonaTurnState,
 )
 
@@ -92,11 +91,10 @@ class _FixtureAgent(Generic[OutputT]):
 
 
 class _FakeLLM:
-    """Typed discussion fixtures plus a plain synthesis LLM."""
+    """Typed persona discussion fixtures."""
 
     def __init__(self, responses: dict[str, str] | None = None) -> None:
         self._responses = responses or {}
-        self.calls: list[list[ChatMessage]] = []
         self.agent_calls: list[Sequence[BaseMessage]] = []
         self.agents = PersonaDiscussionAgents(
             scoring=_FixtureAgent(self, "score", PersonaScoreOutput),
@@ -111,10 +109,11 @@ class _FakeLLM:
                 ModeratorJudgmentOutput,
             ),
         )
-
-    def complete(self, messages: list[ChatMessage]) -> str:
-        self.calls.append(messages)
-        return "Discussion synthesis."
+        self.synthesis_agent = _FixtureAgent(
+            self,
+            "synthesis",
+            PersonaSynthesisOutput,
+        )
 
     def response(self, key: str) -> str:
         defaults = {
@@ -126,6 +125,9 @@ class _FakeLLM:
             "moderator": (
                 '{"converged":false,"emergent_persona":"none",'
                 '"reason":"test"}'
+            ),
+            "synthesis": (
+                '{"summary":"Discussion synthesis.","confidence":0.5}'
             ),
         }
         return self._responses.get(key, defaults[key])
@@ -359,7 +361,7 @@ def test_select_personas_uses_typed_agent_response() -> None:
     discussion = ProactivePersonaDiscussion(
         personas=(ANALYST_PERSONA, SKEPTIC_PERSONA, BUILDER_PERSONA, HISTORIAN_PERSONA),
         agents=llm.agents,
-        synthesis_llm=llm,
+        synthesis_agent=llm.synthesis_agent,
         min_participants=2,
         max_participants=3,
     )
@@ -378,7 +380,7 @@ def test_select_personas_rejects_partially_malformed_selection(
     discussion = ProactivePersonaDiscussion(
         personas=(ANALYST_PERSONA, SKEPTIC_PERSONA, BUILDER_PERSONA),
         agents=llm.agents,
-        synthesis_llm=llm,
+        synthesis_agent=llm.synthesis_agent,
         min_participants=2,
         max_participants=2,
         project_root=tmp_path,
@@ -402,7 +404,7 @@ def test_moderator_judgment_detects_convergence() -> None:
     llm = _FakeLLM({"moderator": '{"converged": true, "emergent_persona": "none", "reason": "stable consensus"}'})
     discussion = ProactivePersonaDiscussion(
         agents=llm.agents,
-        synthesis_llm=llm,
+        synthesis_agent=llm.synthesis_agent,
     )
     judgment = discussion._moderator_judgment(
         {"analyst_self": 0.8, "builder_self": 0.75},
@@ -421,7 +423,7 @@ def test_moderator_judgment_rejects_string_boolean(
     })
     discussion = ProactivePersonaDiscussion(
         agents=llm.agents,
-        synthesis_llm=llm,
+        synthesis_agent=llm.synthesis_agent,
         project_root=tmp_path,
     )
 
@@ -490,7 +492,7 @@ def test_moderator_judgment_spawns_emergent_persona() -> None:
     llm = _FakeLLM({"moderator": '{"converged": false, "emergent_persona": "bridge_self", "reason": "needs bridge"}'})
     discussion = ProactivePersonaDiscussion(
         agents=llm.agents,
-        synthesis_llm=llm,
+        synthesis_agent=llm.synthesis_agent,
     )
     judgment = discussion._moderator_judgment(
         {"analyst_self": 0.6, "skeptic_self": 0.4},
@@ -510,7 +512,7 @@ def test_discuss_with_llm_blocks_low_scores() -> None:
     discussion = ProactivePersonaDiscussion(
         personas=(ANALYST_PERSONA, SKEPTIC_PERSONA),
         agents=llm.agents,
-        synthesis_llm=llm,
+        synthesis_agent=llm.synthesis_agent,
         min_participants=2,
         max_participants=2,
     )
@@ -530,7 +532,7 @@ def test_discuss_with_llm_approves_high_scores() -> None:
     discussion = ProactivePersonaDiscussion(
         personas=(ANALYST_PERSONA, BUILDER_PERSONA),
         agents=llm.agents,
-        synthesis_llm=llm,
+        synthesis_agent=llm.synthesis_agent,
         min_participants=2,
         max_participants=2,
     )
@@ -555,7 +557,7 @@ def test_proactive_persona_discussion_uses_llm_when_provided(monkeypatch: pytest
     discussion = ProactivePersonaDiscussion(
         personas=personas,
         agents=llm.agents,
-        synthesis_llm=llm,
+        synthesis_agent=llm.synthesis_agent,
         min_participants=3,
         max_participants=3,
     )
@@ -597,7 +599,7 @@ def test_proactive_persona_discussion_injects_language_preference() -> None:
     discussion = ProactivePersonaDiscussion(
         personas=personas,
         agents=llm.agents,
-        synthesis_llm=llm,
+        synthesis_agent=llm.synthesis_agent,
         min_participants=3,
         max_participants=3,
         language_preference="zh-CN",
@@ -606,33 +608,39 @@ def test_proactive_persona_discussion_injects_language_preference() -> None:
     discussion.discuss(_make_candidate())
 
     prompts = "\n".join(
-        [
-            *(call[0].text for call in llm.agent_calls),
-            *(call[0].content for call in llm.calls),
-        ]
+        call[0].text for call in llm.agent_calls
     )
     assert "Write the note in zh-CN" in prompts
     assert "Write the summary in zh-CN" in prompts
 
 
-# --- Legacy persona node tests (unaffected by proactive scoring changes) ---
-
-
 def test_llm_backed_persona_node_generates_distinct_notes() -> None:
-    from nuself.persona.graph import LLMBackedPersonaNode
-    from nuself.persona.definition import PersonaDefinition, PersonaInput
+    from nuself.persona.graph import AgentBackedPersonaNode
+    from nuself.persona.definition import (
+        PersonaContributionOutput,
+        PersonaDefinition,
+        PersonaInput,
+    )
 
-    class _LegacyFakeLLM:
-        def complete(self, messages: list[ChatMessage]) -> str:
-            text = json.dumps([{"role": m.role, "content": m.content} for m in messages])
+    class _ContributionAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> PersonaContributionOutput:
+            text = "\n".join(message.text for message in messages)
             if "skeptic_self" in text:
-                return "Skeptic challenges the core assumption here."
-            if "builder_self" in text:
-                return "Builder proposes three concrete steps to act on this."
-            return "Analyst breaks this into components and implications."
+                note = "Skeptic challenges the core assumption here."
+            elif "builder_self" in text:
+                note = "Builder proposes three concrete steps to act on this."
+            else:
+                note = "Analyst breaks this into components and implications."
+            return PersonaContributionOutput(
+                note=note,
+                questions=[],
+                confidence=0.5,
+            )
 
-    llm = _LegacyFakeLLM()
-    node = LLMBackedPersonaNode(llm)
+    node = AgentBackedPersonaNode(_ContributionAgent())
 
     analyst = PersonaDefinition(id="analyst_self", description="Decomposes questions.")
     skeptic = PersonaDefinition(id="skeptic_self", description="Challenges assumptions.")
@@ -652,19 +660,25 @@ def test_llm_backed_persona_node_generates_distinct_notes() -> None:
 
 
 def test_llm_backed_synthesizer_node_produces_summary() -> None:
-    from nuself.persona.graph import LLMBackedSynthesizerNode
+    from nuself.persona.graph import AgentBackedSynthesizerNode
     from nuself.persona.definition import (
         PersonaContribution,
         PersonaInput,
+        PersonaSynthesisOutput,
         PersonaTurnState,
     )
 
-    class _EchoLLM:
-        def complete(self, messages: list[ChatMessage]) -> str:
-            return "Summary of the discussion."
+    class _SynthesisAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> PersonaSynthesisOutput:
+            return PersonaSynthesisOutput(
+                summary="Summary of the discussion.",
+                confidence=0.5,
+            )
 
-    llm = _EchoLLM()
-    node = LLMBackedSynthesizerNode(llm)
+    node = AgentBackedSynthesizerNode(_SynthesisAgent())
 
     state = PersonaTurnState(
         input=PersonaInput(user_message="test"),

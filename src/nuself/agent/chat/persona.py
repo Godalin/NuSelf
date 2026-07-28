@@ -6,19 +6,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from nuself.domain.proactive import IdeaCandidate
-from nuself.llm import ChatLLM, LangChainLLMEndpoint
+from nuself.llm import LangChainLLMEndpoint
 from nuself.logs import LogLevel, write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.persona import (
-    LLMBackedActivationPolicy,
-    LLMBackedPersonaNode,
-    LLMBackedSynthesizerNode,
+    AgentBackedActivationPolicy,
+    AgentBackedPersonaNode,
+    AgentBackedSynthesizerNode,
     PersonaDefinition,
     PersonaGraphDriver,
     PersonaInput,
     PersonaTurnState,
     SharedPersonaDiscussionService,
     load_persona_definitions,
+    persona_graph_agents,
 )
 from nuself.runtime.context import current_runtime_context
 from nuself.runtime.observability import (
@@ -34,7 +35,6 @@ class ConversationPersonaOrchestrator:
         self,
         *,
         project_root: Path | None,
-        llm: ChatLLM,
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         language_preference: str,
         memory_query_service: MemoryQueryService,
@@ -42,29 +42,50 @@ class ConversationPersonaOrchestrator:
         self._project_root = project_root
         self._memory_query_service = memory_query_service
         self._persona_definitions = load_persona_definitions(project_root)
-        self._activation_policy = LLMBackedActivationPolicy(
+        graph_agents = (
+            persona_graph_agents(
+                langchain_models,
+                project_root=project_root,
+            )
+            if langchain_models
+            else None
+        )
+        self._activation_policy = AgentBackedActivationPolicy(
             self._persona_definitions,
-            llm=llm,
-            langchain_models=langchain_models,
+            agent=(
+                graph_agents.activation
+                if graph_agents is not None
+                else None
+            ),
             project_root=project_root,
         )
         self._persona_driver = PersonaGraphDriver(
-            persona_node=LLMBackedPersonaNode(
-                llm=llm,
-                language_preference=language_preference,
-                langchain_models=langchain_models,
-                project_root=project_root,
+            persona_node=(
+                AgentBackedPersonaNode(
+                    graph_agents.contribution,
+                    language_preference=language_preference,
+                    project_root=project_root,
+                )
+                if graph_agents is not None
+                else None
             ),
-            synthesizer_node=LLMBackedSynthesizerNode(
-                llm=llm,
-                language_preference=language_preference,
-                langchain_models=langchain_models,
-                project_root=project_root,
+            synthesizer_node=(
+                AgentBackedSynthesizerNode(
+                    graph_agents.synthesis,
+                    language_preference=language_preference,
+                    project_root=project_root,
+                )
+                if graph_agents is not None
+                else None
             ),
         )
         self._discussion_service = SharedPersonaDiscussionService(
             project_root=project_root,
-            synthesis_llm=llm,
+            synthesis_agent=(
+                graph_agents.synthesis
+                if graph_agents is not None
+                else None
+            ),
             language_preference=language_preference,
         )
 

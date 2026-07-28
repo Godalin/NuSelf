@@ -4,9 +4,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Annotated, Protocol, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
+
+NonBlankText: TypeAlias = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1),
+]
 
 
 @dataclass(frozen=True)
@@ -66,19 +77,17 @@ class PersonaContributionOutput(BaseModel):
 
     model_config = ConfigDict(strict=True, extra="forbid")
 
-    note: str = Field(
-        min_length=1,
+    note: NonBlankText = Field(
         description="One or two sentences from the persona perspective.",
     )
-    questions: list[str] = Field(
-        default_factory=lambda: list[str](),
-        description="Optional questions this persona would ask.",
+    questions: list[NonBlankText] = Field(
+        max_length=3,
+        description="Questions this persona would ask, possibly empty.",
     )
-    confidence: float | None = Field(
-        default=None,
+    confidence: float = Field(
         ge=0.0,
         le=1.0,
-        description="Optional confidence from 0.0 to 1.0.",
+        description="Confidence from 0.0 to 1.0.",
     )
 
 
@@ -87,15 +96,13 @@ class PersonaSynthesisOutput(BaseModel):
 
     model_config = ConfigDict(strict=True, extra="forbid")
 
-    summary: str = Field(
-        min_length=1,
+    summary: NonBlankText = Field(
         description="One or two crisp sentences capturing consensus or key tension.",
     )
-    confidence: float | None = Field(
-        default=None,
+    confidence: float = Field(
         ge=0.0,
         le=1.0,
-        description="Optional confidence from 0.0 to 1.0.",
+        description="Confidence from 0.0 to 1.0.",
     )
 
 
@@ -105,13 +112,29 @@ class PersonaActivationOutput(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
 
     activated: bool = Field(description="Whether any personas should respond.")
-    selected_persona_ids: list[str] = Field(
-        default_factory=lambda: list[str](),
+    selected_persona_ids: list[NonBlankText] = Field(
+        max_length=5,
         description="Persona ids to activate.",
     )
-    trigger: str = Field(default="structured judgment", description="Brief reason for activation.")
-    should_escalate: bool = Field(default=False, description="Whether competitive discussion should run.")
-    escalation_reason: str = Field(default="", description="Brief reason for escalation.")
+    trigger: NonBlankText = Field(description="Brief reason for activation.")
+    should_escalate: bool = Field(
+        description="Whether competitive discussion should run."
+    )
+    escalation_reason: NonBlankText = Field(
+        description="Brief reason for escalation decision."
+    )
+
+    @model_validator(mode="after")
+    def _activation_state_is_consistent(self) -> PersonaActivationOutput:
+        if self.activated != bool(self.selected_persona_ids):
+            raise ValueError(
+                "activated must match whether persona ids are selected"
+            )
+        if self.should_escalate and not self.activated:
+            raise ValueError(
+                "escalation requires an activated persona selection"
+            )
+        return self
 
 
 @dataclass(frozen=True)

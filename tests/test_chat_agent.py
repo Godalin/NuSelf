@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from langchain_core.tools import BaseTool
@@ -20,7 +20,7 @@ from nuself.agent.chat import (
 from nuself.agent.chat import ConversationGraphRuntimeError
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
-from nuself.llm import ChatMessage
+from nuself.llm import ChatMessage, LangChainLLMEndpoint
 from nuself.logs import read_log_events, runtime_event_log_sink
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
@@ -399,7 +399,71 @@ def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path
     assert TraceRepository(tmp_path).list_traces(kind="chat_turn") == []
 
 
-def test_conversation_runtime_runs_llm_backed_personas_through_selves_subagent(tmp_path: Path) -> None:
+def test_conversation_runtime_runs_agent_backed_personas_through_selves_subagent(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from nuself.persona import PersonaGraphAgents
+    from nuself.persona.definition import (
+        PersonaActivationOutput,
+        PersonaContributionOutput,
+        PersonaSynthesisOutput,
+    )
+
+    class _StaticAgent:
+        def __init__(self, output: object) -> None:
+            self._output = output
+
+        def invoke(self, messages: object) -> object:
+            del messages
+            return self._output
+
+    graph_agents = PersonaGraphAgents(
+        activation=cast(
+            Any,
+            _StaticAgent(
+                PersonaActivationOutput(
+                    activated=True,
+                    selected_persona_ids=["analyst_self"],
+                    trigger="analytical question",
+                    should_escalate=False,
+                    escalation_reason="consultation only",
+                )
+            ),
+        ),
+        contribution=cast(
+            Any,
+            _StaticAgent(
+                PersonaContributionOutput(
+                    note="analyst_self gives a concrete agent-backed perspective.",
+                    questions=[],
+                    confidence=0.5,
+                )
+            ),
+        ),
+        synthesis=cast(
+            Any,
+            _StaticAgent(
+                PersonaSynthesisOutput(
+                    summary="Agent-backed synthesis of internal perspectives.",
+                    confidence=0.5,
+                )
+            ),
+        ),
+    )
+
+    def fake_persona_graph_agents(
+        endpoints: tuple[LangChainLLMEndpoint, ...],
+        *,
+        project_root: Path | None = None,
+    ) -> PersonaGraphAgents:
+        del endpoints, project_root
+        return graph_agents
+
+    monkeypatch.setattr(
+        "nuself.agent.chat.persona.persona_graph_agents",
+        fake_persona_graph_agents,
+    )
     llm = FakeLLM(
         {
             "activated": True,
@@ -412,6 +476,7 @@ def test_conversation_runtime_runs_llm_backed_personas_through_selves_subagent(t
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
+        langchain_models=cast(Any, (object(),)),
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="Persona reply.", confidence=0.4)
         ),
@@ -419,12 +484,12 @@ def test_conversation_runtime_runs_llm_backed_personas_through_selves_subagent(t
     )
 
     result = runtime._consult_selves_tool("Should I split this project?")  # type: ignore[reportPrivateUsage]
-    assert "analyst_self gives a concrete LLM-backed perspective." in result
-    assert "LLM-backed synthesis of internal perspectives." in result
+    assert "analyst_self gives a concrete agent-backed perspective." in result
+    assert "Agent-backed synthesis of internal perspectives." in result
 
     persona_events = [event for event in read_log_events(project_root=tmp_path, component="persona") if event.event == "persona_summary"]
     assert len(persona_events) >= 1
-    assert "analyst_self gives a concrete LLM-backed perspective." in persona_events[-1].message
+    assert "analyst_self gives a concrete agent-backed perspective." in persona_events[-1].message
     assert " | " not in persona_events[-1].message
     assert persona_events[-1].metadata == {"persona_count": 1, "has_synthesis": True}
 

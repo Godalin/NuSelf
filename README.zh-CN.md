@@ -14,7 +14,7 @@ NuSelf 是一个本地 AI 镜像项目。它的目标是逐步成长为一个带
 - 基于统一存储层的 trace 记录和长线 reason 线程，用于保存可追溯的思考来源；已有 SQLite 数据库会被自动选用。
 - 持久化聊天线程，并能压缩较早的对话上下文。
 
-LangGraph 现已支撑 conversation runtime。聊天 agent 可在对话中调用工具搜索记忆、列出和搁置待讨论反思主题、归档过时记忆、调整重要性分数、查看活跃 reason 线程，并搜索 thought trace。内部 persona 系统对聊天和后台反思共用一套竞争式讨论流程，LLM 驱动的人格节点可生成独立观点。邮件和 macOS 通知在配置后可用。
+LangGraph 现已支撑 conversation runtime。聊天 agent 可在对话中调用工具搜索记忆、列出和搁置待讨论反思主题、归档过时记忆、调整重要性分数、查看活跃 reason 线程，并搜索 thought trace。内部 persona 系统对聊天和后台反思共用一套竞争式讨论流程，并通过严格 schema agent 生成激活决策、独立观点和汇总。邮件和 macOS 通知在配置后可用。
 
 规范的 conversation runtime API 是 `ConversationGraphRuntime`；激进开发阶段
 不再保留原 `ChatAgent` 类名 alias。

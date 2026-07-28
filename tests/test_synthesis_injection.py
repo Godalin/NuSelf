@@ -4,16 +4,24 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
+from typing import Any, cast
 
+import pytest
 from nuself.agent.chat import (
     ChatStructuredOutput,
     ConversationGraphRuntime,
     ConversationTurnState,
     ThreadState,
 )
-from nuself.llm import ChatMessage
+from nuself.llm import ChatMessage, LangChainLLMEndpoint
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
+from nuself.persona import PersonaGraphAgents
+from nuself.persona.definition import (
+    PersonaActivationOutput,
+    PersonaContributionOutput,
+    PersonaSynthesisOutput,
+)
 
 
 class FakeLLM:
@@ -26,7 +34,7 @@ class FakeLLM:
             "selected_persona_ids": ["skeptic_self", "builder_self", "analyst_self"],
             "trigger": "mixed intent",
             "should_escalate": False,
-            "escalation_reason": "",
+            "escalation_reason": "consultation only",
         }
 
     def complete(self, messages: list[ChatMessage]) -> str:
@@ -39,6 +47,10 @@ class FakeLLM:
             return "LLM-backed synthesis of internal perspectives."
         self.calls.append(messages)
         return "plain fallback"
+
+    @property
+    def activation_response(self) -> dict[str, object]:
+        return self._activation_response
 
 
 class StaticResponseService:
@@ -58,12 +70,75 @@ class StaticResponseService:
         return draft
 
 
-def test_selves_consult_returns_internal_synthesis(tmp_path: Path) -> None:
+def _install_persona_agents(
+    monkeypatch: pytest.MonkeyPatch,
+    activation_response: dict[str, object],
+) -> tuple[object, ...]:
+    class _StaticAgent:
+        def __init__(self, output: object) -> None:
+            self._output = output
+
+        def invoke(self, messages: object) -> object:
+            del messages
+            return self._output
+
+    graph_agents = PersonaGraphAgents(
+        activation=cast(
+            Any,
+            _StaticAgent(
+                PersonaActivationOutput.model_validate(activation_response)
+            ),
+        ),
+        contribution=cast(
+            Any,
+            _StaticAgent(
+                PersonaContributionOutput(
+                    note="Agent-backed persona perspective.",
+                    questions=[],
+                    confidence=0.5,
+                )
+            ),
+        ),
+        synthesis=cast(
+            Any,
+            _StaticAgent(
+                PersonaSynthesisOutput(
+                    summary="Agent-backed synthesis of internal perspectives.",
+                    confidence=0.5,
+                )
+            ),
+        ),
+    )
+
+    def fake_persona_graph_agents(
+        endpoints: tuple[LangChainLLMEndpoint, ...],
+        *,
+        project_root: Path | None = None,
+    ) -> PersonaGraphAgents:
+        del endpoints, project_root
+        return graph_agents
+
+    monkeypatch.setattr(
+        "nuself.agent.chat.persona.persona_graph_agents",
+        fake_persona_graph_agents,
+    )
+    return cast(tuple[object, ...], (object(),))
+
+
+def test_selves_consult_returns_internal_synthesis(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     """Verify that selves synthesis is now exposed through the subagent tool."""
     llm = FakeLLM()
+    models = _install_persona_agents(
+        monkeypatch,
+        llm.activation_response,
+    )
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
+        langchain_models=cast(Any, models),
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
@@ -72,7 +147,7 @@ def test_selves_consult_returns_internal_synthesis(tmp_path: Path) -> None:
     )
 
     assert "Selves consultation result:" in result
-    assert "LLM-backed synthesis of internal perspectives." in result
+    assert "Agent-backed synthesis of internal perspectives." in result
     assert "skeptic_self" in result or "builder_self" in result
 
 
@@ -139,7 +214,10 @@ def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
     assert "Internal perspective fusion:" not in system_prompt
 
 
-def test_selves_consult_handles_explicit_multi_persona_request(tmp_path: Path) -> None:
+def test_selves_consult_handles_explicit_multi_persona_request(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     """Verify synthesis is generated for explicit multi-persona requests through the subagent tool."""
     llm = FakeLLM(
         {
@@ -147,12 +225,17 @@ def test_selves_consult_handles_explicit_multi_persona_request(tmp_path: Path) -
             "selected_persona_ids": ["skeptic_self", "builder_self", "historian_self", "care_self"],
             "trigger": "explicit multi-view request",
             "should_escalate": False,
-            "escalation_reason": "",
+            "escalation_reason": "consultation only",
         },
+    )
+    models = _install_persona_agents(
+        monkeypatch,
+        llm.activation_response,
     )
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
+        langchain_models=cast(Any, models),
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 

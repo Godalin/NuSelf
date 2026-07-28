@@ -129,7 +129,6 @@ class ConversationGraphRuntime:
         )
         self._persona_orchestrator = ConversationPersonaOrchestrator(
             project_root=project_root,
-            llm=self._llm,
             langchain_models=self._langchain_models,
             language_preference=self._language_preference,
             memory_query_service=self._memory_query_service,

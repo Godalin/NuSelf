@@ -126,15 +126,17 @@ The old `PersonaActivationPolicy` and `HostDiscussionPolicy` classes have been d
 
 ### New Behavior
 
-A single `LLMBackedActivationPolicy` replaces both. One LLM call decides:
+A single `AgentBackedActivationPolicy` replaces both. One typed agent call decides:
 1. **Which personas** should respond to the user's message
 2. **Whether** the topic warrants competitive multi-persona discussion
 
-`LLMBackedActivationPolicy.decide(persona_input)` shall:
+`AgentBackedActivationPolicy.decide(persona_input)` shall:
 
 1. Receive: user message + memory context + available persona list (id + description)
-2. Build a structured prompt describing each persona and the user's context
-3. Request structured JSON:
+2. Build framework-native system and human messages describing each persona
+   and the user's context
+3. Invoke the exact `PersonaActivationOutput` schema through
+   `PersonaGraphAgents.activation`:
    ```json
    {
      "activated": true|false,
@@ -146,7 +148,8 @@ A single `LLMBackedActivationPolicy` replaces both. One LLM call decides:
    ```
 4. Map `selected_persona_ids` back to `PersonaDefinition` objects
 5. `activated` is true if `selected_persona_ids` is non-empty
-6. On parse failure, fall back to `PersonaActivation(trigger="llm_fallback")`
+6. On agent or schema failure, fall back to
+   `PersonaActivation(trigger="agent_fallback")`
 
 ### Prompt Design
 
@@ -164,14 +167,13 @@ Available personas:
 User message: {user_message}
 Memory context: {memory_context}
 
-Return ONLY a JSON object with these fields:
+Return these structured fields:
 - activated (bool): Should any personas respond?
 - selected_persona_ids (list): Which personas are relevant? Empty if none.
 - trigger (string): Brief reason for the selection.
 - should_escalate (bool): Should this enter competitive multi-persona discussion?
 - escalation_reason (string): Brief reason for escalation.
 
-No markdown fences.
 ```
 
 ### Interface
@@ -189,11 +191,11 @@ class PersonaActivation:
         return bool(self.selected_personas)
 
 
-class LLMBackedActivationPolicy:
+class AgentBackedActivationPolicy:
     def __init__(
         self,
         personas: tuple[PersonaDefinition, ...] | None = None,
-        llm: ChatLLM | None = None,
+        agent: StructuredAgent[PersonaActivationOutput] | None = None,
     ) -> None: ...
 
     def decide(self, persona_input: PersonaInput) -> PersonaActivation: ...
@@ -202,9 +204,9 @@ class LLMBackedActivationPolicy:
 ### Backward Compatibility
 
 - The old `PersonaActivationPolicy` and `HostDiscussionPolicy` classes are deleted.
-- `ConversationGraphRuntime` instantiates `LLMBackedActivationPolicy` instead.
+- `ConversationGraphRuntime` instantiates `AgentBackedActivationPolicy` instead.
 - `run_personas_node` reads `state.persona_activation.should_escalate` directly; no second policy call.
-- Tests use `FakeLLM` with deterministic JSON responses.
+- Tests use deterministic typed agents.
 - `render_host_decision` no longer displays `matched_markers`; it uses `escalation_reason` from log metadata.
 
 ## P2: Persona Discussion Scoring
@@ -234,7 +236,7 @@ Fallback: return first `max_participants` non-synthesizer personas.
 
 Each discussion turn uses the selected personas deterministically, capped at `max_participants`. If the moderator requests an emergent persona, the next turn keeps up to `max_participants - 1` selected personas and includes the temporary persona in the remaining slot. Random participant sampling is deleted.
 
-#### 2. Persona Scoring (`LLMBackedScoringPersonaNode`)
+#### 2. Persona Scoring (`AgentBackedScoringPersonaNode`)
 
 Each persona node prompt now requests both a note and a 0-1 score:
 

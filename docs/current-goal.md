@@ -5,8 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Persona discussion scoring, selection, and moderator judgment use shared
-typed agents while discussion orchestration remains domain-owned.
+Idle. The persona graph structured-agent migration is complete.
 
 ## Active Branch
 
@@ -14,36 +13,29 @@ typed agents while discussion orchestration remains domain-owned.
 
 ## Ordered Work
 
-No active implementation work.
+None until the next review batch begins.
 
 ## Out Of Scope
 
-Start the next review batch by replacing this idle objective before changing
-code.
+None while idle.
 
 ## Completion Evidence
 
-- `PersonaDiscussionAgents` composes exact-schema scoring, selection, and
-  moderator capabilities through the shared structured-agent runner.
-- All three models are strict and extra-forbid. Scores are bounded, text and
-  persona ids are normalized/non-blank, selection is limited to five ids, and
-  emergent persona values are closed.
-- Discussion prompts use framework messages. Prompted/fenced JSON, parser
-  helpers, generated defaults, score clamping, and discussion `llm=` injection
-  are removed.
-- Scoring, selection, and moderator failures retain their documented neutral,
-  deterministic-pool, and non-converged fallbacks with structured diagnostics.
-- Natural-language synthesis remains a separate `synthesis_llm` capability.
-- Focused persona discussion/reflection tests: 74 passed.
-- Final full tests: 1458 passed.
-- Pyright: 0 errors.
+- Activation, contribution, and synthesis use exact schemas through
+  `PersonaGraphAgents` and the shared structured-agent runner.
+- The persona graph no longer owns endpoint iteration, direct structured-output
+  binding, prompted JSON, response-text parsing, or old LLM-backed aliases.
+- Chat, proactive discussion, and reflection compose the same synthesis
+  capability while retaining deterministic no-agent and failure fallbacks.
+- `.venv/bin/pytest -q`: `1456 passed`.
+- `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-Push is authorized; completed review batches are published immediately after
-their validated commit.
+`dev/v0.3.x` is published through `a72436f`; this completed batch is pending
+commit and push.
 
 ## Next Review Batch
 
-Audit persona graph activation/contribution/synthesis boundaries.
+Audit remaining persona tools and reason-export generated-output boundaries.
