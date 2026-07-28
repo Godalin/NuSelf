@@ -5,7 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The daemon-side reason export job lifecycle has been extracted.
+Idle. The Unix socket request/response adapter has been extracted from the
+daemon process runner.
 
 ## Active Branch
 
@@ -22,21 +23,18 @@ code.
 
 ## Completion Evidence
 
-- `daemon/reason_export.py` owns typed enqueue, pre-thread dependency
-  preparation, manifest/progress inspection, single-job processing, failure
-  persistence, retry timers, startup reconciliation, message-context
-  activation, queue polling, and shutdown drain.
-- `DaemonState` injects `ReasonExportWorker.enqueue` into `ChatAgent`, registers
-  `ReasonExportWorker.run` with the shared supervisor, and retains only
-  prepare/start plus stop/join composition.
-- The stopping gate and lifecycle lock close enqueue before drain; a regression
-  test proves a composition failure racing with shutdown cannot create a new
-  retry timer.
-- Recovery tests patch and inspect the owning module rather than daemon server
-  internals.
-- `daemon/server.py` decreased from 1116 to 582 lines and contains no export
-  queue, timer, store, service, manifest, or progress implementation.
-- Focused export/daemon/reason-output tests: 67 passed.
+- `daemon/socket_server.py` owns the typed Unix server state, bounded frame
+  read/write, request decoding, registry invocation, protocol/IO/unexpected
+  exception translation, and response-delivery observation.
+- The socket adapter depends only on structural `DaemonRequestState`; it does
+  not import `DaemonState` or the daemon process runner.
+- `daemon/server.py` selects the adapter while retaining socket path, loop,
+  signal, worker, and cleanup ownership. It no longer implements or re-exports
+  request transport or registry dispatch.
+- Transport, activity, and business-handler tests import and patch their actual
+  owning modules instead of relying on accidental server exports.
+- `daemon/server.py` decreased from 582 to 459 lines.
+- Focused transport/server/instance/payload/activity tests: 70 passed.
 - Final full tests: 1270 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.

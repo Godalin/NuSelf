@@ -197,6 +197,20 @@ bounded by `MAX_DAEMON_FRAME_BYTES`, including that newline.
   `daemon/response_delivery_failed` and returns from the connection handler
   without leaking the socket error.
 
+`nuself.daemon.socket_server` owns the Unix-socket transport adapter. Its
+`NuSelfUnixServer` stores only the structural `DaemonRequestState`; its
+`RequestHandler` reads one bounded frame, decodes one `DaemonRequest`, calls
+the typed daemon request registry boundary, encodes one `DaemonResponse`, and
+writes one bounded frame. The module must not import `DaemonState` or the
+daemon process runner.
+
+Transport `ProtocolError` values become failed responses. Request-read
+`OSError`, unexpected handler exceptions, and response-delivery failures retain
+their existing observed audit boundaries. A clean peer disconnect returns
+without a response. The daemon process runner owns socket path creation,
+server-loop timing, state construction, signals, workers, and cleanup; none of
+those responsibilities belong to the socket adapter.
+
 ## Runtime Envelope And Correlation Context
 
 `nuself.runtime.context` owns `RuntimeContext`, `current_runtime_context()`,

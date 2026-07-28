@@ -175,7 +175,7 @@ def _handler_fake(
 
 
 def test_server_clean_eof_returns_without_response(tmp_path: Path) -> None:
-    from nuself.daemon.server import RequestHandler
+    from nuself.daemon.socket_server import RequestHandler
 
     writer = io.BytesIO()
     fake = _handler_fake(
@@ -196,7 +196,7 @@ def test_server_clean_eof_returns_without_response(tmp_path: Path) -> None:
 def test_server_incomplete_frame_returns_protocol_failure(
     tmp_path: Path,
 ) -> None:
-    from nuself.daemon.server import RequestHandler
+    from nuself.daemon.socket_server import RequestHandler
 
     writer = io.BytesIO()
     fake = _handler_fake(
@@ -216,7 +216,7 @@ def test_server_incomplete_frame_returns_protocol_failure(
 def test_server_rejects_second_frame_received_with_request(
     tmp_path: Path,
 ) -> None:
-    from nuself.daemon.server import RequestHandler
+    from nuself.daemon.socket_server import RequestHandler
 
     request = DaemonRequest(
         type="ping",
@@ -246,7 +246,7 @@ def test_server_rejects_second_frame_received_with_request(
 def test_server_read_timeout_is_observed_and_returns_failure(
     tmp_path: Path,
 ) -> None:
-    from nuself.daemon.server import RequestHandler
+    from nuself.daemon.socket_server import RequestHandler
 
     writer = io.BytesIO()
     fake = _handler_fake(
@@ -271,7 +271,7 @@ def test_server_broken_pipe_is_observed_without_escaping(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nuself.daemon import server as server_module
+    from nuself.daemon import socket_server as server_module
 
     request = DaemonRequest(
         type="ping",

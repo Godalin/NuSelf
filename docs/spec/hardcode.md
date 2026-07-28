@@ -65,7 +65,7 @@ behavior, grouped by subsystem. Configurable defaults live in
 | poll interval | `daemon/lifecycle.py:57,72` | 0.05 s | Startup/shutdown poll sleep |
 | `timeout=2.0` | `daemon/client.py:21` | 2 s | Daemon socket connection timeout |
 | `MAX_DAEMON_FRAME_BYTES` | `daemon/protocol.py` | 1 MiB | Maximum request/response JSONL frame including newline |
-| `DAEMON_REQUEST_IO_TIMEOUT_SECONDS` | `daemon/server.py` | 5 s | Server timeout for receiving one request frame and delivering its response |
+| `DAEMON_REQUEST_IO_TIMEOUT_SECONDS` | `daemon/socket_server.py` | 5 s | Server timeout for receiving one request frame and delivering its response |
 
 ## Notification
 

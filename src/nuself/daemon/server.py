@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import argparse
 import os
-import socketserver
 import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import override
 
 from nuself.agent.chat import ChatAgent
 from nuself.config import (
@@ -23,21 +21,14 @@ from nuself.daemon.instance import (
     DaemonInstanceLock,
     DaemonInstanceLockContended,
 )
-from nuself.daemon.protocol import (
-    DaemonPeerDisconnected,
-    DaemonRequest,
-    DaemonResponse,
-    ProtocolError,
-)
-from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.reason_export import (
     ReasonExportWorker,
     build_reason_export_section_planner,
 )
 from nuself.daemon.signals import DaemonSignalOwner
-from nuself.daemon.transport import (
-    read_socket_frame,
-    write_stream_frame,
+from nuself.daemon.socket_server import (
+    NuSelfUnixServer,
+    RequestHandler,
 )
 from nuself.daemon.types import WorkerHealth
 from nuself.daemon.workers import DaemonWorkerSupervisor
@@ -48,18 +39,13 @@ from nuself.notification.email import EmailNotificationAdapter
 from nuself.notification.macos import MacOSNotificationAdapter
 from nuself.reason import ReasonScheduler
 from nuself.reflection import ReflectionScheduler
-from nuself.runtime.context import (
-    runtime_context,
-)
 from nuself.runtime.observability import (
-    format_exception_chain,
     report_observed_failure,
     run_observed_best_effort,
 )
 from nuself.storage import write_text_atomic
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
-DAEMON_REQUEST_IO_TIMEOUT_SECONDS = 5.0
 
 
 @dataclass(frozen=True)
@@ -324,115 +310,6 @@ class DaemonState:
             error_event="notification_delivery_error",
             error_message="notification delivery iteration failed",
         )
-
-
-class NuSelfUnixServer(socketserver.ThreadingUnixStreamServer):
-    """Unix stream server with typed NuSelf state."""
-
-    daemon_threads = True
-    allow_reuse_address = True
-
-    def __init__(self, socket_path: str, handler: type[socketserver.BaseRequestHandler], state: DaemonState) -> None:
-        self.state = state
-        super().__init__(socket_path, handler)
-
-
-class RequestHandler(socketserver.StreamRequestHandler):
-    """Handle one JSONL request per client connection."""
-
-    @override
-    def handle(self) -> None:
-        request_id = "unknown"
-        try:
-            self.connection.settimeout(
-                DAEMON_REQUEST_IO_TIMEOUT_SECONDS
-            )
-            raw_line = read_socket_frame(self.connection)
-        except DaemonPeerDisconnected:
-            return
-        except ProtocolError as exc:
-            response = DaemonResponse.fail(request_id, str(exc))
-        except OSError as exc:
-            report_observed_failure(
-                exc,
-                component="daemon",
-                event="request_transport_failed",
-                message="Daemon request transport failed",
-                project_root=self._request_project_root(),
-                metadata=None,
-                level="warning",
-                status="error",
-            )
-            response = DaemonResponse.fail(
-                request_id,
-                format_exception_chain(exc),
-            )
-        else:
-            try:
-                daemon_request = DaemonRequest.from_json_line(raw_line)
-                request_id = daemon_request.request_id
-                response = handle_request(
-                    daemon_request,
-                    self._daemon_state(),
-                )
-            except ProtocolError as exc:
-                response = DaemonResponse.fail(request_id, str(exc))
-            except Exception as exc:
-                chain = format_exception_chain(exc)
-                with runtime_context(
-                    request_id=request_id,
-                    source="daemon",
-                ):
-                    report_observed_failure(
-                        exc,
-                        component="daemon",
-                        event="request_failed",
-                        message="Daemon request handling failed",
-                        project_root=self._request_project_root(),
-                        metadata=None,
-                        level="error",
-                        status="error",
-                    )
-                response = DaemonResponse.fail(request_id, chain)
-
-        try:
-            write_stream_frame(
-                self.wfile,
-                response.to_json_line(),
-            )
-        except (OSError, ProtocolError) as exc:
-            context = (
-                runtime_context(
-                    request_id=request_id,
-                    source="daemon",
-                )
-                if request_id != "unknown"
-                else runtime_context(source="daemon")
-            )
-            with context:
-                report_observed_failure(
-                    exc,
-                    component="daemon",
-                    event="response_delivery_failed",
-                    message="Daemon response could not be delivered",
-                    project_root=self._request_project_root(),
-                    metadata=None,
-                    level="warning",
-                    status="error",
-                )
-
-    def _request_project_root(self) -> Path | None:
-        try:
-            return self._daemon_state().project_root
-        except Exception:
-            return None
-
-    def _daemon_state(self) -> DaemonState:
-        server = self.server
-        if not isinstance(server, NuSelfUnixServer):
-            raise RuntimeError("unexpected server type")
-        return server.state
-
 
 def run_daemon(project_root: Path | None = None) -> int:
     """Run the local daemon until a shutdown request is received."""

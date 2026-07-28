@@ -9,7 +9,8 @@ from nuself.daemon.activity import (
     ActivitySubscriptionNotFound,
 )
 from nuself.daemon.protocol import DaemonRequest
-from nuself.daemon.server import DaemonState, handle_request
+from nuself.daemon.request_handlers import handle_request
+from nuself.daemon.server import DaemonState
 from nuself.logs import LogEvent, observe_log_events, write_log_event
 
 

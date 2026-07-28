@@ -8,10 +8,8 @@ import pytest
 
 from nuself.agent.chat import ChatAgent
 from nuself.daemon.protocol import DaemonRequest
-from nuself.daemon.server import (
-    DaemonState,
-    handle_request,
-)
+from nuself.daemon.request_handlers import handle_request
+from nuself.daemon.server import DaemonState
 from nuself.daemon.workers import (
     DaemonWorkerJoinTimeoutError,
     DaemonWorkerSupervisor,
@@ -581,7 +579,7 @@ def test_daemon_handle_backstops_unexpected_error(tmp_path: Path, monkeypatch: p
     import io
     from types import SimpleNamespace
 
-    from nuself.daemon import server as server_mod
+    from nuself.daemon import socket_server as server_mod
     from nuself.daemon.protocol import DaemonResponse
 
     class FakeConnection:
