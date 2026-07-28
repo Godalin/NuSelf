@@ -66,7 +66,10 @@ class LangChainStructuredAgent(Generic[StructuredOutputT]):
         def complete(endpoint: LangChainLLMEndpoint) -> StructuredOutputT:
             agent = self._agents[endpoint.index]
             result: object = agent.invoke({"messages": list(messages)})
-            return self._structured_response(result)
+            return require_structured_response(
+                result,
+                self._schema,
+            )
 
         return invoke_agent_endpoint(
             self._endpoints,
@@ -75,24 +78,30 @@ class LangChainStructuredAgent(Generic[StructuredOutputT]):
             component=self._component,
         )
 
-    def _structured_response(self, result: object) -> StructuredOutputT:
-        if not isinstance(result, dict):
-            raise ValueError(
-                "LangChain agent returned invalid state: "
-                f"{type(result).__name__}"
-            )
-        state = cast(dict[str, object], result)
-        if "structured_response" not in state:
-            raise ValueError(
-                "LangChain agent state is missing structured_response"
-            )
-        structured = state["structured_response"]
-        if not isinstance(structured, self._schema):
-            raise ValueError(
-                "LangChain agent returned invalid structured_response: "
-                f"{type(structured).__name__}"
-            )
-        return structured
+
+def require_structured_response(
+    result: object,
+    schema: type[StructuredOutputT],
+) -> StructuredOutputT:
+    """Return the exact framework structured response or reject the state."""
+    if not isinstance(result, dict):
+        raise ValueError(
+            "LangChain agent returned invalid state: "
+            f"{type(result).__name__}"
+        )
+    state = cast(dict[str, object], result)
+    if "structured_response" not in state:
+        raise ValueError(
+            "LangChain agent state is missing structured_response"
+        )
+    structured = state["structured_response"]
+    if not isinstance(structured, schema):
+        raise ValueError(
+            "LangChain agent returned invalid structured_response: "
+            f"{type(structured).__name__}"
+        )
+    return structured
+
 
 def default_structured_agent(
     schema: type[StructuredOutputT],

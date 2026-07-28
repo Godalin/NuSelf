@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Converge chat response retry/failover on the shared agent endpoint runner while
-preserving tool-safe replay suppression and deterministic local fallback.
+Unify strict LangGraph `structured_response` decoding across shared structured
+agents, chat, and reason without hiding their distinct tool middleware state.
 
 ## Active Branch
 
@@ -14,40 +14,40 @@ preserving tool-safe replay suppression and deterministic local fallback.
 
 ## Ordered Work
 
-1. Specify shared same-endpoint retry and endpoint-switch policy.
-2. Extend the shared endpoint runner with bounded retry hooks.
-3. Migrate chat response off its private endpoint loop.
-4. Preserve immediate suppression after any tool outcome.
-5. Verify protocol errors retry once but never switch endpoints.
+1. Specify the shared strict structured-state decoder contract.
+2. Extract the decoder into shared agent infrastructure.
+3. Migrate `LangChainStructuredAgent`, chat, and reason.
+4. Preserve chat's visible-tool-call rejection after typed decoding.
+5. Verify wrong state, missing fields, dictionaries, and wrong schemas fail.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep chat's deterministic local response after exhausted or unsafe model
-  execution.
-- Keep supervisor construction in chat because it owns chat tools and
-  middleware.
+- Keep `create_agent` composition local to each capability because chat and
+  reason own distinct tools, prompts, and middleware state.
+- Keep domain conversion and extra semantic validation after shared decoding.
 
 ## Completion Evidence
 
-- `ConversationResponseSynthesizer` delegates endpoint ordering, success
-  preference, availability classification, and failover diagnostics to
-  `invoke_agent_endpoint`.
-- The shared runner supports validated bounded same-endpoint attempts, a retry
-  predicate, a failover predicate, and a retry observer.
-- Chat protocol failures retry endpoint 0 once and do not invoke endpoint 1.
-- Chat availability failures switch from endpoint 0 to endpoint 1.
-- Any captured tool outcome closes both predicates before another invocation
-  and enters the deterministic local response.
+- `require_structured_response` is the sole production decoder for LangGraph
+  `structured_response` state.
+- `LangChainStructuredAgent`, chat response, and reason advance all use the
+  shared decoder.
+- The decoder rejects non-dictionary state, missing response state,
+  dictionary-shaped payloads, and wrong schema instances without coercion.
+- Chat runs visible tool-call rejection after the shared typed check.
+- Reason projects captured tool outcomes before translating decoder failure to
+  `ReasonAdvanceError`.
+- Full-tree search finds no other manual structured-response extraction.
 - `.venv/bin/pytest -q`: `1468 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `627123d`.
+`dev/v0.3.x` is published through `bd08835`.
 
 ## Next Review Batch
 
-Audit whether chat's tool-enabled supervisor can reuse more of the structured
-agent construction without hiding middleware state.
+Audit remaining framework state parsing and model invocation outside shared
+agent infrastructure.

@@ -47,6 +47,19 @@ NuSelf structured-agent runner. The runner constructs LangChain agents with
 invokes them with framework message objects, and accepts only an actual
 instance of the requested schema from `structured_response`.
 
+Strict `structured_response` extraction is one shared infrastructure
+operation used by the no-tool structured runner and tool-enabled chat/reason
+agents. The decoder requires a dictionary-shaped LangGraph state, a present
+`structured_response` key, and an actual instance of the requested schema. It
+does not validate dictionaries into models, parse message text, or apply
+domain defaults.
+
+Agent construction remains at each capability boundary when tools, system
+prompts, or middleware state differ. Shared decoding must not hide tool
+outcomes needed to decide whether retry or failover is safe. Domain-specific
+checks, such as rejecting visible tool-call text in a chat answer, run after
+the shared schema check.
+
 The runner owns ordered configured-endpoint failover and records the successful
 endpoint through the common LLM preference state. Only endpoint-availability
 failures advance to the next endpoint. Missing state, dictionary-shaped

@@ -21,6 +21,7 @@ from nuself.agent.chat.types import (
 )
 from nuself.agent.failover import invoke_agent_endpoint
 from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
+from nuself.agent.structured import require_structured_response
 from nuself.llm import (
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
@@ -256,23 +257,12 @@ def _endpoint_metadata(
 def _structured_output_from_state(
     result: object,
 ) -> ChatStructuredOutput:
-    if not isinstance(result, dict):
-        raise ValueError(
-            "LangChain agent returned invalid state: "
-            f"{type(result).__name__}"
-        )
-    state = cast(dict[str, object], result)
-    if "structured_response" in state:
-        structured = state["structured_response"]
-        if not isinstance(structured, ChatStructuredOutput):
-            raise ValueError(
-                "LangChain agent returned invalid structured_response: "
-                f"{type(structured).__name__}"
-            )
-        _reject_visible_tool_call(structured)
-        return structured
-
-    raise ValueError("LangChain agent state is missing structured_response")
+    structured = require_structured_response(
+        result,
+        ChatStructuredOutput,
+    )
+    _reject_visible_tool_call(structured)
+    return structured
 
 
 def _looks_like_tool_call(text: str) -> bool:

@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.failover import invoke_agent_endpoint
 from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
+from nuself.agent.structured import require_structured_response
 
 from nuself.llm import LangChainLLMEndpoint
 from nuself.reason.domain import (
@@ -319,13 +320,16 @@ class ReasonAdvancer:
                 except Exception:
                     self._project_tool_outcomes()
                     raise
-                state = cast(dict[str, object], result) if isinstance(result, dict) else {}
                 step_tool_logs = self._project_tool_outcomes()
-                structured = state.get("structured_response")
-                if not isinstance(structured, ReasonStepOutput):
+                try:
+                    structured = require_structured_response(
+                        result,
+                        ReasonStepOutput,
+                    )
+                except ValueError as exc:
                     raise ReasonAdvanceError(
                         "Reason agent did not return ReasonStepOutput"
-                    )
+                    ) from exc
                 return structured.to_step(
                     thread.id,
                     tool_logs=step_tool_logs,
