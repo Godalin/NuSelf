@@ -56,7 +56,7 @@ Make daemon lifecycle transitions explicit and audit their actual outcomes.
 
 ## Publication
 
-`dev/v0.3.x` is ready to publish through implementation commit `d4aca10`.
+`dev/v0.3.x` is published through implementation commit `d4aca10`.
 
 ## Next Review Batch
 
