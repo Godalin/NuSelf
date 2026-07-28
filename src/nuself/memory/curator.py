@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.clock import utc_now_iso
@@ -17,7 +17,7 @@ from nuself.logs import LogLevel, write_log_event
 from nuself.profile.repository import ProfileItemRepository
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
-from nuself.memory.text import clamp_unit, extract_json_object, looks_like_raw_transcript
+from nuself.memory.text import extract_json_object, looks_like_raw_transcript
 from nuself.runtime.observability import (
     report_corrupt_record,
     run_observed_best_effort,
@@ -159,18 +159,31 @@ class MemoryDecision:
 class CuratorActionItem(BaseModel):
     """One structured memory curation action from the LLM."""
 
+    model_config = ConfigDict(strict=True, extra="forbid")
+
     action: Literal["create", "update", "ignore"] = Field(description="Memory action type.")
     title: str = Field(default="", description="Memory entry title.")
     body: str = Field(default="", description="Memory entry body.")
     type: str = Field(default="episode", description="Memory entry type.")
-    tags: list[str] = Field(default_factory=list, description="One to four short tags.")
+    tags: list[str] = Field(
+        default_factory=lambda: list[str](),
+        max_length=4,
+        description="One to four short tags.",
+    )
     entry_id: str | None = Field(default=None, description="Existing entry id to update.")
-    confidence: float = Field(default=0.6, description="Confidence from 0.0 to 1.0.")
+    confidence: float = Field(
+        default=0.6,
+        ge=0.0,
+        le=1.0,
+        description="Confidence from 0.0 to 1.0.",
+    )
     reason: str = Field(default="", description="Reason for the action.")
 
 
 class CuratorActionsOutput(BaseModel):
     """Structured curator actions response from the LLM."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
 
     actions: list[CuratorActionItem] = Field(description="Memory curation actions.")
 
@@ -397,7 +410,7 @@ class MemoryCurator:
                             observed_at=observed_at,
                         )
                     ],
-                    confidence=_clamp_confidence(action.confidence),
+                    confidence=action.confidence,
                     privacy=existing.privacy,
                     reason=action.reason,
                     target_entry_id=existing.id,
@@ -438,7 +451,7 @@ class MemoryCurator:
                     observed_at=observed_at,
                 )
             ],
-            confidence=_clamp_confidence(action.confidence),
+            confidence=action.confidence,
             reason=action.reason,
             observed_at=observed_at,
         )
@@ -481,7 +494,7 @@ class MemoryCurator:
                     observed_at=observed_at,
                 )
             ],
-            confidence=_clamp_confidence(action.confidence),
+            confidence=action.confidence,
             privacy=existing.privacy,
             reason=action.reason,
             target_entry_id=existing.id,
@@ -640,34 +653,39 @@ def _has_memory_worthy_signal(messages: list[ThreadMessage], min_quality_chars: 
 def _parse_actions(raw: str, *, allowed_types: tuple[str, ...] | None = None) -> list[MemoryAction]:
     extracted = _extract_json_object(raw)
     output = CuratorActionsOutput.model_validate_json(extracted)
-    actions: list[MemoryAction] = []
-    for item in output.actions:
-        action = _action_from_item(item, allowed_types=allowed_types)
-        if action is not None:
-            actions.append(action)
-    return actions
+    return [
+        _action_from_item(item, allowed_types=allowed_types)
+        for item in output.actions
+    ]
 
 
-def _action_from_item(item: CuratorActionItem, *, allowed_types: tuple[str, ...] | None = None) -> MemoryAction | None:
-    if item.action != "ignore" and (item.title == "" or item.body == ""):
-        return None
+def _action_from_item(
+    item: CuratorActionItem,
+    *,
+    allowed_types: tuple[str, ...] | None = None,
+) -> MemoryAction:
+    title = item.title.strip()
+    body = item.body.strip()
+    if item.action != "ignore" and (title == "" or body == ""):
+        raise ValueError("memory mutation action requires title and body")
     tags = _normalize_tags(item.tags)
     if item.action != "ignore" and not tags:
-        return None
-    if item.action != "ignore" and _looks_like_raw_transcript(item.body):
-        return None
-    try:
-        memory_type = _memory_type(item.type, allowed_types=allowed_types)
-    except ValueError:
-        return None
+        raise ValueError("memory mutation action requires tags")
+    if item.action != "ignore" and _looks_like_raw_transcript(body):
+        raise ValueError("memory mutation action body must not be a transcript")
+    if item.action == "update" and (
+        item.entry_id is None or item.entry_id.strip() == ""
+    ):
+        raise ValueError("memory update action requires entry_id")
+    memory_type = _memory_type(item.type, allowed_types=allowed_types)
     return MemoryAction(
         action=item.action,
         type=memory_type,
-        title=item.title,
-        body=item.body,
+        title=title,
+        body=body,
         tags=tags,
         entry_id=item.entry_id,
-        confidence=_clamp_confidence(item.confidence),
+        confidence=item.confidence,
         reason=item.reason,
     )
 
@@ -689,10 +707,6 @@ def _normalize_tags(tags: list[str]) -> tuple[str, ...]:
         normalized.append(clean)
         seen.add(clean)
     return tuple(normalized)
-
-
-def _clamp_confidence(value: float) -> float:
-    return clamp_unit(value)
 
 
 def _extract_json_object(raw: str) -> str:

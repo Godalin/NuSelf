@@ -63,6 +63,8 @@ status 与 deletion 状态，避免投影失败把成功操作伪装成失败。
 
 Memory curator 活动现在以结构化事件写入 `memory.log`；curator trace/audit 和
 organizer completion audit 失败不会覆盖已持久化的 memory 或 reflection 结果。
+Curator action batch 会在写 candidate 前完整验证；未知或强转字段、越界 confidence
+和不完整 mutation 会让整个 source range defer，不再部分执行其余有效 action。
 
 Email 与 macOS delivery failure 诊断不会覆盖明确的 adapter 失败结果，也不会
 阻止 outbox 持久化失败 attempt。

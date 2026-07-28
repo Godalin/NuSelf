@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Persona graph structured outputs are strict, and
-`with_structured_output(...)` must return the declared model type.
+Idle. Memory curator action validation is strict, and any invalid generated
+action defers the complete decision before dispatch.
 
 ## Active Branch
 
@@ -23,26 +23,25 @@ code.
 
 ## Completion Evidence
 
-- Activation, contribution, and synthesis output models use strict types and
-  forbid unknown fields.
-- Contribution and synthesis confidence values are constrained to the
-  inclusive zero-to-one range.
-- Persona graph structured endpoints accept only an instance of the requested
-  output model; dictionary results are observed endpoint failures.
-- Endpoint fakes now return typed models, and regression tests cover dictionary
-  rejection, coercion rejection, extra fields, and confidence bounds.
-- The documented ordinary `ChatLLM` fallback after structured endpoint
-  exhaustion remains unchanged.
-- Focused persona/chat tests: 92 passed.
-- Final full tests: 1425 passed.
+- Curator output and action models use strict types, forbid extra fields, limit
+  tags to four, and constrain confidence from zero through one.
+- Every action is converted to `MemoryAction` before dispatch; one invalid
+  sibling rejects the complete generated decision.
+- Mutation actions require non-blank title/body, normalized non-empty tags, a
+  registered memory type, and no raw transcript body.
+- Update actions require a non-empty target entry id.
+- Confidence clamping is removed from parsing and candidate creation because
+  invalid values no longer cross the typed boundary.
+- Focused curator tests: 29 passed.
+- Final full tests: 1430 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
 ## Publication
 
-All local commits remain pending until explicit push authorization.
+`dev/v0.3.x` is published through `f02ca22`.
 
 ## Next Review Batch
 
-Audit reflection and memory LLM JSON models for strict shape, numeric bounds,
-and fail-closed action dispatch.
+Strictly validate optimizer actions as a complete batch before candidate
+dispatch.

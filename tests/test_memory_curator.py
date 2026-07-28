@@ -15,7 +15,11 @@ from nuself.domain.memory import (
 from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
 from nuself.logs import read_log_events
-from nuself.memory.curator import MemoryCurator, MemoryCuratorSettings
+from nuself.memory.curator import (
+    MemoryCurator,
+    MemoryCuratorSettings,
+    _parse_actions,  # pyright: ignore[reportPrivateUsage]
+)
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
 
@@ -28,6 +32,77 @@ class FakeCuratorLLM:
     def complete(self, messages: list[ChatMessage]) -> str:
         self.calls.append(messages)
         return self.response
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        (
+            '{"actions":[{"action":"create","type":"episode",'
+            '"title":"Invalid confidence","body":"Body","tags":["memory"],'
+            '"confidence":1.2}]}'
+        ),
+        (
+            '{"actions":[{"action":"create","type":"episode",'
+            '"title":"Coercive confidence","body":"Body","tags":["memory"],'
+            '"confidence":true}]}'
+        ),
+        (
+            '{"actions":[{"action":"create","type":"episode",'
+            '"title":"Extra field","body":"Body","tags":["memory"],'
+            '"confidence":0.8,"unknown":"value"}]}'
+        ),
+        (
+            '{"actions":[{"action":"update","type":"episode",'
+            '"title":"Missing target","body":"Body","tags":["memory"],'
+            '"confidence":0.8}]}'
+        ),
+    ],
+)
+def test_curator_action_schema_fails_closed(raw: str) -> None:
+    with pytest.raises(ValueError):
+        _parse_actions(raw, allowed_types=("episode",))
+
+
+def test_curator_rejects_complete_batch_when_one_action_is_invalid(
+    tmp_path: Path,
+) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "Remember that curator decisions must be validated "
+                        "completely before any memory candidate is written."
+                    ),
+                )
+            ],
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":['
+        '{"action":"create","type":"episode","title":"Valid sibling",'
+        '"body":"This action must not be partially applied.",'
+        '"tags":["memory"],"confidence":0.8},'
+        '{"action":"create","type":"unknown","title":"Invalid sibling",'
+        '"body":"This invalid type rejects the batch.",'
+        '"tags":["memory"],"confidence":0.8}'
+        "]}"
+    )
+    curator = MemoryCurator(
+        tmp_path,
+        llm=llm,
+        thread_store=thread_store,
+        settings=MemoryCuratorSettings(auto_accept=False),
+    )
+
+    result = curator.run_once()
+
+    assert result.processed_messages == 0
+    assert MemoryCandidateRepository(tmp_path).list() == []
 
 
 def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> None:

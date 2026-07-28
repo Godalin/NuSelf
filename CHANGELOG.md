@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Memory curator responses now use strict, extra-forbid action schemas with
+  bounded confidence. Every generated action is validated before dispatch; one
+  invalid action defers the complete decision instead of partially applying
+  valid siblings.
 - Persona activation, contribution, and synthesis now require strict typed
   LangChain outputs. Dictionary compatibility, unknown fields, coercive types,
   and out-of-range confidence values now fail the endpoint instead of being

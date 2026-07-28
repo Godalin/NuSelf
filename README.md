@@ -77,6 +77,9 @@ turning successful operations into apparent failures.
 Memory curator activity now remains structured in `memory.log`; curator trace
 and audit failures, plus organizer completion audit failures, cannot replace
 already-persisted memory or reflection results.
+Curator action batches are validated completely before candidate dispatch.
+Unknown or coercive fields, out-of-range confidence, and incomplete mutations
+defer the source range instead of partially applying valid sibling actions.
 
 Email and macOS delivery-failure diagnostics cannot replace a definitive
 adapter failure or prevent the outbox from persisting the failed attempt.
