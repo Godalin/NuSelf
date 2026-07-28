@@ -1,6 +1,12 @@
 import pytest
 
+import nuself.decorators as decorators
 from nuself.decorators import approval_required, audit_log
+
+
+def test_decorator_package_has_no_pending_callable_registry() -> None:
+    assert decorators.__all__ == ["approval_required", "audit_log"]
+    assert not hasattr(decorators, "ApprovalManager")
 
 
 def test_approval_interactive(monkeypatch: pytest.MonkeyPatch) -> None:

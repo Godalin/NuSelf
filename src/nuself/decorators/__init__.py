@@ -1,10 +1,9 @@
-"""Simpler decorators package for NuSelf.
+"""Tool-composition decorators for NuSelf.
 
-This module provides decorator primitives for tool composition:
-`audit_log` and `approval_required`, plus `ApprovalManager` for runtime
-management of pending approvals.
+Approval is a synchronous callable wrapper. Deferred approval does not retain
+Python callables in process-global state.
 """
-from .approval import ApprovalManager, approval_required
+from .approval import approval_required
 from .audit import audit_log
 
-__all__ = ["ApprovalManager", "approval_required", "audit_log"]
+__all__ = ["approval_required", "audit_log"]

@@ -394,6 +394,15 @@ arbitrary string. Composition must assign each decorated tool to an existing
 domain or shared-infrastructure component; casts must not manufacture unknown
 log files.
 
+The current approval decorator is a synchronous request boundary. It owns the
+wrapped callable only through normal decorator composition, prompts and decides
+within the same invocation, and never places the callable or its arguments in a
+process-global pending registry. Decline returns without executing the callable;
+approval executes it exactly once in that invocation. A future deferred
+approval flow would require a durable typed request/job contract with explicit
+project, identity, expiry, and idempotency semantics; retaining arbitrary
+Python callables is not such a contract.
+
 Reasoning thread creation is the first migration target for this pattern. The old post-turn confirmation flow remains documented below for compatibility, but the implementation goal is to move approval into the tool composition layer so the agent lifecycle does not depend on a separate after-turn replay step.
 
 ### Behavioral Guidelines for Reason Awareness (Prompt-Level)

@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Removed the unused process-global `ApprovalManager` callback registry.
+  Approval-gated tools continue to use the synchronous decorator boundary;
+  deferred approval must use a future durable typed contract instead of
+  retaining arbitrary Python callables.
 - Structured audit writes now reject unknown components and malformed event
   names before filesystem access. Shared backend lifecycle diagnostics use the
   new `storage` log component, available through `nuself dev logs --component
