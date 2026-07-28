@@ -298,6 +298,11 @@ Check system health:
 uv run nuself dev health
 ```
 
+Daemon health reflects both scheduled-iteration failures and unexpected worker
+target exits. Worker diagnostics carry a `daemon.worker.<name>` source; failure
+to write that diagnostic falls back to a runtime warning without terminating
+the scheduled loop.
+
 Quick status overview:
 
 ```bash

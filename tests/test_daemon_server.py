@@ -14,6 +14,7 @@ from nuself.logs import read_log_events
 from nuself.memory.curator import MemoryCuratorResult
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.runtime.workers import OwnedWorker
+from nuself.runtime.context import RuntimeContext, current_runtime_context
 
 
 class StructuredFakeLLM:
@@ -251,6 +252,122 @@ def test_memory_curator_worker_survives_unexpected_error(
     assert health.last_error == "bad curator data"
     state.shutdown_requested.set()
     state.stop_background_memory_curator()
+
+
+def test_worker_supervisor_records_escaping_target_and_context(
+    tmp_path: Path,
+) -> None:
+    state = DaemonState(tmp_path)
+    observed: list[RuntimeContext] = []
+
+    def fail_target() -> None:
+        observed.append(current_runtime_context())
+        raise ValueError("target escaped")
+
+    state._workers["memory_curator"] = OwnedWorker(  # pyright: ignore[reportPrivateUsage]
+        name="memory_curator",
+        thread_name="test-supervised-worker",
+        target=state._supervised_worker_target(  # pyright: ignore[reportPrivateUsage]
+            "memory_curator",
+            fail_target,
+        ),
+    )
+
+    state.start_background_memory_curator()
+    state._join_worker(  # pyright: ignore[reportPrivateUsage]
+        "memory_curator",
+        timeout=1,
+    )
+
+    assert observed[0].source == "daemon.worker.memory_curator"
+    health = next(
+        item for item in state.worker_health() if item.name == "memory_curator"
+    )
+    assert health.alive is False
+    assert health.consecutive_failures == 1
+    assert health.last_error == "target escaped"
+    event = next(
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="daemon",
+        )
+        if event.event == "worker_exited_unexpectedly"
+    )
+    assert event.source == "daemon.worker.memory_curator"
+    assert event.metadata == {"worker": "memory_curator"}
+    assert event.error == "target escaped"
+
+
+def test_worker_error_log_failure_does_not_stop_scheduled_loop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.runtime import observability
+
+    state = DaemonState(tmp_path)
+    state.memory_curator_interval_seconds = 0.01
+    calls = 0
+
+    class FailOnceCurator:
+        def run_once(self) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise ValueError("first iteration failed")
+            state.shutdown_requested.set()
+
+    state.memory_curator = FailOnceCurator()  # type: ignore[assignment]
+
+    def fail_error_log(
+        *args: object,
+        **kwargs: object,
+    ) -> object:
+        raise OSError("worker log unavailable")
+
+    monkeypatch.setattr(
+        observability,
+        "write_log_event",
+        fail_error_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="memory_curator_error.*worker log unavailable",
+    ):
+        state.start_background_memory_curator()
+        state.stop_background_memory_curator()
+
+    assert calls == 2
+    health = next(
+        item for item in state.worker_health() if item.name == "memory_curator"
+    )
+    assert health.alive is False
+    assert health.consecutive_failures == 0
+    assert health.last_success_at is not None
+
+
+def test_export_worker_initialization_fails_before_thread_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.daemon import server as server_mod
+
+    state = DaemonState(tmp_path)
+
+    def fail_store(*args: object, **kwargs: object) -> object:
+        raise OSError("workspace unavailable")
+
+    monkeypatch.setattr(server_mod, "PrivateWorkspaceStore", fail_store)
+
+    with pytest.raises(OSError, match="workspace unavailable"):
+        state.start_background_export_worker()
+
+    snapshot = state._workers[  # pyright: ignore[reportPrivateUsage]
+        "export_worker"
+    ].snapshot
+    assert snapshot.state == "new"
+    assert snapshot.alive is False
 
 
 def test_daemon_worker_join_timeout_is_logged_and_remains_live(

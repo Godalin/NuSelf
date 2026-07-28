@@ -263,12 +263,19 @@ state.
   lifetime. A naturally exited or stopped worker is not implicitly restarted.
 - The target wrapper records `stopped` in `finally`, including unexpected
   target exit.
+- Daemon composition wraps each target in a supervisor that establishes its
+  runtime source context and records any escaping `Exception` in daemon health.
+  `OwnedWorker` itself remains domain-neutral and does not own logging.
 - `join(timeout)` returns a typed snapshot. A live thread after the timeout is
   `timed_out`; later target exit transitions it to `stopped`.
 - The primitive does not own domain intervals, retries, queues, timers, or the
   daemon-wide shutdown event.
 - Daemon health reads liveness from owned workers rather than parallel thread
   fields. Domain success/error counters remain separate health data.
+- Scheduled daemon workers share one iteration boundary for success/failure
+  health transitions and observable error reporting. Reporting failure cannot
+  terminate the loop; the shutdown-aware interval remains the only retry
+  boundary.
 - Export queue/timer cancellation remains an explicit export-worker cleanup
   performed before join.
 

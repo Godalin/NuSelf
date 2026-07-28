@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TypeVar
 import warnings
 
-from nuself.logs import LogComponent, write_log_event
+from nuself.logs import LogComponent, LogLevel, write_log_event
 
 T = TypeVar("T")
 DEFAULT_DECODE_ERRORS: tuple[type[Exception], ...] = (
@@ -116,6 +116,8 @@ def report_observed_failure(
     message: str,
     project_root: Path | None,
     metadata: dict[str, object] | None,
+    level: LogLevel = "warning",
+    status: str = "degraded",
 ) -> None:
     """Report an already-caught failure without replacing that failure."""
 
@@ -126,8 +128,8 @@ def report_observed_failure(
             event,
             message,
             project_root=project_root,
-            level="warning",
-            status="degraded",
+            level=level,
+            status=status,
             error=error,
             metadata=metadata,
         )

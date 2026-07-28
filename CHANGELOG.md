@@ -58,6 +58,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Daemon background workers now share one supervised iteration boundary.
+  Unexpected target exits and per-iteration failures update health with
+  correlated `daemon.worker.<name>` diagnostics, and a logging failure can no
+  longer terminate an otherwise recoverable scheduled loop. Export worker
+  dependencies are initialized synchronously before its thread starts.
 - SQLite shutdown now reports WAL checkpoint and connection-close failures
   instead of silently claiming success. Failed closes remain retryable,
   initialization cleanup preserves the original failure, and resetting

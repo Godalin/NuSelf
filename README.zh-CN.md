@@ -285,6 +285,10 @@ state 持久化失败会写入 daemon 日志。Progress 缺失属于正常状态
 uv run nuself dev health
 ```
 
+Daemon health 会同时反映定时迭代失败和 worker target 的意外退出。Worker
+诊断带有 `daemon.worker.<name>` source；即使结构化诊断写入失败，也只会回退为
+runtime warning，不会终止仍可恢复的定时循环。
+
 快速状态概览：
 
 ```bash

@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The structured audit identity and storage component ownership stage is
+Idle. The daemon worker supervision and shared scheduled-iteration stage is
 complete; no implementation change is currently active.
 
 ## Active Branch
@@ -31,5 +31,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit background-worker error handling against the shared handler,
-observability, and runtime-context contracts.
+Audit daemon shutdown cleanup ordering and multi-error preservation.

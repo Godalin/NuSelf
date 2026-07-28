@@ -44,10 +44,16 @@ from nuself.reason.output import (
     ReasonOutputService,
 )
 from nuself.reflection import ReflectionScheduler
+from nuself.runtime.context import runtime_context
 from nuself.runtime.jobs import JobMessage
-from nuself.runtime.observability import format_exception_chain
+from nuself.runtime.observability import (
+    format_exception_chain,
+    report_observed_failure,
+    run_observed_best_effort,
+)
 from nuself.runtime.workers import OwnedWorker
 from nuself.storage import write_json_atomic, write_text_atomic
+from nuself.workspace import PrivateWorkspaceStore
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
 
@@ -236,6 +242,9 @@ class DaemonState:
         self._reason_scheduler_start_lock = threading.Lock()
         self._export_timers: list[threading.Timer] = []
         self._export_timers_lock = threading.Lock()
+        self._export_worker_start_lock = threading.Lock()
+        self._export_store: PrivateWorkspaceStore | None = None
+        self._export_output_service: ReasonOutputService | None = None
         self._worker_health_lock = threading.Lock()
         self._worker_health: dict[str, WorkerHealth] = {
             name: WorkerHealth(name=name)
@@ -251,29 +260,68 @@ class DaemonState:
             "memory_curator": OwnedWorker(
                 name="memory_curator",
                 thread_name="nuself-memory-curator",
-                target=self._run_background_memory_curator,
+                target=self._supervised_worker_target(
+                    "memory_curator",
+                    self._run_background_memory_curator,
+                ),
             ),
             "reflection_scheduler": OwnedWorker(
                 name="reflection_scheduler",
                 thread_name="nuself-reflection-scheduler",
-                target=self._run_background_reflection_scheduler,
+                target=self._supervised_worker_target(
+                    "reflection_scheduler",
+                    self._run_background_reflection_scheduler,
+                ),
             ),
             "reason_scheduler": OwnedWorker(
                 name="reason_scheduler",
                 thread_name="nuself-reason-scheduler",
-                target=self._run_background_reason_scheduler,
+                target=self._supervised_worker_target(
+                    "reason_scheduler",
+                    self._run_background_reason_scheduler,
+                ),
             ),
             "export_worker": OwnedWorker(
                 name="export_worker",
                 thread_name="nuself-export-worker",
-                target=self._run_background_export_worker,
+                target=self._supervised_worker_target(
+                    "export_worker",
+                    self._run_background_export_worker,
+                ),
             ),
             "notification_delivery": OwnedWorker(
                 name="notification_delivery",
                 thread_name="nuself-notification-delivery",
-                target=self._run_background_notification_delivery,
+                target=self._supervised_worker_target(
+                    "notification_delivery",
+                    self._run_background_notification_delivery,
+                ),
             ),
         }
+
+    def _supervised_worker_target(
+        self,
+        name: str,
+        target: Callable[[], None],
+    ) -> Callable[[], None]:
+        def run() -> None:
+            with runtime_context(source=f"daemon.worker.{name}"):
+                try:
+                    target()
+                except Exception as exc:
+                    self._record_worker_failure(name, exc)
+                    report_observed_failure(
+                        exc,
+                        component="daemon",
+                        event="worker_exited_unexpectedly",
+                        message=f"{name} worker exited unexpectedly",
+                        project_root=self.project_root,
+                        metadata={"worker": name},
+                        level="error",
+                        status="error",
+                    )
+
+        return run
 
     def worker_health(self) -> tuple[WorkerHealth, ...]:
         """Return a stable snapshot of daemon worker health."""
@@ -313,6 +361,80 @@ class DaemonState:
             )
         return chain
 
+    def _write_worker_started(
+        self,
+        name: str,
+        *,
+        event: str,
+        message: str,
+    ) -> None:
+        run_observed_best_effort(
+            lambda: write_log_event(
+                "daemon",
+                event,
+                message,
+                project_root=self.project_root,
+                level="info",
+                status="started",
+                metadata={"worker": name},
+            ),
+            component="daemon",
+            event="worker_start_log_failed",
+            message=f"Could not record {name} worker start",
+            project_root=self.project_root,
+            metadata={"worker": name, "start_event": event},
+        )
+
+    def _run_worker_iteration(
+        self,
+        name: str,
+        operation: Callable[[], object],
+        *,
+        error_event: str,
+        error_message: str,
+    ) -> bool:
+        try:
+            operation()
+        except Exception as exc:
+            self._record_worker_failure(name, exc)
+            report_observed_failure(
+                exc,
+                component="daemon",
+                event=error_event,
+                message=error_message,
+                project_root=self.project_root,
+                metadata={"worker": name},
+                level="error",
+                status="error",
+            )
+            return False
+        self._record_worker_success(name)
+        return True
+
+    def _run_scheduled_worker(
+        self,
+        name: str,
+        operation: Callable[[], object],
+        *,
+        interval_seconds: float,
+        started_event: str,
+        started_message: str,
+        error_event: str,
+        error_message: str,
+    ) -> None:
+        self._write_worker_started(
+            name,
+            event=started_event,
+            message=started_message,
+        )
+        while not self.shutdown_requested.wait(interval_seconds):
+            self._run_worker_iteration(
+                name,
+                operation,
+                error_event=error_event,
+                error_message=error_message,
+            )
+
     def start_background_memory_curator(self) -> None:
         self._workers["memory_curator"].start()
 
@@ -337,31 +459,15 @@ class DaemonState:
         self._join_worker("memory_curator")
 
     def _run_background_memory_curator(self) -> None:
-        write_log_event(
-            "daemon",
-            "memory_curator_started",
-            "memory curator thread started",
-            project_root=self.project_root,
-            level="info",
-            status="started"
+        self._run_scheduled_worker(
+            "memory_curator",
+            self.memory_curator.run_once,
+            interval_seconds=self.memory_curator_interval_seconds,
+            started_event="memory_curator_started",
+            started_message="memory curator thread started",
+            error_event="memory_curator_error",
+            error_message="memory curator iteration failed",
         )
-        
-        while not self.shutdown_requested.wait(self.memory_curator_interval_seconds):
-            try:
-                self.memory_curator.run_once()
-                self._record_worker_success("memory_curator")
-            except Exception as exc:
-                chain = self._record_worker_failure("memory_curator", exc)
-                write_log_event(
-                    "daemon",
-                    "memory_curator_error",
-                    "memory curator iteration failed",
-                    project_root=self.project_root,
-                    level="error",
-                    status="error",
-                    error=chain,
-                )
-                continue
 
     def start_background_reflection_scheduler(self) -> None:
         self._workers["reflection_scheduler"].start()
@@ -370,35 +476,19 @@ class DaemonState:
         self._join_worker("reflection_scheduler")
 
     def _run_background_reflection_scheduler(self) -> None:
-        write_log_event(
-            "daemon",
-            "reflection_scheduler_started",
-            "reflection scheduler thread started",
-            project_root=self.project_root,
-            level="info",
-            status="started"
+        def run_once() -> None:
+            if self.reflection_scheduler.should_reflect():
+                self.reflection_scheduler.reflect()
+
+        self._run_scheduled_worker(
+            "reflection_scheduler",
+            run_once,
+            interval_seconds=self.reflection_check_interval_seconds,
+            started_event="reflection_scheduler_started",
+            started_message="reflection scheduler thread started",
+            error_event="reflection_scheduler_error",
+            error_message="reflection scheduler iteration failed",
         )
-        
-        while not self.shutdown_requested.wait(self.reflection_check_interval_seconds):
-            try:
-                should_reflect = self.reflection_scheduler.should_reflect()
-                if should_reflect:
-                    self.reflection_scheduler.reflect()
-                self._record_worker_success("reflection_scheduler")
-            except Exception as exc:
-                chain = self._record_worker_failure(
-                    "reflection_scheduler", exc
-                )
-                write_log_event(
-                    "daemon",
-                    "reflection_scheduler_error",
-                    "reflection scheduler iteration failed",
-                    project_root=self.project_root,
-                    level="error",
-                    status="error",
-                    error=chain,
-                )
-                continue
 
     def start_background_reason_scheduler(self) -> None:
         with self._reason_scheduler_start_lock:
@@ -420,7 +510,18 @@ class DaemonState:
             worker.start()
 
     def start_background_export_worker(self) -> None:
-        self._workers["export_worker"].start()
+        with self._export_worker_start_lock:
+            worker = self._workers["export_worker"]
+            if worker.snapshot.state != "new":
+                return
+            self._export_store = PrivateWorkspaceStore(
+                self.project_root,
+                scope="reason",
+            )
+            self._export_output_service = ReasonOutputService(
+                self.project_root
+            )
+            worker.start()
 
     def stop_background_export_worker(self) -> None:
         with self._export_timers_lock:
@@ -446,18 +547,18 @@ class DaemonState:
         self._join_worker("export_worker")
 
     def _run_background_export_worker(self) -> None:
-        from nuself.workspace import PrivateWorkspaceStore
-
-        write_log_event(
-            "daemon",
-            "export_worker_started",
-            "export queue worker thread started",
-            project_root=self.project_root,
-            status="started",
+        self._write_worker_started(
+            "export_worker",
+            event="export_worker_started",
+            message="export queue worker thread started",
         )
 
-        store = PrivateWorkspaceStore(self.project_root, scope="reason")
-        service = ReasonOutputService(self.project_root)
+        store = self._export_store
+        service = self._export_output_service
+        if store is None or service is None:
+            raise RuntimeError(
+                "export worker dependencies were not initialized"
+            )
 
         def _llm_runner(
             thread: ReasoningThread,
@@ -731,32 +832,20 @@ class DaemonState:
         self._join_worker("reason_scheduler")
 
     def _run_background_reason_scheduler(self) -> None:
-        write_log_event(
-            "daemon",
-            "reason_scheduler_started",
-            "reason scheduler thread started",
-            project_root=self.project_root,
-            level="info",
-            status="started"
-        )
+        def run_once() -> None:
+            if self.reason_scheduler is None:
+                raise RuntimeError("reason scheduler was not initialized")
+            self.reason_scheduler.run_once()
 
-        while not self.shutdown_requested.wait(self.reason_scheduler_interval_seconds):
-            try:
-                if self.reason_scheduler is not None:
-                    self.reason_scheduler.run_once()
-                self._record_worker_success("reason_scheduler")
-            except Exception as exc:
-                chain = self._record_worker_failure("reason_scheduler", exc)
-                write_log_event(
-                    "daemon",
-                    "reason_scheduler_error",
-                    "reason scheduler iteration failed",
-                    project_root=self.project_root,
-                    level="error",
-                    status="error",
-                    error=chain,
-                )
-                continue
+        self._run_scheduled_worker(
+            "reason_scheduler",
+            run_once,
+            interval_seconds=self.reason_scheduler_interval_seconds,
+            started_event="reason_scheduler_started",
+            started_message="reason scheduler thread started",
+            error_event="reason_scheduler_error",
+            error_message="reason scheduler iteration failed",
+        )
 
     def start_background_notification_delivery(self) -> None:
         self._workers["notification_delivery"].start()
@@ -765,33 +854,15 @@ class DaemonState:
         self._join_worker("notification_delivery")
 
     def _run_background_notification_delivery(self) -> None:
-        write_log_event(
-            "daemon",
-            "notification_delivery_started",
-            "notification delivery thread started",
-            project_root=self.project_root,
-            level="info",
-            status="started"
+        self._run_scheduled_worker(
+            "notification_delivery",
+            self.notification_delivery_loop.run_once,
+            interval_seconds=self.notification_delivery_interval_seconds,
+            started_event="notification_delivery_started",
+            started_message="notification delivery thread started",
+            error_event="notification_delivery_error",
+            error_message="notification delivery iteration failed",
         )
-        
-        while not self.shutdown_requested.wait(self.notification_delivery_interval_seconds):
-            try:
-                self.notification_delivery_loop.run_once()
-                self._record_worker_success("notification_delivery")
-            except Exception as exc:
-                chain = self._record_worker_failure(
-                    "notification_delivery", exc
-                )
-                write_log_event(
-                    "daemon",
-                    "notification_delivery_error",
-                    "notification delivery iteration failed",
-                    project_root=self.project_root,
-                    level="error",
-                    status="error",
-                    error=chain,
-                )
-                continue
 
 
 class NuSelfUnixServer(socketserver.ThreadingUnixStreamServer):

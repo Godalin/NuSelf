@@ -6,6 +6,7 @@ from nuself.logs import read_log_events
 from nuself.runtime.observability import (
     decode_observed_record,
     format_exception_chain,
+    report_observed_failure,
     run_observed_best_effort,
 )
 
@@ -74,6 +75,29 @@ def test_best_effort_propagates_undeclared_exception(
         project_root=tmp_path,
         component="memory",
     ) == []
+
+
+def test_observed_failure_supports_authoritative_error_severity(
+    tmp_path: Path,
+) -> None:
+    report_observed_failure(
+        RuntimeError("worker failed"),
+        component="daemon",
+        event="worker_exited_unexpectedly",
+        message="worker exited",
+        project_root=tmp_path,
+        metadata={"worker": "memory_curator"},
+        level="error",
+        status="error",
+    )
+
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="daemon",
+    )
+    assert event.level == "error"
+    assert event.status == "error"
+    assert event.error == "worker failed"
 
 
 def test_best_effort_warns_when_structured_sink_also_fails(

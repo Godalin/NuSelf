@@ -63,10 +63,19 @@ unexpected per-iteration exception unless shutdown has been requested.
   terminate the worker thread.
 - Workers track their last successful run, last error, consecutive failure
   count, and thread liveness so daemon status can expose degraded subsystems.
+- All worker targets run inside `source="daemon.worker.<name>"` runtime
+  context. A target-level exception that escapes initialization or the loop is
+  recorded in health and reported as `daemon/worker_exited_unexpectedly`
+  before the owned thread becomes stopped.
+- The structured error write is a secondary reporting effect. If it fails,
+  shared observability emits a Python warning; logging failure must not escape
+  the iteration boundary or terminate an otherwise recoverable worker.
 - The loop itself must not retry the failed operation immediately. The next
   configured scheduled iteration is the retry boundary.
-- Fatal initialization failures before a worker loop starts remain daemon
-  startup failures and must be surfaced to the caller.
+- Dependencies required before a worker loop starts are constructed by its
+  synchronous `start_background_*` boundary before thread ownership. Those
+  initialization failures remain daemon startup failures and surface to the
+  caller.
 - A retryable worker operation must persist its retry/attempt transition before
   scheduling another execution. If that durable transition fails, log the
   state-persistence failure separately and do not enqueue an untracked retry.
