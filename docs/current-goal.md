@@ -47,7 +47,7 @@ Enforce private filesystem permissions at the shared atomic write boundary.
 
 ## Publication
 
-`dev/v0.3.x` is published through `82e269b`.
+`dev/v0.3.x` is ready for publication through `6b9a4f8`.
 
 ## Next Review Batch
 
