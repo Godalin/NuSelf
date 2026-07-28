@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Centralize framework tool service metadata interpretation so chat, skills, and
-reason logging share one validated contract.
+Make service ownership intrinsic to every chat tool definition and remove
+construction-time name mapping and metadata mutation.
 
 ## Active Branch
 
@@ -14,38 +14,37 @@ reason logging share one validated contract.
 
 ## Ordered Work
 
-1. Specify one shared `service_component` interpretation rule.
-2. Add shared single-tool and tool-index helpers.
-3. Migrate chat call logging and skill grouping.
-4. Migrate reason tool routing.
-5. Verify valid, missing, and invalid metadata consistently.
+1. Audit every chat tool construction site.
+2. Specify definition-time service ownership.
+3. Add service metadata to each tool definition.
+4. Delete the name-to-service table and post-construction mutation.
+5. Verify the complete registry has expected ownership.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Do not change renderer interpretation of persisted log-event metadata.
-- Do not infer a service component from tool names.
-- Do not require service metadata for tools that do not emit service-call logs.
+- Do not change tool names, descriptions, schemas, tags, or execution behavior.
+- Keep persona and workspace builders independently composable.
+- Do not introduce a replacement central catalog.
 
 ## Completion Evidence
 
-- `tool_service_component` is the sole framework-tool metadata interpreter and
-  returns only string service components.
-- `index_tool_service_components` builds validated name-to-service indexes and
-  omits tools with missing or invalid metadata.
-- Chat call logging, generated skill grouping, and reason tool routing use the
-  shared helpers; production search finds no repeated direct interpretation in
-  those runtimes.
-- Unit tests cover valid, missing, numeric, and arbitrary-object metadata.
-- `.venv/bin/pytest -q`: `1470 passed`.
+- Every tool built directly by `build_langchain_chat_tools` declares
+  `service_component` in its own constructor call.
+- The name-to-service table and post-construction `tool.metadata` mutation are
+  deleted; production and test search finds neither pattern.
+- The runtime registry test verifies service ownership for every chat,
+  persona, selves, and skill-loader tool.
+- Tool names, descriptions, schemas, tags, and execution paths are unchanged.
+- `.venv/bin/pytest -q`: `1471 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `5f5ae9f`.
+`dev/v0.3.x` is published through `991edbc`.
 
 ## Next Review Batch
 
-Audit construction-time tool metadata assignment and remove the remaining
-name-to-service mutation table.
+Review the monolithic chat tool builder and define subsystem-owned registration
+boundaries.

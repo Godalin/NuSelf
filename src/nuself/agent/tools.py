@@ -499,6 +499,7 @@ def build_langchain_chat_tools(
                 "before deciding whether to search more deeply. Returns a simple count."
             ),
             tags=("readonly",),
+            metadata={"service_component": "memory"},
         ),
         tool_from_function(
             list_pending_reflections,
@@ -510,6 +511,7 @@ def build_langchain_chat_tools(
                 "Returns a 0-based numbered list with title, type, and confidence."
             ),
             tags=("readonly",),
+            metadata={"service_component": "reflection"},
         ),
         tool_from_function(
             count_pending_reflections,
@@ -519,6 +521,7 @@ def build_langchain_chat_tools(
                 "or pending reflections are currently available."
             ),
             tags=("readonly",),
+            metadata={"service_component": "reflection"},
         ),
         tool_from_function(
             _composed_reflection_dismiss,
@@ -529,6 +532,7 @@ def build_langchain_chat_tools(
                 "The 0-based index corresponds to the numbered list from reflection_list_pending."
             ),
             tags=("write",),
+            metadata={"service_component": "reflection"},
         ),
         tool_from_function(
             archive_reflection_by_numeric_handle,
@@ -539,6 +543,7 @@ def build_langchain_chat_tools(
                 "The 0-based index corresponds to the numbered list shown in the pending reflections context."
             ),
             tags=("write",),
+            metadata={"service_component": "reflection"},
         ),
         tool_from_function(
             archive_memory_by_id,
@@ -549,6 +554,7 @@ def build_langchain_chat_tools(
                 "Requires the memory entry_id."
             ),
             tags=("write",),
+            metadata={"service_component": "memory"},
         ),
         tool_from_function(
             update_memory_importance_by_id,
@@ -559,6 +565,7 @@ def build_langchain_chat_tools(
                 "Requires the memory entry_id and a new importance value."
             ),
             tags=("write",),
+            metadata={"service_component": "memory"},
         ),
         tool_from_function(
             list_active_reasoning_threads,
@@ -568,6 +575,7 @@ def build_langchain_chat_tools(
                 "open questions, ongoing thinking, active reason threads, or what NuSelf is still considering."
             ),
             tags=("readonly",),
+            metadata={"service_component": "reasoning"},
         ),
         tool_from_function(
             count_reasoning_threads,
@@ -577,6 +585,7 @@ def build_langchain_chat_tools(
                 "questions or reasoning threads NuSelf is tracking."
             ),
             tags=("readonly",),
+            metadata={"service_component": "reasoning"},
         ),
         tool_from_function(
             show_reasoning_thread,
@@ -586,6 +595,7 @@ def build_langchain_chat_tools(
                 "but omitting tool logs. Pass 'current' to show the most recent active thread."
             ),
             tags=("readonly",),
+            metadata={"service_component": "reasoning"},
         ),
         tool_from_function(
             show_reasoning_context,
@@ -596,6 +606,7 @@ def build_langchain_chat_tools(
                 "Does not include step bodies or tool logs. Pass 'current' to show the most recent active thread."
             ),
             tags=("readonly",),
+            metadata={"service_component": "reasoning"},
         ),
         tool_from_function(
             show_reasoning_step,
@@ -606,6 +617,7 @@ def build_langchain_chat_tools(
                 "and evidence refs, but omits tool logs."
             ),
             tags=("readonly",),
+            metadata={"service_component": "reasoning"},
         ),
         tool_from_function(
             _composed_reason_propose,
@@ -621,6 +633,7 @@ def build_langchain_chat_tools(
                 "enrich the thread's initial context with different perspectives."
             ),
             tags=("write",),
+            metadata={"service_component": "reasoning"},
         ),
         tool_from_function(
             _composed_reason_export,
@@ -634,6 +647,7 @@ def build_langchain_chat_tools(
                 "On approval, the underlying result contains the export job manifest and workspace paths, while the full composed output is stored in the thread workspace."
             ),
             tags=("write", "log"),
+            metadata={"service_component": "reasoning"},
         ),
         tool_from_function(
             search_trace,
@@ -643,6 +657,7 @@ def build_langchain_chat_tools(
                 "how a belief or answer formed, or what prior records support a conclusion."
             ),
             tags=("readonly",),
+            metadata={"service_component": "trace"},
         ),
         tool_from_function(
             count_traces,
@@ -652,6 +667,7 @@ def build_langchain_chat_tools(
                 "how many provenance records exist or match a topic."
             ),
             tags=("readonly",),
+            metadata={"service_component": "trace"},
         ),
         tool_from_function(
             show_trace,
@@ -660,6 +676,7 @@ def build_langchain_chat_tools(
                 "Show a specific thought provenance trace record with related links. Requires a trace_id."
             ),
             tags=("readonly",),
+            metadata={"service_component": "trace"},
         ),
         tool_from_function(
             related_traces,
@@ -669,6 +686,7 @@ def build_langchain_chat_tools(
                 "reflection:<id>, reason:<id>, reason_step:<id>, persona_prompt:<id>, or trace:<id>."
             ),
             tags=("readonly",),
+            metadata={"service_component": "trace"},
         ),
     ]
     if selves_consult is not None:
@@ -683,35 +701,10 @@ def build_langchain_chat_tools(
                     "Do not use for direct service status/count/search questions."
                 ),
                 tags=("readonly",),
+                metadata={"service_component": "selves"},
             )
         )
     persona_tools = build_persona_tools(project_root)
-    _SERVICE_BY_TOOL: dict[str, str] = {
-        "memory_search": "memory",
-        "memory_count": "memory",
-        "memory_archive": "memory",
-        "memory_update_importance": "memory",
-        "reflection_list_pending": "reflection",
-        "reflection_count": "reflection",
-        "reflection_dismiss": "reflection",
-        "reflection_archive": "reflection",
-        "reason_list_active": "reasoning",
-        "reason_count": "reasoning",
-        "reason_context": "reasoning",
-        "reason_step": "reasoning",
-        "reason_show": "reasoning",
-        "reason_propose": "reasoning",
-        "reason_export": "reasoning",
-        "trace_search": "trace",
-        "trace_count": "trace",
-        "trace_show": "trace",
-        "trace_related": "trace",
-        "selves_consult": "selves",
-    }
-    for tool in tools:
-        service = _SERVICE_BY_TOOL.get(tool.name)
-        if service:
-            tool.metadata = {"service_component": service}  # pyright: ignore[reportAttributeAccessIssue]
     return tuple(tools) + persona_tools
 
 

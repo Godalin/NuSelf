@@ -336,6 +336,12 @@ Tool names must start with the owning subsystem name. This keeps agent-visible t
 
 Each `StructuredTool` definition must set `metadata={"service_component": "<subsystem>"}` — e.g., `metadata={"service_component": "memory"}` for a memory tool. The `service_component` is used by the log wrapper when writing `service_tool_called` events; the renderer reads it directly from the log event's metadata. No code should derive the service tag from the tool name.
 
+Service ownership is declared at the individual framework-tool construction
+site. A registry builder must not maintain a parallel name-to-service table or
+mutate tool metadata after construction. Adding or renaming a tool therefore
+changes one authoritative definition rather than requiring a second catalog to
+remain synchronized.
+
 Tools that emit durable operational logs, such as export flows and other long-running side effects, should include a `log` tag in addition to their behavioral tag(s) so log-oriented tooling can classify them consistently.
 
 #### `memory_count`

@@ -19,6 +19,7 @@ from nuself.agent.chat import (
     ThreadStore,
 )
 from nuself.agent.chat import ConversationGraphRuntimeError
+from nuself.agent.tool_utils import tool_service_component
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.llm import LangChainLLMEndpoint
@@ -812,6 +813,31 @@ def test_conversation_runtime_registers_langchain_tools(tmp_path: Path) -> None:
 
     assert "memory_search" in tools
     assert all(isinstance(tool, BaseTool) for tool in tools.values())
+
+
+def test_conversation_runtime_tools_declare_service_ownership(
+    tmp_path: Path,
+) -> None:
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        response_service=FakeResponseService(),
+    )
+    tools = cast(dict[str, BaseTool], getattr(runtime, "_tools"))
+    expected_by_prefix = {
+        "memory": "memory",
+        "reflection": "reflection",
+        "reason": "reasoning",
+        "trace": "trace",
+        "selves": "selves",
+        "persona": "persona",
+    }
+
+    assert tool_service_component(tools["load_skill"]) == "skill"
+    for name, tool in tools.items():
+        if name == "load_skill":
+            continue
+        prefix = name.split("_", maxsplit=1)[0]
+        assert tool_service_component(tool) == expected_by_prefix[prefix]
 
 
 def test_conversation_runtime_capability_snapshot_is_stable(
