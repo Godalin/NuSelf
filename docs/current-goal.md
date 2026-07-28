@@ -61,7 +61,7 @@ Give Reason Output one closed audit contract across service and worker.
 
 ## Publication
 
-The Reason Output audit-contract batch is awaiting its implementation commit.
+`dev/v0.3.x` is ready to publish through implementation commit `0563b81`.
 
 ## Next Review Batch
 
