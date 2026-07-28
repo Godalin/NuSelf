@@ -2,12 +2,18 @@
 
 import json
 import threading
+from collections.abc import Sequence
 from pathlib import Path
 import time
 
 import pytest
+from langchain_core.messages import BaseMessage
+from pydantic import ValidationError
 
 from nuself.daemon.reason_export import (
+    ReasonSectionOutput,
+    ReasonSectionPlanOutput,
+    build_reason_export_section_planner,
     inspect_export_job,
     persist_export_failure,
 )
@@ -18,6 +24,7 @@ from nuself.reason.output import (
     ReasonOutputProgress,
     ReasonOutputService,
 )
+from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.storage import write_json_atomic
 from nuself.runtime.jobs import JobMessage
 from nuself.runtime.context import runtime_context
@@ -76,6 +83,159 @@ def _progress(
         pdf_path=None,
         updated_at="2026-01-01T00:00:00+00:00",
     )
+
+
+class _SectionAgent:
+    def __init__(self, output: ReasonSectionPlanOutput) -> None:
+        self.output = output
+        self.calls: list[Sequence[BaseMessage]] = []
+
+    def invoke(
+        self,
+        messages: Sequence[BaseMessage],
+    ) -> ReasonSectionPlanOutput:
+        self.calls.append(messages)
+        return self.output
+
+
+def _reason_steps() -> tuple[ReasoningStep, ...]:
+    return (
+        ReasoningStep(
+            id="step-0",
+            thread_id="thread-1",
+            summary="First step",
+        ),
+        ReasoningStep(
+            id="step-1",
+            thread_id="thread-1",
+            summary="Second step",
+        ),
+        ReasoningStep(
+            id="step-2",
+            thread_id="thread-1",
+            summary="Third step",
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"sections": []},
+        {
+            "sections": [
+                {
+                    "title": " ",
+                    "focus": "valid",
+                    "step_start": 0,
+                    "step_end": 0,
+                }
+            ]
+        },
+        {
+            "sections": [
+                {
+                    "title": "valid",
+                    "focus": "valid",
+                    "step_start": "0",
+                    "step_end": 0,
+                }
+            ]
+        },
+        {
+            "sections": [
+                {
+                    "title": "valid",
+                    "focus": "valid",
+                    "step_start": 1,
+                    "step_end": 0,
+                }
+            ]
+        },
+    ],
+)
+def test_reason_section_plan_output_is_exact(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        ReasonSectionPlanOutput.model_validate(payload)
+
+
+def test_reason_export_section_planner_uses_complete_typed_plan(
+    tmp_path: Path,
+) -> None:
+    agent = _SectionAgent(
+        ReasonSectionPlanOutput(
+            sections=[
+                ReasonSectionOutput(
+                    title="Opening",
+                    focus="Establish the problem",
+                    step_start=0,
+                    step_end=1,
+                ),
+                ReasonSectionOutput(
+                    title="Resolution",
+                    focus="Conclude the work",
+                    step_start=2,
+                    step_end=2,
+                ),
+            ]
+        )
+    )
+    planner = build_reason_export_section_planner(
+        tmp_path,
+        agent=agent,
+    )
+
+    sections = planner(
+        ReasoningThread(id="thread-1", topic="Typed export"),
+        _reason_steps(),
+        "report",
+    )
+
+    assert [section.title for section in sections] == [
+        "Opening",
+        "Resolution",
+    ]
+    assert sections[0].step_ids == ("step-0", "step-1")
+    assert sections[1].step_ids == ("step-2",)
+    assert len(agent.calls) == 1
+    assert "Return ONLY" not in agent.calls[0][1].text
+
+
+def test_reason_export_section_planner_rejects_partial_range_plan(
+    tmp_path: Path,
+) -> None:
+    agent = _SectionAgent(
+        ReasonSectionPlanOutput(
+            sections=[
+                ReasonSectionOutput(
+                    title="Partial",
+                    focus="Skips the final step",
+                    step_start=0,
+                    step_end=1,
+                )
+            ]
+        )
+    )
+    planner = build_reason_export_section_planner(
+        tmp_path,
+        agent=agent,
+    )
+
+    sections = planner(
+        ReasoningThread(id="thread-1", topic="Fallback export"),
+        _reason_steps(),
+        "report",
+    )
+
+    assert sections
+    assert sections[0].title != "Partial"
+    assert tuple(
+        step_id
+        for section in sections
+        for step_id in section.step_ids
+    ) == ("step-0", "step-1", "step-2")
 
 
 def _wait_for_event(root: Path, event_name: str) -> LogEvent:

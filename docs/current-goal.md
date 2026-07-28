@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The shared free-text agent and persona tool migration is complete.
+Idle. The reason-export section-plan migration is complete.
 
 ## Active Branch
 
@@ -21,22 +21,23 @@ None while idle.
 
 ## Completion Evidence
 
-- `TextAgent` accepts LangChain messages and requires a stripped, non-empty
-  natural-language result without a fake structured schema.
-- Text and structured agents use one shared endpoint invocation/failover
-  primitive.
-- Global and thread-scoped persona tool builders inject the capability once;
-  handlers no longer construct an LLM.
-- Both persona `default_llm().complete()` paths and hidden local fallback are
-  removed.
-- `.venv/bin/pytest -q`: `1465 passed`.
+- `ReasonSectionPlanOutput` and `ReasonSectionOutput` require exact,
+  non-coercive fields with bounded section counts and ordered ranges.
+- Generated ranges must form one contiguous, non-overlapping partition of all
+  source steps.
+- Prompted JSON, response parsing, coercion/defaulting, and partial sibling
+  acceptance are removed.
+- Malformed plans use the deterministic planner as one complete fallback;
+  endpoint exhaustion remains an export failure.
+- `.venv/bin/pytest -q`: `1471 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `e164674`.
+`dev/v0.3.x` is published through `62a208b`.
 
 ## Next Review Batch
 
-Audit the next remaining direct model boundary after persona tools.
+Migrate free-text reason export composition or chat compression onto
+`TextAgent`, keeping each as a separate functional commit.

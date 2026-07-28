@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reason export chapter planning now accepts only an exact
+  `ReasonSectionPlanOutput` through the shared structured-agent runner.
+  Prompted JSON, text parsing, field coercion/defaulting, and partial sibling
+  acceptance were removed; malformed or incomplete ranges use the
+  deterministic planner as one complete fallback.
 - Global and thread-scoped `persona_think` now use an injected framework-native
   `TextAgent` with LangChain messages and a required non-empty natural-language
   result. Both direct `default_llm().complete()` paths and the hidden local

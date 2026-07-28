@@ -193,6 +193,21 @@ The agent result must expose a `structured_response` that is an actual
 `model_dump`, filter malformed collection members, clamp invalid confidence,
 or supply a second set of response defaults after framework validation.
 
+Reason export section planning is a third exact structured-agent capability.
+`ReasonSectionPlanOutput` contains one through eight strict
+`ReasonSectionOutput` entries. Every entry requires a non-blank `title` and
+`focus`, non-negative integer `step_start` and `step_end`, and
+`step_start <= step_end`.
+
+The caller additionally requires the generated ranges to form one ordered,
+contiguous, non-overlapping partition from step index `0` through the final
+input step. A missing range, overlap, gap, reversed range, out-of-bounds index,
+unknown field, coercive value, or malformed sibling invalidates the complete
+plan. Malformed typed output uses the deterministic section planner; endpoint
+unavailability remains an export failure. The planner does not request JSON,
+parse generated text, call `str()` or `int()` on generated fields, supply
+generated defaults, or partially accept valid siblings.
+
 ### State Transitions
 
 | From                           | Action    | To         |

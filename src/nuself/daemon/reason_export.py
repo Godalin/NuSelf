@@ -8,8 +8,18 @@ import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import cast
+from typing import Annotated, cast
 
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
+
+from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
 from nuself.config import ConfigSystem
 from nuself.daemon.workers import DaemonWorkerSupervisor
@@ -43,6 +53,40 @@ SectionPlanner = Callable[
     [ReasoningThread, Sequence[ReasoningStep], str],
     tuple[ReasonOutputSection, ...],
 ]
+
+
+class ReasonSectionOutput(BaseModel):
+    """One exact generated section range."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    title: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1),
+    ]
+    focus: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1),
+    ]
+    step_start: int = Field(ge=0)
+    step_end: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _range_is_ordered(self) -> ReasonSectionOutput:
+        if self.step_start > self.step_end:
+            raise ValueError("section step_start must not exceed step_end")
+        return self
+
+
+class ReasonSectionPlanOutput(BaseModel):
+    """Exact generated chapter plan for one reason export."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    sections: list[ReasonSectionOutput] = Field(
+        min_length=1,
+        max_length=8,
+    )
 
 
 def _write_export_audit_event(
@@ -144,18 +188,33 @@ def persist_export_failure(
 
 def build_reason_export_section_planner(
     project_root: Path,
+    *,
+    agent: StructuredAgent[ReasonSectionPlanOutput] | None = None,
 ) -> SectionPlanner:
-    """Return an instance-scoped LLM section planner for export tools."""
+    """Return an instance-scoped typed-agent section planner."""
 
     lang = ConfigSystem.load(
         project_root=project_root
     ).chat.language_preference
+    section_agent = (
+        agent
+        if agent is not None
+        else default_structured_agent(
+            ReasonSectionPlanOutput,
+            project_root=project_root,
+            component="reasoning",
+        )
+    )
 
     def planner(
         thread: ReasoningThread,
         steps: Sequence[ReasoningStep],
         mode: str,
     ) -> tuple[ReasonOutputSection, ...]:
+        from nuself.reason.output import plan_sections as fallback_plan
+
+        if not steps:
+            return fallback_plan(thread, list(steps), mode=mode)
         step_lines: list[str] = []
         for index, step in enumerate(steps):
             step_lines.append(f"  {index}. summary: {step.summary}")
@@ -166,62 +225,49 @@ def build_reason_export_section_planner(
         steps_text = "\n".join(step_lines)
 
         prompt = (
-            f"You are planning a {mode} for thread '{thread.topic}'. "
-            f"Write in {lang}.\n\n"
             "Organize the following reason steps into 2–8 chapters.\n"
             "For each chapter provide:\n"
             '- "title" — a descriptive chapter title\n'
             '- "focus" — what this chapter should cover\n'
             '- "step_start" — index of the first step (0-based)\n'
             '- "step_end" — index of the last step (inclusive)\n\n'
-            "Return ONLY a valid JSON array (no markdown, no explanation):\n"
-            '[{"title": "...", "focus": "...", "step_start": 0, '
-            '"step_end": 2}, ...]\n\n'
+            "Ranges must form one ordered contiguous partition covering every "
+            "step exactly once.\n\n"
             f"Steps:\n{steps_text}"
         )
-        raw = default_llm(project_root).complete(
-            [ChatMessage(role="user", content=prompt)]
-        )
         try:
-            data: object = json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            data = []
-
-        sections: list[ReasonOutputSection] = []
-        if isinstance(data, list):
-            entries = cast(list[object], data)
-            for index, entry in enumerate(entries):
-                if not isinstance(entry, dict):
-                    continue
-                item = cast(dict[str, object], entry)
-                title = str(
-                    item.get("title", f"{mode.title()} {index + 1}")
-                )
-                focus = str(item.get("focus", ""))
-                step_start = _section_index(item.get("step_start", 0))
-                step_end = _section_index(item.get("step_end", 0))
-                step_ids = tuple(
+            output = section_agent.invoke(
+                [
+                    SystemMessage(
+                        content=(
+                            f"You are planning a {mode} for reason thread "
+                            f"'{thread.topic}'. Write in {lang}."
+                        )
+                    ),
+                    HumanMessage(content=prompt),
+                ]
+            )
+            sections = _materialize_section_plan(output, steps)
+        except ValueError:
+            return fallback_plan(thread, list(steps), mode=mode)
+        return tuple(
+            ReasonOutputSection(
+                index=index,
+                title=section.title,
+                focus=section.focus,
+                step_ids=tuple(
                     steps[position].id
-                    for position in range(step_start, step_end + 1)
-                    if 0 <= position < len(steps)
-                )
-                sections.append(
-                    ReasonOutputSection(
-                        index=index,
-                        title=title,
-                        focus=focus,
-                        step_ids=step_ids,
-                        source_start_index=step_start,
-                        source_end_index=step_end,
-                        summary=focus[:80] if focus else title[:80],
+                    for position in range(
+                        section.step_start,
+                        section.step_end + 1,
                     )
-                )
-
-        if sections:
-            return tuple(sections)
-        from nuself.reason.output import plan_sections as fallback_plan
-
-        return fallback_plan(thread, list(steps), mode=mode)
+                ),
+                source_start_index=section.step_start,
+                source_end_index=section.step_end,
+                summary=section.focus[:80],
+            )
+            for index, section in enumerate(sections)
+        )
 
     return planner
 
@@ -666,8 +712,22 @@ def _read_json_object(path: Path) -> dict[str, object]:
     return cast(dict[str, object], raw)
 
 
-def _section_index(value: object) -> int:
-    return int(value) if isinstance(value, (int, float, str)) else 0
+def _materialize_section_plan(
+    output: ReasonSectionPlanOutput,
+    steps: Sequence[ReasoningStep],
+) -> tuple[ReasonSectionOutput, ...]:
+    expected_start = 0
+    for section in output.sections:
+        if section.step_start != expected_start:
+            raise ValueError(
+                "section ranges must be ordered, contiguous, and non-overlapping"
+            )
+        if section.step_end >= len(steps):
+            raise ValueError("section range exceeds available reason steps")
+        expected_start = section.step_end + 1
+    if expected_start != len(steps):
+        raise ValueError("section ranges must cover every reason step")
+    return tuple(output.sections)
 
 
 def _next_backoff(attempts: int) -> int:

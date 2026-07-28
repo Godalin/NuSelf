@@ -373,6 +373,9 @@ SQLite 后端对损坏的动态列 JSON 采用相同隔离规则：健康的相�
 且不会暴露其中内容；直接查询和文件系统失败仍会明确返回。无效 progress 和 retry
 state 持久化失败会写入 daemon 日志。Progress 缺失属于正常状态，但无法读取或格式
 损坏时会明确诊断，也不会把部分非法字段强制转换成有效快照。
+模型生成的 reason export 章节计划同样使用严格 structured-agent schema；所有范围
+必须按顺序、连续且完整覆盖 source steps。malformed 或不完整计划会整体回退到
+确定性章节规划，不会修补生成字段或部分接受相邻条目。
 
 检查系统健康：
 

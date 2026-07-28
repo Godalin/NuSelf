@@ -409,6 +409,10 @@ and isolates malformed manifests without exposing their contents, while direct
 lookup and filesystem failures remain visible; invalid progress and retry-state
 persistence failures are reported in daemon logs. Missing progress is normal,
 but unreadable or malformed progress is diagnosed and never partially coerced.
+Generated reason-export chapter plans also use an exact structured-agent
+schema. Their ranges must form one ordered, contiguous partition of all source
+steps; malformed or partial plans fall back as a whole to deterministic
+section planning rather than repairing generated fields or accepting siblings.
 
 Check system health:
 
