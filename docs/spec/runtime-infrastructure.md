@@ -156,8 +156,22 @@ registration and common lifecycle semantics over the neutral
   `DaemonWorkerJoinTimeoutError`. The worker remains owned and may be joined
   again after it exits.
 - The supervisor owns only common execution semantics. `DaemonState` retains
-  subsystem construction, interval values, concrete operations, export queue
-  behavior, and daemon startup/cleanup order.
+  subsystem construction, interval values, concrete operations, and worker
+  target registration; the process runner retains daemon startup/cleanup
+  order.
+
+`nuself.daemon.state.DaemonState` is the daemon subsystem composition owner. It
+constructs request-facing state, config-derived subsystem services, cross-
+capability wiring, the reason export worker, and all concrete worker targets;
+then it registers and seals those targets with `DaemonWorkerSupervisor`.
+
+`DaemonState` exposes the worker-specific start/stop operations required by the
+process runner, but does not own PID/socket files, instance locking, signal
+installation, server-loop timing, startup order, cleanup ordering, or lifecycle
+error aggregation. Those process concerns remain in `nuself.daemon.server`.
+Business, request-handler, and worker tests should import the state owner
+directly. Process-lifecycle tests may replace the `DaemonState` factory imported
+by the runner to verify failure and cleanup boundaries.
 
 ### JSONL Transport Framing
 

@@ -9,7 +9,7 @@ from nuself.daemon.reason_export import (
     inspect_export_job,
     persist_export_failure,
 )
-from nuself.daemon.server import DaemonState
+from nuself.daemon.state import DaemonState
 from nuself.logs import LogEvent, read_log_events
 from nuself.reason.output import (
     ReasonOutputManifest,

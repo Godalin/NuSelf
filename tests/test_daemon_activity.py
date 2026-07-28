@@ -10,7 +10,7 @@ from nuself.daemon.activity import (
 )
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
-from nuself.daemon.server import DaemonState
+from nuself.daemon.state import DaemonState
 from nuself.logs import LogEvent, observe_log_events, write_log_event
 
 
