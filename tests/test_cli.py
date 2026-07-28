@@ -34,6 +34,7 @@ from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepos
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
 from nuself.trace.service import TraceQueryService
 
 
@@ -601,6 +602,53 @@ def test_interactive_turn_hides_background_activity_events(
     assert "NuSelf:\n\nfinal reply" in captured.out
     captured_events = session.transcript_log_events("default", include_all=True)
     assert [event.component for event in captured_events] == ["chat"]
+
+
+def test_interactive_turn_binds_exact_context_to_send_thread(
+    tmp_path: Path,
+) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("default"))
+    observed: list[RuntimeContext] = []
+
+    def fake_send(
+        message: str, thread_id: str, turn_id: str | None
+    ) -> cli.InteractiveChatResult:
+        assert message == "hello"
+        assert thread_id == "default"
+        assert turn_id is not None
+        observed.append(current_runtime_context())
+        return cli.InteractiveChatResult(code=0, reply="final reply")
+
+    session = cli.InteractiveSession(connected_at=cli.datetime.now(cli.UTC))
+    send_turn = cast(Callable[..., int], cli._send_interactive_chat_turn)
+    with runtime_context(
+        request_id="stale-request",
+        job_id="stale-job",
+        trace_id="stale-trace",
+        source="test",
+    ):
+        result = send_turn(
+            fake_send,
+            tmp_path,
+            "default",
+            "hello",
+            session,
+        )
+        assert current_runtime_context() == RuntimeContext(
+            request_id="stale-request",
+            job_id="stale-job",
+            trace_id="stale-trace",
+            source="test",
+        )
+
+    assert result == 0
+    assert len(observed) == 1
+    assert observed[0].thread_id == "default"
+    assert observed[0].turn_id is not None
+    assert observed[0].source == "client"
+    assert observed[0].request_id is None
+    assert observed[0].job_id is None
+    assert observed[0].trace_id is None
 
 
 def test_interactive_daemon_timeout_retries_and_preserves_logs(

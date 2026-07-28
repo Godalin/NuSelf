@@ -152,7 +152,14 @@ alias string sets.
 
 During each chat turn, before printing the assistant reply, the REPL polls for new log events as they are written and prints only interactive activity logs using `render_log_event()`. It does not wait for the final assistant reply before showing current-turn progress logs. Live REPL activity must be scoped to the current top-level `turn_id`; timestamp order alone is not enough to decide that a log belongs to the visible turn.
 
-Interactive activity logs are user-relevant events from the current chat path: direct chat service/tool calls, approval prompts for gated tool execution, persona/self discussion progress, and chat/daemon failure or failover events. Background subsystem logs from reason, reflection, memory, trace, notification, or other autonomous services must not appear in the live REPL output only because they were written while a chat turn was waiting. They remain available through `nuself dev logs`, subsystem commands, and `:export all`.
+Interactive activity logs are user-relevant events from the current chat path: direct chat service/tool calls, approval prompts for gated tool execution, persona/self discussion progress, and chat/daemon failure or failover events. Background subsystem logs from reason, reflection, memory, trace, notification, or other autonomous services must not appear in the live REPL output only because they were written while a chat turn was waiting. They remain available through `nuself dev logs` and subsystem commands.
+
+The interactive session captures the current chat path's `chat`, `daemon`, and
+`persona` activity plus approval prompts for transcript export. `:export all`
+includes every such captured event, including low-level ones that live output
+and the default shareable export omit; it does not turn reason, reflection,
+memory, trace, notification, or other concurrent background audit records into
+chat-transcript activity.
 
 When attached to the daemon, the REPL opens a turn-scoped activity
 subscription and long-polls bounded event batches while the chat request runs.
@@ -168,6 +175,12 @@ When a log records one subsystem calling another subsystem's service/tool bounda
 `persona_summary` activity is rendered as a multi-line block. The header follows the same `[component] event key=value ...` rule and names the event once, then each persona contribution is printed on its own indented line in contribution order, followed by the synthesizer line if present. It must not collapse multiple persona thoughts into one pipe-delimited line. Because self activation `status` and host `escalation_reason` values can be long natural-language text, `[selves]` logs render these values as indented body text instead of placing them in the header. Indented lines under `[selves]` logs are prose/body lines, not additional `key=value` metadata. If the log message already contains the escalation reason, the renderer must not repeat it as a separate `escalation_reason=...` field.
 
 Competitive persona discussion logs, including chat-triggered and reflection-triggered discussions, are `persona` component logs and render with the display tag `[selves]`. Logs with `discussion_trace` metadata render the header as one compact log line and then print the trace underneath using the discussion trace block format. The trace block is indented relative to the log header so each self contribution reads like a chat message instead of a single serialized metadata list. Chat-triggered competitive discussions also emit `persona_discussion_step` logs as each trace entry is produced, then emit a final `persona_discussion` summary without re-dumping the full trace.
+
+The live-chat send thread is a continuation of the interactive turn, not an
+independent worker. Its target captures the creating RuntimeContext before the
+thread starts and restores the thread's prior context after completion or
+failure. Long-lived daemon workers follow their separate runtime ownership
+contract and never inherit CLI context.
 
 When color is enabled, each known self label in a `persona_summary` or `discussion_trace` block uses a stable distinct color. Color applies only to the speaker label, not the thought text, and no-color mode preserves the same plain text without ANSI escapes.
 

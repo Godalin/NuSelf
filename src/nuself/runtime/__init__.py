@@ -2,6 +2,7 @@
 
 from nuself.runtime.context import (
     RuntimeContext,
+    bind_runtime_context,
     current_runtime_context,
     runtime_context,
     use_runtime_context,
@@ -68,6 +69,7 @@ __all__ = [
     "WorkerLifecycleSnapshot",
     "WorkerLifecycleState",
     "build_event_definition_registry",
+    "bind_runtime_context",
     "current_runtime_context",
     "runtime_context",
     "use_runtime_context",

@@ -242,6 +242,33 @@ the next tick never inherits correlation left by the previous one.
 The continuously blocking reason export worker is not tick-scoped: each of its
 operations is scoped by the dequeued `JobMessage` as specified above.
 
+## Deferred Callback Context
+
+`bind_runtime_context(callback)` captures the current immutable
+`RuntimeContext` when the callback is bound. Every later invocation exactly
+installs that captured context for the callback duration and restores the
+invoking thread's context on return or exception. It is used only when deferred
+work continues the same logical operation.
+
+Ownership rules:
+
+- synchronous `run_observed_best_effort` operations execute in their existing
+  context and need no binding;
+- the CLI live-chat send thread binds its callback so the chat turn continues
+  across the thread boundary;
+- the CLI establishes an exact turn context before binding, so unrelated
+  ambient request, job, or trace identity cannot leak into a new user turn;
+- correlation inheritance does not itself grant presentation ownership:
+  interactive sessions capture only activity allowed by the CLI visibility
+  contract, even when other synchronous work inherits the same turn identity;
+- long-lived `OwnedWorker` targets do not inherit their creator's context;
+  their supervisor and per-tick/message boundaries own context explicitly;
+- queue wake-up Timers do not inherit context when the queued `JobMessage`
+  already carries an immutable context envelope.
+
+Implicit or blanket thread-context propagation is forbidden because it can
+attach startup requests or previous operations to unrelated background work.
+
 ## Event Delivery
 
 Ephemeral events use an in-process publisher/subscriber interface:

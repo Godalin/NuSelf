@@ -328,6 +328,9 @@ context 记录仍可读取。
 每次定时 memory、reflection、reason 和 notification-delivery tick 也会获得新的
 job identity；嵌套工作与失败诊断共享该 identity，复用 worker thread 时每轮都会从
 隔离的 context 开始。
+短生命周期的 deferred callback 可以显式绑定其所延续逻辑操作的不可变 runtime
+context。交互聊天的发送线程使用这一边界，同时 transcript capture 仍仅限当前 chat
+path，不会吸收并发后台子系统的 audit record。
 
 ## 通知
 

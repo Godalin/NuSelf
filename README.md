@@ -347,6 +347,10 @@ Every scheduled memory, reflection, reason, and notification-delivery tick
 also receives a fresh job identity. Nested work and failure diagnostics share
 that identity, and reused worker threads begin each iteration with an isolated
 context.
+Short-lived deferred callbacks can explicitly bind the immutable runtime
+context of the logical operation they continue. Interactive chat uses this
+boundary for its send thread, while transcript capture remains limited to the
+chat path and does not absorb concurrent background subsystem audit records.
 
 ## Notifications
 

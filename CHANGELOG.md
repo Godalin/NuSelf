@@ -58,6 +58,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Interactive chat send callbacks now preserve the exact thread/turn runtime
+  context across their worker-thread boundary without inheriting stale
+  request, job, or trace identity. Transcript capture keeps low-level activity
+  from the current chat path while excluding correlated background subsystem
+  audit records.
 - Daemon JSONL transport now uses a shared 1 MiB request/response frame limit,
   requires newline-complete UTF-8 JSON, times out stalled server reads, and
   rejects incomplete, extra, non-finite, or response-id-mismatched frames.

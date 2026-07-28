@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from collections.abc import Mapping
 from typing import cast
 
@@ -11,6 +12,7 @@ from nuself.runtime import (
     MessageKind,
     RuntimeContext,
     RuntimeEnvelope,
+    bind_runtime_context,
     current_runtime_context,
     runtime_context,
     use_runtime_context,
@@ -50,6 +52,59 @@ def test_saved_runtime_context_replaces_ambient_and_restores() -> None:
             request_id="ambient-request",
             thread_id="ambient-thread",
             source="worker",
+        )
+
+    assert current_runtime_context() == RuntimeContext()
+
+
+def test_bound_runtime_callback_captures_context_across_thread() -> None:
+    observed: list[RuntimeContext] = []
+
+    with runtime_context(
+        request_id="captured-request",
+        thread_id="captured-thread",
+        source="client",
+    ):
+        bound = bind_runtime_context(
+            lambda: observed.append(current_runtime_context())
+        )
+
+    with runtime_context(request_id="invoker-request", source="test"):
+        worker = threading.Thread(target=bound)
+        worker.start()
+        worker.join()
+        assert current_runtime_context() == RuntimeContext(
+            request_id="invoker-request",
+            source="test",
+        )
+
+    assert observed == [
+        RuntimeContext(
+            request_id="captured-request",
+            thread_id="captured-thread",
+            source="client",
+        )
+    ]
+
+
+def test_bound_runtime_callback_restores_invoker_after_exception() -> None:
+    def fail(value: str) -> None:
+        assert value == "expected"
+        assert current_runtime_context() == RuntimeContext(
+            request_id="captured-request",
+            source="client",
+        )
+        raise RuntimeError("callback failed")
+
+    with runtime_context(request_id="captured-request", source="client"):
+        bound = bind_runtime_context(fail)
+
+    with runtime_context(request_id="invoker-request", source="test"):
+        with pytest.raises(RuntimeError, match="callback failed"):
+            bound("expected")
+        assert current_runtime_context() == RuntimeContext(
+            request_id="invoker-request",
+            source="test",
         )
 
     assert current_runtime_context() == RuntimeContext()

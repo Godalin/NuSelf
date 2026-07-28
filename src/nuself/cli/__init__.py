@@ -153,6 +153,11 @@ try:
         write_log_event,
     )
     from nuself.memory.curator import MemoryCurator
+    from nuself.runtime.context import (
+        RuntimeContext,
+        bind_runtime_context,
+        use_runtime_context,
+    )
     from nuself.tui.render import TerminalTheme, render_log_event, render_session_header
 finally:
     warnings.warn = _original_warn
@@ -485,16 +490,25 @@ def _send_interactive_chat_turn(
             print(
                 f"Retrying message after failed attempt ({attempt}/{INTERACTIVE_CHAT_ATTEMPTS})..."
             )
-        result, events, printed_logs = _run_interactive_send_with_live_logs(
-            send_message,
-            message,
-            thread_id,
-            turn_id,
-            project_root,
-            log_cursor,
-            printed_logs=printed_logs,
-            daemon_activity=daemon_activity,
-        )
+        with use_runtime_context(
+            RuntimeContext(
+                thread_id=thread_id,
+                turn_id=turn_id,
+                source="client",
+            )
+        ):
+            result, events, printed_logs = (
+                _run_interactive_send_with_live_logs(
+                    send_message,
+                    message,
+                    thread_id,
+                    turn_id,
+                    project_root,
+                    log_cursor,
+                    printed_logs=printed_logs,
+                    daemon_activity=daemon_activity,
+                )
+            )
         previous_next_index = session.captured_next_indexes.get(
             thread_id, session.start_index_for(project_root, thread_id)
         )
@@ -562,7 +576,10 @@ def _run_interactive_send_with_live_logs(
         except BaseException as exc:  # pragma: no cover - defensive thread boundary
             error_box.append(exc)
 
-    send_thread = threading.Thread(target=_target, daemon=True)
+    send_thread = threading.Thread(
+        target=bind_runtime_context(_target),
+        daemon=True,
+    )
     send_thread.start()
     captured_events: list[LogEvent] = []
     try:
@@ -596,7 +613,9 @@ def _run_interactive_send_with_live_logs(
                     turn_id=turn_id,
                 )
             if new_events:
-                captured_events.extend(new_events)
+                captured_events.extend(
+                    _captured_interactive_activity_events(new_events)
+                )
                 printed_logs = _print_visible_interactive_activity_events(
                     new_events, printed_logs=printed_logs
                 )
@@ -637,7 +656,7 @@ def _run_interactive_send_with_live_logs(
             turn_id=turn_id,
         )
     if new_events:
-        captured_events.extend(new_events)
+        captured_events.extend(_captured_interactive_activity_events(new_events))
         printed_logs = _print_visible_interactive_activity_events(
             new_events, printed_logs=printed_logs
         )
@@ -1079,6 +1098,17 @@ def _print_interactive_activity_events(events: list[LogEvent]) -> None:
 
 def _visible_interactive_activity_events(events: list[LogEvent]) -> list[LogEvent]:
     return [event for event in events if _is_interactive_activity_log(event)]
+
+
+def _captured_interactive_activity_events(
+    events: list[LogEvent],
+) -> list[LogEvent]:
+    return [
+        event
+        for event in events
+        if event.component in {"chat", "daemon", "persona"}
+        or event.event == "approval_prompted"
+    ]
 
 
 def _is_interactive_activity_log(event: LogEvent) -> bool:
