@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
 from nuself.memory.intake import MemoryIntakeAgent, _extract_json_object
@@ -10,14 +12,20 @@ from nuself.profile.repository import ProfileItemRepository
 
 
 def test_memory_intake_locally_infers_goal() -> None:
-    llm = FakeIntakeLLM('{"type":"goal","title":"Finish memory system planning","tags":["planning"],"confidence":0.8}')
+    llm = FakeIntakeLLM(
+        '{"type":"goal","title":"Finish memory system planning","tags":["planning"],'
+        '"confidence":0.8,"importance":0.7}'
+    )
     result = MemoryIntakeAgent(llm=llm).infer(body="My goal is to finish the memory system planning.")
 
     assert result.type == "goal"
 
 
 def test_memory_intake_locally_infers_concept() -> None:
-    llm = FakeIntakeLLM('{"type":"concept","title":"Temporal memory preserves change","tags":["memory"],"confidence":0.7}')
+    llm = FakeIntakeLLM(
+        '{"type":"concept","title":"Temporal memory preserves change","tags":["memory"],'
+        '"confidence":0.7,"importance":0.6}'
+    )
     result = MemoryIntakeAgent(llm=llm).infer(body="Temporal memory means preserving when a thought changed.")
 
     assert result.type == "concept"
@@ -46,7 +54,10 @@ def test_memory_intake_raises_on_invalid_llm_response() -> None:
 
 
 def test_memory_intake_requires_llm_tags() -> None:
-    llm = FakeIntakeLLM('{"type":"preference","title":"Concise CLI output","tags":[],"confidence":0.8}')
+    llm = FakeIntakeLLM(
+        '{"type":"preference","title":"Concise CLI output","tags":[],"confidence":0.8,'
+        '"importance":0.6}'
+    )
     agent = MemoryIntakeAgent(llm=llm)
 
     try:
@@ -59,6 +70,28 @@ def test_memory_intake_requires_llm_tags() -> None:
 def test_extract_json_object_strips_markdown_fences() -> None:
     raw = '```json\n{"type":"belief","title":"Test"}\n```'
     assert _extract_json_object(raw) == '{"type":"belief","title":"Test"}'
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        '{"type":"belief","title":"Title","tags":["memory"],"confidence":0.8}',
+        '{"type":"belief","title":"Title","tags":["memory"],"importance":0.6}',
+        '{"type":"belief","title":"Title","tags":[],"confidence":0.8,"importance":0.6}',
+        '{"type":"belief","title":"Title","tags":["a","b","c","d","e"],'
+        '"confidence":0.8,"importance":0.6}',
+        '{"type":"belief","title":"Title","tags":["memory"],"confidence":1.2,"importance":0.6}',
+        '{"type":"belief","title":"Title","tags":["memory"],"confidence":0.8,"importance":-0.1}',
+        '{"type":"belief","title":"Title","tags":["memory"],"confidence":true,"importance":0.6}',
+        '{"type":"belief","title":"Title","tags":["memory"],"confidence":0.8,'
+        '"importance":0.6,"unknown":"value"}',
+    ],
+)
+def test_memory_intake_rejects_incomplete_or_coercive_schema(response: str) -> None:
+    agent = MemoryIntakeAgent(llm=FakeIntakeLLM(response))
+
+    with pytest.raises(ValueError, match="invalid JSON"):
+        agent.infer(body="A durable memory note.")
 
 
 class FakeIntakeLLM:
@@ -82,7 +115,10 @@ def test_memory_intake_includes_profile_context_in_prompt(tmp_path: Path) -> Non
             source_refs=["source:profile:0"],
         )
     )
-    llm = FakeIntakeLLM('{"type":"preference","title":"Concise CLI output","tags":["cli"],"confidence":0.8}')
+    llm = FakeIntakeLLM(
+        '{"type":"preference","title":"Concise CLI output","tags":["cli"],'
+        '"confidence":0.8,"importance":0.6}'
+    )
     agent = MemoryIntakeAgent(tmp_path, llm=llm, profile_repository=profile_repo)
 
     agent.infer(body="I prefer concise CLI output.")

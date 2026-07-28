@@ -7,11 +7,11 @@ import re
 from pathlib import Path
 from typing import cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.domain.memory import MemoryEntryType, MemoryTypeRegistry, default_memory_type_registry
 from nuself.llm import ChatLLM, ChatMessage, default_llm
-from nuself.memory.text import clamp_unit, extract_json_object
+from nuself.memory.text import extract_json_object
 from nuself.profile.repository import ProfileItemRepository
 
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
@@ -20,11 +20,13 @@ WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
 class IntakeResultOutput(BaseModel):
     """Structured memory intake result from the LLM."""
 
+    model_config = ConfigDict(strict=True, extra="forbid")
+
     type: str = Field(description="Memory entry type.")
     title: str = Field(description="Concise memory entry title.")
-    tags: list[str] = Field(default_factory=list, description="0-4 short tags.")
-    confidence: float = Field(default=0.7, description="Confidence from 0.0 to 1.0.")
-    importance: float = Field(default=0.5, description="Importance from 0.0 to 1.0.")
+    tags: list[str] = Field(min_length=1, max_length=4, description="1-4 short tags.")
+    confidence: float = Field(ge=0, le=1, description="Confidence from 0.0 to 1.0.")
+    importance: float = Field(ge=0, le=1, description="Importance from 0.0 to 1.0.")
 
 
 @dataclass(frozen=True)
@@ -143,8 +145,8 @@ def _parse_intake_result(raw: str, *, allowed_types: tuple[str, ...] | None = No
         title=title,
         body="",
         tags=tags,
-        confidence=_clamp_confidence(output.confidence),
-        importance=_clamp_importance(output.importance),
+        confidence=output.confidence,
+        importance=output.importance,
     )
 
 
@@ -169,11 +171,3 @@ def _normalize_tags(tags: list[str]) -> tuple[str, ...]:
         result.append(clean)
         seen.add(clean)
     return tuple(result)
-
-
-def _clamp_confidence(value: float) -> float:
-    return clamp_unit(value)
-
-
-def _clamp_importance(value: float) -> float:
-    return clamp_unit(value)

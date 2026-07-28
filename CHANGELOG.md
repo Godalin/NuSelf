@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Manual memory intake now requires a complete strict generated schema for
+  type, title, tags, confidence, and importance. Unknown fields, coercive
+  values, invalid tag counts, and out-of-range scores now fail the command
+  instead of being defaulted or clamped.
 - Memory optimizer responses now use strict, extra-forbid action schemas with
   bounded confidence. Every generated action is validated before candidate
   dispatch; one invalid action defers the complete decision instead of

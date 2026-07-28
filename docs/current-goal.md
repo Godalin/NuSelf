@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Memory optimizer action validation is strict, and any invalid generated
-action defers the complete decision before candidate dispatch.
+Idle. Manual memory intake accepts only the complete strict generated schema
+and rejects invalid confidence or importance instead of repairing it.
 
 ## Active Branch
 
@@ -23,17 +23,14 @@ code.
 
 ## Completion Evidence
 
-- Optimizer output and action models use strict types, forbid extra fields,
-  and constrain present confidence values from zero through one.
-- Every action is converted to `MemoryOptimizeAction` before dispatch; one
-  invalid sibling rejects the complete generated decision.
-- Every action requires a non-blank target entry id. Updates additionally
-  require non-blank title/body, reject raw transcripts, and reject unknown
-  memory type overrides.
-- Confidence clamping is removed from parsing and candidate creation because
-  invalid values no longer cross the typed boundary.
-- Focused optimizer tests: 15 passed.
-- Final full tests: 1438 passed.
+- Intake output uses strict types, forbids extra fields, and requires type,
+  title, tags, confidence, and importance without generated defaults.
+- Generated tags require one through four items. Confidence and importance are
+  constrained from zero through one at the typed boundary.
+- Empty normalized titles/tags and unregistered types remain rejected.
+- Confidence and importance clamping is removed; invalid values fail intake.
+- Focused intake tests: 15 passed.
+- Final full tests: 1447 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -44,4 +41,5 @@ their validated commit.
 
 ## Next Review Batch
 
-Strictly validate memory intake JSON without clamping invalid scores.
+Audit remaining prompted-JSON subsystem boundaries and prioritize migration to
+framework-native structured output.

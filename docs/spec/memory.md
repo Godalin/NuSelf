@@ -10,8 +10,14 @@
 4. The agent must normalize body by collapsing whitespace.
 5. The agent must raise `ValueError` if normalized body is empty.
 6. The agent must include up to 5 matching profile items in the LLM prompt.
-7. The LLM result must include `type`, `title`, `tags`, `confidence`, and `importance`.
-8. Result is written directly to `MemoryEntryRepository` (bypasses candidate queue), then `reindex()` is called.
+7. The LLM result must include `type`, `title`, `tags`, `confidence`, and
+   `importance`. Its schema uses strict types, forbids unknown fields, requires
+   1-4 tags, and constrains confidence and importance from zero through one.
+   Invalid values are rejected rather than defaulted, coerced, or clamped.
+8. The generated type must be registered and the normalized title and tags
+   must remain non-empty.
+9. Result is written directly to `MemoryEntryRepository` (bypasses candidate
+   queue), then `reindex()` is called.
 
 ## Temporal Memory Contract
 
