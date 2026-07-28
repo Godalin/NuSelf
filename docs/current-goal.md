@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Model daemon ownership and readiness as one explicit lifecycle phase.
+Make daemon status observation single-use, reusable, and uniformly surfaced.
 
 ## Active Branch
 
@@ -13,41 +13,42 @@ Model daemon ownership and readiness as one explicit lifecycle phase.
 
 ## Ordered Work
 
-1. Audit every `DaemonStatus` constructor, consumer, and ownership check.
-2. Replace stored `running` with explicit stopped/owned/ready phases.
-3. Make ownership inspection failure a typed unknown snapshot.
-4. Wrap status failure consistently in start/stop lifecycle errors.
-5. Render phases and status-unavailable errors across CLI entrypoints.
-6. Verify every phase, PID gating, error causes, and command exit behavior.
+1. Audit every status call and identify duplicate observations per CLI decision.
+2. Define explicit same-decision snapshot reuse without global caching.
+3. Validate reused snapshots belong to the requested runtime project.
+4. Reuse the default entrypoint snapshot when starting the daemon.
+5. Centralize CLI status observation and safe failure reporting.
+6. Cover REPL status failure and prove commands do not duplicate observation.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Server readiness publication order remains unchanged.
-- Worker health remains separate from process ownership/readiness phase.
-- No compatibility alias preserves boolean constructor input.
+- Status remains an instantaneous observation, not a lease or durable fact.
+- Start/stop polling always takes fresh snapshots after the initial decision.
+- No process-global, time-based, or cross-command status cache is introduced.
 
 ## Completion Evidence
 
-- `DaemonStatus.phase` is authoritative across `stopped`, `owned_unready`,
-  `ready`, `inconsistent`, and typed-error `unknown`; `running` is derived.
-- Status combines typed ping and non-blocking instance-lock ownership, and a
-  missing lock returns stopped without creating runtime metadata.
-- Only `ready` may carry PID identity; construction rejects PID on every other
-  phase and observation reads PID only after ready is proven.
-- `DaemonStatusError` retains an unknown partial snapshot and original lock
-  failure; start/stop wrap it as typed lifecycle failures with full chaining.
-- Initial start rejects an existing unready owner without spawning a competing
-  child; inconsistent readiness fails rather than being treated as stopped.
-- CLI status/list/system/entrypoint surfaces render phase directly, report
-  ownership inspection failure safely, and return non-zero when unavailable.
-- Chat/open one-shot fallback is permitted only for `stopped`; owned-unready or
-  inconsistent state cannot start concurrent local work.
-- Direct tests cover all phase combinations, PID gating, no-write stopped
-  observation, status-error causality, start rejection, CLI errors, and fallback
-  prevention.
-- Focused lifecycle and CLI suites: `359 passed`.
-- Full test suite: `1722 passed`.
+- Status-call audit found one duplicate default-launch observation and one REPL
+  error path that bypassed the shared safe CLI boundary.
+- `lifecycle.start(initial_status=...)` reuses only an explicitly supplied
+  same-decision snapshot and rejects socket/PID paths from another project
+  before creating runtime directories.
+- Startup polling after the initial decision remains fresh, and daemon instance
+  locking remains the authoritative competing-start race boundary.
+- The default launcher now passes its initial stopped snapshot into startup, so
+  that command decision performs one initial typed ping and ownership probe.
+- `cli.daemon_status.observe_daemon_status()` is the single status/error
+  boundary used by daemon commands, system checks, launch entrypoints,
+  interactive headers, and REPL `:dev status`.
+- Status inspection failure is rendered once with the stable safe message;
+  internal cause details remain absent from CLI output and the REPL stays alive.
+- Tests patch the real `nuself.daemon.lifecycle` owner rather than depending on
+  an incidental re-export from the CLI composition root.
+- Direct tests prove snapshot reuse, cross-project rejection, one observation
+  per default launch decision, and safe REPL status failure.
+- Focused lifecycle and CLI suites: `363 passed`.
+- Full test suite: `1726 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
@@ -57,5 +58,4 @@ Model daemon ownership and readiness as one explicit lifecycle phase.
 
 ## Next Review Batch
 
-Review daemon status observation cost and snapshot reuse after phase modeling is
-authoritative.
+Review lifecycle transition result types and audit projection semantics.

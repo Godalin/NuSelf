@@ -784,6 +784,15 @@ typed status error retaining an `unknown` partial snapshot and the original
 cause. If the stable lock file has never existed, observation returns `stopped`
 without creating runtime directories or metadata.
 
+A status value is an immutable point-in-time observation, not a lease. Callers
+must not cache it across commands or use elapsed-time expiry as a substitute
+for a fresh lifecycle decision. A synchronous operation may explicitly reuse
+the snapshot that triggered that same operation, avoiding a duplicate typed
+ping and lock probe. Lifecycle code validates that a supplied snapshot names
+the requested runtime socket and PID paths before using it. Any later polling
+iteration always observes a fresh snapshot; the instance lock remains the
+authoritative race boundary for competing process startup.
+
 ### PID Metadata
 
 After socket binding, the lock owner publishes

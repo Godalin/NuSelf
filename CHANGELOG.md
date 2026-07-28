@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon status observation is now shared across CLI and REPL surfaces; the
+  default launcher reuses its initial project-validated snapshot instead of
+  immediately repeating the same ping and ownership probe.
 - Daemon status now exposes explicit `stopped`, `owned_unready`, `ready`,
   `inconsistent`, and typed `unknown` phases; ambiguous ownership never falls
   back to one-shot execution or masquerades as stopped.

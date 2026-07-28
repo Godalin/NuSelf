@@ -50,6 +50,7 @@ try:
         EntrypointCallbacks,
         EntrypointController,
     )
+    from nuself.cli.daemon_status import observe_daemon_status
     from nuself.cli.repl.activity import (
         print_interactive_activity_events as _print_interactive_activity_events,
     )
@@ -99,7 +100,6 @@ try:
         send_interactive_chat_turn as _run_interactive_chat_turn,
     )
     from nuself.cli.repl.types import InteractiveChatResult
-    from nuself.daemon import lifecycle
     from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
     from nuself.runtime.observability import report_observed_failure
     from nuself.storage import reset_default_backend
@@ -337,9 +337,8 @@ def _render_assistant_reply_rich(text: str) -> None:
 
 
 def _interactive_daemon_status(project_root: Path | None) -> str:
-    try:
-        status = lifecycle.status(project_root)
-    except lifecycle.DaemonStatusError:
+    status = observe_daemon_status(project_root)
+    if status is None:
         return "unknown"
     return "running" if status.running else (
         "one-shot" if status.phase == "stopped" else status.phase

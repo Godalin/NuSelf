@@ -103,8 +103,11 @@ def _status(tmp_path: Path, *, running: bool) -> DaemonStatus:
 
 def _return_status(
     value: DaemonStatus,
-) -> Callable[[Path | None], DaemonStatus]:
-    def get_status(_project_root: Path | None) -> DaemonStatus:
+) -> Callable[..., DaemonStatus]:
+    def get_status(
+        _project_root: Path | None,
+        **_kwargs: object,
+    ) -> DaemonStatus:
         return value
 
     return get_status
@@ -131,6 +134,38 @@ def test_default_entrypoint_stops_when_daemon_start_fails(
     assert "Failed to start daemon:" in captured.err
 
 
+def test_default_entrypoint_reuses_its_initial_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stopped = _status(tmp_path, running=False)
+    ready = _status(tmp_path, running=True)
+    status_calls = 0
+
+    def observe(project_root: Path | None) -> DaemonStatus:
+        nonlocal status_calls
+        status_calls += 1
+        return stopped
+
+    def start(
+        project_root: Path | None,
+        *,
+        initial_status: DaemonStatus | None = None,
+    ) -> DaemonStatus:
+        assert initial_status is stopped
+        return ready
+
+    monkeypatch.setattr(entrypoints.lifecycle, "status", observe)
+    monkeypatch.setattr(entrypoints.lifecycle, "start", start)
+
+    result = RecordingCallbacks().controller().handle_default(
+        argparse.Namespace(project_root=tmp_path, message="hello")
+    )
+
+    assert result == 0
+    assert status_calls == 1
+
+
 def test_default_entrypoint_reports_typed_start_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -143,7 +178,12 @@ def test_default_entrypoint_reports_typed_start_failure(
         exit_code=7,
     )
 
-    def fail_start(project_root: Path | None) -> DaemonStatus:
+    def fail_start(
+        project_root: Path | None,
+        *,
+        initial_status: DaemonStatus | None = None,
+    ) -> DaemonStatus:
+        del initial_status
         raise failure
 
     monkeypatch.setattr(entrypoints.lifecycle, "status", _return_status(stopped))

@@ -18,8 +18,14 @@ from langchain_core.messages import BaseMessage
 from nuself import cli
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.cli import build_parser, main
+from nuself.config import runtime_paths
 from nuself.daemon.client import DaemonConnectionError
-from nuself.daemon.lifecycle import DaemonStartError, DaemonStatus, DaemonStopError
+from nuself.daemon.lifecycle import (
+    DaemonStartError,
+    DaemonStatus,
+    DaemonStatusError,
+    DaemonStopError,
+)
 from nuself.daemon.protocol import DaemonResponse
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.memory.intake import IntakeResultOutput
@@ -365,6 +371,47 @@ def test_interactive_status_command_shows_daemon_status(
     assert "daemon stopped" in captured.out
     assert "daemon stopped pid=- socket=" in captured.out
     assert "\n\nNuSelf> " not in captured.out.split("daemon stopped", maxsplit=1)[1]
+
+
+def test_interactive_status_command_reports_observation_failure(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
+    paths = runtime_paths(tmp_path)
+    stopped = DaemonStatus(
+        phase="stopped",
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    unknown = DaemonStatus(
+        phase="unknown",
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    calls = 0
+
+    def observe(project_root: Path | None) -> DaemonStatus:
+        nonlocal calls
+        calls += 1
+        if calls <= 2:
+            return stopped
+        raise DaemonStatusError(unknown) from OSError("private detail")
+
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", observe)
+    monkeypatch.setattr("sys.stdin", _TextInput(":dev status\n:q\n"))
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert (
+        "Daemon status unavailable: "
+        "daemon ownership status could not be observed"
+    ) in captured.err
+    assert "private detail" not in captured.err
 
 
 def test_interactive_logs_command_shows_recent_activity(
@@ -788,7 +835,7 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
         )
 
     monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
     monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
 
     result = main(["--project-root", str(tmp_path), "chat"])
@@ -860,7 +907,7 @@ def test_interactive_daemon_application_error_does_not_retry(
         return daemon_status
 
     monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
     monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
 
     result = main(["--project-root", str(tmp_path), "chat"])
@@ -912,7 +959,7 @@ def test_interactive_malformed_daemon_payload_does_not_retry(
 
     monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
     monkeypatch.setattr(
-        "nuself.cli.lifecycle.status",
+        "nuself.daemon.lifecycle.status",
         fake_status,
     )
     monkeypatch.setattr(
@@ -1230,7 +1277,7 @@ def test_default_entrypoint_uses_existing_daemon_with_message(
         print(f"sent {message}")
         return 0
 
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
     monkeypatch.setattr("nuself.cli._send_chat", fake_send)
 
     result = main(["--project-root", str(tmp_path), "--message", "hello"])
@@ -1256,7 +1303,7 @@ def test_default_entrypoint_interactive_omits_redundant_startup_preamble(
         return daemon_status
 
     monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
 
     result = main(["--project-root", str(tmp_path)])
     captured = capsys.readouterr()
@@ -1289,15 +1336,20 @@ def test_default_entrypoint_creates_daemon_when_missing(
     def fake_status(project_root: Path | None) -> DaemonStatus:
         return stopped
 
-    def fake_start(project_root: Path | None) -> DaemonStatus:
+    def fake_start(
+        project_root: Path | None,
+        *,
+        initial_status: DaemonStatus | None = None,
+    ) -> DaemonStatus:
+        assert initial_status is stopped
         return running
 
     def fake_send(message: str, project_root: Path | None) -> int:
         print(f"sent {message}")
         return 0
 
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.lifecycle.start", fake_start)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.start", fake_start)
     monkeypatch.setattr("nuself.cli._send_chat", fake_send)
 
     result = main(["--project-root", str(tmp_path), "--message", "hello"])
@@ -1345,7 +1397,7 @@ def test_daemon_chat_uses_long_timeout(
     def fake_status(project_root: Path | None) -> DaemonStatus:
         return daemon_status
 
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
     monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
 
     result = main(["--project-root", str(tmp_path), "attach", "--message", "hello"])
@@ -1397,7 +1449,7 @@ def test_daemon_chat_uses_configured_request_timeout(
     def fake_status(project_root: Path | None) -> DaemonStatus:
         return daemon_status
 
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
     monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
 
     result = main(["--project-root", str(tmp_path), "attach", "--message", "hello"])
@@ -1441,7 +1493,7 @@ def test_daemon_chat_prints_memory_update(
     def fake_status(project_root: Path | None) -> DaemonStatus:
         return daemon_status
 
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
     monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
 
     result = main(
@@ -1476,7 +1528,7 @@ def test_daemon_chat_connection_error_is_reported(
     def fake_status(project_root: Path | None) -> DaemonStatus:
         return daemon_status
 
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
     monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
 
     result = main(["--project-root", str(tmp_path), "attach", "--message", "hello"])
@@ -3349,7 +3401,7 @@ def test_interactive_whoami_shows_profile_items(
     repo.save(ProfileItem(type="fact", title="Work", body="I work in software."))
 
     monkeypatch.setattr("sys.stdin", _TextInput(":whoami\n:q\n"))
-    monkeypatch.setattr("nuself.cli.lifecycle.status", _mock_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", _mock_status)
     result = main(["--project-root", str(tmp_path), "attach"])
     captured = capsys.readouterr()
     assert result == 0
@@ -3375,7 +3427,7 @@ def test_interactive_notify_lists_pending(
 
     monkeypatch.setattr("sys.stdin", _TextInput(":inbox notify\n:q\n"))
     monkeypatch.setattr(
-        "nuself.cli.lifecycle.status",
+        "nuself.daemon.lifecycle.status",
         _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
@@ -3403,7 +3455,7 @@ def test_interactive_notify_send_and_dismiss(
 
     monkeypatch.setattr("sys.stdin", _TextInput(":inbox notify dismiss n-002\n:q\n"))
     monkeypatch.setattr(
-        "nuself.cli.lifecycle.status",
+        "nuself.daemon.lifecycle.status",
         _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
@@ -3417,7 +3469,7 @@ def test_interactive_unknown_command_shows_hints(
 ) -> None:
     monkeypatch.setattr("sys.stdin", _TextInput(":th\n:q\n"))
     monkeypatch.setattr(
-        "nuself.cli.lifecycle.status",
+        "nuself.daemon.lifecycle.status",
         _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
@@ -3433,7 +3485,7 @@ def test_interactive_unknown_command_no_hints_for_unrelated(
 ) -> None:
     monkeypatch.setattr("sys.stdin", _TextInput(":xyz\n:q\n"))
     monkeypatch.setattr(
-        "nuself.cli.lifecycle.status",
+        "nuself.daemon.lifecycle.status",
         _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
@@ -3479,7 +3531,7 @@ def test_interactive_history_shows_recent_messages(
 
     monkeypatch.setattr("sys.stdin", _TextInput(":history\n:q\n"))
     monkeypatch.setattr(
-        "nuself.cli.lifecycle.status",
+        "nuself.daemon.lifecycle.status",
         _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
@@ -3505,7 +3557,7 @@ def test_interactive_archive_unarchive_delete_and_archived(
             ":archive\n:archived\n:unarchive alpha\n:archived\n:thread beta\n:delete\n:q\n"
         ),
     )
-    monkeypatch.setattr("nuself.cli.lifecycle.status", _mock_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", _mock_status)
     result = main(["--project-root", str(tmp_path), "thread", "open", "alpha"])
     captured = capsys.readouterr()
 
@@ -3561,8 +3613,8 @@ def test_daemon_restart_stops_then_starts(
     def fake_start(project_root: Path | None) -> DaemonStatus:
         return running
 
-    monkeypatch.setattr("nuself.cli.lifecycle.stop", fake_stop)
-    monkeypatch.setattr("nuself.cli.lifecycle.start", fake_start)
+    monkeypatch.setattr("nuself.daemon.lifecycle.stop", fake_stop)
+    monkeypatch.setattr("nuself.daemon.lifecycle.start", fake_start)
     _fail_lifecycle_audit_storage(monkeypatch)
 
     with pytest.warns(
@@ -3613,9 +3665,9 @@ def test_interactive_restart_restarts_daemon_and_keeps_session(
         return current_status
 
     monkeypatch.setattr("sys.stdin", _TextInput(":r\n:q\n"))
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.lifecycle.stop", fake_stop)
-    monkeypatch.setattr("nuself.cli.lifecycle.start", fake_start)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.stop", fake_stop)
+    monkeypatch.setattr("nuself.daemon.lifecycle.start", fake_start)
     _fail_lifecycle_audit_storage(monkeypatch)
 
     with pytest.warns(RuntimeWarning) as captured_warnings:
@@ -3645,7 +3697,7 @@ def test_daemon_start_with_mocked_lifecycle(
     def fake_start(project_root: Path | None) -> DaemonStatus:
         return running
 
-    monkeypatch.setattr("nuself.cli.lifecycle.start", fake_start)
+    monkeypatch.setattr("nuself.daemon.lifecycle.start", fake_start)
     _fail_lifecycle_audit_storage(monkeypatch)
 
     with pytest.warns(
@@ -3666,7 +3718,7 @@ def test_daemon_status_ownership_failure_is_safe(
 ) -> None:
     socket_path = tmp_path / "private" / "runtime" / "nuself.sock"
     pid_path = tmp_path / "private" / "runtime" / "nuself.pid"
-    status_error = cli.lifecycle.DaemonStatusError(
+    status_error = DaemonStatusError(
         DaemonStatus(
             phase="unknown",
             pid=None,
@@ -3683,7 +3735,7 @@ def test_daemon_status_ownership_failure_is_safe(
         del project_root, ping_timeout
         raise status_error
 
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fail_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fail_status)
 
     result = main(
         ["--project-root", str(tmp_path), "daemon", "status"]
@@ -3716,7 +3768,7 @@ def test_daemon_start_failure_is_safe_and_audited(
     def fail_start(project_root: Path | None) -> DaemonStatus:
         raise failure
 
-    monkeypatch.setattr("nuself.cli.lifecycle.start", fail_start)
+    monkeypatch.setattr("nuself.daemon.lifecycle.start", fail_start)
 
     result = main(
         ["--project-root", str(tmp_path), "daemon", "start"]
@@ -3775,9 +3827,9 @@ def test_interactive_restart_start_failure_keeps_repl_alive(
         raise failure
 
     monkeypatch.setattr("sys.stdin", _TextInput(":r\n:q\n"))
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.lifecycle.stop", fake_stop)
-    monkeypatch.setattr("nuself.cli.lifecycle.start", fail_start)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.stop", fake_stop)
+    monkeypatch.setattr("nuself.daemon.lifecycle.start", fail_start)
 
     result = main(["--project-root", str(tmp_path), "attach"])
 
@@ -3808,7 +3860,7 @@ def test_daemon_stop_with_mocked_lifecycle(
     def fake_stop(project_root: Path | None) -> DaemonStatus:
         return stopped
 
-    monkeypatch.setattr("nuself.cli.lifecycle.stop", fake_stop)
+    monkeypatch.setattr("nuself.daemon.lifecycle.stop", fake_stop)
     _fail_lifecycle_audit_storage(monkeypatch)
 
     with pytest.warns(
@@ -3842,7 +3894,7 @@ def test_daemon_stop_failure_is_safe_and_audited(
     def fail_stop(project_root: Path | None) -> DaemonStatus:
         raise failure
 
-    monkeypatch.setattr("nuself.cli.lifecycle.stop", fail_stop)
+    monkeypatch.setattr("nuself.daemon.lifecycle.stop", fail_stop)
 
     result = main(
         ["--project-root", str(tmp_path), "daemon", "stop"]
@@ -3892,8 +3944,8 @@ def test_interactive_restart_stop_failure_keeps_repl_alive(
         raise failure
 
     monkeypatch.setattr("sys.stdin", _TextInput(":r\n:q\n"))
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.lifecycle.stop", fail_stop)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.stop", fail_stop)
 
     result = main(["--project-root", str(tmp_path), "attach"])
 
@@ -3924,7 +3976,7 @@ def test_interactive_sources_lists_documents(
 
     monkeypatch.setattr("sys.stdin", _TextInput(":mem sources\n:q\n"))
     monkeypatch.setattr(
-        "nuself.cli.lifecycle.status",
+        "nuself.daemon.lifecycle.status",
         _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
@@ -3979,7 +4031,7 @@ def test_interactive_search_finds_memory(
 
     monkeypatch.setattr("sys.stdin", _TextInput(":mem search deep work\n:q\n"))
     monkeypatch.setattr(
-        "nuself.cli.lifecycle.status",
+        "nuself.daemon.lifecycle.status",
         _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
@@ -5004,7 +5056,7 @@ def test_interactive_reason_without_args_shows_help(
         return _mock_status(tmp_path)
 
     monkeypatch.setattr("sys.stdin", _TextInput(":reason\n:q\n"))
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
 
     result = main(["--project-root", str(tmp_path), "attach"])
     captured = capsys.readouterr()
@@ -5024,7 +5076,7 @@ def test_interactive_reason_list_shows_threads(
         tmp_path, prompt_generator=_test_reason_prompt_generator
     ).start_thread("Track this reasoning thread")
     monkeypatch.setattr("sys.stdin", _TextInput(":reason list\n:q\n"))
-    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
 
     result = main(["--project-root", str(tmp_path), "attach"])
     captured = capsys.readouterr()
@@ -5282,7 +5334,7 @@ def test_repl_watch_detects_new_entries(
     monkeypatch.setattr("time.sleep", _fake_sleep)
     monkeypatch.setattr("sys.stdin", _TextInput(":inbox notify watch\n:q\n"))
     monkeypatch.setattr(
-        "nuself.cli.lifecycle.status",
+        "nuself.daemon.lifecycle.status",
         _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
@@ -5327,7 +5379,7 @@ def test_repl_notify_watch_subcommand(
     monkeypatch.setattr("time.sleep", _fake_sleep)
     monkeypatch.setattr("sys.stdin", _TextInput(":inbox notify watch\n:q\n"))
     monkeypatch.setattr(
-        "nuself.cli.lifecycle.status",
+        "nuself.daemon.lifecycle.status",
         _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])
@@ -5449,7 +5501,7 @@ def test_repl_trace_lists_records(
 
     monkeypatch.setattr("sys.stdin", _TextInput(":trace\n:q\n"))
     monkeypatch.setattr(
-        "nuself.cli.lifecycle.status",
+        "nuself.daemon.lifecycle.status",
         _mock_status,
     )
     result = main(["--project-root", str(tmp_path), "attach"])

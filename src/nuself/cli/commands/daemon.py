@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Literal
 
+from nuself.cli.daemon_status import observe_daemon_status
 from nuself.daemon import client, lifecycle
 from nuself.daemon.audit import write_lifecycle_audit
 from nuself.runtime.diagnostics import (
@@ -71,6 +72,7 @@ def start_daemon_observed(
     project_root: Path | None,
     *,
     operation: Literal["start", "restart"],
+    initial_status: lifecycle.DaemonStatus | None = None,
 ) -> lifecycle.DaemonStatus:
     """Run one daemon start with shared lifecycle projections."""
 
@@ -81,7 +83,13 @@ def start_daemon_observed(
             project_root=project_root,
         )
     try:
-        result = lifecycle.start(project_root)
+        if initial_status is None:
+            result = lifecycle.start(project_root)
+        else:
+            result = lifecycle.start(
+                project_root,
+                initial_status=initial_status,
+            )
     except lifecycle.DaemonStartError as exc:
         write_start_failure_audit(
             exc,
@@ -214,14 +222,8 @@ def handle_daemon_restart(args: argparse.Namespace) -> int:
 
 
 def handle_daemon_status(args: argparse.Namespace) -> int:
-    try:
-        result = lifecycle.status(args.project_root)
-    except lifecycle.DaemonStatusError as exc:
-        print(
-            "Daemon status unavailable: "
-            f"{diagnostic_exception_message(exc)}",
-            file=sys.stderr,
-        )
+    result = observe_daemon_status(args.project_root)
+    if result is None:
         return 1
     print(format_status(result))
     return 0 if result.running else 1
@@ -256,14 +258,8 @@ def handle_daemon_health(args: argparse.Namespace) -> int:
 
 
 def handle_daemon_list(args: argparse.Namespace) -> int:
-    try:
-        result = lifecycle.status(args.project_root)
-    except lifecycle.DaemonStatusError as exc:
-        print(
-            "Daemon status unavailable: "
-            f"{diagnostic_exception_message(exc)}",
-            file=sys.stderr,
-        )
+    result = observe_daemon_status(args.project_root)
+    if result is None:
         return 1
     print(format_daemon_list(result))
     return 0

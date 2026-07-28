@@ -230,6 +230,44 @@ def test_start_isolates_raw_process_output_from_structured_daemon_log(
     assert read_log_events(project_root=tmp_path, component="daemon") == []
 
 
+def test_start_reuses_matching_initial_ready_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = runtime_paths(tmp_path)
+    ready = lifecycle.DaemonStatus(
+        phase="ready",
+        pid=42,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+
+    def fail_status(*args: object, **kwargs: object) -> lifecycle.DaemonStatus:
+        raise AssertionError("initial status must be reused")
+
+    monkeypatch.setattr(lifecycle, "status", fail_status)
+
+    assert lifecycle.start(tmp_path, initial_status=ready) is ready
+
+
+def test_start_rejects_initial_status_from_another_project(
+    tmp_path: Path,
+) -> None:
+    other_paths = runtime_paths(tmp_path / "other")
+    stopped = lifecycle.DaemonStatus(
+        phase="stopped",
+        pid=None,
+        socket_path=other_paths.socket_path,
+        pid_path=other_paths.pid_path,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="different runtime project",
+    ):
+        lifecycle.start(tmp_path, initial_status=stopped)
+
+
 def test_start_rotates_bounded_raw_process_log_before_spawn(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

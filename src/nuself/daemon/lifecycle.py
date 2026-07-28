@@ -204,14 +204,20 @@ def status(
 def start(
     project_root: Path | None = None,
     *,
+    initial_status: DaemonStatus | None = None,
     process_log_retention: DaemonProcessLogRetentionPolicy = (
         DEFAULT_DAEMON_PROCESS_LOG_RETENTION
     ),
     startup_policy: DaemonWaitPolicy = DEFAULT_DAEMON_STARTUP_POLICY,
 ) -> DaemonStatus:
     paths = runtime_paths(project_root)
-    ensure_runtime_dirs(paths)
-    current = _status_for_start(paths.project_root)
+    if initial_status is None:
+        ensure_runtime_dirs(paths)
+        current = _status_for_start(paths.project_root)
+    else:
+        _validate_status_paths(initial_status, paths)
+        ensure_runtime_dirs(paths)
+        current = initial_status
     if current.running:
         return current
     if current.phase == "owned_unready":
@@ -220,6 +226,11 @@ def start(
             status=current,
         )
     if current.phase == "inconsistent":
+        raise DaemonStartError(
+            "status_failed",
+            status=current,
+        )
+    if current.phase == "unknown":
         raise DaemonStartError(
             "status_failed",
             status=current,
@@ -300,6 +311,19 @@ def _status_for_start(
             "status_failed",
             status=exc.status,
         ) from exc
+
+
+def _validate_status_paths(
+    status_snapshot: DaemonStatus,
+    paths: RuntimePaths,
+) -> None:
+    if (
+        status_snapshot.socket_path != paths.socket_path
+        or status_snapshot.pid_path != paths.pid_path
+    ):
+        raise ValueError(
+            "initial daemon status belongs to a different runtime project"
+        )
 
 
 def _rotate_daemon_process_log_if_needed(

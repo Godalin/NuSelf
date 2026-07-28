@@ -15,6 +15,7 @@ from nuself.cli.commands.daemon import (
     format_status,
     start_daemon_observed,
 )
+from nuself.cli.daemon_status import observe_daemon_status
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import lifecycle
 from nuself.notification.deep_link import DeepLink
@@ -93,6 +94,7 @@ class EntrypointController:
                 result = start_daemon_observed(
                     args.project_root,
                     operation="start",
+                    initial_status=result,
                 )
             except lifecycle.DaemonStartError as exc:
                 print(
@@ -200,15 +202,7 @@ class EntrypointController:
     def _status_or_report(
         project_root: Path | None,
     ) -> lifecycle.DaemonStatus | None:
-        try:
-            return lifecycle.status(project_root)
-        except lifecycle.DaemonStatusError as exc:
-            print(
-                "Daemon status unavailable: "
-                f"{diagnostic_exception_message(exc)}",
-                file=sys.stderr,
-            )
-            return None
+        return observe_daemon_status(project_root)
 
     def _prepare_open_thread(
         self,

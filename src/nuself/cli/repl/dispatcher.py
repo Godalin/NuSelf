@@ -8,6 +8,7 @@ from pathlib import Path
 
 from nuself.agent.chat import ThreadState, ThreadStore
 from nuself.cli.commands.daemon import format_status
+from nuself.cli.daemon_status import observe_daemon_status
 from nuself.cli.commands.memory.entries import format_memory_preview
 from nuself.cli.commands.output import print_ansi
 from nuself.cli.repl.commands import (
@@ -41,7 +42,6 @@ from nuself.cli.repl.transcript import (
     auto_save_interactive_transcripts,
     handle_interactive_export_command,
 )
-from nuself.daemon import lifecycle
 from nuself.logs import read_log_events
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.handlers import HandlerRegistry
@@ -469,7 +469,9 @@ def _handle_inbox_command(
 def _handle_dev_command(body: str, project_root: Path | None) -> None:
     print()
     if body == "status":
-        print(format_status(lifecycle.status(project_root)))
+        status = observe_daemon_status(project_root)
+        if status is not None:
+            print(format_status(status))
     elif body == "logs":
         events = read_log_events(project_root=project_root, tail=8)
         if not events:

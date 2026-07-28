@@ -388,6 +388,10 @@ nuself daemon start | stop | restart | status | health | list
   obtained only from a runtime metadata file.
 - Status ownership-inspection failure prints a concise status-unavailable error
   and exits non-zero; it is never rendered as `stopped`.
+- Every CLI surface uses the shared daemon-status observation boundary for this
+  error rendering, including REPL `:dev status`. One command decision performs
+  one initial observation; the default launcher passes that snapshot into
+  startup rather than immediately repeating the same ping and lock probe.
 
 ### Memory
 

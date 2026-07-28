@@ -7,8 +7,8 @@ import sys
 
 from nuself.agent.chat import ThreadStore
 from nuself.cli.commands.output import print_ansi
+from nuself.cli.daemon_status import observe_daemon_status
 from nuself.config import ConfigSystem, runtime_paths
-from nuself.daemon import lifecycle
 from nuself.logs import (
     LOG_COMPONENTS,
     LogComponent,
@@ -16,18 +16,11 @@ from nuself.logs import (
 )
 from nuself.notification import NotificationOutbox
 from nuself.tui.render import render_log_event, render_log_event_json
-from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 def handle_status(args: argparse.Namespace) -> int:
-    try:
-        daemon = lifecycle.status(args.project_root)
-    except lifecycle.DaemonStatusError as exc:
-        print(
-            "Daemon status unavailable: "
-            f"{diagnostic_exception_message(exc)}",
-            file=sys.stderr,
-        )
+    daemon = observe_daemon_status(args.project_root)
+    if daemon is None:
         return 1
     threads = ThreadStore(args.project_root).list()
     pending = len(
@@ -54,13 +47,10 @@ def handle_health(args: argparse.Namespace) -> int:
         and not config_path.exists()
     ):
         issues.append(f"config file missing: {config_path}")
-    try:
-        daemon = lifecycle.status(args.project_root)
-    except lifecycle.DaemonStatusError as exc:
-        issues.append(
-            "daemon status unavailable: "
-            f"{diagnostic_exception_message(exc)}"
-        )
+    status_unavailable = False
+    daemon = observe_daemon_status(args.project_root)
+    if daemon is None:
+        status_unavailable = True
     else:
         if not daemon.running:
             issues.append(f"daemon is not ready: {daemon.phase}")
@@ -68,6 +58,8 @@ def handle_health(args: argparse.Namespace) -> int:
         print("Health issues:")
         for issue in issues:
             print(f"  - {issue}")
+        return 1
+    if status_unavailable:
         return 1
     print("All checks passed.")
     return 0
