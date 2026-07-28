@@ -7,7 +7,7 @@ import json
 import sys
 from typing import cast
 
-from nuself.cli_output import print_ansi
+from nuself.commands.output import print_ansi
 from nuself.trace.domain import TRACE_KINDS, TraceKind
 from nuself.trace.repository import (
     TraceNotFound,

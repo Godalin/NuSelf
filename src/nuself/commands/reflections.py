@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 
-from nuself.cli_output import print_ansi, resolve_handle
+from nuself.commands.output import print_ansi, resolve_handle
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import (
     ReflectionEntryNotFound,

@@ -48,7 +48,7 @@ try:
     from nuself.agent.chat import ChatAgent, ThreadState, ThreadStore
     from nuself.daemon import client, lifecycle
     from nuself.daemon.protocol import JsonValue
-    from nuself.cli_daemon import (
+    from nuself.commands.daemon import (
         format_status as _format_status,
         handle_daemon_health,
         handle_daemon_list,
@@ -57,7 +57,7 @@ try:
         handle_daemon_status,
         handle_daemon_stop,
     )
-    from nuself.cli_threads import (
+    from nuself.commands.threads import (
         handle_thread_archive,
         handle_thread_archived,
         handle_thread_branch,
@@ -68,12 +68,12 @@ try:
         handle_thread_show,
         handle_thread_unarchive,
     )
-    from nuself.cli_output import (
+    from nuself.commands.output import (
         print_ansi as _print_ansi,
         resolve_handle as _resolve_handle,
         resolve_handle_selection as _resolve_handle_selection,
     )
-    from nuself.cli_notifications import (
+    from nuself.commands.notifications import (
         handle_notify_clear,
         handle_notify_dismiss,
         handle_notify_list,
@@ -82,7 +82,7 @@ try:
         handle_notify_stats,
         handle_notify_watch,
     )
-    from nuself.cli_reason import (
+    from nuself.commands.reason import (
         REASON_VERBS,
         handle_reason_delete,
         handle_reason_list,
@@ -90,14 +90,14 @@ try:
         handle_reason_start,
         handle_reason_thread_action,
     )
-    from nuself.cli_trace import (
+    from nuself.commands.trace import (
         handle_trace_list,
         handle_trace_reindex,
         handle_trace_related,
         handle_trace_search,
         handle_trace_show,
     )
-    from nuself.cli_reflections import (
+    from nuself.commands.reflections import (
         handle_reflection_archive,
         handle_reflection_dismiss,
         handle_reflection_list,

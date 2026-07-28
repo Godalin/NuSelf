@@ -97,22 +97,23 @@ Rules:
 
 ## CLI Module Boundaries
 
-`nuself.cli` remains the composition root and parser entrypoint, but subsystem
-command implementations must move into focused modules as they are touched.
+`nuself.cli` remains the composition root and parser entrypoint. Extracted
+command implementations live under the `nuself.commands` package so the
+top-level application namespace stays focused on subsystem APIs.
 
-- `cli_daemon.py` owns daemon lifecycle/health handlers and daemon status
+- `commands/daemon.py` owns daemon lifecycle/health handlers and daemon status
   formatting.
-- `cli_threads.py` owns one-shot thread list/show/create/rename/branch/archive
+- `commands/threads.py` owns one-shot thread list/show/create/rename/branch/archive
   lifecycle handlers; REPL thread switching remains in the REPL layer.
-- `cli_output.py` owns ANSI-aware printing and visible-handle error rendering
+- `commands/output.py` owns ANSI-aware printing and visible-handle error rendering
   shared by extracted command modules.
-- `cli_notifications.py` owns one-shot notification list/show/stats/watch/send/
+- `commands/notifications.py` owns one-shot notification list/show/stats/watch/send/
   dismiss/clear handlers; notification REPL shortcuts remain in the REPL layer.
-- `cli_reason.py` owns one-shot reason list/show/start/action/delete handlers.
+- `commands/reason.py` owns one-shot reason list/show/start/action/delete handlers.
   The long-running terminal watch loop remains with REPL/session orchestration.
-- `cli_trace.py` owns one-shot trace list/show/search/related/reindex handlers
+- `commands/trace.py` owns one-shot trace list/show/search/related/reindex handlers
   and their command-line filter normalization.
-- `cli_reflections.py` owns one-shot reflection list/show/lifecycle/promote/
+- `commands/reflections.py` owns one-shot reflection list/show/lifecycle/promote/
   organize handlers; reflection REPL shortcuts remain in the REPL layer.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
