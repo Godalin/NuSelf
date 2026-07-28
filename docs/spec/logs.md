@@ -305,6 +305,18 @@ Display name mapping: `persona` → `selves`.
   file, reads only newly appended complete lines, and retains an incomplete
   trailing line for the next read. Stable event IDs provide deduplication;
   canonical record content is used only for legacy records.
+- Full and incremental reads reconcile identities after chronological sorting.
+  The first record for an identity is canonical. A later identical canonical
+  record with the same identity is an expected overlap and is silently
+  deduplicated, including across rotated/active files or activity transport
+  plus file fallback. The cursor retains canonical fingerprints across batches
+  and `mark_seen(...)`.
+- Reusing an `event_id` for different canonical record content is an integrity
+  conflict. The later record is suppressed and one non-raising terminal
+  warning is aggregated per reconciliation batch. The warning contains only
+  the conflict count plus first component/event name; it excludes event IDs,
+  record payloads, messages, metadata, and paths. Legacy records continue to
+  use canonical content-derived identity, so identical legacy copies dedupe.
 
 ## Log Retention And Rotation
 

@@ -627,6 +627,12 @@ def read_log_events(
                 corruptions,
             )
     events.sort(key=_log_event_chronological_key)
+    events, identity_conflicts = _reconcile_log_event_identities(
+        events,
+        seen_event_keys=set(),
+        seen_event_fingerprints={},
+    )
+    _report_log_identity_conflicts(identity_conflicts)
     if tail is not None and tail > 0:
         return events[-tail:]
     return events
@@ -774,18 +780,75 @@ def log_event_key(event: LogEvent) -> str:
     return f"legacy:{json.dumps(record, sort_keys=True, ensure_ascii=True)}"
 
 
+def _log_event_fingerprint(event: LogEvent) -> str:
+    return json.dumps(
+        event.to_record(),
+        sort_keys=True,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+
+
+def _reconcile_log_event_identities(
+    events: Iterable[LogEvent],
+    *,
+    seen_event_keys: set[str],
+    seen_event_fingerprints: dict[str, str],
+) -> tuple[list[LogEvent], list[LogEvent]]:
+    canonical: list[LogEvent] = []
+    conflicts: list[LogEvent] = []
+    for event in events:
+        key = log_event_key(event)
+        fingerprint = _log_event_fingerprint(event)
+        if key not in seen_event_keys:
+            seen_event_keys.add(key)
+            seen_event_fingerprints[key] = fingerprint
+            canonical.append(event)
+            continue
+        existing = seen_event_fingerprints.get(key)
+        if existing is None:
+            seen_event_fingerprints[key] = fingerprint
+            continue
+        if existing != fingerprint:
+            conflicts.append(event)
+    return canonical, conflicts
+
+
+def _report_log_identity_conflicts(
+    conflicts: list[LogEvent],
+) -> None:
+    if not conflicts:
+        return
+    first = conflicts[0]
+    emit_runtime_warning(
+        "logs/event_identity_conflict: "
+        f"count={len(conflicts)} "
+        f"first_component={first.component} "
+        f"first_event={first.event}",
+        stacklevel=3,
+    )
+
+
 class InteractiveLogCursor:
     """Incrementally reads complete lines appended after cursor creation."""
 
     def __init__(
         self,
         seen_event_keys: set[str] | None = None,
+        seen_event_fingerprints: dict[str, str] | None = None,
         offsets: dict[LogComponent, int] | None = None,
         identities: dict[LogComponent, tuple[int, int] | None] | None = None,
     ) -> None:
-        self.seen_event_keys = seen_event_keys or set()
-        self.offsets = offsets or {}
-        self.identities = identities or {}
+        self.seen_event_keys: set[str] = (
+            seen_event_keys if seen_event_keys is not None else set()
+        )
+        self.seen_event_fingerprints: dict[str, str] = (
+            seen_event_fingerprints
+            if seen_event_fingerprints is not None
+            else {}
+        )
+        self.offsets = offsets if offsets is not None else {}
+        self.identities = identities if identities is not None else {}
 
     @classmethod
     def from_project(cls, project_root: Path | None) -> InteractiveLogCursor:
@@ -805,20 +868,24 @@ class InteractiveLogCursor:
     def mark_seen(self, events: Iterable[LogEvent]) -> None:
         """Register events delivered through a non-file transport."""
 
-        for event in events:
-            self.seen_event_keys.add(log_event_key(event))
+        _, conflicts = _reconcile_log_event_identities(
+            events,
+            seen_event_keys=self.seen_event_keys,
+            seen_event_fingerprints=self.seen_event_fingerprints,
+        )
+        _report_log_identity_conflicts(conflicts)
 
     def read_new_events(self, project_root: Path | None) -> list[LogEvent]:
         events: list[LogEvent] = []
         for component in LOG_COMPONENTS:
             events.extend(self._read_component(component, project_root))
         events.sort(key=_log_event_chronological_key)
-        new_events: list[LogEvent] = []
-        for event in events:
-            key = log_event_key(event)
-            if key not in self.seen_event_keys:
-                new_events.append(event)
-            self.seen_event_keys.add(key)
+        new_events, conflicts = _reconcile_log_event_identities(
+            events,
+            seen_event_keys=self.seen_event_keys,
+            seen_event_fingerprints=self.seen_event_fingerprints,
+        )
+        _report_log_identity_conflicts(conflicts)
         return new_events
 
     def _read_component(

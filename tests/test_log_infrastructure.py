@@ -715,6 +715,135 @@ def test_incremental_cursor_deduplicates_stable_event_ids(tmp_path: Path) -> Non
     assert cursor.read_new_events(tmp_path) == []
 
 
+def test_full_reader_deduplicates_exact_rotated_overlap(
+    tmp_path: Path,
+) -> None:
+    path = log_path("chat", project_root=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    event = LogEvent(
+        time="2026-01-01T00:00:00Z",
+        level="info",
+        component="chat",
+        event="overlap_event",
+        message="same",
+        event_id="shared-event",
+        schema_version=RUNTIME_SCHEMA_VERSION,
+    )
+    serialized = json.dumps(event.to_record()) + "\n"
+    path.with_name("chat.log.1").write_text(
+        serialized,
+        encoding="utf-8",
+    )
+    path.write_text(serialized, encoding="utf-8")
+
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always")
+        events = read_log_events(
+            project_root=tmp_path,
+            component="chat",
+        )
+
+    assert events == [event]
+    assert captured == []
+
+
+def test_full_reader_reports_conflicting_event_identity_safely(
+    tmp_path: Path,
+) -> None:
+    path = log_path("chat", project_root=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    canonical = LogEvent(
+        time="2026-01-01T00:00:00Z",
+        level="info",
+        component="chat",
+        event="identity_event",
+        message="canonical private value",
+        event_id="private-event-id",
+        schema_version=RUNTIME_SCHEMA_VERSION,
+    )
+    conflict = LogEvent(
+        time="2026-01-01T00:00:01Z",
+        level="error",
+        component="chat",
+        event="identity_event",
+        message="conflicting private value",
+        event_id="private-event-id",
+        schema_version=RUNTIME_SCHEMA_VERSION,
+    )
+    path.write_text(
+        json.dumps(canonical.to_record())
+        + "\n"
+        + json.dumps(conflict.to_record())
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.warns(RuntimeWarning) as captured:
+        events = read_log_events(
+            project_root=tmp_path,
+            component="chat",
+        )
+
+    assert events == [canonical]
+    assert len(captured) == 1
+    warning = str(captured[0].message)
+    assert "logs/event_identity_conflict" in warning
+    assert "count=1" in warning
+    assert "first_component=chat" in warning
+    assert "first_event=identity_event" in warning
+    assert "private-event-id" not in warning
+    assert "private value" not in warning
+    assert str(tmp_path) not in warning
+
+
+def test_cursor_reconciles_mark_seen_across_file_batches(
+    tmp_path: Path,
+) -> None:
+    cursor = InteractiveLogCursor.from_project(tmp_path)
+    canonical = LogEvent(
+        time="2026-01-01T00:00:00Z",
+        level="info",
+        component="chat",
+        event="activity_event",
+        message="canonical",
+        event_id="activity-event-id",
+        schema_version=RUNTIME_SCHEMA_VERSION,
+    )
+    cursor.mark_seen([canonical])
+    path = log_path("chat", project_root=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(canonical.to_record()) + "\n",
+        encoding="utf-8",
+    )
+
+    with warnings.catch_warnings(record=True) as exact_warnings:
+        warnings.simplefilter("always")
+        assert cursor.read_new_events(tmp_path) == []
+    assert exact_warnings == []
+
+    conflict = LogEvent(
+        time="2026-01-01T00:00:01Z",
+        level="warning",
+        component="chat",
+        event="activity_event",
+        message="private conflict",
+        event_id="activity-event-id",
+        schema_version=RUNTIME_SCHEMA_VERSION,
+    )
+    with path.open("a", encoding="utf-8") as log_file:
+        log_file.write(json.dumps(conflict.to_record()) + "\n")
+
+    with pytest.warns(RuntimeWarning) as captured:
+        assert cursor.read_new_events(tmp_path) == []
+
+    assert len(captured) == 1
+    warning = str(captured[0].message)
+    assert "event_identity_conflict" in warning
+    assert "activity-event-id" not in warning
+    assert "private conflict" not in warning
+
+
 def test_log_rotation_bounds_backups_and_readers_include_them(
     tmp_path: Path,
 ) -> None:
