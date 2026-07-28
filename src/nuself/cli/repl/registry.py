@@ -16,6 +16,12 @@ class ReplCommand:
         return tuple(f":{item}" for item in (self.name, *self.aliases))
 
 
+@dataclass(frozen=True)
+class ResolvedReplCommand:
+    name: str
+    body: str
+
+
 REPL_COMMANDS: tuple[ReplCommand, ...] = (
     ReplCommand(
         "q",
@@ -100,7 +106,32 @@ REPL_COMMANDS: tuple[ReplCommand, ...] = (
     ReplCommand("delete", help_lines=("  :delete                   delete the current thread",)),
 )
 
-_BY_NAME = {command.name: command for command in REPL_COMMANDS}
+
+def _index_commands(
+    commands: tuple[ReplCommand, ...],
+) -> tuple[dict[str, ReplCommand], dict[str, ReplCommand]]:
+    by_name: dict[str, ReplCommand] = {}
+    by_token: dict[str, ReplCommand] = {}
+    for command in commands:
+        if command.name in by_name:
+            raise ValueError(
+                f"duplicate REPL command name: {command.name!r}"
+            )
+        by_name[command.name] = command
+        for token in command.tokens:
+            if token in by_token:
+                raise ValueError(
+                    f"duplicate REPL command token: {token!r}"
+                )
+            by_token[token] = command
+    return by_name, by_token
+
+
+_BY_NAME, _BY_TOKEN = _index_commands(REPL_COMMANDS)
+
+
+def command_names() -> tuple[str, ...]:
+    return tuple(_BY_NAME)
 
 
 def command_tokens() -> tuple[str, ...]:
@@ -128,6 +159,18 @@ def command_body(text: str, name: str) -> str | None:
 
 def command_matches(text: str, name: str) -> bool:
     return command_body(text, name) == ""
+
+
+def resolve_command(text: str) -> ResolvedReplCommand | None:
+    """Resolve a complete input to one canonical command and argument body."""
+    token, separator, remainder = text.partition(" ")
+    command = _BY_TOKEN.get(token)
+    if command is None:
+        return None
+    return ResolvedReplCommand(
+        name=command.name,
+        body=remainder.strip() if separator else "",
+    )
 
 
 def render_help_lines() -> list[str]:

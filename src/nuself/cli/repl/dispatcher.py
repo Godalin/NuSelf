@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from nuself.agent.chat import ThreadState, ThreadStore
@@ -30,7 +32,10 @@ from nuself.cli.repl.commands import (
     handle_interactive_whoami_command,
 )
 from nuself.cli.repl.input import interactive_help
-from nuself.cli.repl.registry import command_body, command_matches
+from nuself.cli.repl.registry import (
+    command_names,
+    resolve_command,
+)
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.transcript import (
     auto_save_interactive_transcripts,
@@ -38,128 +43,366 @@ from nuself.cli.repl.transcript import (
 )
 from nuself.daemon import lifecycle
 from nuself.logs import read_log_events
+from nuself.runtime.handlers import HandlerRegistry
 from nuself.tui.render import render_log_event
 
 InteractiveCommandResult = tuple[str, str]
+ReplCommandHandler = Callable[
+    [str, "ReplCommandContext"],
+    InteractiveCommandResult,
+]
+ReplCommandRegistry = HandlerRegistry[
+    str,
+    [str, "ReplCommandContext"],
+    InteractiveCommandResult,
+]
 
 
-def handle_interactive_command(
-    command: str,
-    project_root: Path | None,
-    current_thread_id: str,
-    session: InteractiveSession,
+@dataclass(frozen=True)
+class ReplCommandContext:
+    command: str
+    project_root: Path | None
+    current_thread_id: str
+    session: InteractiveSession
+
+
+class ReplCommandDispatcher:
+    """Resolve and dispatch REPL commands through one sealed registry."""
+
+    def __init__(self) -> None:
+        self._registry = _build_repl_command_registry()
+
+    @property
+    def registered_commands(self) -> tuple[str, ...]:
+        return self._registry.registered_keys
+
+    def handle(
+        self,
+        command: str,
+        project_root: Path | None,
+        current_thread_id: str,
+        session: InteractiveSession,
+    ) -> InteractiveCommandResult:
+        resolved = resolve_command(command)
+        context = ReplCommandContext(
+            command=command,
+            project_root=project_root,
+            current_thread_id=current_thread_id,
+            session=session,
+        )
+        if resolved is None:
+            return _unknown_command(context)
+        return self._registry.dispatch(
+            resolved.name,
+            resolved.body,
+            context,
+        )
+
+
+def _build_repl_command_registry() -> ReplCommandRegistry:
+    registry: ReplCommandRegistry = HandlerRegistry()
+    handlers: tuple[tuple[str, ReplCommandHandler], ...] = (
+        ("q", _handle_quit),
+        ("history", _handle_history),
+        ("whoami", _handle_whoami),
+        ("inbox", _handle_inbox),
+        ("help", _handle_help),
+        ("dev", _handle_dev),
+        ("export", _handle_export),
+        ("mem", _handle_memory),
+        ("thread", _handle_thread),
+        ("reason", _handle_reason),
+        ("trace", _handle_trace),
+        ("persona", _handle_persona),
+        ("restart", _handle_restart),
+        ("rename", _handle_rename),
+        ("branch", _handle_branch),
+        ("archive", _handle_archive),
+        ("unarchive", _handle_unarchive),
+        ("archived", _handle_archived),
+        ("delete", _handle_delete),
+    )
+    for name, handler in handlers:
+        registry.register(name, handler)
+    expected = set(command_names())
+    actual = set(registry.registered_keys)
+    if actual != expected:
+        raise RuntimeError(
+            "REPL command registry does not match command catalog: "
+            f"missing={sorted(expected - actual)} "
+            f"extra={sorted(actual - expected)}"
+        )
+    return registry.seal()
+
+
+def _unknown_command(
+    context: ReplCommandContext,
 ) -> InteractiveCommandResult:
-    """Route one normalized REPL command and return its session action."""
-
-    if command_matches(command, "q"):
-        auto_save_interactive_transcripts(project_root, session)
-        return ("exit", current_thread_id)
-    if command_matches(command, "history"):
-        print()
-        print_ansi(
-            handle_interactive_history_command(project_root, current_thread_id)
-        )
-        return ("", current_thread_id)
-    if command_matches(command, "whoami"):
-        print()
-        print_ansi(handle_interactive_whoami_command(project_root))
-        return ("", current_thread_id)
-    inbox_body = command_body(command, "inbox")
-    if inbox_body is not None:
-        _handle_inbox_command(inbox_body, command, project_root)
-        return ("", current_thread_id)
-    if command_matches(command, "help"):
-        print()
-        print(interactive_help())
-        return ("", current_thread_id)
-    dev_body = command_body(command, "dev")
-    if dev_body is not None:
-        _handle_dev_command(dev_body, project_root)
-        return ("", current_thread_id)
-    if command_body(command, "export") is not None:
-        print()
-        print_ansi(
-            handle_interactive_export_command(
-                command,
-                project_root,
-                current_thread_id,
-                session,
-            )
-        )
-        return ("", current_thread_id)
-    memory_body = command_body(command, "mem")
-    if memory_body is not None:
-        print()
-        if memory_body == "":
-            print_ansi(format_memory_preview(project_root))
-        else:
-            print_ansi(handle_interactive_memory_command(memory_body, project_root))
-        return ("", current_thread_id)
-    thread_body = command_body(command, "thread")
-    if thread_body is not None:
-        return _handle_thread_switch(thread_body, project_root, current_thread_id)
-    reason_body = command_body(command, "reason")
-    if reason_body is not None:
-        print()
-        if reason_body == "watch" or reason_body.startswith("watch "):
-            body = reason_body.removeprefix("watch").strip()
-            handle_interactive_reason_watch(
-                project_root,
-                thread_ref=body or None,
-            )
-        else:
-            print_ansi(handle_interactive_reason_command(reason_body, project_root))
-        return ("", current_thread_id)
-    trace_body = command_body(command, "trace")
-    if trace_body is not None:
-        print()
-        print_ansi(handle_interactive_trace_command(trace_body, project_root))
-        return ("", current_thread_id)
-    persona_body = command_body(command, "persona")
-    if persona_body is not None:
-        print()
-        print_ansi(
-            handle_interactive_persona_command(
-                persona_body or "list",
-                project_root,
-            )
-        )
-        return ("", current_thread_id)
-    if command_matches(command, "restart"):
-        print()
-        print_ansi(handle_interactive_restart_command(project_root))
-        return ("redraw_header", current_thread_id)
-    rename_body = command_body(command, "rename")
-    if rename_body is not None:
-        return _handle_thread_rename(
-            rename_body,
-            project_root,
-            current_thread_id,
-        )
-    branch_body = command_body(command, "branch")
-    if branch_body is not None:
-        return _handle_thread_branch(
-            branch_body,
-            project_root,
-            current_thread_id,
-        )
-    if command_matches(command, "archive"):
-        return _handle_thread_archive(project_root, current_thread_id)
-    unarchive_body = command_body(command, "unarchive")
-    if unarchive_body is not None:
-        return _handle_thread_unarchive(
-            unarchive_body,
-            project_root,
-            current_thread_id,
-        )
-    if command_matches(command, "archived"):
-        _print_archived_threads(project_root)
-        return ("", current_thread_id)
-    if command_matches(command, "delete"):
-        return _handle_thread_delete(project_root, current_thread_id)
     print()
-    print(interactive_help(command))
-    return ("", current_thread_id)
+    print(interactive_help(context.command))
+    return ("", context.current_thread_id)
+
+
+def _reject_nonempty_body(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult | None:
+    if body == "":
+        return None
+    return _unknown_command(context)
+
+
+def _handle_quit(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    rejected = _reject_nonempty_body(body, context)
+    if rejected is not None:
+        return rejected
+    auto_save_interactive_transcripts(
+        context.project_root,
+        context.session,
+    )
+    return ("exit", context.current_thread_id)
+
+
+def _handle_history(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    rejected = _reject_nonempty_body(body, context)
+    if rejected is not None:
+        return rejected
+    print()
+    print_ansi(
+        handle_interactive_history_command(
+            context.project_root,
+            context.current_thread_id,
+        )
+    )
+    return ("", context.current_thread_id)
+
+
+def _handle_whoami(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    rejected = _reject_nonempty_body(body, context)
+    if rejected is not None:
+        return rejected
+    print()
+    print_ansi(handle_interactive_whoami_command(context.project_root))
+    return ("", context.current_thread_id)
+
+
+def _handle_inbox(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    _handle_inbox_command(
+        body,
+        context.command,
+        context.project_root,
+    )
+    return ("", context.current_thread_id)
+
+
+def _handle_help(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    rejected = _reject_nonempty_body(body, context)
+    if rejected is not None:
+        return rejected
+    print()
+    print(interactive_help())
+    return ("", context.current_thread_id)
+
+
+def _handle_dev(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    _handle_dev_command(body, context.project_root)
+    return ("", context.current_thread_id)
+
+
+def _handle_export(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    print()
+    canonical_command = ":export"
+    if body:
+        canonical_command = f"{canonical_command} {body}"
+    print_ansi(
+        handle_interactive_export_command(
+            canonical_command,
+            context.project_root,
+            context.current_thread_id,
+            context.session,
+        )
+    )
+    return ("", context.current_thread_id)
+
+
+def _handle_memory(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    print()
+    if body == "":
+        print_ansi(format_memory_preview(context.project_root))
+    else:
+        print_ansi(
+            handle_interactive_memory_command(
+                body,
+                context.project_root,
+            )
+        )
+    return ("", context.current_thread_id)
+
+
+def _handle_thread(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    return _handle_thread_switch(
+        body,
+        context.project_root,
+        context.current_thread_id,
+    )
+
+
+def _handle_reason(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    print()
+    if body == "watch" or body.startswith("watch "):
+        thread_ref = body.removeprefix("watch").strip()
+        handle_interactive_reason_watch(
+            context.project_root,
+            thread_ref=thread_ref or None,
+        )
+    else:
+        print_ansi(
+            handle_interactive_reason_command(
+                body,
+                context.project_root,
+            )
+        )
+    return ("", context.current_thread_id)
+
+
+def _handle_trace(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    print()
+    print_ansi(
+        handle_interactive_trace_command(
+            body,
+            context.project_root,
+        )
+    )
+    return ("", context.current_thread_id)
+
+
+def _handle_persona(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    print()
+    print_ansi(
+        handle_interactive_persona_command(
+            body or "list",
+            context.project_root,
+        )
+    )
+    return ("", context.current_thread_id)
+
+
+def _handle_restart(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    rejected = _reject_nonempty_body(body, context)
+    if rejected is not None:
+        return rejected
+    print()
+    print_ansi(handle_interactive_restart_command(context.project_root))
+    return ("redraw_header", context.current_thread_id)
+
+
+def _handle_rename(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    return _handle_thread_rename(
+        body,
+        context.project_root,
+        context.current_thread_id,
+    )
+
+
+def _handle_branch(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    return _handle_thread_branch(
+        body,
+        context.project_root,
+        context.current_thread_id,
+    )
+
+
+def _handle_archive(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    rejected = _reject_nonempty_body(body, context)
+    if rejected is not None:
+        return rejected
+    return _handle_thread_archive(
+        context.project_root,
+        context.current_thread_id,
+    )
+
+
+def _handle_unarchive(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    return _handle_thread_unarchive(
+        body,
+        context.project_root,
+        context.current_thread_id,
+    )
+
+
+def _handle_archived(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    rejected = _reject_nonempty_body(body, context)
+    if rejected is not None:
+        return rejected
+    _print_archived_threads(context.project_root)
+    return ("", context.current_thread_id)
+
+
+def _handle_delete(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    rejected = _reject_nonempty_body(body, context)
+    if rejected is not None:
+        return rejected
+    return _handle_thread_delete(
+        context.project_root,
+        context.current_thread_id,
+    )
 
 
 def _handle_inbox_command(

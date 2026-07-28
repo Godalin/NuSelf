@@ -1,8 +1,10 @@
 from nuself.cli.repl.registry import (
     command_body,
     command_matches,
+    command_names,
     command_tokens,
     render_help_lines,
+    resolve_command,
     tokens_for,
 )
 
@@ -23,3 +25,13 @@ def test_registry_drives_completion_tokens_and_help() -> None:
     assert len(tokens) == len(set(tokens))
     assert {":q", ":quit", ":exit", ":persona", ":p"} <= set(tokens)
     assert ":mem, :m                  preview memory entries" in help_text
+
+
+def test_registry_resolves_alias_to_canonical_name_and_body() -> None:
+    resolved = resolve_command(":m search durable context")
+
+    assert resolved is not None
+    assert resolved.name == "mem"
+    assert resolved.body == "search durable context"
+    assert resolve_command(":memory search durable context") is None
+    assert "mem" in command_names()

@@ -6,7 +6,8 @@ from pathlib import Path
 from _pytest.capture import CaptureFixture
 
 from nuself.agent.chat import ThreadState, ThreadStore
-from nuself.cli.repl.dispatcher import handle_interactive_command
+from nuself.cli.repl.dispatcher import ReplCommandDispatcher
+from nuself.cli.repl.registry import command_names
 from nuself.cli.repl.session import InteractiveSession
 
 
@@ -20,7 +21,7 @@ def test_dispatcher_owns_thread_switch_and_creation(
 ) -> None:
     ThreadStore(tmp_path).save(ThreadState.empty("default"))
 
-    action = handle_interactive_command(
+    action = ReplCommandDispatcher().handle(
         ":thread project",
         tmp_path,
         "default",
@@ -36,7 +37,7 @@ def test_dispatcher_unknown_command_preserves_thread_and_uses_registry_help(
     tmp_path: Path,
     capsys: CaptureFixture[str],
 ) -> None:
-    action = handle_interactive_command(
+    action = ReplCommandDispatcher().handle(
         ":not-a-command",
         tmp_path,
         "current",
@@ -47,3 +48,9 @@ def test_dispatcher_unknown_command_preserves_thread_and_uses_registry_help(
     output = capsys.readouterr().out
     assert "Unknown interactive command: :not-a-command" in output
     assert ":help" in output
+
+
+def test_dispatcher_registry_is_complete_and_sealed() -> None:
+    dispatcher = ReplCommandDispatcher()
+
+    assert set(dispatcher.registered_commands) == set(command_names())

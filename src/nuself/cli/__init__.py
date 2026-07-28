@@ -79,7 +79,7 @@ try:
         handle_interactive_reason_watch as _handle_interactive_reason_watch,
     )
     from nuself.cli.repl.dispatcher import (
-        handle_interactive_command as _handle_interactive_command,
+        ReplCommandDispatcher,
     )
     from nuself.cli.repl.input import (
         InteractiveCompleter as _InteractiveCompleter,
@@ -179,6 +179,7 @@ def _interactive_loop(
     header_presenter = SessionHeaderPresenter(
         _interactive_daemon_status
     )
+    command_dispatcher = ReplCommandDispatcher()
 
     def send_turn(
         turn_sender: Callable[
@@ -203,7 +204,7 @@ def _interactive_loop(
         send_message,
         project_root,
         ReplCallbacks(
-            handle_command=_handle_interactive_command,
+            handle_command=command_dispatcher.handle,
             send_turn=send_turn,
             auto_save=_auto_save_interactive_transcripts,
             run_curator=_run_memory_curator,

@@ -75,6 +75,26 @@ The daemon request registry must be complete for every declared
 primitive improves ownership; argparse remains responsible for argument
 parsing and LangChain remains responsible for agent tool dispatch.
 
+The interactive REPL top-level command boundary uses the shared registry after
+lexical command resolution:
+
+- the declarative REPL command catalog is authoritative for canonical names,
+  aliases, completion, and help;
+- one resolver maps a complete input command to exactly one canonical name and
+  argument body before dispatch;
+- the CLI composition root owns one `ReplCommandDispatcher` and its sealed
+  registry for the interactive session;
+- every canonical catalog entry has exactly one registered handler, and
+  composition fails when the catalog and registry differ;
+- handlers receive the argument body plus an immutable command context
+  containing the project root, current thread, and session;
+- unknown input remains a presentation concern and renders interactive help
+  without entering the registry.
+
+Argparse continues binding its parsed namespace directly to typed CLI adapters,
+and LangChain continues owning agent-tool dispatch. Neither boundary is routed
+through `HandlerRegistry`.
+
 Daemon dispatch installs one request-scope middleware. Every handler inherits
 the daemon request id and `source="daemon"` through `RuntimeContext`, and log
 activity projection is active for the complete handler invocation. Individual

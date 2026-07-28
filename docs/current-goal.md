@@ -5,7 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. REPL session-header presentation now follows one explicit lifecycle.
+Idle. REPL top-level commands now use one typed, sealed handler registry owned
+by the CLI composition root.
 
 ## Active Branch
 
@@ -22,16 +23,17 @@ code.
 
 ## Completion Evidence
 
-- `SessionHeaderPresenter` owns session-header rendering through one injected
-  status provider.
-- REPL startup, dispatcher `redraw_header`, and every completed non-command
-  turn call the same presenter exactly once.
-- `InteractiveSession` no longer stores presentation-only last-header state,
-  and the root no longer implements a parallel conditional renderer.
-- A consecutive-turn regression test proves output contains exactly one startup
-  header plus one header after each of two turns with unchanged thread/status.
-- Focused presentation/session/dispatcher/turn/CLI tests: 308 passed.
-- Final full tests: 1271 passed.
+- The authoritative catalog indexes unique canonical names and aliases, and
+  resolves each input once to a canonical name plus argument body.
+- `ReplCommandDispatcher` owns a sealed `HandlerRegistry` with exactly one
+  handler for every catalog command; composition rejects a missing or extra
+  handler.
+- The CLI composition root creates one dispatcher per interactive loop instead
+  of using a process-global mutable registry.
+- Argparse and LangChain tool dispatch remain on their framework-native
+  boundaries.
+- Focused REPL/CLI tests: 338 passed.
+- Final full tests: 1273 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -41,5 +43,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Extract remaining REPL reply/banner presentation or resume cross-subsystem
-infrastructure review.
+Continue auditing runtime context, observability, event, and audit-log adoption
+after this handler boundary is complete.
