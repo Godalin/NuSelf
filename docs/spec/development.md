@@ -104,6 +104,10 @@ command implementations must move into focused modules as they are touched.
   formatting.
 - `cli_threads.py` owns one-shot thread list/show/create/rename/branch/archive
   lifecycle handlers; REPL thread switching remains in the REPL layer.
+- `cli_output.py` owns ANSI-aware printing and visible-handle error rendering
+  shared by extracted command modules.
+- `cli_notifications.py` owns one-shot notification list/show/stats/watch/send/
+  dismiss/clear handlers; notification REPL shortcuts remain in the REPL layer.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
   repository APIs.

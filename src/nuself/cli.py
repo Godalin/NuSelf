@@ -13,14 +13,12 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any, TypeVar, cast
+from typing import cast
 from uuid import uuid4
 import warnings
 
-from prompt_toolkit import print_formatted_text as _print_ft
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
-from prompt_toolkit.formatted_text import ANSI as _ANSI
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.shortcuts import prompt as _prompt
@@ -31,7 +29,6 @@ _original_warn = warnings.warn
 TYPEWRITER_DELAY_SECONDS = 0.01
 TYPEWRITER_REFRESH_PER_SECOND = 30
 NOTIFICATION_EVAL_FIXTURE_COUNT = 3
-_HandleItem = TypeVar("_HandleItem")
 
 
 def _suppress_startup_warning(
@@ -72,10 +69,19 @@ try:
         handle_thread_show,
         handle_thread_unarchive,
     )
-    from nuself.handles import (
-        VisibleHandleError,
-        resolve_visible_handle,
-        resolve_visible_handle_selection,
+    from nuself.cli_output import (
+        print_ansi as _print_ansi,
+        resolve_handle as _resolve_handle,
+        resolve_handle_selection as _resolve_handle_selection,
+    )
+    from nuself.cli_notifications import (
+        handle_notify_clear,
+        handle_notify_dismiss,
+        handle_notify_list,
+        handle_notify_send,
+        handle_notify_show,
+        handle_notify_stats,
+        handle_notify_watch,
     )
     from nuself.domain.memory import (
         MemoryCandidate,
@@ -174,13 +180,6 @@ def _maybe_show_session_update(project_root: Path | None, thread_id: str) -> Non
         _print_ansi(render_session_header(daemon_status=status, thread_id=thread_id))
     _last_header_thread = thread_id
     _last_header_status = status
-
-
-def _print_ansi(text: str, **kwargs: Any) -> None:
-    if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
-        _print_ft(_ANSI(text), **kwargs)
-    else:
-        print(text, **kwargs)
 
 
 def _init_interactive_input(project_root: Path | None) -> None:
@@ -836,36 +835,6 @@ def _print_json_wire(*entities: object) -> None:
     import json
     for entity in entities:
         print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
-
-
-def _resolve_handle(
-    value: str,
-    items: Sequence[_HandleItem],
-    *,
-    label: str,
-    get_id: Callable[[_HandleItem], str],
-) -> str | None:
-    try:
-        return resolve_visible_handle(value, items, label=label, get_id=get_id)
-    except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
-
-
-def _resolve_handle_selection(
-    value: str,
-    items: Sequence[_HandleItem],
-    *,
-    label: str,
-    get_id: Callable[[_HandleItem], str],
-) -> list[str] | None:
-    try:
-        return resolve_visible_handle_selection(
-            value, items, label=label, get_id=get_id
-        )
-    except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
 
 
 def _add_log_arguments(parser: argparse.ArgumentParser) -> None:
@@ -1609,139 +1578,6 @@ def handle_eval(args: argparse.Namespace) -> int:
 
     print(f"\n{all_passed}/{all_total} passed")
     return 0 if all_passed == all_total and all_total > 0 else 1
-
-
-def handle_notify_list(args: argparse.Namespace) -> int:
-    from nuself.notification import NotificationOutbox
-    from nuself.tui.render import render_outbox_summary
-
-    outbox = NotificationOutbox(args.project_root)
-    status = args.status
-    entries = outbox.list(status=status)
-    if not entries:
-        filter_msg = f" with status '{status}'" if status else ""
-        print(f"No outbox entries{filter_msg}.")
-        return 0
-    for index, entry in enumerate(entries):
-        _print_ansi(render_outbox_summary(entry, index=index))
-    return 0
-
-
-def _resolve_notify_entry_id(args: argparse.Namespace) -> str | None:
-    """Resolve a notification id or visible numeric index to the stored id."""
-    from nuself.notification import NotificationOutbox
-
-    return _resolve_handle(
-        args.entry_id,
-        NotificationOutbox(args.project_root).list(),
-        label="notification",
-        get_id=lambda entry: entry.id,
-    )
-
-
-def handle_notify_show(args: argparse.Namespace) -> int:
-    from nuself.notification import NotificationOutbox, OutboxEntryNotFound
-    from nuself.tui.render import render_outbox_detail
-
-    entry_id = _resolve_notify_entry_id(args)
-    if entry_id is None:
-        return 1
-    try:
-        entry = NotificationOutbox(args.project_root).get(entry_id)
-    except OutboxEntryNotFound:
-        print(f"Outbox entry not found: {entry_id}", file=sys.stderr)
-        return 1
-    _print_ansi(render_outbox_detail(entry))
-    return 0
-
-
-def handle_notify_stats(args: argparse.Namespace) -> int:
-    from nuself.notification import NotificationOutbox
-
-    outbox = NotificationOutbox(args.project_root)
-    entries = outbox.list()
-    counts: dict[str, int] = {"pending": 0, "sent": 0, "failed": 0, "dismissed": 0}
-    for entry in entries:
-        counts[entry.status] = counts.get(entry.status, 0) + 1
-    print(f"Total:      {len(entries)}")
-    print(f"Pending:    {counts['pending']}")
-    print(f"Sent:       {counts['sent']}")
-    print(f"Failed:     {counts['failed']}")
-    print(f"Dismissed:  {counts['dismissed']}")
-    return 0
-
-
-def handle_notify_watch(args: argparse.Namespace) -> int:
-    import time
-
-    from nuself.notification import NotificationOutbox
-    from nuself.tui.render import render_outbox_summary
-
-    outbox = NotificationOutbox(args.project_root)
-    interval: float = max(1, args.interval)
-    print(f"Watching outbox every {int(interval)}s. Press Ctrl+C or type 'q' + Enter to quit.")
-
-    seen: set[str] = set()
-    for entry in outbox.list():
-        seen.add(entry.id)
-
-    try:
-        while True:
-            time.sleep(interval)
-            for entry in outbox.list():
-                if entry.id not in seen:
-                    seen.add(entry.id)
-                    _print_ansi(render_outbox_summary(entry))
-            # Non-blocking check for 'q' is not possible with plain input();
-            # rely on Ctrl+C for clean exit.
-    except KeyboardInterrupt:
-        print("\nStopped watching.")
-        return 0
-
-
-def handle_notify_send(args: argparse.Namespace) -> int:
-    from nuself.notification import NotificationOutbox, LogOnlyNotificationAdapter, OutboxEntryNotFound
-
-    entry_id = _resolve_notify_entry_id(args)
-    if entry_id is None:
-        return 1
-    outbox = NotificationOutbox(args.project_root)
-    try:
-        entry = outbox.get(entry_id)
-    except OutboxEntryNotFound:
-        print(f"Outbox entry not found: {entry_id}", file=sys.stderr)
-        return 1
-    adapter = LogOnlyNotificationAdapter(args.project_root)
-    if adapter.send(entry):
-        outbox.mark_sent(entry_id)
-        print(f"Sent: {entry.id}")
-        return 0
-    outbox.mark_failed(entry_id)
-    print(f"Failed to send: {entry.id}", file=sys.stderr)
-    return 1
-
-
-def handle_notify_dismiss(args: argparse.Namespace) -> int:
-    from nuself.notification import NotificationOutbox, OutboxEntryNotFound
-
-    entry_id = _resolve_notify_entry_id(args)
-    if entry_id is None:
-        return 1
-    try:
-        NotificationOutbox(args.project_root).dismiss(entry_id)
-        print(f"Dismissed: {entry_id}")
-        return 0
-    except OutboxEntryNotFound:
-        print(f"Outbox entry not found: {entry_id}", file=sys.stderr)
-        return 1
-
-
-def handle_notify_clear(args: argparse.Namespace) -> int:
-    from nuself.notification import NotificationOutbox
-
-    count = NotificationOutbox(args.project_root).clear("dismissed")
-    print(f"Cleared {count} dismissed notification(s).")
-    return 0
 
 
 # ── Reason handlers ───────────────────────────────────────────────────
