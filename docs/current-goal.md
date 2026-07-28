@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Unify safe exception serialization into daemon wire errors.
+Use one safe exception presentation boundary across the entire CLI package.
 
 ## Active Branch
 
@@ -13,44 +13,44 @@ Unify safe exception serialization into daemon wire errors.
 
 ## Ordered Work
 
-1. Audit every `DaemonResponse` failure construction path.
-2. Define one protocol-layer exception-to-error constructor.
-3. Make compact exception-chain output credential-safe by construction.
-4. Replace local daemon `str(exception)` wire and audit projections.
-5. Preserve stable explicit protocol messages and original control flow.
+1. Audit every remaining direct exception rendering site.
+2. Separate CLI presentation from domain decision and wrapping logic.
+3. Define the CLI safe exception presentation contract.
+4. Migrate chat, REPL, transcript, and command adapters together.
+5. Preserve exit codes, retry metadata, stream routing, and original failures.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Explicit `DaemonResponse.fail(..., error: str)` remains available for stable
-  protocol-owned text.
-- Client retry phase and response status semantics remain unchanged.
-- Arbitrary successful payload strings are never treated as diagnostics.
+- Agent-tool and background-domain fallback text is reviewed separately after
+  the CLI package is complete.
+- Already-decoded daemon application error strings remain protocol-owned text.
+- Successful output and user-supplied arguments are never globally sanitized.
 
 ## Completion Evidence
 
-- `DaemonResponse.fail_from_exception(...)` is the protocol-owned constructor
-  for safe single-exception or compact-chain wire errors.
-- `diagnostic_exception_chain(...)` now owns safe rendering, cause/context
-  traversal, duplicate removal, and credential sanitization in
-  `runtime.diagnostics`; the former observability formatter alias was removed
-  and all internal callers migrated.
-- Socket read/parse/handler failures, typed request rejection, activity lookup,
-  chat failure, client connection wrapping, and daemon lifecycle audit paths no
-  longer serialize exceptions locally with `str(...)`.
-- Tests prove broken exception renderers fall back safely and both outer and
-  root-cause credentials are absent from daemon response frames and audit logs.
-- Focused protocol, daemon, chat, worker, observability, and REPL suites:
-  `248 passed`.
-- Full test suite: `1641 passed`.
+- Every caught exception rendered or projected inside `nuself.cli` now uses
+  `diagnostic_exception_message(...)`; source audit finds no direct
+  `str(exception)` or f-string exception rendering.
+- Daemon and one-shot chat preserve retry metadata, exit codes, stderr routing,
+  and audit ownership while sanitizing caught connection/runtime failures.
+- REPL command handlers, dispatcher output, transcript/export helpers, visible
+  handles, daemon/reflection/thread/reason/pack commands, and all memory command
+  modules share the same presentation boundary.
+- An AST architecture test rejects future direct rendering of an
+  `except ... as name` variable anywhere in the CLI package.
+- Behavior tests prove credentials are absent from CLI stderr and audit records
+  and a broken runtime exception renderer falls back to its class name.
+- Focused CLI, entrypoint, REPL, and transcript suites: `317 passed`.
+- Full test suite: `1645 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `c1962ff`.
+`dev/v0.3.x` is published through `56ef7d5`.
 
 ## Next Review Batch
 
-Review remaining direct exception rendering in CLI and domain adapters after
-daemon wire errors are centralized.
+Review agent-tool and background-domain fallback text after CLI exception
+presentation is centralized.

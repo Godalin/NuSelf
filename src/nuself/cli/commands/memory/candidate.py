@@ -18,6 +18,7 @@ from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryNotFound,
 )
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.memory import (
     render_candidate_detail,
     render_candidate_row,
@@ -150,7 +151,7 @@ def handle_memory_candidate_accept(
             )
             return 1
         except ValueError as exc:
-            print(str(exc), file=sys.stderr)
+            print(diagnostic_exception_message(exc), file=sys.stderr)
             return 1
         record_memory_trace(args.project_root, entry, "accept")
         print(
@@ -231,7 +232,7 @@ def handle_memory_candidate_merge(
         )
         return 1
     except ValueError as exc:
-        print(str(exc), file=sys.stderr)
+        print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
     record_memory_trace(args.project_root, entry, "merge")
     print(

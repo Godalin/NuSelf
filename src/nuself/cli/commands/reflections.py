@@ -13,6 +13,7 @@ from nuself.reflection.repository import (
     ReflectionRepository,
 )
 from nuself.reflection.service import ReflectionService
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.reason import render_reason_detail
 from nuself.tui.render import (
     render_reflection_entry_detail,
@@ -105,7 +106,10 @@ def handle_reflection_promote(args: argparse.Namespace) -> int:
             args.project_root
         ).promote_to_reason(entry_id)
     except (ReflectionEntryNotFound, ValueError, RuntimeError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(
+            f"Error: {diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
         return 1
     print(f"Promoted reflection to reason thread: {thread.id}")
     print_ansi(render_reason_detail(thread))

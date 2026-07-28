@@ -28,6 +28,7 @@ from nuself.memory.repository import (
     MemoryStats,
     memory_stats,
 )
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.tui.memory import (
@@ -212,7 +213,11 @@ def handle_memory_add(args: argparse.Namespace) -> int:
             tags=list(args.tag),
         )
     except (RuntimeError, ValueError) as exc:
-        print(f"Memory intake failed: {exc}", file=sys.stderr)
+        print(
+            "Memory intake failed: "
+            f"{diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
         return 1
     entry = MemoryEntry(
         type=inferred.type,
@@ -391,7 +396,7 @@ def handle_memory_unquarantine(
         )
         return 1
     except ValueError as exc:
-        print(str(exc), file=sys.stderr)
+        print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
     print(f"Unquarantined memory entry: {args.entry_id}")
     return 0

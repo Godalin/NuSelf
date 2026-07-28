@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- CLI chat, REPL, transcript, and command adapters now share safe exception
+  presentation, preventing caught exceptions with credentials or broken string
+  renderers from leaking or replacing the intended command result.
 - Daemon exception responses now use one protocol-owned safe constructor, and
   compact exception chains sanitize credentials by construction instead of
   relying on each socket or request handler to remember redaction.

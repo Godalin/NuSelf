@@ -13,6 +13,7 @@ from nuself.config import ConfigSystem
 from nuself.daemon import client
 from nuself.memory.curator import MemoryCurator
 from nuself.runtime.context import runtime_context
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.observability import write_observed_log_event
 from nuself.tui.render import TerminalTheme
 
@@ -69,7 +70,10 @@ def send_daemon_chat_interactive(
                 timeout=chat_request_timeout_seconds(project_root),
             )
         except client.DaemonConnectionError as exc:
-            error = f"daemon request failed: {exc}"
+            error = (
+                "daemon request failed: "
+                f"{diagnostic_exception_message(exc)}"
+            )
             print(error, file=sys.stderr)
             return InteractiveChatResult(
                 code=1,
@@ -82,7 +86,7 @@ def send_daemon_chat_interactive(
                 ),
             )
         except client.DaemonApplicationError as exc:
-            error = str(exc)
+            error = diagnostic_exception_message(exc)
             write_observed_log_event(
                 "chat",
                 "daemon_chat_failed",
@@ -169,6 +173,7 @@ def send_one_shot_chat_interactive(
             run_memory_curator(project_root)
             return InteractiveChatResult(code=0, reply=reply)
         except RuntimeError as exc:
+            error = diagnostic_exception_message(exc)
             write_observed_log_event(
                 "chat",
                 "one_shot_chat_failed",
@@ -176,10 +181,10 @@ def send_one_shot_chat_interactive(
                 project_root=project_root,
                 level="error",
                 status="error",
-                error=str(exc),
+                error=error,
                 failure_message="Chat client audit projection failed",
             )
-            print(str(exc), file=sys.stderr)
+            print(error, file=sys.stderr)
             return InteractiveChatResult(code=1)
 
 
@@ -189,6 +194,7 @@ def run_memory_curator(project_root: Path | None) -> None:
     try:
         result = MemoryCurator(project_root).run_once()
     except RuntimeError as exc:
+        error = diagnostic_exception_message(exc)
         write_observed_log_event(
             "memory",
             "curator_failed",
@@ -196,11 +202,11 @@ def run_memory_curator(project_root: Path | None) -> None:
             project_root=project_root,
             level="error",
             status="error",
-            error=str(exc),
+            error=error,
             failure_message="Chat client audit projection failed",
         )
         print_ansi(
-            f"{_theme.tag('[memory]', 'memory')} curator failed: {exc}",
+            f"{_theme.tag('[memory]', 'memory')} curator failed: {error}",
             file=sys.stderr,
         )
         return

@@ -7,6 +7,7 @@ import sys
 
 from nuself.daemon import client, lifecycle
 from nuself.daemon.audit import write_lifecycle_audit
+from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 def format_status(status: lifecycle.DaemonStatus) -> str:
@@ -107,7 +108,11 @@ def handle_daemon_health(args: argparse.Namespace) -> int:
         client.DaemonConnectionError,
         client.DaemonApplicationError,
     ) as exc:
-        print(f"Daemon health unavailable: {exc}", file=sys.stderr)
+        print(
+            "Daemon health unavailable: "
+            f"{diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
         return 1
     for worker in response.workers:
         print(

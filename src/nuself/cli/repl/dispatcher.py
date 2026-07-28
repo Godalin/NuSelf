@@ -43,6 +43,7 @@ from nuself.cli.repl.transcript import (
 )
 from nuself.daemon import lifecycle
 from nuself.logs import read_log_events
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.tui.render import render_log_event
 
@@ -509,7 +510,7 @@ def _handle_thread_rename(
             ThreadStore(project_root).rename(current_thread_id, new_id)
             print(f"Renamed thread to: {new_id}")
         except ValueError as exc:
-            print(f"Error: {exc}")
+            print(f"Error: {diagnostic_exception_message(exc)}")
     return ("redraw_header", new_id or current_thread_id)
 
 
@@ -535,7 +536,7 @@ def _handle_thread_branch(
             ThreadStore(project_root).branch(current_thread_id, new_id, index)
             print(f"Branched to thread: {new_id}")
         except ValueError as exc:
-            print(f"Error: {exc}")
+            print(f"Error: {diagnostic_exception_message(exc)}")
     return ("redraw_header", new_id or current_thread_id)
 
 
@@ -548,7 +549,7 @@ def _handle_thread_archive(
         ThreadStore(project_root).archive(current_thread_id)
         print(f"Archived thread: {current_thread_id}")
     except ValueError as exc:
-        print(f"Error: {exc}")
+        print(f"Error: {diagnostic_exception_message(exc)}")
     return ("redraw_header", "default")
 
 
@@ -565,7 +566,7 @@ def _handle_thread_unarchive(
             ThreadStore(project_root).unarchive(thread_id)
             print(f"Unarchived thread: {thread_id}")
         except ValueError as exc:
-            print(f"Error: {exc}")
+            print(f"Error: {diagnostic_exception_message(exc)}")
     return ("", current_thread_id)
 
 
@@ -588,5 +589,5 @@ def _handle_thread_delete(
         ThreadStore(project_root).delete(current_thread_id)
         print(f"Deleted thread: {current_thread_id}")
     except ValueError as exc:
-        print(f"Error: {exc}")
+        print(f"Error: {diagnostic_exception_message(exc)}")
     return ("redraw_header", "default")

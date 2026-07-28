@@ -17,6 +17,8 @@ Domain boundaries apply sanitization before truncation or persistence.
 Single-exception projections use the shared safe diagnostic-message formatter
 rather than calling `str(exception)` locally. The formatter cannot raise when
 exception rendering fails and sanitizes before returning text.
+CLI adapters use this formatter for every caught exception they render or
+project. Local command modules must not interpolate caught exceptions directly.
 
 ## Error Classes
 

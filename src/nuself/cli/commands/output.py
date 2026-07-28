@@ -14,6 +14,7 @@ from nuself.handles import (
     resolve_visible_handle,
     resolve_visible_handle_selection,
 )
+from nuself.runtime.diagnostics import diagnostic_exception_message
 
 _HandleItem = TypeVar("_HandleItem")
 
@@ -35,7 +36,7 @@ def resolve_handle(
     try:
         return resolve_visible_handle(value, items, label=label, get_id=get_id)
     except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
+        print(diagnostic_exception_message(exc), file=sys.stderr)
         return None
 
 
@@ -51,5 +52,5 @@ def resolve_handle_selection(
             value, items, label=label, get_id=get_id
         )
     except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
+        print(diagnostic_exception_message(exc), file=sys.stderr)
         return None

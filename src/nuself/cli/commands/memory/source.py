@@ -15,6 +15,7 @@ from nuself.memory.source_repository import (
     SourceRepository,
 )
 from nuself.profile.repository import ProfileItemRepository
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.memory import render_source_detail, render_source_row
 
 
@@ -71,7 +72,7 @@ def handle_memory_source_ingest(
             privacy=_privacy_arg(args.privacy),
         )
     except ValueError as exc:
-        print(str(exc), file=sys.stderr)
+        print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
     print(f"Source ingest: {result.summary()}")
     return 0

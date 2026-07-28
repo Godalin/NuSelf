@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from nuself.config import runtime_paths
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage import get_default_backend
 from nuself.storage_sqlite import (
     SqliteStorageBackend,
@@ -65,7 +66,11 @@ def handle_pack_import(args: argparse.Namespace) -> int:
     try:
         import_sqlite_thought_pack(source, destination)
     except ThoughtPackValidationError as exc:
-        print(f"Invalid thought pack: {exc}", file=sys.stderr)
+        print(
+            "Invalid thought pack: "
+            f"{diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
         return 1
     print(f"Imported to {destination}")
     return 0
@@ -127,7 +132,11 @@ def handle_pack_inspect(args: argparse.Namespace) -> int:
     try:
         inspection = inspect_sqlite_thought_pack(database)
     except ThoughtPackValidationError as exc:
-        print(f"Invalid thought pack: {exc}", file=sys.stderr)
+        print(
+            "Invalid thought pack: "
+            f"{diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
         return 1
     print(f"Thought pack: {database.name}")
     print(f"  path: {database}")

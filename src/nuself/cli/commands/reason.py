@@ -9,6 +9,7 @@ import sys
 from nuself.cli.commands.output import print_ansi
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.reason import render_reason_detail, render_reason_row
 
 REASON_VERBS: dict[str, tuple[str, str]] = {
@@ -72,7 +73,10 @@ def handle_reason_start(args: argparse.Namespace) -> int:
             args.topic, priority=args.priority, mandates=mandates
         )
     except ReasonError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(
+            f"Error: {diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
         return 1
     print(f"Started reasoning thread: {thread.id}")
     print_ansi(render_reason_detail(thread))
@@ -93,7 +97,10 @@ def handle_reason_thread_action(args: argparse.Namespace) -> int:
     try:
         thread = method(args.thread_id)
     except ReasonError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(
+            f"Error: {diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
         return 1
     print(f"{verb} reason thread: {thread.id}")
     print_ansi(
@@ -111,7 +118,10 @@ def handle_reason_delete(args: argparse.Namespace) -> int:
             args.thread_id
         )
     except ReasonError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(
+            f"Error: {diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
         return 1
     print(f"Deleted reason thread: {thread_id}")
     return 0

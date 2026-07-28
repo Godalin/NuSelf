@@ -102,6 +102,30 @@ def test_daemon_payload_decode_failure_is_not_retryable(
     assert result.request_may_have_completed is True
 
 
+def test_daemon_connection_failure_redacts_cli_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    connection_secret = "connection-secret-value"
+
+    def fail_chat(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise DaemonConnectionError(
+            f"connection failed api_key={connection_secret}"
+        )
+
+    monkeypatch.setattr(chat.client, "chat", fail_chat)
+
+    result = chat.send_daemon_chat_interactive(
+        "hello",
+        tmp_path,
+    )
+
+    assert result.error == "daemon request failed: connection failed api_key=***"
+    assert connection_secret not in capsys.readouterr().err
+
+
 def test_daemon_application_failure_is_correlated_and_not_retryable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -131,6 +155,59 @@ def test_daemon_application_failure_is_correlated_and_not_retryable(
     assert event.turn_id == "turn-1"
     assert event.source == "client"
     assert event.error == "graph failed"
+
+
+def test_one_shot_failure_is_safely_presented_and_audited(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    runtime_secret = "runtime-secret-value"
+
+    def fail_reply(*args: object, **kwargs: object) -> str:
+        del args, kwargs
+        raise RuntimeError(
+            f"one-shot failed password={runtime_secret}"
+        )
+
+    monkeypatch.setattr(chat, "one_shot_reply", fail_reply)
+
+    result = chat.send_one_shot_chat_interactive(
+        "hello",
+        tmp_path,
+    )
+
+    assert result.code == 1
+    assert capsys.readouterr().err == "one-shot failed password=***\n"
+    [event] = read_log_events(project_root=tmp_path, component="chat")
+    assert event.error == "one-shot failed password=***"
+    assert runtime_secret not in str(event.to_record())
+
+
+def test_one_shot_failure_survives_broken_exception_renderer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class BrokenMessageError(RuntimeError):
+        def __str__(self) -> str:
+            raise KeyboardInterrupt
+
+    def fail_reply(*args: object, **kwargs: object) -> str:
+        del args, kwargs
+        raise BrokenMessageError
+
+    monkeypatch.setattr(chat, "one_shot_reply", fail_reply)
+
+    result = chat.send_one_shot_chat_interactive(
+        "hello",
+        tmp_path,
+    )
+
+    assert result.code == 1
+    assert capsys.readouterr().err == "BrokenMessageError\n"
+    [event] = read_log_events(project_root=tmp_path, component="chat")
+    assert event.error == "BrokenMessageError"
 
 
 def test_daemon_success_projects_reply_and_memory_update(

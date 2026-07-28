@@ -7,6 +7,7 @@ import sys
 from collections.abc import Callable
 
 from nuself.agent.chat import ThreadState, ThreadStore
+from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 def handle_thread_list(args: argparse.Namespace) -> int:
@@ -55,7 +56,10 @@ def _run_thread_action(
     try:
         action()
     except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(
+            f"Error: {diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
         return 1
     print(success)
     return 0

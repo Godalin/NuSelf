@@ -32,7 +32,10 @@ from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService
-from nuself.runtime.diagnostics import diagnostic_exception_chain
+from nuself.runtime.diagnostics import (
+    diagnostic_exception_chain,
+    diagnostic_exception_message,
+)
 from nuself.runtime.observability import (
     report_observed_failure,
 )
@@ -154,7 +157,7 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         try:
             thread = service.start_thread(question)
         except ReasonError as exc:
-            return f"Error: {exc}"
+            return f"Error: {diagnostic_exception_message(exc)}"
         return f"Started reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("advance "):
         thread_id = command.removeprefix("advance ").strip()
@@ -167,42 +170,42 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         try:
             thread = service.advance_thread(thread_id)
         except ReasonError as exc:
-            return f"Error: {exc}"
+            return f"Error: {diagnostic_exception_message(exc)}"
         return f"Advanced reason thread: {thread.id}\n{render_reason_detail(thread, service.list_steps(thread.id))}"
     if command.startswith("pause "):
         thread_id = command.removeprefix("pause ").strip()
         try:
             thread = service.pause_thread(thread_id)
         except ReasonError as exc:
-            return f"Error: {exc}"
+            return f"Error: {diagnostic_exception_message(exc)}"
         return f"Paused reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("resume "):
         thread_id = command.removeprefix("resume ").strip()
         try:
             thread = service.resume_thread(thread_id)
         except ReasonError as exc:
-            return f"Error: {exc}"
+            return f"Error: {diagnostic_exception_message(exc)}"
         return f"Resumed reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("resolve "):
         thread_id = command.removeprefix("resolve ").strip()
         try:
             thread = service.resolve_thread(thread_id)
         except ReasonError as exc:
-            return f"Error: {exc}"
+            return f"Error: {diagnostic_exception_message(exc)}"
         return f"Resolved reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("archive "):
         thread_id = command.removeprefix("archive ").strip()
         try:
             thread = service.archive_thread(thread_id)
         except ReasonError as exc:
-            return f"Error: {exc}"
+            return f"Error: {diagnostic_exception_message(exc)}"
         return f"Archived reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("delete "):
         thread_id = command.removeprefix("delete ").strip()
         try:
             tid = service.delete_thread(thread_id)
         except ReasonError as exc:
-            return f"Error: {exc}"
+            return f"Error: {diagnostic_exception_message(exc)}"
         return f"Deleted reason thread: {tid}"
     return interactive_reason_help(command)
 
@@ -391,7 +394,10 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
             level="error",
             status="error",
         )
-        return f"{theme.tag('[persona]', 'persona')} {theme.error(str(exc))}"
+        return (
+            f"{theme.tag('[persona]', 'persona')} "
+            f"{theme.error(diagnostic_exception_message(exc))}"
+        )
 
 
 def handle_interactive_restart_command(project_root: Path | None) -> str:
@@ -580,7 +586,7 @@ def handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: 
         try:
             thread = ReflectionService(project_root, repository=repo).promote_to_reason(entry_id)
         except RuntimeError as exc:
-            return f"Error: {exc}"
+            return f"Error: {diagnostic_exception_message(exc)}"
         return f"Promoted reflection to reason thread: {thread.id}\n{render_reason_detail(thread)}"
     return f"Unknown :inbox reflection subcommand: {subcmd}"
 

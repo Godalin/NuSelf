@@ -10,6 +10,19 @@
 6. **JSON mode is a first-class view**: Structured-data commands support `--json`.
 7. **Separate user outcomes from internal audit**: `list` shows meaningful outcomes. `logs` shows the full audit trail.
 
+## Exception Presentation
+
+Every caught exception rendered by `nuself.cli` uses the shared safe diagnostic
+message formatter. This applies equally to stderr, recoverable REPL text,
+transcript/export status, and auxiliary audit `error` fields. A broken
+exception renderer falls back to its class name, and credential-like values are
+removed before presentation.
+
+Stable strings already decoded from a daemon error response are protocol-owned
+user outcomes and are not reinterpreted as exception objects. Sanitization does
+not change exit codes, retry metadata, stdout/stderr routing, command ownership,
+or whether an exception is caught versus propagated.
+
 ## Color System
 
 Controlled by `TerminalTheme`. Default ON when `sys.stdout.isatty()` and `NO_COLOR` is not set.

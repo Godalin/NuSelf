@@ -14,6 +14,7 @@ from nuself.cli.repl.input import interactive_help
 from nuself.cli.repl.registry import command_body
 from nuself.config import runtime_paths
 from nuself.logs import LogEvent
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.render import format_display_timestamp, render_log_event
 
 
@@ -148,7 +149,7 @@ def save_interactive_transcript(
             include_all_logs=include_all_logs,
         )
     except ValueError as exc:
-        return f"Error: {exc}"
+        return f"Error: {diagnostic_exception_message(exc)}"
 
     session.mark_transcript_exported(project_root, thread_id)
     lines = [f"Saved transcript: {path}"]
@@ -309,7 +310,7 @@ def copy_text_to_clipboard(text: str) -> tuple[bool, str]:
     try:
         subprocess.run(command, input=text, text=True, check=True)
     except (OSError, subprocess.CalledProcessError) as exc:
-        return False, str(exc)
+        return False, diagnostic_exception_message(exc)
     return True, ""
 
 

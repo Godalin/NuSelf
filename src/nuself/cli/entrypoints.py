@@ -14,6 +14,7 @@ from nuself.cli.commands.daemon import format_status
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import lifecycle
 from nuself.notification.deep_link import DeepLink
+from nuself.runtime.diagnostics import diagnostic_exception_message
 
 InteractiveSender = Callable[
     [str, str, str | None],
@@ -169,7 +170,11 @@ class EntrypointController:
             try:
                 link = DeepLink.parse(args.deep_link)
             except ValueError as exc:
-                print(f"Invalid deep link: {exc}", file=sys.stderr)
+                print(
+                    "Invalid deep link: "
+                    f"{diagnostic_exception_message(exc)}",
+                    file=sys.stderr,
+                )
                 return None
             if link.action == "new_thread":
                 thread_id = link.title or "new-thread"
