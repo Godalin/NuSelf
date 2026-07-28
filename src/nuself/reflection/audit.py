@@ -229,9 +229,14 @@ def report_reflection_failure(
 
     definition = REFLECTION_AUDIT_REGISTRY.resolve("reflection", event)
     event_metadata = metadata or {}
+    status = definition.status
+    if status is None:
+        raise AuditSchemaError(
+            f"{definition.component}/{definition.event} failure requires status"
+        )
     definition.validate(
         level=definition.level,
-        status=definition.status,
+        status=status,
         error=diagnostic_exception_chain(exc),
         metadata=event_metadata,
     )
@@ -242,6 +247,6 @@ def report_reflection_failure(
         message=message,
         project_root=project_root,
         level=definition.level,
-        status=definition.status,
+        status=status,
         metadata=dict(event_metadata),
     )

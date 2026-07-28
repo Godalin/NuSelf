@@ -16,6 +16,7 @@ from nuself.runtime.definitions import (
 from nuself.runtime.identities import require_audit_event_name
 
 AuditErrorPolicy = Literal["forbidden", "required"]
+AuditDurationPolicy = Literal["forbidden", "required", "optional"]
 AuditMetadataValidator = Callable[[Mapping[str, object]], None]
 
 
@@ -49,8 +50,9 @@ class AuditEventDefinition:
     component: LogComponent
     event: str
     level: LogLevel
-    status: str
+    status: str | None
     error_policy: AuditErrorPolicy = "forbidden"
+    duration_policy: AuditDurationPolicy = "forbidden"
     metadata_validator: AuditMetadataValidator = _validate_no_metadata
 
     def __post_init__(self) -> None:
@@ -59,10 +61,12 @@ class AuditEventDefinition:
         require_audit_event_name(self.event)
         if self.level not in {"debug", "info", "warning", "error"}:
             raise ValueError("audit definition level is invalid")
-        if not self.status:
+        if self.status is not None and not self.status:
             raise ValueError("audit definition status must not be empty")
         if self.error_policy not in {"forbidden", "required"}:
             raise ValueError("audit definition error policy is invalid")
+        if self.duration_policy not in {"forbidden", "required", "optional"}:
+            raise ValueError("audit definition duration policy is invalid")
         if not callable(self.metadata_validator):
             raise TypeError("audit metadata validator must be callable")
 
@@ -70,9 +74,10 @@ class AuditEventDefinition:
         self,
         *,
         level: LogLevel,
-        status: str,
+        status: str | None,
         error: str | None,
         metadata: Mapping[str, object],
+        duration_ms: int | None = None,
     ) -> None:
         if level != self.level:
             raise AuditSchemaError(
@@ -90,6 +95,20 @@ class AuditEventDefinition:
         elif error is not None:
             raise AuditSchemaError(
                 f"{self.component}/{self.event} forbids an error"
+            )
+        if duration_ms is not None and (
+            type(duration_ms) is not int or duration_ms < 0
+        ):
+            raise AuditSchemaError(
+                f"{self.component}/{self.event} duration is invalid"
+            )
+        if self.duration_policy == "required" and duration_ms is None:
+            raise AuditSchemaError(
+                f"{self.component}/{self.event} requires a duration"
+            )
+        if self.duration_policy == "forbidden" and duration_ms is not None:
+            raise AuditSchemaError(
+                f"{self.component}/{self.event} forbids a duration"
             )
         self.metadata_validator(metadata)
 

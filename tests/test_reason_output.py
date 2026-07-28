@@ -32,7 +32,7 @@ def test_reason_output_plan_and_compose(tmp_path: Path, monkeypatch: pytest.Monk
         del args, kwargs
 
     monkeypatch.setattr(
-        "nuself.reason.output.write_observed_log_event",
+        "nuself.reason.output.write_reason_output_audit",
         drop_audit,
     )
     service = _reason_service(tmp_path)

@@ -60,6 +60,7 @@ def test_audit_definition_validates_exact_projection_contract() -> None:
         "error",
         "failed",
         error_policy="required",
+        duration_policy="required",
         metadata_validator=_validate_id,
     )
 
@@ -68,6 +69,7 @@ def test_audit_definition_validates_exact_projection_contract() -> None:
         status="failed",
         error="failure",
         metadata={"id": "m1"},
+        duration_ms=12,
     )
 
     with pytest.raises(AuditSchemaError, match="requires level"):
@@ -76,6 +78,7 @@ def test_audit_definition_validates_exact_projection_contract() -> None:
             status="failed",
             error="failure",
             metadata={"id": "m1"},
+            duration_ms=12,
         )
     with pytest.raises(AuditSchemaError, match="requires an error"):
         definition.validate(
@@ -83,11 +86,46 @@ def test_audit_definition_validates_exact_projection_contract() -> None:
             status="failed",
             error=None,
             metadata={"id": "m1"},
+            duration_ms=12,
         )
     with pytest.raises(AuditSchemaError, match="id metadata"):
         definition.validate(
             level="error",
             status="failed",
             error="failure",
+            metadata={},
+            duration_ms=12,
+        )
+
+    with pytest.raises(AuditSchemaError, match="requires a duration"):
+        definition.validate(
+            level="error",
+            status="failed",
+            error="failure",
+            metadata={"id": "m1"},
+        )
+
+
+def test_audit_definition_accepts_absent_status_contract() -> None:
+    definition = AuditEventDefinition(
+        "memory",
+        "entry_seen",
+        "info",
+        None,
+    )
+
+    definition.validate(
+        level="info",
+        status=None,
+        error=None,
+        metadata={},
+    )
+
+    with pytest.raises(AuditSchemaError, match="forbids a duration"):
+        definition.validate(
+            level="info",
+            status=None,
+            error=None,
+            duration_ms=1,
             metadata={},
         )

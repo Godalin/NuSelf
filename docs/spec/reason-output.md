@@ -384,9 +384,59 @@ Invalid optional progress remains degraded input: its diagnostic may fail, but
 composition still runs from the valid manifest.
 
 Reason output planning, chunk skip/start/completion, composition, and PDF
-lifecycle records use `write_observed_log_event(...)`. They cannot prevent a
-durable manifest/progress transition, skip an existing chunk, block chunk
-composition, or replace a composed Markdown/PDF outcome.
+lifecycle records use the validated Reason Output audit adapter over shared
+best-effort observability. They cannot prevent a durable manifest/progress
+transition, skip an existing chunk, block chunk composition, or replace a
+composed Markdown/PDF outcome.
+
+### Audit contract
+
+Reason Output owns one sealed audit registry across its two operational
+components. `reasoning` records describe durable output artifacts; `daemon`
+records describe wake-up delivery, queue consumption, retries, and startup
+recovery. Component placement does not split semantic ownership into parallel
+string protocols.
+
+Each definition fixes level, optional status, error policy, duration policy,
+and exact metadata. Producers resolve and validate before entering the
+best-effort sink. Unknown events and invalid payloads are programming errors,
+not audit persistence failures. Domain-specific
+`export_audit_write_failed` and `export_job_enqueue_log_failed` records report
+projection failure and remain governed by shared observability.
+
+Reasoning-side events:
+
+| Event | Level | Status | Error / duration | Metadata |
+|---|---|---|---|---|
+| `reason_output_planned` | `info` | `created` | none | thread/job, mode/format, source start and nullable end, segment and step counts |
+| `reason_output_chunk_skipped` | `info` | none | none | thread/job/chunk |
+| `reason_output_chunk_started` | `info` | none | none | thread/job/chunk |
+| `reason_output_chunk_failed` | `error` | `error` | error required | thread/job/chunk |
+| `reason_output_chunk_completed` | `info` | `ok` | duration required | thread/job/chunk/path |
+| `reason_output_composed` | `info` | `completed` | none | thread/job/chunk count/combined path |
+| `reason_output_pdf_started` | `info` | none | none | combined/PDF paths |
+| `reason_output_pdf_timeout` | `warning` | `error` | none | combined/PDF paths |
+| `reason_output_pdf_failed` | `warning` | `error` | error required | combined/PDF paths |
+| `reason_output_pdf_created` | `info` | `completed` | none | combined/PDF paths |
+
+Daemon-side events:
+
+| Event | Level | Status | Error | Metadata |
+|---|---|---|---|---|
+| `export_job_enqueue_failed` | `warning` | `degraded` | required | thread/job |
+| `export_job_enqueued` | `info` | `queued` | forbidden | thread/job |
+| `export_queue_drained` | `warning` | none | forbidden | positive drained job count |
+| `export_worker_get_error` | `warning` | `error` | required | none |
+| `export_job_type_ignored` | `warning` | none | forbidden | message id and unsupported job name |
+| `export_job_dequeued` | `info` | none | forbidden | thread/job |
+| `export_job_manifest_invalid` | `error` | `error` | required | thread/job |
+| `export_job_progress_invalid` | `warning` | `degraded` | required | thread/job |
+| `export_job_composition_started` | `info` | none | forbidden | thread/job/chunk count |
+| `export_job_state_persist_failed` | `error` | `error` | required | thread/job and original operation error |
+| `export_job_failed` | `error` | `error` | required | thread/job/attempts |
+| `export_job_retry` | `info` | `retry` | forbidden | thread/job/attempts/backoff |
+| `export_reconciliation_skip` | `warning` | `error` | required | thread/job |
+| `export_queue_reconciled` | `info` | none | forbidden | non-negative replayed job count |
 
 When the Markdown artifact is finished, the export pipeline should automatically invoke the PDF helper script so the thread can be shared as both Markdown and PDF.
 

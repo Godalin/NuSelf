@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Give Reflection audit events one closed, validated domain contract.
+Give Reason Output one closed audit contract across service and worker.
 
 ## Active Branch
 
@@ -13,50 +13,56 @@ Give Reflection audit events one closed, validated domain contract.
 
 ## Ordered Work
 
-1. Inventory Reflection audit producers and compare them with the domain spec.
-2. Define reusable domain-audit registry and validation mechanics.
-3. Register every Reflection-owned event with exact status/error/metadata rules.
-4. Route scheduler and organizer writes through one Reflection audit adapter.
-5. Keep persona and infrastructure failure events in their owning domains.
-6. Verify unknown events and invalid payloads fail before the best-effort sink.
+1. Inventory reasoning-side output and daemon-side export audit producers.
+2. Extend shared audit definitions for optional status and duration contracts.
+3. Register the complete cross-component Reason Output audit taxonomy.
+4. Migrate output planning/composition/PDF projections to the domain adapter.
+5. Migrate queue/retry/reconciliation projections to the same domain registry.
+6. Verify every canonical schema and pre-sink rejection of invalid producers.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
 - No process-global registry containing every domain's audit events.
 - No migration or rewriting of historical JSONL records.
-- No change to Reflection scheduling, persistence, or scoring behavior.
-- `persona_discussion` remains owned by the persona subsystem.
+- No change to export manifests, queue semantics, retry timing, or PDF behavior.
+- No conversion of typed job wake-ups into runtime events or persisted commands.
 - Generic audit-projection failure events remain owned by observability.
 
 ## Completion Evidence
 
-- The audit inventory found thirteen Reflection-owned events while the former
-  domain table documented only six mixed-owner entries.
-- `runtime.audit_definitions` now owns reusable audit identity, exact
-  projection validation, duplicate rejection, lookup, and sealing semantics.
-- Neutral component and severity types now live in `runtime.audit_types`, so
-  definition infrastructure does not depend back on the persistent log sink.
-- `reflection.audit` owns a sealed registry for all thirteen Reflection event
-  names and their exact level, status, error, and metadata contracts.
-- Scheduler and organizer producers now use one Reflection adapter; scattered
-  Reflection component/event/level/status combinations have been removed.
-- Unknown Reflection events and invalid payloads fail before the best-effort
-  persistence sink, so producer bugs are not misreported as storage failures.
-- Persona discussion writes remain persona-owned; generic projection-failure
-  events remain observability-owned.
-- Direct tests cover generic registry duplicate/seal/lookup behavior, all
-  canonical Reflection schemas, unknown fields, unknown events, and pre-sink
-  rejection.
-- Focused audit, Reflection, observability, and log suites: `172 passed`.
-- Full test suite: `1801 passed`.
+- The inventory identified ten reasoning-side artifact events and fourteen
+  daemon-side wake-up, queue, retry, and reconciliation events.
+- One sealed `reason.output_audit` registry now owns all twenty-four
+  `(component, event)` identities instead of splitting the capability into
+  unrelated file-local string protocols.
+- Shared `AuditEventDefinition` now supports exact optional-status and
+  forbidden/required/optional duration policies; existing Reflection contracts
+  remain validated through the same primitive.
+- Planning, chunk, composition, PDF, enqueue, dequeue, retry, failure, drain,
+  and reconciliation producers all route through the Reason Output adapter.
+- Caught operation failures resolve their registered error contract before
+  shared failure reporting; normal projections resolve before the best-effort
+  sink.
+- The schema review clarified that `source_end_index=None` is the intentional
+  “through the final step” representation and validates it explicitly.
+- Queue drain counts and ignored job names are now structured metadata rather
+  than facts available only by parsing human-readable messages.
+- No direct `write_observed_log_event(...)`,
+  `report_observed_failure(...)`, or `run_observed_best_effort(...)` calls
+  remain in the output service or export worker.
+- Direct tests cover all twenty-four canonical schemas, unknown fields,
+  unknown identities, optional status, duration requirements, and existing
+  output/retry/recovery behavior.
+- Focused audit, output, queue, subagent, and recovery suites: `104 passed`.
+- Full test suite: `1852 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is ready to publish through implementation commit `236b9c8`.
+The Reason Output audit-contract batch is awaiting its implementation commit.
 
 ## Next Review Batch
 
-Review Reason output and export-worker audit schema ownership.
+Review Memory curator and optimizer audit schema ownership.
