@@ -4,6 +4,7 @@ import pytest
 
 from nuself.logs import read_log_events
 from nuself.runtime.observability import (
+    decode_observed_record,
     format_exception_chain,
     run_observed_best_effort,
 )
@@ -66,3 +67,52 @@ def test_best_effort_warns_when_structured_sink_also_fails(
         )
 
     assert result is None
+
+
+@pytest.mark.parametrize(
+    ("wire", "expected_id"),
+    [
+        ({"id": "mem_bad", "private_body": "secret"}, "mem_bad"),
+        ({"private_body": "secret"}, "<unknown>"),
+    ],
+)
+def test_record_decode_failure_reports_identity_without_payload(
+    tmp_path: Path,
+    wire: dict[str, object],
+    expected_id: str,
+) -> None:
+    def decode(record: dict[str, object]) -> str:
+        raise ValueError("missing required title")
+
+    assert (
+        decode_observed_record(
+            wire,
+            decode,
+            component="memory",
+            collection="memory_entries",
+            project_root=tmp_path,
+        )
+        is None
+    )
+
+    event = read_log_events(project_root=tmp_path, component="memory")[-1]
+    assert event.event == "record_decode_failed"
+    assert event.metadata == {
+        "collection": "memory_entries",
+        "record_id": expected_id,
+    }
+    assert "secret" not in str(event.to_record())
+
+
+def test_record_decode_does_not_hide_unexpected_errors(tmp_path: Path) -> None:
+    def decode(record: dict[str, object]) -> str:
+        raise RuntimeError("programming failure")
+
+    with pytest.raises(RuntimeError, match="programming failure"):
+        decode_observed_record(
+            {"id": "mem_bad"},
+            decode,
+            component="memory",
+            collection="memory_entries",
+            project_root=tmp_path,
+        )

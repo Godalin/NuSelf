@@ -10,6 +10,7 @@ from nuself.config import runtime_paths
 from nuself.derived import write_derived_index
 from nuself.domain.memory import MemoryCandidate, merge_relations
 from nuself.domain.profile import ProfileItem
+from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend, auto_backend
 
 
@@ -57,10 +58,15 @@ class ProfileItemRepository:
     def list(self) -> list[ProfileItem]:
         items: list[ProfileItem] = []
         for wire in self._col.list():
-            try:
-                items.append(ProfileItem.from_wire(wire))
-            except (ValueError, KeyError):
-                pass
+            item = decode_observed_record(
+                wire,
+                ProfileItem.from_wire,
+                component="memory",
+                collection="profile_items",
+                project_root=self._paths.project_root,
+            )
+            if item is not None:
+                items.append(item)
         return sorted(items, key=lambda item: item.updated_at, reverse=True)
 
     def search(self, query: str, filters: ProfileSearchFilters | None = None) -> list[ProfileItem]:

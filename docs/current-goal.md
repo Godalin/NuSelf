@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Improve system robustness in review-driven stages, beginning with silent
-failure handling and observability at best-effort side-effect boundaries.
+Make malformed authoritative records observable without making one corrupt
+record prevent healthy records from being listed or rebuilt.
 
 ## Active Branch
 
@@ -14,34 +14,34 @@ failure handling and observability at best-effort side-effect boundaries.
 
 ## Ordered Work
 
-1. [x] Classify silent exception handlers by control-flow intent and risk.
-2. [x] Specify a shared observable best-effort boundary and fallback channel.
-3. [x] Implement the shared boundary with focused unit tests.
-4. [x] Migrate audit logging and memory/persona trace recording.
-5. [x] Audit remaining broad or silent exceptions and record the next batch.
-6. [x] Run full tests, type checking, and formatting checks.
+1. [x] Inventory repository decode-and-skip paths and their existing contracts.
+2. [x] Specify corrupt-record isolation, diagnostics, and identity handling.
+3. [x] Add one shared repository decode boundary with focused tests.
+4. [ ] Migrate the highest-risk authoritative repositories in reviewable
+   groups.
+5. [ ] Audit remaining repositories and record the next robustness batch.
+6. [ ] Run full tests, type checking, and formatting checks.
 7. [ ] Commit and push in reviewable stages.
 
 ## Out Of Scope
 
-- Treating expected parse failures, missing files, or cleanup races as errors.
-- Changing the success/failure semantics of primary domain operations.
-- Adding an autonomous agent subsystem without a bounded task that benefits
-  from agent reasoning.
+- Rejecting an entire collection because one record is malformed.
+- Automatically rewriting or deleting corrupt authoritative data.
+- Logging expected missing records or cleanup races as corruption.
 
 ## Completion Evidence
 
-- Best-effort failures produce a structured warning/error when possible and a
-  fallback diagnostic when the structured sink itself fails.
-- Migrated primary operations remain successful when their trace/audit side
-  effect fails.
-- Focused tests cover the shared boundary and each migrated caller.
-- The remaining silent-exception audit has an explicit next action.
+- Every migrated skipped record produces a structured warning with collection,
+  record identity when recoverable, and compact error detail.
+- Healthy records remain readable when one neighboring record is corrupt.
+- Diagnostics do not expose complete private record contents.
+- Focused tests cover identity-present and identity-missing corrupt records.
 - Full pytest, Pyright, and `git diff --check` pass.
 
-## Next Review Batch
+## Migration Groups
 
-After this slice, make corrupt-record handling observable across repositories
-that currently skip malformed memory, source, profile, persona, reason,
-reflection, notification, or trace records. Then harden daemon export-manifest
-failure reporting. Expected missing-file and cleanup races remain excluded.
+- [x] Memory entries/candidates, source documents/chunks, and profile items.
+- [ ] Persona prompts.
+- [ ] Reason threads/steps.
+- [ ] Reflection entries and notification outbox.
+- [ ] Thought traces/links.

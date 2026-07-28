@@ -24,6 +24,7 @@ from nuself.domain.memory import (
 )
 from nuself.domain.profile import ProfileItem
 from nuself.profile.repository import ProfileItemRepository
+from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend, auto_backend
 
 
@@ -184,10 +185,15 @@ class MemoryEntryRepository:
     def list(self) -> list[MemoryEntry]:
         entries: list[MemoryEntry] = []
         for wire in self._col.list():
-            try:
-                entries.append(_entry_from_wire(wire))
-            except (ValueError, KeyError):
-                pass
+            entry = decode_observed_record(
+                wire,
+                _entry_from_wire,
+                component="memory",
+                collection="memory_entries",
+                project_root=self._paths.project_root,
+            )
+            if entry is not None:
+                entries.append(entry)
         return sorted(entries, key=lambda entry: entry.updated_at, reverse=True)
 
     def search(self, query: str, filters: MemorySearchFilters | None = None) -> list[MemoryEntry]:
@@ -422,15 +428,21 @@ class MemoryCandidateRepository:
     ) -> None:
         be = backend if backend is not None else auto_backend(project_root)
         self._col = be.collection("memory_candidates")
+        self._paths = runtime_paths(project_root)
         self._entry_repository = entry_repository or MemoryEntryRepository(project_root)
         self._profile_repository = profile_repository or ProfileItemRepository(project_root)
 
     def list(self, *, include_reviewed: bool = False) -> list[MemoryCandidate]:
         candidates: list[MemoryCandidate] = []
         for wire in self._col.list():
-            try:
-                candidate = MemoryCandidate.from_wire(wire)
-            except (ValueError, KeyError):
+            candidate = decode_observed_record(
+                wire,
+                MemoryCandidate.from_wire,
+                component="memory",
+                collection="memory_candidates",
+                project_root=self._paths.project_root,
+            )
+            if candidate is None:
                 continue
             if include_reviewed or candidate.review_state == "pending":
                 candidates.append(candidate)

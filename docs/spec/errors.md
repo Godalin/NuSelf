@@ -89,6 +89,24 @@ after a memory or persona update.
 - Expected parsing fallbacks and cleanup races should use their specific
   exception types and do not need best-effort failure events.
 
+## Corrupt Record Isolation
+
+Collection listing and rebuild operations isolate malformed records so one bad
+record does not hide healthy neighbors.
+
+- Repositories use one shared decode boundary for stored record dictionaries.
+- Only declared schema/decode errors such as `ValueError`, `KeyError`, and
+  `TypeError` are isolated. Unexpected programming or infrastructure errors
+  propagate normally.
+- Each isolated record writes a structured `record_decode_failed` warning with
+  the collection name, recoverable record ID or `"<unknown>"`, and compact
+  exception chain.
+- Diagnostics must not include the complete record, private body, prompt,
+  source text, or other arbitrary payload fields.
+- Listing does not rewrite, quarantine, or delete the malformed record.
+- Direct `get` operations continue to surface decode errors to their caller;
+  silently converting corrupt data into "not found" is forbidden.
+
 ## REPL Retry Contract
 
 Interactive chat may retry exactly once only when the send result is explicitly marked retryable.

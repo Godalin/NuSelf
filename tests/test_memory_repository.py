@@ -12,6 +12,8 @@ from nuself.domain.memory import (
 )
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository, MemoryRelationFilters
 from nuself.memory.repository import MemorySearchFilters, memory_stats
+from nuself.logs import read_log_events
+from nuself.storage import FileStorageBackend
 
 
 def test_memory_repository_crud(tmp_path: Path) -> None:
@@ -35,6 +37,29 @@ def test_memory_repository_crud(tmp_path: Path) -> None:
 
     repo.delete(entry.id)
     assert repo.list() == []
+
+
+def test_memory_repository_isolates_and_reports_corrupt_neighbor(
+    tmp_path: Path,
+) -> None:
+    backend = FileStorageBackend(tmp_path / "private")
+    repo = MemoryEntryRepository(tmp_path, backend=backend)
+    healthy = repo.save(
+        MemoryEntry(type="concept", title="Healthy", body="Readable")
+    )
+    backend.collection("memory_entries").put(
+        "mem_corrupt",
+        {"id": "mem_corrupt", "body": "private contents"},
+    )
+
+    assert [entry.id for entry in repo.list()] == [healthy.id]
+    event = read_log_events(project_root=tmp_path, component="memory")[-1]
+    assert event.event == "record_decode_failed"
+    assert event.metadata == {
+        "collection": "memory_entries",
+        "record_id": "mem_corrupt",
+    }
+    assert "private contents" not in str(event.to_record())
 
 
 def test_memory_repository_lists_relations(tmp_path: Path) -> None:

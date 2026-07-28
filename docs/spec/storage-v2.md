@@ -156,6 +156,15 @@ class MemoryEntryRepository:
 
 Repository 内部纯数据逻辑不变（`to_wire()` / `from_wire()` 已就绪）。
 
+### Corrupt Record Reads
+
+Storage collections return stored wire dictionaries without applying domain
+schema policy. Repository list/rebuild operations decode those dictionaries
+through the shared corrupt-record isolation boundary defined in
+[`errors.md`](errors.md). A malformed wire record is skipped with a structured,
+payload-safe diagnostic; it is never silently deleted or rewritten. Direct
+lookups surface the decode failure.
+
 ### Unify Long-Lived Object IDs
 
 统一 ID 格式为 `{prefix}_{uuid_short}`：

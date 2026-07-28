@@ -13,6 +13,7 @@ from nuself.derived import write_derived_index
 from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEvidence, PrivacyLevel
 from nuself.domain.source import SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path
+from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend, auto_backend
 
 SUPPORTED_SOURCE_SUFFIXES = {".md", ".markdown", ".txt"}
@@ -88,30 +89,31 @@ class SourceRepository:
 
     def replace_chunks(self, source_id: str, chunks: list[SourceChunk]) -> None:
         for wire in self._chunks.list():
-            try:
-                existing = SourceChunk.from_wire(wire)
-                if existing.source_id == source_id:
-                    self._chunks.delete(existing.id)
-            except (ValueError, KeyError):
-                pass
+            existing = self._decode_chunk(wire)
+            if existing is not None and existing.source_id == source_id:
+                self._chunks.delete(existing.id)
         for chunk in chunks:
             self._chunks.put(chunk.id, chunk.to_wire())
 
     def list_documents(self) -> list[SourceDocument]:
         items: list[SourceDocument] = []
         for wire in self._documents.list():
-            try:
-                items.append(SourceDocument.from_wire(wire))
-            except (ValueError, KeyError):
-                pass
+            document = decode_observed_record(
+                wire,
+                SourceDocument.from_wire,
+                component="memory",
+                collection="source_documents",
+                project_root=self._paths.project_root,
+            )
+            if document is not None:
+                items.append(document)
         return sorted(items, key=lambda d: d.updated_at, reverse=True)
 
     def list_chunks(self, source_id: str | None = None) -> list[SourceChunk]:
         items: list[SourceChunk] = []
         for wire in self._chunks.list():
-            try:
-                chunk = SourceChunk.from_wire(wire)
-            except (ValueError, KeyError):
+            chunk = self._decode_chunk(wire)
+            if chunk is None:
                 continue
             if source_id is None or chunk.source_id == source_id:
                 items.append(chunk)
@@ -153,12 +155,18 @@ class SourceRepository:
 
     def _delete_chunks(self, source_id: str) -> None:
         for wire in self._chunks.list():
-            try:
-                chunk = SourceChunk.from_wire(wire)
-                if chunk.source_id == source_id:
-                    self._chunks.delete(chunk.id)
-            except (ValueError, KeyError):
-                pass
+            chunk = self._decode_chunk(wire)
+            if chunk is not None and chunk.source_id == source_id:
+                self._chunks.delete(chunk.id)
+
+    def _decode_chunk(self, wire: dict[str, object]) -> SourceChunk | None:
+        return decode_observed_record(
+            wire,
+            SourceChunk.from_wire,
+            component="memory",
+            collection="source_chunks",
+            project_root=self._paths.project_root,
+        )
 
     def _delete_derived_candidates(self, source_prefix: str) -> None:
         from nuself.memory.repository import MemoryCandidateRepository
