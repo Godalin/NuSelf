@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Keep structured event persistence available when bounded-retention rotation
-encounters filesystem failures.
+Recover the active structured log cleanly when a single-record append fails
+after writing only part of its JSONL bytes.
 
 ## Active Branch
 
@@ -14,39 +14,38 @@ encounters filesystem failures.
 
 ## Ordered Work
 
-1. Audit rotation mutation order and write-failure boundaries.
-2. Specify persistence-first degradation for retention failures.
-3. Isolate rotation failures without weakening append failures.
-4. Emit one safe non-raising rotation diagnostic.
-5. Verify failures before and after active-file replacement.
+1. Audit text-stream write, flush, and failure behavior.
+2. Specify record-boundary rollback for failed appends.
+3. Add a complete-write loop under the existing process lock.
+4. Preserve the primary append error if rollback also fails.
+5. Verify recovery from an injected partial write.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Append, lock, and runtime-directory failures still propagate to the caller.
-- Observers run only after the current event is successfully appended.
-- Do not expose event content, filesystem paths, or exception messages in the
-  degradation diagnostic.
+- Successful appends remain process-visible rather than `fsync`-durable.
+- Rollback is limited to bytes written by the failing append while holding the
+  stable inter-process lock.
+- Failed events are not delivered to observers.
 
 ## Completion Evidence
 
-- Retention rotation `OSError`s are isolated from the active event append;
-  lock, directory, and append failures remain outside the degradation boundary.
-- A failed rotation before active-file replacement continues in the existing
-  active file; a failure after replacement creates a new active file.
-- Both recovery states preserve readable event history and deliver the
-  successfully persisted event to process-local observers.
-- Rotation diagnostics are non-raising and expose only component plus exception
-  type, excluding event content, paths, and exception messages.
-- Focused log infrastructure tests: `48 passed`.
-- `.venv/bin/pytest -q`: `1544 passed`.
+- Active-file appends capture the record boundary under the existing stable
+  lock and use an unbuffered complete-write loop.
+- Short writes are retried until the full JSONL record is process-visible.
+- An injected partial write rolls back to the prior boundary, propagates the
+  original `OSError`, skips observer delivery, and permits a clean later write.
+- Rollback failure emits one non-raising diagnostic containing only component
+  and exception type; private paths and exception messages remain excluded.
+- Focused log infrastructure tests: `51 passed`.
+- `.venv/bin/pytest -q`: `1547 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `762d32c`.
+`dev/v0.3.x` is published through `4089880`.
 
 ## Next Review Batch
 
-Audit partial append recovery and record durability guarantees.
+Audit sidecar lock lifecycle and in-process lock registry growth.

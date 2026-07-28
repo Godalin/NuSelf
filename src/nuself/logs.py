@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
 from threading import Lock, RLock
-from typing import Literal, cast
+from typing import BinaryIO, Literal, cast
 from uuid import uuid4
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
@@ -482,9 +482,11 @@ def _append_log_event(
                 )
             except OSError as exc:
                 _report_log_rotation_failure(event_record.component, exc)
-            with path.open("a", encoding="utf-8") as log_file:
-                log_file.write(line)
-                log_file.flush()
+            _append_encoded_log_line(
+                path,
+                line.encode("utf-8"),
+                component=event_record.component,
+            )
         finally:
             flock(lock_file.fileno(), LOCK_UN)
     for observer in _CURRENT_LOG_EVENT_OBSERVERS.get():
@@ -498,6 +500,50 @@ def _append_log_event(
             )
             continue
     return event_record
+
+
+def _append_encoded_log_line(
+    path: Path,
+    encoded_line: bytes,
+    *,
+    component: LogComponent,
+) -> None:
+    with path.open("a+b", buffering=0) as log_file:
+        record_boundary = log_file.seek(0, 2)
+        try:
+            _write_log_bytes(log_file, encoded_line)
+        except OSError:
+            _rollback_failed_log_append(
+                log_file,
+                record_boundary,
+                component=component,
+            )
+            raise
+
+
+def _write_log_bytes(log_file: BinaryIO, encoded_line: bytes) -> None:
+    written = 0
+    while written < len(encoded_line):
+        count = log_file.write(encoded_line[written:])
+        if count <= 0:
+            raise OSError("log append made no progress")
+        written += count
+
+
+def _rollback_failed_log_append(
+    log_file: BinaryIO,
+    record_boundary: int,
+    *,
+    component: LogComponent,
+) -> None:
+    try:
+        log_file.truncate(record_boundary)
+    except OSError as exc:
+        emit_runtime_warning(
+            "logs/append_rollback_failed: "
+            f"component={component} error_type={type(exc).__name__}",
+            stacklevel=4,
+        )
 
 
 def _report_log_rotation_failure(

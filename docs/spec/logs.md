@@ -337,6 +337,16 @@ Structured component logs use `LogRetentionPolicy`. The production default is
   only the component and exception type, never event content, filesystem
   paths, or the exception message. Lock acquisition, directory creation, and
   active-file append failures still propagate.
+- A record append captures the active file length under the stable lock and
+  writes the encoded JSONL record to completion, including retrying short
+  writes. If writing fails after a partial append, the writer truncates back to
+  that captured record boundary before propagating the original error. The
+  failed event is not delivered to observers. If rollback itself fails, one
+  non-raising terminal warning reports only component plus rollback exception
+  type; it never replaces the primary append error or includes event content,
+  paths, or exception messages.
+- Successful writes are flushed to the operating system through an unbuffered
+  file handle but are not individually `fsync`-durable.
 - Readers include numbered backups in chronological sorting.
 - Incremental cursors track file identity as well as byte offset. If rotation
   replaces the active file, a cursor finishes the matching `.1` inode from its

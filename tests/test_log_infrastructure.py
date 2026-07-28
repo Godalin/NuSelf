@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import cast
+from typing import BinaryIO, cast
 
 import pytest
 
@@ -947,6 +947,96 @@ def test_rotation_failure_preserves_current_event_and_safe_diagnostic(
     assert "error_type=PermissionError" in warning
     assert "private current event" not in warning
     assert "private failure" not in warning
+    assert str(private_path) not in warning
+
+
+def test_partial_log_append_rolls_back_before_propagating(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed: list[LogEvent] = []
+    existing = write_log_event(
+        "chat",
+        "turn_started",
+        "existing",
+        project_root=tmp_path,
+    )
+    write_log_bytes = logs._write_log_bytes  # pyright: ignore[reportPrivateUsage]
+    private_path = tmp_path / "private-append-target"
+
+    def fail_after_partial_write(
+        log_file: BinaryIO,
+        encoded_line: bytes,
+    ) -> None:
+        assert log_file.write(encoded_line[:17]) == 17
+        raise OSError(5, "private append failure", private_path)
+
+    monkeypatch.setattr(logs, "_write_log_bytes", fail_after_partial_write)
+
+    with observe_log_events(observed.append):
+        with pytest.raises(OSError, match="private append failure"):
+            write_log_event(
+                "chat",
+                "turn_completed",
+                "failed",
+                project_root=tmp_path,
+            )
+
+    assert observed == []
+    assert read_log_events(project_root=tmp_path, component="chat") == [existing]
+
+    monkeypatch.setattr(logs, "_write_log_bytes", write_log_bytes)
+    recovered = write_log_event(
+        "chat",
+        "turn_completed",
+        "recovered",
+        project_root=tmp_path,
+    )
+    assert read_log_events(project_root=tmp_path, component="chat") == [
+        existing,
+        recovered,
+    ]
+
+
+def test_log_byte_writer_retries_short_writes() -> None:
+    written = bytearray()
+
+    class ShortWriter:
+        def write(self, value: bytes) -> int:
+            count = min(3, len(value))
+            written.extend(value[:count])
+            return count
+
+    logs._write_log_bytes(  # pyright: ignore[reportPrivateUsage]
+        cast(BinaryIO, ShortWriter()),
+        b"complete-record\n",
+    )
+
+    assert written == b"complete-record\n"
+
+
+def test_append_rollback_failure_reports_safely_without_raising(
+    tmp_path: Path,
+) -> None:
+    private_path = tmp_path / "private-rollback-target"
+
+    class FailingRollback:
+        def truncate(self, _size: int) -> int:
+            raise PermissionError(13, "private rollback failure", private_path)
+
+    with pytest.warns(RuntimeWarning) as captured:
+        logs._rollback_failed_log_append(  # pyright: ignore[reportPrivateUsage]
+            cast(BinaryIO, FailingRollback()),
+            42,
+            component="chat",
+        )
+
+    assert len(captured) == 1
+    warning = str(captured[0].message)
+    assert "logs/append_rollback_failed" in warning
+    assert "component=chat" in warning
+    assert "error_type=PermissionError" in warning
+    assert "private rollback failure" not in warning
     assert str(private_path) not in warning
 
 
