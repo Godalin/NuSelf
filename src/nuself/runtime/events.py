@@ -6,6 +6,10 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from threading import RLock
 
+from nuself.runtime.event_definitions import (
+    EventDefinitionRegistry,
+    build_event_definition_registry,
+)
 from nuself.runtime.messages import RuntimeEnvelope
 
 EventSubscriber = Callable[[RuntimeEnvelope], None]
@@ -45,8 +49,16 @@ class EventDeliveryError(RuntimeError):
 class EventPublisher:
     """Owns ordered subscribers and delivers events synchronously."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        definitions: EventDefinitionRegistry | None = None,
+    ) -> None:
         self._lock = RLock()
+        self._definitions = (
+            definitions
+            if definitions is not None
+            else build_event_definition_registry()
+        )
         self._next_subscription_id = 1
         self._subscribers: dict[int, tuple[str | None, EventSubscriber]] = {}
 
@@ -83,6 +95,7 @@ class EventPublisher:
     ) -> RuntimeEnvelope:
         """Create and synchronously publish one immutable event."""
 
+        self._definitions.resolve(producer, name)
         event = RuntimeEnvelope(
             kind="event",
             name=name,
@@ -97,6 +110,7 @@ class EventPublisher:
 
         if event.kind != "event":
             raise ValueError("event publisher requires an event envelope")
+        self._definitions.resolve(event.producer, event.name)
         with self._lock:
             subscribers = tuple(self._subscribers.items())
         failures: list[EventDeliveryFailure] = []

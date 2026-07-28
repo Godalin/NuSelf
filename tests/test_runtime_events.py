@@ -5,7 +5,17 @@ from pathlib import Path
 import pytest
 
 from nuself.logs import read_log_events, runtime_event_log_sink
-from nuself.runtime import EventDeliveryError, EventPublisher, RuntimeEnvelope
+from nuself.runtime import (
+    DuplicateEventDefinitionError,
+    EventDefinitionRegistry,
+    EventDefinitionRegistrySealedError,
+    EventDeliveryError,
+    EventPublisher,
+    RuntimeEnvelope,
+    RuntimeEventDefinition,
+    UnknownEventDefinitionError,
+    build_event_definition_registry,
+)
 
 
 def test_event_publisher_delivers_matching_subscribers_in_order() -> None:
@@ -80,3 +90,51 @@ def test_runtime_event_log_sink_preserves_event_identity(tmp_path: Path) -> None
     assert logged.event == event.name
     assert logged.status == "started"
     assert logged.metadata == {"worker": "memory"}
+
+
+def test_event_publisher_rejects_unknown_or_wrong_producer() -> None:
+    publisher = EventPublisher()
+
+    with pytest.raises(UnknownEventDefinitionError):
+        publisher.publish(name="worker.started", producer="chat")
+    with pytest.raises(UnknownEventDefinitionError):
+        publisher.publish(name="domain.changed", producer="memory")
+
+
+def test_domain_event_definitions_extend_core_registry() -> None:
+    definition = RuntimeEventDefinition(
+        producer="memory",
+        name="entry.changed",
+        description="A durable memory entry changed.",
+    )
+    publisher = EventPublisher(build_event_definition_registry((definition,)))
+
+    event = publisher.publish(
+        name="entry.changed",
+        producer="memory",
+        payload={"entry_id": "m1"},
+    )
+
+    assert event.name == "entry.changed"
+
+
+def test_event_definition_registry_rejects_duplicates_and_late_changes() -> None:
+    definition = RuntimeEventDefinition(
+        producer="memory",
+        name="entry.changed",
+        description="A durable memory entry changed.",
+    )
+    registry = EventDefinitionRegistry().register(definition)
+
+    with pytest.raises(DuplicateEventDefinitionError):
+        registry.register(definition)
+
+    registry.seal()
+    with pytest.raises(EventDefinitionRegistrySealedError):
+        registry.register(
+            RuntimeEventDefinition(
+                producer="memory",
+                name="entry.deleted",
+                description="A durable memory entry was deleted.",
+            )
+        )

@@ -52,6 +52,13 @@ These are review-driven refactors that should not block local v0.2 testing. They
   job messages, starting with reason output export.
 - [x] Add an explicit in-process event publisher for live activity; logs remain
   audit/read-model storage rather than a command bus.
+- [x] Decode daemon request/response dictionaries through typed payload
+  contracts at the transport boundary.
+- [x] Register core runtime event definitions and require explicit domain
+  extensions before publication.
+- [ ] Add a bounded structured-log retention and rotation policy.
+- [ ] Replace cross-process REPL activity polling with an explicit live event
+  transport while retaining log-based diagnostics.
 
 ## Current Goal
 

@@ -120,6 +120,14 @@ removed through publisher-scoped opaque handles. Delivery continues across
 subscriber failures and raises one `EventDeliveryError` containing every
 failure after all matching subscribers have run.
 
+Every published event resolves through a sealed
+`EventDefinitionRegistry`. Core lifecycle definitions ship with the runtime;
+domains extend them during composition through
+`build_event_definition_registry(...)`. Duplicate definitions, late
+registration, unknown names, and producer/name ownership mismatches fail before
+delivery. Runtime event names use dotted subject/action names such as
+`worker.started`; historical JSONL audit event slugs remain readable.
+
 `runtime_event_log_sink(...)` is an optional subscriber. Its audit projection
 preserves the original envelope ID; attaching it never changes event delivery
 into log-driven control flow.
