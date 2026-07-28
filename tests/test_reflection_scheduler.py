@@ -261,6 +261,74 @@ def test_reflect_creates_reflection_entry(scheduler: ReflectionScheduler) -> Non
     assert entries[0].deep_link.startswith("nuself://thread/reflections")
 
 
+def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
+    scheduler: ReflectionScheduler,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_trace(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("trace unavailable")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.trace.service.TraceRecorder.record_reflection_created",
+        fail_trace,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "reflection/trace_recording_failed: trace unavailable; "
+            "structured logging failed: audit store unavailable"
+        ),
+    ):
+        result = scheduler.reflect(now)
+
+    assert result is True
+    assert len(scheduler._reflection_repo.list()) == 1
+    assert scheduler._read_last_reflection() == now
+    events = read_log_events(
+        project_root=scheduler._project_root,
+        component="reflection",
+    )
+    assert events[-1].event == "cycle_completed"
+
+
+def test_organizer_diagnostics_cannot_interrupt_best_effort_boundary(
+    scheduler: ReflectionScheduler,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_organizer(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("organizer unavailable")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.reflection.scheduler.ReflectionOrganizer.organize_pending",
+        fail_organizer,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "reflection/organizer_failed: organizer unavailable; "
+            "structured logging failed: audit store unavailable"
+        ),
+    ):
+        scheduler._organize_pending_reflections()
+
+
 def test_reflect_creates_multiple_reflection_entries(scheduler: ReflectionScheduler) -> None:
     import time
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
@@ -427,6 +495,37 @@ def test_corrupt_schedule_state_fails_closed(
     assert events[-1].status == "degraded"
     assert events[-1].metadata == {"record": "last_reflection.json"}
     assert "2024-01-01" not in (events[-1].error or "")
+
+
+def test_corrupt_schedule_diagnostics_cannot_change_fail_closed_decision(
+    scheduler: ReflectionScheduler,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    scheduler._last_reflection_path.write_text(
+        '{"schema_version":1}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "reflection/schedule_state_corrupt: "
+            "reflection schedule state is malformed or unsupported; "
+            "structured logging failed: audit store unavailable"
+        ),
+    ):
+        result = scheduler.should_reflect(
+            datetime(2024, 1, 2, 12, tzinfo=UTC)
+        )
+
+    assert result is False
 
 
 def test_reflect_reports_corrupt_schedule_state_as_blocked(
@@ -784,6 +883,37 @@ def test_relevance_gate_corrupt_state_keeps_cooldown_active(
     events = read_log_events(project_root=tmp_path, component="reflection")
     assert events[-1].event == "schedule_state_corrupt"
     assert events[-1].status == "degraded"
+
+
+def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.reflection import LLMRelevanceGate
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    gate = LLMRelevanceGate(tmp_path, llm=_FakeLLM())
+    last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
+    last_path.parent.mkdir(parents=True, exist_ok=True)
+    last_path.write_text('{"timestamp":"not-a-date"}', encoding="utf-8")
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "reflection/schedule_state_corrupt: "
+            "reflection schedule state is malformed or unsupported; "
+            "structured logging failed: audit store unavailable"
+        ),
+    ):
+        result = gate._cooldown_ok()
+
+    assert result is False
 
 
 def test_relevance_gate_no_cooldown_when_no_last_reflection(tmp_path: Path) -> None:

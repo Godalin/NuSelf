@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reflection trace/organizer failure and corrupt schedule-state diagnostics now
+  use shared observable reporting. Diagnostic storage failure cannot interrupt
+  an already-persisted cycle or change fail-closed scheduler/cooldown behavior.
 - Reason advancer, scheduler, and output-runner failure logs now use shared
   observable reporting. Audit storage failure cannot mask the original
   advancer/runner exception or turn a cooled-down scheduler failure into a new

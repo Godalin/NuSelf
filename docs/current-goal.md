@@ -5,8 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Reason advancer, scheduler, and output-runner failure diagnostics cannot
-mask the original exception or change scheduler cooldown/return behavior.
+Idle. Reflection trace, organizer, and corrupt-schedule diagnostics cannot
+interrupt an already-persisted cycle or change fail-closed scheduling and
+cooldown decisions.
 
 ## Active Branch
 
@@ -23,19 +24,17 @@ code.
 
 ## Completion Evidence
 
-- Advancer agent/tool failure writes structured `advance_tool_failed` without
-  traceback payloads and propagates the exact original exception object.
-- Scheduler applies and persists cooldown before best-effort
-  `scheduler_advance_failed`; audit failure emits a terminal warning while
-  `run_once()` returns `None` and persists no step.
-- Output runner failure writes `reason_output_chunk_failed` best effort,
-  propagates the exact runner exception, and writes no failed chunk.
-- All three projections retain runtime/thread/job/chunk correlation and cannot
-  introduce a hidden retry when structured logging fails.
-- Successful events, prompts, step parsing, cooldown duration, and output
-  retry behavior are unchanged.
-- Focused advancer, scheduler, and output-runner tests: 23 passed.
-- Final full tests: 1311 passed.
+- Trace failure after reflection persistence uses shared reporting; diagnostic
+  storage failure emits a terminal warning while the cycle completes and
+  schedule state advances.
+- Organizer failure remains best effort even when its diagnostic cannot be
+  persisted.
+- Corrupt scheduler state still blocks reflection, and corrupt relevance-gate
+  state still keeps cooldown active, when structured logging fails.
+- Repository, schedule-state write, outbox, candidate generation, relevance,
+  and discussion behavior remain unchanged.
+- Focused reflection and observability tests: 58 passed.
+- Final full tests: 1315 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -46,4 +45,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-reason failure projections cannot replace their primary outcomes.
+reflection auxiliary diagnostics preserve cycle and fail-closed outcomes.

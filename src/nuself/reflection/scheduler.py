@@ -21,6 +21,7 @@ from nuself.notification.deep_link import DeepLink
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.persona import PersonaCompetitionResult, SharedPersonaDiscussionService
+from nuself.runtime.observability import report_observed_failure
 from nuself.storage import write_json_atomic
 
 REFLECTION_SCHEDULE_STATE_VERSION = 1
@@ -244,15 +245,15 @@ class ReflectionScheduler:
                 decision_points=decision_points,
             )
         except Exception as exc:
-
-            write_log_event(
-                "reflection",
-                "trace_recording_failed",
-                f"failed to record trace for reflection: {exc}",
+            report_observed_failure(
+                exc,
+                component="reflection",
+                event="trace_recording_failed",
+                message="Failed to record trace for persisted reflection",
                 project_root=self._project_root,
                 level="error",
                 status="failed",
-                error=str(exc),
+                metadata={"reflection_id": entry.id},
             )
         self._organize_pending_reflections()
         self._write_last_reflection(now, title=title, body=body)
@@ -277,14 +278,15 @@ class ReflectionScheduler:
         try:
             ReflectionOrganizer(self._project_root, repository=self._reflection_repo).organize_pending()
         except Exception as exc:
-            write_log_event(
-                "reflection",
-                "organizer_failed",
-                "reflection organizer failed",
+            report_observed_failure(
+                exc,
+                component="reflection",
+                event="organizer_failed",
+                message="Reflection organizer failed",
                 project_root=self._project_root,
                 level="error",
                 status="failed",
-                error=str(exc),
+                metadata=None,
             )
 
     def _in_quiet_hours(self, now: datetime) -> bool:
@@ -390,14 +392,14 @@ class ReflectionScheduler:
         self,
         exc: ReflectionScheduleStateError,
     ) -> None:
-        write_log_event(
-            "reflection",
-            "schedule_state_corrupt",
-            "reflection schedule state is invalid; scheduling is blocked",
+        report_observed_failure(
+            exc,
+            component="reflection",
+            event="schedule_state_corrupt",
+            message="Reflection schedule state is invalid; scheduling is blocked",
             project_root=self._project_root,
             level="warning",
             status="degraded",
-            error=str(exc),
             metadata={"record": self._last_reflection_path.name},
         )
 
@@ -619,14 +621,17 @@ class LLMRelevanceGate:
                 self._last_reflection_path
             )
         except ReflectionScheduleStateError as exc:
-            write_log_event(
-                "reflection",
-                "schedule_state_corrupt",
-                "reflection schedule state is invalid; cooldown remains active",
+            report_observed_failure(
+                exc,
+                component="reflection",
+                event="schedule_state_corrupt",
+                message=(
+                    "Reflection schedule state is invalid; "
+                    "cooldown remains active"
+                ),
                 project_root=self._project_root,
                 level="warning",
                 status="degraded",
-                error=str(exc),
                 metadata={"record": self._last_reflection_path.name},
             )
             return False

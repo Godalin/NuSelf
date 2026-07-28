@@ -163,6 +163,19 @@ writes a payload-safe `schedule_state_corrupt` warning, and reports
 cooldown as active when the same state is corrupt. Successful publication
 updates the complete record through atomic file replacement.
 
+The two `schedule_state_corrupt` projections use shared failure reporting.
+Diagnostic persistence failure emits a terminal warning but cannot make
+`should_reflect()` raise, change the scheduler's `state_corrupt` block, or make
+the relevance gate treat cooldown as available.
+
+Trace recording after reflection persistence and best-effort pending-reflection
+organization are auxiliary effects. Their `trace_recording_failed` and
+`organizer_failed` projections also use shared reporting. Failure of either
+effect or its diagnostic cannot remove the persisted reflection, interrupt
+later schedule-state/outbox/cycle completion work, or introduce a hidden
+retry. Repository, schedule-state write, and outbox failures remain
+authoritative.
+
 ## Optional Notify Bridge
 
 If `reflection.auto_notify` is `true`, a brief `OutboxEntry` is created **pointing to** the reflection:

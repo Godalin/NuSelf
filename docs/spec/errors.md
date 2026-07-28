@@ -156,6 +156,11 @@ after a memory or persona update.
 - Expected parsing fallbacks and cleanup races should use their specific
   exception types and do not need best-effort failure events.
 
+Reflection trace recording and organizer execution after a persisted
+reflection are secondary under this contract. Corrupt reflection schedule
+diagnostics are also secondary to the authoritative fail-closed block/cooldown
+decision. Their logging failure cannot turn those outcomes into exceptions.
+
 ## Atomic File Failure Provenance
 
 Shared atomic text/JSON persistence propagates an ordinary write or replace

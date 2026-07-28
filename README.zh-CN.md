@@ -40,6 +40,9 @@ thread-local transaction 状态。
 Reason 执行失败日志不会覆盖 advancer、scheduler 或 output runner 的原始结果，
 即使结构化审计存储不可用也是如此。
 
+Reflection 辅助诊断不会中断已持久化的 cycle，也不会让损坏 schedule 的
+fail-closed block/cooldown 决策变成异常。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。
