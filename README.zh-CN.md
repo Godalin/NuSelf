@@ -262,7 +262,8 @@ Reason thread 的调度时间戳必须包含时区，因此损坏的 cooldown �
 进入后台推进。
 无效的 reason export manifest 会安全停止合成。任务列表会报告并隔离损坏 manifest，
 且不会暴露其中内容；直接查询和文件系统失败仍会明确返回。无效 progress 和 retry
-state 持久化失败会写入 daemon 日志。
+state 持久化失败会写入 daemon 日志。Progress 缺失属于正常状态，但无法读取或格式
+损坏时会明确诊断，也不会把部分非法字段强制转换成有效快照。
 
 检查系统健康：
 

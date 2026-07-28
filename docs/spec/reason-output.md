@@ -215,6 +215,15 @@ Progress is a read-friendly summary of the manifest state. The manifest is alway
   unreadable or schema-invalid progress file writes
   `export_job_progress_invalid`; composition may continue from the valid
   manifest.
+- Progress decoding requires the complete documented wire shape. Identity and
+  status fields are non-blank strings, `updated_at` is timezone-aware ISO-8601,
+  integer fields exclude booleans, and completed chunk indexes are unique,
+  non-negative, and lower than `total_chunks`. Invalid list members are rejected
+  rather than filtered or numerically coerced.
+- Readers attempt the progress read directly. Only `FileNotFoundError` is the
+  normal absent state; other filesystem failures are retained as
+  `progress_error` and flow through the same payload-safe degraded diagnostic
+  as JSON, shape, field, and identity failures.
 - Recovery diagnostics identify the thread and job but do not include chunk
   contents or the raw manifest/progress payload.
 

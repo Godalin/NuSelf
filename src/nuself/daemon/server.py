@@ -91,12 +91,12 @@ def _inspect_export_job(
         return ExportJobInspection(manifest=manifest, total_chunks="?")
 
     progress_path = manifest_path.with_name(manifest.progress_filename)
-    if not progress_path.exists():
-        return ExportJobInspection(manifest=manifest, total_chunks="?")
     try:
         progress = _read_export_progress(progress_path)
         if progress.job_id != job_id or progress.thread_id != thread_id:
             raise ValueError("export progress identity does not match queue message")
+    except FileNotFoundError:
+        return ExportJobInspection(manifest=manifest, total_chunks="?")
     except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
         return ExportJobInspection(
             manifest=manifest,

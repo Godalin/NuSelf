@@ -54,6 +54,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Reason export progress reads now distinguish a normally missing file from
+  permission and other filesystem failures. Progress snapshots are decoded
+  strictly instead of filtering or coercing invalid chunk indexes.
 - Reason-thread scheduling timestamps now require timezone-aware ISO-8601
   values. Corrupt cooldown records are reported and isolated before scheduling
   instead of silently becoming eligible for background advancement.

@@ -31,6 +31,11 @@ REASON_OUTPUT_STORAGE_VERSION = "NuSelfReasonOutput/v1"
 REASON_OUTPUT_MODES: tuple[str, ...] = ("outline", "narrative", "report", "summary")
 REASON_OUTPUT_FORMATS: tuple[str, ...] = ("markdown",)
 REASON_OUTPUT_STATUSES: tuple[str, ...] = ("planned", "complete", "failed")
+REASON_OUTPUT_PDF_STATUSES: tuple[str, ...] = (
+    "pending",
+    "generated",
+    "failed",
+)
 _SECTION_FIELDS = frozenset(
     {
         "index",
@@ -67,6 +72,18 @@ _MANIFEST_FIELDS = frozenset(
         "attempts",
         "last_error",
         "last_attempt_at",
+    }
+)
+_PROGRESS_FIELDS = frozenset(
+    {
+        "job_id",
+        "thread_id",
+        "status",
+        "completed_chunks",
+        "total_chunks",
+        "pdf_status",
+        "pdf_path",
+        "updated_at",
     }
 )
 _DecodedRecord = TypeVar("_DecodedRecord")
@@ -298,17 +315,32 @@ class ReasonOutputProgress:
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> ReasonOutputProgress:
+        _expect_exact_fields(data, _PROGRESS_FIELDS, label="reason output progress")
+        status = _expect_str(data, "status")
+        if status not in REASON_OUTPUT_STATUSES:
+            raise ValueError("reason output progress status is invalid")
+        pdf_status = _expect_str(data, "pdf_status")
+        if pdf_status not in REASON_OUTPUT_PDF_STATUSES:
+            raise ValueError("reason output progress PDF status is invalid")
+        total_chunks = _expect_int(data, "total_chunks")
+        if total_chunks < 0:
+            raise ValueError("total_chunks must be non-negative")
+        completed_chunks = _expect_int_tuple(data, "completed_chunks")
+        if len(set(completed_chunks)) != len(completed_chunks):
+            raise ValueError("completed_chunks must not contain duplicates")
+        if any(index < 0 or index >= total_chunks for index in completed_chunks):
+            raise ValueError(
+                "completed_chunks indexes must be within total_chunks"
+            )
         return cls(
-            job_id=_expect_str(data, "job_id"),
-            thread_id=_expect_str(data, "thread_id"),
-            status=_expect_str(data, "status"),
-            completed_chunks=tuple(
-                int(x) for x in _expect_list(data, "completed_chunks") if isinstance(x, (int, float))
-            ),
-            total_chunks=_expect_int(data, "total_chunks"),
-            pdf_status=_expect_str(data, "pdf_status"),
+            job_id=_expect_nonblank_str(data, "job_id"),
+            thread_id=_expect_nonblank_str(data, "thread_id"),
+            status=status,
+            completed_chunks=completed_chunks,
+            total_chunks=total_chunks,
+            pdf_status=pdf_status,
             pdf_path=_optional_str(data, "pdf_path"),
-            updated_at=_expect_str(data, "updated_at"),
+            updated_at=_expect_aware_iso(data, "updated_at"),
         )
 
 
@@ -1157,6 +1189,20 @@ def _expect_str_tuple(
         if not isinstance(value, str) or not value.strip():
             raise ValueError(
                 f"field '{field_name}' must contain non-blank strings"
+            )
+        result.append(value)
+    return tuple(result)
+
+
+def _expect_int_tuple(
+    data: dict[str, object],
+    field_name: str,
+) -> tuple[int, ...]:
+    result: list[int] = []
+    for value in _expect_list(data, field_name):
+        if type(value) is not int:
+            raise ValueError(
+                f"field '{field_name}' must contain integers"
             )
         result.append(value)
     return tuple(result)

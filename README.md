@@ -272,7 +272,8 @@ make a thread eligible for background advancement.
 Invalid reason-export manifests stop composition safely. Job listing reports
 and isolates malformed manifests without exposing their contents, while direct
 lookup and filesystem failures remain visible; invalid progress and retry-state
-persistence failures are reported in daemon logs.
+persistence failures are reported in daemon logs. Missing progress is normal,
+but unreadable or malformed progress is diagnosed and never partially coerced.
 
 Check system health:
 
