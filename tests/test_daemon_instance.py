@@ -257,6 +257,133 @@ def test_contended_daemon_preserves_owner_resources(
     ) == []
 
 
+def test_owned_recovery_removes_stale_socket_and_pid_and_audits(
+    tmp_path: Path,
+) -> None:
+    import nuself.daemon.server as server_module
+
+    paths = runtime_paths(tmp_path)
+    paths.runtime_dir.mkdir(parents=True)
+    paths.socket_path.write_text("crashed socket", encoding="utf-8")
+    paths.pid_path.write_text("4321\n", encoding="utf-8")
+
+    server_module._reconcile_stale_runtime_metadata(paths)
+
+    assert not paths.socket_path.exists()
+    assert not paths.pid_path.exists()
+    event = read_log_events(
+        project_root=tmp_path,
+        component="daemon",
+    )[-1]
+    assert event.event == "runtime_metadata_recovered"
+    assert event.status == "recovered"
+    assert event.metadata == {
+        "socket": True,
+        "pid": True,
+    }
+    assert "crashed socket" not in event.message
+    assert "4321" not in event.message
+
+
+def test_owned_recovery_attempts_both_resources_and_retains_failures(
+    tmp_path: Path,
+) -> None:
+    import nuself.daemon.server as server_module
+
+    paths = runtime_paths(tmp_path)
+    paths.socket_path.mkdir(parents=True)
+    paths.pid_path.mkdir()
+
+    with pytest.raises(
+        server_module.DaemonRuntimeRecoveryError
+    ) as captured:
+        server_module._reconcile_stale_runtime_metadata(paths)
+
+    error = captured.value
+    assert [failure.step for failure in error.failures] == [
+        "stale_socket.unlink",
+        "stale_pid.unlink",
+    ]
+    assert all(
+        isinstance(failure.error, OSError)
+        for failure in error.failures
+    )
+    assert error.__cause__ is error.failures[0].error
+    assert paths.socket_path.is_dir()
+    assert paths.pid_path.is_dir()
+
+
+def test_recovery_failure_still_runs_owned_metadata_cleanup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import nuself.daemon.server as server_module
+
+    paths = runtime_paths(tmp_path)
+    paths.socket_path.mkdir(parents=True)
+    paths.pid_path.mkdir()
+
+    def fail_if_constructed(project_root: Path) -> object:
+        raise AssertionError(
+            f"daemon state must not be constructed for {project_root}"
+        )
+
+    monkeypatch.setattr(
+        server_module,
+        "DaemonState",
+        fail_if_constructed,
+    )
+
+    with pytest.raises(server_module.DaemonLifecycleError) as captured:
+        server_module._run_owned_daemon(paths)
+
+    error = captured.value
+    assert isinstance(
+        error.primary_error,
+        server_module.DaemonRuntimeRecoveryError,
+    )
+    assert error.__cause__ is error.primary_error
+    assert [
+        failure.step for failure in error.primary_error.failures
+    ] == [
+        "stale_socket.unlink",
+        "stale_pid.unlink",
+    ]
+    assert [failure.step for failure in error.failures] == [
+        "socket.unlink",
+        "pid.unlink",
+    ]
+
+
+def test_recovery_audit_failure_cannot_restore_stale_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import nuself.daemon.server as server_module
+
+    paths = runtime_paths(tmp_path)
+    paths.runtime_dir.mkdir(parents=True)
+    paths.socket_path.write_text("crashed socket", encoding="utf-8")
+    paths.pid_path.write_text("4321\n", encoding="utf-8")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="daemon/lifecycle_audit_write_failed",
+    ):
+        server_module._reconcile_stale_runtime_metadata(paths)
+
+    assert not paths.socket_path.exists()
+    assert not paths.pid_path.exists()
+
+
 class _UnstartedDaemonState:
     def __init__(self, project_root: Path) -> None:
         self.project_root = project_root
@@ -295,6 +422,72 @@ class _UnstartedDaemonState:
         self.stop_calls.append("notification")
 
 
+def test_pid_is_published_only_after_successful_bind(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import signal
+    import nuself.daemon.server as server_module
+
+    paths = runtime_paths(tmp_path)
+    paths.runtime_dir.mkdir(parents=True)
+    pid_observed_after_bind = False
+
+    class ExitingState(_UnstartedDaemonState):
+        def start_background_memory_curator(self) -> None:
+            nonlocal pid_observed_after_bind
+            pid_observed_after_bind = (
+                int(paths.pid_path.read_text(encoding="utf-8")) > 0
+            )
+            super().start_background_memory_curator()
+
+        def start_background_notification_delivery(self) -> None:
+            super().start_background_notification_delivery()
+            self.shutdown_requested.set()
+
+    class BoundServer:
+        def __init__(
+            self,
+            socket_path: str,
+            handler: object,
+            state: object,
+        ) -> None:
+            assert not paths.pid_path.exists()
+            self.timeout = 0.0
+
+        def __enter__(self) -> BoundServer:
+            assert not paths.pid_path.exists()
+            return self
+
+        def __exit__(
+            self,
+            exc_type: object,
+            exc: object,
+            traceback: object,
+        ) -> None:
+            return None
+
+        def handle_request(self) -> None:
+            raise AssertionError("shutdown was already requested")
+
+    def make_state(project_root: Path) -> ExitingState:
+        return ExitingState(project_root)
+
+    def ignore_signal(
+        signal_number: int,
+        handler: object,
+    ) -> object:
+        return handler
+
+    monkeypatch.setattr(server_module, "DaemonState", make_state)
+    monkeypatch.setattr(server_module, "NuSelfUnixServer", BoundServer)
+    monkeypatch.setattr(signal, "signal", ignore_signal)
+
+    assert server_module._run_owned_daemon(paths) == 0
+    assert pid_observed_after_bind is True
+    assert not paths.pid_path.exists()
+
+
 def test_bind_failure_starts_no_workers_and_cleans_owned_resources(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -317,7 +510,7 @@ def test_bind_failure_starts_no_workers_and_cleans_owned_resources(
         handler: object,
         state: object,
     ) -> object:
-        assert int(paths.pid_path.read_text(encoding="utf-8")) > 0
+        assert not paths.pid_path.exists()
         assert list(paths.runtime_dir.glob("nuself.pid.*.tmp")) == []
         raise OSError("bind failed")
 
@@ -334,6 +527,80 @@ def test_bind_failure_starts_no_workers_and_cleans_owned_resources(
     with pytest.raises(OSError, match="bind failed"):
         server_module._run_owned_daemon(paths)
 
+    assert len(states) == 1
+    assert states[0].start_calls == []
+    assert states[0].stop_calls == [
+        "memory",
+        "reflection",
+        "reason",
+        "export",
+        "notification",
+    ]
+    assert not paths.socket_path.exists()
+    assert not paths.pid_path.exists()
+
+
+def test_pid_publication_failure_cleans_bound_socket_without_starting_workers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import signal
+    import nuself.daemon.server as server_module
+
+    paths = runtime_paths(tmp_path)
+    paths.runtime_dir.mkdir(parents=True)
+    states: list[_UnstartedDaemonState] = []
+    publication_error = OSError("pid publication failed")
+
+    class BoundServer:
+        def __init__(
+            self,
+            socket_path: str,
+            handler: object,
+            state: object,
+        ) -> None:
+            paths.socket_path.write_text("bound", encoding="utf-8")
+
+        def __enter__(self) -> BoundServer:
+            return self
+
+        def __exit__(
+            self,
+            exc_type: object,
+            exc: object,
+            traceback: object,
+        ) -> None:
+            return None
+
+    def make_state(project_root: Path) -> _UnstartedDaemonState:
+        state = _UnstartedDaemonState(project_root)
+        states.append(state)
+        return state
+
+    def fail_pid_publication(path: Path, content: str) -> None:
+        assert path == paths.pid_path
+        assert int(content) > 0
+        raise publication_error
+
+    def ignore_signal(
+        signal_number: int,
+        handler: object,
+    ) -> object:
+        return handler
+
+    monkeypatch.setattr(server_module, "DaemonState", make_state)
+    monkeypatch.setattr(server_module, "NuSelfUnixServer", BoundServer)
+    monkeypatch.setattr(
+        server_module,
+        "write_text_atomic",
+        fail_pid_publication,
+    )
+    monkeypatch.setattr(signal, "signal", ignore_signal)
+
+    with pytest.raises(OSError) as captured:
+        server_module._run_owned_daemon(paths)
+
+    assert captured.value is publication_error
     assert len(states) == 1
     assert states[0].start_calls == []
     assert states[0].stop_calls == [

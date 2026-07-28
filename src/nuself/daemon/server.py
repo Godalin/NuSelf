@@ -45,6 +45,17 @@ class DaemonLifecycleError(RuntimeError):
         self.primary_error = primary_error
 
 
+class DaemonRuntimeRecoveryError(RuntimeError):
+    """Raised when stale runtime metadata cannot be fully reconciled."""
+
+    def __init__(self, failures: tuple[CleanupFailure, ...]) -> None:
+        super().__init__(
+            f"daemon runtime metadata recovery failed in "
+            f"{len(failures)} step(s)"
+        )
+        self.failures = failures
+
+
 def _finish_daemon_lifecycle(
     *,
     project_root: Path,
@@ -119,8 +130,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
     started = False
     primary_error: BaseException | None = None
     try:
-        paths.socket_path.unlink(missing_ok=True)
-        write_text_atomic(paths.pid_path, f"{os.getpid()}\n")
+        _reconcile_stale_runtime_metadata(paths)
         state = DaemonState(paths.project_root)
         signal_owner = DaemonSignalOwner(state.shutdown_requested)
         signal_owner.install()
@@ -130,6 +140,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
             RequestHandler,
             state,
         ) as server:
+            write_text_atomic(paths.pid_path, f"{os.getpid()}\n")
             write_lifecycle_audit(
                 "started",
                 "daemon started",
@@ -203,6 +214,43 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
         cleanup_failures=cleanup_failures,
     )
     return 0
+
+
+def _reconcile_stale_runtime_metadata(paths: RuntimePaths) -> None:
+    recovered: dict[str, object] = {
+        "socket": False,
+        "pid": False,
+    }
+
+    def remove_stale(name: str, path: Path) -> None:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return
+        recovered[name] = True
+
+    failures = run_cleanup_steps(
+        (
+            (
+                "stale_socket.unlink",
+                lambda: remove_stale("socket", paths.socket_path),
+            ),
+            (
+                "stale_pid.unlink",
+                lambda: remove_stale("pid", paths.pid_path),
+            ),
+        )
+    )
+    if failures:
+        raise DaemonRuntimeRecoveryError(failures) from failures[0].error
+    if any(recovered.values()):
+        write_lifecycle_audit(
+            "runtime_metadata_recovered",
+            "stale daemon runtime metadata recovered",
+            project_root=paths.project_root,
+            status="recovered",
+            metadata=recovered,
+        )
 
 
 def main(argv: list[str] | None = None) -> int:

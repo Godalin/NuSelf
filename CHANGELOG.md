@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon startup now reconciles stale socket and PID metadata explicitly while
+  holding the instance lock, audits successful crash recovery, and publishes
+  the current PID only after Unix-socket binding succeeds.
 - Daemon shutdown now uses bounded graceful request and instance-lock release
   as its ownership boundary; stale PID metadata is never used for signal
   escalation, and stop/restart failures are typed and consistently audited.

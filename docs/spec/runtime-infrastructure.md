@@ -724,9 +724,16 @@ close operation is retried.
 The owner holds the lock until request serving and all background-worker
 shutdown are complete. Only that owner may:
 
-- remove a stale `nuself.sock` before binding;
+- reconcile stale `nuself.sock` and `nuself.pid` before initialization;
 - publish `nuself.pid`;
 - remove the socket and PID during cleanup.
+
+Reconciliation attempts removal of both stale resources independently while the
+instance lock is held. Any failures are retained together in a typed recovery
+error and abort startup; later lifecycle cleanup still attempts both resources.
+Successful reconciliation emits one best-effort
+`daemon/runtime_metadata_recovered` audit with boolean socket/PID fields and no
+file contents.
 
 While holding that ownership, the daemon temporarily owns the process SIGINT
 and SIGTERM handlers through `DaemonSignalOwner`. It restores pre-existing
@@ -737,17 +744,19 @@ lifecycle operations, not permanent module-level side effects.
 If the lock is already held, the contender writes
 `daemon/instance_lock_contended`, returns a non-zero exit status, and must not
 construct daemon state or modify socket/PID resources. Unix-server binding must
-complete before background workers start. Any bind or partial-start failure
-still runs every owner cleanup step before the lock is released. Cleanup
-failures are named and aggregated without discarding the bind/serve failure.
-The daemon resets only the current project root's default storage backend;
-other in-process project backends are not part of its ownership.
+complete before PID publication and before background workers start. The PID
+record therefore never claims a daemon whose socket failed to bind. Any
+reconciliation, bind, PID-publication, or partial-start failure still runs every
+owner cleanup step before the lock is released. Cleanup failures are named and
+aggregated without discarding the primary failure. The daemon resets only the
+current project root's default storage backend; other in-process project
+backends are not part of its ownership.
 
 ### PID Metadata
 
-The lock owner publishes `private/runtime/nuself.pid` through atomic text-file
-replacement. A valid PID record is one positive base-10 integer; surrounding
-whitespace is ignored.
+After socket binding, the lock owner publishes
+`private/runtime/nuself.pid` through atomic text-file replacement. A valid PID
+record is one positive base-10 integer; surrounding whitespace is ignored.
 
 Missing PID state is the normal stopped/starting boundary and returns no PID
 without a diagnostic. Empty, non-integer, zero, or negative content is corrupt

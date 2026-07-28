@@ -202,6 +202,13 @@ Daemon shutdown has one lifecycle-owned ownership boundary:
   project ping. A syntactically valid but stale PID file is never rendered as a
   running-process identity.
 
+Daemon startup recovery runs only after acquiring the project instance lock.
+It independently removes stale socket and PID metadata before constructing
+daemon state. Multiple recovery failures are retained in one typed error; a
+failure aborts initialization but does not skip the normal owned cleanup
+boundary. Binding precedes PID publication, so bind failure cannot publish a
+current-process PID. Recovery audit failure remains secondary.
+
 Daemon shutdown owns an ordered set of named cleanup steps. It signals
 shutdown, attempts each worker stop independently, resets only the current
 project's default storage backend, removes the socket and PID independently,
