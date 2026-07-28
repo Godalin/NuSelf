@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- The live-chat send-thread boundary now observes unexpected callback
+  exceptions without crashing the REPL, while preserving `KeyboardInterrupt`,
+  `SystemExit`, and other control exceptions across the thread boundary after
+  subscription cleanup.
 - REPL daemon-activity open, poll, drain, and close failures are now observable
   with structured stage and client context. Live-log transport degradation
   cannot alter chat results, and persisted turn events are recovered through

@@ -193,6 +193,14 @@ thread starts and restores the thread's prior context after completion or
 failure. Long-lived daemon workers follow their separate runtime ownership
 contract and never inherit CLI context.
 
+An unexpected callback `Exception` becomes a non-retryable failed interactive
+result after final activity drain and subscription close, and emits
+`chat/interactive_send_failed`. A non-`Exception` `BaseException` such as
+`KeyboardInterrupt` or `SystemExit` is process-control state: the main thread
+skips auxiliary final drain, closes the subscription, and re-raises the same
+exception object with its traceback. Control state must not be converted into
+`code=1` or replaced by activity diagnostics.
+
 Daemon-backed and one-shot client adapters establish one
 `source="client"` scope for the whole operation. Interactive retry markers and
 their send attempts execute inside the same thread/turn scope; individual

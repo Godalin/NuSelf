@@ -148,6 +148,9 @@ Rules:
   `subscription_id` when allocated, exception kind, and for
   `DaemonConnectionError` its phase, request id, retryability, and
   possible-completion state.
+- `interactive_send_failed` records an unexpected `Exception` escaping the
+  bound send callback. Process-control `BaseException` values are re-raised and
+  are not projected as ordinary chat failures.
 - `turn.reused` confirms idempotency: the retry returned an existing completed result instead of rerunning chat/tools.
 - Final response boundary retries use `final_response_retry`; they are model-output retries inside one chat turn, not transport retries.
 - Interactive logs should show chat lifecycle and retry events so users can distinguish normal multi-tool execution from retry-driven repeated work.

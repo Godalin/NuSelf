@@ -364,6 +364,10 @@ Ownership rules:
   context and need no binding;
 - the CLI live-chat send thread binds its callback so the chat turn continues
   across the thread boundary;
+- that boundary transports ordinary callback `Exception` values back as
+  observed interactive failures, but transports non-`Exception`
+  `BaseException` values back as main-thread control flow after subscription
+  cleanup;
 - the CLI establishes an exact turn context before binding, so unrelated
   ambient request, job, or trace identity cannot leak into a new user turn;
 - correlation inheritance does not itself grant presentation ownership:

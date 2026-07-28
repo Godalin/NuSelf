@@ -579,6 +579,151 @@ def test_live_send_reports_callback_exception_without_escaping(
     assert captured == []
     assert printed is False
     assert "chat turn failed: send exploded" in capsys.readouterr().err
+    failure = read_log_events(
+        project_root=tmp_path,
+        component="chat",
+    )[-1]
+    assert failure.event == "interactive_send_failed"
+    assert failure.level == "error"
+    assert failure.status == "error"
+    assert failure.error == "send exploded"
+    assert failure.metadata == {"exception_type": "ValueError"}
+
+
+def test_send_failure_diagnostic_storage_loss_keeps_repl_failure(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    capsys: CaptureFixture[str],
+) -> None:
+    def fail_send(
+        message: str,
+        thread_id: str,
+        turn_id: str | None,
+    ) -> InteractiveChatResult:
+        del message, thread_id, turn_id
+        raise ValueError("send exploded")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("diagnostic store unavailable")
+
+    def read_nothing(
+        project_root: Path | None,
+        log_cursor: InteractiveLogCursor,
+        *,
+        turn_id: str | None = None,
+    ) -> list[LogEvent]:
+        del project_root, log_cursor, turn_id
+        return []
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="chat/interactive_send_failed",
+    ):
+        result, captured, printed = run_live_activity_send(
+            fail_send,
+            "hello",
+            "default",
+            "turn-send-warning",
+            tmp_path,
+            InteractiveLogCursor.from_project(tmp_path),
+            printed_logs=False,
+            daemon_activity=False,
+            poll_interval_seconds=0,
+            read_events=read_nothing,
+            present_events=_mark_presented,
+        )
+
+    assert result.code == 1
+    assert result.retryable is False
+    assert captured == []
+    assert printed is False
+    assert "chat turn failed: send exploded" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "control",
+    [
+        KeyboardInterrupt("interrupt send"),
+        SystemExit(7),
+    ],
+)
+def test_send_control_exception_is_reraised_after_close_without_drain(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    control: BaseException,
+) -> None:
+    root_cause = RuntimeError("control root cause")
+    closed: list[str] = []
+    final_drain_called = False
+
+    def fail_send(
+        message: str,
+        thread_id: str,
+        turn_id: str | None,
+    ) -> InteractiveChatResult:
+        del message, thread_id, turn_id
+        raise control from root_cause
+
+    def open_activity(
+        turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del turn_id, project_root
+        return "sub-control"
+
+    def next_activity(
+        *args: object,
+        **kwargs: object,
+    ) -> tuple[LogEvent, ...]:
+        nonlocal final_drain_called
+        del args
+        if kwargs.get("limit") == 256:
+            final_drain_called = True
+        return ()
+
+    def close_activity(
+        subscription_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> bool:
+        del project_root
+        closed.append(subscription_id)
+        return True
+
+    monkeypatch.setattr(activity.client, "open_activity", open_activity)
+    monkeypatch.setattr(activity.client, "next_activity", next_activity)
+    monkeypatch.setattr(activity.client, "close_activity", close_activity)
+
+    with pytest.raises(type(control)) as captured:
+        run_live_activity_send(
+            fail_send,
+            "hello",
+            "default",
+            "turn-control",
+            tmp_path,
+            InteractiveLogCursor.from_project(tmp_path),
+            printed_logs=False,
+            daemon_activity=True,
+            poll_interval_seconds=0,
+            read_events=read_interactive_activity_events,
+            present_events=_mark_presented,
+        )
+
+    assert captured.value is control
+    assert captured.value.__cause__ is root_cause
+    assert captured.value.__traceback__ is not None
+    assert final_drain_called is False
+    assert closed == ["sub-control"]
+    assert read_log_events(
+        project_root=tmp_path,
+        component="chat",
+    ) == []
 
 
 def test_live_send_closes_subscription_on_unexpected_poll_failure(

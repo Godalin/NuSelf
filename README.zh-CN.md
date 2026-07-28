@@ -75,6 +75,9 @@ REPL daemon-activity transport 是辅助投影：open、poll、final-drain 与 c
 失败会携带结构化 client context 被观测，不会改变 chat 结果，并在可行时通过
 scoped cursor 恢复已持久化的 turn events。
 
+Live-chat send thread 会把意外的普通 callback failure 观测为不可重试的 turn
+失败；process-control exception 则在 subscription cleanup 后原样传回主线程。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

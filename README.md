@@ -89,6 +89,10 @@ failures are observed with structured client context, cannot alter chat
 results, and recover persisted turn events through the scoped cursor when
 possible.
 
+The live-chat send thread observes unexpected ordinary callback failures as
+non-retryable turn failures, while process-control exceptions cross back to the
+main thread unchanged after subscription cleanup.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).

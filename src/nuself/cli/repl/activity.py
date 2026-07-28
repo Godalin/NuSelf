@@ -105,13 +105,16 @@ def run_live_activity_send(
         enabled=daemon_activity,
     )
     result_box: list[InteractiveChatResult] = []
-    error_box: list[BaseException] = []
+    error_box: list[Exception] = []
+    control_box: list[BaseException] = []
 
     def target() -> None:
         try:
             result_box.append(send_message(message, thread_id, turn_id))
-        except BaseException as exc:  # pragma: no cover - defensive thread boundary
+        except Exception as exc:  # pragma: no cover - defensive thread boundary
             error_box.append(exc)
+        except BaseException as exc:  # pragma: no cover - control boundary
+            control_box.append(exc)
 
     send_thread = threading.Thread(
         target=bind_runtime_context(target),
@@ -172,6 +175,10 @@ def run_live_activity_send(
             send_thread.join(timeout=0.5)
             raise
 
+        if control_box:
+            control = control_box[0]
+            raise control.with_traceback(control.__traceback__)
+
         new_events = _drain_final_activity(
             subscription_id,
             project_root,
@@ -194,7 +201,20 @@ def run_live_activity_send(
             printed_logs=printed_logs,
         )
     if error_box:
-        print(f"chat turn failed: {error_box[0]}", file=sys.stderr)
+        error = error_box[0]
+        report_observed_failure(
+            error,
+            component="chat",
+            event="interactive_send_failed",
+            message="Interactive chat send callback failed",
+            project_root=project_root,
+            metadata={
+                "exception_type": error.__class__.__name__,
+            },
+            level="error",
+            status="error",
+        )
+        print(f"chat turn failed: {error}", file=sys.stderr)
         return InteractiveChatResult(code=1), captured_events, printed_logs
     return (
         result_box[0] if result_box else InteractiveChatResult(code=1),

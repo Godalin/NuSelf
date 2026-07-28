@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. REPL daemon-activity open, poll, final-drain, and close degradation is
-observable without allowing auxiliary live-log transport to alter the chat
-result; turn-scoped fallback recovers events without replaying delivered ones.
+Idle. Ordinary live-chat callback failures are separate from process-control
+`BaseException` values: failures remain observable while interrupts and exits
+cross the send-thread boundary after subscription cleanup.
 
 ## Active Branch
 
@@ -24,22 +24,21 @@ code.
 
 ## Completion Evidence
 
-- Open, poll, final-drain, and close connection/application failures emit
-  `chat/activity_transport_degraded` with stage, error kind, subscription id,
-  and structured daemon-client context when available.
-- Failure of the degradation diagnostic itself falls back to a runtime warning
-  and cannot replace or retry a successful chat result.
-- Open, poll, and final-drain degradation reads the existing turn-scoped
-  incremental cursor; close failure remains diagnostic only.
-- Subscription-delivered event identities are registered through
-  `InteractiveLogCursor.mark_seen()` before presentation.
-- Poll fallback recovers a later persisted event while presenting an earlier
-  subscription-delivered event exactly once.
-- Healthy daemon activity remains subscription-only; unexpected poll and
-  renderer failures retain their authoritative propagation and cleanup.
-- Focused REPL activity, log infrastructure, CLI, and CLI chat tests:
-  336 passed.
-- Final full tests: 1362 passed.
+- Unexpected callback `Exception` values emit
+  `chat/interactive_send_failed` with compact error and exception type after
+  activity drain and subscription close.
+- Ordinary callback failure retains the existing non-retryable `code=1` REPL
+  result and stderr message.
+- Structured diagnostic storage failure falls back to a runtime warning
+  without replacing that ordinary failure result.
+- Callback `KeyboardInterrupt` and `SystemExit` preserve the same exception
+  object, explicit cause, and traceback when re-raised on the main thread.
+- Control exceptions skip auxiliary final drain, complete subscription close,
+  and are not projected as ordinary chat failures.
+- Main-thread `KeyboardInterrupt`, unexpected poll/renderer failures, expected
+  activity degradation, and context binding retain their existing behavior.
+- Focused REPL activity, turn, session-state, and CLI tests: 321 passed.
+- Final full tests: 1365 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -50,4 +49,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-REPL activity transport degradation is observable and recoverable.
+the live-chat send thread preserves failure and control-flow semantics.

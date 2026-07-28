@@ -272,6 +272,14 @@ trigger or suppress a chat retry. Open, poll, and drain failure may recover
 persisted turn events through the incremental cursor; close failure only
 affects subscription cleanup.
 
+Unexpected live-chat callback `Exception` values are observed as
+`chat/interactive_send_failed` and become a non-retryable interactive failure;
+failure of that diagnostic cannot replace the callback error. Callback
+`KeyboardInterrupt`, `SystemExit`, and other non-`Exception` `BaseException`
+values remain control flow. The same object is re-raised on the main thread
+after subscription close, with cause and traceback retained. Auxiliary final
+drain is skipped so it cannot mask the control exception.
+
 Retryable:
 
 - daemon connection timeout
