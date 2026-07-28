@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Remove the process-global reason-output section planner and make its lifecycle
-explicit through daemon-to-chat service composition.
+Move interactive CLI/REPL history, completion, and display state from mutable
+module globals into explicit session ownership.
 
 ## Active Branch
 
@@ -14,32 +14,32 @@ explicit through daemon-to-chat service composition.
 
 ## Ordered Work
 
-1. [x] Trace planner ownership from daemon startup through chat export tools.
-2. [x] Specify instance-scoped planner composition and default behavior.
-3. [x] Inject planner through chat runtime and tool construction.
-4. [x] Remove global setter/state and add isolation tests.
-5. [x] Audit remaining process-global runtime mutation.
+1. [x] Trace creation, mutation, reset, and test ownership of interactive state.
+2. [x] Specify session-scoped input and display lifecycle.
+3. [x] Introduce one typed session-state owner without changing REPL behavior.
+4. [x] Remove mutable CLI/REPL globals and migrate callers/tests.
+5. [x] Audit remaining interactive lifecycle leaks.
 6. [x] Run full tests, type checking, and formatting checks.
-7. [ ] Commit and push together with the pending remote synchronization.
+7. [ ] Commit; push all pending commits after explicit authorization.
 
 ## Out Of Scope
 
-- Changing section-planning prompts or the mechanical fallback algorithm.
-- Introducing a general dependency-injection framework.
-- Changing reason export tool or manifest contracts.
+- Changing command syntax, history persistence format, completion results, or
+  visible transcript rendering.
+- Replacing prompt-toolkit or the existing REPL runtime.
+- Combining daemon worker lifecycle changes into this slice.
 
 ## Completion Evidence
 
-- Two `ReasonOutputService` instances can use different planners concurrently.
-- Constructing or starting one daemon does not change another runtime's planner.
-- No runtime module setter or mutable global owns planner behavior.
-- Existing no-planner callers retain deterministic mechanical planning.
+- Two interactive sessions do not share header, history, or completer state.
+- Input history still persists and de-duplicates under the existing contract.
+- Existing CLI/REPL output tests remain unchanged.
+- No mutable session-behavior globals remain in `nuself.cli` or
+  `nuself.cli.repl.input`.
 - Full pytest, Pyright, and `git diff --check` pass.
 
 ## Next Review Batch
 
-Move CLI/REPL history, completer, and display state from process-global module
-variables into explicit session ownership, then consolidate daemon worker
-start/stop/join state transitions behind one lifecycle primitive. Process-wide
-lock registries and project-keyed caches remain infrastructure caches, not
-runtime behavior callbacks.
+Consolidate daemon worker start/stop/join state transitions behind one lifecycle
+primitive. Preserve each worker's scheduling semantics, but make duplicate
+start, shutdown signaling, join timeout, liveness, and cleanup consistent.

@@ -90,6 +90,22 @@ Logs, `memory list/show`, `reflection list/show`, `notify list/show`, and REPL v
 
 ## REPL Conventions
 
+### Session State Ownership
+
+Each `run_interactive_loop()` call owns one `InteractiveSession` and one
+interactive input state.
+
+- History and completion objects are created for that loop's project root and
+  are never stored in mutable module globals.
+- Consecutive history de-duplication and the existing history file path remain
+  unchanged.
+- Last-rendered daemon status and thread ID belong to the session so header
+  suppression cannot leak between concurrent or sequential REPL connections.
+- Input fallback, command completion, and visible header behavior remain
+  unchanged.
+- Tests and embedded callers may construct two sessions in one process without
+  requiring a global reset hook.
+
 ### Command Prefix
 
 All interactive commands start with `:`.

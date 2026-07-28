@@ -8,10 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from nuself.cli.commands.output import print_ansi
-from nuself.cli.repl.input import (
-    init_interactive_input,
-    read_interactive_input,
-)
+from nuself.cli.repl.input import InteractiveInput
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.tui.render import render_session_header
@@ -33,7 +30,10 @@ class ReplCallbacks:
     send_turn: SendTurn
     auto_save: Callable[[Path | None, InteractiveSession], None]
     run_curator: Callable[[Path | None], None]
-    show_session_update: Callable[[Path | None, str], None]
+    show_session_update: Callable[
+        [Path | None, str, InteractiveSession],
+        None,
+    ]
     daemon_status: Callable[[Path | None], str]
     brand_banner: Callable[[], str]
 
@@ -45,7 +45,7 @@ def run_interactive_loop(
     *,
     initial_thread_id: str = "default",
 ) -> int:
-    init_interactive_input(project_root)
+    interactive_input = InteractiveInput(project_root)
     current_thread_id = initial_thread_id
     session = InteractiveSession(connected_at=datetime.now(UTC))
     session.start_index_for(project_root, current_thread_id)
@@ -63,7 +63,7 @@ def run_interactive_loop(
     try:
         while True:
             try:
-                line = read_interactive_input()
+                line = interactive_input.read()
             except EOFError:
                 print()
                 callbacks.auto_save(project_root, session)
@@ -108,7 +108,9 @@ def run_interactive_loop(
                 print("\nInterrupted.")
                 continue
             callbacks.show_session_update(
-                project_root, current_thread_id
+                project_root,
+                current_thread_id,
+                session,
             )
             if result != 0:
                 continue

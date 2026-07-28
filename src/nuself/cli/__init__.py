@@ -172,17 +172,19 @@ INTERACTIVE_LOG_POLL_INTERVAL_SECONDS = 0.1
 
 
 _theme = TerminalTheme()
-_last_header_thread: str = ""
-_last_header_status: str = ""
 
 
-def _maybe_show_session_update(project_root: Path | None, thread_id: str) -> None:
-    global _last_header_thread, _last_header_status
+def _maybe_show_session_update(
+    project_root: Path | None,
+    thread_id: str,
+    session: InteractiveSession,
+) -> None:
     status = _interactive_daemon_status(project_root) if project_root else "unknown"
-    if thread_id != _last_header_thread or status != _last_header_status:
+    if session.should_render_header(
+        thread_id=thread_id,
+        daemon_status=status,
+    ):
         _print_ansi(render_session_header(daemon_status=status, thread_id=thread_id))
-    _last_header_thread = thread_id
-    _last_header_status = status
 
 
 def main(argv: Sequence[str] | None = None) -> int:

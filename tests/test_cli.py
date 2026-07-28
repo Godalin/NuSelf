@@ -333,8 +333,6 @@ def test_interactive_turn_prints_activity_events(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
-    monkeypatch.setattr("nuself.cli._last_header_thread", "")
-    monkeypatch.setattr("nuself.cli._last_header_status", "")
 
     result = main(["--project-root", str(tmp_path), "chat"])
     captured = capsys.readouterr()

@@ -38,42 +38,6 @@ _PROMPT_STYLE = Style.from_dict({
 
 _PROMPT_TEXT = FormattedText([("class:ansicyan bold", "\nNuSelf> ")])
 
-_history: FileHistory | None = None
-_interactive_completer: InteractiveCompleter | None = None
-
-
-def init_interactive_input(project_root: Path | None) -> None:
-    global _history, _interactive_completer
-    paths = runtime_paths(project_root)
-    ensure_runtime_dirs(paths)
-    history_path = paths.runtime_dir / "interactive_history"
-    _history = DedupFileHistory(str(history_path))
-    _interactive_completer = InteractiveCompleter(project_root)
-
-
-def read_interactive_input() -> str:
-    """Read a line of input with prompt_toolkit (styled), falling back to input()."""
-    try:
-        if sys.stdin.isatty():
-            assert _history is not None
-            return _prompt(
-                _PROMPT_TEXT,
-                style=_PROMPT_STYLE,
-                history=_history,
-                completer=_interactive_completer,
-            )
-    except (AttributeError, OSError):
-        pass
-    line = input("NuSelf> ")
-    append_history(line)
-    return line
-
-
-def append_history(line: str) -> None:
-    if _history is not None and line:
-        _history.append_string(line)
-
-
 class InteractiveCompleter(Completer):
     def __init__(self, project_root: Path | None) -> None:
         super().__init__()
@@ -164,6 +128,38 @@ class InteractiveCompleter(Completer):
         for t in threads:
             if t.startswith(word):
                 yield Completion(t, start_position=-len(word))
+
+
+class InteractiveInput:
+    """History and completion state owned by one interactive loop."""
+
+    def __init__(self, project_root: Path | None) -> None:
+        paths = runtime_paths(project_root)
+        ensure_runtime_dirs(paths)
+        history_path = paths.runtime_dir / "interactive_history"
+        self.history: FileHistory = DedupFileHistory(str(history_path))
+        self.completer = InteractiveCompleter(project_root)
+
+    def read(self) -> str:
+        """Read styled input, falling back to built-in input."""
+
+        try:
+            if sys.stdin.isatty():
+                return _prompt(
+                    _PROMPT_TEXT,
+                    style=_PROMPT_STYLE,
+                    history=self.history,
+                    completer=self.completer,
+                )
+        except (AttributeError, OSError):
+            pass
+        line = input("NuSelf> ")
+        self.append_history(line)
+        return line
+
+    def append_history(self, line: str) -> None:
+        if line:
+            self.history.append_string(line)
 
 
 def interactive_command_hints(partial: str) -> list[str]:

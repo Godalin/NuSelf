@@ -43,6 +43,17 @@ class InteractiveSession:
         default_factory=empty_captured_log_events_by_message
     )
     exported_next_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
+    last_header_thread: str = ""
+    last_header_status: str = ""
+
+    def should_render_header(self, *, thread_id: str, daemon_status: str) -> bool:
+        changed = (
+            thread_id != self.last_header_thread
+            or daemon_status != self.last_header_status
+        )
+        self.last_header_thread = thread_id
+        self.last_header_status = daemon_status
+        return changed
 
     def start_index_for(self, project_root: Path | None, thread_id: str) -> int:
         if thread_id not in self.thread_start_indexes:
