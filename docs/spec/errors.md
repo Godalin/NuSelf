@@ -50,6 +50,19 @@ When daemon chat handling fails:
 - Do not save a partial assistant message for a failed turn.
 - Preserve pre-failure log events, including persona, reflection, memory, and chat logs.
 
+## Daemon Transport Failures
+
+Clean EOF before a request frame is a normal abandoned connection and produces
+no response. Incomplete, oversized, timed-out, or malformed request frames are
+rejected before handler dispatch. The server may return a failed response when
+the connection remains writable; failure to deliver that response is reported
+as a secondary transport diagnostic and never escapes the connection thread.
+
+Client-side socket failures and invalid response frames share
+`DaemonConnectionError`. The original `OSError` or `ProtocolError` is retained
+as the explicit cause. A response with another request's id is invalid even if
+its status and payload otherwise decode successfully.
+
 ## Background Worker Boundary
 
 Every daemon-owned background worker must keep its loop alive after an

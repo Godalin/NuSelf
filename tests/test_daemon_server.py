@@ -477,11 +477,25 @@ def test_daemon_handle_backstops_unexpected_error(tmp_path: Path, monkeypatch: p
     from nuself.daemon import server as server_mod
     from nuself.daemon.protocol import DaemonResponse
 
+    class FakeConnection:
+        def __init__(self, raw: bytes) -> None:
+            self._raw = raw
+
+        def settimeout(self, timeout: float) -> None:
+            assert timeout > 0
+
+        def recv(self, size: int) -> bytes:
+            del size
+            raw, self._raw = self._raw, b""
+            return raw
+
     raw = DaemonRequest(type="ping", payload={}, request_id="boom1").to_json_line()
     fake = SimpleNamespace(
+        connection=FakeConnection(raw),
         rfile=io.BytesIO(raw),
         wfile=io.BytesIO(),
         _daemon_state=lambda: SimpleNamespace(project_root=tmp_path),
+        _request_project_root=lambda: tmp_path,
     )
 
     def boom(request: DaemonRequest, state: object) -> DaemonResponse:

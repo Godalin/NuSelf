@@ -94,6 +94,30 @@ branches.
 `echo` is the deliberate exception: its contract is an arbitrary JSON object,
 so passing its payload through unchanged is the typed behavior of that request.
 
+### JSONL Transport Framing
+
+The daemon transport is one request and one response per Unix-socket
+connection. Every frame is UTF-8 JSON followed by exactly one newline and is
+bounded by `MAX_DAEMON_FRAME_BYTES`, including that newline.
+
+- Server and client socket reads use the same bounded frame reader and byte
+  limit.
+- Empty EOF before any bytes is a quiet peer disconnect.
+- EOF after partial bytes, a limit-length frame without newline, or bytes after
+  the first newline are transport protocol errors.
+- Server request reads use a finite IO timeout so a client cannot hold one
+  request thread forever by withholding the newline.
+- Client connect, send, and response-read operations share the caller's
+  positive finite timeout.
+- A decoded response must carry the request id sent on that connection.
+- Malformed, oversized, incomplete, extra, or mismatched responses are exposed
+  to callers as `DaemonConnectionError` with the protocol/transport error as
+  cause.
+- A client that disconnects before response delivery does not change an
+  already-completed operation. The server records
+  `daemon/response_delivery_failed` and returns from the connection handler
+  without leaking the socket error.
+
 ## Runtime Envelope And Correlation Context
 
 `nuself.runtime.context` owns `RuntimeContext`, `current_runtime_context()`,

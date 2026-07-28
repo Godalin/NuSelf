@@ -8,6 +8,7 @@ from typing import Any, Literal, TypeAlias, cast
 from uuid import uuid4
 
 PROTOCOL_VERSION = 1
+MAX_DAEMON_FRAME_BYTES = 1024 * 1024
 
 JsonValue: TypeAlias = (
     None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
@@ -39,6 +40,22 @@ class ProtocolError(ValueError):
     """Raised when a protocol payload is malformed."""
 
 
+class DaemonPeerDisconnected(ProtocolError):
+    """Raised when a peer closes before sending any frame bytes."""
+
+
+class DaemonFrameTooLarge(ProtocolError):
+    """Raised when one JSONL frame exceeds the shared byte limit."""
+
+
+class DaemonIncompleteFrame(ProtocolError):
+    """Raised when EOF arrives before a terminating newline."""
+
+
+class DaemonExtraFrameData(ProtocolError):
+    """Raised when a one-frame connection sends bytes after its newline."""
+
+
 def empty_payload() -> dict[str, JsonValue]:
     return {}
 
@@ -57,9 +74,7 @@ class DaemonRequest:
     version: int = PROTOCOL_VERSION
 
     def to_json_line(self) -> bytes:
-        return (json.dumps(self.to_wire(), separators=(",", ":")) + "\n").encode(
-            "utf-8"
-        )
+        return _encode_json_line(self.to_wire())
 
     def to_wire(self) -> dict[str, JsonValue]:
         return {
@@ -94,9 +109,7 @@ class DaemonResponse:
     version: int = PROTOCOL_VERSION
 
     def to_json_line(self) -> bytes:
-        return (json.dumps(self.to_wire(), separators=(",", ":")) + "\n").encode(
-            "utf-8"
-        )
+        return _encode_json_line(self.to_wire())
 
     def to_wire(self) -> dict[str, JsonValue]:
         wire: dict[str, JsonValue] = {
@@ -141,13 +154,63 @@ class DaemonResponse:
 
 
 def _decode_json_object(line: bytes) -> dict[str, Any]:
+    _validate_json_line_frame(line)
     try:
-        value = json.loads(line.decode("utf-8"))
+        value = json.loads(
+            line.decode("utf-8"),
+            parse_constant=_reject_json_constant,
+        )
+    except UnicodeDecodeError as exc:
+        raise ProtocolError("frame is not valid UTF-8") from exc
     except json.JSONDecodeError as exc:
         raise ProtocolError(f"invalid json: {exc.msg}") from exc
+    except ValueError as exc:
+        raise ProtocolError(str(exc)) from exc
     if not isinstance(value, dict):
         raise ProtocolError("payload must be a JSON object")
     return cast(dict[str, Any], value)
+
+
+def _encode_json_line(wire: dict[str, JsonValue]) -> bytes:
+    try:
+        frame = (
+            json.dumps(
+                wire,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+            + "\n"
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ProtocolError("daemon frame is not valid JSON") from exc
+    if len(frame) > MAX_DAEMON_FRAME_BYTES:
+        raise DaemonFrameTooLarge(
+            f"daemon frame exceeds {MAX_DAEMON_FRAME_BYTES} bytes"
+        )
+    return frame
+
+
+def _validate_json_line_frame(line: bytes) -> None:
+    if not line:
+        raise DaemonPeerDisconnected(
+            "peer closed connection before sending a frame"
+        )
+    if len(line) > MAX_DAEMON_FRAME_BYTES:
+        raise DaemonFrameTooLarge(
+            f"daemon frame exceeds {MAX_DAEMON_FRAME_BYTES} bytes"
+        )
+    if not line.endswith(b"\n"):
+        raise DaemonIncompleteFrame(
+            "daemon frame ended before its newline"
+        )
+    if b"\n" in line[:-1]:
+        raise DaemonExtraFrameData(
+            "daemon connection contains more than one frame"
+        )
+
+
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"invalid JSON constant: {value}")
 
 
 def _expect_object(raw: dict[str, Any], field_name: str) -> dict[str, JsonValue]:

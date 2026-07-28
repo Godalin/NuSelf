@@ -307,7 +307,11 @@ private/runtime/
 private/logs/
 ```
 
-第一版协议是 JSON lines，通过 Unix domain socket 通信，socket 路径是 `private/runtime/nuself.sock`。
+第一版协议在每个 Unix domain socket 连接上传输一个 request 和一个 response，
+两者都是以换行结尾的 UTF-8 JSON；socket 路径是
+`private/runtime/nuself.sock`。单帧上限为 1 MiB；停滞、截断、额外、格式错误或
+request id 不匹配的 response 都会作为 transport error 返回，不会占住 server
+thread 或被当成部分 JSON 接受。
 
 ## 通知
 

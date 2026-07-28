@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import socket
+from math import isfinite
 from pathlib import Path
 from typing import cast
 
 from nuself.config import runtime_paths
-from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, RequestType
+from nuself.daemon.protocol import (
+    DaemonRequest,
+    DaemonResponse,
+    JsonValue,
+    ProtocolError,
+    RequestType,
+)
+from nuself.daemon.transport import read_socket_frame
 from nuself.logs import LogEvent
 
 
@@ -24,6 +32,12 @@ def request(
 ) -> DaemonResponse:
     """Send one request to the local daemon and return one response."""
 
+    if (
+        isinstance(timeout, bool)
+        or not isfinite(timeout)
+        or timeout <= 0
+    ):
+        raise ValueError("daemon request timeout must be positive and finite")
     req = DaemonRequest(type=request_type, payload=payload or {})
     paths = runtime_paths(project_root)
     if not paths.socket_path.exists():
@@ -36,11 +50,16 @@ def request(
             sock.settimeout(timeout)
             sock.connect(str(paths.socket_path))
             sock.sendall(req.to_json_line())
-            response_line = _recv_line(sock)
-    except OSError as exc:
-        raise DaemonConnectionError(str(exc)) from exc
-
-    return DaemonResponse.from_json_line(response_line)
+            response_line = read_socket_frame(sock)
+        response = DaemonResponse.from_json_line(response_line)
+        if response.request_id != req.request_id:
+            raise ProtocolError(
+                "daemon response request_id does not match request"
+            )
+        return response
+    except (OSError, ProtocolError) as exc:
+        detail = str(exc).strip() or exc.__class__.__name__
+        raise DaemonConnectionError(detail) from exc
 
 
 def ping(project_root: Path | None = None) -> bool:
@@ -123,17 +142,3 @@ def close_activity(
         project_root=project_root,
     )
     return response.status == "ok" and response.payload.get("closed") is True
-
-
-def _recv_line(sock: socket.socket) -> bytes:
-    chunks: list[bytes] = []
-    while True:
-        chunk = sock.recv(4096)
-        if not chunk:
-            break
-        chunks.append(chunk)
-        if b"\n" in chunk:
-            break
-    if not chunks:
-        raise DaemonConnectionError("daemon closed connection without a response")
-    return b"".join(chunks).split(b"\n", 1)[0] + b"\n"

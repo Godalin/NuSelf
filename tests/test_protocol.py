@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from nuself.daemon.protocol import DaemonRequest, DaemonResponse, ProtocolError
+import pytest
+
+from nuself.daemon.protocol import (
+    MAX_DAEMON_FRAME_BYTES,
+    DaemonFrameTooLarge,
+    DaemonIncompleteFrame,
+    DaemonRequest,
+    DaemonResponse,
+    ProtocolError,
+)
 
 
 def test_request_round_trip() -> None:
@@ -39,6 +48,35 @@ def test_request_rejects_malformed_json() -> None:
         assert "invalid json" in str(exc)
         return
     raise AssertionError("expected ProtocolError")
+
+
+def test_protocol_rejects_missing_newline_and_invalid_utf8() -> None:
+    with pytest.raises(DaemonIncompleteFrame):
+        DaemonRequest.from_json_line(
+            b'{"version":1,"request_id":"r","type":"ping","payload":{}}'
+        )
+    with pytest.raises(ProtocolError, match="UTF-8"):
+        DaemonRequest.from_json_line(b"\xff\n")
+
+
+def test_protocol_rejects_non_finite_json_numbers() -> None:
+    with pytest.raises(ProtocolError, match="invalid JSON constant"):
+        DaemonRequest.from_json_line(
+            b'{"version":1,"request_id":"r","type":"echo",'
+            b'"payload":{"value":NaN}}\n'
+        )
+    with pytest.raises(ProtocolError, match="valid JSON"):
+        DaemonRequest(
+            type="echo",
+            payload={"value": float("inf")},
+        ).to_json_line()
+
+
+def test_protocol_rejects_oversized_frame() -> None:
+    with pytest.raises(DaemonFrameTooLarge):
+        DaemonRequest.from_json_line(
+            b"x" * MAX_DAEMON_FRAME_BYTES + b"\n"
+        )
 
 
 def test_request_rejects_version_mismatch() -> None:

@@ -322,7 +322,11 @@ private/runtime/
 private/logs/
 ```
 
-The first protocol is JSON lines over a Unix domain socket at `private/runtime/nuself.sock`.
+The first protocol is one request and one response as newline-complete UTF-8
+JSON over a Unix domain socket at `private/runtime/nuself.sock`. Frames are
+bounded to 1 MiB; stalled, incomplete, extra, malformed, and mismatched
+responses fail as transport errors instead of retaining a server thread or
+being accepted as partial JSON.
 
 ## Notifications
 

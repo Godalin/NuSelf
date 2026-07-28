@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The daemon signal-handler ownership and restoration stage is complete;
-no implementation change is currently active.
+Idle. The bounded daemon JSONL transport stage is complete; no implementation
+change is currently active.
 
 ## Active Branch
 
@@ -31,4 +31,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit request transport read/write timeout and disconnect semantics.
+Audit daemon protocol field strictness and JSON-value validation.

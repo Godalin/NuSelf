@@ -58,6 +58,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Daemon JSONL transport now uses a shared 1 MiB request/response frame limit,
+  requires newline-complete UTF-8 JSON, times out stalled server reads, and
+  rejects incomplete, extra, non-finite, or response-id-mismatched frames.
+  Client disconnects during response delivery are observed without escaping
+  the server connection handler.
 - Daemon execution now borrows SIGINT/SIGTERM handlers explicitly and restores
   the exact previous process handlers on every exit path. Partial installation
   rolls back already-changed signals, and restoration failures remain
