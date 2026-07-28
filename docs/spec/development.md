@@ -29,6 +29,13 @@
   the behavior they describe; do not create a second documentation-only commit
   that temporarily allows drift.
 - Before non-trivial work, check `docs/current-goal.md`. Mention conflicts before proceeding.
+- Before implementation begins, update `docs/current-goal.md` so its objective,
+  ordered work, exclusions, and completion evidence govern the intended change.
+- Update progress immediately when a step completes or the active scope
+  changes. Commit the relevant progress update with the functional change.
+- When the objective is complete, move only unresolved follow-ups to
+  `docs/TODOs.md`; preserve completed history in Git or `CHANGELOG.md`, then
+  return `docs/current-goal.md` to an explicit idle state.
 - Push normal development commits only when the user asks to publish or sync the branch.
 - Before pushing, confirm the working tree is clean and the intended commits are on the current branch.
 - Normal branch push command: `git push`.

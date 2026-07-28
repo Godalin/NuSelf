@@ -6,6 +6,14 @@ An AI mirror for deep personal discussion — someone with similar life experien
 
 ## Development Constraints
 
+- **Track active work in current-goal**: Read [`docs/current-goal.md`](docs/current-goal.md)
+  before starting non-trivial work. Before implementation, make sure it names
+  the active objective, ordered steps, exclusions, and completion evidence.
+  Update its checkboxes and scope as soon as progress or direction changes, and
+  include the relevant progress update in the same functional commit. Do not
+  leave completed work there as project history; once an objective is complete,
+  move unresolved follow-ups to [`docs/TODOs.md`](docs/TODOs.md) and return
+  `current-goal.md` to an explicit idle state.
 - **Design before implement**: For any non-trivial feature or behavioral change, write or update the relevant `docs/spec/` document **before** writing implementation code.
 - **Spec is authoritative**: A feature change is not complete until the spec that governs it is updated in the same change.
 - **No spec drift**: If code behavior diverges from its spec, either fix the code or update the spec. The spec must always describe the actual system.
@@ -14,6 +22,8 @@ An AI mirror for deep personal discussion — someone with similar life experien
 
 ## Quick Links
 
+- [`docs/current-goal.md`](docs/current-goal.md) — active objective, ordered work, and completion evidence
+- [`docs/TODOs.md`](docs/TODOs.md) — unresolved medium/long-term backlog
 - [`docs/spec/development.md`](docs/spec/development.md) — code standards, commit policy, architecture direction
 - [`docs/spec/cli.md`](docs/spec/cli.md) — CLI/REPL output contracts
 - [`docs/spec/memory.md`](docs/spec/memory.md) — memory system behavioral contracts

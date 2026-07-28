@@ -18,7 +18,7 @@ active development progress.
 ## Ordered Work
 
 1. [x] Define and document the responsibilities of active documentation.
-2. [ ] Repair specification indexes, status labels, and internal links.
+2. [x] Repair specification indexes, status labels, and internal links.
 3. [ ] Reduce `TODOs.md` to unresolved backlog and remove the completed
    milestone plan from active documentation.
 4. [ ] Replace overlapping historical design documents with one concise
@@ -29,7 +29,8 @@ active development progress.
 
 ## Documentation Responsibilities
 
-- `AGENTS.md`: development constraints and high-value navigation.
+- `AGENTS.md`: development constraints, the mandatory `current-goal` workflow,
+  and high-value navigation.
 - `docs/current-goal.md`: the one active execution board.
 - `docs/TODOs.md`: unresolved medium/long-term backlog only.
 - `docs/architecture.md`: current high-level system boundaries and design
