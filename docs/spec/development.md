@@ -125,6 +125,9 @@ top-level application namespace stays focused on subsystem APIs.
   source, candidate, entry, and graph operations as they are extracted.
   `commands/memory/source.py` owns source ingest/list/show/delete/chunks/search/
   extract handlers and source-specific output formatting.
+  `commands/memory/candidate.py` owns candidate review handlers, ordering, and
+  single/multiple visible-handle resolution. `commands/memory/common.py` owns
+  command-layer memory trace recording shared across memory command modules.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
   repository APIs.
