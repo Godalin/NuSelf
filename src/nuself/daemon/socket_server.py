@@ -21,10 +21,7 @@ from nuself.daemon.transport import (
     write_stream_frame,
 )
 from nuself.runtime.context import runtime_context
-from nuself.runtime.observability import (
-    format_exception_chain,
-    report_observed_failure,
-)
+from nuself.runtime.observability import report_observed_failure
 
 DAEMON_REQUEST_IO_TIMEOUT_SECONDS = 5.0
 
@@ -89,7 +86,7 @@ class RequestHandler(socketserver.StreamRequestHandler):
         except DaemonPeerDisconnected:
             return
         except ProtocolError as exc:
-            response = DaemonResponse.fail(request_id, str(exc))
+            response = DaemonResponse.fail_from_exception(request_id, exc)
         except OSError as exc:
             report_observed_failure(
                 exc,
@@ -101,9 +98,10 @@ class RequestHandler(socketserver.StreamRequestHandler):
                 level="warning",
                 status="error",
             )
-            response = DaemonResponse.fail(
+            response = DaemonResponse.fail_from_exception(
                 request_id,
-                format_exception_chain(exc),
+                exc,
+                include_chain=True,
             )
         else:
             try:
@@ -111,9 +109,11 @@ class RequestHandler(socketserver.StreamRequestHandler):
                 request_id = request.request_id
                 response = handle_request(request, self._daemon_state())
             except ProtocolError as exc:
-                response = DaemonResponse.fail(request_id, str(exc))
+                response = DaemonResponse.fail_from_exception(
+                    request_id,
+                    exc,
+                )
             except Exception as exc:
-                chain = format_exception_chain(exc)
                 with runtime_context(
                     request_id=request_id,
                     source="daemon",
@@ -128,7 +128,11 @@ class RequestHandler(socketserver.StreamRequestHandler):
                         level="error",
                         status="error",
                     )
-                response = DaemonResponse.fail(request_id, chain)
+                response = DaemonResponse.fail_from_exception(
+                    request_id,
+                    exc,
+                    include_chain=True,
+                )
 
         fallback = False
         try:

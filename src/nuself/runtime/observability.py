@@ -15,9 +15,9 @@ from nuself.logs import (
     write_log_event,
 )
 from nuself.runtime.diagnostics import (
+    diagnostic_exception_chain,
     emit_runtime_warning,
     redact_sensitive_text,
-    safe_exception_message,
 )
 from nuself.runtime.events import EventDeliveryError, EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
@@ -28,24 +28,6 @@ DEFAULT_DECODE_ERRORS: tuple[type[Exception], ...] = (
     KeyError,
     TypeError,
 )
-
-
-def format_exception_chain(exc: BaseException) -> str:
-    """Return unique non-empty exception messages from outermost to root cause."""
-
-    messages: list[str] = []
-    current: BaseException | None = exc
-    while current is not None:
-        message = safe_exception_message(current)
-        if message and message not in messages:
-            messages.append(message)
-        if current.__cause__ is not None:
-            current = current.__cause__
-        elif current.__suppress_context__:
-            current = None
-        else:
-            current = current.__context__
-    return " <- ".join(messages) if messages else exc.__class__.__name__
 
 
 def run_observed_best_effort(
@@ -221,7 +203,7 @@ def report_observed_failure(
 ) -> None:
     """Report an already-caught failure without replacing that failure."""
 
-    error = redact_sensitive_text(format_exception_chain(exc))
+    error = diagnostic_exception_chain(exc)
     try:
         write_log_event(
             component,
@@ -236,7 +218,7 @@ def report_observed_failure(
     except Exception as log_exc:
         warning = (
             f"{component}/{event}: {error}; structured logging failed: "
-            f"{format_exception_chain(log_exc)}"
+            f"{diagnostic_exception_chain(log_exc)}"
         )
         emit_runtime_warning(
             redact_sensitive_text(warning),

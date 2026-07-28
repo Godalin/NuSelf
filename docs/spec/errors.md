@@ -40,6 +40,9 @@ exception rendering fails and sanitizes before returning text.
   ```
 
 - The chain should include unique, non-empty messages only. It should not include full tracebacks in normal user-facing output.
+- Compact-chain formatting is itself a diagnostic projection and therefore
+  sanitizes credential-like values before returning. Callers must not need to
+  remember a second redaction step.
 - Formatting an exception is itself a secondary diagnostic operation. If
   `str(exception)` fails, compact formatting must use the exception class name
   and retain the original exception object and chain. A broken exception

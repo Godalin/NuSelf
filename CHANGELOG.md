@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon exception responses now use one protocol-owned safe constructor, and
+  compact exception chains sanitize credentials by construction instead of
+  relying on each socket or request handler to remember redaction.
 - Log-observer and agent-tool failure projections now share safe credential
   redaction for structured records, captured outcomes, and terminal warnings;
   original observer and tool exceptions remain unchanged.

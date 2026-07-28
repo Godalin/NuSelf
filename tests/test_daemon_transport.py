@@ -329,6 +329,56 @@ def test_server_read_timeout_is_observed_and_returns_failure(
     assert event.error == "request read timed out"
 
 
+def test_server_sanitizes_unexpected_handler_failure_response(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.daemon import socket_server as server_module
+
+    request = DaemonRequest(
+        type="ping",
+        payload={},
+        request_id="secret-handler-failure",
+    )
+    writer = io.BytesIO()
+    fake = _handler_fake(
+        project_root=tmp_path,
+        raw=io.BytesIO(request.to_json_line()),
+        writer=writer,
+    )
+    outer_secret = "outer-secret-value"
+    root_secret = "root-secret-value"
+
+    def fail_handler(
+        _request: DaemonRequest,
+        _state: object,
+    ) -> DaemonResponse:
+        try:
+            raise ValueError(f"provider password={root_secret}")
+        except ValueError as exc:
+            raise RuntimeError(
+                f"request failed api_key={outer_secret}"
+            ) from exc
+
+    monkeypatch.setattr(server_module, "handle_request", fail_handler)
+
+    server_module.RequestHandler.handle(fake)  # type: ignore[arg-type]
+
+    response = DaemonResponse.from_json_line(writer.getvalue())
+    assert response.error == (
+        "request failed api_key=*** <- provider password=***"
+    )
+    assert outer_secret not in writer.getvalue().decode()
+    assert root_secret not in writer.getvalue().decode()
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="daemon",
+    )
+    assert event.event == "request_failed"
+    assert outer_secret not in (event.error or "")
+    assert root_secret not in (event.error or "")
+
+
 def test_server_broken_pipe_is_observed_without_escaping(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

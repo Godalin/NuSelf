@@ -33,9 +33,9 @@ from nuself.reason.output import (
     ReasonOutputService,
 )
 from nuself.runtime.context import use_runtime_context
+from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.jobs import JobMessage
 from nuself.runtime.observability import (
-    format_exception_chain,
     report_observed_failure,
     write_observed_log_event,
 )
@@ -174,7 +174,7 @@ def persist_export_failure(
     updated = manifest.with_updates(
         status="failed" if attempts >= max_attempts else None,
         attempts=attempts,
-        last_error=format_exception_chain(operation_error),
+        last_error=diagnostic_exception_chain(operation_error),
         last_attempt_at=utc_now_iso(),
     )
     write_json_atomic(manifest_path, updated.to_wire())
@@ -506,7 +506,7 @@ class ReasonExportWorker:
                 metadata={
                     "job_id": job_id,
                     "thread_id": thread_id,
-                    "operation_error": format_exception_chain(
+                    "operation_error": diagnostic_exception_chain(
                         operation_error
                     ),
                 },

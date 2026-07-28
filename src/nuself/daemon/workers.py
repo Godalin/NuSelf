@@ -19,8 +19,8 @@ from nuself.runtime.event_payloads import (
     RuntimeLogLevel,
 )
 from nuself.runtime.events import EventPublisher
+from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
-    format_exception_chain,
     publish_observed_event,
     report_observed_failure,
 )
@@ -118,7 +118,7 @@ class DaemonWorkerSupervisor:
     def record_failure(self, name: str, exc: BaseException) -> str:
         """Update failure health and return the compact exception chain."""
 
-        chain = format_exception_chain(exc)
+        chain = diagnostic_exception_chain(exc)
         with self._health_lock:
             previous = self._health_for(name)
             self._health[name] = WorkerHealth(

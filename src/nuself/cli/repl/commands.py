@@ -32,8 +32,8 @@ from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService
+from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
-    format_exception_chain,
     report_observed_failure,
 )
 from nuself.storage import get_default_backend
@@ -488,7 +488,7 @@ def handle_interactive_history_command(project_root: Path | None, thread_id: str
         )
         return (
             f"Unable to load thread history for '{thread_id}': "
-            f"{format_exception_chain(exc)}"
+            f"{diagnostic_exception_chain(exc)}"
         )
     if not state.messages:
         return "No messages in this thread."

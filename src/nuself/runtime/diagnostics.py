@@ -72,6 +72,24 @@ def diagnostic_exception_message(exc: BaseException) -> str:
     return redact_sensitive_text(safe_exception_message(exc))
 
 
+def diagnostic_exception_chain(exc: BaseException) -> str:
+    """Return one safe, sanitized compact exception chain."""
+
+    messages: list[str] = []
+    current: BaseException | None = exc
+    while current is not None:
+        message = safe_exception_message(current)
+        if message not in messages:
+            messages.append(message)
+        if current.__cause__ is not None:
+            current = current.__cause__
+        elif current.__suppress_context__:
+            current = None
+        else:
+            current = current.__context__
+    return redact_sensitive_text(" <- ".join(messages))
+
+
 def emit_runtime_warning(
     message: str,
     *,

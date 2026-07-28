@@ -9,12 +9,12 @@ from nuself.logs import LogAppendLifecycleError, read_log_events
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.event_definitions import UnknownEventDefinitionError
 from nuself.runtime.diagnostics import (
+    diagnostic_exception_chain,
     diagnostic_exception_message,
     emit_runtime_warning,
 )
 from nuself.runtime.observability import (
     decode_observed_record,
-    format_exception_chain,
     publish_observed_event,
     report_observed_failure,
     run_observed_best_effort,
@@ -51,27 +51,27 @@ def test_domains_do_not_rebuild_observed_log_projection() -> None:
     assert violations == []
 
 
-def test_format_exception_chain_preserves_unique_cause_messages() -> None:
+def test_diagnostic_exception_chain_preserves_unique_cause_messages() -> None:
     try:
         try:
             raise ValueError("root")
         except ValueError as exc:
             raise RuntimeError("outer") from exc
     except RuntimeError as exc:
-        assert format_exception_chain(exc) == "outer <- root"
+        assert diagnostic_exception_chain(exc) == "outer <- root"
 
 
-def test_format_exception_chain_respects_suppressed_context() -> None:
+def test_diagnostic_exception_chain_respects_suppressed_context() -> None:
     try:
         try:
             raise OSError("private path")
         except OSError:
             raise RuntimeError("safe summary") from None
     except RuntimeError as exc:
-        assert format_exception_chain(exc) == "safe summary"
+        assert diagnostic_exception_chain(exc) == "safe summary"
 
 
-def test_format_exception_chain_survives_broken_exception_renderer() -> None:
+def test_diagnostic_exception_chain_survives_broken_renderer() -> None:
     class BrokenMessageError(RuntimeError):
         def __str__(self) -> str:
             raise KeyboardInterrupt
@@ -79,7 +79,10 @@ def test_format_exception_chain_survives_broken_exception_renderer() -> None:
     try:
         raise BrokenMessageError() from ValueError("root")
     except BrokenMessageError as exc:
-        assert format_exception_chain(exc) == "BrokenMessageError <- root"
+        assert (
+            diagnostic_exception_chain(exc)
+            == "BrokenMessageError <- root"
+        )
 
 
 def test_diagnostic_exception_message_is_safe_and_sanitized() -> None:

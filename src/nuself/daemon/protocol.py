@@ -8,6 +8,11 @@ from math import isfinite
 from typing import Any, Literal, TypeAlias, cast
 from uuid import uuid4
 
+from nuself.runtime.diagnostics import (
+    diagnostic_exception_chain,
+    diagnostic_exception_message,
+)
+
 PROTOCOL_VERSION = 1
 MAX_DAEMON_FRAME_BYTES = 1024 * 1024
 
@@ -147,6 +152,23 @@ class DaemonResponse:
         )
 
     @classmethod
+    def fail_from_exception(
+        cls,
+        request_id: str,
+        error: BaseException,
+        *,
+        include_chain: bool = False,
+    ) -> DaemonResponse:
+        """Build a failed response from safe diagnostic exception text."""
+
+        detail = (
+            diagnostic_exception_chain(error)
+            if include_chain
+            else diagnostic_exception_message(error)
+        )
+        return cls.fail(request_id, detail)
+
+    @classmethod
     def from_json_line(cls, line: bytes) -> DaemonResponse:
         raw = _decode_json_object(line)
         version, request_id, status, payload, error_value = (
@@ -176,7 +198,7 @@ def _decode_json_object(line: bytes) -> dict[str, Any]:
     except ProtocolError:
         raise
     except ValueError as exc:
-        raise ProtocolError(str(exc)) from exc
+        raise ProtocolError(diagnostic_exception_message(exc)) from exc
     if not isinstance(value, dict):
         raise ProtocolError("payload must be a JSON object")
     _validate_json_value(cast(object, value), path="$")

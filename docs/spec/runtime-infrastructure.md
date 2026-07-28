@@ -220,6 +220,11 @@ bounded by `MAX_DAEMON_FRAME_BYTES`, including that newline.
   `error`. These invariants apply equally to decoded peer frames and locally
   constructed frames at their encode boundary. The failed-response factory
   replaces a blank underlying diagnostic with a stable generic error.
+- Exceptions become failed responses only through the protocol-owned
+  exception factory. It safely renders and sanitizes a single exception before
+  assigning `error`; unexpected multi-layer failures use the shared sanitized
+  compact-chain formatter. Local transport and handler code must not serialize
+  exceptions with `str(...)`.
 - Server and client socket reads use the same bounded frame reader and byte
   limit.
 - Empty EOF before any bytes is a quiet peer disconnect.

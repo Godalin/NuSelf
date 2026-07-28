@@ -24,6 +24,7 @@ from nuself.daemon.socket_server import (
 )
 from nuself.daemon.state import DaemonState
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.observability import report_observed_failure
 from nuself.storage import write_text_atomic
 
@@ -92,7 +93,7 @@ def run_daemon(project_root: Path | None = None) -> int:
             project_root=paths.project_root,
             level="warning",
             status="skipped",
-            error=str(exc),
+            error=diagnostic_exception_message(exc),
         )
         return 1
     result = 0

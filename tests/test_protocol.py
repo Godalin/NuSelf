@@ -282,3 +282,42 @@ def test_failed_response_factory_backstops_blank_diagnostic() -> None:
     assert DaemonResponse.from_json_line(
         response.to_json_line()
     ) == response
+
+
+def test_failed_response_exception_factory_is_safe_and_sanitized() -> None:
+    class BrokenMessageError(RuntimeError):
+        def __str__(self) -> str:
+            raise KeyboardInterrupt
+
+    assert (
+        DaemonResponse.fail_from_exception(
+            "broken",
+            BrokenMessageError(),
+        ).error
+        == "BrokenMessageError"
+    )
+    assert (
+        DaemonResponse.fail_from_exception(
+            "secret",
+            RuntimeError("failed api_key=private-value"),
+        ).error
+        == "failed api_key=***"
+    )
+
+
+def test_failed_response_exception_factory_sanitizes_compact_chain() -> None:
+    root = ValueError("provider password=root-secret")
+    outer = RuntimeError("request failed token=outer-secret")
+    outer.__cause__ = root
+
+    response = DaemonResponse.fail_from_exception(
+        "chain",
+        outer,
+        include_chain=True,
+    )
+
+    assert response.error == (
+        "request failed token=*** <- provider password=***"
+    )
+    assert "root-secret" not in response.to_json_line().decode()
+    assert "outer-secret" not in response.to_json_line().decode()

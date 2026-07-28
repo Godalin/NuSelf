@@ -27,6 +27,7 @@ from nuself.daemon.protocol import (
 )
 from nuself.daemon.transport import read_socket_frame
 from nuself.logs import LogEvent
+from nuself.runtime.diagnostics import diagnostic_exception_message
 
 PayloadT = TypeVar("PayloadT")
 DaemonConnectionPhase: TypeAlias = Literal[
@@ -131,7 +132,7 @@ def request(
             )
         return response
     except (OSError, ProtocolError) as exc:
-        detail = str(exc).strip() or exc.__class__.__name__
+        detail = diagnostic_exception_message(exc)
         raise DaemonConnectionError(
             detail,
             phase=phase,

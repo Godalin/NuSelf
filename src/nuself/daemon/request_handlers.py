@@ -43,7 +43,6 @@ from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.runtime.handlers import HandlerRegistry, UnknownHandlerError
 from nuself.runtime.context import runtime_context
 from nuself.runtime.observability import (
-    format_exception_chain,
     report_observed_failure,
     run_observed_best_effort,
     write_observed_log_event,
@@ -152,7 +151,10 @@ def handle_request(
             f"unsupported request type: {request.type}",
         )
     except ProtocolError as exc:
-        error = str(exc)
+        response = DaemonResponse.fail_from_exception(
+            request.request_id,
+            exc,
+        )
         write_observed_log_event(
             "daemon",
             "request_rejected",
@@ -161,7 +163,7 @@ def handle_request(
             level="warning",
             request_id=request.request_id,
             status="error",
-            error=error,
+            error=response.error,
             metadata={"request_type": request.type},
             failure_event="request_rejection_log_failed",
             failure_message="daemon request rejection log failed",
@@ -170,10 +172,7 @@ def handle_request(
                 "request_type": request.type,
             },
         )
-        return DaemonResponse.fail(
-            request.request_id,
-            error,
-        )
+        return response
 
 
 def _handle_ping(
@@ -229,7 +228,6 @@ def _handle_chat(
                 source_trace_id=result.trace_id,
             )
         except RuntimeError as exc:
-            error_detail = format_exception_chain(exc)
             report_observed_failure(
                 exc,
                 component="daemon",
@@ -240,9 +238,10 @@ def _handle_chat(
                 status="error",
                 metadata=None,
             )
-            return DaemonResponse.fail(
+            return DaemonResponse.fail_from_exception(
                 request.request_id,
-                error_detail,
+                exc,
+                include_chain=True,
             )
     duration_ms = int((time.monotonic() - started_at) * 1000)
     payload = ChatResponsePayload(
@@ -320,7 +319,7 @@ def _handle_activity_next(
             limit=payload.limit,
         )
     except ActivitySubscriptionNotFound as exc:
-        return DaemonResponse.fail(request.request_id, str(exc))
+        return DaemonResponse.fail_from_exception(request.request_id, exc)
     return DaemonResponse.ok(
         request,
         ActivityEventsResponsePayload(events).to_wire(),

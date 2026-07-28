@@ -55,8 +55,8 @@ from nuself.runtime.event_payloads import (
 )
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.jobs import JobSink
+from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
-    format_exception_chain,
     publish_observed_event,
     run_observed_best_effort,
 )
@@ -251,7 +251,7 @@ class ConversationGraphRuntime:
                     message="chat turn failed",
                     status="error",
                     level="error",
-                    error=format_exception_chain(exc),
+                    error=diagnostic_exception_chain(exc),
                     metadata={"error_type": type(exc).__name__},
                 )
                 raise

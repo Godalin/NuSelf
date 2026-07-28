@@ -23,8 +23,8 @@ from nuself.persona import (
     persona_graph_agents,
 )
 from nuself.runtime.context import current_runtime_context
+from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
-    format_exception_chain,
     write_observed_log_event,
 )
 
@@ -212,7 +212,7 @@ class ConversationPersonaOrchestrator:
                 thread_id=thread_id,
                 level="error",
                 error=str(exc),
-                metadata={"original_error": format_exception_chain(exc)},
+                metadata={"original_error": diagnostic_exception_chain(exc)},
             )
             return f"\nDiscussion failed: {exc}"
 
