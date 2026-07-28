@@ -108,6 +108,8 @@ command implementations must move into focused modules as they are touched.
   shared by extracted command modules.
 - `cli_notifications.py` owns one-shot notification list/show/stats/watch/send/
   dismiss/clear handlers; notification REPL shortcuts remain in the REPL layer.
+- `cli_reason.py` owns one-shot reason list/show/start/action/delete handlers.
+  The long-running terminal watch loop remains with REPL/session orchestration.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
   repository APIs.
