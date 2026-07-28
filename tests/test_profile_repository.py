@@ -121,7 +121,7 @@ def test_profile_item_with_updates_preserves_unmodified_fields(tmp_path: Path) -
     loaded = repo.get(original.id)
     assert loaded.title == "Updated"
     assert loaded.body == "Original body."
-    assert loaded.tags == ["a", "b"]
+    assert loaded.tags == ("a", "b")
     assert loaded.confidence == 0.9
 
 

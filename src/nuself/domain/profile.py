@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import cast
 from uuid import NAMESPACE_URL, uuid5
@@ -14,6 +15,7 @@ from nuself.domain.memory import (
     empty_evidence_list,
     empty_relations_dict,
 )
+from nuself.runtime import freeze_json_value, thaw_json_value
 
 
 def empty_str_list() -> list[str]:
@@ -29,6 +31,58 @@ def _optional_float(data: dict[str, object], field_name: str) -> float | None:
     raise ValueError(f"field '{field_name}' must be a number or null")
 
 
+def _freeze_str_sequence(
+    value: object,
+    *,
+    field_name: str,
+) -> tuple[str, ...]:
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        raise TypeError(f"field '{field_name}' must be a sequence of strings")
+    items = cast(Sequence[object], value)
+    if not all(isinstance(item, str) for item in items):
+        raise TypeError(f"field '{field_name}' must contain only strings")
+    return tuple(cast(Sequence[str], items))
+
+
+def _freeze_relations(
+    value: object,
+    *,
+    field_name: str,
+) -> Mapping[str, Sequence[str]]:
+    if not isinstance(value, Mapping):
+        raise TypeError(f"field '{field_name}' must be a mapping")
+    relations = cast(Mapping[object, object], value)
+    normalized: dict[str, tuple[str, ...]] = {}
+    for key, targets in relations.items():
+        if not isinstance(key, str):
+            raise TypeError(f"field '{field_name}' keys must be strings")
+        normalized[key] = _freeze_str_sequence(
+            targets,
+            field_name=f"{field_name}.{key}",
+        )
+    frozen = freeze_json_value(normalized)
+    if not isinstance(frozen, Mapping):
+        raise TypeError(f"field '{field_name}' must be a mapping")
+    return cast(Mapping[str, Sequence[str]], frozen)
+
+
+def _freeze_evidence(
+    value: object,
+    *,
+    field_name: str,
+) -> tuple[MemoryEvidence, ...]:
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        raise TypeError(
+            f"field '{field_name}' must be a sequence of MemoryEvidence"
+        )
+    items = cast(Sequence[object], value)
+    if not all(isinstance(item, MemoryEvidence) for item in items):
+        raise TypeError(
+            f"field '{field_name}' must contain only MemoryEvidence"
+        )
+    return tuple(cast(Sequence[MemoryEvidence], items))
+
+
 def new_profile_item_id(source_ref: str | None = None) -> str:
     if source_ref is None:
         return f"profile_{uuid5(NAMESPACE_URL, utc_now_iso()).hex}"
@@ -42,8 +96,8 @@ class ProfileItem:
     type: str
     title: str
     body: str
-    tags: list[str] = field(default_factory=empty_str_list)
-    source_refs: list[str] = field(default_factory=empty_str_list)
+    tags: Sequence[str] = field(default_factory=empty_str_list)
+    source_refs: Sequence[str] = field(default_factory=empty_str_list)
     confidence: float = 1.0
     importance: float = 0.5
     privacy: PrivacyLevel = "private"
@@ -54,8 +108,30 @@ class ProfileItem:
     valid_from: str | None = None
     valid_until: str | None = None
     temporal_note: str = ""
-    relations: dict[str, list[str]] = field(default_factory=empty_relations_dict)
-    evidence: list[MemoryEvidence] = field(default_factory=empty_evidence_list)
+    relations: Mapping[str, Sequence[str]] = field(default_factory=empty_relations_dict)
+    evidence: Sequence[MemoryEvidence] = field(default_factory=empty_evidence_list)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "tags",
+            _freeze_str_sequence(self.tags, field_name="tags"),
+        )
+        object.__setattr__(
+            self,
+            "source_refs",
+            _freeze_str_sequence(self.source_refs, field_name="source_refs"),
+        )
+        object.__setattr__(
+            self,
+            "relations",
+            _freeze_relations(self.relations, field_name="relations"),
+        )
+        object.__setattr__(
+            self,
+            "evidence",
+            _freeze_evidence(self.evidence, field_name="evidence"),
+        )
 
     def with_updates(
         self,
@@ -91,7 +167,7 @@ class ProfileItem:
         )
 
     def to_wire(self) -> dict[str, object]:
-        return {
+        wire = {
             "id": self.id,
             "type": self.type,
             "title": self.title,
@@ -112,6 +188,7 @@ class ProfileItem:
             "related_memory_ids": self.relations.get("related_to", []),
             "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
+        return cast(dict[str, object], thaw_json_value(wire))
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> "ProfileItem":

@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The persisted Memory read-model ownership batch is complete.
+Idle. The persisted Profile and Source read-model ownership batch is complete.
 
 ## Active Branch
 
@@ -22,15 +22,13 @@ code.
 
 ## Completion Evidence
 
-- `MemoryEntry`, `MemoryCandidate`, and `MemoryObject` detach and recursively
-  freeze tags, source refs, relations, payload, metadata, and evidence
+- `ProfileItem` detaches and freezes tags, source refs, relations, and evidence
   membership.
-- `to_wire()` returns detached standard list/dict containers without changing
-  persisted fields.
-- Descriptor validation, merge, graph projection, queries, conversions,
-  curator, and optimizer operate on immutable collection abstractions.
-- Focused Memory and integration tests: 103 passed.
-- Full tests: 1234 passed.
+- `SourceDocument` detaches and freezes tags.
+- Both models preserve existing JSON list/dict wire fields and return detached
+  containers.
+- Focused Profile, Source, and integration tests: 47 passed.
+- Full tests: 1237 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -40,4 +38,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit remaining repository summary/index read models and source-domain records.
+Audit remaining repository summary/index read models.

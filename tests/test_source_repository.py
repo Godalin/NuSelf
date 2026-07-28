@@ -62,7 +62,7 @@ def test_load_markdown_source_extracts_metadata_and_chunks(tmp_path: Path) -> No
     assert document.origin == "journal"
     assert document.privacy == "shareable"
     assert document.source_date == "2026-05-07"
-    assert document.tags == ["memory", "mirror", "imported"]
+    assert document.tags == ("memory", "mirror", "imported")
     assert chunks[0].source_id == document.id
     assert chunks[0].source_ref == f"source:{document.id}:0"
     assert "First paragraph." in chunks[0].text
@@ -81,7 +81,7 @@ def test_source_repository_ingests_file_and_replaces_chunks(tmp_path: Path) -> N
     assert result.chunks == 1
     assert repo.get_document(document.id) == document
     assert document.title == "Local note title"
-    assert document.tags == ["notes"]
+    assert document.tags == ("notes",)
     assert chunks[0].source_ref == f"source:{document.id}:0"
 
     source_path.write_text("Local note title\n\nUpdated body.", encoding="utf-8")

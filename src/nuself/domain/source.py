@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, TypeAlias, cast
@@ -35,10 +36,13 @@ class SourceDocument:
     kind: SourceKind
     origin: str = "local"
     privacy: PrivacyLevel = "private"
-    tags: list[str] = field(default_factory=empty_str_list)
+    tags: Sequence[str] = field(default_factory=empty_str_list)
     source_date: str | None = None
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "tags", _freeze_str_sequence(self.tags))
 
     def to_wire(self) -> dict[str, object]:
         return {
@@ -48,7 +52,7 @@ class SourceDocument:
             "kind": self.kind,
             "origin": self.origin,
             "privacy": self.privacy,
-            "tags": self.tags,
+            "tags": list(self.tags),
             "source_date": self.source_date,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -142,6 +146,15 @@ def _expect_str_list(data: dict[str, object], field_name: str) -> list[str]:
             raise ValueError(f"field '{field_name}' must contain only strings")
         result.append(item)
     return result
+
+
+def _freeze_str_sequence(value: object) -> tuple[str, ...]:
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        raise TypeError("source tags must be a sequence of strings")
+    items = cast(Sequence[object], value)
+    if not all(isinstance(item, str) for item in items):
+        raise TypeError("source tags must contain only strings")
+    return tuple(cast(Sequence[str], items))
 
 
 def _expect_kind(data: dict[str, object], field_name: str) -> SourceKind:

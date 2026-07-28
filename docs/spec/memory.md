@@ -34,11 +34,11 @@ Rules:
 
 ## Read-Model Collection Ownership
 
-`MemoryEntry`, `MemoryCandidate`, and `MemoryObject` are immutable persisted
-read models. They must not retain aliases to caller-owned containers.
-Construction and wire decoding recursively freeze tags, source references,
-relations, payload, metadata, and collection membership around immutable
-`MemoryEvidence` records.
+`MemoryEntry`, `MemoryCandidate`, `MemoryObject`, `ProfileItem`, and
+`SourceDocument` are immutable persisted read models. They must not retain
+aliases to caller-owned containers. Construction and wire decoding recursively
+freeze tags, source references, relations, payload, metadata, and collection
+membership around immutable `MemoryEvidence` records.
 
 The persisted wire contract remains ordinary JSON lists and objects.
 `to_wire()` returns a recursively detached mutable-container tree; mutating
