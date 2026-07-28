@@ -13,7 +13,7 @@ from nuself.derived import write_derived_index
 from nuself.reason.domain import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend, auto_backend
+from nuself.storage import StorageBackend, get_default_backend
 
 REASON_STORAGE_VERSION = "NuSelfReasonStore/v1"
 
@@ -30,7 +30,11 @@ class ReasonRepository:
         backend: StorageBackend | None = None,
     ) -> None:
         self._project_root = project_root
-        effective = backend if backend is not None else auto_backend(project_root)
+        effective = (
+            backend
+            if backend is not None
+            else get_default_backend(project_root)
+        )
         self._backend = effective
         self._threads = effective.collection("reason_threads")
         self._steps = effective.collection("reason_steps")

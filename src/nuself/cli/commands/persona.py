@@ -21,7 +21,7 @@ from nuself.persona.prompt_repo import (
     create_persona_prompt,
 )
 from nuself.runtime.observability import run_observed_best_effort
-from nuself.storage import auto_backend
+from nuself.storage import get_default_backend
 from nuself.trace.service import TraceRecorder
 from nuself.tui.persona import render_persona_detail, render_persona_row
 from nuself.tui.render import TerminalTheme
@@ -33,7 +33,9 @@ def _prompts_for_list(
     project_root: Path | None,
 ) -> tuple[PersonaPrompt, ...]:
     return PersonaPromptRepository(
-        collection=auto_backend(project_root).collection("persona_prompts"),
+        collection=get_default_backend(project_root).collection(
+            "persona_prompts"
+        ),
         project_root=project_root,
     ).list()
 
@@ -125,7 +127,9 @@ def handle_persona_list(args: argparse.Namespace) -> int:
 
 def handle_persona_create(args: argparse.Namespace) -> int:
     repository = PersonaPromptRepository(
-        collection=auto_backend(args.project_root).collection("persona_prompts"),
+        collection=get_default_backend(args.project_root).collection(
+            "persona_prompts"
+        ),
         project_root=args.project_root,
     )
     persona = create_persona_prompt(
@@ -155,7 +159,9 @@ def handle_persona_create(args: argparse.Namespace) -> int:
 
 def handle_persona_show(args: argparse.Namespace) -> int:
     repository = PersonaPromptRepository(
-        collection=auto_backend(args.project_root).collection("persona_prompts"),
+        collection=get_default_backend(args.project_root).collection(
+            "persona_prompts"
+        ),
         project_root=args.project_root,
     )
     prompt_id = resolve_persona_id(args)
@@ -174,7 +180,9 @@ def handle_persona_show(args: argparse.Namespace) -> int:
 
 def handle_persona_delete(args: argparse.Namespace) -> int:
     repository = PersonaPromptRepository(
-        collection=auto_backend(args.project_root).collection("persona_prompts"),
+        collection=get_default_backend(args.project_root).collection(
+            "persona_prompts"
+        ),
         project_root=args.project_root,
     )
     prompt_ids = resolve_persona_ids(args)
@@ -214,7 +222,9 @@ def _set_enabled(
     args: argparse.Namespace, *, enabled: bool
 ) -> int:
     repository = PersonaPromptRepository(
-        collection=auto_backend(args.project_root).collection("persona_prompts"),
+        collection=get_default_backend(args.project_root).collection(
+            "persona_prompts"
+        ),
         project_root=args.project_root,
     )
     prompt_id = resolve_persona_id(args)

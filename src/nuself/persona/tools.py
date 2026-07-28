@@ -11,7 +11,7 @@ from langchain_core.tools import StructuredTool
 from nuself.agent.text import TextAgent, default_text_agent
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
 from nuself.runtime.observability import run_observed_best_effort
-from nuself.storage import auto_backend
+from nuself.storage import get_default_backend
 from nuself.store import ScopedWorkspace, WorkspaceCollection
 
 
@@ -39,7 +39,9 @@ def build_persona_tools(
     """Build persona tools that any agent (chat, reason) can use."""
 
     repo = PersonaPromptRepository(
-        collection=auto_backend(project_root).collection("persona_prompts"),
+        collection=get_default_backend(project_root).collection(
+            "persona_prompts"
+        ),
         project_root=project_root,
     )
     persona_agent = (
@@ -281,7 +283,9 @@ def build_reason_persona_tools(
 
     global_repo = (
         PersonaPromptRepository(
-            collection=auto_backend(global_project_root).collection("persona_prompts"),
+            collection=get_default_backend(global_project_root).collection(
+                "persona_prompts"
+            ),
             project_root=global_project_root,
         )
         if global_project_root

@@ -15,7 +15,7 @@ from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEvidence, PrivacyLevel
 from nuself.domain.source import SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend, auto_backend
+from nuself.storage import StorageBackend, get_default_backend
 
 SUPPORTED_SOURCE_SUFFIXES = {".md", ".markdown", ".txt"}
 DEFAULT_CHUNK_TARGET_CHARS = 1200
@@ -53,7 +53,11 @@ class SourceRepository:
         *,
         backend: StorageBackend | None = None,
     ) -> None:
-        be = backend if backend is not None else auto_backend(project_root)
+        be = (
+            backend
+            if backend is not None
+            else get_default_backend(project_root)
+        )
         self._documents = be.collection("source_documents")
         self._chunks = be.collection("source_chunks")
         self._paths = runtime_paths(project_root)

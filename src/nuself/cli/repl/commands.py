@@ -36,7 +36,7 @@ from nuself.runtime.observability import (
     format_exception_chain,
     report_observed_failure,
 )
-from nuself.storage import auto_backend
+from nuself.storage import get_default_backend
 from nuself.trace.repository import TraceNotFound
 from nuself.trace.service import TraceQueryService
 from nuself.tui.memory import (
@@ -331,7 +331,9 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
         from nuself.tui.persona import render_persona_detail, render_persona_row
 
         repo = PersonaPromptRepository(
-            collection=auto_backend(project_root).collection("persona_prompts"),
+            collection=get_default_backend(project_root).collection(
+                "persona_prompts"
+            ),
             project_root=project_root,
         )
         if command in {"", "list"}:

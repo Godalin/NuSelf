@@ -9,7 +9,7 @@ from typing import Literal, cast
 
 from nuself.config import runtime_paths
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend, auto_backend
+from nuself.storage import StorageBackend, get_default_backend
 
 
 @dataclass(frozen=True)
@@ -114,7 +114,11 @@ class ReflectionRepository:
         *,
         backend: StorageBackend | None = None,
     ) -> None:
-        be = backend if backend is not None else auto_backend(project_root)
+        be = (
+            backend
+            if backend is not None
+            else get_default_backend(project_root)
+        )
         self._col = be.collection("reflection_entries")
         self._paths = runtime_paths(project_root)
 

@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Replace the monolithic chat tool module with a subsystem-owned `agent.tools`
-package and a thin composition root.
+Make ordinary repositories share the process-owned default storage backend so
+daemon shutdown can close every long-lived SQLite connection it owns.
 
 ## Active Branch
 
@@ -14,38 +14,39 @@ package and a thin composition root.
 
 ## Ordered Work
 
-1. Audit the monolith's dependency and public-import graph.
-2. Specify package ownership and composition boundaries.
-3. Extract memory, reflection, reason, trace, selves, and workspace builders.
-4. Keep `agent.tools` as the stable public composition entry.
-5. Verify subsystem registries and the complete composed registry.
+1. Audit repository backend creation and SQLite close semantics.
+2. Specify default versus explicitly injected backend ownership.
+3. Migrate ordinary repository and persona construction to the default backend.
+4. Verify repositories for one root share one backend and reset closes it.
+5. Keep explicit backend injection isolated and caller-owned.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Do not change tool names, descriptions, schemas, tags, or execution behavior.
-- Keep persona tools owned by `nuself.persona`.
-- Keep existing public imports from `nuself.agent.tools` working.
+- Do not change repository domain behavior or collection layouts.
+- Keep migration/diagnostic backends explicitly caller-owned.
+- Do not make repositories close a shared backend individually.
 
 ## Completion Evidence
 
-- `nuself.agent.tools` is a package whose public `__init__` only constructs
-  shared service lifetimes and composes subsystem builders.
-- Memory, reflection, reason, trace, selves, and workspace definitions live in
-  focused modules; persona definitions remain owned by `nuself.persona`.
-- `ReasonAdvancer` imports the public lazy workspace builder instead of a
-  private helper.
-- Direct subsystem tests verify each builder's exact registry membership.
-- A live before/after comparison against `30d48d9` proves all 25 composed tool
-  names, order, descriptions, argument schemas, tags, and metadata are equal.
-- `.venv/bin/pytest -q`: `1473 passed`.
+- Memory entry/candidate/source, profile, reason, reflection, trace,
+  notification, and persona construction now use
+  `get_default_backend(project_root)` by default.
+- Production search leaves `auto_backend()` only in its low-level factory,
+  default-registry creation, and the explicitly owned dev diagnostic command.
+- Eight repository families for one root obtain the same registered backend.
+- `reset_default_backend(root)` closes the SQLite connection used by an
+  already-created default repository.
+- Explicit `MemoryCandidateRepository(backend=...)` now passes that backend to
+  its implicit entry/profile repositories and never consults the registry.
+- `.venv/bin/pytest -q`: `1476 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `30d48d9`.
+`dev/v0.3.x` is published through `6682cd2`.
 
 ## Next Review Batch
 
-Audit tool dependency lifetime ownership after the registry split.
+Audit CLI-owned temporary backend closure and process teardown symmetry.

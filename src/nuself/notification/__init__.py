@@ -16,7 +16,7 @@ from nuself.runtime.context import (
     use_runtime_context,
 )
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend
+from nuself.storage import StorageBackend, get_default_backend
 
 OutboxStatus = Literal["pending", "sent", "failed", "dismissed"]
 
@@ -121,8 +121,11 @@ class NotificationOutbox:
         *,
         backend: StorageBackend | None = None,
     ) -> None:
-        from nuself.storage import auto_backend
-        be = backend if backend is not None else auto_backend(project_root)
+        be = (
+            backend
+            if backend is not None
+            else get_default_backend(project_root)
+        )
         self._col = be.collection("notification_outbox")
         self._project_root = runtime_paths(project_root).project_root
 

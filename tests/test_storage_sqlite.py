@@ -11,14 +11,25 @@ from typing import cast
 import pytest
 
 from nuself.logs import read_log_events
+from nuself.memory.repository import (
+    MemoryCandidateRepository,
+    MemoryEntryRepository,
+)
+from nuself.memory.source_repository import SourceRepository
+from nuself.notification import NotificationOutbox
+from nuself.profile.repository import ProfileItemRepository
+from nuself.reason.repository import ReasonRepository
+from nuself.reflection.repository import ReflectionRepository
 from nuself.storage import (
     DefaultBackendResetError,
+    FileStorageBackend,
     StorageBackend,
     create_sqlite_backend,
     get_default_backend,
     reset_default_backend,
     set_default_backend,
 )
+from nuself.trace.repository import TraceRepository
 from nuself.storage_sqlite import (
     COLLECTION_NAMES,
     SqliteStorageBackend,
@@ -166,6 +177,88 @@ def test_default_backend_is_scoped_by_project_root(tmp_path: Path) -> None:
         )
     finally:
         reset_default_backend()
+
+
+def test_repositories_share_the_project_default_backend(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = FileStorageBackend(tmp_path / "private")
+    calls: list[Path | None] = []
+
+    def default_backend(project_root: Path | None = None) -> StorageBackend:
+        calls.append(project_root)
+        return backend
+
+    for module in (
+        "nuself.memory.repository",
+        "nuself.memory.source_repository",
+        "nuself.notification",
+        "nuself.profile.repository",
+        "nuself.reason.repository",
+        "nuself.reflection.repository",
+        "nuself.trace.repository",
+    ):
+        monkeypatch.setattr(
+            f"{module}.get_default_backend",
+            default_backend,
+        )
+
+    MemoryEntryRepository(tmp_path)
+    MemoryCandidateRepository(tmp_path)
+    SourceRepository(tmp_path)
+    NotificationOutbox(tmp_path)
+    ProfileItemRepository(tmp_path)
+    ReasonRepository(tmp_path)
+    ReflectionRepository(tmp_path)
+    TraceRepository(tmp_path)
+
+    assert calls == [tmp_path] * 8
+
+
+def test_reset_closes_backend_used_by_default_repository(
+    tmp_path: Path,
+) -> None:
+    backend = SqliteStorageBackend(
+        tmp_path / "private" / "nuself.sqlite",
+        project_root=tmp_path,
+    )
+    set_default_backend(backend, tmp_path)
+    repository = MemoryEntryRepository(tmp_path)
+    backend.collection("memory_entries").put(
+        "lifecycle-probe",
+        {"id": "lifecycle-probe", "title": "probe"},
+    )
+
+    reset_default_backend(tmp_path)
+
+    assert getattr(backend, "_closed") is True
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        repository.list()
+
+
+def test_explicit_candidate_backend_isolated_from_default_registry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_default(
+        project_root: Path | None = None,
+    ) -> StorageBackend:
+        raise AssertionError(
+            f"default backend consulted for explicit root {project_root}"
+        )
+
+    monkeypatch.setattr(
+        "nuself.memory.repository.get_default_backend",
+        unexpected_default,
+    )
+
+    repository = MemoryCandidateRepository(
+        tmp_path,
+        backend=FileStorageBackend(tmp_path / "isolated"),
+    )
+
+    assert repository.list() == []
 
 
 def test_reset_default_backend_attempts_every_owned_close(

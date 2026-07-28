@@ -187,6 +187,15 @@ default-backend registry and released by `reset_default_backend()`; temporary
 thought-pack backends are owned by the command that opens them.
 Owners must quiesce concurrent users before closing the backend.
 
+Ordinary repositories and long-lived service/tool composition must obtain
+their implicit backend through `get_default_backend(project_root)`. They share
+that backend by normalized project root and never close it individually.
+Passing an explicit `backend=` remains an isolation boundary: the caller owns
+that backend, the repository uses only the supplied instance, and the default
+registry is not consulted. `auto_backend()` is a low-level owned-backend
+factory for migration, diagnostics, and the default registry itself; ordinary
+repository constructors must not call it directly.
+
 `close()` is lock-protected and idempotent after the underlying connection has
 closed successfully. It first requests a truncating WAL checkpoint and always
 attempts to close the connection even if that checkpoint fails. A checkpoint

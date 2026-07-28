@@ -12,7 +12,7 @@ from nuself.domain.memory import MemoryCandidate, merge_relations
 from nuself.domain.profile import ProfileItem
 from nuself.runtime.observability import decode_observed_record
 from nuself.runtime import freeze_json_value
-from nuself.storage import StorageBackend, auto_backend
+from nuself.storage import StorageBackend, get_default_backend
 
 
 def empty_str_counts() -> dict[str, int]:
@@ -58,7 +58,11 @@ class ProfileItemRepository:
         *,
         backend: StorageBackend | None = None,
     ) -> None:
-        be = backend if backend is not None else auto_backend(project_root)
+        be = (
+            backend
+            if backend is not None
+            else get_default_backend(project_root)
+        )
         self._col = be.collection("profile_items")
         self._paths = runtime_paths(project_root)
 
