@@ -22,6 +22,14 @@ RetryObserver = Callable[[LangChainLLMEndpoint, Exception], None]
 _AGENT_IMPLEMENTATION_ERRORS = (
     AssertionError,
     AttributeError,
+    ImportError,
+    LookupError,
+    MemoryError,
+    NameError,
+    NotImplementedError,
+    RecursionError,
+    SyntaxError,
+    SystemError,
     TypeError,
 )
 

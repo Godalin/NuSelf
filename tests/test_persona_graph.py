@@ -443,9 +443,11 @@ def test_llm_backed_synthesis_failure_is_observed_before_fallback(
     [
         AssertionError("broken persona invariant"),
         AttributeError("missing persona dependency"),
+        KeyError("missing persona registry entry"),
+        NotImplementedError("persona path is not implemented"),
         TypeError("invalid internal persona call"),
     ],
-    ids=["assertion", "attribute", "type"],
+    ids=["assertion", "attribute", "lookup", "not-implemented", "type"],
 )
 @pytest.mark.parametrize(
     "stage",

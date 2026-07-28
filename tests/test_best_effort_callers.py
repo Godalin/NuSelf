@@ -212,9 +212,10 @@ def test_persona_failure_log_cannot_mask_discussion_failure(
     [
         AssertionError("broken discussion invariant"),
         AttributeError("missing discussion dependency"),
+        KeyError("missing discussion registry entry"),
         TypeError("invalid internal discussion call"),
     ],
-    ids=["assertion", "attribute", "type"],
+    ids=["assertion", "attribute", "lookup", "type"],
 )
 def test_persona_discussion_implementation_errors_propagate(
     tmp_path: Path,

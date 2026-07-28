@@ -99,9 +99,9 @@ The chat orchestration layer that invokes
 `SharedPersonaDiscussionService.discuss(...)` also uses the shared agent
 failure policy. A recoverable provider/runtime discussion failure may append
 the existing visible `Discussion failed` result and write its audit record.
-`AssertionError`, `AttributeError`, and `TypeError` propagate unchanged rather
-than being rendered as a persona conclusion; no discussion-failure audit is
-created for those implementation errors.
+Sharedly classified implementation and process-integrity failures propagate
+unchanged rather than being rendered as a persona conclusion; no
+discussion-failure audit is created for those errors.
 
 ## Parameters
 

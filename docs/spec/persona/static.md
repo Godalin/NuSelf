@@ -132,9 +132,9 @@ domain result. Diagnostic persistence cannot replace fallback output.
 
 The fallback boundary uses the shared agent failure policy. Provider/runtime
 errors and structured validation errors may use the deterministic fallback.
-Clear implementation failures (`AssertionError`, `AttributeError`, and
-`TypeError`) propagate unchanged from activation, contribution, and synthesis;
-they are not persona opinions or model degradation.
+Sharedly classified implementation and process-integrity failures propagate
+unchanged from activation, contribution, and synthesis; they are not persona
+opinions or model degradation.
 
 ### Activation Policy
 

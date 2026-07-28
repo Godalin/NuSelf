@@ -190,9 +190,11 @@ def test_protocol_failure_retries_same_endpoint_without_failover(
     [
         AssertionError("broken chat invariant"),
         AttributeError("missing chat dependency"),
+        KeyError("missing chat registry entry"),
+        NotImplementedError("chat path is not implemented"),
         TypeError("invalid internal chat call"),
     ],
-    ids=["assertion", "attribute", "type"],
+    ids=["assertion", "attribute", "lookup", "not-implemented", "type"],
 )
 def test_pre_tool_implementation_errors_propagate_without_retry_or_fallback(
     monkeypatch: pytest.MonkeyPatch,
@@ -299,9 +301,19 @@ def test_availability_failure_uses_shared_endpoint_failover(
     assert result.answer == "backup response"
 
 
-def test_tool_outcome_suppresses_retry_even_for_implementation_error(
+@pytest.mark.parametrize(
+    ("error", "uses_fallback"),
+    [
+        (RuntimeError("provider failed after tool execution"), True),
+        (AssertionError("implementation failed after tool execution"), False),
+    ],
+    ids=["recoverable", "implementation"],
+)
+def test_tool_outcome_suppresses_retry_before_failure_policy(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    error: Exception,
+    uses_fallback: bool,
 ) -> None:
     endpoint_calls = 0
     events: list[str] = []
@@ -313,7 +325,7 @@ def test_tool_outcome_suppresses_retry_even_for_implementation_error(
         del self, prompt
         nonlocal endpoint_calls
         endpoint_calls += 1
-        raise AssertionError("implementation failed after tool execution")
+        raise error
 
     def report_failure(
         error: BaseException,
@@ -360,13 +372,20 @@ def test_tool_outcome_suppresses_retry_even_for_implementation_error(
         log_tool_outcome=_ignore_tool_outcome,
     )
 
-    result = synthesizer.complete(
-        [HumanMessage(content="mutate once")]
-    )
+    if uses_fallback:
+        result = synthesizer.complete(
+            [HumanMessage(content="mutate once")]
+        )
+        assert "LLM API is not configured yet" in result.answer
+        assert result.answer.endswith("Last message: mutate once")
+    else:
+        with pytest.raises(type(error)) as caught:
+            synthesizer.complete(
+                [HumanMessage(content="mutate once")]
+            )
+        assert caught.value is error
 
     assert endpoint_calls == 1
-    assert "LLM API is not configured yet" in result.answer
-    assert result.answer.endswith("Last message: mutate once")
     assert events == ["llm_retry_suppressed_after_tool_call"]
 
 

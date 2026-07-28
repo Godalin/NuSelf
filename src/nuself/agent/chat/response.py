@@ -149,6 +149,8 @@ class ConversationResponseSynthesizer:
                     failed_endpoint,
                     exc,
                 )
+                if not is_recoverable_agent_failure(exc):
+                    raise
                 return _local_response_output(prompt)
             if not is_recoverable_agent_failure(exc):
                 raise

@@ -241,16 +241,20 @@ cannot discard a valid response, skip the next configured attempt, prevent
 local fallback, or replace a completed chat answer with an exception.
 
 Chat's local response policy is not an exception sink for implementation
-defects. Before any tool executes, `AssertionError`, `AttributeError`, and
-`TypeError` propagate unchanged and are ineligible for retry, endpoint
-failover, or local fallback. After a tool outcome exists, the non-replay
-contract takes precedence and any ordinary invocation exception enters local
-fallback without another model call.
+defects. Before any tool executes, the shared policy rejects assertion,
+attribute, import, lookup, memory exhaustion, name resolution, unimplemented
+path, recursion, syntax, interpreter-system, and type errors. These errors
+propagate unchanged and are ineligible for retry, endpoint failover, or local
+fallback. After a tool outcome exists, the non-replay contract suppresses every
+further model call. Recoverable failures may use local fallback; sharedly
+classified implementation and process-integrity failures propagate unchanged
+after retry suppression.
 
 The pre-tool classification is shared agent infrastructure, not a chat-only
 rule. Persona activation, contribution, and synthesis use the same policy:
 provider/runtime and validation failures may produce their specified fallback,
-but `AssertionError`, `AttributeError`, and `TypeError` propagate unchanged.
+but every sharedly classified implementation or process-integrity failure
+propagates unchanged.
 Chat's outer competitive-discussion orchestration uses the same policy and
 must not convert those implementation errors into a normal answer appendix.
 

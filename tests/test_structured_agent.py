@@ -225,3 +225,56 @@ def test_shared_endpoint_runner_rejects_invalid_attempt_count() -> None:
             component="memory",
             attempts_per_endpoint=0,
         )
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        AssertionError(),
+        AttributeError(),
+        ImportError(),
+        KeyError(),
+        IndexError(),
+        MemoryError(),
+        NameError(),
+        NotImplementedError(),
+        RecursionError(),
+        SyntaxError(),
+        SystemError(),
+        TypeError(),
+    ],
+    ids=[
+        "assertion",
+        "attribute",
+        "import",
+        "key",
+        "index",
+        "memory",
+        "name",
+        "not-implemented",
+        "recursion",
+        "syntax",
+        "system",
+        "type",
+    ],
+)
+def test_shared_agent_policy_rejects_implementation_errors(
+    error: Exception,
+) -> None:
+    assert not failover_module.is_recoverable_agent_failure(error)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        RuntimeError(),
+        ValueError(),
+        OSError(),
+        Exception(),
+    ],
+    ids=["runtime", "validation", "operating-system", "provider-specific"],
+)
+def test_shared_agent_policy_accepts_recoverable_failures(
+    error: Exception,
+) -> None:
+    assert failover_module.is_recoverable_agent_failure(error)

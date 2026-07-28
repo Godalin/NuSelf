@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Shared agent fallback classification now also surfaces import, lookup, memory
+  exhaustion, name resolution, unimplemented-path, recursion, syntax, and
+  interpreter-system errors instead of treating them as model degradation.
 - Chat persona discussion now surfaces assertion, attribute, and type errors
   instead of appending them to the answer as an ordinary discussion failure.
 - Persona activation, contribution, and synthesis no longer turn assertion,
@@ -22,9 +25,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Approval prompts now treat only stdin EOF as a safe-default decline;
   rendering, terminal-output, and unexpected input failures surface normally
   instead of being mislabeled as a user rejection.
-- Chat no longer retries or silently replaces pre-tool assertion, attribute,
-  or type errors with a local fallback response; after tool execution, the
-  existing no-replay fallback remains authoritative.
+- Chat no longer retries or silently replaces assertion, attribute, or type
+  errors with a local fallback response. After tool execution it still
+  suppresses every retry, then propagates the implementation failure unchanged.
 - Memory mutation tools now report only genuinely absent entries as
   “not found”; repository, decoding, persistence, and programming failures
   remain real tool failures instead of being mislabeled as user input errors.
