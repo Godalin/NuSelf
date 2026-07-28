@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections import OrderedDict
 from collections.abc import Callable, Generator, Iterable, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
@@ -69,6 +70,9 @@ _AUDIT_EVENT_NAME = re.compile(
 )
 _LOG_LOCKS_GUARD = Lock()
 _LOG_WRITE_LOCKS: WeakValueDictionary[Path, RLock] = WeakValueDictionary()
+_LOG_DIRECTORY_SYNC_GUARD = Lock()
+_LOG_DIRECTORY_SYNC_CACHE_LIMIT = 256
+_SYNCED_LOG_IDENTITIES: OrderedDict[Path, tuple[int, int]] = OrderedDict()
 _LEGACY_LOG_INSTANT = datetime.min.replace(tzinfo=UTC)
 
 
@@ -656,7 +660,7 @@ def _append_encoded_log_line(
 
 def _open_log_data_file(path: Path) -> BinaryIO:
     ensure_private_file(path)
-    _sync_log_directory(path.parent)
+    _sync_log_directory_for_active(path)
     return path.open("a+b", buffering=0)
 
 
@@ -679,6 +683,22 @@ def _sync_log_directory(path: Path) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+def _sync_log_directory_for_active(path: Path) -> None:
+    normalized = path.absolute()
+    stat_result = path.stat()
+    identity = (stat_result.st_dev, stat_result.st_ino)
+    with _LOG_DIRECTORY_SYNC_GUARD:
+        if _SYNCED_LOG_IDENTITIES.get(normalized) == identity:
+            _SYNCED_LOG_IDENTITIES.move_to_end(normalized)
+            return
+    _sync_log_directory(path.parent)
+    with _LOG_DIRECTORY_SYNC_GUARD:
+        _SYNCED_LOG_IDENTITIES[normalized] = identity
+        _SYNCED_LOG_IDENTITIES.move_to_end(normalized)
+        while len(_SYNCED_LOG_IDENTITIES) > _LOG_DIRECTORY_SYNC_CACHE_LIMIT:
+            _SYNCED_LOG_IDENTITIES.popitem(last=False)
 
 
 def _rollback_failed_log_append(

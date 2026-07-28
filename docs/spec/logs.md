@@ -391,6 +391,15 @@ Structured component logs use `LogRetentionPolicy`. The production default is
   fails, one non-raising terminal warning reports only component plus rollback
   exception type; it never replaces the primary append error or includes event
   content, paths, or exception messages.
+- Directory synchronization is identity-aware, not record-batched. A bounded
+  process-local cache remembers only successfully synchronized active
+  `(device, inode)` identities. Repeated appends to the same active inode skip
+  redundant directory `fsync`; first use, rotation, cross-process replacement,
+  and retry after synchronization failure must synchronize again. Cache
+  eviction only causes an extra safe sync.
+- The synchronous public API does not use implicit batching, group commit, a
+  timer, or an asynchronous flush worker. Each returned `LogEvent` still owns
+  one complete data-file write, `fsync`, close, and observer outcome.
 - A successful data-handle close after append synchronization completes the
   durable append contract. Process-local observers run only afterward. A close
   failure propagates as `LogAppendLifecycleError`; the event is not delivered

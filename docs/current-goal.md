@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Eliminate mixed-protocol writers from structured component logs.
+Reduce structured-log sync overhead without weakening per-record durability.
 
 ## Active Branch
 
@@ -13,46 +13,42 @@ Eliminate mixed-protocol writers from structured component logs.
 
 ## Ordered Work
 
-1. Audit every producer and reader of `private/logs/*.log`.
-2. Reserve component log files exclusively for structured JSONL events.
-3. Move daemon stdout/stderr to a distinct owner-only raw process stream.
-4. Project optimizer activity through structured best-effort audit events.
-5. Ensure logging failure cannot replace persisted optimizer candidates.
-6. Verify paths, event schemas, parseability, and process-handle ownership.
+1. Audit whether batching can preserve the synchronous append/observer contract.
+2. Keep every record as an independently acknowledged durable transaction.
+3. Identify redundant directory synchronization without assuming path stability.
+4. Cache only successfully synced active file identities with a strict bound.
+5. Invalidate naturally on rotation or cross-process active-file replacement.
+6. Verify repeat writes, identity changes, sync failure, and cache capacity.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- The daemon raw process stream is not parsed as structured JSONL and has its
-  own best-effort append semantics.
-- Existing malformed legacy component lines remain isolated by readers.
-- Structured-log batching and throughput policy remains deferred until every
-  producer obeys one protocol.
+- No asynchronous worker, flush timer, or group-commit queue is introduced.
+- Data-file `fsync`, close, rollback, and observer ordering remain unchanged.
+- Cache state is a process-local optimization, never persisted truth.
 
 ## Completion Evidence
 
-- `RuntimePaths` now distinguishes structured `daemon_log_path` from raw
-  `daemon_process_log_path`.
-- Daemon stdout/stderr is appended only to owner-only
-  `private/logs/daemon-process.log`; the parent closes its handle immediately
-  after spawning, and structured readers never parse that stream.
-- Memory optimizer deferred, candidate-staged, and completed activity uses
-  canonical `LogEvent` JSONL through `write_observed_log_event(...)`.
-- Optimizer audit metadata contains identifiers/actions/counts but excludes
-  free-form candidate titles, bodies, reasons, and model failure text.
-- Structured audit failure cannot replace a deferred result or already-saved
-  optimizer candidate.
-- A source-wide writer audit finds no remaining raw component-log append path.
-- Focused optimizer, lifecycle, config, log, and CLI suites: `100 passed`.
-- Full test suite: `1667 passed`.
+- Implicit asynchronous batching was rejected because it cannot preserve the
+  synchronous per-record append, close, error, and observer contract.
+- A process-local LRU cache records only successfully directory-synced active
+  `(device, inode)` identities and is capped at 256 paths.
+- Consecutive appends to one unchanged active inode reuse its directory sync
+  while every record still performs its own data-file `fsync`.
+- First use, rotation/active identity replacement, retry after directory-sync
+  failure, and safe cache eviction all trigger directory synchronization.
+- Cache access is separately locked and remains an optimization; eviction or
+  process restart can only add a redundant safe sync.
+- Focused logging and observability suites: `89 passed`.
+- Full test suite: `1668 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through implementation commit `324f1b3`.
+`dev/v0.3.x` is published through `fb14df6`.
 
 ## Next Review Batch
 
-Review structured-log batching and throughput policy after all component-log
-producers obey the structured event protocol.
+Review daemon raw-stream retention after structured-log synchronization no
+longer repeats unchanged directory work.

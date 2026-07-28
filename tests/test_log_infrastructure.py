@@ -4,6 +4,7 @@ import gc
 import json
 import threading
 import warnings
+from collections import OrderedDict
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -1315,7 +1316,7 @@ def test_log_rollback_sync_failure_reports_uncertain_outcome(
     assert read_log_events(project_root=tmp_path, component="chat") == [existing]
 
 
-def test_log_observer_runs_only_after_directory_and_append_sync(
+def test_repeated_log_append_reuses_directory_sync_but_not_record_sync(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1340,11 +1341,23 @@ def test_log_observer_runs_only_after_directory_and_append_sync(
         write_log_event(
             "chat",
             "turn_completed",
-            "durable",
+            "durable-1",
+            project_root=tmp_path,
+        )
+        write_log_event(
+            "chat",
+            "turn_completed",
+            "durable-2",
             project_root=tmp_path,
         )
 
-    assert operations == ["directory_sync", "file_sync", "observer"]
+    assert operations == [
+        "directory_sync",
+        "file_sync",
+        "observer",
+        "file_sync",
+        "observer",
+    ]
 
 
 def test_new_log_directory_sync_failure_prevents_append_and_observer(
@@ -1428,6 +1441,46 @@ def test_rotation_syncs_directory_for_new_active_file(
     )
 
     assert synced_directories == [tmp_path / "private" / "logs"]
+
+
+def test_directory_sync_identity_cache_is_bounded_and_eviction_is_safe(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    synced_directories: list[Path] = []
+    sync_log_directory = (
+        logs._sync_log_directory  # pyright: ignore[reportPrivateUsage]
+    )
+
+    def record_directory_sync(path: Path) -> None:
+        sync_log_directory(path)
+        synced_directories.append(path)
+
+    empty_cache: OrderedDict[Path, tuple[int, int]] = OrderedDict()
+    monkeypatch.setattr(logs, "_SYNCED_LOG_IDENTITIES", empty_cache)
+    monkeypatch.setattr(logs, "_LOG_DIRECTORY_SYNC_CACHE_LIMIT", 2)
+    monkeypatch.setattr(logs, "_sync_log_directory", record_directory_sync)
+
+    for component in ("chat", "memory", "daemon"):
+        write_log_event(
+            component,
+            "cache_test",
+            component,
+            project_root=tmp_path,
+        )
+
+    assert len(logs._SYNCED_LOG_IDENTITIES) == 2  # pyright: ignore[reportPrivateUsage]
+    assert len(synced_directories) == 3
+
+    write_log_event(
+        "chat",
+        "cache_test",
+        "chat-again",
+        project_root=tmp_path,
+    )
+
+    assert len(logs._SYNCED_LOG_IDENTITIES) == 2  # pyright: ignore[reportPrivateUsage]
+    assert len(synced_directories) == 4
 
 
 def test_log_data_close_failure_reports_persisted_outcome(

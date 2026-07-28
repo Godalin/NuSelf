@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Structured logs now avoid redundant directory synchronization for repeated
+  appends to the same active inode through a bounded process-local cache,
+  without batching or weakening per-record data-file durability.
 - Memory optimizer activity now uses structured audit events, while daemon
   stdout/stderr is isolated in `daemon-process.log`; component JSONL files no
   longer have raw-text writers.
