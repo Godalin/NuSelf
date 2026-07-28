@@ -10,7 +10,6 @@ from langchain_core.tools import BaseTool
 
 from nuself.clock import utc_now
 from nuself.llm import LangChainLLMEndpoint
-from nuself.logs import write_log_event
 from nuself.reason.advancer import (
     ReasonAdvancer,
     default_reason_advancer,
@@ -19,7 +18,10 @@ from nuself.reason.domain import ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.runtime.context import runtime_context
-from nuself.runtime.observability import report_observed_failure
+from nuself.runtime.observability import (
+    report_observed_failure,
+    write_observed_log_event,
+)
 
 
 class ReasonScheduler:
@@ -97,7 +99,7 @@ class ReasonScheduler:
             updated = self._service.advance_thread(candidate.id, step=step)
             self._apply_cooldown(updated)
 
-        write_log_event(
+        write_observed_log_event(
             "reasoning",
             "scheduler_advance",
             f"Background advance for thread {candidate.id}: {step.kind}",

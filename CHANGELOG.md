@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reason proposal, background advance, and output planning/composition/PDF
+  audits now use the shared auxiliary projection boundary. Audit-store failure
+  no longer blocks an approved thread, a persisted step/cooldown, or durable
+  export artifacts and progress.
 - Reflection scheduling logs now use the shared auxiliary projection boundary.
   Schedule blocks, filtering, discussion, fallback, and completed-cycle
   records can no longer change reflection decisions when the log store fails.

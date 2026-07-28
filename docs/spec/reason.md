@@ -638,6 +638,10 @@ does not use post-turn log dispatch for confirmation. See
 [cli.md](cli.md#approval-and-event-boundaries) for the current approval and
 event separation.
 
+`proposal_created` is an auxiliary observed log projection. Failure to persist
+it cannot prevent the approved `ReasonService.start_thread(...)` mutation or
+change the returned thread identity.
+
 ### Chat Tool Contract
 
 Reason tools let the chat agent inspect, propose, and manage reasoning threads.

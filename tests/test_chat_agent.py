@@ -1246,6 +1246,52 @@ def test_reason_propose_creates_thread_after_confirmation(tmp_path: Path, monkey
     assert events[-1].event == "thread_started"
 
 
+def test_reason_propose_creates_thread_when_proposal_audit_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import builtins
+    import sys
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(builtins, "input", lambda _prompt="": "y")
+
+    def generate_prompt(*args: object, **kwargs: object) -> str:
+        del args, kwargs
+        return "Test-generated reasoning prompt."
+
+    monkeypatch.setattr(
+        "nuself.reason.service.generate_reasoning_prompt",
+        generate_prompt,
+    )
+
+    def drop_audit(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+
+    monkeypatch.setattr(
+        "nuself.agent.tools.reason.write_observed_log_event",
+        drop_audit,
+    )
+
+    result = _invoke_chat_tool(
+        _chat_tool(tmp_path, "reason_propose"),
+        {
+            "topic": "What should I think about next?",
+            "working_summary": "Keep it short.",
+            "active_items": [{"label": "next step", "kind": "decision"}],
+            "mandates": [],
+        },
+    )
+
+    parsed = json.loads(result)
+    assert parsed.get("approved") is True
+    thread_id = parsed.get("result")
+    assert isinstance(thread_id, str)
+    events = read_log_events(project_root=tmp_path, component="reasoning")
+    assert all(event.event != "proposal_created" for event in events)
+    assert events[-1].event == "thread_started"
+
+
 def test_reason_export_tool_requires_confirmation_before_queueing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.reason.output import ReasonOutputService
     from nuself.reason.repository import ReasonRepository

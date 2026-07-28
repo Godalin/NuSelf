@@ -11,12 +11,12 @@ from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.common import structured_tool_factory
 from nuself.handles import VisibleHandleError, parse_visible_index
-from nuself.logs import write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.output import ReasonOutputService, SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.runtime.jobs import JobSink
+from nuself.runtime.observability import write_observed_log_event
 
 
 def build_reason_tools(
@@ -191,7 +191,7 @@ def build_reason_tools(
         if not topic:
             return "Error: topic must be a non-empty string"
         proposal_id = uuid4().hex[:12]
-        write_log_event(
+        write_observed_log_event(
             "reasoning",
             "proposal_created",
             f"Reasoning thread proposal: {topic[:60]}",

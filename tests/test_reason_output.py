@@ -28,6 +28,13 @@ def _prompt(*args: object, **kwargs: object) -> str:
 
 
 def test_reason_output_plan_and_compose(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def drop_audit(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+
+    monkeypatch.setattr(
+        "nuself.reason.output.write_observed_log_event",
+        drop_audit,
+    )
     service = _reason_service(tmp_path)
     thread = service.start_thread("Export me")
     first = service.advance_thread(

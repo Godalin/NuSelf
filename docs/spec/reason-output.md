@@ -383,6 +383,11 @@ queue, manifest, retry, composition, reconciliation, or shutdown decision.
 Invalid optional progress remains degraded input: its diagnostic may fail, but
 composition still runs from the valid manifest.
 
+Reason output planning, chunk skip/start/completion, composition, and PDF
+lifecycle records use `write_observed_log_event(...)`. They cannot prevent a
+durable manifest/progress transition, skip an existing chunk, block chunk
+composition, or replace a composed Markdown/PDF outcome.
+
 When the Markdown artifact is finished, the export pipeline should automatically invoke the PDF helper script so the thread can be shared as both Markdown and PDF.
 
 Repeated calls with the same selected source range and export settings should be idempotent. The same deterministic `job_id` is produced, and the same `jobs/{job_id}` directory is reused. If the earlier job is still pending or in progress, the plan step returns the existing manifest without re-enqueueing.

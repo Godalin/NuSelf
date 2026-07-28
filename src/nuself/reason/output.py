@@ -15,7 +15,6 @@ from typing import Callable, Sequence, TypeVar, cast
 from uuid import uuid4
 
 from nuself.clock import utc_now, utc_now_iso
-from nuself.logs import write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.service import ReasonService
@@ -24,6 +23,7 @@ from nuself.runtime.observability import (
     report_corrupt_record,
     report_observed_failure,
     run_observed_best_effort,
+    write_observed_log_event,
 )
 from nuself.storage import write_json_atomic, write_text_atomic
 from nuself.workspace import PrivateWorkspaceStore
@@ -478,7 +478,7 @@ class ReasonOutputService:
                 updated_at=manifest.updated_at,
             ),
         )
-        write_log_event(
+        write_observed_log_event(
             "reasoning",
             "reason_output_planned",
             f"Planned reason output job {job_id} for thread {thread.id}",
@@ -522,26 +522,22 @@ class ReasonOutputService:
                 metadata={"thread_id": thread.id, "job_id": job_id},
             )
             if enqueued:
-                run_observed_best_effort(
-                    lambda: write_log_event(
-                        "daemon",
-                        "export_job_enqueued",
-                        (
-                            f"Enqueued export job {job_id} "
-                            f"for thread {thread.id}"
-                        ),
-                        project_root=self._project_root,
-                        status="queued",
-                        metadata={
-                            "thread_id": thread.id,
-                            "job_id": job_id,
-                        },
+                write_observed_log_event(
+                    "daemon",
+                    "export_job_enqueued",
+                    (
+                        f"Enqueued export job {job_id} "
+                        f"for thread {thread.id}"
                     ),
-                    component="daemon",
-                    event="export_job_enqueue_log_failed",
-                    message="Failed to write export enqueue audit record",
                     project_root=self._project_root,
+                    status="queued",
                     metadata={
+                        "thread_id": thread.id,
+                        "job_id": job_id,
+                    },
+                    failure_event="export_job_enqueue_log_failed",
+                    failure_message="Failed to write export enqueue audit record",
+                    failure_metadata={
                         "thread_id": thread.id,
                         "job_id": job_id,
                     },
@@ -611,7 +607,7 @@ class ReasonOutputService:
             if chunk_path.exists():
                 chunk = ReasonOutputChunk(index=index, filename=filename, step_ids=tuple(step.id for step in batch))
                 chunks.append(chunk)
-                write_log_event(
+                write_observed_log_event(
                     "reasoning",
                     "reason_output_chunk_skipped",
                     f"Chunk {index+1}/{total} already exists, skipping",
@@ -621,7 +617,7 @@ class ReasonOutputService:
                 continue
 
             # Emit chunk-level start event
-            write_log_event(
+            write_observed_log_event(
                 "reasoning",
                 "reason_output_chunk_started",
                 f"Starting chunk {index+1}/{total} for job {manifest.job_id}",
@@ -663,7 +659,7 @@ class ReasonOutputService:
             )
 
             # Emit chunk completed event
-            write_log_event(
+            write_observed_log_event(
                 "reasoning",
                 "reason_output_chunk_completed",
                 f"Completed chunk {index+1}/{total} for job {manifest.job_id}",
@@ -723,7 +719,7 @@ class ReasonOutputService:
                 updated_at=updated.updated_at,
             ),
         )
-        write_log_event(
+        write_observed_log_event(
             "reasoning",
             "reason_output_composed",
             f"Composed reason output job {manifest.job_id} for thread {thread.id}",
@@ -738,7 +734,7 @@ class ReasonOutputService:
         )
 
         # Generate PDF with timeout — combined.md is already written.
-        write_log_event(
+        write_observed_log_event(
             "reasoning",
             "reason_output_pdf_started",
             f"Generating PDF for {paths.combined.name}",
@@ -811,7 +807,7 @@ class ReasonOutputService:
                 timeout=120,
             )
         except subprocess.TimeoutExpired:
-            write_log_event(
+            write_observed_log_event(
                 "reasoning",
                 "reason_output_pdf_timeout",
                 f"PDF generation timed out for {paths.combined.name}",
@@ -822,7 +818,7 @@ class ReasonOutputService:
             )
             return None
         except subprocess.CalledProcessError as exc:
-            write_log_event(
+            write_observed_log_event(
                 "reasoning",
                 "reason_output_pdf_failed",
                 f"Failed to generate PDF for {paths.combined.name}",
@@ -834,7 +830,7 @@ class ReasonOutputService:
             )
             return None
         if paths.pdf.is_file():
-            write_log_event(
+            write_observed_log_event(
                 "reasoning",
                 "reason_output_pdf_created",
                 f"Generated PDF for {paths.combined.name}",

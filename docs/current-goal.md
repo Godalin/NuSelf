@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Provide one typed best-effort log projection API and migrate reflection
-scheduling so auxiliary evidence cannot change scheduler decisions.
+Migrate Reason lifecycle/output/proposal audits to the shared observed log API
+without weakening authoritative delivery or tool-middleware boundaries.
 
 ## Active Branch
 
@@ -14,40 +14,41 @@ scheduling so auxiliary evidence cannot change scheduler decisions.
 
 ## Ordered Work
 
-1. Inventory shared log fields and failure-diagnostic metadata.
-2. Specify `write_observed_log_event(...)` as the auxiliary projection API.
-3. Replace chat-local wrappers with the shared API.
-4. Migrate every direct reflection-scheduler projection.
-5. Verify uncertain writes cannot change reflection outcomes.
+1. Classify reason, notification, and tool log effects by authority.
+2. Preserve authoritative log-only delivery and middleware-owned callbacks.
+3. Migrate reason scheduler, output, and proposal lifecycle audits.
+4. Remove redundant reason-output lambda wrappers.
+5. Verify committed/planned/composed results survive audit failure.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Authoritative callers retain direct `write_log_event(...)`.
-- The observed API never retries its original event.
-- A diagnostic uses the same component with stable failure identity and
-  `audit_event` metadata.
+- `LogOnlyNotificationAdapter.send(...)` remains authoritative because its log
+  write is the configured delivery effect.
+- Tool runtime callbacks remain direct because shared middleware owns their
+  failure reporter and primary-outcome isolation.
+- Durable manifests, chunks, progress, queues, and Reason domain mutations
+  continue to propagate failures.
 
 ## Completion Evidence
 
-- `write_observed_log_event(...)` mirrors all typed log/correlation fields,
-  returns `LogEvent | None`, and delegates failure to the non-recursive shared
-  observability boundary without retrying the original event.
-- Failure diagnostics use `audit_projection_failed`, retain caller-supplied
-  diagnostic context, and always add the canonical `audit_event`.
-- Chat adapters and the REPL retry marker now use the shared API without local
-  lambda wrappers.
-- Every reflection scheduler projection now uses the shared API; an unavailable
-  audit store cannot change a successfully persisted reflection result.
-- Focused observability, reflection, CLI, chat, and REPL tests: `383 passed`.
-- `.venv/bin/pytest -q`: `1560 passed`.
+- Reason scheduler completion, output plan/enqueue/chunk/compose/PDF lifecycle,
+  and proposal records now use `write_observed_log_event(...)`.
+- A missing audit store cannot block an approved proposal from creating its
+  thread or change a persisted scheduler step and cooldown.
+- Full output planning/composition remains complete with manifests, progress,
+  chunks, combined Markdown, and PDF when every lifecycle audit is unavailable.
+- `LogOnlyNotificationAdapter` remains direct and authoritative; middleware
+  tool-log callbacks remain direct with their existing shared failure reporter.
+- Focused reason, export recovery, agent, and subagent tests: `122 passed`.
+- `.venv/bin/pytest -q`: `1561 passed` with no warnings.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `910a64d`.
+`dev/v0.3.x` is published through `d72f49f`.
 
 ## Next Review Batch
 
-Migrate remaining direct reason, notification, and tool projections.
+Audit middleware-owned tool-log callbacks and failure reporters for duplication.

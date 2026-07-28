@@ -97,9 +97,16 @@ def test_chunk_failure_log_cannot_mask_runner_exception(
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
+    def drop_lifecycle_audit(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.reason.output.write_observed_log_event",
+        drop_lifecycle_audit,
     )
 
     with pytest.warns(

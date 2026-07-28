@@ -113,7 +113,17 @@ def test_run_once_never_advances_corrupt_cooldown_record(
         repository.get_thread(thread.id)
 
 
-def test_run_once_advances_eligible_thread(tmp_path: Path) -> None:
+def test_run_once_advances_eligible_thread_when_audit_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def drop_audit(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+
+    monkeypatch.setattr(
+        "nuself.reason.scheduler.write_observed_log_event",
+        drop_audit,
+    )
     service = _reason_service(repository=ReasonRepository(tmp_path))
     thread = service.start_thread("Test advance")
 
