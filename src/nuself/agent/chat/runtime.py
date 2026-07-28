@@ -49,6 +49,10 @@ from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.output import SectionPlanner
 from nuself.runtime.context import runtime_context
+from nuself.runtime.event_payloads import (
+    RuntimeLogEventPayload,
+    RuntimeLogLevel,
+)
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.jobs import JobSink
 from nuself.runtime.observability import (
@@ -275,27 +279,24 @@ class ConversationGraphRuntime:
         event: str,
         message: str,
         status: str,
-        level: str = "info",
+        level: RuntimeLogLevel = "info",
         duration_ms: int | None = None,
         error: str | None = None,
         metadata: dict[str, object] | None = None,
     ) -> None:
-        payload: dict[str, object] = {
-            "message": message,
-            "status": status,
-            "level": level,
-        }
-        if duration_ms is not None:
-            payload["duration_ms"] = duration_ms
-        if error is not None:
-            payload["error"] = error
-        if metadata is not None:
-            payload["metadata"] = metadata
+        payload = RuntimeLogEventPayload(
+            message=message,
+            level=level,
+            status=status,
+            duration_ms=duration_ms,
+            error=error,
+            metadata=metadata,
+        )
         publish_observed_event(
             self._event_publisher,
             name=event,
             producer="chat",
-            payload=payload,
+            payload=payload.to_mapping(),
             project_root=self._project_root,
             failure_component="chat",
             failure_event="turn_event_delivery_failed",

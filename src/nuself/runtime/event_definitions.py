@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, field
 from threading import RLock
+
+from nuself.runtime.event_payloads import (
+    validate_runtime_log_event_payload,
+)
+
+EventPayloadValidator = Callable[[Mapping[str, object]], None]
 
 
 class DuplicateEventDefinitionError(ValueError):
@@ -26,10 +32,19 @@ class RuntimeEventDefinition:
     producer: str
     name: str
     description: str
+    payload_validator: EventPayloadValidator | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
 
     def __post_init__(self) -> None:
         if not self.producer or not self.name or not self.description:
             raise ValueError("event definition fields must not be empty")
+
+    def validate_payload(self, payload: Mapping[str, object]) -> None:
+        if self.payload_validator is not None:
+            self.payload_validator(payload)
 
 
 class EventDefinitionRegistry:
@@ -82,41 +97,49 @@ CORE_EVENT_DEFINITIONS: tuple[RuntimeEventDefinition, ...] = (
         producer="daemon",
         name="worker.started",
         description="A daemon worker entered its run loop.",
+        payload_validator=validate_runtime_log_event_payload,
     ),
     RuntimeEventDefinition(
         producer="daemon",
         name="worker.stopped",
         description="A daemon worker exited its run loop.",
+        payload_validator=validate_runtime_log_event_payload,
     ),
     RuntimeEventDefinition(
         producer="daemon",
         name="worker.failed",
         description="A daemon worker iteration failed.",
+        payload_validator=validate_runtime_log_event_payload,
     ),
     RuntimeEventDefinition(
         producer="chat",
         name="turn.started",
         description="A logical chat turn started.",
+        payload_validator=validate_runtime_log_event_payload,
     ),
     RuntimeEventDefinition(
         producer="chat",
         name="turn.completed",
         description="A logical chat turn completed.",
+        payload_validator=validate_runtime_log_event_payload,
     ),
     RuntimeEventDefinition(
         producer="chat",
         name="turn.failed",
         description="A logical chat turn failed.",
+        payload_validator=validate_runtime_log_event_payload,
     ),
     RuntimeEventDefinition(
         producer="chat",
         name="turn.reused",
         description="A completed logical chat turn was returned idempotently.",
+        payload_validator=validate_runtime_log_event_payload,
     ),
     RuntimeEventDefinition(
         producer="chat",
         name="tool.activity",
         description="An agent tool emitted live activity.",
+        payload_validator=validate_runtime_log_event_payload,
     ),
 )
 

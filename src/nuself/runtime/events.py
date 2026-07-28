@@ -105,12 +105,16 @@ class EventPublisher:
     ) -> RuntimeEnvelope:
         """Create and synchronously publish one immutable event."""
 
-        self._definitions.resolve(producer, name)
+        definition = self._definitions.resolve(producer, name)
+        event_payload: Mapping[str, object] = (
+            {} if payload is None else payload
+        )
+        definition.validate_payload(event_payload)
         event = RuntimeEnvelope(
             kind="event",
             name=name,
             producer=producer,
-            payload=payload or {},
+            payload=event_payload,
         )
         self.publish_envelope(event)
         return event
@@ -120,7 +124,11 @@ class EventPublisher:
 
         if event.kind != "event":
             raise ValueError("event publisher requires an event envelope")
-        self._definitions.resolve(event.producer, event.name)
+        definition = self._definitions.resolve(
+            event.producer,
+            event.name,
+        )
+        definition.validate_payload(event.payload)
         with self._lock:
             subscribers = tuple(self._subscribers.items())
         failures: list[EventDeliveryFailure] = []

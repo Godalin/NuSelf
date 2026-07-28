@@ -123,7 +123,7 @@ def test_observed_event_payload_validation_failure_propagates(
             publisher,
             name="turn.started",
             producer="chat",
-            payload={"invalid": object()},
+            payload={"metadata": {"invalid": object()}},
             project_root=tmp_path,
             failure_component="chat",
             failure_event="turn_event_delivery_failed",

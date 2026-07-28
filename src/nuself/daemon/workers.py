@@ -14,6 +14,10 @@ from nuself.runtime.context import (
     runtime_context,
     use_runtime_context,
 )
+from nuself.runtime.event_payloads import (
+    RuntimeLogEventPayload,
+    RuntimeLogLevel,
+)
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.observability import (
     format_exception_chain,
@@ -265,7 +269,7 @@ class DaemonWorkerSupervisor:
         *,
         event: str,
         message: str,
-        level: str = "info",
+        level: RuntimeLogLevel = "info",
         status: str,
         error: str | None = None,
         metadata: dict[str, object] | None = None,
@@ -276,19 +280,18 @@ class DaemonWorkerSupervisor:
         event_metadata: dict[str, object] = {"worker": name}
         if metadata is not None:
             event_metadata.update(metadata)
-        payload: dict[str, object] = {
-            "message": message,
-            "level": level,
-            "status": status,
-            "metadata": event_metadata,
-        }
-        if error is not None:
-            payload["error"] = error
+        payload = RuntimeLogEventPayload(
+            message=message,
+            level=level,
+            status=status,
+            error=error,
+            metadata=event_metadata,
+        )
         publish_observed_event(
             self._event_publisher,
             name=event,
             producer="daemon",
-            payload=payload,
+            payload=payload.to_mapping(),
             project_root=self._project_root,
             failure_component="daemon",
             failure_event="worker_event_delivery_failed",

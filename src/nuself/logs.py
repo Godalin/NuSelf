@@ -20,6 +20,7 @@ from nuself.runtime.context import (
     current_runtime_context,
 )
 from nuself.runtime.diagnostics import emit_runtime_warning
+from nuself.runtime.event_payloads import RuntimeLogEventPayload
 from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
     RuntimeEnvelope,
@@ -272,26 +273,13 @@ def write_runtime_event(
         envelope.producer,
         envelope.name,
     )
-    payload = envelope.payload
-    level = payload.get("level", "info")
-    if level not in {"debug", "info", "warning", "error"}:
-        raise ValueError("runtime event log level is invalid")
-    message = payload.get("message", envelope.name)
-    if not isinstance(message, str):
-        raise TypeError("runtime event log message must be a string")
-    metadata_value = payload.get("metadata")
-    metadata: Mapping[str, object] | None = None
-    if isinstance(metadata_value, Mapping):
-        metadata = cast(
-            Mapping[str, object],
-            metadata_value,
-        )
+    payload = RuntimeLogEventPayload.from_mapping(envelope.payload)
     event_record = LogEvent(
         time=envelope.created_at,
-        level=cast(LogLevel, level),
+        level=payload.level,
         component=envelope.producer,
         event=envelope.name,
-        message=message,
+        message=payload.message or envelope.name,
         event_id=envelope.message_id,
         schema_version=envelope.schema_version,
         thread_id=envelope.context.thread_id,
@@ -300,11 +288,11 @@ def write_runtime_event(
         job_id=envelope.context.job_id,
         trace_id=envelope.context.trace_id,
         source=envelope.context.source,
-        node=_optional_str(payload.get("node")),
-        duration_ms=_optional_int(payload.get("duration_ms")),
-        status=_optional_str(payload.get("status")),
-        error=_optional_str(payload.get("error")),
-        metadata=metadata,
+        node=payload.node,
+        duration_ms=payload.duration_ms,
+        status=payload.status,
+        error=payload.error,
+        metadata=payload.metadata,
     )
     return _append_log_event(
         event_record,

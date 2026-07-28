@@ -4,13 +4,18 @@ from pathlib import Path
 
 import pytest
 
-from nuself.logs import read_log_events, runtime_event_log_sink
+from nuself.logs import (
+    read_log_events,
+    runtime_event_log_sink,
+    write_runtime_event,
+)
 from nuself.runtime import (
     DuplicateEventDefinitionError,
     EventDefinitionRegistry,
     EventDefinitionRegistrySealedError,
     EventDeliveryError,
     EventPublisher,
+    RuntimeLogEventPayload,
     RuntimeEnvelope,
     RuntimeEventDefinition,
     UnknownEventDefinitionError,
@@ -34,11 +39,11 @@ def test_event_publisher_delivers_matching_subscribers_in_order() -> None:
     event = publisher.publish(
         name="worker.started",
         producer="daemon",
-        payload={"worker": "memory"},
+        payload={"metadata": {"worker": "memory"}},
     )
 
     assert received == ["all:worker.started", "named:worker.started"]
-    assert event.payload == {"worker": "memory"}
+    assert event.payload == {"metadata": {"worker": "memory"}}
 
 
 def test_event_publisher_delivers_independently_then_reports_failures() -> None:
@@ -119,6 +124,84 @@ def test_event_publisher_rejects_unknown_or_wrong_producer() -> None:
         publisher.publish(name="worker.started", producer="chat")
     with pytest.raises(UnknownEventDefinitionError):
         publisher.publish(name="domain.changed", producer="memory")
+
+
+def test_core_event_payload_is_validated_before_subscriber_delivery() -> None:
+    publisher = EventPublisher()
+    received: list[RuntimeEnvelope] = []
+    publisher.subscribe(received.append)
+
+    with pytest.raises(
+        ValueError,
+        match="unknown fields",
+    ):
+        publisher.publish(
+            name="worker.started",
+            producer="daemon",
+            payload={"worker": "memory"},
+        )
+
+    assert received == []
+
+
+def test_existing_core_event_envelope_is_validated_before_delivery() -> None:
+    publisher = EventPublisher()
+    received: list[RuntimeEnvelope] = []
+    publisher.subscribe(received.append)
+    envelope = RuntimeEnvelope(
+        kind="event",
+        name="worker.started",
+        producer="daemon",
+        payload={"worker": "memory"},
+    )
+
+    with pytest.raises(ValueError, match="unknown fields"):
+        publisher.publish_envelope(envelope)
+
+    assert received == []
+
+
+@pytest.mark.parametrize(
+    ("payload", "error_type", "message"),
+    [
+        ({"level": "verbose"}, ValueError, "level is invalid"),
+        ({"status": 1}, TypeError, "status must be a string"),
+        (
+            {"duration_ms": True},
+            TypeError,
+            "duration_ms must be an integer",
+        ),
+        (
+            {"duration_ms": -1},
+            TypeError,
+            "non-negative integer",
+        ),
+        ({"metadata": []}, TypeError, "metadata must be a mapping"),
+    ],
+)
+def test_runtime_log_payload_rejects_invalid_projection_fields(
+    payload: dict[str, object],
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    with pytest.raises(error_type, match=message):
+        RuntimeLogEventPayload.from_mapping(payload)
+
+
+def test_runtime_log_sink_reuses_strict_payload_parser(
+    tmp_path: Path,
+) -> None:
+    envelope = RuntimeEnvelope(
+        kind="event",
+        name="worker.started",
+        producer="daemon",
+        payload={"worker": "memory"},
+    )
+
+    with pytest.raises(ValueError, match="unknown fields"):
+        write_runtime_event(envelope, project_root=tmp_path)
+
+    assert read_log_events(project_root=tmp_path) == []
 
 
 def test_domain_event_definitions_extend_core_registry() -> None:

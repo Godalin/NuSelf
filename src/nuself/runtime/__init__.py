@@ -14,9 +14,14 @@ from nuself.runtime.event_definitions import (
     DuplicateEventDefinitionError,
     EventDefinitionRegistry,
     EventDefinitionRegistrySealedError,
+    EventPayloadValidator,
     RuntimeEventDefinition,
     UnknownEventDefinitionError,
     build_event_definition_registry,
+)
+from nuself.runtime.event_payloads import (
+    RuntimeLogEventPayload,
+    RuntimeLogLevel,
 )
 from nuself.runtime.events import (
     EventDeliveryError,
@@ -57,6 +62,7 @@ __all__ = [
     "DuplicateHandlerError",
     "EventDefinitionRegistry",
     "EventDefinitionRegistrySealedError",
+    "EventPayloadValidator",
     "EventDeliveryError",
     "EventDeliveryFailure",
     "EventPublisher",
@@ -73,6 +79,8 @@ __all__ = [
     "RuntimeContext",
     "RuntimeEnvelope",
     "RuntimeEventDefinition",
+    "RuntimeLogEventPayload",
+    "RuntimeLogLevel",
     "UnknownEventDefinitionError",
     "UnknownHandlerError",
     "WorkerLifecycleSnapshot",

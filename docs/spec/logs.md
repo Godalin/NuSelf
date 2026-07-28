@@ -191,6 +191,17 @@ Event-definition, producer, envelope, and payload validation failures occur
 before delivery and propagate to the producer; they must not be mislabeled or
 suppressed as subscriber failures.
 
+Core runtime events that project into logs use one shared typed payload
+contract. The only fields are `message`, `level`, `node`, `duration_ms`,
+`status`, `error`, and `metadata`; unknown fields are rejected rather than
+silently ignored. Present scalar fields have their exact documented types,
+duration is a non-negative integer, metadata is a mapping, and the complete
+payload remains strict JSON. Core event definitions validate this contract
+before the envelope is created or any subscriber runs. Chat/worker producers
+and `write_runtime_event()` use the same payload type, so producer and sink
+validation cannot drift. Extension event definitions may supply a different
+validator when their payload is not a log projection.
+
 ## Process-Local Observation
 
 `observe_log_events(observer)` adds a synchronous process-local projection for

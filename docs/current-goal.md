@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make observed runtime-event publication degrade subscriber delivery failures
-without hiding producer contract errors or losing event identity.
+Give log-projected runtime events one typed payload contract shared by
+producers, event definitions, and the log sink.
 
 ## Active Branch
 
@@ -14,39 +14,43 @@ without hiding producer contract errors or losing event identity.
 
 ## Ordered Work
 
-1. Audit publisher construction, subscription, publication, and log sinks.
-2. Separate producer contract failures from subscriber delivery failures.
-3. Return the created envelope after partial delivery failure.
-4. Preserve best-effort structured diagnostics for subscriber failures.
-5. Verify invalid definitions and payloads propagate without false diagnostics.
+1. Audit payload construction and sink-side coercion for every core event.
+2. Specify one strict runtime log-projection payload.
+3. Validate core event payloads before envelope creation and subscriber calls.
+4. Migrate chat and daemon worker producers to the typed payload.
+5. Reuse the same parser in the log sink and reject ignored fields.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep synchronous ordered subscriber delivery.
-- Preserve independent delivery to later subscribers after one fails.
-- Do not make lifecycle event projection authoritative over domain work.
+- Keep extension events free to define their own payload validator.
+- Preserve runtime envelope identity and context behavior.
+- Do not turn direct domain audit records into runtime events.
 
 ## Completion Evidence
 
-- `publish_observed_event()` catches only `EventDeliveryError`; unknown
-  definitions, producer mismatches, and invalid payloads propagate.
-- Partial subscriber delivery failure still reports a structured degraded
-  diagnostic and returns the `RuntimeEnvelope` retained by the delivery error.
-- The return contract is now always `RuntimeEnvelope`, so callers cannot
-  misinterpret partial delivery as an event that was never created.
-- Tests cover partial delivery identity, unknown producer propagation, invalid
-  payload propagation, and absence of false delivery diagnostics.
-- Focused runtime-event, observability, daemon-worker, and chat tests:
-  `89 passed`.
-- `.venv/bin/pytest -q`: `1503 passed`.
+- `RuntimeLogEventPayload` is the single typed schema for core event log
+  projections, including exact scalar types, non-negative durations, mapping
+  metadata, and rejection of unknown fields.
+- Every core `RuntimeEventDefinition` validates that schema before
+  `RuntimeEnvelope` creation or subscriber delivery; extension definitions
+  retain an optional custom payload validator.
+- Chat-turn and daemon-worker producers construct the typed payload directly,
+  while `write_runtime_event()` parses the same type instead of independently
+  coercing or dropping fields.
+- Tests prove invalid core payloads and prebuilt envelopes reach no
+  subscribers, invalid projection fields fail precisely, and manually
+  supplied envelopes cannot bypass the strict log sink parser.
+- Focused runtime-event, observability, daemon-worker, chat, and log tests:
+  `120 passed`.
+- `.venv/bin/pytest -q`: `1511 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `83ba87d`.
+`dev/v0.3.x` is published through `e1aa5db`.
 
 ## Next Review Batch
 
-Audit event/log payload schema duplication and projection validation.
+Audit runtime envelope kinds and transport-specific message wrappers.
