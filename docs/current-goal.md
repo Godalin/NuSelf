@@ -51,7 +51,7 @@ Make daemon runtime metadata recovery explicit and ownership-safe.
 
 ## Publication
 
-`dev/v0.3.x` is ready to publish through implementation commit `01f982c`.
+`dev/v0.3.x` is published through implementation commit `01f982c`.
 
 ## Next Review Batch
 
