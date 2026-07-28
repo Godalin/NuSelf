@@ -17,6 +17,7 @@ from nuself.reason.output import (
 )
 from nuself.storage import write_json_atomic
 from nuself.runtime.jobs import JobMessage
+from nuself.runtime.context import runtime_context
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -246,20 +247,32 @@ def test_worker_does_not_compose_corrupt_manifest(
 
     monkeypatch.setattr(ReasonOutputService, "compose_with_runner", compose)
     state = DaemonState(tmp_path)
-    state._export_queue.put(  # pyright: ignore[reportPrivateUsage]
-        JobMessage.create(
-            name="reason.output.export",
-            producer="test",
-            job_id="job_1",
-            resource_id="thread_1",
+    with runtime_context(
+        request_id="request-1",
+        turn_id="turn-1",
+        trace_id="trace-1",
+        source="daemon",
+    ):
+        state._export_queue.put(  # pyright: ignore[reportPrivateUsage]
+            JobMessage.create(
+                name="reason.output.export",
+                producer="test",
+                job_id="job_1",
+                resource_id="thread_1",
+            )
         )
-    )
     state.start_background_export_worker()
     event = _wait_for_event(tmp_path, "export_job_manifest_invalid")
     state.shutdown_requested.set()
     state.stop_background_export_worker()
 
     assert calls == []
+    assert event.request_id == "request-1"
+    assert event.turn_id == "turn-1"
+    assert event.trace_id == "trace-1"
+    assert event.job_id == "job_1"
+    assert event.thread_id == "thread_1"
+    assert event.source == "daemon.worker.export_worker"
     assert event.metadata == {"job_id": "job_1", "thread_id": "thread_1"}
 
 
@@ -307,6 +320,88 @@ def test_worker_reports_invalid_progress_and_continues(
         "thread_id": "thread_1",
     }
     assert "secret progress" not in str(event.to_record())
+
+
+def test_worker_retry_message_inherits_job_correlation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path, progress_path = _job_paths(tmp_path)
+    write_json_atomic(manifest_path, _manifest().to_wire())
+    write_json_atomic(progress_path, _progress().to_wire())
+    captured: list[JobMessage] = []
+
+    def compose(
+        self: ReasonOutputService,
+        thread_id: str,
+        job_id: str,
+        runner: object,
+    ) -> ReasonOutputManifest:
+        raise RuntimeError("compose failed")
+
+    class FakeTimer:
+        def __init__(
+            self,
+            interval: float,
+            function: object,
+            args: tuple[JobMessage, ...],
+        ) -> None:
+            del interval, function
+            captured.extend(args)
+
+        def start(self) -> None:
+            return None
+
+        def cancel(self) -> None:
+            return None
+
+        def is_alive(self) -> bool:
+            return False
+
+    monkeypatch.setattr(ReasonOutputService, "compose_with_runner", compose)
+    monkeypatch.setattr("nuself.daemon.server.threading.Timer", FakeTimer)
+
+    def no_owners(self: PrivateWorkspaceStore) -> list[str]:
+        del self
+        return []
+
+    monkeypatch.setattr(
+        PrivateWorkspaceStore,
+        "list_owners",
+        no_owners,
+    )
+    state = DaemonState(tmp_path)
+    with runtime_context(
+        request_id="request-retry",
+        turn_id="turn-retry",
+        trace_id="trace-retry",
+        source="daemon",
+    ):
+        state._export_queue.put(  # pyright: ignore[reportPrivateUsage]
+            JobMessage.create(
+                name="reason.output.export",
+                producer="test",
+                job_id="job_1",
+                resource_id="thread_1",
+            )
+        )
+
+    state.start_background_export_worker()
+    event = _wait_for_event(tmp_path, "export_job_retry")
+    state.shutdown_requested.set()
+    state.stop_background_export_worker()
+
+    assert event.request_id == "request-retry"
+    assert event.job_id == "job_1"
+    assert event.thread_id == "thread_1"
+    assert len(captured) == 1
+    retry = captured[0]
+    assert retry.envelope.context.request_id == "request-retry"
+    assert retry.envelope.context.turn_id == "turn-retry"
+    assert retry.envelope.context.trace_id == "trace-retry"
+    assert retry.envelope.context.job_id == "job_1"
+    assert retry.envelope.context.thread_id == "thread_1"
+    assert retry.envelope.context.source == "daemon.worker.export_worker"
 
 
 def test_worker_logs_state_persistence_failure_without_retry(

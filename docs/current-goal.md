@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The typed daemon success-response decoding stage is complete; no
+Idle. The reason export RuntimeEnvelope correlation stage is complete; no
 implementation change is currently active.
 
 ## Active Branch
@@ -31,4 +31,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit runtime message/envelope adoption across background jobs and events.
+Audit notification delivery correlation and runtime-envelope adoption.

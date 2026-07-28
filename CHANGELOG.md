@@ -73,6 +73,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   success payloads. Explicit daemon rejections remain application errors,
   while malformed successful responses fail as connection/protocol errors
   instead of being skipped, defaulted, or coerced.
+- Reason export workers now activate each queued job's saved runtime context.
+  Export and retry logs preserve top-level request, turn, trace, job, thread,
+  and worker-source correlation instead of relying only on repeated metadata.
 - Daemon execution now borrows SIGINT/SIGTERM handlers explicitly and restores
   the exact previous process handlers on every exit path. Partial installation
   rolls back already-changed signals, and restoration failures remain

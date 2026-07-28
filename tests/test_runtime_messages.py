@@ -13,6 +13,7 @@ from nuself.runtime import (
     RuntimeEnvelope,
     current_runtime_context,
     runtime_context,
+    use_runtime_context,
 )
 
 
@@ -27,6 +28,29 @@ def test_runtime_context_is_nested_and_resets() -> None:
                 source="daemon",
             )
         assert current_runtime_context().turn_id is None
+
+    assert current_runtime_context() == RuntimeContext()
+
+
+def test_saved_runtime_context_replaces_ambient_and_restores() -> None:
+    saved = RuntimeContext(
+        request_id="saved-request",
+        job_id="saved-job",
+        source="producer",
+    )
+
+    with runtime_context(
+        request_id="ambient-request",
+        thread_id="ambient-thread",
+        source="worker",
+    ):
+        with use_runtime_context(saved):
+            assert current_runtime_context() == saved
+        assert current_runtime_context() == RuntimeContext(
+            request_id="ambient-request",
+            thread_id="ambient-thread",
+            source="worker",
+        )
 
     assert current_runtime_context() == RuntimeContext()
 

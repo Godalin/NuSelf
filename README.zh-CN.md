@@ -319,6 +319,9 @@ thread 或被当成部分 JSON 接受。envelope 字段在收发两端都严格�
 chat、health、activity、ping 和 shutdown 的 typed client operation 会校验完整的
 成功 payload。daemon 明确拒绝与损坏的成功响应保持不同错误类型，损坏的 worker 或
 activity 嵌套记录也不会被静默跳过。
+排队的 reason export 会把不可变 runtime context 带入 worker 执行和重试，因此日志
+能保留顶层 request、turn、trace、job 与 thread 关联，同时用消费它的 worker 标记
+source。
 
 ## 通知
 

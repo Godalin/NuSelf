@@ -9,7 +9,7 @@ import queue
 import socketserver
 import threading
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import cast, override
 
@@ -54,7 +54,7 @@ from nuself.reason.output import (
     ReasonOutputService,
 )
 from nuself.reflection import ReflectionScheduler
-from nuself.runtime.context import runtime_context
+from nuself.runtime.context import runtime_context, use_runtime_context
 from nuself.runtime.jobs import JobMessage
 from nuself.runtime.observability import (
     format_exception_chain,
@@ -697,6 +697,200 @@ class DaemonState:
         def _next_backoff(attempts: int) -> int:
             return min(MAX_BACKOFF, BASE_BACKOFF * (2 ** (attempts - 1)))
 
+        def _process_job(job_message: JobMessage) -> None:
+            if job_message.envelope.name != "reason.output.export":
+                write_log_event(
+                    "daemon",
+                    "export_job_type_ignored",
+                    (
+                        "Ignored unsupported export job type "
+                        f"{job_message.envelope.name}"
+                    ),
+                    project_root=self.project_root,
+                    level="warning",
+                    metadata={
+                        "message_id": job_message.envelope.message_id
+                    },
+                )
+                return
+            thread_id = job_message.resource_id
+            job_id = job_message.job_id
+
+            write_log_event(
+                "daemon",
+                "export_job_dequeued",
+                f"Processing export job {job_id} for thread {thread_id}",
+                project_root=self.project_root,
+                metadata={"job_id": job_id, "thread_id": thread_id},
+            )
+
+            manifest_path = (
+                store.paths(thread_id).artifacts
+                / "export"
+                / "jobs"
+                / job_id
+                / "manifest.json"
+            )
+            try:
+                inspection = _inspect_export_job(
+                    manifest_path,
+                    job_id=job_id,
+                    thread_id=thread_id,
+                )
+            except (
+                OSError,
+                json.JSONDecodeError,
+                ValueError,
+                KeyError,
+            ) as exc:
+                self._record_worker_failure("export_worker", exc)
+                write_log_event(
+                    "daemon",
+                    "export_job_manifest_invalid",
+                    f"Cannot process export job {job_id}: invalid manifest",
+                    project_root=self.project_root,
+                    level="error",
+                    status="error",
+                    error=format_exception_chain(exc),
+                    metadata={
+                        "job_id": job_id,
+                        "thread_id": thread_id,
+                    },
+                )
+                return
+
+            if inspection.terminal:
+                return
+
+            if inspection.progress_error is not None:
+                write_log_event(
+                    "daemon",
+                    "export_job_progress_invalid",
+                    f"Ignoring invalid progress for export job {job_id}",
+                    project_root=self.project_root,
+                    level="warning",
+                    status="degraded",
+                    error=format_exception_chain(
+                        inspection.progress_error
+                    ),
+                    metadata={
+                        "job_id": job_id,
+                        "thread_id": thread_id,
+                    },
+                )
+
+            write_log_event(
+                "daemon",
+                "export_job_composition_started",
+                (
+                    f"Composing {inspection.total_chunks} chunk(s) "
+                    f"for job {job_id}"
+                ),
+                project_root=self.project_root,
+                metadata={
+                    "job_id": job_id,
+                    "thread_id": thread_id,
+                    "chunks": inspection.total_chunks,
+                },
+            )
+
+            try:
+                service.compose_with_runner(
+                    thread_id,
+                    job_id,
+                    _llm_runner,
+                )
+                self._record_worker_success("export_worker")
+            except Exception as exc:
+                self._record_worker_failure("export_worker", exc)
+                try:
+                    failed_manifest = _persist_export_failure(
+                        manifest_path,
+                        exc,
+                        max_attempts=MAX_ATTEMPTS,
+                    )
+                except Exception as state_exc:
+                    write_log_event(
+                        "daemon",
+                        "export_job_state_persist_failed",
+                        (
+                            "Could not persist failure state for export "
+                            f"job {job_id}"
+                        ),
+                        project_root=self.project_root,
+                        level="error",
+                        status="error",
+                        error=format_exception_chain(state_exc),
+                        metadata={
+                            "job_id": job_id,
+                            "thread_id": thread_id,
+                            "operation_error": format_exception_chain(
+                                exc
+                            ),
+                        },
+                    )
+                    return
+
+                attempts = failed_manifest.attempts
+
+                if attempts >= MAX_ATTEMPTS:
+                    write_log_event(
+                        "daemon",
+                        "export_job_failed",
+                        (
+                            f"Export job {job_id} exhausted retries: "
+                            f"{exc!s}"
+                        ),
+                        project_root=self.project_root,
+                        level="error",
+                        status="error",
+                        error=format_exception_chain(exc),
+                        metadata={
+                            "job_id": job_id,
+                            "thread_id": thread_id,
+                            "attempts": attempts,
+                        },
+                    )
+                    return
+
+                backoff = _next_backoff(attempts)
+                write_log_event(
+                    "daemon",
+                    "export_job_retry",
+                    (
+                        f"Export job {job_id} will retry in {backoff}s "
+                        f"(attempt {attempts})"
+                    ),
+                    project_root=self.project_root,
+                    status="retry",
+                    metadata={
+                        "job_id": job_id,
+                        "thread_id": thread_id,
+                        "attempts": attempts,
+                        "next_backoff": backoff,
+                    },
+                )
+                with self._export_timers_lock:
+                    self._export_timers = [
+                        timer
+                        for timer in self._export_timers
+                        if timer.is_alive()
+                    ]
+                    retry_message = JobMessage.create(
+                        name="reason.output.export",
+                        producer="daemon.retry",
+                        job_id=job_id,
+                        resource_id=thread_id,
+                        payload={"attempt": attempts + 1},
+                    )
+                    timer = threading.Timer(
+                        backoff,
+                        self._export_queue.put,
+                        args=(retry_message,),
+                    )
+                    self._export_timers.append(timer)
+                    timer.start()
+
         # --- Startup reconciliation ---
         # Re-enqueue any job whose manifest status is not complete/failed.
         # Also clear stale .lock files from crashed runs.
@@ -776,144 +970,14 @@ class DaemonState:
 
             if self.shutdown_requested.is_set():
                 break
-            if job_message.envelope.name != "reason.output.export":
-                write_log_event(
-                    "daemon",
-                    "export_job_type_ignored",
-                    f"Ignored unsupported export job type {job_message.envelope.name}",
-                    project_root=self.project_root,
-                    level="warning",
-                    metadata={"message_id": job_message.envelope.message_id},
-                )
-                continue
-            thread_id = job_message.resource_id
-            job_id = job_message.job_id
-
-            write_log_event(
-                "daemon",
-                "export_job_dequeued",
-                f"Processing export job {job_id} for thread {thread_id}",
-                project_root=self.project_root,
-                metadata={"job_id": job_id, "thread_id": thread_id},
+            message_context = replace(
+                job_message.envelope.context,
+                thread_id=job_message.resource_id,
+                job_id=job_message.job_id,
+                source="daemon.worker.export_worker",
             )
-
-            manifest_path = store.paths(thread_id).artifacts / "export" / "jobs" / job_id / "manifest.json"
-            try:
-                inspection = _inspect_export_job(
-                    manifest_path,
-                    job_id=job_id,
-                    thread_id=thread_id,
-                )
-            except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
-                self._record_worker_failure("export_worker", exc)
-                write_log_event(
-                    "daemon",
-                    "export_job_manifest_invalid",
-                    f"Cannot process export job {job_id}: invalid manifest",
-                    project_root=self.project_root,
-                    level="error",
-                    status="error",
-                    error=format_exception_chain(exc),
-                    metadata={"job_id": job_id, "thread_id": thread_id},
-                )
-                continue
-
-            if inspection.terminal:
-                continue
-
-            if inspection.progress_error is not None:
-                write_log_event(
-                    "daemon",
-                    "export_job_progress_invalid",
-                    f"Ignoring invalid progress for export job {job_id}",
-                    project_root=self.project_root,
-                    level="warning",
-                    status="degraded",
-                    error=format_exception_chain(inspection.progress_error),
-                    metadata={"job_id": job_id, "thread_id": thread_id},
-                )
-
-            write_log_event(
-                "daemon",
-                "export_job_composition_started",
-                f"Composing {inspection.total_chunks} chunk(s) for job {job_id}",
-                project_root=self.project_root,
-                metadata={
-                    "job_id": job_id,
-                    "thread_id": thread_id,
-                    "chunks": inspection.total_chunks,
-                },
-            )
-
-            try:
-                service.compose_with_runner(thread_id, job_id, _llm_runner)
-                self._record_worker_success("export_worker")
-            except Exception as exc:
-                self._record_worker_failure("export_worker", exc)
-                try:
-                    failed_manifest = _persist_export_failure(
-                        manifest_path,
-                        exc,
-                        max_attempts=MAX_ATTEMPTS,
-                    )
-                except Exception as state_exc:
-                    write_log_event(
-                        "daemon",
-                        "export_job_state_persist_failed",
-                        f"Could not persist failure state for export job {job_id}",
-                        project_root=self.project_root,
-                        level="error",
-                        status="error",
-                        error=format_exception_chain(state_exc),
-                        metadata={
-                            "job_id": job_id,
-                            "thread_id": thread_id,
-                            "operation_error": format_exception_chain(exc),
-                        },
-                    )
-                    continue
-
-                attempts = failed_manifest.attempts
-
-                if attempts >= MAX_ATTEMPTS:
-                    write_log_event(
-                        "daemon",
-                        "export_job_failed",
-                        f"Export job {job_id} exhausted retries: {exc!s}",
-                        project_root=self.project_root,
-                        level="error",
-                        status="error",
-                        error=format_exception_chain(exc),
-                        metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts},
-                    )
-                else:
-                    backoff = _next_backoff(attempts)
-                    write_log_event(
-                        "daemon",
-                        "export_job_retry",
-                        f"Export job {job_id} will retry in {backoff}s (attempt {attempts})",
-                        project_root=self.project_root,
-                        status="retry",
-                        metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts, "next_backoff": backoff},
-                    )
-                    with self._export_timers_lock:
-                        # Drop timers that have already fired so the list cannot
-                        # grow unbounded over a long-lived daemon with many retries.
-                        self._export_timers = [x for x in self._export_timers if x.is_alive()]
-                        retry_message = JobMessage.create(
-                            name="reason.output.export",
-                            producer="daemon.retry",
-                            job_id=job_id,
-                            resource_id=thread_id,
-                            payload={"attempt": attempts + 1},
-                        )
-                        t = threading.Timer(
-                            backoff,
-                            self._export_queue.put,
-                            args=(retry_message,),
-                        )
-                        self._export_timers.append(t)
-                        t.start()
+            with use_runtime_context(message_context):
+                _process_job(job_message)
 
     def stop_background_reason_scheduler(self) -> None:
         self._join_worker("reason_scheduler")

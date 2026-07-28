@@ -98,6 +98,21 @@ def current_runtime_context() -> RuntimeContext:
 
 
 @contextmanager
+def use_runtime_context(
+    context: RuntimeContext,
+) -> Generator[RuntimeContext, None, None]:
+    """Temporarily replace the ambient context with one saved context."""
+
+    token: Token[RuntimeContext | None] = _CURRENT_RUNTIME_CONTEXT.set(
+        context
+    )
+    try:
+        yield context
+    finally:
+        _CURRENT_RUNTIME_CONTEXT.reset(token)
+
+
+@contextmanager
 def runtime_context(
     *,
     thread_id: str | None = None,

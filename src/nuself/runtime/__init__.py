@@ -4,6 +4,7 @@ from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
     runtime_context,
+    use_runtime_context,
 )
 from nuself.runtime.event_definitions import (
     CORE_EVENT_DEFINITIONS,
@@ -69,4 +70,5 @@ __all__ = [
     "build_event_definition_registry",
     "current_runtime_context",
     "runtime_context",
+    "use_runtime_context",
 ]

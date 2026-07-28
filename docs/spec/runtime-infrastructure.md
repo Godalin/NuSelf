@@ -210,6 +210,22 @@ and sequences remain immutable inside the envelope.
 Correlation context is inherited through one neutral runtime context. Logging
 may project that context, but logging must not own it.
 
+At an asynchronous message-consumption boundary, the consumer installs the
+message's saved `RuntimeContext` as an exact replacement for the worker's
+ambient context, then applies consumer-owned fields such as its worker
+`source`. It must not merely merge into whatever context a reused worker thread
+retained from a previous message. The prior worker context is restored after
+each message on success, rejection, or failure.
+
+Reason export `JobMessage` consumption additionally projects its durable
+`resource_id` as `thread_id`. Initial queued messages retain the originating
+request, turn, and trace fields. Retry messages created inside that activated
+scope inherit the same chain and job id. Startup reconciliation messages have
+no invented request identity but still carry their durable job/thread identity.
+All logs emitted while inspecting, composing, failing, or retrying that job
+therefore receive top-level correlation fields without relying on duplicated
+metadata.
+
 ## Event Delivery
 
 Ephemeral events use an in-process publisher/subscriber interface:

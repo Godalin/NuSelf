@@ -336,6 +336,9 @@ Typed client operations validate complete success payloads for chat, health,
 activity, ping, and shutdown. A daemon rejection stays distinct from a
 malformed successful response, and malformed nested worker or activity records
 are never silently skipped.
+Queued reason exports carry their immutable runtime context into worker
+execution and retries, so logs retain top-level request, turn, trace, job, and
+thread correlation while identifying the consuming worker as their source.
 
 ## Notifications
 
