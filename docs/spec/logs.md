@@ -336,6 +336,13 @@ Structured component logs use `LogRetentionPolicy`. The production default is
   once no operation references it, the registry may reclaim both the lock and
   its path key. A long-lived process therefore does not retain every project
   path it has ever logged to.
+- Opening the sidecar and acquiring its exclusive lock are authoritative
+  prerequisites and their failures propagate before append. Unlocking or
+  closing that sidecar occurs after the append outcome is known and is
+  secondary: either failure emits a separate non-raising terminal warning but
+  cannot turn a persisted event into a failed write or replace an append
+  exception. The warning contains only component, cleanup operation, and
+  exception type; it excludes event content, paths, and exception messages.
 - Rotation is bounded-retention maintenance, not a prerequisite for event
   persistence. An `OSError` while deleting or replacing rotation files does
   not reject the current event: the writer appends it to whichever active file

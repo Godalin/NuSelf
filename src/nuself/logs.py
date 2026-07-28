@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
 from threading import Lock, RLock
-from typing import BinaryIO, Literal, cast
+from typing import IO, BinaryIO, Literal, cast
 from uuid import uuid4
 from weakref import WeakValueDictionary
 
@@ -472,24 +472,23 @@ def _append_log_event(
     )
     encoded_size = len(line.encode("utf-8"))
     lock_path = path.with_name(f"{path.name}.lock")
-    with _log_write_lock(path), lock_path.open("a", encoding="utf-8") as lock_file:
-        flock(lock_file.fileno(), LOCK_EX)
+    with _log_write_lock(path), _locked_log_sidecar(
+        lock_path,
+        component=event_record.component,
+    ):
         try:
-            try:
-                _rotate_log_if_needed(
-                    path,
-                    incoming_bytes=encoded_size,
-                    policy=retention_policy,
-                )
-            except OSError as exc:
-                _report_log_rotation_failure(event_record.component, exc)
-            _append_encoded_log_line(
+            _rotate_log_if_needed(
                 path,
-                line.encode("utf-8"),
-                component=event_record.component,
+                incoming_bytes=encoded_size,
+                policy=retention_policy,
             )
-        finally:
-            flock(lock_file.fileno(), LOCK_UN)
+        except OSError as exc:
+            _report_log_rotation_failure(event_record.component, exc)
+        _append_encoded_log_line(
+            path,
+            line.encode("utf-8"),
+            component=event_record.component,
+        )
     for observer in _CURRENT_LOG_EVENT_OBSERVERS.get():
         try:
             observer(event_record)
@@ -501,6 +500,65 @@ def _append_log_event(
             )
             continue
     return event_record
+
+
+@contextmanager
+def _locked_log_sidecar(
+    lock_path: Path,
+    *,
+    component: LogComponent,
+) -> Generator[None, None, None]:
+    lock_file = lock_path.open("a", encoding="utf-8")
+    locked = False
+    try:
+        flock(lock_file.fileno(), LOCK_EX)
+        locked = True
+        yield
+    finally:
+        _cleanup_log_sidecar(
+            lock_file,
+            locked=locked,
+            component=component,
+        )
+
+
+def _cleanup_log_sidecar(
+    lock_file: IO[str],
+    *,
+    locked: bool,
+    component: LogComponent,
+) -> None:
+    if locked:
+        try:
+            flock(lock_file.fileno(), LOCK_UN)
+        except OSError as exc:
+            _report_log_lock_cleanup_failure(
+                component,
+                operation="unlock",
+                exc=exc,
+            )
+    try:
+        lock_file.close()
+    except OSError as exc:
+        _report_log_lock_cleanup_failure(
+            component,
+            operation="close",
+            exc=exc,
+        )
+
+
+def _report_log_lock_cleanup_failure(
+    component: LogComponent,
+    *,
+    operation: Literal["unlock", "close"],
+    exc: OSError,
+) -> None:
+    emit_runtime_warning(
+        "logs/lock_cleanup_failed: "
+        f"component={component} operation={operation} "
+        f"error_type={type(exc).__name__}",
+        stacklevel=4,
+    )
 
 
 def _append_encoded_log_line(

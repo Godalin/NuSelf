@@ -7,7 +7,7 @@ import warnings
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import BinaryIO, cast
+from typing import IO, BinaryIO, cast
 
 import pytest
 
@@ -718,6 +718,119 @@ def test_sidecar_lock_file_persists_after_local_lock_reclamation(
     assert path.absolute() not in (
         logs._LOG_WRITE_LOCKS  # pyright: ignore[reportPrivateUsage]
     )
+
+
+def test_log_unlock_failure_preserves_success_and_observer_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed: list[LogEvent] = []
+    flock = logs.flock
+    private_path = tmp_path / "private-unlock-target"
+
+    def fail_unlock(file_descriptor: int, operation: int) -> None:
+        if operation == logs.LOCK_UN:
+            raise PermissionError(13, "private unlock failure", private_path)
+        flock(file_descriptor, operation)
+
+    monkeypatch.setattr(logs, "flock", fail_unlock)
+
+    with pytest.warns(RuntimeWarning) as captured:
+        with observe_log_events(observed.append):
+            written = write_log_event(
+                "chat",
+                "turn_completed",
+                "persisted",
+                project_root=tmp_path,
+            )
+
+    assert observed == [written]
+    assert read_log_events(project_root=tmp_path, component="chat") == [written]
+    assert len(captured) == 1
+    warning = str(captured[0].message)
+    assert "logs/lock_cleanup_failed" in warning
+    assert "component=chat" in warning
+    assert "operation=unlock" in warning
+    assert "error_type=PermissionError" in warning
+    assert "private unlock failure" not in warning
+    assert str(private_path) not in warning
+
+
+def test_log_lock_acquisition_failure_prevents_append_and_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed: list[LogEvent] = []
+
+    def fail_acquire(_file_descriptor: int, operation: int) -> None:
+        assert operation == logs.LOCK_EX
+        raise PermissionError("lock acquisition failed")
+
+    monkeypatch.setattr(logs, "flock", fail_acquire)
+
+    with observe_log_events(observed.append):
+        with pytest.raises(PermissionError, match="lock acquisition failed"):
+            write_log_event(
+                "chat",
+                "turn_completed",
+                "not persisted",
+                project_root=tmp_path,
+            )
+
+    assert observed == []
+    assert not log_path("chat", project_root=tmp_path).exists()
+
+
+def test_log_unlock_failure_does_not_replace_append_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    flock = logs.flock
+
+    def fail_unlock(file_descriptor: int, operation: int) -> None:
+        if operation == logs.LOCK_UN:
+            raise PermissionError("secondary unlock failure")
+        flock(file_descriptor, operation)
+
+    def fail_append(_log_file: BinaryIO, _encoded_line: bytes) -> None:
+        raise OSError("primary append failure")
+
+    monkeypatch.setattr(logs, "flock", fail_unlock)
+    monkeypatch.setattr(logs, "_write_log_bytes", fail_append)
+
+    with pytest.warns(RuntimeWarning, match="operation=unlock"):
+        with pytest.raises(OSError, match="primary append failure"):
+            write_log_event(
+                "chat",
+                "turn_completed",
+                "failed",
+                project_root=tmp_path,
+            )
+
+
+def test_log_sidecar_close_failure_is_non_raising_and_safe(
+    tmp_path: Path,
+) -> None:
+    private_path = tmp_path / "private-close-target"
+
+    class FailingClose:
+        def close(self) -> None:
+            raise PermissionError(13, "private close failure", private_path)
+
+    with pytest.warns(RuntimeWarning) as captured:
+        logs._cleanup_log_sidecar(  # pyright: ignore[reportPrivateUsage]
+            cast(IO[str], FailingClose()),
+            locked=False,
+            component="chat",
+        )
+
+    assert len(captured) == 1
+    warning = str(captured[0].message)
+    assert "logs/lock_cleanup_failed" in warning
+    assert "operation=close" in warning
+    assert "error_type=PermissionError" in warning
+    assert "private close failure" not in warning
+    assert str(private_path) not in warning
 
 
 def test_incremental_cursor_waits_for_complete_lines(tmp_path: Path) -> None:
