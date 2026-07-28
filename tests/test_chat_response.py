@@ -26,12 +26,12 @@ from nuself.llm import (
 def test_structured_output_state_is_authoritative() -> None:
     result = _structured_output_from_state(
         {
-            "structured_response": {
-                "answer": "Structured answer",
-                "evidence_references": ["memory-1"],
-                "confidence": 0.8,
-                "epistemic_status": "grounded",
-            },
+            "structured_response": ChatStructuredOutput(
+                answer="Structured answer",
+                evidence_references=["memory-1"],
+                confidence=0.8,
+                epistemic_status="grounded",
+            ),
             "messages": [AIMessage(content="Different message")],
         }
     )
@@ -41,11 +41,11 @@ def test_structured_output_state_is_authoritative() -> None:
 
 
 def test_invalid_structured_output_does_not_fall_back_to_message() -> None:
-    with pytest.raises(ValueError, match="answer"):
+    with pytest.raises(ValueError, match="invalid structured_response: dict"):
         _structured_output_from_state(
             {
                 "structured_response": {
-                    "evidence_references": [],
+                    "answer": "Dictionary compatibility",
                 },
                 "messages": [AIMessage(content="Plausible fallback")],
             }
@@ -109,21 +109,16 @@ def test_plain_fallback_rejects_visible_tool_call(
         _plain_fallback_output("minimax:tool_call private")
 
 
-@pytest.mark.parametrize(
-    "state",
-    [
-        {
-            "structured_response": {
-                "answer": "minimax:tool_call fake",
-            },
-        },
-    ],
-)
 def test_tool_protocol_text_is_rejected_in_every_state_path(
-    state: dict[str, object],
 ) -> None:
     with pytest.raises(ValueError, match="tool call text"):
-        _structured_output_from_state(state)
+        _structured_output_from_state(
+            {
+                "structured_response": ChatStructuredOutput(
+                    answer="minimax:tool_call fake"
+                ),
+            }
+        )
 
 
 def test_endpoint_state_failure_retries_then_uses_local_fallback(

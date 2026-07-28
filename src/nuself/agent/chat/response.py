@@ -256,17 +256,13 @@ def _structured_output_from_state(
     state = cast(dict[str, object], result)
     if "structured_response" in state:
         structured = state["structured_response"]
-        if isinstance(structured, ChatStructuredOutput):
-            parsed = structured
-        elif isinstance(structured, dict):
-            parsed = ChatStructuredOutput.model_validate(structured)
-        else:
+        if not isinstance(structured, ChatStructuredOutput):
             raise ValueError(
                 "LangChain agent returned invalid structured_response: "
                 f"{type(structured).__name__}"
             )
-        _reject_visible_tool_call(parsed)
-        return parsed
+        _reject_visible_tool_call(structured)
+        return structured
 
     raise ValueError("LangChain agent state is missing structured_response")
 

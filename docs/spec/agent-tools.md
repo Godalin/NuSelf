@@ -100,11 +100,11 @@ create_agent(model, tools=tools, response_format=...) → LangChain-managed tool
 ```
 
 When agent state contains `structured_response`, that field is authoritative:
-NuSelf validates it as `ChatStructuredOutput` and rejects malformed values or
-visible tool-protocol text. It must not silently reinterpret the final ordinary
-message after an authoritative structured value fails validation; the endpoint
-retry/failover boundary handles that failure. Reading the final message remains
-a compatibility path only when `structured_response` is absent.
+NuSelf requires an actual `ChatStructuredOutput` instance and rejects
+dictionary values, malformed values, or visible tool-protocol text. It must
+not silently reinterpret the final ordinary message after an authoritative
+structured value fails validation; the endpoint retry/failover boundary
+handles that failure.
 
 NuSelf must not ask the model to print a private tool protocol in the assistant message body. In particular:
 
@@ -148,7 +148,8 @@ Persona/selves work is not a fixed pre-response stage; it is invoked through the
 LangChain agent execution must return `structured_response` produced through
 framework-native `ToolStrategy(ChatStructuredOutput)`. Missing or invalid
 structured state is a protocol failure; message content is never reparsed as a
-second response protocol.
+second response protocol, and dictionary state is never revalidated into the
+response model.
 
 When no configured LangChain model exists, the deterministic local
 `ChatLLM` fallback may produce one plain answer. The runtime wraps that text in

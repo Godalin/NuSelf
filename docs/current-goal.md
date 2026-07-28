@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. LangChain typed structured output is now the only reason
-step-generation boundary; the manual dictionary response protocol is deleted.
+Idle. Chat's LangChain `structured_response` state now requires an actual
+`ChatStructuredOutput` instance; dictionary revalidation is deleted.
 
 ## Active Branch
 
@@ -23,18 +23,15 @@ code.
 
 ## Completion Evidence
 
-- `ReasonStepOutput` is a strict Pydantic model with domain enums, bounded
-  confidence, forbidden extra fields, and typed nested tracked items.
-- The advancer accepts only a framework-returned `ReasonStepOutput` instance
-  and converts it directly to `ReasoningStep`.
-- `step_from_data`, evidence filtering, tracked-item filtering, confidence
-  clamping, terminal fallback, and arbitrary `model_dump` acceptance are
-  deleted.
-- Tests inject typed framework responses and explicitly prove dictionary
-  responses are rejected.
-- Persisted `TrackedItem` requires a non-empty string label and rejects
-  malformed present fields while retaining documented omission defaults.
-- Focused reason tests: 117 passed.
+- LangChain state decoding accepts only `ChatStructuredOutput` for
+  `structured_response`.
+- Dictionary values are rejected rather than passed through a second Pydantic
+  validation path.
+- Typed structured state remains authoritative over ordinary message content,
+  and visible tool-call protocol text is still rejected.
+- The separate no-model plain-text fallback and typed
+  `ConversationResponseService` seam are unchanged.
+- Focused chat/runtime/daemon tests: 110 passed.
 - Final full tests: 1420 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
@@ -45,5 +42,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit other agent subsystems for framework structured-output results that are
-reparsed through manual dictionary protocols.
+Audit remaining Pydantic structured-output models for coercive/default-heavy
+configuration that weakens their framework validation.
