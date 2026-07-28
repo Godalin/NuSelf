@@ -24,6 +24,10 @@ Process-local log observers are isolated from business operations and from one
 another. If both an observer and its structured failure record fail, NuSelf
 emits a terminal runtime warning rather than silently losing the diagnostic.
 
+Persona graph LLM failures retain deterministic contribution, synthesis, and
+activation fallbacks while recording structured degradation; unavailable
+diagnostics cannot interrupt endpoint failover.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).

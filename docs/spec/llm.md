@@ -249,6 +249,11 @@ The score is stored in `PersonaContribution.confidence`. `_heuristic_score()` is
 
 Fallback: note = "{persona_id} considered the topic.", score = 0.5.
 
+For the standard persona graph, structured endpoint, contribution completion,
+synthesis completion, and activation failures are recorded through shared
+best-effort observability. These diagnostics never replace the fallback or
+prevent another configured structured endpoint from being tried.
+
 #### 3. Moderator Judgment (`_moderator_judgment`)
 
 Replaces both `_round_has_consensus()` and `_maybe_spawn_emergent_persona()`. After each scoring round, the moderator LLM receives the current scores and discussion trace, then returns:

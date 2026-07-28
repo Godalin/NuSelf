@@ -22,6 +22,9 @@ LangGraph 现已支撑 conversation runtime。聊天 agent 可在对话中调用
 进程内日志 observer 彼此隔离，也不会影响业务操作；如果 observer 和对应的
 结构化故障记录同时失败，NuSelf 会发出最终运行时警告，不再静默丢失诊断。
 
+Persona graph 的 LLM 故障会保留确定性的贡献、汇总和激活 fallback，同时记录
+结构化降级信息；诊断存储不可用也不会中断 endpoint failover。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

@@ -5,8 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Process-local log observer failures remain visible through a shared
-terminal runtime warning when their structured diagnostic cannot be persisted.
+Idle. Every LLM degradation in the standard persona graph is observable, and
+diagnostic persistence failure cannot stop endpoint failover or replace the
+existing deterministic contribution, synthesis, or activation fallback.
 
 ## Active Branch
 
@@ -23,18 +24,18 @@ code.
 
 ## Completion Evidence
 
-- A failed observer still cannot undo its already-persisted audit record,
-  suppress later observers, or fail the business operation.
-- If `daemon/log_observer_failed` cannot be persisted, one `RuntimeWarning`
-  reports both the original observer error and the structured-log error.
-- Observer delivery is suspended while reporting the failure, so the terminal
-  warning path cannot recursively invoke observers.
-- Log observers, shared observability, and agent tool-log middleware use one
-  terminal warning primitive that suppresses warning-policy escalation rather
-  than replacing the primary result or exception.
-- No observer or diagnostic retry was introduced.
-- Focused affected-boundary tests: 74 passed.
-- Final full tests: 1290 passed.
+- Structured endpoint failures use `persona_structured_failed`; diagnostic
+  failure emits a terminal warning and the next endpoint is still attempted.
+- Contribution and synthesis completion failures use
+  `persona_completion_failed` with stage and persona identity metadata before
+  returning their unchanged deterministic fallbacks.
+- Activation failure uses `persona_activation_failed` before returning its
+  unchanged `llm_fallback` result.
+- Diagnostic storage failure cannot replace contribution fallback output.
+- Prompts, schemas, confidence values, fallback text, activation decisions,
+  and retry behavior are unchanged.
+- Focused persona graph, discussion, and observability tests: 50 passed.
+- Final full tests: 1294 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -45,4 +46,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-the log-observer terminal fallback is explicit.
+the standard persona graph has no silent LLM degradation.

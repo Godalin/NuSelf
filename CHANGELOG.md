@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Standard persona graph LLM degradation is now observable across structured
+  endpoint failover, contribution generation, synthesis, and activation.
+  Diagnostic storage failure cannot stop failover or replace the existing
+  deterministic fallback result.
 - Process-local log observer failures now fall back to a contextual
   `RuntimeWarning` when their structured `log_observer_failed` diagnostic
   cannot be persisted, instead of becoming completely invisible. Observer

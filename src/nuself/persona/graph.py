@@ -17,7 +17,6 @@ from nuself.llm import (
     is_endpoint_availability_error,
     record_llm_endpoint_success,
 )
-
 from nuself.persona.definition import (
     BUILTIN_PERSONAS,
     PersonaActivation,
@@ -32,6 +31,7 @@ from nuself.persona.definition import (
     PersonaSynthesizerNode,
     PersonaTurnState,
 )
+from nuself.runtime.observability import report_observed_failure
 
 StructuredPersonaT = TypeVar("StructuredPersonaT", bound=BaseModel)
 
@@ -108,8 +108,6 @@ def _complete_persona_structured(
 ) -> StructuredPersonaT | None:
     if not endpoints:
         return None
-    from nuself.logs import write_log_event
-
     converted = _to_langchain_messages(messages)
     for position, endpoint in enumerate(endpoints):
         try:
@@ -126,15 +124,22 @@ def _complete_persona_structured(
             # Fail visible: log every endpoint failure (including schema/validation
             # errors) instead of silently returning None, and fail over to the next
             # endpoint on any error, matching the chat runtime's failover policy.
-            write_log_event(
-                "persona",
-                "persona_structured_failed",
-                f"structured persona output failed on endpoint {endpoint.index} ({schema.__name__})",
+            report_observed_failure(
+                exc,
+                component="persona",
+                event="persona_structured_failed",
+                message=(
+                    "structured persona output failed on endpoint "
+                    f"{endpoint.index} ({schema.__name__})"
+                ),
                 project_root=project_root,
                 level="warning",
                 status="error",
-                error=str(exc),
-                metadata={"endpoint": endpoint.index, "availability": is_endpoint_availability_error(str(exc))},
+                metadata={
+                    "endpoint": endpoint.index,
+                    "availability": is_endpoint_availability_error(str(exc)),
+                    "schema": schema.__name__,
+                },
             )
             if position + 1 < len(endpoints):
                 continue
@@ -210,7 +215,18 @@ class LLMBackedPersonaNode:
             )
         try:
             response = self._llm.complete(messages).strip()
-        except Exception:
+        except Exception as exc:
+            report_observed_failure(
+                exc,
+                component="persona",
+                event="persona_completion_failed",
+                message=f"persona contribution fallback used for {persona.id}",
+                project_root=self._project_root,
+                metadata={
+                    "stage": "contribution",
+                    "persona_id": persona.id,
+                },
+            )
             response = f"{persona.id} considered the topic."
 
         return PersonaContribution(persona_id=persona.id, notes=(response,), confidence=0.5)
@@ -267,7 +283,15 @@ class LLMBackedSynthesizerNode:
             )
         try:
             summary = self._llm.complete(messages).strip()
-        except Exception:
+        except Exception as exc:
+            report_observed_failure(
+                exc,
+                component="persona",
+                event="persona_completion_failed",
+                message="persona synthesis fallback used",
+                project_root=self._project_root,
+                metadata={"stage": "synthesis"},
+            )
             summary = " | ".join(lines)
         return PersonaSynthesis(
             summary=summary,
@@ -297,12 +321,20 @@ class LLMBackedActivationPolicy:
             return PersonaActivation(trigger="no_llm")
         try:
             return self._decide_with_llm(persona_input)
-        except (RuntimeError, ValueError, KeyError) as e:
+        except (RuntimeError, ValueError, KeyError) as exc:
+            report_observed_failure(
+                exc,
+                component="persona",
+                event="persona_activation_failed",
+                message="persona activation fallback used",
+                project_root=self._project_root,
+                metadata={"stage": "activation"},
+            )
             return PersonaActivation(
                 trigger="llm_fallback",
                 selected_personas=(),
                 should_escalate=False,
-                escalation_reason=f"fallback: {e}",
+                escalation_reason=f"fallback: {exc}",
             )
 
     def _decide_with_llm(self, persona_input: PersonaInput) -> PersonaActivation:

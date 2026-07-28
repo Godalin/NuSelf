@@ -120,6 +120,15 @@ class PersonaSynthesizerNode(Protocol):
 - **LLMBackedScoringPersonaNode** (discussion only): Returns both a note and a 0–1
   support score. Used by `ProactivePersonaDiscussion`, not by the standard graph.
 
+Every failed standard-graph LLM path is observable. Structured endpoint
+failures write `persona_structured_failed` and continue to the next endpoint
+or existing `ChatLLM` fallback. A failed contribution or synthesis
+`ChatLLM.complete()` writes `persona_completion_failed` with its stage and,
+for contributions, persona id before returning the existing deterministic
+fallback. Diagnostic persistence is secondary and cannot replace fallback
+output or stop endpoint continuation; terminal warning behavior follows the
+shared runtime observability contract.
+
 ### Activation Policy
 
 `LLMBackedActivationPolicy` decides whether persona work should run for a turn:
@@ -134,6 +143,10 @@ The policy:
 3. Falls back to prompted JSON via `ChatLLM.complete()`, validated by the same
    strict `PersonaActivationOutput` schema
 4. On any error, returns safe fallback (`trigger="llm_fallback"`, no activation)
+
+Activation errors also write `persona_activation_failed` before returning that
+safe fallback. Diagnostic failure cannot replace or alter the activation
+result.
 
 `PersonaActivationOutput` is the sole activation parse boundary. JSON booleans
 must be booleans, persona IDs must be strings, and all declared field types must

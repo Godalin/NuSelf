@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from typing import Any, cast
 
+import pytest
+
+from nuself.llm import LangChainLLMEndpoint, LLMSettings
+from nuself.logs import read_log_events
 from nuself.persona import (
     LLMBackedActivationPolicy,
     LLMBackedPersonaNode,
@@ -244,14 +250,24 @@ def test_llm_backed_activation_no_match_returns_empty() -> None:
     assert activation.should_escalate is False
 
 
-def test_llm_backed_activation_fallback_on_failure() -> None:
-    policy = LLMBackedActivationPolicy(llm=_BrokenLLM())
+def test_llm_backed_activation_fallback_on_failure(tmp_path: Path) -> None:
+    policy = LLMBackedActivationPolicy(
+        llm=_BrokenLLM(),
+        project_root=tmp_path,
+    )
 
     activation = policy.decide(PersonaInput(user_message="What are the risks?"))
 
     assert activation.activated is False
     assert activation.trigger == "llm_fallback"
     assert activation.should_escalate is False
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="persona",
+    )
+    assert event.event == "persona_activation_failed"
+    assert event.error == "simulated LLM failure"
+    assert event.metadata == {"stage": "activation"}
 
 
 def test_llm_backed_activation_ignores_unknown_persona_ids() -> None:
@@ -296,3 +312,176 @@ def test_llm_backed_activation_no_llm_returns_safe_fallback() -> None:
 
     assert activation.activated is False
     assert activation.trigger == "no_llm"
+
+
+def test_llm_backed_persona_failure_is_observed_before_fallback(
+    tmp_path: Path,
+) -> None:
+    node = LLMBackedPersonaNode(
+        llm=_BrokenLLM(),
+        project_root=tmp_path,
+    )
+
+    result = node(
+        ANALYST_PERSONA,
+        PersonaInput(user_message="Review this"),
+    )
+
+    assert result.notes == ("analyst_self considered the topic.",)
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="persona",
+    )
+    assert event.event == "persona_completion_failed"
+    assert event.error == "simulated LLM failure"
+    assert event.metadata == {
+        "stage": "contribution",
+        "persona_id": "analyst_self",
+    }
+
+
+def test_llm_backed_synthesis_failure_is_observed_before_fallback(
+    tmp_path: Path,
+) -> None:
+    node = LLMBackedSynthesizerNode(
+        llm=_BrokenLLM(),
+        project_root=tmp_path,
+    )
+    state = PersonaTurnState(
+        input=PersonaInput(user_message="Review this"),
+        selected_personas=(),
+        contributions=(
+            PersonaContribution(
+                persona_id="analyst_self",
+                notes=("Analyze the boundary.",),
+            ),
+        ),
+    )
+
+    result = node(state)
+
+    assert result is not None
+    assert result.summary == "- analyst_self: Analyze the boundary."
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="persona",
+    )
+    assert event.event == "persona_completion_failed"
+    assert event.error == "simulated LLM failure"
+    assert event.metadata == {"stage": "synthesis"}
+
+
+def test_structured_diagnostic_failure_does_not_stop_endpoint_failover(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+
+    class _StructuredModel:
+        def __init__(
+            self,
+            label: str,
+            result: dict[str, object] | None,
+        ) -> None:
+            self._label = label
+            self._result = result
+
+        def with_structured_output(self, schema: object) -> _StructuredModel:
+            return self
+
+        def invoke(self, messages: object) -> dict[str, object]:
+            calls.append(self._label)
+            if self._result is None:
+                raise RuntimeError("primary endpoint failed")
+            return self._result
+
+    class _UnusedFallbackLLM:
+        def complete(self, messages: object) -> str:
+            raise AssertionError("structured backup should satisfy the call")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("diagnostic store unavailable")
+
+    settings = LLMSettings(
+        base_url="https://example.invalid/v1",
+        api_key="test",
+        model="test",
+    )
+    endpoints = (
+        LangChainLLMEndpoint(
+            index=0,
+            settings=settings,
+            model=cast(Any, _StructuredModel("primary", None)),
+        ),
+        LangChainLLMEndpoint(
+            index=1,
+            settings=settings,
+            model=cast(
+                Any,
+                _StructuredModel(
+                    "backup",
+                    {
+                        "note": "Backup perspective.",
+                        "questions": [],
+                        "confidence": 0.8,
+                    },
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    node = LLMBackedPersonaNode(
+        llm=cast(Any, _UnusedFallbackLLM()),
+        langchain_models=endpoints,
+        project_root=tmp_path,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "persona/persona_structured_failed: primary endpoint failed; "
+            "structured logging failed: diagnostic store unavailable"
+        ),
+    ):
+        result = node(
+            ANALYST_PERSONA,
+            PersonaInput(user_message="Review this"),
+        )
+
+    assert calls == ["primary", "backup"]
+    assert result.notes == ("Backup perspective.",)
+    assert result.confidence == 0.8
+
+
+def test_completion_diagnostic_failure_does_not_replace_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("diagnostic store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    node = LLMBackedPersonaNode(
+        llm=_BrokenLLM(),
+        project_root=tmp_path,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "persona/persona_completion_failed: simulated LLM failure; "
+            "structured logging failed: diagnostic store unavailable"
+        ),
+    ):
+        result = node(
+            ANALYST_PERSONA,
+            PersonaInput(user_message="Review this"),
+        )
+
+    assert result.notes == ("analyst_self considered the topic.",)
