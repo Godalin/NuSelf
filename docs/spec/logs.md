@@ -254,6 +254,14 @@ Display name mapping: `persona` → `selves`.
 - Directory creation before open.
 - New writes project a version-1 `RuntimeEnvelope`, including its stable
   `message_id` as `event_id`.
+- A direct audit envelope carries the complete `RuntimeLogEventPayload`; its
+  message, level, node, duration, status, error, and metadata survive envelope
+  record round trips. An empty audit envelope is not a valid direct write.
+- `create_audit_envelope(...)` constructs that self-contained immutable
+  message. `write_audit_envelope(...)` and runtime-event projection share one
+  envelope-to-`LogEvent` boundary, differing only in the required envelope
+  kind. `write_log_event(...)` is the domain-facing convenience composition of
+  those two audit operations.
 - An `EventPublisher` may attach `runtime_event_log_sink(...)`; this projection
   retains the published event's ID and correlation context.
 - Writes are serialized by a per-path process lock and an advisory file lock;

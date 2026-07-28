@@ -15,12 +15,17 @@ from nuself.logs import (
     LogComponent,
     LogEvent,
     LogRetentionPolicy,
+    create_audit_envelope,
     log_path,
     observe_log_events,
     read_log_events,
+    write_audit_envelope,
     write_log_event,
 )
-from nuself.runtime import RUNTIME_SCHEMA_VERSION
+from nuself.runtime import (
+    RUNTIME_SCHEMA_VERSION,
+    RuntimeEnvelope,
+)
 
 
 def test_new_log_events_have_stable_envelope_identity(tmp_path: Path) -> None:
@@ -34,6 +39,75 @@ def test_new_log_events_have_stable_envelope_identity(tmp_path: Path) -> None:
 
     assert read.event_id == written.event_id
     assert read.schema_version == RUNTIME_SCHEMA_VERSION
+
+
+def test_audit_envelope_round_trip_retains_complete_projection(
+    tmp_path: Path,
+) -> None:
+    envelope = create_audit_envelope(
+        "chat",
+        "turn_completed",
+        "turn completed",
+        level="warning",
+        thread_id="thread-1",
+        request_id="request-1",
+        turn_id="turn-1",
+        job_id="job-1",
+        trace_id="trace-1",
+        source="test",
+        node="respond",
+        duration_ms=12,
+        status="completed",
+        error="degraded",
+        metadata={"tool_count": 2},
+    )
+
+    decoded = RuntimeEnvelope.from_record(envelope.to_record())
+    written = write_audit_envelope(decoded, project_root=tmp_path)
+
+    assert written == LogEvent(
+        time=envelope.created_at,
+        level="warning",
+        component="chat",
+        event="turn_completed",
+        message="turn completed",
+        event_id=envelope.message_id,
+        schema_version=envelope.schema_version,
+        thread_id="thread-1",
+        request_id="request-1",
+        turn_id="turn-1",
+        job_id="job-1",
+        trace_id="trace-1",
+        source="test",
+        node="respond",
+        duration_ms=12,
+        status="completed",
+        error="degraded",
+        metadata={"tool_count": 2},
+    )
+
+
+def test_audit_writer_rejects_wrong_kind_or_missing_message(
+    tmp_path: Path,
+) -> None:
+    event_envelope = RuntimeEnvelope(
+        kind="event",
+        name="turn.completed",
+        producer="chat",
+        payload={"message": "completed"},
+    )
+    with pytest.raises(ValueError, match="requires an audit envelope"):
+        write_audit_envelope(event_envelope, project_root=tmp_path)
+
+    empty_audit = RuntimeEnvelope(
+        kind="audit",
+        name="turn_completed",
+        producer="chat",
+    )
+    with pytest.raises(ValueError, match="requires a message"):
+        write_audit_envelope(empty_audit, project_root=tmp_path)
+
+    assert read_log_events(project_root=tmp_path) == []
 
 
 def test_log_event_metadata_is_detached_and_recursively_immutable(

@@ -215,9 +215,62 @@ def write_log_event(
 ) -> LogEvent:
     """Append a structured log event and return it."""
 
+    envelope = create_audit_envelope(
+        component,
+        event,
+        message,
+        level=level,
+        thread_id=thread_id,
+        request_id=request_id,
+        turn_id=turn_id,
+        job_id=job_id,
+        trace_id=trace_id,
+        source=source,
+        node=node,
+        duration_ms=duration_ms,
+        status=status,
+        error=error,
+        metadata=metadata,
+    )
+    return write_audit_envelope(
+        envelope,
+        project_root=project_root,
+        retention_policy=retention_policy,
+    )
+
+
+def create_audit_envelope(
+    component: LogComponent,
+    event: str,
+    message: str,
+    *,
+    level: LogLevel = "info",
+    thread_id: str | None = None,
+    request_id: str | None = None,
+    turn_id: str | None = None,
+    job_id: str | None = None,
+    trace_id: str | None = None,
+    source: str | None = None,
+    node: str | None = None,
+    duration_ms: int | None = None,
+    status: str | None = None,
+    error: str | None = None,
+    metadata: dict[str, object] | None = None,
+) -> RuntimeEnvelope:
+    """Create one complete immutable direct-audit envelope."""
+
     _require_log_identity(component, event)
     context = current_runtime_context()
-    envelope = RuntimeEnvelope(
+    payload = RuntimeLogEventPayload(
+        message=message,
+        level=level,
+        node=node,
+        duration_ms=duration_ms,
+        status=status,
+        error=error,
+        metadata=metadata,
+    )
+    return RuntimeEnvelope(
         kind="audit",
         name=event,
         producer=component,
@@ -229,29 +282,21 @@ def write_log_event(
             trace_id=trace_id if trace_id is not None else context.trace_id,
             source=source if source is not None else context.source,
         ),
+        payload=payload.to_mapping(),
     )
-    event_record = LogEvent(
-        time=envelope.created_at,
-        level=level,
-        component=component,
-        event=event,
-        message=message,
-        event_id=envelope.message_id,
-        schema_version=envelope.schema_version,
-        thread_id=envelope.context.thread_id,
-        request_id=envelope.context.request_id,
-        turn_id=envelope.context.turn_id,
-        job_id=envelope.context.job_id,
-        trace_id=envelope.context.trace_id,
-        source=envelope.context.source,
-        node=node,
-        duration_ms=duration_ms,
-        status=status,
-        error=error,
-        metadata=metadata,
-    )
-    return _append_log_event(
-        event_record,
+
+
+def write_audit_envelope(
+    envelope: RuntimeEnvelope,
+    *,
+    project_root: Path | None = None,
+    retention_policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION,
+) -> LogEvent:
+    """Persist one self-contained direct-audit envelope."""
+
+    return _write_envelope_log_projection(
+        envelope,
+        required_kind="audit",
         project_root=project_root,
         retention_policy=retention_policy,
     )
@@ -265,21 +310,44 @@ def write_runtime_event(
 ) -> LogEvent:
     """Persist an event envelope as an audit projection with the same identity."""
 
-    if envelope.kind != "event":
-        raise ValueError("log event sink requires an event envelope")
+    return _write_envelope_log_projection(
+        envelope,
+        required_kind="event",
+        project_root=project_root,
+        retention_policy=retention_policy,
+    )
+
+
+def _write_envelope_log_projection(
+    envelope: RuntimeEnvelope,
+    *,
+    required_kind: Literal["audit", "event"],
+    project_root: Path | None,
+    retention_policy: LogRetentionPolicy,
+) -> LogEvent:
+    if envelope.kind != required_kind:
+        raise ValueError(
+            f"log projection requires an {required_kind} envelope"
+        )
     if envelope.producer not in LOG_COMPONENTS:
-        raise ValueError("runtime event producer is not a log component")
+        raise ValueError("log envelope producer is not a log component")
     _require_log_identity(
         envelope.producer,
         envelope.name,
     )
     payload = RuntimeLogEventPayload.from_mapping(envelope.payload)
+    if required_kind == "audit" and payload.message is None:
+        raise ValueError("audit envelope requires a message")
     event_record = LogEvent(
         time=envelope.created_at,
         level=payload.level,
         component=envelope.producer,
         event=envelope.name,
-        message=payload.message or envelope.name,
+        message=(
+            payload.message
+            if payload.message is not None
+            else envelope.name
+        ),
         event_id=envelope.message_id,
         schema_version=envelope.schema_version,
         thread_id=envelope.context.thread_id,

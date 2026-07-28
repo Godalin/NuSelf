@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make the declared `RuntimeEnvelope` kind taxonomy match the messages the
-runtime actually produces and consumes.
+Make audit envelopes self-contained and project audit/event envelopes through
+one typed log boundary.
 
 ## Active Branch
 
@@ -14,40 +14,41 @@ runtime actually produces and consumes.
 
 ## Ordered Work
 
-1. Trace every declared kind to a concrete producer and consumer.
-2. Document transport and durable records that deliberately do not use an
-   envelope.
-3. Remove unimplemented request and notification kinds.
-4. Reject those kinds in local construction and strict record decoding.
-5. Verify event, job, and audit remain the complete supported taxonomy.
+1. Audit direct log writes and runtime-event log projection.
+2. Specify complete audit content inside the envelope payload.
+3. Add explicit audit-envelope construction and write boundaries.
+4. Share one envelope-to-`LogEvent` projector across audit and event kinds.
+5. Verify audit envelope round trips retain every projected field.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep daemon request/response framing under `daemon.protocol`.
-- Keep notification correlation on the durable outbox entry.
-- Do not add placeholder kinds for possible future transports.
+- Preserve `write_log_event()` as the domain-facing convenience API.
+- Keep direct audit names governed by domain specs rather than the runtime
+  event-definition registry.
+- Preserve append, observer, retention, and legacy-read behavior.
 
 ## Completion Evidence
 
-- `MessageKind` and the runtime decoder now accept exactly `event`, `job`, and
-  `audit`, each backed by a concrete producer and consumer.
-- Dormant `request` and `notification` kinds were removed; daemon frames remain
-  owned by `daemon.protocol`, while notification correlation remains on the
-  durable outbox entry.
-- Local construction and strict record decoding both reject the removed kinds.
-- Tests round-trip the complete supported taxonomy and cover the independent
-  daemon protocol and notification ownership paths.
-- Focused runtime-message, event, log, protocol, and notification tests:
-  `140 passed`.
-- `.venv/bin/pytest -q`: `1519 passed`.
+- `create_audit_envelope()` puts the complete `RuntimeLogEventPayload` and
+  resolved runtime context into one immutable `kind="audit"` envelope.
+- `write_audit_envelope()` and `write_runtime_event()` delegate to one strict
+  envelope-to-`LogEvent` projector with explicit kind ownership.
+- `write_log_event()` is now only the domain-facing composition of audit
+  envelope creation and persistence; it no longer constructs a parallel
+  `LogEvent`.
+- Tests prove a serialized/decoded audit envelope preserves every identity,
+  context, payload, and metadata field, while wrong-kind and empty audit
+  envelopes are rejected before append.
+- Focused log, runtime-event, observability, and CLI tests: `352 passed`.
+- `.venv/bin/pytest -q`: `1521 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `bfc0912`.
+`dev/v0.3.x` is published through `0c46c4e`.
 
 ## Next Review Batch
 
-Audit whether audit envelopes should become a first-class typed projection.
+Audit LogEvent construction and decode validation for remaining silent coercion.

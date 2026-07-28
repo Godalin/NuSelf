@@ -310,6 +310,12 @@ and sequences remain immutable inside the envelope.
 Correlation context is inherited through one neutral runtime context. Logging
 may project that context, but logging must not own it.
 
+An `audit` envelope is self-contained: it carries the shared typed log payload
+rather than using an empty envelope merely to allocate identity. Direct audit
+and runtime-event envelopes use the same log projector, so serializing and
+decoding an audit envelope preserves every field needed to append the same
+`LogEvent`.
+
 Daemon `request`/response frames are transport contracts owned by
 `daemon.protocol`, including framing limits and response status; they are not
 runtime envelopes. Notification intents are durable outbox records that embed
