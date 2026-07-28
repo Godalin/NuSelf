@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Callable, cast
 
 import pytest
 from langgraph.store.base import PutOp
 
-from nuself.store import ScopedWorkspace, SqliteStore
+from nuself.store import (
+    ScopedWorkspace,
+    SqliteStore,
+    SqliteStoreLifecycleError,
+)
 from nuself.workspace import PrivateWorkspacePaths
 
 
@@ -24,6 +29,51 @@ def _paths(tmp_path: Path) -> PrivateWorkspacePaths:
 
 def _db(tmp_path: Path) -> Path:
     return _paths(tmp_path).database
+
+
+class LifecycleConnectionProxy:
+    def __init__(
+        self,
+        delegate: sqlite3.Connection,
+        *,
+        fail_commit: bool = False,
+        fail_rollback: bool = False,
+        fail_close: bool = False,
+    ) -> None:
+        self._delegate = delegate
+        self.fail_commit = fail_commit
+        self.fail_rollback = fail_rollback
+        self.fail_close = fail_close
+        self.close_calls = 0
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._delegate, name)
+
+    def commit(self) -> None:
+        if self.fail_commit:
+            raise RuntimeError("commit failed")
+        self._delegate.commit()
+
+    def rollback(self) -> None:
+        if self.fail_rollback:
+            raise RuntimeError("rollback failed")
+        self._delegate.rollback()
+
+    def close(self) -> None:
+        self.close_calls += 1
+        if self.fail_close:
+            raise RuntimeError("close failed")
+        self._delegate.close()
+
+
+def _connection_factory(
+    connection: LifecycleConnectionProxy,
+) -> Callable[[str], sqlite3.Connection]:
+    def connect(database: str) -> sqlite3.Connection:
+        del database
+        return cast(sqlite3.Connection, connection)
+
+    return connect
 
 
 def test_store_put_and_get(tmp_path: Path) -> None:
@@ -68,6 +118,78 @@ def test_store_batch_rolls_back_when_later_value_is_not_strict_json(
     existing = store.get(("ns",), "existing")
     assert existing is not None
     assert existing.value == {"value": "old"}
+
+
+def test_store_batch_retains_primary_rollback_and_close_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = SqliteStore(_db(tmp_path))
+    raw = sqlite3.connect(_db(tmp_path))
+    connection = LifecycleConnectionProxy(
+        raw,
+        fail_rollback=True,
+        fail_close=True,
+    )
+    monkeypatch.setattr(
+        "nuself.store.sqlite3.connect",
+        _connection_factory(connection),
+    )
+
+    try:
+        with pytest.raises(SqliteStoreLifecycleError) as captured:
+            store.put(("ns",), "invalid", {"value": float("inf")})
+    finally:
+        raw.close()
+
+    assert isinstance(captured.value.primary_error, TypeError)
+    assert isinstance(captured.value.rollback_error, RuntimeError)
+    assert isinstance(captured.value.close_error, RuntimeError)
+    assert captured.value.__cause__ is captured.value.primary_error
+    assert connection.close_calls == 1
+
+
+def test_store_commit_failure_propagates_after_successful_cleanup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = SqliteStore(_db(tmp_path))
+    raw = sqlite3.connect(_db(tmp_path))
+    connection = LifecycleConnectionProxy(raw, fail_commit=True)
+    monkeypatch.setattr(
+        "nuself.store.sqlite3.connect",
+        _connection_factory(connection),
+    )
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        store.put(("ns",), "key", {"value": "not committed"})
+
+    assert connection.close_calls == 1
+
+
+def test_store_surfaces_close_failure_after_successful_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = SqliteStore(_db(tmp_path))
+    raw = sqlite3.connect(_db(tmp_path))
+    connection = LifecycleConnectionProxy(raw, fail_close=True)
+    monkeypatch.setattr(
+        "nuself.store.sqlite3.connect",
+        _connection_factory(connection),
+    )
+
+    try:
+        with pytest.raises(SqliteStoreLifecycleError) as captured:
+            store.put(("ns",), "key", {"value": "committed"})
+    finally:
+        raw.close()
+
+    assert captured.value.primary_error is None
+    assert captured.value.rollback_error is None
+    assert isinstance(captured.value.close_error, RuntimeError)
+    assert captured.value.__cause__ is captured.value.close_error
+    assert connection.close_calls == 1
 
 
 def test_store_delete(tmp_path: Path) -> None:

@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable, cast
+from typing import Any, Callable, Iterable, TypeVar, cast
 
 from langgraph.store.base import (
     BaseStore,
@@ -29,9 +29,72 @@ from nuself.runtime import decode_json_value, encode_json_value
 
 __all__ = [
     "SqliteStore",
+    "SqliteStoreLifecycleError",
     "ScopedWorkspace",
     "WorkspaceCollection",
 ]
+
+_T = TypeVar("_T")
+
+
+class SqliteStoreLifecycleError(RuntimeError):
+    """Retain transaction and connection cleanup failures."""
+
+    def __init__(
+        self,
+        *,
+        primary_error: BaseException | None,
+        rollback_error: BaseException | None,
+        close_error: BaseException | None,
+    ) -> None:
+        super().__init__(
+            "workspace SQLite transaction lifecycle failed"
+            if primary_error is not None
+            else "workspace SQLite connection could not be closed"
+        )
+        self.primary_error = primary_error
+        self.rollback_error = rollback_error
+        self.close_error = close_error
+
+
+def _run_transaction(
+    db_path: Path,
+    operation: Callable[[sqlite3.Connection], _T],
+) -> _T:
+    conn = sqlite3.connect(str(db_path))
+    try:
+        result = operation(conn)
+        conn.commit()
+    except BaseException as primary_error:
+        rollback_error: BaseException | None = None
+        try:
+            conn.rollback()
+        except BaseException as error:
+            rollback_error = error
+        try:
+            conn.close()
+        except BaseException as close_error:
+            raise SqliteStoreLifecycleError(
+                primary_error=primary_error,
+                rollback_error=rollback_error,
+                close_error=close_error,
+            ) from primary_error
+        if rollback_error is not None:
+            raise SqliteStoreLifecycleError(
+                primary_error=primary_error,
+                rollback_error=rollback_error,
+                close_error=None,
+            ) from primary_error
+        raise
+    try:
+        conn.close()
+    except BaseException as close_error:
+        raise SqliteStoreLifecycleError(
+            primary_error=None,
+            rollback_error=None,
+            close_error=close_error,
+        ) from close_error
+    return result
 
 
 def _create_workspace_entries_table(conn: sqlite3.Connection) -> None:
@@ -67,12 +130,7 @@ class SqliteStore(BaseStore):
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(db_path))
-        try:
-            _create_workspace_entries_table(conn)
-            conn.commit()
-        finally:
-            conn.close()
+        _run_transaction(db_path, _create_workspace_entries_table)
 
     @classmethod
     def for_project(
@@ -86,8 +144,7 @@ class SqliteStore(BaseStore):
         return cls(path)
 
     def batch(self, ops: Iterable[Op]) -> list[Result]:
-        conn = sqlite3.connect(str(self._db_path))
-        try:
+        def execute(conn: sqlite3.Connection) -> list[Result]:
             results: list[Result] = []
             for op in ops:
                 if isinstance(op, GetOp):
@@ -98,13 +155,9 @@ class SqliteStore(BaseStore):
                     results.append(self._do_search(conn, op))
                 else:
                     results.append(self._do_list_namespaces(conn, op))
-            conn.commit()
             return results
-        except BaseException:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+
+        return _run_transaction(self._db_path, execute)
 
     async def abatch(self, ops: Iterable[Op]) -> list[Result]:
         return self.batch(ops)

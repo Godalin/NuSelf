@@ -39,6 +39,13 @@ Non-string keys, arbitrary objects, and non-finite floats are rejected.
 `SqliteStore.batch()` owns one transaction: if any operation cannot encode,
 all earlier writes from that batch are rolled back and pre-existing entries
 remain unchanged. Reads reject non-standard non-finite JSON constants.
+Initialization and each batch own exactly one short-lived SQLite connection
+and close it exactly once. Initialization commits schema creation before
+closing. A successful batch commits before closing; a failed batch rolls back
+before closing. If rollback or close also fails, the store must retain every
+failure without replacing the original operation error as the explicit cause.
+Close failure after a successful commit is still surfaced, without replaying
+the committed batch.
 
 `workspace.sqlite` must include a `workspace_meta` table:
 
