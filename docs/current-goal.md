@@ -19,7 +19,7 @@ active development progress.
 
 1. [x] Define and document the responsibilities of active documentation.
 2. [x] Repair specification indexes, status labels, and internal links.
-3. [ ] Reduce `TODOs.md` to unresolved backlog and remove the completed
+3. [x] Reduce `TODOs.md` to unresolved backlog and remove the completed
    milestone plan from active documentation.
 4. [ ] Replace overlapping historical design documents with one concise
    current architecture document.
