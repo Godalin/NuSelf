@@ -332,13 +332,14 @@ def test_selves_consult_writes_host_discussion_decision_log(tmp_path: Path, caps
 
     events = [event for event in read_log_events(project_root=tmp_path, component="persona") if event.event == "host_discussion_decision"]
     assert events
-    assert events[-1].status == "approved"
+    assert events[-1].status == "completed"
     assert events[-1].metadata is not None
     assert events[-1].metadata.get("should_escalate") is True
+    assert "user asked for debate" not in str(events[-1].metadata)
     step_events = [event for event in read_log_events(project_root=tmp_path, component="persona") if event.event == "persona_discussion_step"]
     assert step_events
     assert step_events[0].metadata is not None
-    assert "discussion_trace" in step_events[0].metadata
+    assert step_events[0].metadata == {"step_number": 1}
     outcome_events = [event for event in read_log_events(project_root=tmp_path, component="persona") if event.event == "persona_discussion"]
     assert outcome_events
     assert outcome_events[-1].metadata is not None
@@ -501,7 +502,11 @@ def test_conversation_runtime_runs_agent_backed_personas_through_selves_subagent
 
     persona_events = [event for event in read_log_events(project_root=tmp_path, component="persona") if event.event == "persona_summary"]
     assert len(persona_events) >= 1
-    assert "analyst_self gives a concrete agent-backed perspective." in persona_events[-1].message
+    assert persona_events[-1].message == "Persona consultation completed"
+    assert persona_events[-1].metadata == {
+        "persona_count": 1,
+        "has_synthesis": True,
+    }
     assert " | " not in persona_events[-1].message
     assert persona_events[-1].metadata == {"persona_count": 1, "has_synthesis": True}
 

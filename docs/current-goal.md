@@ -5,7 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Give Memory curation one closed, privacy-minimal audit contract.
+Give Persona consultation and discussion one closed, privacy-minimal audit
+contract owned by the Persona subsystem.
 
 ## Active Branch
 
@@ -13,52 +14,59 @@ Give Memory curation one closed, privacy-minimal audit contract.
 
 ## Ordered Work
 
-1. Inventory curator, optimizer, and secondary-effect failure audit producers.
-2. Define the complete Memory curation taxonomy and metadata minimization.
+1. Inventory static graph, competitive discussion, chat consultation,
+   Reflection integration, and lifecycle-trace audit producers.
+2. Define one Persona-owned event taxonomy and privacy boundary.
 3. Register exact level/status/error/metadata contracts for all owned events.
-4. Route curator and optimizer projections through domain adapters.
-5. Route auto-accept and trace failures through a validated secondary wrapper.
-6. Verify private titles/reasons never enter new curation audit metadata.
+4. Route Persona graph/discussion failures through domain adapters.
+5. Route chat and Reflection projections through Persona-owned adapters.
+6. Verify prompts, candidate text, model reasons, synthesis, and discussion
+   utterances never enter Persona audit records.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
 - No process-global registry containing every domain's audit events.
 - No migration or rewriting of historical JSONL records.
-- No change to curator/optimizer decisions, candidate persistence, or cursor state.
+- No change to activation, scoring, moderation, or Reflection decisions.
+- No removal of discussion content from its authoritative result/trace
+  structures; only the audit projection is minimized.
 - Generic corrupt-record diagnostics remain owned by observability.
 - Generic audit-projection failure events remain owned by observability.
 
 ## Completion Evidence
 
-- The inventory identified nine primary curator/optimizer projections plus
-  registered `auto_accept_failed` and `trace_recording_failed` secondary-effect
-  failures.
-- One sealed `memory.audit` registry now owns all eleven event identities and
-  their exact level, status, error, and metadata contracts.
-- Curator and optimizer no longer accept arbitrary event/level/status strings;
-  their adapters resolve definitions before the best-effort log sink.
-- `run_memory_curation_observed(...)` validates secondary-effect failure
-  identity and metadata before executing auto-accept or trace recording.
-- Shared `run_observed_best_effort(...)` now accepts declared failure level and
-  status rather than forcing every domain diagnostic to warning/degraded.
-- Candidate curation records retain IDs, target IDs, action, and memory type
-  but no longer copy private candidate titles or free-form model reasons.
-- Corrupt cursor diagnostics remain under the generic record-decoding contract
-  and are not duplicated into the curation registry.
-- Direct tests cover all eleven canonical schemas, unknown fields, unknown
-  identities, pre-sink rejection, private metadata minimization, and declared
-  secondary-failure presentation.
-- Focused Memory audit, curator, optimizer, and observability suites:
-  `92 passed`.
-- Full test suite: `1877 passed`.
+- The inventory covers static graph fallbacks, competitive discussion
+  fallbacks/results, chat consultation/host/step projections, Reflection
+  discussion projection, dynamic-persona lifecycle trace failures, and the
+  interactive Persona command boundary.
+- One sealed `persona.audit` registry owns all ten direct Persona event
+  identities and their exact level, status, error, and metadata contracts.
+- Persona graph, discussion, dynamic tools, CLI, Chat, Reflection, and REPL
+  callers now use Persona-owned adapters instead of choosing raw log
+  component/event/level/status combinations.
+- Reflection no longer authors Persona records or copies candidate title/body,
+  revised content, scores, discussion trace, or model reason into audit data.
+- Chat audit records no longer copy user topics, persona synthesis,
+  escalation/model reasons, winner/veto id lists, or discussion utterances.
+  Content-free step records preserve progress visibility by ordinal.
+- Failure records retain only their sanitized structured error plus a stable
+  stage/action where required; persona ids and duplicate raw exception chains
+  were removed from metadata.
+- Unknown lifecycle actions still fail at the command implementation boundary;
+  declared lifecycle trace failures are validated before entering the
+  best-effort sink.
+- Direct tests cover all ten canonical schemas, unknown metadata, unknown
+  identities, pre-sink rejection, and privacy-minimal behavior.
+- Focused Persona, Chat, Reflection, and REPL suites: `220 passed`.
+- Full test suite: `1900 passed`.
 - Pyright 1.1.409: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is ready to publish through implementation commit `bcdc09d`.
+Pending this batch's implementation commit and push.
 
 ## Next Review Batch
 
-Review persona consultation/discussion audit schema ownership.
+Select after this batch is verified and published.

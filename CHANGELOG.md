@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Persona consultation, discussion, fallback, lifecycle-trace, and interactive
+  command audits now use one closed Persona-owned schema; audit records retain
+  only stable ids, stages, decisions, and counts instead of duplicating user
+  topics, candidate text, synthesis, discussion utterances, or model reasons.
 - Daemon lifecycle audits now use a closed immutable event registry with fixed
   projection defaults and exact per-event metadata schemas; producer mistakes
   fail before reaching the best-effort log sink.

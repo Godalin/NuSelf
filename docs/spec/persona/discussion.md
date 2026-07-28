@@ -44,7 +44,10 @@ Rules:
 
 Internally, the `selves_consult` subagent may reuse the existing persona LangGraph subgraph and competitive discussion service. The public boundary is still the LangChain tool/subagent contract; the old fixed chat graph nodes are transitional plumbing and must not be the primary activation path.
 
-`persona_summary` logs are ordinary activated self passes. They are not proof that competitive discussion ran. Competitive chat discussion only runs when `AgentBackedActivationPolicy.should_escalate` is true; otherwise the host decision log is `status=skipped`.
+`persona_summary` logs are ordinary activated self passes. They are not proof
+that competitive discussion ran. Competitive chat discussion only runs when
+`AgentBackedActivationPolicy.should_escalate` is true. The host decision audit
+uses a stable `status=completed`; `should_escalate` carries the decision.
 
 ## User-Facing Boundary
 
@@ -86,9 +89,9 @@ Malformed output keeps the existing caller-owned safety behavior:
   allows the bounded discussion loop to continue.
 
 Agent and schema failures for all three stages write
-`persona/persona_discussion_degraded` through shared best-effort observability.
-Metadata identifies `scoring`, `selection`, or `moderator`; scoring also names
-the persona, selection names the candidate, and moderator names the turn.
+`persona/persona_discussion_degraded` through the Persona-owned audit adapter.
+Metadata identifies only `scoring`, `selection`, or `moderator`; subject ids,
+prompts, generated notes, and model reasons are excluded.
 `SharedPersonaDiscussionService` passes its project root into the discussion
 engine and its LLM-backed graph nodes so these records use the same project
 storage as the calling chat or reflection runtime. Diagnostic persistence
@@ -145,7 +148,37 @@ Trace entries are strings with these prefixes:
 
 Renderers must parse these prefixes and group by turn. User-facing discussion trace rendering uses square-bracket tags for the trace title, group headers, and speaker labels, such as `[discussion]`, `[turn-1]`, and `[analyst_self]`. See [`cli.md`](../cli.md) for trace rendering contract.
 
-Chat-triggered discussion must also stream visible trace entries as `persona_discussion_step` logs while the discussion runs. The final chat-triggered `persona_discussion` log is a summary and must not re-emit the full discussion trace in one delayed block.
+Chat-triggered discussion emits a content-free `persona_discussion_step` audit
+for each completed trace step while the discussion runs. Discussion text stays
+in the discussion result/trace structure and must not be duplicated into audit
+messages or metadata. The final `persona_discussion` audit contains only the
+candidate id, approval decision, participant/outcome counts, and step count.
+
+## Audit Contract
+
+Persona owns every direct `component=persona` event, including events requested
+by Chat, Reflection, and CLI callers. Callers use Persona adapters; they do not
+construct raw log records or choose arbitrary levels/statuses.
+
+| Event | Level | Status | Metadata |
+|---|---|---|---|
+| `persona_summary` | `info` | `completed` | non-negative `persona_count`, boolean `has_synthesis` |
+| `host_discussion_decision` | `info` | `completed` | boolean `should_escalate` |
+| `persona_discussion_step` | `debug` | `running` | positive `step_number` |
+| `persona_discussion` | `info` | `completed` | non-empty `candidate_id`, boolean `approved`, non-negative winner/emergent/veto/score/step counts |
+| `persona_discussion_failure` | `error` | `failed` | required error, no metadata |
+| `persona_discussion_degraded` | `warning` | `degraded` | required error, stage in `scoring`, `selection`, `moderator` |
+| `persona_completion_failed` | `warning` | `degraded` | required error, stage in `contribution`, `synthesis` |
+| `persona_activation_failed` | `warning` | `degraded` | required error, no metadata |
+| `trace_recording_failed` | `warning` | `degraded` | required error, persona prompt id and declared tool/CLI lifecycle action |
+| `interactive_command_failed` | `error` | `error` | required error, non-empty command `action` |
+
+Messages for these records are fixed operational descriptions. User topics,
+memory context, persona prompts, candidate title/body/revisions, synthesis
+text, discussion utterances, full traces, escalation/model reasons, and raw
+exception-chain copies in metadata are forbidden. The sanitized error field is
+the sole failure detail. Unknown events or schema violations fail before the
+best-effort sink; sink failures remain generic observability events.
 
 ## Result Structure
 

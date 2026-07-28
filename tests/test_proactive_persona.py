@@ -320,10 +320,7 @@ def test_agent_backed_scoring_persona_node_fallback_on_invalid_output(
         component="persona",
     )
     assert event.event == "persona_discussion_degraded"
-    assert event.metadata == {
-        "stage": "scoring",
-        "persona_id": "analyst_self",
-    }
+    assert event.metadata == {"stage": "scoring"}
 
 
 def test_agent_backed_scoring_persona_node_rejects_numeric_string(
@@ -394,10 +391,7 @@ def test_select_personas_rejects_partially_malformed_selection(
         component="persona",
     )
     assert event.event == "persona_discussion_degraded"
-    assert event.metadata == {
-        "stage": "selection",
-        "candidate_id": "c1",
-    }
+    assert event.metadata == {"stage": "selection"}
 
 
 def test_moderator_judgment_detects_convergence() -> None:
@@ -443,10 +437,7 @@ def test_moderator_judgment_rejects_string_boolean(
         component="persona",
     )
     assert event.event == "persona_discussion_degraded"
-    assert event.metadata == {
-        "stage": "moderator",
-        "turn_number": 2,
-    }
+    assert event.metadata == {"stage": "moderator"}
 
 
 def test_discussion_diagnostic_failure_does_not_replace_scoring_fallback(

@@ -77,7 +77,8 @@ prompt text.
 CLI create, enable, and disable mutations record their corresponding lifecycle
 trace after the authoritative persona mutation succeeds. Trace recording is a
 secondary effect: a recoverable `RuntimeError` emits
-`persona/trace_recording_failed` with the persona ID and action, but does not
+the Persona-owned `persona/trace_recording_failed` audit with the persona ID
+and action, but does not
 turn the completed CLI mutation into a failure. Unknown lifecycle actions and
 undeclared implementation errors propagate rather than being broadly hidden.
 

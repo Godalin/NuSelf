@@ -33,7 +33,7 @@ from nuself.persona.definition import (
     PersonaTurnState,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.observability import report_observed_failure
+from nuself.persona.audit import report_persona_failure
 
 class PersonaGraphState(TypedDict):
     """LangGraph state wrapper for a persona turn."""
@@ -208,16 +208,11 @@ class AgentBackedPersonaNode:
         except Exception as exc:
             if not is_recoverable_agent_failure(exc):
                 raise
-            report_observed_failure(
+            report_persona_failure(
                 exc,
-                component="persona",
                 event="persona_completion_failed",
-                message=f"persona contribution fallback used for {persona.id}",
                 project_root=self._project_root,
-                metadata={
-                    "stage": "contribution",
-                    "persona_id": persona.id,
-                },
+                metadata={"stage": "contribution"},
             )
         return PersonaContribution(
             persona_id=persona.id,
@@ -270,11 +265,9 @@ class AgentBackedSynthesizerNode:
         except Exception as exc:
             if not is_recoverable_agent_failure(exc):
                 raise
-            report_observed_failure(
+            report_persona_failure(
                 exc,
-                component="persona",
                 event="persona_completion_failed",
-                message="persona synthesis fallback used",
                 project_root=self._project_root,
                 metadata={"stage": "synthesis"},
             )
@@ -308,13 +301,10 @@ class AgentBackedActivationPolicy:
         except Exception as exc:
             if not is_recoverable_agent_failure(exc):
                 raise
-            report_observed_failure(
+            report_persona_failure(
                 exc,
-                component="persona",
                 event="persona_activation_failed",
-                message="persona activation fallback used",
                 project_root=self._project_root,
-                metadata={"stage": "activation"},
             )
             return PersonaActivation(
                 trigger="agent_fallback",

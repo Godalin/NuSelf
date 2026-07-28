@@ -26,7 +26,7 @@ from nuself.persona.graph import (
     AgentBackedSynthesizerNode,
     PersonaGraphDriver,
 )
-from nuself.runtime.observability import report_observed_failure
+from nuself.persona.audit import report_persona_failure
 
 DiscussionTraceSink = Callable[[str], None]
 NonBlankText: TypeAlias = Annotated[
@@ -166,16 +166,11 @@ class AgentBackedScoringPersonaNode:
             note = output.note
             score = output.score
         except (RuntimeError, ValueError) as exc:
-            report_observed_failure(
+            report_persona_failure(
                 exc,
-                component="persona",
                 event="persona_discussion_degraded",
-                message=f"persona discussion scoring fallback used for {persona.id}",
                 project_root=self._project_root,
-                metadata={
-                    "stage": "scoring",
-                    "persona_id": persona.id,
-                },
+                metadata={"stage": "scoring"},
             )
             note = f"{persona.id} considered the topic."
             score = 0.5
@@ -396,16 +391,11 @@ class ProactivePersonaDiscussion:
             output = self._agents.selection.invoke(messages)
             selected_ids = output.selected_persona_ids
         except (RuntimeError, ValueError) as exc:
-            report_observed_failure(
+            report_persona_failure(
                 exc,
-                component="persona",
                 event="persona_discussion_degraded",
-                message="persona discussion selection fallback used",
                 project_root=self._project_root,
-                metadata={
-                    "stage": "selection",
-                    "candidate_id": candidate.id,
-                },
+                metadata={"stage": "selection"},
             )
             selected_ids = []
 
@@ -516,16 +506,11 @@ class ProactivePersonaDiscussion:
         try:
             return self._agents.moderator.invoke(messages)
         except (RuntimeError, ValueError) as exc:
-            report_observed_failure(
+            report_persona_failure(
                 exc,
-                component="persona",
                 event="persona_discussion_degraded",
-                message="persona discussion moderator fallback used",
                 project_root=self._project_root,
-                metadata={
-                    "stage": "moderator",
-                    "turn_number": turn_number,
-                },
+                metadata={"stage": "moderator"},
             )
             return ModeratorJudgmentOutput(
                 converged=False,

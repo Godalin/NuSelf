@@ -320,7 +320,7 @@ def test_reflect_result_survives_unavailable_auxiliary_logs(
         drop_log,
     )
     monkeypatch.setattr(
-        "nuself.reflection.scheduler.write_observed_log_event",
+        "nuself.reflection.scheduler.write_persona_audit",
         drop_log,
     )
 

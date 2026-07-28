@@ -24,8 +24,8 @@ from nuself.reflection.audit import (
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.persona import PersonaCompetitionResult, SharedPersonaDiscussionService
+from nuself.persona.audit import write_persona_audit
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.observability import write_observed_log_event
 from nuself.storage import write_json_atomic
 
 REFLECTION_SCHEDULE_STATE_VERSION = 1
@@ -443,28 +443,19 @@ class ReflectionScheduler:
 
         if not isinstance(result, PersonaCompetitionResult):
             return
-        metadata: dict[str, object] = {
-            "candidate_id": candidate.id,
-            "candidate_title": candidate.title,
-            "candidate_type": candidate.candidate_type,
-            "composite": round(score.composite, 3),
-            "approved": result.approved,
-            "scores": {k: round(v, 3) for k, v in result.scores.items()},
-            "blocking_vetos": list(result.blocking_vetos),
-            "winner_persona_ids": list(result.winner_persona_ids),
-            "emergent_persona_ids": list(result.emergent_persona_ids),
-            "discussion_trace": list(result.discussion_trace),
-            "revised_title": result.revised_title,
-            "revised_body": result.revised_body,
-        }
-        status = "approved" if result.approved else "rejected"
-        write_observed_log_event(
-            "persona",
+        del score, now
+        write_persona_audit(
             "persona_discussion",
-            f"{candidate.title} — {result.reason}",
             project_root=self._project_root,
-            status=status,
-            metadata=metadata,
+            metadata={
+                "candidate_id": candidate.id,
+                "approved": result.approved,
+                "winner_count": len(result.winner_persona_ids),
+                "emergent_count": len(result.emergent_persona_ids),
+                "blocking_veto_count": len(result.blocking_vetos),
+                "score_count": len(result.scores),
+                "discussion_steps": len(result.discussion_trace),
+            },
         )
 
 

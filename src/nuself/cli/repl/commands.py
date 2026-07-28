@@ -33,6 +33,7 @@ from nuself.memory.source_repository import (
     SourceRepository,
 )
 from nuself.persona.prompt_repo import PersonaPromptRepository
+from nuself.persona.audit import report_persona_failure
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService
@@ -388,15 +389,11 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
         return interactive_persona_help(command)
     except Exception as exc:
         action = command.split(maxsplit=1)[0] if command else "list"
-        report_observed_failure(
+        report_persona_failure(
             exc,
-            component="persona",
             event="interactive_command_failed",
-            message="Interactive persona command failed",
             project_root=project_root,
             metadata={"action": action},
-            level="error",
-            status="error",
         )
         return (
             f"{theme.tag('[persona]', 'persona')} "

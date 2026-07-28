@@ -8,7 +8,6 @@ from pathlib import Path
 from nuself.agent.failover import is_recoverable_agent_failure
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import LangChainLLMEndpoint
-from nuself.logs import LogLevel
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.persona import (
     AgentBackedActivationPolicy,
@@ -22,14 +21,12 @@ from nuself.persona import (
     load_persona_definitions,
     persona_graph_agents,
 )
+from nuself.persona.audit import (
+    report_persona_failure,
+    write_persona_audit,
+)
 from nuself.runtime.context import current_runtime_context
-from nuself.runtime.diagnostics import (
-    diagnostic_exception_chain,
-    diagnostic_exception_message,
-)
-from nuself.runtime.observability import (
-    write_observed_log_event,
-)
+from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 class ConversationPersonaOrchestrator:
@@ -168,40 +165,44 @@ class ConversationPersonaOrchestrator:
     ) -> str:
         if not should_escalate:
             return ""
+        step_number = 0
+
+        def record_step(entry: str) -> None:
+            nonlocal step_number
+            del entry
+            step_number += 1
+            self._write_discussion_step_log(thread_id, step_number)
+
         try:
-            result = self._discussion_service.discuss(
-                self._build_candidate(
-                    thread_id=thread_id,
-                    user_message=topic,
-                    title=(
-                        topic.splitlines()[0]
-                        if topic.splitlines()
-                        else topic
-                    )[:120],
-                    source_summary=(
-                        turn_state.synthesis.summary
-                        if turn_state.synthesis is not None
-                        else ""
-                    ),
-                ),
-                on_trace_entry=lambda entry: self._write_discussion_step_log(
-                    thread_id,
-                    trigger,
-                    entry,
+            candidate = self._build_candidate(
+                thread_id=thread_id,
+                user_message=topic,
+                title=(
+                    topic.splitlines()[0]
+                    if topic.splitlines()
+                    else topic
+                )[:120],
+                source_summary=(
+                    turn_state.synthesis.summary
+                    if turn_state.synthesis is not None
+                    else ""
                 ),
             )
-            self._write_audit(
+            result = self._discussion_service.discuss(
+                candidate,
+                on_trace_entry=record_step,
+            )
+            write_persona_audit(
                 "persona_discussion",
-                f"chat-triggered discussion: {result.reason}",
+                project_root=self._project_root,
                 thread_id=thread_id,
-                status=trigger,
                 metadata={
-                    "winner_persona_ids": list(result.winner_persona_ids),
-                    "emergent_persona_ids": list(
-                        result.emergent_persona_ids
-                    ),
-                    "blocking_vetos": list(result.blocking_vetos),
-                    "reason": result.reason,
+                    "candidate_id": candidate.id,
+                    "approved": result.approved,
+                    "winner_count": len(result.winner_persona_ids),
+                    "emergent_count": len(result.emergent_persona_ids),
+                    "blocking_veto_count": len(result.blocking_vetos),
+                    "score_count": len(result.scores),
                     "discussion_steps": len(result.discussion_trace),
                 },
             )
@@ -210,13 +211,10 @@ class ConversationPersonaOrchestrator:
             if not is_recoverable_agent_failure(exc):
                 raise
             error = diagnostic_exception_message(exc)
-            self._write_audit(
-                "persona_discussion_failure",
-                error,
-                thread_id=thread_id,
-                level="error",
-                error=error,
-                metadata={"original_error": diagnostic_exception_chain(exc)},
+            report_persona_failure(
+                exc,
+                event="persona_discussion_failure",
+                project_root=self._project_root,
             )
             return f"\nDiscussion failed: {error}"
 
@@ -240,11 +238,11 @@ class ConversationPersonaOrchestrator:
         thread_id: str,
         trigger: str,
     ) -> None:
-        self._write_audit(
+        del trigger
+        write_persona_audit(
             "persona_summary",
-            _compact_summary(turn_state),
+            project_root=self._project_root,
             thread_id=thread_id,
-            status=trigger,
             metadata={
                 "persona_count": len(turn_state.contributions),
                 "has_synthesis": turn_state.synthesis is not None,
@@ -258,61 +256,24 @@ class ConversationPersonaOrchestrator:
         should_escalate: bool,
         escalation_reason: str,
     ) -> None:
-        self._write_audit(
+        del escalation_reason
+        write_persona_audit(
             "host_discussion_decision",
-            escalation_reason,
+            project_root=self._project_root,
             thread_id=thread_id,
-            status="approved" if should_escalate else "skipped",
-            metadata={
-                "should_escalate": should_escalate,
-                "escalation_reason": escalation_reason,
-            },
+            metadata={"should_escalate": should_escalate},
         )
 
     def _write_discussion_step_log(
         self,
         thread_id: str,
-        trigger: str,
-        entry: str,
+        step_number: int,
     ) -> None:
-        self._write_audit(
+        write_persona_audit(
             "persona_discussion_step",
-            "",
-            thread_id=thread_id,
-            status=trigger,
-            metadata={"discussion_trace": [entry]},
-        )
-
-    def _write_audit(
-        self,
-        event: str,
-        message: str,
-        *,
-        thread_id: str,
-        status: str | None = None,
-        level: LogLevel = "info",
-        error: str | None = None,
-        metadata: dict[str, object] | None = None,
-    ) -> None:
-        failure_metadata: dict[str, object] = {
-            "event": event,
-            "thread_id": thread_id,
-        }
-        if metadata is not None and "original_error" in metadata:
-            failure_metadata["original_error"] = metadata["original_error"]
-        write_observed_log_event(
-            "persona",
-            event,
-            message,
             project_root=self._project_root,
             thread_id=thread_id,
-            status=status,
-            level=level,
-            error=error,
-            metadata=metadata,
-            failure_event=f"{event}_write_failed",
-            failure_message=f"Failed to write {event} audit record",
-            failure_metadata=failure_metadata,
+            metadata={"step_number": step_number},
         )
 
     @staticmethod
@@ -340,19 +301,6 @@ class ConversationPersonaOrchestrator:
             source_summary=source_summary,
             created_at=now.isoformat(),
         )
-
-
-def _compact_summary(turn_state: PersonaTurnState) -> str:
-    parts: list[str] = []
-    for contribution in turn_state.contributions:
-        note = contribution.notes[0] if contribution.notes else ""
-        snippet = note if len(note) <= 140 else f"{note[:137]}..."
-        parts.append(f"{contribution.persona_id}: {snippet}")
-    if turn_state.synthesis is not None:
-        summary = turn_state.synthesis.summary
-        snippet = summary if len(summary) <= 140 else f"{summary[:137]}..."
-        parts.append(f"synthesizer_self: {snippet}")
-    return "\n".join(parts) if parts else "(no persona contributions)"
 
 
 def _format_consult_result(

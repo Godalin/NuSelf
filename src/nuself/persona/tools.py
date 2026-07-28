@@ -11,7 +11,7 @@ from langchain_core.tools import StructuredTool
 from nuself.agent.text import TextAgent, default_text_agent
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.observability import run_observed_best_effort
+from nuself.persona.audit import run_persona_observed
 from nuself.storage import get_default_backend
 from nuself.store import ScopedWorkspace, WorkspaceCollection
 
@@ -209,11 +209,9 @@ def _record_prompt_trace(prompt: PersonaPrompt, *, project_root: Path | None = N
             name=prompt.name,
         )
 
-    run_observed_best_effort(
+    run_persona_observed(
         record,
-        component="persona",
         event="trace_recording_failed",
-        message="Could not record persona prompt creation trace",
         project_root=project_root,
         metadata={"persona_prompt_id": prompt.id, "action": "create"},
     )
@@ -229,11 +227,9 @@ def _record_prompt_disabled_trace(prompt: PersonaPrompt, *, project_root: Path |
             participants=["agent"],
         )
 
-    run_observed_best_effort(
+    run_persona_observed(
         record,
-        component="persona",
         event="trace_recording_failed",
-        message="Could not record persona disable trace",
         project_root=project_root,
         metadata={"persona_prompt_id": prompt.id, "action": "disable"},
     )
@@ -249,11 +245,9 @@ def _record_prompt_enabled_trace(prompt: PersonaPrompt, *, project_root: Path | 
             participants=["agent"],
         )
 
-    run_observed_best_effort(
+    run_persona_observed(
         record,
-        component="persona",
         event="trace_recording_failed",
-        message="Could not record persona enable trace",
         project_root=project_root,
         metadata={"persona_prompt_id": prompt.id, "action": "enable"},
     )

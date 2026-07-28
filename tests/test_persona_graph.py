@@ -334,7 +334,7 @@ def test_llm_backed_activation_fallback_on_failure(tmp_path: Path) -> None:
     )
     assert event.event == "persona_activation_failed"
     assert event.error == "simulated LLM failure"
-    assert event.metadata == {"stage": "activation"}
+    assert event.metadata == {}
 
 
 def test_llm_backed_activation_ignores_unknown_persona_ids() -> None:
@@ -401,10 +401,7 @@ def test_llm_backed_persona_failure_is_observed_before_fallback(
     )
     assert event.event == "persona_completion_failed"
     assert event.error == "simulated LLM failure"
-    assert event.metadata == {
-        "stage": "contribution",
-        "persona_id": "analyst_self",
-    }
+    assert event.metadata == {"stage": "contribution"}
 
 
 def test_llm_backed_synthesis_failure_is_observed_before_fallback(

@@ -220,8 +220,10 @@ All events below are visible through
 | `organizer_failed` | `error` | `failed` | required error, no metadata |
 | `organizer_completed` | `info` | `completed` | non-negative `merged_groups` and `archived_entries` |
 
-`persona_discussion` is emitted during this pipeline but belongs to the
-persona audit contract. `audit_projection_failed` and
+`persona_discussion` is emitted during this pipeline through the Persona
+adapter and belongs to the Persona audit contract. Reflection does not copy
+candidate title/body, revisions, discussion trace, or model reason into that
+record. `audit_projection_failed` and
 `organizer_audit_write_failed` describe observability failure rather than
 Reflection behavior and remain governed by the shared observability contract.
 

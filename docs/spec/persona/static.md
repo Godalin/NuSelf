@@ -151,9 +151,12 @@ The policy:
    (`trigger="agent_fallback"`, no activation). Sharedly classified
    implementation errors propagate unchanged.
 
-Activation errors also write `persona_activation_failed` before returning that
-safe fallback. Diagnostic failure cannot replace or alter the activation
-result.
+Activation errors also write the Persona-owned `persona_activation_failed`
+audit before returning that safe fallback. Contribution and synthesis
+fallbacks use `persona_completion_failed`. Their closed schemas identify only
+the stable stage (where applicable); prompts, input, generated text, persona
+ids, and model reasons are not copied into audit metadata. Diagnostic failure
+cannot replace or alter the fallback result.
 
 The three output models are strict, extra-forbid, and complete: contribution
 and synthesis confidence is required in `[0, 1]`; activation requires every

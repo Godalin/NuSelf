@@ -185,26 +185,23 @@ def test_persona_failure_log_cannot_mask_discussion_failure(
         selected_personas=(),
     )
 
-    result = orchestrator._run_discussion(  # pyright: ignore[reportPrivateUsage]
-        topic="compare",
-        thread_id="thread-1",
-        trigger="requested",
-        turn_state=turn_state,
-        should_escalate=True,
-    )
+    with pytest.warns(
+        RuntimeWarning,
+        match="persona/persona_discussion_failure",
+    ):
+        result = orchestrator._run_discussion(  # pyright: ignore[reportPrivateUsage]
+            topic="compare",
+            thread_id="thread-1",
+            trigger="requested",
+            turn_state=turn_state,
+            should_escalate=True,
+        )
 
     assert result == "\nDiscussion failed: discussion unavailable"
-    event = read_log_events(project_root=tmp_path, component="persona")[-1]
-    assert event.event == "persona_discussion_failure_write_failed"
-    assert event.error == (
-        "audit store unavailable <- discussion unavailable"
-    )
-    assert event.metadata == {
-        "event": "persona_discussion_failure",
-        "thread_id": "thread-1",
-        "original_error": "discussion unavailable",
-        "audit_event": "persona_discussion_failure",
-    }
+    assert read_log_events(
+        project_root=tmp_path,
+        component="persona",
+    ) == []
 
 
 @pytest.mark.parametrize(
