@@ -50,7 +50,7 @@ Eliminate mixed-protocol writers from structured component logs.
 
 ## Publication
 
-`dev/v0.3.x` is ready for publication through `324f1b3`.
+`dev/v0.3.x` is published through implementation commit `324f1b3`.
 
 ## Next Review Batch
 
