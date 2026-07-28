@@ -264,11 +264,6 @@ class ReasonExportWorker:
     def run(self) -> None:
         """Reconcile durable jobs, then process queue messages until shutdown."""
 
-        self._supervisor.write_started(
-            EXPORT_WORKER_NAME,
-            event="export_worker_started",
-            message="export queue worker thread started",
-        )
         store, _ = self._dependencies()
         self._reconcile(store)
         while not self._shutdown_requested.is_set():

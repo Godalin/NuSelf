@@ -14,6 +14,7 @@ from nuself.daemon.reason_export import (
 )
 from nuself.daemon.types import WorkerHealth
 from nuself.daemon.workers import DaemonWorkerSupervisor
+from nuself.logs import runtime_event_log_sink
 from nuself.memory.curator import MemoryCurator
 from nuself.notification import (
     NotificationAdapter,
@@ -23,6 +24,7 @@ from nuself.notification.email import EmailNotificationAdapter
 from nuself.notification.macos import MacOSNotificationAdapter
 from nuself.reason import ReasonScheduler
 from nuself.reflection import ReflectionScheduler
+from nuself.runtime.events import EventPublisher
 
 
 class DaemonState:
@@ -32,9 +34,14 @@ class DaemonState:
         self.project_root = project_root
         self.shutdown_requested = threading.Event()
         self.activity_broker = ActivityBroker()
+        self.event_publisher = EventPublisher()
+        self.event_publisher.subscribe(
+            runtime_event_log_sink(project_root)
+        )
         self._worker_supervisor = DaemonWorkerSupervisor(
             project_root,
             self.shutdown_requested,
+            self.event_publisher,
         )
         self.reason_export_worker = ReasonExportWorker(
             project_root,
@@ -192,8 +199,6 @@ class DaemonState:
             "memory_curator",
             self.memory_curator.run_once,
             interval_seconds=self.memory_curator_interval_seconds,
-            started_event="memory_curator_started",
-            started_message="memory curator thread started",
             error_event="memory_curator_error",
             error_message="memory curator iteration failed",
         )
@@ -207,8 +212,6 @@ class DaemonState:
             "reflection_scheduler",
             run_once,
             interval_seconds=self.reflection_check_interval_seconds,
-            started_event="reflection_scheduler_started",
-            started_message="reflection scheduler thread started",
             error_event="reflection_scheduler_error",
             error_message="reflection scheduler iteration failed",
         )
@@ -223,8 +226,6 @@ class DaemonState:
             "reason_scheduler",
             run_once,
             interval_seconds=self.reason_scheduler_interval_seconds,
-            started_event="reason_scheduler_started",
-            started_message="reason scheduler thread started",
             error_event="reason_scheduler_error",
             error_message="reason scheduler iteration failed",
         )
@@ -234,8 +235,6 @@ class DaemonState:
             "notification_delivery",
             self.notification_delivery_loop.run_once,
             interval_seconds=self.notification_delivery_interval_seconds,
-            started_event="notification_delivery_started",
-            started_message="notification delivery thread started",
             error_event="notification_delivery_error",
             error_message="notification delivery iteration failed",
         )

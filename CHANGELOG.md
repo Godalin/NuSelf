@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon worker lifecycle activity now flows through the registered runtime
+  event publisher as `worker.started`, `worker.failed`, and `worker.stopped`,
+  with structured audit logs attached as a subscriber. Subscriber failure no
+  longer changes worker execution or health transitions, and worker-specific
+  failure names are retained as `operation_event` metadata.
 - Removed the unused process-global `ApprovalManager` callback registry.
   Approval-gated tools continue to use the synchronous decorator boundary;
   deferred approval must use a future durable typed contract instead of

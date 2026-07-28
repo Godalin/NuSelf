@@ -162,15 +162,15 @@ registration and common lifecycle semantics over the neutral
   lifecycle snapshot with the last successful iteration, compact exception
   chain, and consecutive failure count.
 - Every worker target runs under `source="daemon.worker.<name>"`. An exception
-  escaping the complete target is observed as
-  `daemon/worker_exited_unexpectedly` and updates health without escaping the
-  thread.
+  escaping the complete target updates health and publishes
+  `daemon/worker.failed` without escaping the thread.
 - Every scheduled iteration gets a fresh job id and a context containing only
   that job id and worker source. Ambient request, thread, trace, and job
   identity must not leak into worker iterations.
-- Expected iteration failures update health and emit the worker-specific error
-  event without terminating the schedule. A later successful iteration clears
-  the consecutive failure count while retaining a success timestamp.
+- Expected iteration failures update health and publish `daemon/worker.failed`
+  with the worker-specific operation event in metadata, without terminating
+  the schedule. A later successful iteration clears the consecutive failure
+  count while retaining a success timestamp.
 - Joining a still-live worker after the caller's timeout emits
   `daemon/thread_timeout` with worker, timeout, and lifecycle state, then raises
   `DaemonWorkerJoinTimeoutError`. The worker remains owned and may be joined
@@ -399,6 +399,26 @@ into log-driven control flow.
 Events that can trigger durable or destructive state changes require a
 request/job path with idempotency and explicit user approval. Replaying an
 audit log must never repeat the action.
+
+Daemon worker lifecycle is the first production event boundary. `DaemonState`
+owns one `EventPublisher`, attaches `runtime_event_log_sink(...)`, and injects
+the publisher into `DaemonWorkerSupervisor`.
+
+- Every registered worker target publishes `daemon/worker.started` immediately
+  before entering its target and `daemon/worker.stopped` in the target
+  wrapper's `finally` block.
+- An expected scheduled-iteration failure and an exception escaping the
+  complete target each publish `daemon/worker.failed`. The payload preserves
+  the worker name, compact error chain, and domain operation event where one
+  exists.
+- Worker event envelopes inherit the active worker or job `RuntimeContext`.
+  Their audit projections retain the same message ID and correlation fields.
+- Event publication is observational. A failed audit or future subscriber is
+  reported through the shared best-effort observability boundary and cannot
+  skip the target, terminate a schedule, replace worker health updates, or
+  prevent the stopped event attempt.
+- Join timeout remains the direct `daemon/thread_timeout` audit record because
+  a timed-out worker is still alive and has not emitted a stopped transition.
 
 ## Cross-Process Activity
 

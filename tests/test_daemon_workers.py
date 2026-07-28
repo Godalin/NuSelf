@@ -9,7 +9,9 @@ from nuself.daemon.workers import (
     DaemonWorkerRegistrationError,
     DaemonWorkerSupervisor,
 )
+from nuself.logs import read_log_events, runtime_event_log_sink
 from nuself.runtime import (
+    EventPublisher,
     RuntimeContext,
     current_runtime_context,
     runtime_context,
@@ -17,7 +19,13 @@ from nuself.runtime import (
 
 
 def _supervisor(tmp_path: Path) -> DaemonWorkerSupervisor:
-    return DaemonWorkerSupervisor(tmp_path, threading.Event())
+    publisher = EventPublisher()
+    publisher.subscribe(runtime_event_log_sink(tmp_path))
+    return DaemonWorkerSupervisor(
+        tmp_path,
+        threading.Event(),
+        publisher,
+    )
 
 
 def test_worker_registration_is_unique_and_sealed(
@@ -109,3 +117,46 @@ def test_worker_iteration_replaces_ambient_context_and_updates_health(
     assert health.last_success_at is not None
     assert health.last_error is None
     assert health.consecutive_failures == 0
+
+
+def test_worker_lifecycle_subscriber_failure_does_not_skip_target_or_stop(
+    tmp_path: Path,
+) -> None:
+    publisher = EventPublisher()
+    publisher.subscribe(runtime_event_log_sink(tmp_path))
+
+    def fail_subscriber(_event: object) -> None:
+        raise RuntimeError("subscriber unavailable")
+
+    publisher.subscribe(fail_subscriber)
+    supervisor = DaemonWorkerSupervisor(
+        tmp_path,
+        threading.Event(),
+        publisher,
+    )
+    ran = threading.Event()
+    supervisor.register(
+        "worker",
+        thread_name="test-worker-events",
+        target=ran.set,
+    )
+    supervisor.seal()
+
+    supervisor.start("worker")
+    supervisor.join("worker", timeout=1)
+
+    assert ran.is_set()
+    lifecycle = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="daemon",
+        )
+        if event.event.startswith("worker.")
+    ]
+    assert [event.event for event in lifecycle] == [
+        "worker.started",
+        "worker.stopped",
+    ]
+    assert all(event.event_id is not None for event in lifecycle)
+    assert all(event.source == "daemon.worker.worker" for event in lifecycle)

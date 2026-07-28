@@ -78,7 +78,7 @@ unexpected per-iteration exception unless shutdown has been requested.
   count, and thread liveness so daemon status can expose degraded subsystems.
 - All worker targets run inside `source="daemon.worker.<name>"` runtime
   context. A target-level exception that escapes initialization or the loop is
-  recorded in health and reported as `daemon/worker_exited_unexpectedly`
+  recorded in health and published as `daemon/worker.failed`
   before the owned thread becomes stopped.
 - The structured error write is a secondary reporting effect. If it fails,
   shared observability emits a Python warning; logging failure must not escape

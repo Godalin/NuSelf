@@ -285,9 +285,11 @@ state 持久化失败会写入 daemon 日志。Progress 缺失属于正常状态
 uv run nuself dev health
 ```
 
-Daemon health 会同时反映定时迭代失败和 worker target 的意外退出。Worker
-诊断带有 `daemon.worker.<name>` source；即使结构化诊断写入失败，也只会回退为
-runtime warning，不会终止仍可恢复的定时循环。Shutdown 会尝试每一个 owned
+Daemon health 会同时反映定时迭代失败和 worker target 的意外退出。Worker 生命周期
+统一发布为已注册的 `worker.started`、`worker.failed` 和 `worker.stopped` event，
+再以相同 identity 和 `daemon.worker.<name>` source 投影到结构化 audit log。
+Audit 或其他 event subscriber 失败时只会回退为 runtime warning，不会改变 worker
+执行、health transition 或仍可恢复的定时循环。Shutdown 会尝试每一个 owned
 cleanup step 并保留同时发生的故障；只有 worker、当前项目 storage、socket 和 PID
 都清理成功后，才会写入 `daemon/stopped`。SIGINT/SIGTERM handler 只由 daemon
 临时借用，退出时会精确恢复 host process 原有的 handler。

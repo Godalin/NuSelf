@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. `nuself.runtime.context` is now the only public and internal
-correlation-context API.
+Idle. Daemon worker lifecycle is now a production-owned `EventPublisher`
+boundary with audit logs as an explicit subscriber.
 
 ## Active Branch
 
@@ -23,17 +23,21 @@ code.
 
 ## Completion Evidence
 
-- `nuself.logs` reads `current_runtime_context()` directly and no longer
-  defines `LogContext`, `current_log_context()`, or `log_context()`.
-- Reason scheduling, chat turns, and persona consultation use the neutral
-  runtime API; no production or test caller imports a logging-owned context
-  name.
-- The logging spec defines logs as a consumer of context while keeping
-  process-local observers separate from serializable correlation identity.
-- Existing persisted `LogEvent` fields and intentional per-event overrides are
-  unchanged.
-- Focused runtime/log/chat/reason/persona/daemon/notification tests: 452 passed.
-- Final full tests: 1273 passed.
+- `DaemonState` owns one `EventPublisher`, attaches
+  `runtime_event_log_sink(...)`, and injects it into the worker supervisor.
+- Every worker target publishes registered `worker.started` and
+  `worker.stopped` envelopes; scheduled and escaping failures publish
+  `worker.failed` with the domain operation event retained in metadata.
+- Successful audit projections retain the event envelope ID and worker/job
+  runtime context.
+- A production-composition regression subscribes to `DaemonState`'s publisher
+  and proves the start/stop audit records retain those exact envelope IDs.
+- A regression test proves another subscriber may fail on both start and stop
+  without skipping the target or stopped-event audit projection.
+- Worker health, scheduled retry intervals, registration, export initialization,
+  and join-timeout behavior remain unchanged.
+- Focused runtime-event/worker/daemon/export tests: 66 passed.
+- Final full tests: 1275 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -43,5 +47,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit direct correlation overrides and event-to-audit projection after context
-API ownership is singular.
+Audit chat lifecycle event adoption after daemon worker lifecycle is real.

@@ -299,9 +299,12 @@ uv run nuself dev health
 ```
 
 Daemon health reflects both scheduled-iteration failures and unexpected worker
-target exits. Worker diagnostics carry a `daemon.worker.<name>` source; failure
-to write that diagnostic falls back to a runtime warning without terminating
-the scheduled loop. Shutdown attempts every owned cleanup step and retains
+target exits. Worker lifecycle activity is published as registered
+`worker.started`, `worker.failed`, and `worker.stopped` events, then projected
+to structured audit logs with the same identity and `daemon.worker.<name>`
+source. A failed audit or other event subscriber falls back to a runtime
+warning without changing worker execution, health transitions, or the
+scheduled loop. Shutdown attempts every owned cleanup step and retains
 simultaneous failures; `daemon/stopped` is emitted only after workers,
 project-scoped storage, socket, and PID cleanup all succeed. SIGINT/SIGTERM
 handlers are temporary daemon ownership and the host process's exact previous

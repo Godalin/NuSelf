@@ -15,7 +15,7 @@ from nuself.daemon.workers import (
     DaemonWorkerSupervisor,
 )
 from nuself.llm import ChatMessage
-from nuself.logs import read_log_events
+from nuself.logs import read_log_events, runtime_event_log_sink
 from nuself.memory.curator import MemoryCuratorResult
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.runtime.context import (
@@ -23,6 +23,25 @@ from nuself.runtime.context import (
     current_runtime_context,
     runtime_context,
 )
+from nuself.runtime.events import EventPublisher
+from nuself.runtime.messages import RuntimeEnvelope
+
+
+def _worker_supervisor(
+    tmp_path: Path,
+    shutdown_requested: threading.Event | None = None,
+) -> DaemonWorkerSupervisor:
+    publisher = EventPublisher()
+    publisher.subscribe(runtime_event_log_sink(tmp_path))
+    return DaemonWorkerSupervisor(
+        tmp_path,
+        (
+            shutdown_requested
+            if shutdown_requested is not None
+            else threading.Event()
+        ),
+        publisher,
+    )
 
 
 class StructuredFakeLLM:
@@ -48,6 +67,34 @@ class RepeatedChainFailingLLM:
             raise RuntimeError("same")
         except RuntimeError as exc:
             raise RuntimeError("same") from exc
+
+
+def test_daemon_state_owns_worker_event_and_audit_composition(
+    tmp_path: Path,
+) -> None:
+    state = DaemonState(tmp_path)
+    received: list[RuntimeEnvelope] = []
+    state.event_publisher.subscribe(received.append)
+    state.shutdown_requested.set()
+
+    state.start_background_memory_curator()
+    state.stop_background_memory_curator()
+
+    assert [event.name for event in received] == [
+        "worker.started",
+        "worker.stopped",
+    ]
+    audit = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="daemon",
+        )
+        if event.event.startswith("worker.")
+    ]
+    assert [event.event_id for event in audit] == [
+        event.message_id for event in received
+    ]
 
 
 def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
@@ -266,7 +313,7 @@ def test_worker_supervisor_records_escaping_target_and_context(
     tmp_path: Path,
 ) -> None:
     shutdown_requested = threading.Event()
-    supervisor = DaemonWorkerSupervisor(tmp_path, shutdown_requested)
+    supervisor = _worker_supervisor(tmp_path, shutdown_requested)
     observed: list[RuntimeContext] = []
 
     def fail_target() -> None:
@@ -290,23 +337,34 @@ def test_worker_supervisor_records_escaping_target_and_context(
     assert health.alive is False
     assert health.consecutive_failures == 1
     assert health.last_error == "target escaped"
-    event = next(
+    lifecycle = [
         event
         for event in read_log_events(
             project_root=tmp_path,
             component="daemon",
         )
-        if event.event == "worker_exited_unexpectedly"
-    )
-    assert event.source == "daemon.worker.memory_curator"
-    assert event.metadata == {"worker": "memory_curator"}
-    assert event.error == "target escaped"
+        if event.event.startswith("worker.")
+    ]
+    assert [event.event for event in lifecycle] == [
+        "worker.started",
+        "worker.failed",
+        "worker.stopped",
+    ]
+    failed = lifecycle[1]
+    assert failed.source == "daemon.worker.memory_curator"
+    assert failed.metadata == {
+        "worker": "memory_curator",
+        "operation_event": "worker_exited_unexpectedly",
+        "error_type": "ValueError",
+    }
+    assert failed.error == "target escaped"
 
 
 def test_worker_error_log_failure_does_not_stop_scheduled_loop(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from nuself import logs
     from nuself.runtime import observability
 
     state = DaemonState(tmp_path)
@@ -330,6 +388,11 @@ def test_worker_error_log_failure_does_not_stop_scheduled_loop(
         raise OSError("worker log unavailable")
 
     monkeypatch.setattr(
+        logs,
+        "write_runtime_event",
+        fail_error_log,
+    )
+    monkeypatch.setattr(
         observability,
         "write_log_event",
         fail_error_log,
@@ -337,7 +400,7 @@ def test_worker_error_log_failure_does_not_stop_scheduled_loop(
 
     with pytest.warns(
         RuntimeWarning,
-        match="memory_curator_error.*worker log unavailable",
+        match="worker_event_delivery_failed.*worker log unavailable",
     ):
         state.start_background_memory_curator()
         state.stop_background_memory_curator()
@@ -354,7 +417,7 @@ def test_worker_error_log_failure_does_not_stop_scheduled_loop(
 def test_worker_iterations_have_isolated_job_contexts(
     tmp_path: Path,
 ) -> None:
-    supervisor = DaemonWorkerSupervisor(tmp_path, threading.Event())
+    supervisor = _worker_supervisor(tmp_path)
     supervisor.register(
         "memory_curator",
         thread_name="test-memory-curator",
@@ -413,7 +476,7 @@ def test_worker_iterations_have_isolated_job_contexts(
 def test_worker_failure_log_uses_iteration_job_context(
     tmp_path: Path,
 ) -> None:
-    supervisor = DaemonWorkerSupervisor(tmp_path, threading.Event())
+    supervisor = _worker_supervisor(tmp_path)
     supervisor.register(
         "reflection_scheduler",
         thread_name="test-reflection-scheduler",
@@ -439,11 +502,16 @@ def test_worker_failure_log_uses_iteration_job_context(
             project_root=tmp_path,
             component="daemon",
         )
-        if item.event == "reflection_scheduler_error"
+        if item.event == "worker.failed"
     )
     assert observed[0].job_id is not None
     assert event.job_id == observed[0].job_id
     assert event.source == "daemon.worker.reflection_scheduler"
+    assert event.metadata == {
+        "worker": "reflection_scheduler",
+        "operation_event": "reflection_scheduler_error",
+        "error_type": "ValueError",
+    }
     assert current_runtime_context() == RuntimeContext()
 
 
@@ -481,7 +549,7 @@ def test_daemon_worker_join_timeout_is_logged_and_remains_live(
     tmp_path: Path,
 ) -> None:
     shutdown_requested = threading.Event()
-    supervisor = DaemonWorkerSupervisor(tmp_path, shutdown_requested)
+    supervisor = _worker_supervisor(tmp_path, shutdown_requested)
     release = threading.Event()
 
     def wait_for_release() -> None:

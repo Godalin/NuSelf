@@ -9,12 +9,12 @@ from uuid import uuid4
 
 from nuself.clock import utc_now_iso
 from nuself.daemon.types import WorkerHealth
-from nuself.logs import write_log_event
 from nuself.runtime.context import (
     RuntimeContext,
     runtime_context,
     use_runtime_context,
 )
+from nuself.runtime.events import EventPublisher
 from nuself.runtime.observability import (
     format_exception_chain,
     report_observed_failure,
@@ -41,9 +41,11 @@ class DaemonWorkerSupervisor:
         self,
         project_root: Path,
         shutdown_requested: threading.Event,
+        event_publisher: EventPublisher,
     ) -> None:
         self._project_root = project_root
         self._shutdown_requested = shutdown_requested
+        self._event_publisher = event_publisher
         self._registration_lock = threading.Lock()
         self._health_lock = threading.Lock()
         self._workers: dict[str, OwnedWorker] = {}
@@ -143,16 +145,18 @@ class DaemonWorkerSupervisor:
             try:
                 operation()
             except Exception as exc:
-                self.record_failure(name, exc)
-                report_observed_failure(
-                    exc,
-                    component="daemon",
-                    event=error_event,
+                error = self.record_failure(name, exc)
+                self._publish_lifecycle_event(
+                    name,
+                    event="worker.failed",
                     message=error_message,
-                    project_root=self._project_root,
-                    metadata={"worker": name},
                     level="error",
                     status="error",
+                    error=error,
+                    metadata={
+                        "operation_event": error_event,
+                        "error_type": type(exc).__name__,
+                    },
                 )
                 return False
             self.record_success(name)
@@ -164,19 +168,12 @@ class DaemonWorkerSupervisor:
         operation: Callable[[], object],
         *,
         interval_seconds: float,
-        started_event: str,
-        started_message: str,
         error_event: str,
         error_message: str,
     ) -> None:
         """Run an observed operation repeatedly until daemon shutdown."""
 
         self._worker(name)
-        self.write_started(
-            name,
-            event=started_event,
-            message=started_message,
-        )
         while not self._shutdown_requested.wait(interval_seconds):
             self.run_iteration(
                 name,
@@ -217,19 +214,36 @@ class DaemonWorkerSupervisor:
     ) -> Callable[[], None]:
         def run() -> None:
             with runtime_context(source=f"daemon.worker.{name}"):
+                self._publish_lifecycle_event(
+                    name,
+                    event="worker.started",
+                    message=f"{name} worker started",
+                    status="started",
+                )
                 try:
                     target()
                 except Exception as exc:
-                    self.record_failure(name, exc)
-                    report_observed_failure(
-                        exc,
-                        component="daemon",
-                        event="worker_exited_unexpectedly",
+                    error = self.record_failure(name, exc)
+                    self._publish_lifecycle_event(
+                        name,
+                        event="worker.failed",
                         message=f"{name} worker exited unexpectedly",
-                        project_root=self._project_root,
-                        metadata={"worker": name},
                         level="error",
                         status="error",
+                        error=error,
+                        metadata={
+                            "operation_event": (
+                                "worker_exited_unexpectedly"
+                            ),
+                            "error_type": type(exc).__name__,
+                        },
+                    )
+                finally:
+                    self._publish_lifecycle_event(
+                        name,
+                        event="worker.stopped",
+                        message=f"{name} worker stopped",
+                        status="stopped",
                     )
 
         return run
@@ -245,31 +259,42 @@ class DaemonWorkerSupervisor:
                 last_success_at=utc_now_iso(),
             )
 
-    def write_started(
+    def _publish_lifecycle_event(
         self,
         name: str,
         *,
         event: str,
         message: str,
+        level: str = "info",
+        status: str,
+        error: str | None = None,
+        metadata: dict[str, object] | None = None,
     ) -> None:
-        """Write one best-effort worker start audit event."""
+        """Publish one lifecycle event without changing worker control flow."""
 
         self._worker(name)
+        event_metadata: dict[str, object] = {"worker": name}
+        if metadata is not None:
+            event_metadata.update(metadata)
+        payload: dict[str, object] = {
+            "message": message,
+            "level": level,
+            "status": status,
+            "metadata": event_metadata,
+        }
+        if error is not None:
+            payload["error"] = error
         run_observed_best_effort(
-            lambda: write_log_event(
-                "daemon",
-                event,
-                message,
-                project_root=self._project_root,
-                level="info",
-                status="started",
-                metadata={"worker": name},
+            lambda: self._event_publisher.publish(
+                name=event,
+                producer="daemon",
+                payload=payload,
             ),
             component="daemon",
-            event="worker_start_log_failed",
-            message=f"Could not record {name} worker start",
+            event="worker_event_delivery_failed",
+            message=f"Could not deliver {name} {event} event",
             project_root=self._project_root,
-            metadata={"worker": name, "start_event": event},
+            metadata={"worker": name, "lifecycle_event": event},
         )
 
     def _worker(self, name: str) -> OwnedWorker:
