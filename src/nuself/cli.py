@@ -27,7 +27,6 @@ _original_warn = warnings.warn
 
 TYPEWRITER_DELAY_SECONDS = 0.01
 TYPEWRITER_REFRESH_PER_SECOND = 30
-NOTIFICATION_EVAL_FIXTURE_COUNT = 3
 
 
 def _suppress_startup_warning(
@@ -123,6 +122,7 @@ try:
         handle_pack_inspect,
         handle_pack_list,
     )
+    from nuself.commands.eval import handle_eval
     from nuself.commands.memory.profile import (
         handle_memory_profile_delete,
         handle_memory_profile_list,
@@ -1097,59 +1097,6 @@ def handle_open(args: argparse.Namespace) -> int:
         args.project_root,
         initial_thread_id=thread_id,
     )
-
-
-def handle_eval(args: argparse.Namespace) -> int:
-    import sys
-    from nuself.eval import run_eval, load_fixtures
-
-    component: str = args.component
-    all_passed = 0
-    all_total = 0
-
-    if component in ("conversations", "all"):
-        fixtures_dir = args.fixtures or (Path(__file__).parent.parent / "tests" / "fixtures" / "conversations")
-        if fixtures_dir.exists():
-            fixtures = load_fixtures(fixtures_dir)
-            if fixtures:
-                import tempfile
-                with tempfile.TemporaryDirectory() as tmp:
-                    results = run_eval(Path(tmp), fixtures_dir)
-                passed = sum(1 for r in results if r.passed)
-                total = len(results)
-                all_passed += passed
-                all_total += total
-                print(f"== conversations: {passed}/{total} passed ==")
-                for result in results:
-                    status = "PASS" if result.passed else "FAIL"
-                    print(f"  {status} {result.fixture_name} (score={result.score:.2f})")
-                    for failure in result.failures:
-                        print(f"    - {failure}")
-            else:
-                print("No conversation fixtures found.")
-        else:
-            print(f"Fixtures directory not found: {fixtures_dir}", file=sys.stderr)
-
-    if component in ("notifications", "all"):
-        import subprocess
-        import sys
-
-        result = subprocess.run(
-            [sys.executable, "-m", "pytest", "tests/test_notification_eval_fixtures.py", "-v"],
-            capture_output=True,
-            text=True,
-        )
-        print("== notifications ==")
-        print(result.stdout)
-        if result.returncode == 0:
-            all_passed += NOTIFICATION_EVAL_FIXTURE_COUNT
-            all_total += NOTIFICATION_EVAL_FIXTURE_COUNT
-        else:
-            all_total += NOTIFICATION_EVAL_FIXTURE_COUNT
-            print(result.stderr, file=sys.stderr)
-
-    print(f"\n{all_passed}/{all_total} passed")
-    return 0 if all_passed == all_total and all_total > 0 else 1
 
 
 # ── Reason handlers ───────────────────────────────────────────────────

@@ -122,6 +122,8 @@ top-level application namespace stays focused on subsystem APIs.
   storage backend diagnostics.
 - `commands/pack.py` owns thought-pack export/import/list/inspect behavior,
   including pack path resolution and human-readable archive sizes.
+- `commands/eval.py` owns conversation and notification fixture evaluation
+  orchestration for both the canonical and compatibility CLI routes.
 - Memory CLI commands live together under the `commands/memory/` package and
   are split by subdomain instead of collected in one oversized module.
   `commands/memory/profile.py` owns profile list/search/show/delete/reindex
