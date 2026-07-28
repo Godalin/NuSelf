@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from nuself.agent.chat import ConversationGraphRuntime
+from nuself.agent.chat import (
+    ChatStructuredOutput,
+    ConversationGraphRuntime,
+    ConversationTurnState,
+)
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState
@@ -44,16 +48,43 @@ def _worker_supervisor(
     )
 
 
-class StructuredFakeLLM:
+class PlainFakeLLM:
     def __init__(self) -> None:
         self.calls: list[list[ChatMessage]] = []
 
     def complete(self, messages: list[ChatMessage]) -> str:
         self.calls.append(messages)
-        return (
-            '{"answer":"stubbed: hello","evidence_references":["mem_1","source:note:0"],'
-            '"confidence":0.8,"epistemic_status":"grounded"}'
+        return "stubbed: hello"
+
+
+class StaticResponseService:
+    def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
+        return ChatStructuredOutput(
+            answer="stubbed: hello",
+            evidence_references=["mem_1", "source:note:0"],
+            confidence=0.8,
+            epistemic_status="grounded",
         )
+
+    def finalize(
+        self,
+        state: ConversationTurnState,
+        draft: ChatStructuredOutput,
+    ) -> ChatStructuredOutput:
+        return draft
+
+
+def _successful_conversation_runtime(
+    tmp_path: Path,
+    *,
+    event_publisher: EventPublisher | None = None,
+) -> ConversationGraphRuntime:
+    return ConversationGraphRuntime(
+        tmp_path,
+        llm=PlainFakeLLM(),
+        response_service=StaticResponseService(),
+        event_publisher=event_publisher,
+    )
 
 
 class FailingLLM:
@@ -99,7 +130,7 @@ def test_daemon_state_owns_worker_event_and_audit_composition(
 
 def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
-    state.conversation_runtime = ConversationGraphRuntime(tmp_path, llm=StructuredFakeLLM())
+    state.conversation_runtime = _successful_conversation_runtime(tmp_path)
     request = DaemonRequest(type="chat", payload={"message": "hello"}, request_id="chat1")
 
     response = handle_request(request, state)
@@ -120,9 +151,8 @@ def test_daemon_chat_uses_state_event_publisher(
     tmp_path: Path,
 ) -> None:
     state = DaemonState(tmp_path)
-    state.conversation_runtime = ConversationGraphRuntime(
+    state.conversation_runtime = _successful_conversation_runtime(
         tmp_path,
-        llm=StructuredFakeLLM(),
         event_publisher=state.event_publisher,
     )
     received: list[RuntimeEnvelope] = []
@@ -181,7 +211,7 @@ def test_daemon_chat_uses_state_event_publisher(
 
 def test_daemon_chat_uses_explicit_thread_id(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
-    state.conversation_runtime = ConversationGraphRuntime(tmp_path, llm=StructuredFakeLLM())
+    state.conversation_runtime = _successful_conversation_runtime(tmp_path)
     request = DaemonRequest(type="chat", payload={"message": "hello", "thread_id": "custom"}, request_id="chat2")
 
     response = handle_request(request, state)
@@ -193,7 +223,7 @@ def test_daemon_chat_uses_explicit_thread_id(tmp_path: Path) -> None:
 
 def test_daemon_chat_persists_turn_id_for_retry_idempotency(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
-    state.conversation_runtime = ConversationGraphRuntime(tmp_path, llm=StructuredFakeLLM())
+    state.conversation_runtime = _successful_conversation_runtime(tmp_path)
     request = DaemonRequest(
         type="chat",
         payload={"message": "hello", "thread_id": "default", "turn_id": "turn-retry"},
@@ -274,10 +304,7 @@ def test_chat_completion_audit_cannot_invalidate_response(
         fail_log,
     )
     state = DaemonState(tmp_path)
-    state.conversation_runtime = ConversationGraphRuntime(
-        tmp_path,
-        llm=StructuredFakeLLM(),
-    )
+    state.conversation_runtime = _successful_conversation_runtime(tmp_path)
     request = DaemonRequest(
         type="chat",
         payload={"message": "hello"},

@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Chat responses now use framework-native `structured_response` as the sole
+  model protocol. Prompted/fenced JSON and LangChain message-state fallbacks
+  were removed; no-model local chat remains a plain-text deterministic path.
 - Removed the `ChatAgent` class-name alias. Production composition, tests, and
   public imports now use `ConversationGraphRuntime` directly.
 - Reason not-found, prompt, advance, and transition failures now use a declared

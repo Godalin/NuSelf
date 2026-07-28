@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage
 
 from nuself.agent.chat.response import (
     ConversationResponseSynthesizer,
+    _plain_fallback_output,  # pyright: ignore[reportPrivateUsage]
     _structured_output_from_state,  # pyright: ignore[reportPrivateUsage]
 )
 from nuself.agent.chat.thread import ThreadState
@@ -64,99 +65,48 @@ def test_invalid_structured_output_type_is_rejected() -> None:
         )
 
 
-def test_missing_structured_output_uses_compatibility_message() -> None:
-    result = _structured_output_from_state(
-        {"messages": [AIMessage(content="Compatibility answer")]}
-    )
-
-    assert result.answer == "Compatibility answer"
-
-
-@pytest.mark.parametrize("source", ("local", "state"))
-def test_compatibility_output_accepts_fenced_json(
-    source: str,
-) -> None:
-    raw = (
-        "```json\n"
-        '{"answer":"Fenced answer","epistemic_status":"uncertain"}\n'
-        "```"
-    )
-
-    if source == "local":
-        result = ConversationResponseSynthesizer.parse_output(raw)
-    else:
-        result = _structured_output_from_state(
-            {"messages": [AIMessage(content=raw)]}
-        )
-
-    assert result.answer == "Fenced answer"
-    assert result.epistemic_status == "uncertain"
-
-
-@pytest.mark.parametrize("source", ("local", "state"))
-def test_compatibility_output_rejects_malformed_protocol_candidate(
-    source: str,
-) -> None:
-    raw = '{"answer":"private draft"'
-
+def test_missing_structured_output_does_not_parse_message_state() -> None:
     with pytest.raises(
         ValueError,
-        match="malformed structured response",
-    ) as captured:
-        if source == "local":
-            ConversationResponseSynthesizer.parse_output(raw)
-        else:
-            _structured_output_from_state(
-                {"messages": [AIMessage(content=raw)]}
-            )
-
-    assert "private draft" not in str(captured.value)
-
-
-def test_compatibility_output_preserves_non_protocol_brace_text() -> None:
-    raw = "{This is ordinary unfinished prose"
-
-    local = ConversationResponseSynthesizer.parse_output(raw)
-    state = _structured_output_from_state(
-        {"messages": [AIMessage(content=raw)]}
-    )
-
-    assert local.answer == raw
-    assert state.answer == raw
-
-
-@pytest.mark.parametrize(
-    "raw",
-    (
-        '{"answer":"A","unknown":true}',
-        '{"answer":"A","epistemic_status":"certain"}',
-        '{"answer":"A","confidence":1.1}',
-        '{"answer":"A","confidence":-0.1}',
-    ),
-)
-def test_compatibility_output_rejects_invalid_response_schema(
-    raw: str,
-) -> None:
-    with pytest.raises(ValueError):
-        ConversationResponseSynthesizer.parse_output(raw)
-    with pytest.raises(ValueError):
+        match="missing structured_response",
+    ):
         _structured_output_from_state(
-            {"messages": [AIMessage(content=raw)]}
+            {"messages": [AIMessage(content="Plausible fallback")]}
         )
 
 
+def test_plain_fallback_preserves_non_protocol_text() -> None:
+    raw = "{This is ordinary unfinished prose"
+
+    result = _plain_fallback_output(raw)
+
+    assert result.answer == raw
+    assert result.evidence_references == []
+    assert result.confidence is None
+    assert result.epistemic_status == "inferred"
+
+
 @pytest.mark.parametrize(
     "raw",
     (
-        "minimax:tool_call private",
-        '{"answer":"minimax:tool_call private"}',
+        '{"answer":"A"}',
+        '{"answer":"private draft"',
+        "```json\n"
+        '{"answer":"Fenced answer","epistemic_status":"uncertain"}\n'
+        "```",
     ),
 )
-def test_compatibility_output_rejects_visible_tool_call(
+def test_plain_fallback_rejects_response_protocol_text(
     raw: str,
 ) -> None:
+    with pytest.raises(ValueError, match="forbidden response protocol"):
+        _plain_fallback_output(raw)
+
+
+def test_plain_fallback_rejects_visible_tool_call(
+) -> None:
     with pytest.raises(ValueError, match="visible tool call text"):
-        ConversationResponseSynthesizer.parse_output(raw)
+        _plain_fallback_output("minimax:tool_call private")
 
 
 @pytest.mark.parametrize(
@@ -166,11 +116,6 @@ def test_compatibility_output_rejects_visible_tool_call(
             "structured_response": {
                 "answer": "minimax:tool_call fake",
             },
-        },
-        {
-            "messages": [
-                AIMessage(content="minimax:tool_call fake"),
-            ],
         },
     ],
 )
@@ -205,7 +150,7 @@ def test_endpoint_state_failure_retries_then_uses_local_fallback(
 
         def complete(self, messages: list[ChatMessage]) -> str:
             self.calls += 1
-            return '{"answer":"Local fallback"}'
+            return "Local fallback"
 
     local_llm = LocalLLM()
 
@@ -269,7 +214,7 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
 
         def complete(self, messages: list[ChatMessage]) -> str:
             self.calls += 1
-            return '{"answer":"Local fallback"}'
+            return "Local fallback"
 
     local_llm = LocalLLM()
     endpoint = LangChainLLMEndpoint(

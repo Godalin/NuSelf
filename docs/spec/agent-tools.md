@@ -145,18 +145,18 @@ types, and thread persistence live in separate modules beneath it.
 Tool calling is delegated to `create_agent` inside the **respond** node.
 Persona/selves work is not a fixed pre-response stage; it is invoked through the `selves_consult` subagent tool when the main chat agent decides it is useful.
 
-Fallback LLMs that do not implement native tool calling may produce a plain answer, but they must not emulate tools by printing tool markers to the user.
+LangChain agent execution must return `structured_response` produced through
+framework-native `ToolStrategy(ChatStructuredOutput)`. Missing or invalid
+structured state is a protocol failure; message content is never reparsed as a
+second response protocol.
 
-If the active model or test double is not a LangChain chat model, NuSelf may use a deterministic local fallback parser that accepts a plain JSON envelope (`{"answer": ..., "evidence_references": ..., ...}`) or markdown-fenced JSON. This parser must never be a parallel production protocol for tool calling.
-
-The local parser and LangChain message-state compatibility path use the same
-codec. Ordinary non-JSON text may become an answer, but text that is clearly a
-response-protocol candidate (including a JSON fence or a leading object with
-response field names) must decode and validate completely. JSON syntax errors,
-unknown fields, invalid epistemic status, confidence outside `[0, 1]`, and
-visible tool-call text are protocol failures; raw candidate text must not be
-reinterpreted as the user-facing answer. Malformed brace-prefixed prose without
-response-protocol fields remains ordinary text.
+When no configured LangChain model exists, the deterministic local
+`ChatLLM` fallback may produce one plain answer. The runtime wraps that text in
+`ChatStructuredOutput` with default metadata. JSON objects, fenced JSON,
+response-field payloads, and visible tool-call markers are rejected rather
+than parsed. Tests or alternate composition roots that need non-default
+structured fields inject `ConversationResponseService`; they must not emulate
+a model by returning prompted JSON.
 
 Within one logical chat turn, repeated tool calls with the same normalized tool name and identical arguments should reuse the first result. The runtime should still return a `ToolMessage` for every LangChain tool call id, but it should not execute or log duplicate service calls. This keeps interactive logs readable and prevents repeated status queries such as `memory_count` from looking like retries.
 

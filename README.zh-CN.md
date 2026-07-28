@@ -18,6 +18,8 @@ LangGraph 现已支撑 conversation runtime。聊天 agent 可在对话中调用
 
 规范的 conversation runtime API 是 `ConversationGraphRuntime`；激进开发阶段
 不再保留原 `ChatAgent` 类名 alias。
+已配置模型必须返回 framework-native structured response。无模型时的本地
+fallback 仅返回纯文本；prompted 或 fenced JSON 不再构成第二套聊天响应协议。
 
 审批门控工具在次要审计存储不可用时仍以用户提示和工具结果为准；
 故障会通过结构化降级诊断记录，并在诊断日志也失败时退化为运行时警告。

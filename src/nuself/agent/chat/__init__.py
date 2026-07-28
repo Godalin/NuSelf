@@ -4,6 +4,7 @@ from nuself.agent.chat.runtime import (
     ConversationGraphRuntime,
     trace_summary,
 )
+from nuself.agent.chat.response import ConversationResponseService
 from nuself.agent.chat.thread import (
     ThreadMessage,
     ThreadState,
@@ -27,6 +28,7 @@ __all__ = [
     "ConversationGraphRuntimeError",
     "ConversationNodeName",
     "ConversationNodeResult",
+    "ConversationResponseService",
     "ConversationTurnState",
     "ThreadMessage",
     "ThreadState",

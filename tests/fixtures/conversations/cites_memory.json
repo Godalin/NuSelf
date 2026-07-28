@@ -10,7 +10,12 @@
       "tags": ["work"]
     }
   ],
-  "llm_response": "{\"answer\":\"You prefer remote work for deep focus tasks.\",\"evidence_references\":[\"mem_123\"],\"confidence\":0.9,\"epistemic_status\":\"grounded\"}",
+  "response": {
+    "answer": "You prefer remote work for deep focus tasks.",
+    "evidence_references": ["mem_123"],
+    "confidence": 0.9,
+    "epistemic_status": "grounded"
+  },
   "expectations": {
     "answer_contains": ["remote work", "deep focus"],
     "evidence_references_count_min": 1,

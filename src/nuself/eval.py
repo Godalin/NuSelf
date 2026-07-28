@@ -7,7 +7,12 @@ import json
 from pathlib import Path
 from typing import cast
 
-from nuself.agent.chat import ConversationGraphRuntime, ChatResult
+from nuself.agent.chat import (
+    ChatResult,
+    ChatStructuredOutput,
+    ConversationGraphRuntime,
+    ConversationTurnState,
+)
 from nuself.domain.memory import MemoryEntry
 from nuself.llm import ChatMessage
 
@@ -68,7 +73,7 @@ class EvalFixture:
     thread_id: str
     user_message: str
     memory_entries: tuple[FixtureMemoryEntry, ...]
-    llm_response: str
+    response: ChatStructuredOutput
     expectations: FixtureExpectations
 
     @classmethod
@@ -84,12 +89,15 @@ class EvalFixture:
         expectations_raw = data.get("expectations")
         if not isinstance(expectations_raw, dict):
             raise ValueError("expectations must be an object")
+        response_raw = data.get("response")
+        if not isinstance(response_raw, dict):
+            raise ValueError("response must be an object")
         return cls(
             name=_expect_str(data, "name"),
             thread_id=_expect_str(data, "thread_id"),
             user_message=_expect_str(data, "user_message"),
             memory_entries=tuple(entries),
-            llm_response=_expect_str(data, "llm_response"),
+            response=ChatStructuredOutput.model_validate(response_raw),
             expectations=FixtureExpectations.from_wire(cast(dict[str, object], expectations_raw)),
         )
 
@@ -111,8 +119,8 @@ class EvalResult:
     failures: tuple[str, ...]
 
 
-class FixtureLLM:
-    """Fake LLM that returns a fixed response for evaluation."""
+class FixturePlainLLM:
+    """Plain LLM dependency used outside typed fixture response synthesis."""
 
     def __init__(self, response: str) -> None:
         self.response = response
@@ -123,6 +131,25 @@ class FixtureLLM:
         return self.response
 
 
+class FixtureResponseService:
+    """Return the fixture's typed response without emulating a model protocol."""
+
+    def __init__(self, response: ChatStructuredOutput) -> None:
+        self.response = response
+        self.calls: list[list[ChatMessage]] = []
+
+    def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
+        self.calls.append(prompt)
+        return self.response
+
+    def finalize(
+        self,
+        state: ConversationTurnState,
+        draft: ChatStructuredOutput,
+    ) -> ChatStructuredOutput:
+        return draft
+
+
 def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
     """Run one golden fixture and return the eval result."""
     from nuself.memory.repository import MemoryEntryRepository
@@ -131,7 +158,11 @@ def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
     for entry in fixture.memory_entries:
         repo.save(entry.to_domain())
 
-    agent = ConversationGraphRuntime(project_root, llm=FixtureLLM(fixture.llm_response))
+    agent = ConversationGraphRuntime(
+        project_root,
+        llm=FixturePlainLLM(fixture.response.answer),
+        response_service=FixtureResponseService(fixture.response),
+    )
     result = agent.respond(fixture.user_message, fixture.thread_id)
     return score_result(fixture, result)
 

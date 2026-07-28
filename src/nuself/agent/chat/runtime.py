@@ -22,7 +22,10 @@ from nuself.agent.chat.types import (
 )
 from nuself.agent.chat.context import ConversationContextPreparer
 from nuself.agent.chat.persona import ConversationPersonaOrchestrator
-from nuself.agent.chat.response import ConversationResponseSynthesizer
+from nuself.agent.chat.response import (
+    ConversationResponseService,
+    ConversationResponseSynthesizer,
+)
 from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.chat.tool_runtime import ConversationToolRuntime
 from nuself.agent.chat.thread import ThreadMessage, ThreadState, ThreadStore
@@ -93,6 +96,7 @@ class ConversationGraphRuntime:
         job_sink: JobSink | None = None,
         section_planner: SectionPlanner | None = None,
         event_publisher: EventPublisher | None = None,
+        response_service: ConversationResponseService | None = None,
     ) -> None:
         self._llm = llm or default_llm(project_root)
         self._langchain_models: tuple[LangChainLLMEndpoint, ...] = (
@@ -138,13 +142,17 @@ class ConversationGraphRuntime:
             section_planner=section_planner,
         )
         self._tools: dict[str, BaseTool] = self._tool_runtime.tools
-        self._response_synthesizer = ConversationResponseSynthesizer(
-            project_root=project_root,
-            llm=self._llm,
-            langchain_models=self._langchain_models,
-            tools=self._tools.values(),
-            log_tool_call=self._tool_runtime.log_call,
-            report_tool_log_failure=self._tool_runtime.report_log_failure,
+        self._response_synthesizer = (
+            response_service
+            if response_service is not None
+            else ConversationResponseSynthesizer(
+                project_root=project_root,
+                llm=self._llm,
+                langchain_models=self._langchain_models,
+                tools=self._tools.values(),
+                log_tool_call=self._tool_runtime.log_call,
+                report_tool_log_failure=self._tool_runtime.report_log_failure,
+            )
         )
         graph: Any = StateGraph(_ConversationGraphState)
         graph.add_node("prepare_context", self._graph_prepare_context)
@@ -433,14 +441,13 @@ class ConversationGraphRuntime:
         parts = [
             "You are NuSelf, a private AI mirror for one person.",
             "Use the user's memory entries and source chunks as durable context. Do not invent memories.",
-            "Return a JSON object with answer, evidence_references, confidence, and epistemic_status.",
+            "Populate the structured response fields answer, evidence_references, confidence, and epistemic_status.",
             "answer must be the user-facing text. evidence_references must cite relevant memory ids or source refs when available.",
             "Use internal persona synthesis as private context only. "
             "Do not narrate internal persona composition or say which self contributed what in the user-facing answer, "
             "unless the user explicitly asks about the internal persona mechanism.",
-            "The JSON object is only an internal transport protocol. "
             "The answer field must contain only the text to show to the user; "
-            "do not include raw JSON, fenced code blocks, or protocol field names inside answer.",
+            "do not include serialization syntax, fenced code blocks, or structured field names inside answer.",
             "If you make a claim about the user's preferences, history, or other personal facts without evidence, set epistemic_status to unsupported.",
             "confidence should be a number between 0 and 1 when you can estimate it; otherwise omit it.",
             "epistemic_status should be one of grounded, inferred, uncertain, or unsupported.",
@@ -473,10 +480,6 @@ class ConversationGraphRuntime:
 
     def _complete_response(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
         return self._response_synthesizer.complete(prompt)
-
-    @staticmethod
-    def _parse_llm_output(raw: str) -> ChatStructuredOutput:
-        return ConversationResponseSynthesizer.parse_output(raw)
 
     def _finalize_draft_response(self, state: ConversationTurnState, draft: ChatStructuredOutput) -> ChatStructuredOutput:
         return self._response_synthesizer.finalize(state, draft)

@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. `ConversationGraphRuntime` is now the sole conversation runtime class
-name, with no `ChatAgent` compatibility alias or daemon composition field.
+Idle. Chat now has one framework-native typed response protocol plus one
+strictly plain-text deterministic local fallback.
 
 ## Active Branch
 
@@ -23,16 +23,18 @@ code.
 
 ## Completion Evidence
 
-- The compatibility assignment and package-root export are deleted.
-- Production CLI, daemon, evaluation, request-state protocols, and tests import
-  `ConversationGraphRuntime` directly.
-- Daemon composition owns `conversation_runtime`; no `chat_agent` state field
-  remains.
-- Graph node methods remain explicit testable seams and are no longer
-  documented as compatibility adapters.
-- `rg '\bChatAgent\b' src tests` returns no code or test references.
-- Focused chat, graph, daemon, CLI, and evaluation tests: 399 passed.
-- Final full tests: 1387 passed.
+- LangChain agent state must contain `structured_response`; message content is
+  never reparsed.
+- The no-model fallback wraps plain text with default structured metadata and
+  rejects response-shaped JSON, fenced JSON, and visible tool-call markers.
+- Prompted/fenced chat JSON parsers, the generic LLM JSON helper, and obsolete
+  runtime parser methods are deleted.
+- `ConversationResponseService` is the typed injection boundary for tests and
+  alternate composition roots.
+- Conversation evaluation fixtures store a structured `response` object and
+  inject it directly; the old `llm_response` string field is removed.
+- Focused chat, daemon, synthesis, response, and evaluation tests: 116 passed.
+- Final full tests: 1377 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -42,6 +44,6 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit the local chat response compatibility parser and remaining legacy
-persisted-data fallbacks, separating removable parallel runtime protocols from
-explicit storage migrations.
+Audit compatibility callbacks in CLI composition and then explicit legacy
+persisted-data fallbacks, removing only those without a current migration
+contract.

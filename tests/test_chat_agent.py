@@ -83,47 +83,21 @@ class FakeLLM:
         return "agent reply"
 
 
-class StructuredFakeLLM:
-    def __init__(self, response: str, activation_response: dict[str, object] | None = None) -> None:
+class StaticResponseService:
+    def __init__(self, response: ChatStructuredOutput) -> None:
         self.response = response
         self.calls: list[list[ChatMessage]] = []
-        self._activation_response = activation_response or {
-            "activated": False,
-            "selected_persona_ids": [],
-            "trigger": "test",
-            "should_escalate": False,
-            "escalation_reason": "",
-        }
 
-    def complete(self, messages: list[ChatMessage]) -> str:
-        content = messages[0].content
-        if "Persona Activation Gate" in content:
-            return json.dumps(self._activation_response)
-        if "private reflection council" in content:
-            return "analyst_self gives a concrete LLM-backed perspective."
-        if "You are the synthesizer. Distill" in content:
-            return "LLM-backed synthesis of internal perspectives."
-        self.calls.append(messages)
+    def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
+        self.calls.append(prompt)
         return self.response
 
-
-class SequencedStructuredFakeLLM(StructuredFakeLLM):
-    def __init__(self, responses: list[str], activation_response: dict[str, object] | None = None) -> None:
-        super().__init__(responses[-1] if responses else "", activation_response=activation_response)
-        self._responses = list(responses)
-
-    def complete(self, messages: list[ChatMessage]) -> str:
-        content = messages[0].content
-        if "Persona Activation Gate" in content:
-            return json.dumps(self._activation_response)
-        if "private reflection council" in content:
-            return "analyst_self gives a concrete LLM-backed perspective."
-        if "You are the synthesizer. Distill" in content:
-            return "LLM-backed synthesis of internal perspectives."
-        self.calls.append(messages)
-        if self._responses:
-            return self._responses.pop(0)
-        return self.response
+    def finalize(
+        self,
+        state: ConversationTurnState,
+        draft: ChatStructuredOutput,
+    ) -> ChatStructuredOutput:
+        return draft
 
 
 class FailingLLM:
@@ -222,11 +196,23 @@ def test_chat_agent_includes_profile_items_by_default(tmp_path: Path) -> None:
 
 
 def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM(
-        '{"answer":"Use the profile context.","evidence_references":["mem_123","source:note:0"],'
-        '"confidence":0.92,"epistemic_status":"grounded"}'
+    llm = FakeLLM()
+    response_service = StaticResponseService(
+        ChatStructuredOutput(
+            answer="Use the profile context.",
+            evidence_references=["mem_123", "source:note:0"],
+            confidence=0.92,
+            epistemic_status="grounded",
+        )
     )
-    agent = ConversationGraphRuntime(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)))
+    agent = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        response_service=response_service,
+        memory_query_service=MemoryQueryService(
+            MemoryEntryRepository(tmp_path)
+        ),
+    )
 
     result = agent.respond("profile context")
 
@@ -235,7 +221,7 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
     assert result.evidence_references == ("mem_123", "source:note:0")
     assert result.confidence == 0.92
     assert result.epistemic_status == "grounded"
-    assert llm.calls[0][0].content.startswith("You are NuSelf")
+    assert response_service.calls[0][0].content.startswith("You are NuSelf")
     thread_path = tmp_path / "private" / "threads" / "default.json"
     text = thread_path.read_text(encoding="utf-8")
     assert "Use the profile context." in text
@@ -358,10 +344,17 @@ def test_thread_store_update_writes_under_transaction(tmp_path: Path) -> None:
 
 
 def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM('{"answer":"Runtime node reply.","evidence_references":["mem_node"],"confidence":0.8}')
+    llm = FakeLLM()
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
+        response_service=StaticResponseService(
+            ChatStructuredOutput(
+                answer="Runtime node reply.",
+                evidence_references=["mem_node"],
+                confidence=0.8,
+            )
+        ),
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
     turn_state = ConversationTurnState.start(ThreadState.empty("default"), "node contracts", "default")
@@ -384,10 +377,13 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
 
 
 def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM('{"answer":"Trivial reply.","evidence_references":[],"confidence":0.4}')
+    llm = FakeLLM()
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
+        response_service=StaticResponseService(
+            ChatStructuredOutput(answer="Trivial reply.", confidence=0.4)
+        ),
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
@@ -404,9 +400,8 @@ def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path
 
 
 def test_conversation_runtime_runs_llm_backed_personas_through_selves_subagent(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM(
-        '{"answer":"Persona reply.","evidence_references":[],"confidence":0.4}',
-        activation_response={
+    llm = FakeLLM(
+        {
             "activated": True,
             "selected_persona_ids": ["analyst_self"],
             "trigger": "analytical question",
@@ -417,6 +412,9 @@ def test_conversation_runtime_runs_llm_backed_personas_through_selves_subagent(t
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
+        response_service=StaticResponseService(
+            ChatStructuredOutput(answer="Persona reply.", confidence=0.4)
+        ),
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
@@ -442,13 +440,19 @@ def test_conversation_runtime_runs_llm_backed_personas_through_selves_subagent(t
 
 
 def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path: Path) -> None:
-    llm = StructuredFakeLLM(
-        '{"answer":"Graph driver reply.","evidence_references":["mem_graph"],'
-        '"confidence":0.9,"epistemic_status":"grounded"}'
+    llm = FakeLLM()
+    response_service = StaticResponseService(
+        ChatStructuredOutput(
+            answer="Graph driver reply.",
+            evidence_references=["mem_graph"],
+            confidence=0.9,
+            epistemic_status="grounded",
+        )
     )
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
+        response_service=response_service,
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-import json
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain.agents.structured_output import ToolStrategy as _ToolStrategy
@@ -22,7 +21,6 @@ from nuself.llm import (
     ChatMessage,
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
-    parse_llm_json_object,
     record_llm_endpoint_success,
     redact_llm_error,
 )
@@ -31,6 +29,21 @@ from nuself.runtime.observability import (
     report_observed_failure,
     run_observed_best_effort,
 )
+
+
+class ConversationResponseService(Protocol):
+    """Typed response capability consumed by the conversation graph."""
+
+    def complete(
+        self,
+        prompt: list[ChatMessage],
+    ) -> ChatStructuredOutput: ...
+
+    def finalize(
+        self,
+        state: ConversationTurnState,
+        draft: ChatStructuredOutput,
+    ) -> ChatStructuredOutput: ...
 
 
 class ConversationResponseSynthesizer:
@@ -59,7 +72,7 @@ class ConversationResponseSynthesizer:
     ) -> ChatStructuredOutput:
         if self._langchain_models:
             return self._complete_with_langchain_tools(prompt)
-        return self.parse_output(self._llm.complete(prompt))
+        return _plain_fallback_output(self._llm.complete(prompt))
 
     def finalize(
         self,
@@ -85,10 +98,6 @@ class ConversationResponseSynthesizer:
             metadata={"thread_id": state.thread_id},
         )
         return draft
-
-    @staticmethod
-    def parse_output(raw: str) -> ChatStructuredOutput:
-        return _parse_compatibility_output(raw)
 
     def _complete_with_langchain_tools(
         self,
@@ -139,7 +148,7 @@ class ConversationResponseSynthesizer:
                 status="fallback",
                 metadata=None,
             )
-        return self.parse_output(self._llm.complete(prompt))
+        return _plain_fallback_output(self._llm.complete(prompt))
 
     def _log_retry(
         self,
@@ -259,29 +268,19 @@ def _structured_output_from_state(
         _reject_visible_tool_call(parsed)
         return parsed
 
-    messages = state.get("messages")
-    if isinstance(messages, list) and messages:
-        content = getattr(cast(object, messages[-1]), "content", None)
-        if isinstance(content, str):
-            return _parse_compatibility_output(content)
-    raise ValueError("no valid structured output in agent state")
+    raise ValueError("LangChain agent state is missing structured_response")
 
 
 def _looks_like_tool_call(text: str) -> bool:
     return "minimax:tool_call" in text
 
 
-def _parse_compatibility_output(raw: str) -> ChatStructuredOutput:
-    try:
-        record = parse_llm_json_object(raw)
-    except (json.JSONDecodeError, ValueError) as exc:
-        if _looks_like_response_protocol(raw):
-            raise ValueError(
-                "Agent returned malformed structured response"
-            ) from exc
-        parsed = ChatStructuredOutput(answer=raw)
-    else:
-        parsed = ChatStructuredOutput.model_validate(record)
+def _plain_fallback_output(raw: str) -> ChatStructuredOutput:
+    if _looks_like_response_protocol(raw):
+        raise ValueError(
+            "Local chat fallback returned forbidden response protocol text"
+        )
+    parsed = ChatStructuredOutput(answer=raw)
     _reject_visible_tool_call(parsed)
     return parsed
 

@@ -6,7 +6,11 @@ The final response boundary is the runtime guard that decides whether a chat age
 
 NuSelf no longer uses a separate LLM-backed presentation agent in the normal chat path. The chat supervisor is responsible for both tool/subagent orchestration and final user-facing wording. This avoids an extra model call and keeps tool results, selves output, and final wording in one agent context.
 
-The boundary is not a sanitizer. It does not mechanically edit leaked protocol text. It checks the structured chat output and, when needed, asks the same chat supervisor to regenerate once with a stricter final-answer instruction. The runtime may still robustly parse protocol-shaped model responses, including fenced JSON protocol blocks, because protocol parsing is transport handling rather than answer rewriting.
+The boundary is not a sanitizer. It does not mechanically edit leaked protocol
+text. It checks the framework-native structured chat output and, when needed,
+asks the same chat supervisor to regenerate once with a stricter final-answer
+instruction. Protocol-shaped or fenced JSON text is rejected rather than
+reparsed through a parallel transport.
 
 ## Pipeline Position
 
@@ -76,7 +80,11 @@ The ordinary chat supervisor prompt must include the final-answer boundary:
 - adapt length and structure to the user's current state;
 - keep uncertainty explicit.
 
-When the active chat model is available through LangChain, the final chat result must be requested through LangChain structured output (`with_structured_output(...)` or an equivalent `response_format`) after any tool loop completes. Prompted JSON parsing is only a compatibility fallback for deterministic tests and non-LangChain local fallback models.
+When the active chat model is available through LangChain, the final chat
+result must be requested through LangChain structured output
+(`with_structured_output(...)` or an equivalent `response_format`) after any
+tool loop completes. Prompted JSON and message-state reparsing are forbidden.
+The deterministic no-model fallback returns plain answer text only.
 
 ## Quality Retry
 

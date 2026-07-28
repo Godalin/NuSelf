@@ -3,20 +3,23 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
-from nuself.agent.chat import ConversationGraphRuntime, ConversationTurnState, ThreadState
+from nuself.agent.chat import (
+    ChatStructuredOutput,
+    ConversationGraphRuntime,
+    ConversationTurnState,
+    ThreadState,
+)
 from nuself.llm import ChatMessage
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 
 
-import json
+class FakeLLM:
+    """Fake LLM for persona and local fallback behavior."""
 
-class StructuredFakeLLM:
-    """Fake LLM that captures all calls and returns structured response."""
-
-    def __init__(self, response: str, activation_response: dict[str, object] | None = None) -> None:
-        self.response = response
+    def __init__(self, activation_response: dict[str, object] | None = None) -> None:
         self.calls: list[list[ChatMessage]] = []
         self._activation_response = activation_response or {
             "activated": True,
@@ -35,12 +38,29 @@ class StructuredFakeLLM:
         if "You are the synthesizer. Distill" in content:
             return "LLM-backed synthesis of internal perspectives."
         self.calls.append(messages)
+        return "plain fallback"
+
+
+class StaticResponseService:
+    def __init__(self, response: ChatStructuredOutput) -> None:
+        self.response = response
+        self.calls: list[list[ChatMessage]] = []
+
+    def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
+        self.calls.append(prompt)
         return self.response
+
+    def finalize(
+        self,
+        state: ConversationTurnState,
+        draft: ChatStructuredOutput,
+    ) -> ChatStructuredOutput:
+        return draft
 
 
 def test_selves_consult_returns_internal_synthesis(tmp_path: Path) -> None:
     """Verify that selves synthesis is now exposed through the subagent tool."""
-    llm = StructuredFakeLLM('{"answer":"Synthesis-aware reply.","evidence_references":[],"confidence":0.5}')
+    llm = FakeLLM()
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
@@ -58,10 +78,13 @@ def test_selves_consult_returns_internal_synthesis(tmp_path: Path) -> None:
 
 def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
     """Verify that synthesis remains internal and does NOT appear in ChatResult.to_payload()."""
-    llm = StructuredFakeLLM('{"answer":"Final answer.","evidence_references":[],"confidence":0.5}')
+    llm = FakeLLM()
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
+        response_service=StaticResponseService(
+            ChatStructuredOutput(answer="Final answer.", confidence=0.5)
+        ),
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
@@ -88,12 +111,13 @@ def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
 
 def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
     """Verify that the chat graph does not include synthesis sections in the normal respond path."""
-    llm = StructuredFakeLLM(
-        '{"answer":"No synthesis reply.","evidence_references":[],"confidence":0.5}',
-    )
+    llm = FakeLLM()
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
+        response_service=StaticResponseService(
+            ChatStructuredOutput(answer="No synthesis reply.", confidence=0.5)
+        ),
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
@@ -117,9 +141,8 @@ def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
 
 def test_selves_consult_handles_explicit_multi_persona_request(tmp_path: Path) -> None:
     """Verify synthesis is generated for explicit multi-persona requests through the subagent tool."""
-    llm = StructuredFakeLLM(
-        '{"answer":"Multi-view reply.","evidence_references":[],"confidence":0.6}',
-        activation_response={
+    llm = FakeLLM(
+        {
             "activated": True,
             "selected_persona_ids": ["skeptic_self", "builder_self", "historian_self", "care_self"],
             "trigger": "explicit multi-view request",
@@ -158,7 +181,7 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
         )
     )
     
-    llm = StructuredFakeLLM('{"answer":"Preserved reply.","evidence_references":[],"confidence":0.5}')
+    llm = FakeLLM()
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
@@ -186,10 +209,18 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
 
 def test_respond_node_uses_main_prompt(tmp_path: Path) -> None:
     """Verify that respond_node uses the main prompt and selves is available as a tool."""
-    llm = StructuredFakeLLM('{"answer":"Synthesized reply.","evidence_references":[],"confidence":0.8,"epistemic_status":"grounded"}')
+    llm = FakeLLM()
+    response_service = StaticResponseService(
+        ChatStructuredOutput(
+            answer="Synthesized reply.",
+            confidence=0.8,
+            epistemic_status="grounded",
+        )
+    )
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
+        response_service=response_service,
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
@@ -208,8 +239,8 @@ def test_respond_node_uses_main_prompt(tmp_path: Path) -> None:
     assert result.state.final_response.confidence == 0.8
     
     # Verify main prompt was used; selves is available as a tool.
-    assert len(llm.calls) >= 1
-    system_prompt = llm.calls[-1][0].content
+    assert len(response_service.calls) >= 1
+    system_prompt = response_service.calls[-1][0].content
     assert "You are NuSelf" in system_prompt
     assert "selves_consult" in system_prompt
     assert "synthesizer self" not in system_prompt
@@ -219,12 +250,14 @@ def test_respond_node_uses_main_prompt(tmp_path: Path) -> None:
 
 def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
     """Verify that respond_node uses the main LLM system prompt."""
-    llm = StructuredFakeLLM(
-        '{"answer":"Normal reply.","evidence_references":[],"confidence":0.5}',
+    llm = FakeLLM()
+    response_service = StaticResponseService(
+        ChatStructuredOutput(answer="Normal reply.", confidence=0.5)
     )
     runtime = ConversationGraphRuntime(
         tmp_path,
         llm=llm,
+        response_service=response_service,
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
@@ -241,8 +274,8 @@ def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
     assert result.state.final_response.answer == "Normal reply."
     
     # Verify main prompt was used
-    assert len(llm.calls) >= 1
-    system_prompt = llm.calls[0][0].content
+    assert len(response_service.calls) >= 1
+    system_prompt = response_service.calls[0][0].content
     assert "You are NuSelf" in system_prompt
     assert "synthesizer self" not in system_prompt
     assert "Do not narrate internal persona composition" in system_prompt

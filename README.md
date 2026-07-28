@@ -18,6 +18,9 @@ LangGraph now backs the conversation runtime. The chat agent can invoke tools to
 
 The canonical conversation runtime API is `ConversationGraphRuntime`; active
 development does not retain the former `ChatAgent` class-name alias.
+Configured models must return framework-native structured responses. The
+no-model local fallback is plain text only; prompted or fenced JSON is not a
+second chat response protocol.
 
 Approval-gated tools keep prompting and tool results authoritative when
 secondary audit storage is unavailable; the failure is reported through

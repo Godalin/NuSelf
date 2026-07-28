@@ -7,18 +7,21 @@ from pathlib import Path
 from nuself.eval import (
     EvalFixture,
     FixtureExpectations,
-    FixtureLLM,
     FixtureMemoryEntry,
+    FixturePlainLLM,
     load_fixtures,
     run_fixture,
     score_result,
 )
-from nuself.agent.chat import ChatResult
+from nuself.agent.chat import ChatResult, ChatStructuredOutput
+from nuself.llm import ChatMessage
 
 
 def test_fixture_llm_returns_fixed_response() -> None:
-    llm = FixtureLLM("fixed reply")
-    result = llm.complete([{"role": "user", "content": "hello"}])  # type: ignore[list-item]
+    llm = FixturePlainLLM("fixed reply")
+    result = llm.complete(
+        [ChatMessage(role="user", content="hello")]
+    )
     assert result == "fixed reply"
     assert len(llm.calls) == 1
 
@@ -29,7 +32,7 @@ def test_score_result_passes_all_expectations() -> None:
         thread_id="t",
         user_message="hi",
         memory_entries=(),
-        llm_response="",
+        response=ChatStructuredOutput(answer=""),
         expectations=FixtureExpectations(
             answer_contains=("hello",),
             evidence_references_count_min=1,
@@ -57,7 +60,7 @@ def test_score_result_fails_missing_evidence() -> None:
         thread_id="t",
         user_message="hi",
         memory_entries=(),
-        llm_response="",
+        response=ChatStructuredOutput(answer=""),
         expectations=FixtureExpectations(
             evidence_references_count_min=1,
         ),
@@ -75,7 +78,7 @@ def test_score_result_fails_banned_pattern() -> None:
         thread_id="t",
         user_message="hi",
         memory_entries=(),
-        llm_response="",
+        response=ChatStructuredOutput(answer=""),
         expectations=FixtureExpectations(
             banned_patterns=("always",),
         ),
@@ -90,7 +93,7 @@ def test_load_fixtures_loads_json_files(tmp_path: Path) -> None:
     fixture_path = tmp_path / "test.json"
     fixture_path.write_text(
         '{"name":"x","thread_id":"t","user_message":"hi","memory_entries":[],'
-        '"llm_response":"reply","expectations":{}}',
+        '"response":{"answer":"reply"},"expectations":{}}',
         encoding="utf-8",
     )
     fixtures = load_fixtures(tmp_path)
@@ -106,7 +109,12 @@ def test_run_fixture_runs_end_to_end(tmp_path: Path) -> None:
         memory_entries=(
             FixtureMemoryEntry(type="belief", title="Pref", body="I like tea.", tags=["food"]),
         ),
-        llm_response='{"answer":"You like tea.","evidence_references":["mem_1"],"confidence":0.9,"epistemic_status":"grounded"}',
+        response=ChatStructuredOutput(
+            answer="You like tea.",
+            evidence_references=["mem_1"],
+            confidence=0.9,
+            epistemic_status="grounded",
+        ),
         expectations=FixtureExpectations(
             answer_contains=("tea",),
             evidence_references_count_min=1,
