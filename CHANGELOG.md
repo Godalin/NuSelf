@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Internal job wake-ups now resolve through sealed name, producer, and payload
+  definitions before queue mutation; Reason export workers reject invalid jobs
+  at ingress instead of queueing and later emitting
+  `export_job_type_ignored`.
 - Reason lifecycle, proposal, scheduler, advancer, trace, output, and daemon
   export-worker audits now use one sealed Reason-owned registry with fixed
   messages and exact metadata; audit records no longer duplicate private

@@ -46,7 +46,6 @@ ReasonAuditEvent = Literal[
     "export_job_enqueued",
     "export_queue_drained",
     "export_worker_get_error",
-    "export_job_type_ignored",
     "export_job_dequeued",
     "export_job_manifest_invalid",
     "export_job_progress_invalid",
@@ -95,7 +94,6 @@ _DAEMON_EVENTS = frozenset(
         "export_job_enqueued",
         "export_queue_drained",
         "export_worker_get_error",
-        "export_job_type_ignored",
         "export_job_dequeued",
         "export_job_manifest_invalid",
         "export_job_progress_invalid",
@@ -137,7 +135,6 @@ _MESSAGES: dict[ReasonAuditEvent, str] = {
     "export_job_enqueued": "Reason export job enqueued",
     "export_queue_drained": "Reason export queue drained",
     "export_worker_get_error": "Reason export queue read failed",
-    "export_job_type_ignored": "Unsupported Reason export job ignored",
     "export_job_dequeued": "Reason export job dequeued",
     "export_job_manifest_invalid": "Reason export manifest invalid",
     "export_job_progress_invalid": "Reason export progress invalid",
@@ -526,9 +523,6 @@ def _build_registry() -> AuditDefinitionRegistry:
         AuditEventDefinition(
             "daemon", "export_worker_get_error", "warning", "error",
             error_policy="required",
-        ),
-        AuditEventDefinition(
-            "daemon", "export_job_type_ignored", "warning", None,
         ),
         AuditEventDefinition(
             "daemon", "export_job_dequeued", "info", None,

@@ -46,12 +46,27 @@ subsystem boundaries through typed, definition-validated adapters.
   shape, while events validate through a definition registry, jobs use a typed
   wrapper without closed name definitions, and audits adapt the envelope
   separately in `logs.py`.
-- Pending full inventory, design, implementation, and verification.
+- Direct envelope construction is already confined to the event publisher,
+  `JobMessage`, and log/audit adapter; no domain bypass requires another
+  wrapper layer.
+- `docs/spec/runtime-infrastructure.md` and
+  `docs/spec/reason-output.md` now define the missing sealed job-definition
+  boundary and reject unknown jobs before queue mutation.
+- `JobDefinitionRegistry` now owns dotted job names, allowed producers, exact
+  data validators, duplicate rejection, sealing, and typed-message validation.
+- Reason owns the `reason.output.export` contract for `reasoning`,
+  `daemon_retry`, and `daemon_reconciliation`; enqueue validates before the
+  only `SimpleQueue.put(...)` call.
+- The worker's unknown-name compatibility branch and
+  `export_job_type_ignored` audit were removed.
+- Focused runtime-job/Reason-export suite: `106 passed`.
+- Full test suite: `2005 passed`.
+- Pyright: `0 errors, 0 warnings, 0 informations`.
+- `git diff --check` passed.
 
 ## Publication
 
-Reason audit ownership was implemented in `b2d2b07`; publication is pending
-the milestone commit and push.
+Pending this batch's implementation commit and push.
 
 ## Next Review Batch
 

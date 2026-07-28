@@ -17,6 +17,7 @@ from uuid import uuid4
 from nuself.clock import utc_now, utc_now_iso
 from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
 from nuself.reason.errors import ReasonNotFound
+from nuself.reason.job_contracts import REASON_OUTPUT_JOB_NAME
 from nuself.reason.audit import (
     report_reason_failure,
     write_reason_audit,
@@ -500,7 +501,7 @@ class ReasonOutputService:
         job_sink = self._job_sink
         if job_sink is not None:
             job_message = JobMessage.create(
-                name="reason.output.export",
+                name=REASON_OUTPUT_JOB_NAME,
                 producer="reasoning",
                 job_id=job_id,
                 resource_id=thread.id,

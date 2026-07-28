@@ -644,6 +644,27 @@ envelope and decoding it again therefore retains every value required to route
 the wake-up. Producers receive a `JobSink` through composition; domain modules
 must not install process-global enqueue callbacks.
 
+Every queue owner validates a `JobMessage` against a sealed
+`JobDefinitionRegistry` before enqueueing it. A job definition owns one dotted
+job name, its allowed producer identities, and an exact validator for the
+domain wake-up `data`. Definitions and registries use the same shared
+`DefinitionRegistry` mechanics as runtime events while remaining distinct
+semantic types:
+
+- job names use the registered dotted runtime-name grammar;
+- producer identities use the lowercase identity-segment grammar;
+- duplicate definitions and mutation after sealing fail during composition;
+- unknown job names, disallowed producers, and invalid data fail before the
+  queue changes;
+- workers consume only definition-validated messages and do not retain an
+  `if name != ...: ignore` compatibility branch.
+
+`JobMessage` remains responsible for the common envelope and routing payload
+shape. A job definition validates domain meaning rather than duplicating
+`RuntimeEnvelope` or `JobPayload` decoding. Event, job, and audit boundaries
+therefore share one immutable wire envelope while each owner performs exactly
+one semantic validation at its ingress.
+
 The durable job record is authoritative and queue delivery is a best-effort
 wake-up. If wake-up delivery fails, the producer keeps the durable record,
 reports the compact exception chain through the shared observability boundary,

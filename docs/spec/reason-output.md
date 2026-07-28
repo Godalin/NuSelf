@@ -244,6 +244,20 @@ The chat tool receives the queue's typed `JobSink` through constructor
 injection; the reason module does not install a process-global enqueue
 callback.
 
+The queue owner seals one definition for `reason.output.export` before worker
+startup. Allowed producers are `reasoning`, `daemon_retry`, and
+`daemon_reconciliation`. Wake-up `data` is exact by producer:
+
+- `reasoning` may send no hints or exactly `mode` plus `output_format`;
+- `daemon_retry` sends exactly a positive `attempt`;
+- `daemon_reconciliation` sends no hints.
+
+Mode and format use the same declared Reason Output enums as the manifest.
+`ReasonExportWorker.enqueue(...)` validates the complete typed message before
+mutating the queue. Unknown names, test-only/arbitrary producers, extra hints,
+and invalid values are programming errors; they are never queued and therefore
+do not produce an `export_job_type_ignored` audit.
+
 The worker reconstructs the job data path from `thread_id` and `job_id`: `private/workspaces/reason/{thread_id}/artifacts/export/jobs/{job_id}/manifest.json`.
 
 #### Retry model
@@ -427,7 +441,6 @@ Daemon-side events:
 | `export_job_enqueued` | `info` | `queued` | forbidden | thread/job |
 | `export_queue_drained` | `warning` | none | forbidden | positive drained job count |
 | `export_worker_get_error` | `warning` | `error` | required | none |
-| `export_job_type_ignored` | `warning` | none | forbidden | none |
 | `export_job_dequeued` | `info` | none | forbidden | none; runtime context carries thread/job |
 | `export_job_manifest_invalid` | `error` | `error` | required | none; runtime context carries thread/job |
 | `export_job_progress_invalid` | `warning` | `degraded` | required | none; runtime context carries thread/job |

@@ -25,6 +25,10 @@ from nuself.clock import utc_now_iso
 from nuself.config import ConfigSystem
 from nuself.daemon.workers import DaemonWorkerSupervisor
 from nuself.reason.domain import ReasoningStep, ReasoningThread
+from nuself.reason.job_contracts import (
+    REASON_OUTPUT_JOB_NAME,
+    build_reason_job_definition_registry,
+)
 from nuself.reason.output import (
     ReasonOutputManifest,
     ReasonOutputProgress,
@@ -38,6 +42,7 @@ from nuself.reason.audit import (
 from nuself.runtime.context import use_runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.jobs import JobMessage
+from nuself.runtime.job_definitions import JobDefinitionRegistry
 from nuself.storage import write_json_atomic
 from nuself.workspace import PrivateWorkspaceStore
 
@@ -45,7 +50,6 @@ MAX_EXPORT_ATTEMPTS = 5
 EXPORT_RETRY_BASE_SECONDS = 10
 EXPORT_RETRY_MAX_SECONDS = 600
 EXPORT_QUEUE_POLL_SECONDS = 1.0
-EXPORT_JOB_NAME = "reason.output.export"
 EXPORT_WORKER_NAME = "export_worker"
 
 SectionPlanner = Callable[
@@ -252,6 +256,7 @@ class ReasonExportWorker:
         supervisor: DaemonWorkerSupervisor,
         *,
         text_agent: TextAgent | None = None,
+        job_definitions: JobDefinitionRegistry | None = None,
     ) -> None:
         self._project_root = project_root
         self._shutdown_requested = shutdown_requested
@@ -264,6 +269,11 @@ class ReasonExportWorker:
                 component="reasoning",
             )
         )
+        self._job_definitions = (
+            job_definitions
+            if job_definitions is not None
+            else build_reason_job_definition_registry()
+        )
         self._queue: queue.SimpleQueue[JobMessage] = queue.SimpleQueue()
         self._stopping = threading.Event()
         self._lifecycle_lock = threading.Lock()
@@ -275,6 +285,7 @@ class ReasonExportWorker:
     def enqueue(self, message: JobMessage) -> None:
         """Enqueue one typed export job message."""
 
+        self._job_definitions.validate(message)
         with self._lifecycle_lock:
             if self._stopping.is_set():
                 return
@@ -350,13 +361,6 @@ class ReasonExportWorker:
                 self._process(message)
 
     def _process(self, message: JobMessage) -> None:
-        if message.envelope.name != EXPORT_JOB_NAME:
-            write_reason_audit(
-                "export_job_type_ignored",
-                project_root=self._project_root,
-                metadata={},
-            )
-            return
         thread_id = message.resource_id
         job_id = message.job_id
         write_reason_audit(
@@ -476,8 +480,8 @@ class ReasonExportWorker:
                 timer for timer in self._timers if timer.is_alive()
             ]
             retry_message = JobMessage.create(
-                name=EXPORT_JOB_NAME,
-                producer="daemon.retry",
+                name=REASON_OUTPUT_JOB_NAME,
+                producer="daemon_retry",
                 job_id=job_id,
                 resource_id=thread_id,
                 payload={"attempt": attempts + 1},
@@ -531,8 +535,8 @@ class ReasonExportWorker:
                     continue
                 self.enqueue(
                     JobMessage.create(
-                        name=EXPORT_JOB_NAME,
-                        producer="daemon.reconciliation",
+                        name=REASON_OUTPUT_JOB_NAME,
+                        producer="daemon_reconciliation",
                         job_id=manifest.job_id,
                         resource_id=owner_id,
                     )

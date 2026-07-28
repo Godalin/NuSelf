@@ -178,12 +178,6 @@ _CANONICAL: tuple[
     ("daemon", "export_worker_get_error", {}, None),
     (
         "daemon",
-        "export_job_type_ignored",
-        {},
-        None,
-    ),
-    (
-        "daemon",
         "export_job_dequeued",
         {},
         None,

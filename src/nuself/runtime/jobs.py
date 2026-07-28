@@ -84,6 +84,14 @@ class JobMessage:
         return value
 
     @property
+    def name(self) -> str:
+        return self.envelope.name
+
+    @property
+    def producer(self) -> str:
+        return self.envelope.producer
+
+    @property
     def resource_id(self) -> str:
         return self._payload.resource_id
 
