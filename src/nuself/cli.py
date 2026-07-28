@@ -70,8 +70,6 @@ try:
     )
     from nuself.commands.output import (
         print_ansi as _print_ansi,
-        resolve_handle as _resolve_handle,
-        resolve_handle_selection as _resolve_handle_selection,
     )
     from nuself.commands.notifications import (
         handle_notify_clear,
@@ -146,24 +144,33 @@ try:
         handle_memory_graph_path,
         handle_memory_graph_search,
     )
+    from nuself.commands.memory.entries import (
+        format_memory_preview as _format_memory_preview,
+        handle_memory_add,
+        handle_memory_delete,
+        handle_memory_edit,
+        handle_memory_list,
+        handle_memory_preview,
+        handle_memory_reindex,
+        handle_memory_relations,
+        handle_memory_search,
+        handle_memory_show,
+        handle_memory_stats,
+        handle_memory_types,
+        handle_memory_unquarantine,
+        memory_type_choices as _memory_type_choices,
+    )
     from nuself.domain.memory import (
         MemoryEntry,
-        default_memory_type_registry,
         default_relation_descriptor_registry,
     )
     from nuself.memory.curator import MemoryCurator
-    from nuself.memory.intake import MemoryIntakeAgent
     from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
     from nuself.memory.repository import (
         MemoryCandidateNotFound,
         MemoryCandidateRepository,
         MemoryEntryNotFound,
         MemoryEntryRepository,
-        MemoryRelationFilters,
-        MemoryRelationIndexRecord,
-        MemoryStats,
-        MemorySearchFilters,
-        memory_stats,
     )
     from nuself.memory.source_repository import SourceDocumentNotFound, SourceRepository
     from nuself.profile.repository import ProfileItemRepository
@@ -1076,233 +1083,6 @@ def handle_open(args: argparse.Namespace) -> int:
         args.project_root,
         initial_thread_id=thread_id,
     )
-
-
-def handle_memory_list(args: argparse.Namespace) -> int:
-    entries = _memory_entries_for_list(args.project_root, sort_by=args.sort_by, review_state=args.review_state)
-    if not entries:
-        print("No memory entries.")
-        return 0
-    for index, entry in enumerate(entries):
-        _print_ansi(render_memory_entry_row(entry, index=index))
-    return 0
-
-
-def handle_memory_preview(args: argparse.Namespace) -> int:
-    _print_ansi(_format_memory_preview(args.project_root, args.limit))
-    return 0
-
-
-def handle_memory_show(args: argparse.Namespace) -> int:
-    repo = MemoryEntryRepository(args.project_root)
-    entry_id = _resolve_memory_entry_id(args)
-    if entry_id is None:
-        return 1
-    try:
-        entry = repo.get(entry_id)
-    except MemoryEntryNotFound:
-        print(f"Memory entry not found: {entry_id}", file=sys.stderr)
-        return 1
-    _print_ansi(render_memory_entry_detail(entry))
-    return 0
-
-
-def handle_memory_add(args: argparse.Namespace) -> int:
-    repo = MemoryEntryRepository(args.project_root)
-    try:
-        inferred = MemoryIntakeAgent(args.project_root).infer(
-            body=args.body,
-            title=args.title,
-            memory_type=args.type,
-            tags=list(args.tag),
-        )
-    except (RuntimeError, ValueError) as exc:
-        print(f"Memory intake failed: {exc}", file=sys.stderr)
-        return 1
-    entry = MemoryEntry(
-        type=inferred.type,
-        title=inferred.title,
-        body=inferred.body,
-        tags=list(inferred.tags),
-        confidence=inferred.confidence,
-        importance=args.importance if args.importance is not None else inferred.importance,
-    )
-    repo.save(entry)
-    repo.reindex()
-    record_memory_trace(args.project_root, entry, "add")
-    _print_ansi(render_memory_entry_row(entry))
-    return 0
-
-
-def handle_memory_edit(args: argparse.Namespace) -> int:
-    repo = MemoryEntryRepository(args.project_root)
-    entry_id = _resolve_memory_entry_id(args)
-    if entry_id is None:
-        return 1
-    try:
-        entry = repo.get(entry_id)
-    except MemoryEntryNotFound:
-        print(f"Memory entry not found: {entry_id}", file=sys.stderr)
-        return 1
-    updated = entry.with_updates(
-        title=args.title,
-        body=args.body,
-        tags=list(args.tag) if args.tag is not None else None,
-        importance=args.importance,
-        review_state=args.review_state,
-    )
-    repo.save(updated)
-    repo.reindex()
-    _print_ansi(render_memory_entry_row(updated))
-    return 0
-
-
-def handle_memory_delete(args: argparse.Namespace) -> int:
-    repo = MemoryEntryRepository(args.project_root)
-    entry_ids = _resolve_memory_entry_ids(args)
-    if entry_ids is None:
-        return 1
-    for entry_id in entry_ids:
-        try:
-            repo.delete(entry_id)
-        except MemoryEntryNotFound:
-            print(f"Memory entry not found: {entry_id}", file=sys.stderr)
-            return 1
-    repo.reindex()
-    for entry_id in entry_ids:
-        print(f"Deleted memory entry: {entry_id}")
-    return 0
-
-
-def handle_memory_search(args: argparse.Namespace) -> int:
-    repo = MemoryEntryRepository(args.project_root)
-    entries = repo.search(
-        args.query,
-        MemorySearchFilters(
-            type=args.type,
-            tag=args.tag,
-            review_state=args.review_state,
-            observed_from=args.observed_from,
-            observed_to=args.observed_to,
-            valid_on=args.valid_on,
-            min_importance=args.min_importance,
-        ),
-    )
-    if not entries:
-        print("No matching memory entries.")
-        return 0
-    for entry in entries:
-        _print_ansi(render_memory_entry_row(entry))
-    return 0
-
-
-def _memory_entries_for_list(
-    project_root: Path | None,
-    *,
-    sort_by: str = "updated_at",
-    review_state: str | None = None,
-) -> list[MemoryEntry]:
-    entries = MemoryEntryRepository(project_root).list()
-    if review_state is not None:
-        entries = [entry for entry in entries if entry.review_state == review_state]
-    if sort_by == "importance":
-        return sorted(entries, key=lambda entry: (-entry.importance, entry.updated_at, entry.id))
-    if sort_by == "type":
-        return sorted(entries, key=lambda entry: (entry.type, entry.updated_at, entry.id))
-    return entries
-
-
-def _resolve_memory_entry_id(args: argparse.Namespace) -> str | None:
-    return _resolve_handle(
-        args.entry_id,
-        _memory_entries_for_list(args.project_root),
-        label="memory",
-        get_id=lambda entry: entry.id,
-    )
-
-
-def _resolve_memory_entry_ids(args: argparse.Namespace) -> list[str] | None:
-    return _resolve_handle_selection(
-        args.entry_id,
-        _memory_entries_for_list(args.project_root),
-        label="memory",
-        get_id=lambda entry: entry.id,
-    )
-
-
-def handle_memory_stats(args: argparse.Namespace) -> int:
-    print(_format_memory_stats(memory_stats(args.project_root)))
-    return 0
-
-
-def handle_memory_relations(args: argparse.Namespace) -> int:
-    records = MemoryEntryRepository(args.project_root).list_relations(
-        MemoryRelationFilters(
-            relation=args.relation,
-            source_id=args.source_id,
-            target_id=args.target_id,
-        )
-    )
-    if not records:
-        print("No memory relations.")
-        return 0
-    for record in records:
-        print(_format_memory_relation(record))
-    return 0
-
-
-def handle_memory_types(args: argparse.Namespace) -> int:
-    registry = default_memory_type_registry()
-    if args.json:
-        import json as _json
-
-        output: list[dict[str, object]] = []
-        for name in registry.names():
-            example = registry.example(name)
-            output.append(
-                {
-                    "type": name,
-                    "description": registry.describe(name),
-                    "default_importance": registry.importance(example) if example is not None else None,
-                    "example": example.to_wire() if example is not None else None,
-                }
-            )
-        print(_json.dumps(output, indent=2, ensure_ascii=False))
-    else:
-        for name in registry.names():
-            example = registry.example(name)
-            default_imp = registry.importance(example) if example is not None else 0.5
-            print(f"{name}: {registry.describe(name)} (default importance {default_imp})")
-    return 0
-
-
-def handle_memory_reindex(args: argparse.Namespace) -> int:
-    memory_repo = MemoryEntryRepository(args.project_root)
-    memory_index_path = memory_repo.reindex()
-    relation_index_path = memory_repo.reindex_relations()
-    graph_index_path = memory_repo.reindex_symbolic_graph()
-    source_index_path = SourceRepository(args.project_root).reindex()
-    profile_index_path = ProfileItemRepository(args.project_root).reindex()
-    print(f"Rebuilt memory index: {memory_index_path}")
-    print(f"Rebuilt relation index: {relation_index_path}")
-    print(f"Rebuilt symbolic graph: {graph_index_path}")
-    print(f"Rebuilt source index: {source_index_path}")
-    print(f"Rebuilt profile index: {profile_index_path}")
-    return 0
-
-
-def handle_memory_unquarantine(args: argparse.Namespace) -> int:
-    repo = MemoryEntryRepository(args.project_root)
-    try:
-        repo.unquarantine(args.entry_id)
-    except MemoryEntryNotFound:
-        print(f"Memory entry not found: {args.entry_id}", file=sys.stderr)
-        return 1
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    print(f"Unquarantined memory entry: {args.entry_id}")
-    return 0
 
 
 def handle_dev_migrate(args: argparse.Namespace) -> int:
@@ -3298,67 +3078,6 @@ def _handle_interactive_threads_command(project_root: Path | None) -> str:
 
 
 
-
-
-def _format_memory_stats(stats: MemoryStats) -> str:
-    lines = [
-        f"entries_total: {stats.entries_total}",
-        f"candidates_total: {stats.candidates_total}",
-        f"pending_candidates: {stats.pending_candidates}",
-        f"entries_with_observed_at: {stats.entries_with_observed_at}",
-        f"entries_with_evidence: {stats.entries_with_evidence}",
-        f"avg_importance: {stats.avg_importance:.2f}",
-        f"max_importance: {stats.max_importance:.2f}",
-        f"avg_importance_by_type: {_format_float_counts(stats.avg_importance_by_type)}",
-        f"entries_by_type: {_format_counts(stats.entries_by_type)}",
-        f"entries_by_review_state: {_format_counts(stats.entries_by_review_state)}",
-        f"candidates_by_review_state: {_format_counts(stats.candidates_by_review_state)}",
-    ]
-    return "\n".join(lines)
-
-
-def _format_memory_relation(record: MemoryRelationIndexRecord) -> str:
-    target_title = record.target_title or "(missing target)"
-    target_type = record.target_type or "missing"
-    return (
-        f"{record.source_id} --{record.relation}-> {record.target_id} "
-        f"[source={record.source_type}:{record.source_title} "
-        f"target={target_type}:{target_title} "
-        f"target_exists={record.target_exists} confidence={record.confidence:.2f}]"
-    )
-
-
-def _format_counts(counts: dict[str, int]) -> str:
-    if not counts:
-        return "-"
-    return ", ".join(f"{key}={counts[key]}" for key in sorted(counts))
-
-
-def _format_float_counts(counts: dict[str, float]) -> str:
-    if not counts:
-        return "-"
-    return ", ".join(f"{key}={counts[key]:.2f}" for key in sorted(counts))
-
-
-
-def _format_memory_preview(project_root: Path | None, limit: int = DEFAULT_MEMORY_PREVIEW_LIMIT) -> str:
-    normalized_limit = max(limit, 1)
-    entries = MemoryEntryRepository(project_root).list()
-    if not entries:
-        return "No memory entries."
-    shown = entries[:normalized_limit]
-    lines: list[str] = []
-    for entry in shown:
-        lines.append(render_memory_entry_row(entry))
-    lines.append("")
-    lines.append(f"  {len(shown)}/{len(entries)} entries shown.")
-    if len(entries) > normalized_limit:
-        lines.append(f"  Use `nuself memory list` or `nuself memory preview --limit N` to see more.")
-    return "\n".join(lines)
-
-
-def _memory_type_choices() -> list[str]:
-    return list(default_memory_type_registry().names())
 
 
 if __name__ == "__main__":

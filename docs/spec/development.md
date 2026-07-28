@@ -130,6 +130,9 @@ top-level application namespace stays focused on subsystem APIs.
   command-layer memory trace recording shared across memory command modules.
   `commands/memory/graph.py` owns symbolic graph nodes/edges/search/path/closure
   handlers and graph-specific text formatting.
+  `commands/memory/entries.py` owns durable entry CRUD/search/preview/stats/
+  relations/types/reindex/unquarantine handlers. It also exposes parser type
+  choices and REPL preview rendering as explicit shared CLI interfaces.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
   repository APIs.
