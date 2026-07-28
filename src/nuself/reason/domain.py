@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Literal, TypeAlias, cast
 from uuid import uuid4
 
@@ -87,6 +88,17 @@ class ReasoningThread:
             raise ValueError(f"invalid reason priority: {self.priority}")
         if self.topic.strip() == "":
             raise ValueError("reason topic must not be empty")
+        _validate_aware_iso(self.created_at, field_name="created_at")
+        _validate_aware_iso(self.updated_at, field_name="updated_at")
+        for field_name in (
+            "last_advanced_at",
+            "next_review_after",
+            "skip_next_advance_until",
+        ):
+            _validate_optional_aware_iso(
+                getattr(self, field_name),
+                field_name=field_name,
+            )
 
     @property
     def active_items(self) -> list[TrackedItem]:
@@ -379,3 +391,32 @@ def _expect_step_kind(data: dict[str, object], field_name: str) -> StepKind:
     if value in STEP_KINDS:
         return value  # pyright: ignore[reportReturnType]
     raise ValueError(f"field '{field_name}' must be a step kind")
+
+
+def _validate_optional_aware_iso(
+    value: object,
+    *,
+    field_name: str,
+) -> None:
+    if value is None:
+        return
+    _validate_aware_iso(value, field_name=field_name)
+
+
+def _validate_aware_iso(
+    value: object,
+    *,
+    field_name: str,
+) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(
+            f"field '{field_name}' must be an ISO-8601 timestamp"
+        )
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(
+            f"field '{field_name}' must be an ISO-8601 timestamp"
+        ) from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"field '{field_name}' must include a timezone")

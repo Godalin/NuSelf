@@ -258,6 +258,8 @@ uv run nuself dev logs --component reflection --tail 10
 
 次要的审计或 thought trace 记录失败会显示为结构化的 `*_failed` 警告，但不会改变主操作的结果。
 读取集合时会隔离损坏的存储记录，并通过不包含正文的 `record_decode_failed` 警告报告。
+Reason thread 的调度时间戳必须包含时区，因此损坏的 cooldown 状态不会再静默地让线程
+进入后台推进。
 无效的 reason export manifest 会安全停止合成。任务列表会报告并隔离损坏 manifest，
 且不会暴露其中内容；直接查询和文件系统失败仍会明确返回。无效 progress 和 retry
 state 持久化失败会写入 daemon 日志。

@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The strict reason export manifest read-boundary stage is complete; no
-implementation change is currently active.
+Idle. The strict reason-thread timestamp and scheduler boundary stage is
+complete; no implementation change is currently active.
 
 ## Active Branch
 
@@ -31,5 +31,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Harden persisted reason-thread timestamps so malformed cooldown state cannot
-silently make a thread scheduler-eligible.
+Continue the silent-exception audit with reason output progress reads and
+interactive fallback boundaries.

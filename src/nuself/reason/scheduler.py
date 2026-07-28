@@ -58,12 +58,11 @@ class ReasonScheduler:
 
         for t in active:
             if t.skip_next_advance_until:
-                try:
-                    cooldown_end = datetime.fromisoformat(t.skip_next_advance_until)
-                    if now < cooldown_end:
-                        continue
-                except ValueError:
-                    pass
+                cooldown_end = datetime.fromisoformat(
+                    t.skip_next_advance_until
+                )
+                if now < cooldown_end:
+                    continue
             candidate = t
             break
 

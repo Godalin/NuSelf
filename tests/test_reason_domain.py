@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 
 
@@ -44,6 +46,35 @@ def test_thread_to_wire_roundtrip() -> None:
     assert "question" not in wire
     t2 = ReasoningThread.from_wire(wire)
     assert t2 == t
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    (
+        ("created_at", "not-a-time"),
+        ("updated_at", "2026-01-01T00:00:00"),
+        ("last_advanced_at", 42),
+        ("next_review_after", "2026-01-01T00:00:00"),
+        ("skip_next_advance_until", "not-a-time"),
+    ),
+)
+def test_thread_from_wire_rejects_invalid_timestamps(
+    field_name: str,
+    value: object,
+) -> None:
+    wire = ReasoningThread(topic="Strict timestamps").to_wire()
+    wire[field_name] = value
+
+    with pytest.raises(ValueError):
+        ReasoningThread.from_wire(wire)
+
+
+def test_thread_local_construction_rejects_naive_cooldown() -> None:
+    with pytest.raises(ValueError, match="include a timezone"):
+        ReasoningThread(
+            topic="Strict cooldown",
+            skip_next_advance_until="2026-01-01T00:00:00",
+        )
 
 
 def test_thread_with_status() -> None:

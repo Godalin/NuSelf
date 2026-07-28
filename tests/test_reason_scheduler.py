@@ -6,12 +6,15 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
+
 from nuself.logs import read_log_events
 from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.scheduler import ReasonScheduler
 from nuself.reason.service import ReasonService
+from nuself.storage import FileStorageBackend
 
 
 def _reason_service(**kwargs: Any) -> ReasonService:
@@ -63,6 +66,51 @@ def test_run_once_skips_thread_on_cooldown(tmp_path: Path) -> None:
         interval_seconds=600,
     )
     scheduler.run_once()
+
+
+def test_run_once_never_advances_corrupt_cooldown_record(
+    tmp_path: Path,
+) -> None:
+    backend = FileStorageBackend(tmp_path / "private")
+    thread = ReasoningThread(topic="Corrupt cooldown")
+    wire = thread.to_wire()
+    wire["skip_next_advance_until"] = "not-a-time"
+    backend.collection("reason_threads").put(thread.id, wire)
+    repository = ReasonRepository(tmp_path, backend=backend)
+    service = _reason_service(
+        project_root=tmp_path,
+        repository=repository,
+    )
+    called = False
+
+    class RecordingAdvancer:
+        def advance(self, t: ReasoningThread) -> ReasoningStep | None:
+            nonlocal called
+            called = True
+            return None
+
+    scheduler = ReasonScheduler(
+        project_root=tmp_path,
+        advancer=cast(ReasonAdvancer, RecordingAdvancer()),
+        service=service,
+        interval_seconds=600,
+    )
+
+    scheduler.run_once()
+
+    assert not called
+    event = read_log_events(
+        project_root=tmp_path,
+        component="reasoning",
+    )[-1]
+    assert event.event == "record_decode_failed"
+    assert event.metadata == {
+        "collection": "reason_threads",
+        "record_id": thread.id,
+    }
+    assert thread.topic not in str(event.to_record())
+    with pytest.raises(ValueError):
+        repository.get_thread(thread.id)
 
 
 def test_run_once_advances_eligible_thread(tmp_path: Path) -> None:

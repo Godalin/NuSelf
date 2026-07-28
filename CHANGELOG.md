@@ -54,6 +54,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Reason-thread scheduling timestamps now require timezone-aware ISO-8601
+  values. Corrupt cooldown records are reported and isolated before scheduling
+  instead of silently becoming eligible for background advancement.
 - Reason export job listing now reports and isolates malformed manifests
   without exposing their contents. Direct lookup no longer turns corrupt
   manifests or authoritative filesystem failures into an ordinary not-found
