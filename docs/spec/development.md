@@ -156,6 +156,11 @@ top-level application namespace stays focused on subsystem APIs.
 - REPL session orchestration remains separate from one-shot command handlers;
   later extractions should not introduce imports from subsystem command modules
   back into `nuself.cli`.
+- REPL modules live under `nuself.repl`; `repl/types.py` owns result contracts,
+  and transcript/session/command modules depend on those contracts rather than
+  importing the CLI composition root.
+- `repl/transcript.py` owns transcript projection, Markdown normalization,
+  persistence naming, shareable-log filtering, and clipboard integration.
 
 Conversation runtime types follow the same rule: `agent/chat_types.py` owns
 settings, structured response/result records, typed turn state, and graph error
