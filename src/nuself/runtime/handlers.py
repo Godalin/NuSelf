@@ -161,6 +161,10 @@ class HandlerRegistry(
         key: HandlerKey,
     ) -> Callable[HandlerParams, HandlerResult]:
         with self._lock:
+            if self._sealed:
+                raise HandlerRegistrySealedError(
+                    "handler registry is sealed; raw handlers are unavailable"
+                )
             try:
                 return self._handlers[key]
             except KeyError as exc:

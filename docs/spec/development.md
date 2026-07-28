@@ -175,8 +175,9 @@ an unsealed registry, so callers cannot observe a partially composed handler
 set or middleware stack. Sealed registries reject all later registration and
 middleware changes.
 
-`resolve()` exposes the directly registered handler for composition-time
-inspection; runtime callers use `dispatch()` so middleware cannot be bypassed.
+`resolve()` exposes the directly registered handler only before sealing for
+composition-time inspection. It raises `HandlerRegistrySealedError` after
+sealing; runtime callers use `dispatch()` so middleware cannot be bypassed.
 Middleware order is outer-to-inner registration order, and wrappers must
 preserve the original handler exception identity unless the middleware's
 documented policy explicitly translates it.

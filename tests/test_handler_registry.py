@@ -37,6 +37,32 @@ def test_handler_registry_decorator_returns_original_handler() -> None:
     assert registry.dispatch("echo", "hello") == "hello"
 
 
+def test_handler_registry_rejects_raw_resolution_after_seal() -> None:
+    calls: list[str] = []
+    registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
+
+    def observe(
+        key: str,
+        next_handler: Callable[[str], str],
+        value: str,
+    ) -> str:
+        calls.append(key)
+        return next_handler(value)
+
+    registry.use(observe)
+    registry.register("echo", lambda value: value)
+    registry.seal()
+
+    with pytest.raises(
+        HandlerRegistrySealedError,
+        match="raw handlers are unavailable",
+    ):
+        registry.resolve("echo")
+
+    assert registry.dispatch("echo", "safe") == "safe"
+    assert calls == ["echo"]
+
+
 def test_handler_registry_rejects_dispatch_before_seal() -> None:
     registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
     registry.register("echo", lambda value: value)

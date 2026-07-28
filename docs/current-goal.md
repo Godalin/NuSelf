@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Complete the shared agent failure policy's central classification of clear
-implementation and process-integrity errors.
+Prevent sealed handler registries from exposing raw handlers that bypass their
+compiled middleware chain.
 
 ## Active Branch
 
@@ -14,42 +14,38 @@ implementation and process-integrity errors.
 
 ## Ordered Work
 
-1. Audit Python exception families that must never become agent fallback.
-2. Keep provider/runtime, validation, and availability failures recoverable.
-3. Expand the shared non-recoverable classification.
-4. Verify the policy directly and through chat/persona consumers.
-5. Preserve original exception identity before and after tool execution.
+1. Audit registry mutation, seal, resolve, and dispatch ownership.
+2. Confirm runtime consumers use dispatch rather than raw resolution.
+3. Restrict raw resolution to composition time.
+4. Verify sealed registries cannot bypass middleware.
+5. Preserve unknown-key and dispatch exception behavior.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Domain-specific explicitly typed catches remain unchanged.
-- `RuntimeError`, `ValueError`, `OSError`, and unknown provider exception
-  classes remain recoverable by the shared policy.
-- Tool replay safety suppresses every subsequent model call, while the shared
-  classification still decides between local fallback and propagation.
+- `resolve()` remains available before sealing for composition inspection.
+- `dispatch()` remains the only runtime invocation API.
+- Handler and middleware call semantics remain unchanged.
 
 ## Completion Evidence
 
-- Shared policy rejects assertion, attribute, import, lookup, memory exhaustion,
-  name resolution, unimplemented-path, recursion, syntax, system, and type
-  errors.
-- Direct tests cover both `KeyError` and `IndexError` through `LookupError`, and
-  verify runtime, validation, operating-system, and unknown provider exception
-  classes remain recoverable.
-- Chat, persona graph, and discussion orchestration consume the expanded policy
-  and preserve exact exception identity without fallback diagnostics.
-- After a tool outcome, both recoverable and implementation failures suppress
-  all further model calls; only the recoverable failure uses local fallback.
-- Focused shared-policy and consumer tests: `87 passed`.
-- `.venv/bin/pytest -q`: `1612 passed` with no warnings.
+- `resolve()` checks the one-way sealed state before exposing the raw handler.
+- A sealed registry raises `HandlerRegistrySealedError` for raw resolution,
+  while `dispatch()` still invokes the compiled middleware chain.
+- Production search found no runtime consumer relying on
+  `HandlerRegistry.resolve(...)`; daemon and REPL use `dispatch()`.
+- Duplicate, unknown, unsealed, middleware-order, and original-exception
+  behavior remains covered by the registry suite.
+- Focused registry, daemon-request, and REPL-dispatch tests: `21 passed`.
+- `.venv/bin/pytest -q`: `1613 passed` with no warnings.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `54955de`.
+`dev/v0.3.x` is published through `64563f9`.
 
 ## Next Review Batch
 
-Continue auditing normal-result fallbacks after the central policy is complete.
+Continue reviewing handler and internal-message infrastructure after raw
+dispatch bypass is closed.

@@ -58,6 +58,10 @@ request-dispatch primitive.
 - A registry has no process-global singleton; the composition root owns it.
 - Registries accept typed synchronous middleware during composition. Like
   handlers, middleware cannot be added after sealing.
+- `resolve()` exposes a directly registered raw handler only before sealing for
+  composition-time inspection. A sealed registry rejects raw resolution so
+  runtime callers cannot bypass middleware; runtime invocation always uses
+  `dispatch()`.
 - Middleware receives the handler key, the next callable, and the original
   typed arguments. It executes in registration order: the first middleware is
   outermost and the handler is innermost.
