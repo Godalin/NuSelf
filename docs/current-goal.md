@@ -50,7 +50,7 @@ Make shared atomic writes crash-durable with truthful failure semantics.
 
 ## Publication
 
-`dev/v0.3.x` is ready for publication through `3bda10f`.
+`dev/v0.3.x` is published through implementation commit `3bda10f`.
 
 ## Next Review Batch
 
