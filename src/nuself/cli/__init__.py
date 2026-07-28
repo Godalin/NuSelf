@@ -50,9 +50,6 @@ try:
         EntrypointCallbacks,
         EntrypointController,
     )
-    from nuself.cli.commands.output import (
-        print_ansi as _print_ansi,
-    )
     from nuself.cli.repl.activity import (
         print_interactive_activity_events as _print_interactive_activity_events,
     )
@@ -87,6 +84,7 @@ try:
     from nuself.cli.repl.input import (
         InteractiveCompleter as _InteractiveCompleter,
     )
+    from nuself.cli.repl.presentation import SessionHeaderPresenter
     from nuself.cli.repl.runtime import (
         ReplCallbacks,
         run_interactive_loop,
@@ -105,7 +103,6 @@ try:
     )
     from nuself.cli.repl.types import InteractiveChatResult
     from nuself.daemon import lifecycle
-    from nuself.tui.render import render_session_header
 finally:
     warnings.warn = _original_warn
 
@@ -120,19 +117,6 @@ CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
 INTERACTIVE_CHAT_ATTEMPTS = 2
 INTERACTIVE_LOG_POLL_INTERVAL_SECONDS = 0.1
-
-
-def _maybe_show_session_update(
-    project_root: Path | None,
-    thread_id: str,
-    session: InteractiveSession,
-) -> None:
-    status = _interactive_daemon_status(project_root) if project_root else "unknown"
-    if session.should_render_header(
-        thread_id=thread_id,
-        daemon_status=status,
-    ):
-        _print_ansi(render_session_header(daemon_status=status, thread_id=thread_id))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -192,6 +176,10 @@ def _interactive_loop(
     initial_thread_id: str = "default",
     daemon_activity: bool = False,
 ) -> int:
+    header_presenter = SessionHeaderPresenter(
+        _interactive_daemon_status
+    )
+
     def send_turn(
         turn_sender: Callable[
             [str, str, str | None],
@@ -219,8 +207,7 @@ def _interactive_loop(
             send_turn=send_turn,
             auto_save=_auto_save_interactive_transcripts,
             run_curator=_run_memory_curator,
-            show_session_update=_maybe_show_session_update,
-            daemon_status=_interactive_daemon_status,
+            show_session_header=header_presenter.show,
             brand_banner=_brand_banner,
         ),
         initial_thread_id=initial_thread_id,

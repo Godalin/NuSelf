@@ -103,10 +103,7 @@ interactive input state.
   or has no messages. A malformed or unreadable persisted thread instead
   renders a concise load-failure message with the compact exception chain; it
   must not be presented as an empty thread.
-- Last-rendered daemon status and thread ID belong to the session so header
-  suppression cannot leak between concurrent or sequential REPL connections.
-- Input fallback, command completion, and visible header behavior remain
-  unchanged.
+- Session headers are presentation effects, not persisted session state.
 - Non-TTY sessions use built-in `input()` without a degradation event. Terminal
   capability `AttributeError` and terminal/prompt `OSError` failures emit one
   payload-safe `chat/interactive_prompt_failed` warning through the shared
@@ -140,7 +137,10 @@ alias string sets.
 - Interactive chat transport failures, including daemon timeouts, do not exit the REPL. The REPL captures and prints any logs produced before the failure, retries the same user message once, and then returns to the prompt if the retry also fails.
 - A REPL retry is the same logical chat turn, not a second user turn. The client must reuse the same `turn_id` for every attempt of one user input. The daemon/chat layer must treat a completed `turn_id` as idempotent: if the first attempt completed after the client timed out, a retry returns the already-saved assistant reply instead of appending the same user message again or rerunning persona work.
 - `:restart` and `:r` restart the daemon from inside the current REPL, then reconnect future requests to the restarted daemon. The command preserves the current thread and interactive transcript session. Restart failures print a concise error and keep the REPL open.
-- Session header reprinted after non-command turns and thread-switching commands:
+- The session header is printed once at startup, once after every completed
+  non-command turn (including a failed turn returning to the prompt), and once
+  after commands whose dispatcher result is `redraw_header`. Other commands do
+  not print it. All three paths use the same presenter and status provider:
   ```
   [daemon] session status=<running|one-shot> thread=<id>
   ```

@@ -7,11 +7,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from nuself.cli.commands.output import print_ansi
 from nuself.cli.repl.input import InteractiveInput
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.tui.render import render_session_header
 
 SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
 HandleCommand = Callable[
@@ -30,11 +28,7 @@ class ReplCallbacks:
     send_turn: SendTurn
     auto_save: Callable[[Path | None, InteractiveSession], None]
     run_curator: Callable[[Path | None], None]
-    show_session_update: Callable[
-        [Path | None, str, InteractiveSession],
-        None,
-    ]
-    daemon_status: Callable[[Path | None], str]
+    show_session_header: Callable[[Path | None, str], None]
     brand_banner: Callable[[], str]
 
 
@@ -54,12 +48,7 @@ def run_interactive_loop(
         "νSelf interactive mode. Type :help for commands, "
         ":q to quit."
     )
-    print_ansi(
-        render_session_header(
-            daemon_status=callbacks.daemon_status(project_root),
-            thread_id=current_thread_id,
-        )
-    )
+    callbacks.show_session_header(project_root, current_thread_id)
     try:
         while True:
             try:
@@ -87,13 +76,9 @@ def run_interactive_loop(
                 if result == "exit":
                     return 0
                 if result == "redraw_header":
-                    print_ansi(
-                        render_session_header(
-                            daemon_status=callbacks.daemon_status(
-                                project_root
-                            ),
-                            thread_id=current_thread_id,
-                        )
+                    callbacks.show_session_header(
+                        project_root,
+                        current_thread_id,
                     )
                 continue
             try:
@@ -107,10 +92,9 @@ def run_interactive_loop(
             except KeyboardInterrupt:
                 print("\nInterrupted.")
                 continue
-            callbacks.show_session_update(
+            callbacks.show_session_header(
                 project_root,
                 current_thread_id,
-                session,
             )
             if result != 0:
                 continue

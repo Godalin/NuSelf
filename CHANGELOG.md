@@ -62,6 +62,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- REPL session headers now follow one consistent lifecycle: once at startup,
+  after every completed chat turn, and after commands that request a redraw.
+  Previously the first turn reprinted the header but later turns with unchanged
+  status/thread silently suppressed it.
 - Isolated LangGraph tool-log projection failures so an unavailable audit sink
   no longer replaces a successful tool result or masks the original tool
   exception; the failure is reported as a structured degraded event when

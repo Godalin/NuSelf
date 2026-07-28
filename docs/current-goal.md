@@ -5,8 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Daemon subsystem and worker-target composition has been extracted from
-the process runner.
+Idle. REPL session-header presentation now follows one explicit lifecycle.
 
 ## Active Branch
 
@@ -23,20 +22,16 @@ code.
 
 ## Completion Evidence
 
-- `daemon/state.py` owns request-facing services, config-derived intervals,
-  ChatAgent/export wiring, notification adapter selection, concrete worker
-  targets, supervisor registration, and worker-specific start/stop operations.
-- `daemon/server.py` imports the state factory while retaining instance lock,
-  PID/socket ownership, signal installation, startup order, server loop,
-  cleanup ordering, and lifecycle failure aggregation.
-- Business, request, export, and worker tests import `daemon.state` directly;
-  process-instance tests still replace `server.DaemonState` as the runner
-  factory injection point.
-- The unused `DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS` constant was removed;
-  config remains the only interval source.
-- `daemon/server.py` decreased from 459 to 250 lines.
-- Focused state/worker/export/instance tests: 55 passed.
-- Final full tests: 1270 passed.
+- `SessionHeaderPresenter` owns session-header rendering through one injected
+  status provider.
+- REPL startup, dispatcher `redraw_header`, and every completed non-command
+  turn call the same presenter exactly once.
+- `InteractiveSession` no longer stores presentation-only last-header state,
+  and the root no longer implements a parallel conditional renderer.
+- A consecutive-turn regression test proves output contains exactly one startup
+  header plus one header after each of two turns with unchanged thread/status.
+- Focused presentation/session/dispatcher/turn/CLI tests: 308 passed.
+- Final full tests: 1271 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -46,5 +41,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Continue daemon lifecycle composition review or resolve the REPL presentation
-contract.
+Extract remaining REPL reply/banner presentation or resume cross-subsystem
+infrastructure review.

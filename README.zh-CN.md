@@ -183,7 +183,7 @@ uv run nuself daemon attach
 uv run nuself daemon attach --message "continue"
 ```
 
-不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。动态补全和 history 持久化采用 best effort：存储失败会记录 degraded event，但不会阻止输入或接受已经输入的内容。以 `:` 开头的输入会被识别为交互指令。输入 `:dev status` 可以查看 daemon/thread 状态，输入 `:dev logs` 可以查看最近 activity events，输入 `:mem` 可以预览当前记忆条目。只读记忆 inspect 快捷命令包括 `:mem search <query>`、`:mem show <entry-id>`、`:mem review`、`:mem review <candidate-id>`、`:mem profile <query>`、`:mem sources` 和 `:mem source <source-id>`。输入 `:reason` 可查看长线推理线程，输入 `:trace` 可查看思维溯源记录，输入 `:inbox` 可查看反思和通知。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
+不带 `--message` 时，`chat` 和 `attach` 会进入交互模式。终端支持时，行编辑和上下键历史由 `private/runtime/interactive_history` 支持。动态补全和 history 持久化采用 best effort：存储失败会记录 degraded event，但不会阻止输入或接受已经输入的内容。会话状态栏会在启动时、每个完成的聊天轮次后，以及请求重绘 thread 或状态的命令后显示。以 `:` 开头的输入会被识别为交互指令。输入 `:dev status` 可以查看 daemon/thread 状态，输入 `:dev logs` 可以查看最近 activity events，输入 `:mem` 可以预览当前记忆条目。只读记忆 inspect 快捷命令包括 `:mem search <query>`、`:mem show <entry-id>`、`:mem review`、`:mem review <candidate-id>`、`:mem profile <query>`、`:mem sources` 和 `:mem source <source-id>`。输入 `:reason` 可查看长线推理线程，输入 `:trace` 可查看思维溯源记录，输入 `:inbox` 可查看反思和通知。输入 `:q`、`:quit`、`:exit` 或发送 EOF 可以退出；未知指令会打印交互帮助并继续会话。
 
 如果 styled terminal input 因已声明的终端能力或 IO 故障不可用，NuSelf 会记录
 `chat/interactive_prompt_failed` 并退回内置输入。EOF、键盘中断和未声明的 prompt

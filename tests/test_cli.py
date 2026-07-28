@@ -359,6 +359,33 @@ def test_interactive_turn_prints_activity_events(
     )
 
 
+def test_consecutive_interactive_turns_each_end_with_session_header(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
+    monkeypatch.setattr(
+        "sys.stdin",
+        _TextInput("first\nsecond\n:q\n"),
+    )
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert captured.out.count(
+        "[daemon] session status=one-shot thread=default"
+    ) == 3
+    assert (
+        "Last message: first\n"
+        "[daemon] session status=one-shot thread=default"
+    ) in captured.out
+    assert (
+        "Last message: second\n"
+        "[daemon] session status=one-shot thread=default"
+    ) in captured.out
+
+
 def test_interactive_turn_prints_activity_events_while_waiting(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
