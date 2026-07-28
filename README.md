@@ -326,7 +326,9 @@ The first protocol is one request and one response as newline-complete UTF-8
 JSON over a Unix domain socket at `private/runtime/nuself.sock`. Frames are
 bounded to 1 MiB; stalled, incomplete, extra, malformed, and mismatched
 responses fail as transport errors instead of retaining a server thread or
-being accepted as partial JSON.
+being accepted as partial JSON. Envelope fields are exact and validated in
+both directions: duplicate or unknown fields, empty request ids, non-finite
+payload numbers, and inconsistent response error states are rejected.
 
 ## Notifications
 

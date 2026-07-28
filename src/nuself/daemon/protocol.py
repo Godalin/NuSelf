@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from math import isfinite
 from typing import Any, Literal, TypeAlias, cast
 from uuid import uuid4
 
@@ -34,6 +35,13 @@ REQUEST_TYPES: tuple[RequestType, ...] = (
     "activity_next",
     "activity_close",
 )
+_REQUEST_FIELDS = frozenset(
+    {"version", "request_id", "type", "payload"}
+)
+_RESPONSE_REQUIRED_FIELDS = frozenset(
+    {"version", "request_id", "status", "payload"}
+)
+_RESPONSE_OPTIONAL_FIELDS = frozenset({"error"})
 
 
 class ProtocolError(ValueError):
@@ -74,7 +82,9 @@ class DaemonRequest:
     version: int = PROTOCOL_VERSION
 
     def to_json_line(self) -> bytes:
-        return _encode_json_line(self.to_wire())
+        wire = self.to_wire()
+        _validate_request_wire(wire)
+        return _encode_json_line(wire)
 
     def to_wire(self) -> dict[str, JsonValue]:
         return {
@@ -87,12 +97,9 @@ class DaemonRequest:
     @classmethod
     def from_json_line(cls, line: bytes) -> DaemonRequest:
         raw = _decode_json_object(line)
-        version = _expect_int(raw, "version")
-        if version != PROTOCOL_VERSION:
-            raise ProtocolError(f"unsupported protocol version: {version}")
-        request_type = _expect_request_type(raw, "type")
-        payload = _expect_object(raw, "payload")
-        request_id = _expect_str(raw, "request_id")
+        version, request_id, request_type, payload = (
+            _validate_request_wire(raw)
+        )
         return cls(
             type=request_type, payload=payload, request_id=request_id, version=version
         )
@@ -109,7 +116,9 @@ class DaemonResponse:
     version: int = PROTOCOL_VERSION
 
     def to_json_line(self) -> bytes:
-        return _encode_json_line(self.to_wire())
+        wire = self.to_wire()
+        _validate_response_wire(wire)
+        return _encode_json_line(wire)
 
     def to_wire(self) -> dict[str, JsonValue]:
         wire: dict[str, JsonValue] = {
@@ -130,20 +139,19 @@ class DaemonResponse:
 
     @classmethod
     def fail(cls, request_id: str, error: str) -> DaemonResponse:
-        return cls(request_id=request_id, status="error", error=error)
+        detail = error.strip() or "daemon request failed"
+        return cls(
+            request_id=request_id,
+            status="error",
+            error=detail,
+        )
 
     @classmethod
     def from_json_line(cls, line: bytes) -> DaemonResponse:
         raw = _decode_json_object(line)
-        version = _expect_int(raw, "version")
-        if version != PROTOCOL_VERSION:
-            raise ProtocolError(f"unsupported protocol version: {version}")
-        request_id = _expect_str(raw, "request_id")
-        status = _expect_response_status(raw, "status")
-        payload = _expect_object(raw, "payload")
-        error_value = raw.get("error")
-        if error_value is not None and not isinstance(error_value, str):
-            raise ProtocolError("field 'error' must be a string")
+        version, request_id, status, payload, error_value = (
+            _validate_response_wire(raw)
+        )
         return cls(
             request_id=request_id,
             status=status,
@@ -159,15 +167,19 @@ def _decode_json_object(line: bytes) -> dict[str, Any]:
         value = json.loads(
             line.decode("utf-8"),
             parse_constant=_reject_json_constant,
+            object_pairs_hook=_decode_object_pairs,
         )
     except UnicodeDecodeError as exc:
         raise ProtocolError("frame is not valid UTF-8") from exc
     except json.JSONDecodeError as exc:
         raise ProtocolError(f"invalid json: {exc.msg}") from exc
+    except ProtocolError:
+        raise
     except ValueError as exc:
         raise ProtocolError(str(exc)) from exc
     if not isinstance(value, dict):
         raise ProtocolError("payload must be a JSON object")
+    _validate_json_value(cast(object, value), path="$")
     return cast(dict[str, Any], value)
 
 
@@ -213,6 +225,112 @@ def _reject_json_constant(value: str) -> object:
     raise ValueError(f"invalid JSON constant: {value}")
 
 
+def _decode_object_pairs(
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ProtocolError(f"duplicate JSON object field: {key}")
+        value[key] = item
+    return value
+
+
+def _validate_request_wire(
+    raw: dict[str, Any],
+) -> tuple[int, str, RequestType, dict[str, JsonValue]]:
+    _expect_fields(raw, required=_REQUEST_FIELDS)
+    version = _expect_protocol_version(raw)
+    request_id = _expect_non_empty_str(raw, "request_id")
+    request_type = _expect_request_type(raw, "type")
+    payload = _expect_object(raw, "payload")
+    _validate_json_value(payload, path="payload")
+    return version, request_id, request_type, payload
+
+
+def _validate_response_wire(
+    raw: dict[str, Any],
+) -> tuple[
+    int,
+    str,
+    ResponseStatus,
+    dict[str, JsonValue],
+    str | None,
+]:
+    _expect_fields(
+        raw,
+        required=_RESPONSE_REQUIRED_FIELDS,
+        optional=_RESPONSE_OPTIONAL_FIELDS,
+    )
+    version = _expect_protocol_version(raw)
+    request_id = _expect_non_empty_str(raw, "request_id")
+    status = _expect_response_status(raw, "status")
+    payload = _expect_object(raw, "payload")
+    _validate_json_value(payload, path="payload")
+    if status == "ok":
+        if "error" in raw:
+            raise ProtocolError(
+                "field 'error' must be absent for an ok response"
+            )
+        error_value = None
+    else:
+        error_value = _expect_non_empty_str(raw, "error")
+    return version, request_id, status, payload, error_value
+
+
+def _expect_fields(
+    raw: dict[str, Any],
+    *,
+    required: frozenset[str],
+    optional: frozenset[str] = frozenset(),
+) -> None:
+    unknown = raw.keys() - required - optional
+    if unknown:
+        names = ", ".join(sorted(unknown))
+        raise ProtocolError(f"unknown envelope field(s): {names}")
+
+
+def _expect_protocol_version(raw: dict[str, Any]) -> int:
+    version = _expect_int(raw, "version")
+    if version != PROTOCOL_VERSION:
+        raise ProtocolError(f"unsupported protocol version: {version}")
+    return version
+
+
+def _validate_json_value(value: object, *, path: str) -> JsonValue:
+    if value is None or isinstance(value, str | bool | int):
+        return value
+    if isinstance(value, float):
+        if not isfinite(value):
+            raise ProtocolError(
+                f"field '{path}' contains a non-finite number"
+            )
+        return value
+    if isinstance(value, list):
+        sequence = cast(list[object], value)
+        return [
+            _validate_json_value(item, path=f"{path}[{index}]")
+            for index, item in enumerate(sequence)
+        ]
+    if isinstance(value, dict):
+        mapping = cast(dict[object, object], value)
+        result: dict[str, JsonValue] = {}
+        for key, item in mapping.items():
+            if not isinstance(key, str):
+                raise ProtocolError(
+                    f"field '{path}' contains a non-string object key"
+                )
+            result[key] = _validate_json_value(
+                item,
+                path=f"{path}.{key}",
+            )
+        return result
+    raise ProtocolError(
+        f"field '{path}' contains non-JSON value "
+        f"{type(value).__name__}"
+    )
+
+
 def _expect_object(raw: dict[str, Any], field_name: str) -> dict[str, JsonValue]:
     value = raw.get(field_name)
     if not isinstance(value, dict):
@@ -227,9 +345,21 @@ def _expect_str(raw: dict[str, Any], field_name: str) -> str:
     return value
 
 
+def _expect_non_empty_str(
+    raw: dict[str, Any],
+    field_name: str,
+) -> str:
+    value = _expect_str(raw, field_name)
+    if not value.strip():
+        raise ProtocolError(
+            f"field '{field_name}' must be a non-empty string"
+        )
+    return value
+
+
 def _expect_int(raw: dict[str, Any], field_name: str) -> int:
     value = raw.get(field_name)
-    if not isinstance(value, int):
+    if isinstance(value, bool) or not isinstance(value, int):
         raise ProtocolError(f"field '{field_name}' must be an integer")
     return value
 

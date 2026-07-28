@@ -311,7 +311,9 @@ private/logs/
 两者都是以换行结尾的 UTF-8 JSON；socket 路径是
 `private/runtime/nuself.sock`。单帧上限为 1 MiB；停滞、截断、额外、格式错误或
 request id 不匹配的 response 都会作为 transport error 返回，不会占住 server
-thread 或被当成部分 JSON 接受。
+thread 或被当成部分 JSON 接受。envelope 字段在收发两端都严格校验；重复或未知
+字段、空 request id、非有限 payload 数值以及与 status 不一致的 error 状态都会被
+拒绝。
 
 ## 通知
 

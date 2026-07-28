@@ -63,6 +63,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   rejects incomplete, extra, non-finite, or response-id-mismatched frames.
   Client disconnects during response delivery are observed without escaping
   the server connection handler.
+- Daemon request/response envelopes now reject duplicate or unknown fields,
+  boolean protocol versions, empty request ids, recursively non-finite JSON
+  values, and response status/error mismatches on both encode and decode.
 - Daemon execution now borrows SIGINT/SIGTERM handlers explicitly and restores
   the exact previous process handlers on every exit path. Partial installation
   rolls back already-changed signals, and restoration failures remain

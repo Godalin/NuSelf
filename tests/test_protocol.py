@@ -65,11 +65,87 @@ def test_protocol_rejects_non_finite_json_numbers() -> None:
             b'{"version":1,"request_id":"r","type":"echo",'
             b'"payload":{"value":NaN}}\n'
         )
-    with pytest.raises(ProtocolError, match="valid JSON"):
+    with pytest.raises(ProtocolError, match="non-finite number"):
         DaemonRequest(
             type="echo",
             payload={"value": float("inf")},
         ).to_json_line()
+
+
+@pytest.mark.parametrize(
+    "line, error",
+    [
+        (
+            b'{"version":true,"request_id":"r","type":"ping",'
+            b'"payload":{}}\n',
+            "version",
+        ),
+        (
+            b'{"version":1,"request_id":"","type":"ping",'
+            b'"payload":{}}\n',
+            "non-empty",
+        ),
+        (
+            b'{"version":1,"request_id":"   ","type":"ping",'
+            b'"payload":{}}\n',
+            "non-empty",
+        ),
+        (
+            b'{"version":1,"request_id":"r","type":"ping",'
+            b'"payload":{},"extra":true}\n',
+            "unknown envelope field",
+        ),
+        (
+            b'{"version":1,"request_id":"first",'
+            b'"request_id":"second","type":"ping","payload":{}}\n',
+            "duplicate JSON object field",
+        ),
+        (
+            b'{"version":1,"request_id":"r","type":"echo",'
+            b'"payload":{"value":1e999}}\n',
+            "non-finite number",
+        ),
+        (
+            b'{"version":1,"request_id":"r","type":"echo",'
+            b'"payload":{"value":1,"value":2}}\n',
+            "duplicate JSON object field",
+        ),
+    ],
+)
+def test_request_rejects_ambiguous_envelope_fields(
+    line: bytes,
+    error: str,
+) -> None:
+    with pytest.raises(ProtocolError, match=error):
+        DaemonRequest.from_json_line(line)
+
+
+@pytest.mark.parametrize(
+    "daemon_request",
+    [
+        DaemonRequest(
+            type="ping",
+            request_id="",
+        ),
+        DaemonRequest(
+            type="ping",
+            version=True,  # type: ignore[arg-type]
+        ),
+        DaemonRequest(
+            type="echo",
+            payload={1: "not a string key"},  # type: ignore[dict-item]
+        ),
+        DaemonRequest(
+            type="echo",
+            payload={"nested": [object()]},  # type: ignore[list-item]
+        ),
+    ],
+)
+def test_request_encode_enforces_wire_contract(
+    daemon_request: DaemonRequest,
+) -> None:
+    with pytest.raises(ProtocolError):
+        daemon_request.to_json_line()
 
 
 def test_protocol_rejects_oversized_frame() -> None:
@@ -138,3 +214,71 @@ def test_response_parses_error_field() -> None:
 
     assert response.status == "error"
     assert response.error == "something failed"
+
+
+@pytest.mark.parametrize(
+    "line, error",
+    [
+        (
+            b'{"version":1,"request_id":"r","status":"ok",'
+            b'"payload":{},"error":"unexpected"}\n',
+            "absent",
+        ),
+        (
+            b'{"version":1,"request_id":"r","status":"error",'
+            b'"payload":{}}\n',
+            "error",
+        ),
+        (
+            b'{"version":1,"request_id":"r","status":"error",'
+            b'"payload":{},"error":""}\n',
+            "non-empty",
+        ),
+        (
+            b'{"version":1,"request_id":"r","status":"ok",'
+            b'"payload":{},"extra":null}\n',
+            "unknown envelope field",
+        ),
+    ],
+)
+def test_response_enforces_status_error_contract(
+    line: bytes,
+    error: str,
+) -> None:
+    with pytest.raises(ProtocolError, match=error):
+        DaemonResponse.from_json_line(line)
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        DaemonResponse(
+            request_id="r",
+            status="ok",
+            error="unexpected",
+        ),
+        DaemonResponse(
+            request_id="r",
+            status="error",
+        ),
+        DaemonResponse(
+            request_id="r",
+            status="error",
+            error="",
+        ),
+    ],
+)
+def test_response_encode_enforces_status_error_contract(
+    response: DaemonResponse,
+) -> None:
+    with pytest.raises(ProtocolError):
+        response.to_json_line()
+
+
+def test_failed_response_factory_backstops_blank_diagnostic() -> None:
+    response = DaemonResponse.fail("r", "   ")
+
+    assert response.error == "daemon request failed"
+    assert DaemonResponse.from_json_line(
+        response.to_json_line()
+    ) == response

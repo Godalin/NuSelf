@@ -100,6 +100,20 @@ The daemon transport is one request and one response per Unix-socket
 connection. Every frame is UTF-8 JSON followed by exactly one newline and is
 bounded by `MAX_DAEMON_FRAME_BYTES`, including that newline.
 
+- A request envelope contains exactly `version`, `request_id`, `type`, and
+  `payload`. A response envelope contains exactly `version`, `request_id`,
+  `status`, `payload`, and an optional `error`.
+- Duplicate object keys and unknown envelope fields are rejected rather than
+  resolved by last-value-wins or silently ignored.
+- Protocol versions are integers but never booleans. Request ids are
+  non-blank strings.
+- Payloads are recursive JSON values with string object keys. Non-finite
+  numbers are invalid even when a JSON decoder would produce them from an
+  overflowing exponent.
+- An `ok` response has no `error`; an `error` response has a non-blank string
+  `error`. These invariants apply equally to decoded peer frames and locally
+  constructed frames at their encode boundary. The failed-response factory
+  replaces a blank underlying diagnostic with a stable generic error.
 - Server and client socket reads use the same bounded frame reader and byte
   limit.
 - Empty EOF before any bytes is a quiet peer disconnect.
