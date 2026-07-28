@@ -5,15 +5,20 @@
 - Standard Python project managed by `uv`.
 - Type-check with `uvx pyright`.
 - Sub-components must be individually tested.
+- Packages imported directly by runtime modules must be declared as direct
+  project dependencies rather than relying on another dependency to install
+  them transitively.
+- Built wheel smoke tests must install the artifact into a clean environment
+  and import the CLI/runtime boundary.
 - User-facing changes must update both `README.md` and `README.zh-CN.md`.
 - Track progress in [`docs/TODOs.md`](docs/TODOs.md); short-term focus in `docs/current-goal.md`.
 
 ## Branch Strategy
 
 - `main` is the stable, releasable branch.
-- `dev/0.2.x` is the ongoing stabilization branch for the current minor line.
+- `dev/v0.3.x` is the active optimization branch for the current minor line.
 - `feature/*` branches are isolated experimental work for a single feature or fix.
-- Each `feature/*` branch should merge back into `dev/0.2.x` before anything is promoted toward `main`.
+- Each `feature/*` branch should merge back into `dev/v0.3.x` before anything is promoted toward `main`.
 - Release work should land on the stabilization or stable branch first, then be tagged from the release commit.
 
 ## Commit And Push Policy

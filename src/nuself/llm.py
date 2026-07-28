@@ -72,6 +72,7 @@ class LLMSettings:
             api_key=endpoint.api_key,
             model=endpoint.model,
             provider="anthropic" if endpoint.anthropic else "openai",
+            timeout_seconds=endpoint.timeout_seconds,
         )
 
 

@@ -353,6 +353,12 @@ class ConfigSystem:
 
         result = cls._build(config_path)
         if cache_key is not None:
+            path_key = cache_key[0]
+            stale_keys = [
+                key for key in _CONFIG_CACHE if key[0] == path_key
+            ]
+            for key in stale_keys:
+                _CONFIG_CACHE.pop(key, None)
             _CONFIG_CACHE[cache_key] = result
         return result
 

@@ -26,3 +26,10 @@ jobs:
         run: uvx pyright --outputjson
       - name: Run tests via uv
         run: uv run pytest -q
+      - name: Build distributions
+        run: uv build
+      - name: Smoke-test built wheel in a clean environment
+        run: |
+          python -m venv /tmp/nuself-wheel-smoke
+          /tmp/nuself-wheel-smoke/bin/python -m pip install dist/*.whl
+          /tmp/nuself-wheel-smoke/bin/python -c "import nuself.cli; import nuself.llm"
