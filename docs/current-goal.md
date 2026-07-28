@@ -17,10 +17,10 @@ record prevent healthy records from being listed or rebuilt.
 1. [x] Inventory repository decode-and-skip paths and their existing contracts.
 2. [x] Specify corrupt-record isolation, diagnostics, and identity handling.
 3. [x] Add one shared repository decode boundary with focused tests.
-4. [ ] Migrate the highest-risk authoritative repositories in reviewable
+4. [x] Migrate the highest-risk authoritative repositories in reviewable
    groups.
-5. [ ] Audit remaining repositories and record the next robustness batch.
-6. [ ] Run full tests, type checking, and formatting checks.
+5. [x] Audit remaining repositories and record the next robustness batch.
+6. [x] Run full tests, type checking, and formatting checks.
 7. [ ] Commit and push in reviewable stages.
 
 ## Out Of Scope
@@ -41,7 +41,15 @@ record prevent healthy records from being listed or rebuilt.
 ## Migration Groups
 
 - [x] Memory entries/candidates, source documents/chunks, and profile items.
-- [ ] Persona prompts.
-- [ ] Reason threads/steps.
-- [ ] Reflection entries and notification outbox.
-- [ ] Thought traces/links.
+- [x] Persona prompts, including thread-scoped legacy files.
+- [x] Reason threads/steps.
+- [x] Reflection entries and notification outbox.
+- [x] Thought traces/links.
+- [x] File-backend JSON syntax and top-level shape failures.
+
+## Next Review Batch
+
+Harden daemon reason-export manifest recovery. Manifest/progress read failures
+and failed retry-state writes currently have local broad exception fallbacks;
+they need explicit durable-state and structured diagnostic behavior without
+causing duplicate composition.

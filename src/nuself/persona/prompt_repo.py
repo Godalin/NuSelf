@@ -10,6 +10,8 @@ import threading
 from typing import cast
 from uuid import uuid4
 
+from nuself.config import find_project_root, runtime_paths
+from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend, auto_backend
 
 _REPO_LOCKS_LOCK = threading.Lock()
@@ -85,7 +87,14 @@ class PersonaPromptRepository:
         backend: StorageBackend | None = None,
         *,
         root: Path | None = None,
+        project_root: Path | None = None,
     ) -> None:
+        effective_root = (
+            project_root
+            if project_root is not None
+            else find_project_root(root) if root is not None else None
+        )
+        self._project_root = runtime_paths(effective_root).project_root
         if root is not None:
             self._mode = "legacy_file"
             self._root = root
@@ -135,10 +144,15 @@ class PersonaPromptRepository:
             return self._legacy_list()
         result: list[PersonaPrompt] = []
         for wire in self._col.list():
-            try:
-                result.append(PersonaPrompt.from_wire(wire))
-            except (ValueError, KeyError):
-                pass
+            prompt = decode_observed_record(
+                wire,
+                PersonaPrompt.from_wire,
+                component="persona",
+                collection="persona_prompts",
+                project_root=self._project_root,
+            )
+            if prompt is not None:
+                result.append(prompt)
         return tuple(sorted(result, key=lambda p: p.name))
 
     def delete(self, prompt_id: str) -> None:
@@ -182,10 +196,23 @@ class PersonaPromptRepository:
         result: list[PersonaPrompt] = []
         for path in sorted(self._root.iterdir()):
             if path.suffix == ".json" and path.name != "name_index.json":
-                prompt = _read_legacy_prompt_file(path)
+                prompt = self._decode_legacy_prompt(path)
                 if prompt is not None:
                     result.append(prompt)
         return tuple(result)
+
+    def _decode_legacy_prompt(self, path: Path) -> PersonaPrompt | None:
+        def decode(_: dict[str, object]) -> PersonaPrompt:
+            return _read_legacy_prompt_file(path)
+
+        return decode_observed_record(
+            {"id": path.stem},
+            decode,
+            component="persona",
+            collection="persona_prompts",
+            project_root=self._project_root,
+            errors=(json.JSONDecodeError, ValueError, KeyError, TypeError),
+        )
 
     def _legacy_delete(self, prompt_id: str) -> None:
         path = self._root / f"{prompt_id}.json"
@@ -218,7 +245,7 @@ class PersonaPromptRepository:
         index: dict[str, str] = {}
         for path in self._root.iterdir():
             if path.suffix == ".json" and path.name != "name_index.json":
-                prompt = _read_legacy_prompt_file(path)
+                prompt = self._decode_legacy_prompt(path)
                 if prompt is not None:
                     index[prompt.name] = prompt.id
         _write_json_atomic(self._root / "name_index.json", cast("dict[str, object]", dict(index)))
@@ -227,14 +254,11 @@ class PersonaPromptRepository:
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 
-def _read_legacy_prompt_file(path: Path) -> PersonaPrompt | None:
-    try:
-        raw: object = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(raw, dict):
-            return PersonaPrompt.from_wire(cast("dict[str, object]", raw))
-    except (OSError, json.JSONDecodeError, ValueError, KeyError):
-        pass
-    return None
+def _read_legacy_prompt_file(path: Path) -> PersonaPrompt:
+    raw: object = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("persona prompt record must be an object")
+    return PersonaPrompt.from_wire(cast("dict[str, object]", raw))
 
 
 def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:

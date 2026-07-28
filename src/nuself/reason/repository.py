@@ -11,6 +11,7 @@ from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.config import runtime_paths
 from nuself.derived import write_derived_index
 from nuself.reason.domain import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
+from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend, auto_backend
 
 REASON_STORAGE_VERSION = "NuSelfReasonStore/v1"
@@ -71,9 +72,14 @@ class ReasonRepository:
     def list_threads(self, status: str | None = "all") -> list[ReasoningThread]:
         threads: list[ReasoningThread] = []
         for raw in self._threads.list():
-            try:
-                thread = ReasoningThread.from_wire(raw)
-            except ValueError:
+            thread = decode_observed_record(
+                raw,
+                ReasoningThread.from_wire,
+                component="reasoning",
+                collection="reason_threads",
+                project_root=self._paths.project_root,
+            )
+            if thread is None:
                 continue
             if status is None:
                 if thread.status not in ACTIVE_STATUSES:
@@ -115,9 +121,14 @@ class ReasonRepository:
     def list_steps(self, thread_id: str) -> list[ReasoningStep]:
         steps: list[ReasoningStep] = []
         for raw in self._steps.find(thread_id=thread_id):
-            try:
-                step = ReasoningStep.from_wire(raw)
-            except ValueError:
+            step = decode_observed_record(
+                raw,
+                ReasoningStep.from_wire,
+                component="reasoning",
+                collection="reason_steps",
+                project_root=self._paths.project_root,
+            )
+            if step is None:
                 continue
             steps.append(step)
         return sorted(steps, key=lambda s: (s.created_at, s.id))

@@ -316,7 +316,10 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
     try:
         from nuself.tui.persona import render_persona_detail, render_persona_row
 
-        repo = PersonaPromptRepository(backend=auto_backend(project_root))
+        repo = PersonaPromptRepository(
+            backend=auto_backend(project_root),
+            project_root=project_root,
+        )
         if command in {"", "list"}:
             prompts = repo.list()
             if not prompts:

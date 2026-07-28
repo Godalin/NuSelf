@@ -9,6 +9,7 @@ from typing import Literal, cast
 from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.config import runtime_paths
 from nuself.derived import write_derived_index
+from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend, auto_backend
 from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
 
@@ -56,9 +57,14 @@ class TraceRepository:
     ) -> list[ThoughtTrace]:
         traces: list[ThoughtTrace] = []
         for wire in self._traces.list():
-            try:
-                trace = ThoughtTrace.from_wire(wire)
-            except (ValueError, KeyError):
+            trace = decode_observed_record(
+                wire,
+                ThoughtTrace.from_wire,
+                component="reasoning",
+                collection="trace_nodes",
+                project_root=self._paths.project_root,
+            )
+            if trace is None:
                 continue
             if kind is not None and trace.kind != kind:
                 continue
@@ -128,9 +134,8 @@ class TraceRepository:
     def links_for(self, trace_id: str) -> list[TraceLink]:
         links: list[TraceLink] = []
         for wire in self._links.list():
-            try:
-                link = TraceLink.from_wire(wire)
-            except (ValueError, KeyError):
+            link = self._decode_link(wire)
+            if link is None:
                 continue
             if link.source_id == trace_id or link.target_id == trace_id:
                 links.append(link)
@@ -142,9 +147,8 @@ class TraceRepository:
             return []
         links: list[TraceLink] = []
         for wire in self._links.list():
-            try:
-                link = TraceLink.from_wire(wire)
-            except (ValueError, KeyError):
+            link = self._decode_link(wire)
+            if link is None:
                 continue
             if link.source_id == normalized or link.target_id == normalized:
                 links.append(link)
@@ -159,6 +163,15 @@ class TraceRepository:
             records.append({"_record_kind": "link", **wire})
         return write_derived_index(
             self._paths, "trace_index.json", records
+        )
+
+    def _decode_link(self, wire: dict[str, object]) -> TraceLink | None:
+        return decode_observed_record(
+            wire,
+            TraceLink.from_wire,
+            component="reasoning",
+            collection="trace_edges",
+            project_root=self._paths.project_root,
         )
 
 

@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, Protocol, cast
 
+from nuself.config import runtime_paths
+from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend
 
 OutboxStatus = Literal["pending", "sent", "failed", "dismissed"]
@@ -105,13 +107,19 @@ class NotificationOutbox:
         from nuself.storage import auto_backend
         be = backend if backend is not None else auto_backend(project_root)
         self._col = be.collection("notification_outbox")
+        self._project_root = runtime_paths(project_root).project_root
 
     def list(self, status: OutboxStatus | None = None) -> list[OutboxEntry]:
         entries: list[OutboxEntry] = []
         for wire in self._col.list():
-            try:
-                entry = OutboxEntry.from_wire(wire)
-            except (ValueError, KeyError):
+            entry = decode_observed_record(
+                wire,
+                OutboxEntry.from_wire,
+                component="outbox",
+                collection="notification_outbox",
+                project_root=self._project_root,
+            )
+            if entry is None:
                 continue
             if status is None or entry.status == status:
                 entries.append(entry)

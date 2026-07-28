@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, cast
 
+from nuself.config import runtime_paths
+from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend, auto_backend
 
 
@@ -114,13 +116,19 @@ class ReflectionRepository:
     ) -> None:
         be = backend if backend is not None else auto_backend(project_root)
         self._col = be.collection("reflection_entries")
+        self._paths = runtime_paths(project_root)
 
     def list(self, status: str | None = None) -> list[ReflectionEntry]:
         entries: list[ReflectionEntry] = []
         for wire in self._col.list():
-            try:
-                entry = ReflectionEntry.from_wire(wire)
-            except (ValueError, KeyError):
+            entry = decode_observed_record(
+                wire,
+                ReflectionEntry.from_wire,
+                component="reflection",
+                collection="reflection_entries",
+                project_root=self._paths.project_root,
+            )
+            if entry is None:
                 continue
             if status is None or entry.status == status:
                 entries.append(entry)

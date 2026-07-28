@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 from nuself.domain.memory import (
     MemoryEntry,
     MemoryObject,
@@ -60,6 +62,8 @@ def test_memory_repository_isolates_and_reports_corrupt_neighbor(
         "record_id": "mem_corrupt",
     }
     assert "private contents" not in str(event.to_record())
+    with pytest.raises((ValueError, KeyError)):
+        repo.get("mem_corrupt")
 
 
 def test_memory_repository_lists_relations(tmp_path: Path) -> None:

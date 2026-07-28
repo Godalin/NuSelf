@@ -72,15 +72,34 @@ def decode_observed_record(
     except errors as exc:
         raw_id = record.get("id")
         record_id = raw_id if isinstance(raw_id, str) and raw_id else "<unknown>"
-        _report_observed_failure(
+        report_corrupt_record(
             exc,
             component=component,
-            event="record_decode_failed",
-            message=f"Skipped malformed record in {collection}",
+            collection=collection,
+            record_id=record_id,
             project_root=project_root,
-            metadata={"collection": collection, "record_id": record_id},
         )
         return None
+
+
+def report_corrupt_record(
+    exc: Exception,
+    *,
+    component: LogComponent,
+    collection: str,
+    record_id: str,
+    project_root: Path | None = None,
+) -> None:
+    """Report one isolated corrupt record without exposing its payload."""
+
+    _report_observed_failure(
+        exc,
+        component=component,
+        event="record_decode_failed",
+        message=f"Skipped malformed record in {collection}",
+        project_root=project_root,
+        metadata={"collection": collection, "record_id": record_id},
+    )
 
 
 def _report_observed_failure(

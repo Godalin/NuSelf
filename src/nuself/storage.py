@@ -15,6 +15,8 @@ from typing import Protocol, cast, runtime_checkable
 from uuid import uuid4
 
 from nuself.config import runtime_paths
+from nuself.logs import LogComponent
+from nuself.runtime.observability import report_corrupt_record
 
 
 # ── Protocols ─────────────────────────────────────────────────────────────
@@ -55,6 +57,21 @@ COLLECTION_NAMES: tuple[str, ...] = (
     "reflection_entries",
 )
 
+COLLECTION_LOG_COMPONENTS: dict[str, LogComponent] = {
+    "memory_entries": "memory",
+    "memory_candidates": "memory",
+    "profile_items": "memory",
+    "source_documents": "memory",
+    "source_chunks": "memory",
+    "persona_prompts": "persona",
+    "reason_threads": "reasoning",
+    "reason_steps": "reasoning",
+    "trace_nodes": "reasoning",
+    "trace_edges": "reasoning",
+    "reflection_entries": "reflection",
+    "notification_outbox": "outbox",
+}
+
 # ── Collection → path mapping (v0.2.3 file layout) ──────────────────────
 
 COLLECTION_DIR_MAP: dict[str, str] = {
@@ -76,17 +93,36 @@ COLLECTION_DIR_MAP: dict[str, str] = {
 # ── File implementation ──────────────────────────────────────────────────
 
 
-def _safe_read_json(path: Path) -> dict[str, object] | None:
+def _read_json_record(path: Path) -> dict[str, object]:
+    raw: object = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("stored record must be a JSON object")
+    result: dict[str, object] = {}
+    for key, value in cast("dict[str, object]", raw).items():
+        result[key] = value
+    return result
+
+
+def _list_json_record(
+    path: Path,
+    *,
+    collection: str,
+    component: LogComponent,
+    project_root: Path,
+) -> dict[str, object] | None:
     try:
-        raw: object = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(raw, dict):
-            result: dict[str, object] = {}
-            for k, v in cast("dict[str, object]", raw).items():
-                result[k] = v
-            return result
-    except (OSError, json.JSONDecodeError):
-        pass
-    return None
+        return _read_json_record(path)
+    except FileNotFoundError:
+        return None
+    except (json.JSONDecodeError, ValueError) as exc:
+        report_corrupt_record(
+            exc,
+            component=component,
+            collection=collection,
+            record_id=path.stem or "<unknown>",
+            project_root=project_root,
+        )
+        return None
 
 
 def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
@@ -109,14 +145,24 @@ def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
 class _FileCollection:
     """One collection backed by a directory of JSON files."""
 
-    def __init__(self, directory: Path) -> None:
+    def __init__(
+        self,
+        directory: Path,
+        *,
+        name: str,
+        component: LogComponent,
+        project_root: Path,
+    ) -> None:
         self._dir = directory
+        self._name = name
+        self._component: LogComponent = component
+        self._project_root = project_root
 
     def get(self, key: str) -> dict[str, object] | None:
         path = self._dir / f"{key}.json"
         if not path.exists():
             return None
-        return _safe_read_json(path)
+        return _read_json_record(path)
 
     def put(self, key: str, value: dict[str, object]) -> None:
         self._dir.mkdir(parents=True, exist_ok=True)
@@ -133,7 +179,12 @@ class _FileCollection:
             return ()
         items: list[dict[str, object]] = []
         for p in sorted(self._dir.rglob("*.json")):
-            obj = _safe_read_json(p)
+            obj = _list_json_record(
+                p,
+                collection=self._name,
+                component=self._component,
+                project_root=self._project_root,
+            )
             if obj is not None:
                 items.append(obj)
         return tuple(items)
@@ -156,17 +207,31 @@ class FileStorageBackend:
     """Storage backend that maps collections to directories of JSON files."""
 
     def __init__(
-        self, root: Path, collection_map: dict[str, str] | None = None
+        self,
+        root: Path,
+        collection_map: dict[str, str] | None = None,
+        *,
+        project_root: Path | None = None,
     ) -> None:
         self._root = root
         self._map = collection_map or COLLECTION_DIR_MAP
+        self._project_root = (
+            runtime_paths(project_root).project_root
+            if project_root is not None
+            else root.parent if root.name == "private" else root
+        )
         self._transaction_lock = threading.RLock()
 
     def collection(self, name: str) -> _FileCollection:
         relative = self._map.get(name)
         if relative is None:
             raise ValueError(f"unknown collection: {name!r}")
-        return _FileCollection(self._root / relative)
+        return _FileCollection(
+            self._root / relative,
+            name=name,
+            component=COLLECTION_LOG_COMPONENTS[name],
+            project_root=self._project_root,
+        )
 
     @contextmanager
     def transaction(self) -> Generator[None, None, None]:
@@ -187,7 +252,10 @@ def create_file_backend(
 ) -> FileStorageBackend:
     """Create a ``FileStorageBackend`` rooted at ``private/``."""
     base = root if root is not None else runtime_paths(project_root).private_root
-    return FileStorageBackend(base)
+    return FileStorageBackend(
+        base,
+        project_root=runtime_paths(project_root).project_root,
+    )
 
 
 def create_sqlite_backend(

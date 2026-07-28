@@ -56,8 +56,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 - Repository collection reads now isolate malformed records and emit
   payload-safe `record_decode_failed` warnings with collection and recoverable
-  record identity. Healthy memory, candidate, source, chunk, and profile
-  records remain readable instead of silently hiding corruption.
+  record identity. Healthy memory, candidate, source, profile, persona, reason,
+  reflection, notification, and trace records remain readable; malformed
+  file-backend JSON is diagnosed at the storage boundary instead of silently
+  disappearing before repository validation.
 - Audit logging and memory/persona thought-trace recording no longer swallow
   secondary failures silently. They now use one observable best-effort
   boundary that writes a structured degraded event and falls back to a Python

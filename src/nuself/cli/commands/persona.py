@@ -32,7 +32,8 @@ def _prompts_for_list(
     project_root: Path | None,
 ) -> tuple[PersonaPrompt, ...]:
     return PersonaPromptRepository(
-        backend=auto_backend(project_root)
+        backend=auto_backend(project_root),
+        project_root=project_root,
     ).list()
 
 
@@ -112,7 +113,8 @@ def handle_persona_list(args: argparse.Namespace) -> int:
 
 def handle_persona_create(args: argparse.Namespace) -> int:
     repository = PersonaPromptRepository(
-        backend=auto_backend(args.project_root)
+        backend=auto_backend(args.project_root),
+        project_root=args.project_root,
     )
     persona = create_persona_prompt(
         args.name, args.prompt, project_root=args.project_root
@@ -141,7 +143,8 @@ def handle_persona_create(args: argparse.Namespace) -> int:
 
 def handle_persona_show(args: argparse.Namespace) -> int:
     repository = PersonaPromptRepository(
-        backend=auto_backend(args.project_root)
+        backend=auto_backend(args.project_root),
+        project_root=args.project_root,
     )
     prompt_id = resolve_persona_id(args)
     if prompt_id is None:
@@ -159,7 +162,8 @@ def handle_persona_show(args: argparse.Namespace) -> int:
 
 def handle_persona_delete(args: argparse.Namespace) -> int:
     repository = PersonaPromptRepository(
-        backend=auto_backend(args.project_root)
+        backend=auto_backend(args.project_root),
+        project_root=args.project_root,
     )
     prompt_ids = resolve_persona_ids(args)
     if prompt_ids is None:
@@ -198,7 +202,8 @@ def _set_enabled(
     args: argparse.Namespace, *, enabled: bool
 ) -> int:
     repository = PersonaPromptRepository(
-        backend=auto_backend(args.project_root)
+        backend=auto_backend(args.project_root),
+        project_root=args.project_root,
     )
     prompt_id = resolve_persona_id(args)
     if prompt_id is None:
