@@ -404,6 +404,127 @@ def test_log_event_rejects_partial_envelope_identity(
         LogEvent.from_record(record)
 
 
+@pytest.mark.parametrize(
+    ("timestamp", "message"),
+    [
+        ("", "must not be empty"),
+        ("2026-01-01T00:00:00", "include a timezone"),
+        ("not-a-time", "ISO-8601"),
+    ],
+)
+def test_log_event_rejects_invalid_structured_timestamp(
+    timestamp: str,
+    message: str,
+) -> None:
+    record = LogEvent(
+        time="2026-01-01T00:00:00Z",
+        level="info",
+        component="chat",
+        event="healthy_event",
+        message="healthy",
+    ).to_record()
+    record["time"] = timestamp
+
+    with pytest.raises(ValueError, match=message):
+        LogEvent.from_record(record)
+
+
+def test_log_reader_orders_offset_timestamps_by_instant(
+    tmp_path: Path,
+) -> None:
+    path = log_path("chat", project_root=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    later = LogEvent(
+        time="2026-01-01T03:00:00+00:00",
+        level="info",
+        component="chat",
+        event="later_event",
+        message="later",
+    )
+    earlier = LogEvent(
+        time="2026-01-01T10:00:00+08:00",
+        level="info",
+        component="chat",
+        event="earlier_event",
+        message="earlier",
+    )
+    equal_first = LogEvent(
+        time="2026-01-01T11:00:00+08:00",
+        level="info",
+        component="chat",
+        event="equal_first",
+        message="equal-first",
+    )
+    equal_second = LogEvent(
+        time="2026-01-01T03:00:00Z",
+        level="info",
+        component="chat",
+        event="equal_second",
+        message="equal-second",
+    )
+    path.write_text(
+        "\n".join(
+            json.dumps(event.to_record())
+            for event in (
+                later,
+                earlier,
+                equal_first,
+                equal_second,
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    events = read_log_events(project_root=tmp_path, component="chat")
+
+    assert [event.message for event in events] == [
+        "earlier",
+        "later",
+        "equal-first",
+        "equal-second",
+    ]
+
+
+def test_incremental_cursor_orders_components_by_instant(
+    tmp_path: Path,
+) -> None:
+    cursor = InteractiveLogCursor.from_project(tmp_path)
+    daemon_path = log_path("daemon", project_root=tmp_path)
+    chat_path = log_path("chat", project_root=tmp_path)
+    daemon_path.parent.mkdir(parents=True, exist_ok=True)
+    daemon_path.write_text(
+        json.dumps(
+            LogEvent(
+                time="2026-01-01T03:00:00Z",
+                level="info",
+                component="daemon",
+                event="later_event",
+                message="later",
+            ).to_record()
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    chat_path.write_text(
+        json.dumps(
+            LogEvent(
+                time="2026-01-01T10:00:00+08:00",
+                level="info",
+                component="chat",
+                event="earlier_event",
+                message="earlier",
+            ).to_record()
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert [
+        event.message for event in cursor.read_new_events(tmp_path)
+    ] == ["earlier", "later"]
+
+
 def test_log_reader_isolates_corrupt_record_without_hiding_legacy(
     tmp_path: Path,
 ) -> None:

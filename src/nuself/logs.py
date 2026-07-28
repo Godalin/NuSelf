@@ -7,7 +7,8 @@ import re
 from collections.abc import Callable, Generator, Iterable, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
+from datetime import UTC, datetime
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
 from threading import Lock, RLock
@@ -55,6 +56,7 @@ _AUDIT_EVENT_NAME = re.compile(
 )
 _LOG_LOCKS_GUARD = Lock()
 _LOG_WRITE_LOCKS: dict[Path, RLock] = {}
+_LEGACY_LOG_INSTANT = datetime.min.replace(tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -107,8 +109,14 @@ class LogEvent:
     status: str | None = None
     error: str | None = None
     metadata: Mapping[str, object] | None = None
+    _allow_empty_time: InitVar[bool] = False
+    _instant: datetime | None = field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, _allow_empty_time: bool) -> None:
         if not isinstance(self.time, str):  # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError("log time must be a string")
         if self.level not in {"debug", "info", "warning", "error"}:
@@ -132,6 +140,19 @@ class LogEvent:
             or self.schema_version != RUNTIME_SCHEMA_VERSION
         ):
             raise ValueError("log schema_version is unsupported")
+        object.__setattr__(
+            self,
+            "_instant",
+            _parse_log_timestamp(
+                self.time,
+                allow_empty=(
+                    _allow_empty_time
+                    and self.event == "legacy"
+                    and self.event_id is None
+                    and self.schema_version is None
+                ),
+            ),
+        )
         for field_name in (
             "thread_id",
             "request_id",
@@ -193,6 +214,13 @@ class LogEvent:
             if value is not None:
                 record[key] = thaw_json_value(value)
         return record
+
+    def chronological_key(self) -> tuple[int, datetime]:
+        """Return an instant-aware stable sorting key."""
+
+        if self._instant is None:
+            return (0, _LEGACY_LOG_INSTANT)
+        return (1, self._instant)
 
     @classmethod
     def from_record(cls, record: dict[str, object]) -> LogEvent:
@@ -598,7 +626,7 @@ def read_log_events(
                 current_component,
                 corruptions,
             )
-    events.sort(key=lambda item: item.time)
+    events.sort(key=_log_event_chronological_key)
     if tail is not None and tail > 0:
         return events[-tail:]
     return events
@@ -634,6 +662,7 @@ def _parse_log_line(
             message=stripped,
             event_id=None,
             schema_version=None,
+            _allow_empty_time=True,
         )
     if not isinstance(parsed, dict):
         if on_corrupt is not None:
@@ -665,6 +694,32 @@ def _report_log_read_corruptions(
         f"first_error={type(first).__name__}: {detail}",
         stacklevel=3,
     )
+
+
+def _parse_log_timestamp(
+    value: str,
+    *,
+    allow_empty: bool,
+) -> datetime | None:
+    if value == "":
+        if allow_empty:
+            return None
+        raise ValueError("structured log time must not be empty")
+    try:
+        instant = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(
+            "log time must be an ISO-8601 timestamp"
+        ) from exc
+    if instant.tzinfo is None or instant.utcoffset() is None:
+        raise ValueError("log time must include a timezone")
+    return instant
+
+
+def _log_event_chronological_key(
+    event: LogEvent,
+) -> tuple[int, datetime]:
+    return event.chronological_key()
 
 
 def _record_optional_str(
@@ -757,7 +812,7 @@ class InteractiveLogCursor:
         events: list[LogEvent] = []
         for component in LOG_COMPONENTS:
             events.extend(self._read_component(component, project_root))
-        events.sort(key=lambda item: item.time)
+        events.sort(key=_log_event_chronological_key)
         new_events: list[LogEvent] = []
         for event in events:
             key = log_event_key(event)

@@ -273,6 +273,12 @@ Display name mapping: `persona` → `selves`.
 - `component=None` reads all component files; otherwise reads exactly one.
 - Missing file → silently skip.
 - All events sorted ascending by `time` (global chronological order).
+- Structured timestamps must parse as timezone-aware ISO-8601 instants.
+  Naive, malformed, and empty structured timestamps are corrupt records.
+  Different offsets representing the same or differently ordered instants are
+  compared as datetimes, never as raw strings; equal instants retain stable
+  input order. Only the synthetic wrapper for a non-JSON plain legacy line may
+  use `time=""`, and that sentinel sorts before timestamped records.
 - `tail > 0` returns `events[-tail:]`.
 - Non-JSON lines wrapped as `event="legacy"`.
 - Invalid JSON lines skipped.
