@@ -316,6 +316,9 @@ thread 或被当成部分 JSON 接受。envelope 字段在收发两端都严格�
 拒绝。
 每种 request type 还会校验自身的精确 payload 字段；类型错误的可选值不会再被静默
 替换为默认值，`echo` 则保留为明确的任意 object 例外。
+chat、health、activity、ping 和 shutdown 的 typed client operation 会校验完整的
+成功 payload。daemon 明确拒绝与损坏的成功响应保持不同错误类型，损坏的 worker 或
+activity 嵌套记录也不会被静默跳过。
 
 ## 通知
 

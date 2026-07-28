@@ -146,7 +146,6 @@ try:
     from nuself.cli.repl.types import InteractiveChatResult
     from nuself.config import ConfigSystem
     from nuself.daemon import client, lifecycle
-    from nuself.daemon.protocol import JsonValue
     from nuself.logs import (
         InteractiveLogCursor,
         LogEvent,
@@ -360,13 +359,11 @@ def _send_chat_interactive(
     turn_id: str | None = None,
 ) -> InteractiveChatResult:
     timeout_seconds = _chat_request_timeout_seconds(project_root)
-    payload: dict[str, JsonValue] = {"message": message, "thread_id": thread_id}
-    if turn_id is not None:
-        payload["turn_id"] = turn_id
     try:
-        response = client.request(
-            "chat",
-            payload,
+        response = client.chat(
+            message,
+            thread_id=thread_id,
+            turn_id=turn_id,
             project_root=project_root,
             timeout=timeout_seconds,
         )
@@ -374,7 +371,8 @@ def _send_chat_interactive(
         error = f"daemon request failed: {exc}"
         print(error, file=sys.stderr)
         return InteractiveChatResult(code=1, retryable=True, error=error)
-    if response.status == "error":
+    except client.DaemonApplicationError as exc:
+        error = str(exc)
         write_log_event(
             "chat",
             "daemon_chat_failed",
@@ -385,33 +383,24 @@ def _send_chat_interactive(
             turn_id=turn_id,
             source="client",
             status="error",
-            error=response.error or "daemon returned an error",
+            error=error,
         )
-        return InteractiveChatResult(
-            code=1, error=response.error or "daemon returned an error"
-        )
-    reply = response.payload.get("reply")
-    if isinstance(reply, str):
-        memory_update = response.payload.get("memory_update")
-        write_log_event(
-            "chat",
-            "daemon_chat_completed",
-            "daemon chat request completed",
-            project_root=project_root,
-            thread_id=_optional_payload_str(response.payload.get("thread_id")),
-            turn_id=turn_id,
-            source="client",
-            status="ok",
-        )
-        return InteractiveChatResult(
-            code=0,
-            reply=reply,
-            memory_update=memory_update
-            if isinstance(memory_update, str) and memory_update != ""
-            else None,
-        )
-    print("daemon response did not include a reply", file=sys.stderr)
-    return InteractiveChatResult(code=1)
+        return InteractiveChatResult(code=1, error=error)
+    write_log_event(
+        "chat",
+        "daemon_chat_completed",
+        "daemon chat request completed",
+        project_root=project_root,
+        thread_id=response.thread_id,
+        turn_id=turn_id,
+        source="client",
+        status="ok",
+    )
+    return InteractiveChatResult(
+        code=0,
+        reply=response.reply,
+        memory_update=response.memory_update or None,
+    )
 
 
 def _chat_request_timeout_seconds(project_root: Path | None) -> float:
@@ -559,7 +548,10 @@ def _run_interactive_send_with_live_logs(
                 turn_id,
                 project_root=project_root,
             )
-        except client.DaemonConnectionError:
+        except (
+            client.DaemonConnectionError,
+            client.DaemonApplicationError,
+        ):
             subscription_id = None
     result_box: list[InteractiveChatResult] = []
     error_box: list[BaseException] = []
@@ -586,7 +578,10 @@ def _run_interactive_send_with_live_logs(
                             ),
                         )
                     )
-                except client.DaemonConnectionError:
+                except (
+                    client.DaemonConnectionError,
+                    client.DaemonApplicationError,
+                ):
                     _close_activity_subscription(
                         subscription_id,
                         project_root,
@@ -625,7 +620,10 @@ def _run_interactive_send_with_live_logs(
                         limit=256,
                     )
                 )
-            except client.DaemonConnectionError:
+            except (
+                client.DaemonConnectionError,
+                client.DaemonApplicationError,
+            ):
                 new_events = []
         finally:
             _close_activity_subscription(
@@ -662,7 +660,10 @@ def _close_activity_subscription(
             subscription_id,
             project_root=project_root,
         )
-    except client.DaemonConnectionError:
+    except (
+        client.DaemonConnectionError,
+        client.DaemonApplicationError,
+    ):
         pass
 
 
@@ -1043,10 +1044,6 @@ def _render_assistant_reply_rich(text: str) -> None:
             visible_text += character
             live.update(Markdown(visible_text))
             time.sleep(TYPEWRITER_DELAY_SECONDS)
-
-
-def _optional_payload_str(value: object) -> str | None:
-    return value if isinstance(value, str) else None
 
 
 def _interactive_daemon_status(project_root: Path | None) -> str:

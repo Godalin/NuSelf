@@ -66,8 +66,11 @@ def stop(project_root: Path | None = None) -> DaemonStatus:
     paths = runtime_paths(project_root)
     if client.ping(paths.project_root):
         try:
-            client.request("shutdown", project_root=paths.project_root)
-        except client.DaemonConnectionError:
+            client.shutdown(paths.project_root)
+        except (
+            client.DaemonConnectionError,
+            client.DaemonApplicationError,
+        ):
             pass
     for _ in range(40):
         time.sleep(0.05)

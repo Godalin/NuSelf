@@ -105,32 +105,24 @@ def handle_daemon_status(args: argparse.Namespace) -> int:
 
 def handle_daemon_health(args: argparse.Namespace) -> int:
     try:
-        response = client.request(
-            "health", project_root=args.project_root, timeout=2.0
+        response = client.health(
+            project_root=args.project_root,
+            timeout=2.0,
         )
-    except client.DaemonConnectionError as exc:
+    except (
+        client.DaemonConnectionError,
+        client.DaemonApplicationError,
+    ) as exc:
         print(f"Daemon health unavailable: {exc}", file=sys.stderr)
         return 1
-    if response.status != "ok":
-        print(
-            f"Daemon health unavailable: {response.error or 'unknown error'}",
-            file=sys.stderr,
-        )
-        return 1
-    workers = response.payload.get("workers")
-    if not isinstance(workers, list):
-        print("Daemon health unavailable: invalid response", file=sys.stderr)
-        return 1
-    for raw in workers:
-        if not isinstance(raw, dict):
-            continue
+    for worker in response.workers:
         print(
             "worker"
-            f" name={raw.get('name', '?')}"
-            f" alive={str(raw.get('alive', False)).lower()}"
-            f" failures={raw.get('consecutive_failures', 0)}"
-            f" last_success={raw.get('last_success_at') or '-'}"
-            f" last_error={raw.get('last_error') or '-'}"
+            f" name={worker.name}"
+            f" alive={str(worker.alive).lower()}"
+            f" failures={worker.consecutive_failures}"
+            f" last_success={worker.last_success_at or '-'}"
+            f" last_error={worker.last_error or '-'}"
         )
     return 0
 

@@ -10,6 +10,8 @@ import pytest
 from nuself.config import runtime_paths
 from nuself.daemon import client
 from nuself.daemon.client import DaemonConnectionError
+from nuself.daemon.client import DaemonApplicationError
+from nuself.daemon.payloads import MessagePayload
 from nuself.daemon.protocol import (
     MAX_DAEMON_FRAME_BYTES,
     DaemonExtraFrameData,
@@ -358,3 +360,31 @@ def test_client_wraps_extra_response_frame_as_connection_error(
 def test_client_rejects_invalid_timeout(timeout: object) -> None:
     with pytest.raises(ValueError, match="positive and finite"):
         client.request("ping", timeout=timeout)  # type: ignore[arg-type]
+
+
+def test_typed_response_decoder_distinguishes_application_failure() -> None:
+    with pytest.raises(
+        DaemonApplicationError,
+        match="request rejected",
+    ):
+        client.decode_response(
+            DaemonResponse.fail("r", "request rejected"),
+            MessagePayload.from_wire,
+            operation="ping",
+        )
+
+
+def test_typed_response_decoder_wraps_malformed_success() -> None:
+    with pytest.raises(DaemonConnectionError) as captured:
+        client.decode_response(
+            DaemonResponse(
+                request_id="r",
+                status="ok",
+                payload={"unexpected": True},
+            ),
+            MessagePayload.from_wire,
+            operation="ping",
+        )
+
+    assert isinstance(captured.value.__cause__, ProtocolError)
+    assert "ping response is malformed" in str(captured.value)

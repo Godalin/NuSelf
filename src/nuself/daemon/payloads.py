@@ -33,6 +33,24 @@ class MessagePayload:
     def to_wire(self) -> dict[str, JsonValue]:
         return {"message": self.message}
 
+    @classmethod
+    def from_wire(
+        cls,
+        payload: dict[str, JsonValue],
+    ) -> MessagePayload:
+        _expect_fields(
+            payload,
+            required=frozenset({"message"}),
+        )
+        return cls(
+            message=_required_string(
+                payload,
+                "message",
+                context="message response",
+                allow_blank=True,
+            )
+        )
+
 
 @dataclass(frozen=True)
 class ChatRequestPayload:
@@ -41,6 +59,15 @@ class ChatRequestPayload:
     message: str
     thread_id: str = "default"
     turn_id: str | None = None
+
+    def to_wire(self) -> dict[str, JsonValue]:
+        payload: dict[str, JsonValue] = {
+            "message": self.message,
+            "thread_id": self.thread_id,
+        }
+        if self.turn_id is not None:
+            payload["turn_id"] = self.turn_id
+        return payload
 
     @classmethod
     def from_wire(cls, payload: dict[str, JsonValue]) -> ChatRequestPayload:
@@ -100,6 +127,57 @@ class WorkerHealthPayload:
             "consecutive_failures": self.consecutive_failures,
         }
 
+    @classmethod
+    def from_wire(
+        cls,
+        payload: dict[str, JsonValue],
+    ) -> WorkerHealthPayload:
+        _expect_fields(
+            payload,
+            required=frozenset(
+                {
+                    "name",
+                    "alive",
+                    "last_success_at",
+                    "last_error",
+                    "consecutive_failures",
+                }
+            ),
+        )
+        consecutive_failures = _required_integer(
+            payload,
+            "consecutive_failures",
+            context="worker health response",
+        )
+        if consecutive_failures < 0:
+            raise ProtocolError(
+                "worker health response field "
+                "'consecutive_failures' must be non-negative"
+            )
+        return cls(
+            name=_required_string(
+                payload,
+                "name",
+                context="worker health response",
+            ),
+            alive=_required_bool(
+                payload,
+                "alive",
+                context="worker health response",
+            ),
+            last_success_at=_required_nullable_string(
+                payload,
+                "last_success_at",
+                context="worker health response",
+            ),
+            last_error=_required_nullable_string(
+                payload,
+                "last_error",
+                context="worker health response",
+            ),
+            consecutive_failures=consecutive_failures,
+        )
+
 
 @dataclass(frozen=True)
 class HealthResponsePayload:
@@ -109,6 +187,34 @@ class HealthResponsePayload:
 
     def to_wire(self) -> dict[str, JsonValue]:
         return {"workers": [worker.to_wire() for worker in self.workers]}
+
+    @classmethod
+    def from_wire(
+        cls,
+        payload: dict[str, JsonValue],
+    ) -> HealthResponsePayload:
+        _expect_fields(
+            payload,
+            required=frozenset({"workers"}),
+        )
+        workers = payload.get("workers")
+        if not isinstance(workers, list):
+            raise ProtocolError(
+                "health response field 'workers' must be a list"
+            )
+        decoded: list[WorkerHealthPayload] = []
+        for index, worker in enumerate(workers):
+            if not isinstance(worker, dict):
+                raise ProtocolError(
+                    f"health response worker[{index}] must be an object"
+                )
+            try:
+                decoded.append(WorkerHealthPayload.from_wire(worker))
+            except ProtocolError as exc:
+                raise ProtocolError(
+                    f"health response worker[{index}] is invalid: {exc}"
+                ) from exc
+        return cls(tuple(decoded))
 
 
 @dataclass(frozen=True)
@@ -136,6 +242,85 @@ class ChatResponsePayload:
         if self.memory_update is not None:
             payload["memory_update"] = self.memory_update
         return payload
+
+    @classmethod
+    def from_wire(
+        cls,
+        payload: dict[str, JsonValue],
+    ) -> ChatResponsePayload:
+        _expect_fields(
+            payload,
+            required=frozenset(
+                {
+                    "answer",
+                    "reply",
+                    "thread_id",
+                    "evidence_references",
+                    "epistemic_status",
+                }
+            ),
+            optional=frozenset({"confidence", "memory_update"}),
+        )
+        evidence = payload.get("evidence_references")
+        if not isinstance(evidence, list) or not all(
+            isinstance(item, str) for item in evidence
+        ):
+            raise ProtocolError(
+                "chat response field 'evidence_references' "
+                "must be a string list"
+            )
+        evidence_references = cast(list[str], evidence)
+        epistemic_status = _required_nullable_string(
+            payload,
+            "epistemic_status",
+            context="chat response",
+        )
+        if epistemic_status not in {
+            None,
+            "grounded",
+            "inferred",
+            "uncertain",
+            "unsupported",
+        }:
+            raise ProtocolError(
+                "chat response field 'epistemic_status' is invalid"
+            )
+        confidence = _optional_number(
+            payload,
+            "confidence",
+            context="chat response",
+        )
+        if confidence is not None and not 0 <= confidence <= 1:
+            raise ProtocolError(
+                "chat response field 'confidence' must be between 0 and 1"
+            )
+        return cls(
+            answer=_required_string(
+                payload,
+                "answer",
+                context="chat response",
+                allow_blank=True,
+            ),
+            reply=_required_string(
+                payload,
+                "reply",
+                context="chat response",
+                allow_blank=True,
+            ),
+            thread_id=_required_string(
+                payload,
+                "thread_id",
+                context="chat response",
+            ),
+            evidence_references=tuple(evidence_references),
+            epistemic_status=epistemic_status,
+            confidence=confidence,
+            memory_update=_optional_string(
+                payload,
+                "memory_update",
+                context="chat response",
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -222,6 +407,23 @@ class ActivityOpenResponsePayload:
     def to_wire(self) -> dict[str, JsonValue]:
         return {"subscription_id": self.subscription_id}
 
+    @classmethod
+    def from_wire(
+        cls,
+        payload: dict[str, JsonValue],
+    ) -> ActivityOpenResponsePayload:
+        _expect_fields(
+            payload,
+            required=frozenset({"subscription_id"}),
+        )
+        return cls(
+            _required_string(
+                payload,
+                "subscription_id",
+                context="activity open response",
+            )
+        )
+
 
 @dataclass(frozen=True)
 class ActivityEventsResponsePayload:
@@ -230,6 +432,38 @@ class ActivityEventsResponsePayload:
     def to_wire(self) -> dict[str, JsonValue]:
         return {"events": [_json_value(event.to_record()) for event in self.events]}
 
+    @classmethod
+    def from_wire(
+        cls,
+        payload: dict[str, JsonValue],
+    ) -> ActivityEventsResponsePayload:
+        _expect_fields(
+            payload,
+            required=frozenset({"events"}),
+        )
+        events = payload.get("events")
+        if not isinstance(events, list):
+            raise ProtocolError(
+                "activity response field 'events' must be a list"
+            )
+        decoded: list[LogEvent] = []
+        for index, event in enumerate(events):
+            if not isinstance(event, dict):
+                raise ProtocolError(
+                    f"activity response event[{index}] must be an object"
+                )
+            try:
+                decoded.append(
+                    LogEvent.from_record(
+                        cast(dict[str, object], event)
+                    )
+                )
+            except ValueError as exc:
+                raise ProtocolError(
+                    f"activity response event[{index}] is invalid: {exc}"
+                ) from exc
+        return cls(tuple(decoded))
+
 
 @dataclass(frozen=True)
 class ActivityCloseResponsePayload:
@@ -237,6 +471,23 @@ class ActivityCloseResponsePayload:
 
     def to_wire(self) -> dict[str, JsonValue]:
         return {"closed": self.closed}
+
+    @classmethod
+    def from_wire(
+        cls,
+        payload: dict[str, JsonValue],
+    ) -> ActivityCloseResponsePayload:
+        _expect_fields(
+            payload,
+            required=frozenset({"closed"}),
+        )
+        return cls(
+            _required_bool(
+                payload,
+                "closed",
+                context="activity close response",
+            )
+        )
 
 
 def _required_string(
@@ -306,12 +557,90 @@ def _optional_integer(
     return value
 
 
+def _required_integer(
+    payload: dict[str, JsonValue],
+    field_name: str,
+    *,
+    context: str,
+) -> int:
+    value = payload.get(field_name)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ProtocolError(
+            f"{context} field '{field_name}' must be an integer"
+        )
+    return value
+
+
+def _required_bool(
+    payload: dict[str, JsonValue],
+    field_name: str,
+    *,
+    context: str,
+) -> bool:
+    value = payload.get(field_name)
+    if not isinstance(value, bool):
+        raise ProtocolError(
+            f"{context} field '{field_name}' must be a boolean"
+        )
+    return value
+
+
+def _required_nullable_string(
+    payload: dict[str, JsonValue],
+    field_name: str,
+    *,
+    context: str,
+) -> str | None:
+    value = payload.get(field_name)
+    if value is not None and not isinstance(value, str):
+        raise ProtocolError(
+            f"{context} field '{field_name}' must be a string or null"
+        )
+    return value
+
+
+def _optional_string(
+    payload: dict[str, JsonValue],
+    field_name: str,
+    *,
+    context: str,
+) -> str | None:
+    if field_name not in payload:
+        return None
+    value = payload[field_name]
+    if not isinstance(value, str):
+        raise ProtocolError(
+            f"{context} field '{field_name}' must be a string"
+        )
+    return value
+
+
+def _optional_number(
+    payload: dict[str, JsonValue],
+    field_name: str,
+    *,
+    context: str,
+) -> float | None:
+    if field_name not in payload:
+        return None
+    value = payload[field_name]
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ProtocolError(
+            f"{context} field '{field_name}' must be a number"
+        )
+    return float(value)
+
+
 def _expect_fields(
     payload: dict[str, JsonValue],
     *,
     required: frozenset[str] = frozenset(),
     optional: frozenset[str] = frozenset(),
 ) -> None:
+    missing = required - payload.keys()
+    if missing:
+        names = ", ".join(sorted(missing))
+        raise ProtocolError(f"missing payload field(s): {names}")
     unknown = payload.keys() - required - optional
     if unknown:
         names = ", ".join(sorted(unknown))

@@ -111,6 +111,24 @@ is best effort and cannot replace that failed response.
 `echo` is the deliberate exception: its contract is an arbitrary JSON object,
 so passing its payload through unchanged is the typed behavior of that request.
 
+Success response payload field sets are also exact:
+
+- `ping` and `shutdown` return one string `message`;
+- `health` returns `workers`, a list of complete typed worker-health records;
+- `chat` returns string `answer`, `reply`, and non-blank `thread_id`, a string
+  list `evidence_references`, nullable string `epistemic_status`, and optional
+  numeric `confidence` and string `memory_update`;
+- activity open/next/close return, respectively, non-blank
+  `subscription_id`, a list of complete log-event records, and boolean
+  `closed`.
+
+Typed client operations own success-payload decoding. An explicit daemon
+`error` response raises `DaemonApplicationError` and is not retryable as a
+connection failure. An `ok` response with a malformed request-specific payload
+raises `DaemonConnectionError` with the payload `ProtocolError` as its cause.
+Nested worker and activity records fail the whole response; clients must not
+skip malformed records or synthesize defaults.
+
 ### JSONL Transport Framing
 
 The daemon transport is one request and one response per Unix-socket

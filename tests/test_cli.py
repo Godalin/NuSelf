@@ -644,7 +644,15 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
             )
             raise DaemonConnectionError("timed out")
         return DaemonResponse(
-            request_id="r1", status="ok", payload={"reply": "daemon reply"}
+            request_id="r1",
+            status="ok",
+            payload={
+                "answer": "daemon reply",
+                "reply": "daemon reply",
+                "thread_id": "default",
+                "evidence_references": [],
+                "epistemic_status": None,
+            },
         )
 
     monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
@@ -1113,7 +1121,13 @@ def test_daemon_chat_uses_long_timeout(
         return DaemonResponse(
             request_id="r1",
             status="ok",
-            payload={"reply": "daemon reply"},
+            payload={
+                "answer": "daemon reply",
+                "reply": "daemon reply",
+                "thread_id": "default",
+                "evidence_references": [],
+                "epistemic_status": None,
+            },
         )
 
     def fake_status(project_root: Path | None) -> DaemonStatus:
@@ -1159,7 +1173,13 @@ def test_daemon_chat_uses_configured_request_timeout(
         return DaemonResponse(
             request_id="r1",
             status="ok",
-            payload={"reply": "daemon reply"},
+            payload={
+                "answer": "daemon reply",
+                "reply": "daemon reply",
+                "thread_id": "default",
+                "evidence_references": [],
+                "epistemic_status": None,
+            },
         )
 
     def fake_status(project_root: Path | None) -> DaemonStatus:
@@ -1197,7 +1217,11 @@ def test_daemon_chat_prints_memory_update(
             request_id="r1",
             status="ok",
             payload={
+                "answer": "daemon reply",
                 "reply": "daemon reply",
+                "thread_id": "default",
+                "evidence_references": [],
+                "epistemic_status": None,
                 "memory_update": "processed=2 created=1 updated=0 ignored=0",
             },
         )

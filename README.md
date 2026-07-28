@@ -332,6 +332,10 @@ payload numbers, and inconsistent response error states are rejected.
 Each request type also validates its exact payload fields; invalid optional
 values are not silently replaced by defaults, with `echo` retained as the
 explicit arbitrary-object exception.
+Typed client operations validate complete success payloads for chat, health,
+activity, ping, and shutdown. A daemon rejection stays distinct from a
+malformed successful response, and malformed nested worker or activity records
+are never silently skipped.
 
 ## Notifications
 

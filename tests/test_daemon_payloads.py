@@ -6,8 +6,11 @@ import pytest
 
 from nuself.daemon.payloads import (
     ActivityCloseRequestPayload,
+    ActivityCloseResponsePayload,
+    ActivityEventsResponsePayload,
     ActivityNextRequestPayload,
     ActivityOpenRequestPayload,
+    ActivityOpenResponsePayload,
     ChatRequestPayload,
     ChatResponsePayload,
     EmptyRequestPayload,
@@ -17,6 +20,7 @@ from nuself.daemon.payloads import (
 )
 from nuself.daemon.protocol import JsonValue, ProtocolError
 from nuself.daemon.types import WorkerHealth
+from nuself.logs import LogEvent
 
 
 def test_chat_request_payload_validates_and_defaults() -> None:
@@ -81,6 +85,7 @@ def test_chat_response_payload_omits_absent_optional_fields() -> None:
         "evidence_references": ["m1"],
         "epistemic_status": "grounded",
     }
+    assert ChatResponsePayload.from_wire(payload.to_wire()) == payload
 
 
 def test_health_response_payload_projects_worker_model() -> None:
@@ -105,6 +110,105 @@ def test_health_response_payload_projects_worker_model() -> None:
         ]
     }
     assert MessagePayload("pong").to_wire() == {"message": "pong"}
+    assert HealthResponsePayload.from_wire(
+        HealthResponsePayload((worker,)).to_wire()
+    ) == HealthResponsePayload((worker,))
+    assert MessagePayload.from_wire(
+        MessagePayload("pong").to_wire()
+    ) == MessagePayload("pong")
+
+
+@pytest.mark.parametrize(
+    "payload, error",
+    [
+        (
+            {
+                "workers": [
+                    {
+                        "name": "memory",
+                        "alive": "yes",
+                        "last_success_at": None,
+                        "last_error": None,
+                        "consecutive_failures": 0,
+                    }
+                ]
+            },
+            r"worker\[0\].*alive",
+        ),
+        (
+            {
+                "answer": "answer",
+                "reply": "answer",
+                "thread_id": "default",
+                "evidence_references": [1],
+                "epistemic_status": "grounded",
+            },
+            "evidence_references",
+        ),
+        (
+            {
+                "answer": "answer",
+                "reply": "answer",
+                "thread_id": "default",
+                "evidence_references": [],
+                "epistemic_status": "invented",
+            },
+            "epistemic_status",
+        ),
+        (
+            {
+                "answer": "answer",
+                "reply": "answer",
+                "thread_id": "default",
+                "evidence_references": [],
+                "epistemic_status": None,
+                "confidence": 2,
+            },
+            "confidence",
+        ),
+    ],
+)
+def test_response_payloads_reject_malformed_nested_fields(
+    payload: dict[str, JsonValue],
+    error: str,
+) -> None:
+    decoder = (
+        HealthResponsePayload.from_wire
+        if "workers" in payload
+        else ChatResponsePayload.from_wire
+    )
+    with pytest.raises(ProtocolError, match=error):
+        decoder(payload)
+
+
+def test_activity_response_payloads_round_trip_and_fail_atomically() -> None:
+    event = LogEvent(
+        time="2026-07-28T00:00:00+00:00",
+        level="info",
+        component="daemon",
+        event="test",
+        message="test event",
+    )
+    opened = ActivityOpenResponsePayload("sub-1")
+    events = ActivityEventsResponsePayload((event,))
+    closed = ActivityCloseResponsePayload(True)
+
+    assert ActivityOpenResponsePayload.from_wire(
+        opened.to_wire()
+    ) == opened
+    assert ActivityEventsResponsePayload.from_wire(
+        events.to_wire()
+    ) == events
+    assert ActivityCloseResponsePayload.from_wire(
+        closed.to_wire()
+    ) == closed
+
+    malformed = events.to_wire()
+    raw_events = malformed["events"]
+    assert isinstance(raw_events, list)
+    raw_events.append({"component": "invalid"})
+    with pytest.raises(ProtocolError, match=r"event\[1\]"):
+        ActivityEventsResponsePayload.from_wire(malformed)
 
 
 def test_activity_payloads_validate_bounds() -> None:
