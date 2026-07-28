@@ -14,7 +14,10 @@ from nuself.logs import (
     LogRetentionPolicy,
     write_log_event,
 )
-from nuself.runtime.diagnostics import emit_runtime_warning
+from nuself.runtime.diagnostics import (
+    emit_runtime_warning,
+    safe_exception_message,
+)
 from nuself.runtime.events import EventDeliveryError, EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
 
@@ -32,7 +35,7 @@ def format_exception_chain(exc: BaseException) -> str:
     messages: list[str] = []
     current: BaseException | None = exc
     while current is not None:
-        message = str(current).strip()
+        message = safe_exception_message(current)
         if message and message not in messages:
             messages.append(message)
         if current.__cause__ is not None:

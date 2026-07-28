@@ -66,6 +66,29 @@ def test_event_publisher_delivers_independently_then_reports_failures() -> None:
     assert str(exc_info.value.failures[0].error) == "subscriber failed"
 
 
+def test_event_delivery_retains_exception_with_broken_string_renderer() -> None:
+    publisher = EventPublisher()
+
+    class BrokenMessageError(RuntimeError):
+        def __str__(self) -> str:
+            raise RuntimeError("message rendering failed")
+
+    subscriber_error = BrokenMessageError()
+
+    def fail(_event: RuntimeEnvelope) -> None:
+        raise subscriber_error
+
+    failed_subscription = publisher.subscribe(fail)
+
+    with pytest.raises(EventDeliveryError) as exc_info:
+        publisher.publish(name="worker.started", producer="daemon")
+
+    [failure] = exc_info.value.failures
+    assert failure.subscription == failed_subscription
+    assert failure.error is subscriber_error
+    assert "BrokenMessageError: <no message>" in str(exc_info.value)
+
+
 def test_event_subscription_can_be_removed() -> None:
     publisher = EventPublisher()
     received: list[str] = []

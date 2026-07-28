@@ -68,6 +68,17 @@ def test_format_exception_chain_respects_suppressed_context() -> None:
         assert format_exception_chain(exc) == "safe summary"
 
 
+def test_format_exception_chain_survives_broken_exception_renderer() -> None:
+    class BrokenMessageError(RuntimeError):
+        def __str__(self) -> str:
+            raise KeyboardInterrupt
+
+    try:
+        raise BrokenMessageError() from ValueError("root")
+    except BrokenMessageError as exc:
+        assert format_exception_chain(exc) == "BrokenMessageError <- root"
+
+
 def test_best_effort_returns_none_and_writes_structured_failure(
     tmp_path: Path,
 ) -> None:

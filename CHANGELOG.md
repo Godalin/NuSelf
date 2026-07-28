@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Runtime event and daemon error reporting now share fail-safe compact
+  exception-chain formatting. Duplicate cause messages are omitted, and an
+  exception with a broken string renderer can no longer replace the original
+  failure.
 - Runtime event payload validators now run exactly once against the immutable
   envelope payload that subscribers receive, eliminating raw/frozen
   double-validation drift.

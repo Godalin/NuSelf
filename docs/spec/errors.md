@@ -32,6 +32,10 @@ NuSelf should fail in a way that preserves root-cause information, avoids repeat
   ```
 
 - The chain should include unique, non-empty messages only. It should not include full tracebacks in normal user-facing output.
+- Formatting an exception is itself a secondary diagnostic operation. If
+  `str(exception)` fails, compact formatting must use the exception class name
+  and retain the original exception object and chain. A broken exception
+  renderer must never replace the failure being reported.
 - Full tracebacks may be added later behind an explicit debug/development mode, but they must not be required to understand the likely root cause.
 
 ## Daemon Chat Failures

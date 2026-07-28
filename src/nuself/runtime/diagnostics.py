@@ -5,6 +5,21 @@ from __future__ import annotations
 import warnings
 
 
+def safe_exception_message(
+    exc: BaseException,
+    *,
+    empty: str | None = None,
+) -> str:
+    """Return exception text without allowing a broken renderer to escape."""
+
+    fallback = exc.__class__.__name__ if empty is None else empty
+    try:
+        message = str(exc).strip()
+    except BaseException:
+        return fallback
+    return message or fallback
+
+
 def emit_runtime_warning(
     message: str,
     *,

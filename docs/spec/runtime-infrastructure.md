@@ -462,6 +462,11 @@ registration. Its compact message includes each subscriber exception type and
 non-empty message so best-effort observability does not discard the actionable
 failure cause.
 
+Building `EventDeliveryError` is a reporting boundary: an exception whose
+`__str__` fails must still remain in `failures`, and its type plus a stable
+fallback must appear in the aggregate message. Diagnostic formatting must not
+replace the subscriber failure set.
+
 Each publication captures one ordered subscription snapshot under the
 publisher lock, then invokes callbacks without holding that lock. Subscribing
 or unsubscribing from a callback never changes the active snapshot: a removed

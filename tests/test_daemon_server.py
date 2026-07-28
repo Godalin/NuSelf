@@ -336,7 +336,7 @@ def test_chat_completion_audit_cannot_invalidate_response(
     assert response.payload["answer"] == "stubbed: hello"
 
 
-def test_daemon_chat_error_preserves_repeated_exception_messages(tmp_path: Path) -> None:
+def test_daemon_chat_error_deduplicates_exception_messages(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     state.conversation_runtime = ConversationGraphRuntime(
         tmp_path,
@@ -348,7 +348,7 @@ def test_daemon_chat_error_preserves_repeated_exception_messages(tmp_path: Path)
 
     assert response.status == "error"
     assert response.error is not None
-    assert response.error.count("same") == 2
+    assert response.error.count("same") == 1
 
 
 class FakeChangedCurator:

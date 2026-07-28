@@ -43,6 +43,7 @@ from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.runtime.handlers import HandlerRegistry, UnknownHandlerError
 from nuself.runtime.context import runtime_context
 from nuself.runtime.observability import (
+    format_exception_chain,
     report_observed_failure,
     run_observed_best_effort,
     write_observed_log_event,
@@ -228,7 +229,7 @@ def _handle_chat(
                 source_trace_id=result.trace_id,
             )
         except RuntimeError as exc:
-            error_detail = _format_exception_chain(exc)
+            error_detail = format_exception_chain(exc)
             report_observed_failure(
                 exc,
                 component="daemon",
@@ -356,17 +357,6 @@ def _run_memory_curator_once(
         metadata={"source_trace_id": source_trace_id},
         errors=(RuntimeError,),
     )
-
-
-def _format_exception_chain(exc: BaseException) -> str:
-    messages: list[str] = []
-    current: BaseException | None = exc
-    while current is not None:
-        message = str(current)
-        if message:
-            messages.append(message)
-        current = current.__cause__ or current.__context__
-    return " <- ".join(messages) if messages else exc.__class__.__name__
 
 
 DAEMON_REQUEST_HANDLERS = build_daemon_request_registry()
