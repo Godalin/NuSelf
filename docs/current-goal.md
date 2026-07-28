@@ -52,7 +52,7 @@ Make runtime and persisted event identities stable and evolution-safe.
 
 ## Publication
 
-The current naming and evolution batch is awaiting its implementation commit.
+`dev/v0.3.x` is ready to publish through implementation commit `97fe04d`.
 
 ## Next Review Batch
 
