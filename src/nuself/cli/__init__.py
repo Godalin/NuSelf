@@ -37,6 +37,7 @@ try:
         InteractiveHandlers,
         build_parser as _build_parser,
     )
+    from nuself.cli.handlers import dispatch_cli
     from nuself.cli.repl.types import InteractiveChatResult
     from nuself.cli.repl.session import (
         InteractiveSession as InteractiveSession,
@@ -141,12 +142,7 @@ def _maybe_show_session_update(project_root: Path | None, thread_id: str) -> Non
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    handler = getattr(args, "handler", None)
-    if handler is None:
-        help_parser = getattr(args, "help_parser", parser)
-        help_parser.print_help()
-        return 0
-    return handler(args)
+    return dispatch_cli(args, parser)
 
 
 def build_parser() -> argparse.ArgumentParser:

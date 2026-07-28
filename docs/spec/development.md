@@ -129,6 +129,8 @@ under the same package.
 - `cli/parser.py` owns top-level parser construction and accepts the small set
   of interactive callbacks through `InteractiveHandlers`; it never imports
   `nuself.cli`.
+- `cli/handlers.py` owns typed argparse handler binding, help-only group
+  binding, and exit-status validation at the single CLI dispatch boundary.
 - `cli/commands/daemon.py` owns daemon lifecycle/health handlers and daemon status
   formatting.
 - `cli/commands/threads.py` owns one-shot thread list/show/create/rename/branch/archive

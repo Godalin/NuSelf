@@ -43,7 +43,7 @@ These are review-driven refactors that should not block local v0.2 testing. They
 
 - [x] Add a sealed, duplicate-safe handler registry and migrate daemon request
   dispatch.
-- [ ] Centralize typed CLI handler binding and dispatch while retaining
+- [x] Centralize typed CLI handler binding and dispatch while retaining
   argparse for parsing.
 - [ ] Introduce a versioned runtime envelope and neutral correlation context.
 - [ ] Make structured logs an envelope sink with stable event IDs, serialized
