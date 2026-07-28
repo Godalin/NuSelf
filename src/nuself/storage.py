@@ -276,7 +276,7 @@ def create_sqlite_backend(
     """Create a ``SqliteStorageBackend`` at ``private/nuself.sqlite`` (or *db_path*)."""
     from nuself.storage_sqlite import SqliteStorageBackend
     path = db_path if db_path is not None else runtime_paths(project_root).private_root / "nuself.sqlite"
-    return SqliteStorageBackend(path)
+    return SqliteStorageBackend(path, project_root=project_root)
 
 
 def auto_backend(project_root: Path | None = None) -> StorageBackend:

@@ -54,6 +54,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- SQLite dynamic columns now decode strictly as JSON. Corrupt rows are reported
+  and isolated during collection reads instead of leaking raw column text into
+  domain models, and JSON null now round-trips as a present `None` value.
 - Local and LangChain compatibility response extraction now share one strict
   codec. Malformed protocol-looking JSON, unknown fields, invalid epistemic
   status or confidence, and visible tool-call text can no longer silently

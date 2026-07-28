@@ -9,6 +9,7 @@ from typing import cast
 
 import pytest
 
+from nuself.logs import read_log_events
 from nuself.storage import (
     create_sqlite_backend,
     get_default_backend,
@@ -48,6 +49,25 @@ class TransactionConnectionProxy:
         if self._fail_rollback:
             raise sqlite3.OperationalError("rollback unavailable")
         self._delegate.rollback()
+
+
+def _set_raw_sqlite_column(
+    db_path: Path,
+    *,
+    table: str,
+    record_id: str,
+    column: str,
+    value: object,
+) -> None:
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            f'UPDATE "{table}" SET "{column}" = ? WHERE id = ?',
+            (value, record_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def test_create_sqlite_backend_creates_db(tmp_path: Path) -> None:
@@ -99,6 +119,123 @@ def test_put_and_get(tmp_path: Path) -> None:
     assert result["id"] == "mem_001"
     assert result["title"] == "Test"
     assert result["value"] == 42
+
+
+def test_json_null_round_trips_as_present_none(tmp_path: Path) -> None:
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
+    col = backend.collection("memory_entries")
+    col.put(
+        "mem_null",
+        {"id": "mem_null", "nullable": None},
+    )
+
+    assert col.get("mem_null") == {
+        "id": "mem_null",
+        "nullable": None,
+    }
+    assert col.list() == (
+        {"id": "mem_null", "nullable": None},
+    )
+
+
+def test_list_isolates_corrupt_sqlite_json_row(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    col = backend.collection("memory_entries")
+    healthy: dict[str, object] = {
+        "id": "healthy",
+        "title": "Readable",
+        "type": "belief",
+    }
+    col.put("healthy", healthy)
+    col.put(
+        "corrupt",
+        {"id": "corrupt", "title": "Before", "type": "belief"},
+    )
+    _set_raw_sqlite_column(
+        db_path,
+        table="col_memory_entries",
+        record_id="corrupt",
+        column="title",
+        value="private corrupt text",
+    )
+
+    assert col.list() == (healthy,)
+
+    event = read_log_events(
+        project_root=tmp_path,
+        component="memory",
+    )[-1]
+    assert event.event == "record_decode_failed"
+    assert event.metadata == {
+        "collection": "memory_entries",
+        "record_id": "corrupt",
+    }
+    assert "private corrupt text" not in str(event.to_record())
+    with pytest.raises(
+        ValueError,
+        match="dynamic column is invalid JSON",
+    ):
+        col.get("corrupt")
+
+
+def test_find_isolates_matching_corrupt_sqlite_row(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    col = backend.collection("memory_entries")
+    healthy: dict[str, object] = {
+        "id": "healthy",
+        "title": "Readable",
+        "type": "belief",
+    }
+    col.put("healthy", healthy)
+    col.put(
+        "corrupt",
+        {"id": "corrupt", "title": "Before", "type": "belief"},
+    )
+    _set_raw_sqlite_column(
+        db_path,
+        table="col_memory_entries",
+        record_id="corrupt",
+        column="title",
+        value="not-json",
+    )
+
+    assert col.find(type="belief") == (healthy,)
+    event = read_log_events(
+        project_root=tmp_path,
+        component="memory",
+    )[-1]
+    assert event.metadata == {
+        "collection": "memory_entries",
+        "record_id": "corrupt",
+    }
+
+
+def test_direct_get_rejects_non_text_dynamic_column(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    col = backend.collection("memory_entries")
+    col.put("corrupt", {"id": "corrupt", "title": "Before"})
+    _set_raw_sqlite_column(
+        db_path,
+        table="col_memory_entries",
+        record_id="corrupt",
+        column="title",
+        value=sqlite3.Binary(b"private bytes"),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="dynamic column is not JSON text",
+    ):
+        col.get("corrupt")
 
 
 def test_get_missing_returns_none(tmp_path: Path) -> None:

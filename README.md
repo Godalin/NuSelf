@@ -278,6 +278,10 @@ Malformed stored records are isolated during collection reads and reported as
 payload-safe `record_decode_failed` warnings. Reason-thread scheduling
 timestamps must include a timezone, so corrupt cooldown state cannot silently
 make a thread eligible for background advancement.
+
+The SQLite backend applies the same isolation to malformed dynamic-column JSON:
+healthy neighboring rows remain readable, direct lookups stay strict, and
+diagnostics never include the corrupt column contents.
 Invalid reason-export manifests stop composition safely. Job listing reports
 and isolates malformed manifests without exposing their contents, while direct
 lookup and filesystem failures remain visible; invalid progress and retry-state

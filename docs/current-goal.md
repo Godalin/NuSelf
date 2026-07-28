@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The SQLite rollback-only transaction and schema-cache recovery stage is
+Idle. The strict SQLite dynamic-column decode and row-isolation stage is
 complete; no implementation change is currently active.
 
 ## Active Branch
@@ -14,7 +14,8 @@ complete; no implementation change is currently active.
 
 ## Ordered Work
 
-No active implementation steps. Completed work is recorded in Git.
+No active implementation steps. Completed work is recorded in Git and
+`CHANGELOG.md`.
 
 ## Out Of Scope
 
@@ -30,4 +31,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit SQLite row JSON corruption and explicit close/checkpoint visibility.
+Audit explicit SQLite close/checkpoint visibility and ownership semantics.

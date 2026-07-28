@@ -165,6 +165,20 @@ through the shared corrupt-record isolation boundary defined in
 payload-safe diagnostic; it is never silently deleted or rewritten. Direct
 lookups surface the decode failure.
 
+SQLite dynamic columns add one lower-level decode boundary. SQL `NULL` means
+the complete-replacement wire record omitted that field; a populated column is
+always JSON text and must decode successfully, including JSON `null` as a
+present Python `None` value. Invalid JSON and non-text dynamic values are
+storage corruption and are never returned as raw strings or silently omitted.
+
+SQLite `get()` surfaces this corruption directly. SQLite `list()` and rows
+selected by `find()` report and isolate each corrupt row through the same
+payload-safe component `record_decode_failed` event used by repositories, then
+continue with healthy neighbors. Diagnostics include only collection and record
+id, not column text or the complete row. The SQLite collection adapter retains
+its project root and collection-to-component ownership so these diagnostics
+flow to the correct structured log.
+
 ### Unify Long-Lived Object IDs
 
 统一 ID 格式为 `{prefix}_{uuid_short}`：

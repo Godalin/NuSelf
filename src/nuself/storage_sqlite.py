@@ -15,20 +15,20 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Protocol, cast
 
-from nuself.storage import COLLECTION_NAMES
+from nuself.logs import LogComponent
+from nuself.runtime.observability import report_corrupt_record
+from nuself.storage import (
+    COLLECTION_LOG_COMPONENTS,
+    COLLECTION_NAMES,
+)
 
 
 def _json(v: object) -> str:
     return json.dumps(v, ensure_ascii=True)
 
 
-def _from_json(s: str | None) -> object:
-    if s is None:
-        return None
-    try:
-        return json.loads(s)
-    except (json.JSONDecodeError, ValueError):
-        return s
+def _from_json(value: str) -> object:
+    return json.loads(value)
 
 
 def _collection_table(name: str) -> str:
@@ -93,6 +93,10 @@ class SqliteCollection:
         lock: _Lock,
         column_cache: dict[str, tuple[str, ...]],
         transaction_state: _TransactionState,
+        *,
+        collection_name: str,
+        component: LogComponent,
+        project_root: Path,
     ) -> None:
         self._conn = conn
         self._table = table
@@ -101,6 +105,9 @@ class SqliteCollection:
         # backend connection), so an ALTER by one is seen by all.
         self._column_cache = column_cache
         self._transaction_state = transaction_state
+        self._collection_name = collection_name
+        self._component: LogComponent = component
+        self._project_root = project_root
 
     def _ensure_columns(self, keys: set[str]) -> None:
         existing = set(self._columns())
@@ -133,12 +140,44 @@ class SqliteCollection:
             if val is None:
                 continue
             if col == "id":
+                if not isinstance(val, str) or not val:
+                    raise ValueError("stored SQLite row id is invalid")
                 result[col] = val
             else:
-                parsed = _from_json(val if isinstance(val, str) else None)
-                if parsed is not None:
-                    result[col] = parsed
+                if not isinstance(val, str):
+                    raise ValueError(
+                        "stored SQLite dynamic column is not JSON text"
+                    )
+                try:
+                    parsed = _from_json(val)
+                except (json.JSONDecodeError, ValueError) as exc:
+                    raise ValueError(
+                        "stored SQLite dynamic column is invalid JSON"
+                    ) from exc
+                result[col] = parsed
         return result
+
+    def _decode_list_rows(
+        self,
+        cols: tuple[str, ...],
+        rows: list[tuple[object, ...]],
+    ) -> tuple[dict[str, object], ...]:
+        items: list[dict[str, object]] = []
+        for row in rows:
+            try:
+                item = self._row_to_dict(cols, row)
+            except (json.JSONDecodeError, ValueError, TypeError) as exc:
+                report_corrupt_record(
+                    exc,
+                    component=self._component,
+                    collection=self._collection_name,
+                    record_id=_row_record_id(cols, row),
+                    project_root=self._project_root,
+                )
+                continue
+            if item:
+                items.append(item)
+        return tuple(items)
 
     def get(self, key: str) -> dict[str, object] | None:
         cols = self._columns()
@@ -205,8 +244,7 @@ class SqliteCollection:
         rows = self._conn.execute(
             f"SELECT {col_list} FROM {_identifier(self._table)}"
         ).fetchall()
-        items = [self._row_to_dict(cols, row) for row in rows]
-        return tuple(d for d in items if d)
+        return self._decode_list_rows(cols, rows)
 
     def find(self, **filters: object) -> tuple[dict[str, object], ...]:
         if not filters:
@@ -238,15 +276,28 @@ class SqliteCollection:
             + " AND ".join(where_parts)
         )
         rows = self._conn.execute(sql, params).fetchall()
-        items = [self._row_to_dict(cols, row) for row in rows]
-        return tuple(d for d in items if d)
+        return self._decode_list_rows(cols, rows)
 
 
 class SqliteStorageBackend:
     """Storage backend backed by a single SQLite database file."""
 
-    def __init__(self, db_path: Path) -> None:
+    def __init__(
+        self,
+        db_path: Path,
+        *,
+        project_root: Path | None = None,
+    ) -> None:
         self._db_path = db_path
+        self._project_root = (
+            project_root
+            if project_root is not None
+            else (
+                db_path.parent.parent
+                if db_path.parent.name == "private"
+                else db_path.parent
+            )
+        )
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -447,6 +498,9 @@ class SqliteStorageBackend:
             self._lock,
             self._column_cache,
             self._transaction_state,
+            collection_name=name,
+            component=COLLECTION_LOG_COMPONENTS[name],
+            project_root=self._project_root,
         )
 
     def collection_names(self) -> tuple[str, ...]:
@@ -479,3 +533,15 @@ def _verify_table(conn: sqlite3.Connection, table: str, name: str) -> None:
     ).fetchone()
     if row is None:
         raise ValueError(f"unknown collection: {name!r}")
+
+
+def _row_record_id(
+    cols: tuple[str, ...],
+    row: tuple[object, ...],
+) -> str:
+    try:
+        index = cols.index("id")
+        value = row[index]
+    except (ValueError, IndexError):
+        return "<unknown>"
+    return value if isinstance(value, str) and value else "<unknown>"
