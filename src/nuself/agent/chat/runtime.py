@@ -29,6 +29,7 @@ from nuself.agent.chat.response import (
 from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.chat.tool_runtime import ConversationToolRuntime
 from nuself.agent.chat.thread import ThreadMessage, ThreadState, ThreadStore
+from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.config import ConfigSystem
 from nuself.llm import (
     ChatLLM,
@@ -97,6 +98,7 @@ class ConversationGraphRuntime:
         section_planner: SectionPlanner | None = None,
         event_publisher: EventPublisher | None = None,
         response_service: ConversationResponseService | None = None,
+        compression_agent: TextAgent | None = None,
     ) -> None:
         self._llm = llm or default_llm(project_root)
         self._langchain_models: tuple[LangChainLLMEndpoint, ...] = (
@@ -124,7 +126,19 @@ class ConversationGraphRuntime:
             self._memory_query_service
         )
         self._state_manager = ConversationStateManager(
-            llm=self._llm,
+            text_agent=(
+                compression_agent
+                if compression_agent is not None
+                else (
+                    LangChainTextAgent(
+                        endpoints=self._langchain_models,
+                        project_root=project_root,
+                        component="chat",
+                    )
+                    if self._langchain_models
+                    else None
+                )
+            ),
             settings=self._settings,
         )
         self._persona_orchestrator = ConversationPersonaOrchestrator(

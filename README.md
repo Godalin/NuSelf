@@ -365,6 +365,10 @@ assistant reply is still returned and the failure is recorded as
 silently presented as an ordinary no-op.
 
 The current conversation graph is intentionally small: it preserves the CLI and daemon protocol boundary while keeping room for later persona subgraphs and richer agent routing.
+Its compression node uses the shared free-text agent capability when a
+LangChain model is available. If that capability is absent, fails, or returns
+empty text, the node retains a bounded deterministic transcript-tail summary
+so context persistence still completes without inventing content.
 
 ## Daemon
 

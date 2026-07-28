@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool
 
 from nuself.agent.chat import (
@@ -228,9 +229,23 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
 
 
 def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:
+    class _CompressionAgent:
+        def __init__(self) -> None:
+            self.calls: list[Sequence[BaseMessage]] = []
+
+        def invoke(self, messages: Sequence[BaseMessage]) -> str:
+            self.calls.append(messages)
+            return "compressed context"
+
     llm = FakeLLM()
+    compression_agent = _CompressionAgent()
     settings = ChatAgentSettings(recent_messages=2, summary_trigger_messages=4, summary_target_chars=200)
-    agent = ConversationGraphRuntime(tmp_path, llm=llm, settings=settings)
+    agent = ConversationGraphRuntime(
+        tmp_path,
+        llm=llm,
+        settings=settings,
+        compression_agent=compression_agent,
+    )
 
     agent.respond("one")
     agent.respond("two")
@@ -241,6 +256,10 @@ def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:
 
     assert "compressed context" in text
     assert text.count('"role"') == 2
+    assert len(compression_agent.calls) == 1
+    assert "Compress a private NuSelf conversation" in (
+        compression_agent.calls[0][0].text
+    )
 
 
 def test_chat_agent_uses_local_summary_without_api_key(tmp_path: Path) -> None:

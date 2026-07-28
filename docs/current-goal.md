@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The reason-export free-text agent migration is complete.
+Idle. The chat compression text-agent migration is complete.
 
 ## Active Branch
 
@@ -21,20 +21,21 @@ None while idle.
 
 ## Completion Evidence
 
-- `ReasonExportWorker` receives one `TextAgent` at construction and invokes it
-  with LangChain system and human messages.
-- Direct `default_llm().complete()` is removed from export composition.
-- Non-empty generation is enforced by the shared capability; endpoint or
-  invocation failure propagates into durable export retry/failure handling.
-- No local configuration-warning response can become a successful artifact.
+- `ConversationStateManager` accepts an optional `TextAgent` and uses
+  LangChain system and human messages for model-backed compression.
+- `ChatLLM` and `ChatMessage` are removed from the compression collaborator.
+- Runtime composition reuses configured LangChain endpoints through
+  `LangChainTextAgent`.
+- Missing, failed, or empty model output uses the bounded deterministic local
+  summary and cannot block conversation persistence.
 - `.venv/bin/pytest -q`: `1473 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `f3db72e`.
+`dev/v0.3.x` is published through `75b32d2`.
 
 ## Next Review Batch
 
-Migrate chat compression onto `TextAgent` as a separate functional commit.
+Audit chat response and reason advancer agent orchestration after compression.

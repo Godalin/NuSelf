@@ -144,6 +144,14 @@ implementing every node directly:
   message filtering for **prepare_context**.
 - `ConversationStateManager` owns message-state persistence and bounded
   summarization for **state_update** and **compression**.
+- Model-backed compression uses an optional shared `TextAgent` with LangChain
+  system and human messages. `ConversationStateManager` does not depend on
+  `ChatLLM`, construct a model, or call `complete()`.
+- When no LangChain model is configured, the text capability fails, or it
+  returns invalid empty text, compression uses the bounded deterministic local
+  summary. This is an explicit persistence-safety policy: it preserves the
+  previous summary plus the newest older transcript tail and never invents
+  content.
 - `ConversationPersonaOrchestrator` owns persona activation, bounded selves
   consultation, discussion escalation, and persona activity logging.
 - `ConversationResponseSynthesizer` owns endpoint failover, framework-native

@@ -334,6 +334,9 @@ memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出
 `memory/post_chat_curation_failed`，而不会静默表现为普通 no-op。
 
 当前 conversation graph 有意保持较小：它保留 CLI 和 daemon protocol 边界，同时为后续 persona subgraphs 和更丰富的 agent routing 留出空间。
+compression node 在 LangChain model 可用时使用共享自由文本 agent capability；
+该 capability 缺失、失败或返回空文本时，会保留有界且确定性的 transcript-tail
+summary，使 context persistence 仍能完成且不会编造内容。
 
 ## 守护进程
 

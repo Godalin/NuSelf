@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Conversation compression now uses an optional shared `TextAgent` with
+  LangChain messages instead of `ChatLLM.complete()`. Missing, failed, or empty
+  model-backed compression retains the bounded deterministic local summary as
+  an explicit persistence-safety fallback.
 - Reason export body composition now uses an injected shared `TextAgent` with
   LangChain messages and non-empty output validation. Direct
   `default_llm().complete()` and its hidden local configuration-warning output

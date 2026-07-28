@@ -4,20 +4,25 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from nuself.agent.chat.types import (
     ChatAgentSettings,
     ConversationNodeResult,
     ConversationTurnState,
 )
 from nuself.agent.chat.thread import ThreadMessage, ThreadState
-from nuself.llm import ChatLLM, ChatMessage
+from nuself.agent.text import TextAgent
 
 
 class ConversationStateManager:
     def __init__(
-        self, *, llm: ChatLLM, settings: ChatAgentSettings
+        self,
+        *,
+        text_agent: TextAgent | None,
+        settings: ChatAgentSettings,
     ) -> None:
-        self._llm = llm
+        self._text_agent = text_agent
         self._settings = settings
 
     def update(
@@ -95,8 +100,7 @@ class ConversationStateManager:
             for message in messages
         )
         prompt = [
-            ChatMessage(
-                role="system",
+            SystemMessage(
                 content=(
                     "Compress a private NuSelf conversation into "
                     "durable context. Preserve user preferences, "
@@ -104,8 +108,7 @@ class ConversationStateManager:
                     "facts. Do not add new facts."
                 ),
             ),
-            ChatMessage(
-                role="user",
+            HumanMessage(
                 content=(
                     "Previous summary:\n"
                     f"{previous_summary or '(none)'}\n\n"
@@ -114,8 +117,12 @@ class ConversationStateManager:
             ),
         ]
         try:
-            summary = self._llm.complete(prompt).strip()
-        except RuntimeError:
+            if self._text_agent is None:
+                raise RuntimeError(
+                    "no configured compression text agent"
+                )
+            summary = self._text_agent.invoke(prompt)
+        except (RuntimeError, ValueError):
             summary = _local_summary(
                 previous_summary,
                 transcript,
