@@ -1,110 +1,188 @@
-# pyright: reportPrivateUsage=false
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
+from langchain_core.messages import BaseMessage
+from pydantic import ValidationError
 
 from nuself.domain.profile import ProfileItem
-from nuself.llm import ChatMessage
-from nuself.memory.intake import MemoryIntakeAgent, _extract_json_object
+from nuself.memory.intake import IntakeResultOutput, MemoryIntakeAgent
 from nuself.profile.repository import ProfileItemRepository
 
 
-def test_memory_intake_locally_infers_goal() -> None:
-    llm = FakeIntakeLLM(
-        '{"type":"goal","title":"Finish memory system planning","tags":["planning"],'
-        '"confidence":0.8,"importance":0.7}'
+class FakeIntakeAgent:
+    def __init__(self, output: IntakeResultOutput) -> None:
+        self.output = output
+        self.calls: list[Sequence[BaseMessage]] = []
+
+    def invoke(
+        self,
+        messages: Sequence[BaseMessage],
+    ) -> IntakeResultOutput:
+        self.calls.append(messages)
+        return self.output
+
+
+def _output(
+    *,
+    memory_type: str = "belief",
+    title: str = "Durable memory",
+    tags: list[str] | None = None,
+    confidence: float = 0.8,
+    importance: float = 0.6,
+) -> IntakeResultOutput:
+    return IntakeResultOutput(
+        type=memory_type,
+        title=title,
+        tags=tags or ["memory"],
+        confidence=confidence,
+        importance=importance,
     )
-    result = MemoryIntakeAgent(llm=llm).infer(body="My goal is to finish the memory system planning.")
+
+
+def test_memory_intake_infers_goal_from_typed_agent() -> None:
+    structured_agent = FakeIntakeAgent(
+        _output(
+            memory_type="goal",
+            title="Finish memory system planning",
+            tags=["planning"],
+            importance=0.7,
+        )
+    )
+
+    result = MemoryIntakeAgent(agent=structured_agent).infer(
+        body="My goal is to finish the memory system planning."
+    )
 
     assert result.type == "goal"
 
 
-def test_memory_intake_locally_infers_concept() -> None:
-    llm = FakeIntakeLLM(
-        '{"type":"concept","title":"Temporal memory preserves change","tags":["memory"],'
-        '"confidence":0.7,"importance":0.6}'
+def test_memory_intake_infers_concept_from_typed_agent() -> None:
+    structured_agent = FakeIntakeAgent(
+        _output(
+            memory_type="concept",
+            title="Temporal memory preserves change",
+        )
     )
-    result = MemoryIntakeAgent(llm=llm).infer(body="Temporal memory means preserving when a thought changed.")
+
+    result = MemoryIntakeAgent(agent=structured_agent).infer(
+        body="Temporal memory means preserving when a thought changed."
+    )
 
     assert result.type == "concept"
 
 
-def test_memory_intake_empty_body_raises() -> None:
-    agent = MemoryIntakeAgent()
-    try:
+def test_memory_intake_empty_body_raises_before_agent_call() -> None:
+    structured_agent = FakeIntakeAgent(_output())
+    agent = MemoryIntakeAgent(agent=structured_agent)
+
+    with pytest.raises(ValueError, match="must not be empty"):
         agent.infer(body="")
-        assert False, "expected ValueError"
-    except ValueError as exc:
-        assert "must not be empty" in str(exc)
+
+    assert structured_agent.calls == []
 
 
-def test_memory_intake_raises_on_invalid_llm_response() -> None:
-    class BrokenLLM:
-        def complete(self, messages: list[ChatMessage]) -> str:
-            return "not valid json"
+def test_memory_intake_wraps_structured_agent_failure() -> None:
+    class BrokenAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> IntakeResultOutput:
+            raise RuntimeError("agent unavailable")
 
-    agent = MemoryIntakeAgent(llm=BrokenLLM())
-    try:
+    agent = MemoryIntakeAgent(agent=BrokenAgent())
+
+    with pytest.raises(
+        ValueError,
+        match="invalid structured output",
+    ):
         agent.infer(body="I prefer dark mode.")
-        assert False, "expected ValueError"
-    except ValueError as exc:
-        assert "invalid JSON" in str(exc)
-
-
-def test_memory_intake_requires_llm_tags() -> None:
-    llm = FakeIntakeLLM(
-        '{"type":"preference","title":"Concise CLI output","tags":[],"confidence":0.8,'
-        '"importance":0.6}'
-    )
-    agent = MemoryIntakeAgent(llm=llm)
-
-    try:
-        agent.infer(body="I prefer concise CLI output.")
-        assert False, "expected ValueError"
-    except ValueError as exc:
-        assert "invalid JSON" in str(exc)
-
-
-def test_extract_json_object_strips_markdown_fences() -> None:
-    raw = '```json\n{"type":"belief","title":"Test"}\n```'
-    assert _extract_json_object(raw) == '{"type":"belief","title":"Test"}'
 
 
 @pytest.mark.parametrize(
-    "response",
+    "payload",
     [
-        '{"type":"belief","title":"Title","tags":["memory"],"confidence":0.8}',
-        '{"type":"belief","title":"Title","tags":["memory"],"importance":0.6}',
-        '{"type":"belief","title":"Title","tags":[],"confidence":0.8,"importance":0.6}',
-        '{"type":"belief","title":"Title","tags":["a","b","c","d","e"],'
-        '"confidence":0.8,"importance":0.6}',
-        '{"type":"belief","title":"Title","tags":["memory"],"confidence":1.2,"importance":0.6}',
-        '{"type":"belief","title":"Title","tags":["memory"],"confidence":0.8,"importance":-0.1}',
-        '{"type":"belief","title":"Title","tags":["memory"],"confidence":true,"importance":0.6}',
-        '{"type":"belief","title":"Title","tags":["memory"],"confidence":0.8,'
-        '"importance":0.6,"unknown":"value"}',
+        {
+            "type": "belief",
+            "title": "Title",
+            "tags": ["memory"],
+            "confidence": 0.8,
+        },
+        {
+            "type": "belief",
+            "title": "Title",
+            "tags": ["memory"],
+            "importance": 0.6,
+        },
+        {
+            "type": "belief",
+            "title": "Title",
+            "tags": [],
+            "confidence": 0.8,
+            "importance": 0.6,
+        },
+        {
+            "type": "belief",
+            "title": "Title",
+            "tags": ["a", "b", "c", "d", "e"],
+            "confidence": 0.8,
+            "importance": 0.6,
+        },
+        {
+            "type": "belief",
+            "title": "Title",
+            "tags": ["memory"],
+            "confidence": 1.2,
+            "importance": 0.6,
+        },
+        {
+            "type": "belief",
+            "title": "Title",
+            "tags": ["memory"],
+            "confidence": 0.8,
+            "importance": -0.1,
+        },
+        {
+            "type": "belief",
+            "title": "Title",
+            "tags": ["memory"],
+            "confidence": True,
+            "importance": 0.6,
+        },
+        {
+            "type": "belief",
+            "title": "Title",
+            "tags": ["memory"],
+            "confidence": 0.8,
+            "importance": 0.6,
+            "unknown": "value",
+        },
     ],
 )
-def test_memory_intake_rejects_incomplete_or_coercive_schema(response: str) -> None:
-    agent = MemoryIntakeAgent(llm=FakeIntakeLLM(response))
+def test_intake_schema_rejects_incomplete_or_coercive_values(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        IntakeResultOutput.model_validate(payload)
 
-    with pytest.raises(ValueError, match="invalid JSON"):
+
+def test_memory_intake_rejects_empty_normalized_tags() -> None:
+    agent = MemoryIntakeAgent(
+        agent=FakeIntakeAgent(_output(tags=[" ", " "])),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="invalid structured output",
+    ):
         agent.infer(body="A durable memory note.")
 
 
-class FakeIntakeLLM:
-    def __init__(self, response: str) -> None:
-        self.response = response
-        self.calls: list[list[ChatMessage]] = []
-
-    def complete(self, messages: list[ChatMessage]) -> str:
-        self.calls.append(messages)
-        return self.response
-
-
-def test_memory_intake_includes_profile_context_in_prompt(tmp_path: Path) -> None:
+def test_memory_intake_includes_profile_context_in_prompt(
+    tmp_path: Path,
+) -> None:
     profile_repo = ProfileItemRepository(tmp_path)
     profile_repo.save(
         ProfileItem(
@@ -115,15 +193,24 @@ def test_memory_intake_includes_profile_context_in_prompt(tmp_path: Path) -> Non
             source_refs=["source:profile:0"],
         )
     )
-    llm = FakeIntakeLLM(
-        '{"type":"preference","title":"Concise CLI output","tags":["cli"],'
-        '"confidence":0.8,"importance":0.6}'
+    structured_agent = FakeIntakeAgent(
+        _output(
+            memory_type="preference",
+            title="Concise CLI output",
+            tags=["cli"],
+        )
     )
-    agent = MemoryIntakeAgent(tmp_path, llm=llm, profile_repository=profile_repo)
+    agent = MemoryIntakeAgent(
+        tmp_path,
+        agent=structured_agent,
+        profile_repository=profile_repo,
+    )
 
     agent.infer(body="I prefer concise CLI output.")
 
-    system_prompt, user_prompt = llm.calls[0]
-    assert "Consider existing profile items" in system_prompt.content
-    assert "Existing profile items:" in user_prompt.content
-    assert "Concise output" in user_prompt.content
+    system_prompt, user_prompt = structured_agent.calls[0]
+    system_content = system_prompt.text
+    user_content = user_prompt.text
+    assert "Consider existing profile items" in system_content
+    assert "Existing profile items:" in user_content
+    assert "Concise output" in user_content

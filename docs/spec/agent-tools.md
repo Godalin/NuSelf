@@ -39,6 +39,24 @@ NuSelf owns only the boundaries around the agent:
 - validate the final structured response before exposing it to the user;
 - persist the updated thread state, traces, and logs.
 
+### Shared Structured-Agent Boundary
+
+Agent subsystems that need structured output without tools use the shared
+NuSelf structured-agent runner. The runner constructs LangChain agents with
+`create_agent(model=..., tools=[], response_format=ToolStrategy(schema))`,
+invokes them with framework message objects, and accepts only an actual
+instance of the requested schema from `structured_response`.
+
+The runner owns ordered configured-endpoint failover and records the successful
+endpoint through the common LLM preference state. Only endpoint-availability
+failures advance to the next endpoint. Missing state, dictionary-shaped
+responses, wrong schema instances, and other protocol failures are surfaced
+without parsing final message text or trying another response protocol.
+
+Subsystems own their prompts and domain conversion after this boundary. They
+must not wrap the runner with prompted JSON, fenced-text extraction,
+`model_validate_json`, or schema-default compatibility behavior.
+
 If the active model or test double is not a LangChain chat model, NuSelf may use
 a deterministic local fallback parser, but fallback models must not become a
 parallel production protocol. They may return a plain final answer or a legacy

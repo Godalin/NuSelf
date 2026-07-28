@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Manual memory intake now runs through a shared LangChain structured-agent
+  boundary and accepts only its typed `structured_response`. Prompted JSON,
+  fenced-text extraction, dictionary state, and the legacy text-LLM injection
+  path were removed.
 - Manual memory intake now requires a complete strict generated schema for
   type, title, tags, confidence, and importance. Unknown fields, coercive
   values, invalid tag counts, and out-of-range scores now fail the command

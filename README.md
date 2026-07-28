@@ -603,7 +603,7 @@ uv run nuself memory add \
   --tag style
 ```
 
-`memory add` infers the memory type and title by default. Its generated metadata must provide a complete strict schema, including 1–4 tags and confidence/importance scores from zero through one; invalid model output fails the command instead of being repaired. Use `--type` or `--title` only when you need an explicit maintenance override.
+`memory add` infers the memory type and title through LangChain's native structured-output boundary. Its generated metadata must provide a complete strict schema, including 1–4 tags and confidence/importance scores from zero through one; missing typed output or invalid model output fails the command instead of being reparsed or repaired. Use `--type` or `--title` only when you need an explicit maintenance override.
 
 List entries:
 

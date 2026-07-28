@@ -5,8 +5,13 @@
 ### Manual Addition (`memory add`)
 
 1. If both `--type` and `--title` are provided explicitly, skip LLM inference.
-2. Otherwise, `MemoryIntakeAgent.infer()` calls the LLM.
-3. On LLM failure or invalid JSON, the command fails. Manual memory addition must not synthesize a local heuristic fallback entry.
+2. Otherwise, `MemoryIntakeAgent.infer()` invokes the shared framework-native
+   structured-agent runner with the strict intake response model.
+3. The runner must return an actual typed intake response from LangChain
+   `structured_response`. Missing or dictionary-shaped structured state,
+   model failure, or schema failure makes the command fail. Manual memory
+   addition must not parse response text or synthesize a local heuristic
+   fallback entry.
 4. The agent must normalize body by collapsing whitespace.
 5. The agent must raise `ValueError` if normalized body is empty.
 6. The agent must include up to 5 matching profile items in the LLM prompt.

@@ -6,12 +6,13 @@ import subprocess
 import sys
 import threading
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol, cast
 
 import pytest
+from langchain_core.messages import BaseMessage
 
 from nuself import cli
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
@@ -20,7 +21,7 @@ from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.lifecycle import DaemonStatus
 from nuself.daemon.protocol import DaemonResponse
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
-from nuself.llm import ChatMessage
+from nuself.memory.intake import IntakeResultOutput
 
 
 def _mock_status(project_root: Path) -> DaemonStatus:
@@ -1922,17 +1923,33 @@ def test_memory_add_list_show_delete(tmp_path: Path, capsys: CaptureFixture) -> 
 def test_memory_add_infers_type_without_manual_type(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    class FakeIntakeLLM:
-        def complete(self, messages: list[ChatMessage]) -> str:
-            return (
-                '{"type":"preference","title":"Terse CLI summaries",'
-                '"tags":["cli"],"confidence":0.8,"importance":0.6}'
+    class FakeIntakeAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> IntakeResultOutput:
+            return IntakeResultOutput(
+                type="preference",
+                title="Terse CLI summaries",
+                tags=["cli"],
+                confidence=0.8,
+                importance=0.6,
             )
 
-    def fake_default_llm(project_root: Path | None = None) -> FakeIntakeLLM:
-        return FakeIntakeLLM()
+    def fake_default_structured_agent(
+        schema: object,
+        *,
+        project_root: Path | None = None,
+        component: str,
+    ) -> FakeIntakeAgent:
+        assert schema is IntakeResultOutput
+        assert component == "memory"
+        return FakeIntakeAgent()
 
-    monkeypatch.setattr("nuself.memory.intake.default_llm", fake_default_llm)
+    monkeypatch.setattr(
+        "nuself.memory.intake.default_structured_agent",
+        fake_default_structured_agent,
+    )
     add_result = main(
         [
             "--project-root",

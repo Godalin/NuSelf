@@ -555,7 +555,7 @@ uv run nuself memory add \
   --tag style
 ```
 
-`memory add` 默认会推断 memory type 和 title。生成的 metadata 必须提供完整的严格 schema，包括 1–4 个 tags，以及零到一之间的 confidence/importance；无效模型输出会让命令失败，不再被自动修正。只有需要显式维护 override 时，才使用 `--type` 或 `--title`。
+`memory add` 默认通过 LangChain 原生 structured-output 边界推断 memory type 和 title。生成的 metadata 必须提供完整的严格 schema，包括 1–4 个 tags，以及零到一之间的 confidence/importance；缺失 typed output 或无效模型输出会让命令失败，不再被重新解析或自动修正。只有需要显式维护 override 时，才使用 `--type` 或 `--title`。
 
 列出条目：
 

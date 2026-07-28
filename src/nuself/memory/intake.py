@@ -7,11 +7,11 @@ import re
 from pathlib import Path
 from typing import cast
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
+from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.domain.memory import MemoryEntryType, MemoryTypeRegistry, default_memory_type_registry
-from nuself.llm import ChatLLM, ChatMessage, default_llm
-from nuself.memory.text import extract_json_object
 from nuself.profile.repository import ProfileItemRepository
 
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
@@ -48,12 +48,16 @@ class MemoryIntakeAgent:
         self,
         project_root: Path | None = None,
         *,
-        llm: ChatLLM | None = None,
+        agent: StructuredAgent[IntakeResultOutput] | None = None,
         profile_repository: ProfileItemRepository | None = None,
         registry: MemoryTypeRegistry | None = None,
     ) -> None:
         self._profile_repository = profile_repository or ProfileItemRepository(project_root)
-        self._llm = llm or default_llm(project_root)
+        self._agent = agent or default_structured_agent(
+            IntakeResultOutput,
+            project_root=project_root,
+            component="memory",
+        )
         self._registry = registry or default_memory_type_registry()
 
     def infer(
@@ -89,31 +93,33 @@ class MemoryIntakeAgent:
 
     def _infer_with_llm(self, body: str) -> MemoryIntakeResult:
         prompt = [
-            ChatMessage(
-                role="system",
+            SystemMessage(
                 content=(
                     "You are the NuSelf Memory Intake Agent. Classify a user-supplied memory note into a "
-                    "durable memory entry. Return only JSON. "
+                    "durable memory entry. "
                     f"Allowed types are {', '.join(self._registry.names())}. Write a concise "
                     "title and 1-4 short tags. Do not copy raw chat transcript markers into the title. Consider "
                     "existing profile items when the note is a duplicate or refinement of already-derived context."
                 ),
             ),
-            ChatMessage(
-                role="user",
+            HumanMessage(
                 content=(
                     f"Memory note:\n{body}\n\n"
                     f"Existing profile items:\n{self._existing_profile_context(body) or '(none)'}\n\n"
-                    "Return JSON like: "
-                    '{"type":"preference","title":"Concise CLI output","tags":["cli"],"confidence":0.8,"importance":0.6}'
+                    "Classify the note into the required structured response."
                 ),
             ),
         ]
         try:
-            raw = self._llm.complete(prompt)
-            return _parse_intake_result(raw, allowed_types=self._registry.names())
+            output = self._agent.invoke(prompt)
+            return _intake_result_from_output(
+                output,
+                allowed_types=self._registry.names(),
+            )
         except (RuntimeError, ValueError) as exc:
-            raise ValueError("memory intake agent unavailable or returned invalid JSON") from exc
+            raise ValueError(
+                "memory intake agent unavailable or returned invalid structured output"
+            ) from exc
 
     def _existing_profile_context(self, body: str) -> str:
         matches = self._profile_repository.search(body)
@@ -130,9 +136,11 @@ class MemoryIntakeAgent:
         return "\n".join(lines)
 
 
-def _parse_intake_result(raw: str, *, allowed_types: tuple[str, ...] | None = None) -> MemoryIntakeResult:
-    extracted = _extract_json_object(raw)
-    output = IntakeResultOutput.model_validate_json(extracted)
+def _intake_result_from_output(
+    output: IntakeResultOutput,
+    *,
+    allowed_types: tuple[str, ...] | None = None,
+) -> MemoryIntakeResult:
     memory_type = _memory_type(output.type, allowed_types=allowed_types)
     title = output.title.strip()
     tags = _normalize_tags(output.tags)
@@ -148,12 +156,6 @@ def _parse_intake_result(raw: str, *, allowed_types: tuple[str, ...] | None = No
         confidence=output.confidence,
         importance=output.importance,
     )
-
-
-def _extract_json_object(raw: str) -> str:
-    return extract_json_object(raw)
-
-
 def _memory_type(value: str, *, allowed_types: tuple[str, ...] | None = None) -> MemoryEntryType:
     names = allowed_types or default_memory_type_registry().names()
     if value in names:

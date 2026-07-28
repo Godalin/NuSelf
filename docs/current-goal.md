@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Manual memory intake accepts only the complete strict generated schema
-and rejects invalid confidence or importance instead of repairing it.
+Idle. One framework-native structured-agent invocation boundary now owns typed
+output and failover, and manual memory intake no longer reparses model text.
 
 ## Active Branch
 
@@ -23,14 +23,17 @@ code.
 
 ## Completion Evidence
 
-- Intake output uses strict types, forbids extra fields, and requires type,
-  title, tags, confidence, and importance without generated defaults.
-- Generated tags require one through four items. Confidence and importance are
-  constrained from zero through one at the typed boundary.
-- Empty normalized titles/tags and unregistered types remain rejected.
-- Confidence and importance clamping is removed; invalid values fail intake.
-- Focused intake tests: 15 passed.
-- Final full tests: 1447 passed.
+- Shared `LangChainStructuredAgent` builds no-tool agents through
+  `create_agent(..., response_format=ToolStrategy(schema))`.
+- The runner accepts only an actual requested schema instance from
+  `structured_response`; missing state, dictionaries, and wrong models fail.
+- Endpoint availability failures use the configured ordering and common
+  endpoint-success state. Protocol failures do not trigger another protocol.
+- Memory intake uses framework messages and the shared typed runner. Prompted
+  JSON, fenced-text extraction, `model_validate_json`, and `llm=` injection
+  are removed from this path.
+- Focused structured-agent/intake/CLI tests: 22 passed.
+- Final full tests: 1453 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -41,5 +44,4 @@ their validated commit.
 
 ## Next Review Batch
 
-Audit remaining prompted-JSON subsystem boundaries and prioritize migration to
-framework-native structured output.
+Migrate memory curator and optimizer to the shared structured-agent boundary.
