@@ -1567,9 +1567,17 @@ def test_logs_command_renders_structured_events(
     )
     write_log_event(
         "memory",
-        "curator_changed",
-        "memory curator changed durable memory",
+        "curator_completed",
+        "memory curator completed",
         project_root=tmp_path,
+        thread_id="default",
+        metadata={
+            "source_ref": "trace:test",
+            "processed_messages": 1,
+            "created": 1,
+            "updated": 0,
+            "ignored": 0,
+        },
     )
 
     result = main(

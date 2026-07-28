@@ -39,12 +39,12 @@ from nuself.logs import (
     LogLevel,
     observe_log_events,
 )
+from nuself.memory.audit import run_memory_observed
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.runtime.handlers import HandlerRegistry, UnknownHandlerError
 from nuself.runtime.context import runtime_context
 from nuself.runtime.observability import (
     report_observed_failure,
-    run_observed_best_effort,
     write_observed_log_event,
 )
 
@@ -345,15 +345,13 @@ def _run_memory_curator_once(
     project_root: Path,
     source_trace_id: str | None = None,
 ) -> MemoryCuratorResult | None:
-    return run_observed_best_effort(
+    return run_memory_observed(
         lambda: memory_curator.run_once(
             source_trace_id=source_trace_id
         ),
-        component="memory",
         event="post_chat_curation_failed",
-        message="post-chat memory curation failed",
         project_root=project_root,
-        metadata={"source_trace_id": source_trace_id},
+        metadata={},
         errors=(RuntimeError,),
     )
 

@@ -16,7 +16,7 @@ from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
 from nuself.memory.audit import (
-    run_memory_curation_observed,
+    run_memory_observed,
     write_curator_audit,
 )
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
@@ -490,10 +490,9 @@ class MemoryCurator:
     def _auto_accept(self, candidate: MemoryCandidate) -> None:
         if not self._settings.auto_accept:
             return
-        result = run_memory_curation_observed(
+        result = run_memory_observed(
             lambda: self._candidate_repository.accept(candidate.id),
             event="auto_accept_failed",
-            message="Memory candidate auto-accept failed",
             project_root=self._paths.project_root,
             metadata={
                 "candidate_id": candidate.id,
@@ -523,7 +522,7 @@ class MemoryCurator:
         if self._trace_recorder is None:
             return
         recorder = self._trace_recorder
-        run_memory_curation_observed(
+        run_memory_observed(
             lambda: recorder.record_memory_update(
                 memory_id=entry.id,
                 title=entry.title,
@@ -534,7 +533,6 @@ class MemoryCurator:
                 source_trace_id=self._source_trace_id,
             ),
             event="trace_recording_failed",
-            message="Could not record persisted curator memory update trace",
             project_root=self._paths.project_root,
             metadata={
                 "memory_id": entry.id,

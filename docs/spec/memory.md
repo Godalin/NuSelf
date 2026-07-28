@@ -253,7 +253,18 @@ The closed Memory curation taxonomy is:
 | `optimizer_completed` | `info` | none | reviewed/update/delete/ignore counts |
 | `optimizer_candidate_staged` | `info` | none | action, candidate, target |
 | `auto_accept_failed` | `warning` | `degraded` | required error plus candidate/action/type/nullable target |
-| `trace_recording_failed` | `warning` | `degraded` | required error plus memory/action |
+| `trace_recording_failed` | `warning` | `degraded` | required error plus memory and one of `create`, `update`, `add`, `accept`, `merge`, or `import` |
+| `curator_failed` | `error` | `error` | required error, no metadata |
+| `post_chat_curation_failed` | `warning` | `degraded` | required error, no metadata |
+| `chat_trace_recording_failed` | `warning` | `degraded` | required error, no metadata |
+
+The sealed Memory audit registry owns these events even when a Chat client,
+daemon request handler, or Memory CLI operation initiates the work. Those
+callers use Memory-domain adapters and never construct raw `component=memory`
+records. Post-chat completion is already represented by `curator_completed`;
+clients must not emit a second `curator_changed` record or copy its free-form
+summary into audit metadata. Chat trace failures use runtime context for thread
+correlation rather than duplicating the thread id.
 
 ## Candidate Review Queue
 

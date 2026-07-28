@@ -43,6 +43,7 @@ from nuself.llm import (
     configured_langchain_chat_models,
 )
 from nuself.logs import runtime_event_log_sink
+from nuself.memory.audit import run_memory_observed
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
@@ -58,7 +59,6 @@ from nuself.runtime.jobs import JobSink
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
     publish_observed_event,
-    run_observed_best_effort,
 )
 from nuself.trace.service import TraceRecorder
 
@@ -374,7 +374,7 @@ class ConversationGraphRuntime:
         if not final_response.evidence_references:
             return None
         evidence_refs = list(final_response.evidence_references)
-        trace = run_observed_best_effort(
+        trace = run_memory_observed(
             lambda: self._trace_recorder.record_chat_turn(
                 title=f"Chat turn cited {evidence_refs[0]}",
                 summary="Assistant reply used retrieved context cited by the final response.",
@@ -386,11 +386,9 @@ class ConversationGraphRuntime:
                 decision_points=["Recorded because the final response cited evidence references."],
                 metadata={"node_trace": list(node_trace), "epistemic_status": final_response.epistemic_status},
             ),
-            component="memory",
-            event="trace_write_failed",
-            message="Chat trace write failed",
+            event="chat_trace_recording_failed",
             project_root=self._project_root,
-            metadata={"thread_id": thread_id},
+            metadata={},
         )
         return trace.id if trace is not None else None
 

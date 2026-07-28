@@ -79,24 +79,27 @@ _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
     ),
     (
         "trace_recording_failed",
-        {"memory_id": "memory-1", "action": "update"},
+        {"memory_id": "memory-1", "action": "add"},
     ),
+    ("curator_failed", {}),
+    ("post_chat_curation_failed", {}),
+    ("chat_trace_recording_failed", {}),
 )
 
 
-def test_memory_curation_registry_owns_complete_taxonomy() -> None:
+def test_memory_registry_owns_complete_taxonomy() -> None:
     assert {
         definition.event
-        for definition in audit.MEMORY_CURATION_AUDIT_REGISTRY.definitions
+        for definition in audit.MEMORY_AUDIT_REGISTRY.definitions
     } == {event for event, _ in _CANONICAL}
 
 
 @pytest.mark.parametrize(("event", "metadata"), _CANONICAL)
-def test_memory_curation_definitions_accept_canonical_payloads(
+def test_memory_definitions_accept_canonical_payloads(
     event: str,
     metadata: dict[str, object],
 ) -> None:
-    definition = audit.MEMORY_CURATION_AUDIT_REGISTRY.resolve(
+    definition = audit.MEMORY_AUDIT_REGISTRY.resolve(
         "memory",
         event,
     )
@@ -114,11 +117,11 @@ def test_memory_curation_definitions_accept_canonical_payloads(
 
 
 @pytest.mark.parametrize(("event", "metadata"), _CANONICAL)
-def test_memory_curation_definitions_reject_unknown_metadata(
+def test_memory_definitions_reject_unknown_metadata(
     event: str,
     metadata: dict[str, object],
 ) -> None:
-    definition = audit.MEMORY_CURATION_AUDIT_REGISTRY.resolve(
+    definition = audit.MEMORY_AUDIT_REGISTRY.resolve(
         "memory",
         event,
     )
@@ -136,7 +139,7 @@ def test_memory_curation_definitions_reject_unknown_metadata(
         )
 
 
-def test_memory_curation_audit_rejects_unknown_event_before_sink(
+def test_memory_audit_rejects_unknown_event_before_sink(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -150,7 +153,7 @@ def test_memory_curation_audit_rejects_unknown_event_before_sink(
 
     with pytest.raises(UnknownAuditDefinitionError):
         audit.write_curator_audit(
-            cast(audit.MemoryCurationAuditEvent, "candidate_saved"),
+            cast(audit.MemoryAuditEvent, "candidate_saved"),
             "invalid",
             project_root=tmp_path,
         )

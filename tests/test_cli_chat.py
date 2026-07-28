@@ -10,7 +10,7 @@ from nuself.daemon.client import (
     DaemonConnectionError,
 )
 from nuself.daemon.payloads import ChatResponsePayload
-from nuself.logs import read_log_events
+from nuself.logs import read_log_events, write_log_event
 from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
@@ -323,7 +323,7 @@ def test_one_shot_success_runs_curator_after_reply(
         assert project_root == tmp_path
         contexts.append(current_runtime_context())
         calls.append("curator")
-        chat.write_observed_log_event(
+        write_log_event(
             "memory",
             "curator_test",
             "curator test",

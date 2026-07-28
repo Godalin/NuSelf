@@ -1690,7 +1690,7 @@ def test_chat_trace_diagnostics_cannot_replace_completed_answer(
     with pytest.warns(
         RuntimeWarning,
         match=(
-            "memory/trace_write_failed: trace store unavailable; "
+            "memory/chat_trace_recording_failed: trace store unavailable; "
             "structured logging failed: audit store unavailable"
         ),
     ):

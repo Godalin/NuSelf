@@ -15,10 +15,10 @@ from nuself.cli.commands.output import print_ansi
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.config import ConfigSystem
 from nuself.daemon import client
+from nuself.memory.audit import report_memory_failure
 from nuself.memory.curator import MemoryCurator
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.observability import write_observed_log_event
 from nuself.tui.render import TerminalTheme
 
 ReplyPrinter = Callable[[str], None]
@@ -181,15 +181,10 @@ def run_memory_curator(project_root: Path | None) -> None:
         result = MemoryCurator(project_root).run_once()
     except RuntimeError as exc:
         error = diagnostic_exception_message(exc)
-        write_observed_log_event(
-            "memory",
-            "curator_failed",
-            "memory curator failed",
+        report_memory_failure(
+            exc,
+            event="curator_failed",
             project_root=project_root,
-            level="error",
-            status="error",
-            error=error,
-            failure_message="Chat client audit projection failed",
         )
         print_ansi(
             f"{_theme.tag('[memory]', 'memory')} curator failed: {error}",
@@ -197,15 +192,6 @@ def run_memory_curator(project_root: Path | None) -> None:
         )
         return
     if result.changed:
-        write_observed_log_event(
-            "memory",
-            "curator_changed",
-            "memory curator changed durable memory",
-            project_root=project_root,
-            status="changed",
-            metadata={"summary": result.summary()},
-            failure_message="Chat client audit projection failed",
-        )
         print_ansi(
             f"{_theme.tag('[memory]', 'memory')} {result.summary()}"
         )

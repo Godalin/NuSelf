@@ -1,4 +1,4 @@
-"""Closed audit contracts for Memory curator and optimizer activity."""
+"""Closed audit contracts owned by the Memory subsystem."""
 
 from __future__ import annotations
 
@@ -12,12 +12,14 @@ from nuself.runtime.audit_definitions import (
     AuditEventDefinition,
     AuditSchemaError,
 )
+from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
+    report_observed_failure,
     run_observed_best_effort,
     write_observed_log_event,
 )
 
-MemoryCurationAuditEvent = Literal[
+MemoryAuditEvent = Literal[
     "curator_history_gap",
     "curator_deferred",
     "curator_completed",
@@ -29,7 +31,25 @@ MemoryCurationAuditEvent = Literal[
     "optimizer_candidate_staged",
     "auto_accept_failed",
     "trace_recording_failed",
+    "curator_failed",
+    "post_chat_curation_failed",
+    "chat_trace_recording_failed",
 ]
+MemoryFailureEvent = Literal[
+    "auto_accept_failed",
+    "trace_recording_failed",
+    "curator_failed",
+    "post_chat_curation_failed",
+    "chat_trace_recording_failed",
+]
+
+_FAILURE_MESSAGES: dict[MemoryFailureEvent, str] = {
+    "auto_accept_failed": "Memory candidate auto-accept failed",
+    "trace_recording_failed": "Memory trace recording failed",
+    "curator_failed": "Memory curator failed",
+    "post_chat_curation_failed": "Post-chat memory curation failed",
+    "chat_trace_recording_failed": "Chat trace recording failed",
+}
 
 T = TypeVar("T")
 
@@ -179,7 +199,14 @@ def _auto_accept_failed(metadata: Mapping[str, object]) -> None:
 def _trace_failed(metadata: Mapping[str, object]) -> None:
     _require_exact(metadata, frozenset({"memory_id", "action"}))
     _string(metadata, "memory_id")
-    if _string(metadata, "action") not in {"create", "update"}:
+    if _string(metadata, "action") not in {
+        "create",
+        "update",
+        "add",
+        "accept",
+        "merge",
+        "import",
+    }:
         raise AuditSchemaError("memory trace action is invalid")
 
 
@@ -231,6 +258,18 @@ def _build_registry() -> AuditDefinitionRegistry:
             error_policy="required",
             metadata_validator=_trace_failed,
         ),
+        AuditEventDefinition(
+            "memory", "curator_failed", "error", "error",
+            error_policy="required",
+        ),
+        AuditEventDefinition(
+            "memory", "post_chat_curation_failed", "warning", "degraded",
+            error_policy="required",
+        ),
+        AuditEventDefinition(
+            "memory", "chat_trace_recording_failed", "warning", "degraded",
+            error_policy="required",
+        ),
     )
     registry = AuditDefinitionRegistry()
     for definition in definitions:
@@ -238,18 +277,18 @@ def _build_registry() -> AuditDefinitionRegistry:
     return registry.seal()
 
 
-MEMORY_CURATION_AUDIT_REGISTRY = _build_registry()
+MEMORY_AUDIT_REGISTRY = _build_registry()
 
 
-def _write_memory_curation_audit(
-    event: MemoryCurationAuditEvent,
+def _write_memory_audit(
+    event: MemoryAuditEvent,
     message: str,
     *,
-    project_root: Path,
+    project_root: Path | None,
     metadata: dict[str, object] | None,
     failure_event: str,
 ) -> LogEvent | None:
-    definition = MEMORY_CURATION_AUDIT_REGISTRY.resolve("memory", event)
+    definition = MEMORY_AUDIT_REGISTRY.resolve("memory", event)
     event_metadata = metadata or {}
     definition.validate(
         level=definition.level,
@@ -271,7 +310,7 @@ def _write_memory_curation_audit(
 
 
 def write_curator_audit(
-    event: MemoryCurationAuditEvent,
+    event: MemoryAuditEvent,
     message: str,
     *,
     project_root: Path,
@@ -279,7 +318,7 @@ def write_curator_audit(
 ) -> LogEvent | None:
     """Validate and project one curator audit."""
 
-    return _write_memory_curation_audit(
+    return _write_memory_audit(
         event,
         message,
         project_root=project_root,
@@ -289,7 +328,7 @@ def write_curator_audit(
 
 
 def write_optimizer_audit(
-    event: MemoryCurationAuditEvent,
+    event: MemoryAuditEvent,
     message: str,
     *,
     project_root: Path,
@@ -297,7 +336,7 @@ def write_optimizer_audit(
 ) -> LogEvent | None:
     """Validate and project one optimizer audit."""
 
-    return _write_memory_curation_audit(
+    return _write_memory_audit(
         event,
         message,
         project_root=project_root,
@@ -306,18 +345,17 @@ def write_optimizer_audit(
     )
 
 
-def run_memory_curation_observed(
+def run_memory_observed(
     operation: Callable[[], T],
     *,
-    event: MemoryCurationAuditEvent,
-    message: str,
-    project_root: Path,
+    event: MemoryFailureEvent,
+    project_root: Path | None,
     metadata: dict[str, object],
     errors: tuple[type[Exception], ...] = (Exception,),
 ) -> T | None:
     """Run one secondary curation effect under a registered failure schema."""
 
-    definition = MEMORY_CURATION_AUDIT_REGISTRY.resolve("memory", event)
+    definition = MEMORY_AUDIT_REGISTRY.resolve("memory", event)
     status = definition.status
     if status is None:
         raise AuditSchemaError(
@@ -333,10 +371,44 @@ def run_memory_curation_observed(
         operation,
         component=definition.component,
         event=definition.event,
-        message=message,
+        message=_FAILURE_MESSAGES[event],
         project_root=project_root,
         metadata=dict(metadata),
         errors=errors,
+        level=definition.level,
+        status=status,
+    )
+
+
+def report_memory_failure(
+    exc: Exception,
+    *,
+    event: MemoryFailureEvent,
+    project_root: Path | None,
+    metadata: dict[str, object] | None = None,
+) -> None:
+    """Validate and report one caught Memory-owned failure."""
+
+    definition = MEMORY_AUDIT_REGISTRY.resolve("memory", event)
+    event_metadata = metadata or {}
+    status = definition.status
+    if status is None:
+        raise AuditSchemaError(
+            f"{definition.component}/{definition.event} failure requires status"
+        )
+    definition.validate(
+        level=definition.level,
+        status=status,
+        error=diagnostic_exception_chain(exc),
+        metadata=event_metadata,
+    )
+    report_observed_failure(
+        exc,
+        component=definition.component,
+        event=definition.event,
+        message=_FAILURE_MESSAGES[event],
+        project_root=project_root,
+        metadata=dict(event_metadata),
         level=definition.level,
         status=status,
     )
