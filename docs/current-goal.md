@@ -46,7 +46,7 @@ Reduce structured-log sync overhead without weakening per-record durability.
 
 ## Publication
 
-`dev/v0.3.x` is ready for publication through `d66ffeb`.
+`dev/v0.3.x` is published through implementation commit `d66ffeb`.
 
 ## Next Review Batch
 
