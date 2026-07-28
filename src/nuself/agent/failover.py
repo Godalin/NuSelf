@@ -19,6 +19,17 @@ from nuself.runtime.observability import report_observed_failure
 ResultT = TypeVar("ResultT")
 FailurePredicate = Callable[[Exception], bool]
 RetryObserver = Callable[[LangChainLLMEndpoint, Exception], None]
+_AGENT_IMPLEMENTATION_ERRORS = (
+    AssertionError,
+    AttributeError,
+    TypeError,
+)
+
+
+def is_recoverable_agent_failure(exc: Exception) -> bool:
+    """Return whether an agent failure may enter a domain fallback policy."""
+
+    return not isinstance(exc, _AGENT_IMPLEMENTATION_ERRORS)
 
 
 def invoke_agent_endpoint(

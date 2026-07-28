@@ -273,6 +273,11 @@ synthesis completion, and activation failures are recorded through shared
 best-effort observability. These diagnostics never replace the fallback or
 prevent another configured structured endpoint from being tried.
 
+Standard persona fallback eligibility uses the shared agent failure policy.
+Provider/runtime and validation failures retain deterministic fallback, while
+`AssertionError`, `AttributeError`, and `TypeError` propagate as implementation
+failures rather than becoming neutral persona output.
+
 Competitive persona discussion uses the same observability boundary for
 scoring, participant-selection, and moderator-judgment failures. Its neutral
 score, deterministic participant pool, and non-converged moderator fallbacks

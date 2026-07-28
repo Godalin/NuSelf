@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Persona activation, contribution, and synthesis no longer turn assertion,
+  attribute, or type errors into neutral fallback output; chat and persona now
+  share one agent failure classification.
 - Approval prompts now treat only stdin EOF as a safe-default decline;
   rendering, terminal-output, and unexpected input failures surface normally
   instead of being mislabeled as a user rejection.

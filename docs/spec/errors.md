@@ -247,6 +247,11 @@ failover, or local fallback. After a tool outcome exists, the non-replay
 contract takes precedence and any ordinary invocation exception enters local
 fallback without another model call.
 
+The pre-tool classification is shared agent infrastructure, not a chat-only
+rule. Persona activation, contribution, and synthesis use the same policy:
+provider/runtime and validation failures may produce their specified fallback,
+but `AssertionError`, `AttributeError`, and `TypeError` propagate unchanged.
+
 Reason-export manifests, composition, retry timer creation/start, and worker
 lifecycle decisions are authoritative. Export lifecycle and caught-failure
 audit records are secondary: audit failure cannot suppress a retry after its

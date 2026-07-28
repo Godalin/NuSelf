@@ -130,6 +130,12 @@ Shared runner failures are observable at that boundary; each graph node then
 records its stage-specific fallback and returns the existing deterministic
 domain result. Diagnostic persistence cannot replace fallback output.
 
+The fallback boundary uses the shared agent failure policy. Provider/runtime
+errors and structured validation errors may use the deterministic fallback.
+Clear implementation failures (`AssertionError`, `AttributeError`, and
+`TypeError`) propagate unchanged from activation, contribution, and synthesis;
+they are not persona opinions or model degradation.
+
 ### Activation Policy
 
 `AgentBackedActivationPolicy` decides whether persona work should run for a turn:
@@ -141,8 +147,9 @@ decide(persona_input) → PersonaActivation
 The policy:
 1. Checks if an agent is available (`trigger="no_agent"` when absent).
 2. Invokes the exact `PersonaActivationOutput` agent.
-3. On any error, returns safe fallback (`trigger="agent_fallback"`, no
-   activation).
+3. On a recoverable agent/runtime or validation error, returns safe fallback
+   (`trigger="agent_fallback"`, no activation). Sharedly classified
+   implementation errors propagate unchanged.
 
 Activation errors also write `persona_activation_failed` before returning that
 safe fallback. Diagnostic failure cannot replace or alter the activation

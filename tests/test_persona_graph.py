@@ -98,6 +98,15 @@ class _BrokenAgent:
         raise RuntimeError("simulated LLM failure")
 
 
+class _ImplementationFailingAgent:
+    def __init__(self, error: Exception) -> None:
+        self._error = error
+
+    def invoke(self, messages: Sequence[BaseMessage]) -> Never:
+        del messages
+        raise self._error
+
+
 def test_persona_graph_runs_minimal_internal_persona() -> None:
     driver = PersonaGraphDriver()
     state = PersonaTurnState(
@@ -427,6 +436,64 @@ def test_llm_backed_synthesis_failure_is_observed_before_fallback(
     assert event.event == "persona_completion_failed"
     assert event.error == "simulated LLM failure"
     assert event.metadata == {"stage": "synthesis"}
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        AssertionError("broken persona invariant"),
+        AttributeError("missing persona dependency"),
+        TypeError("invalid internal persona call"),
+    ],
+    ids=["assertion", "attribute", "type"],
+)
+@pytest.mark.parametrize(
+    "stage",
+    ["activation", "contribution", "synthesis"],
+)
+def test_persona_implementation_errors_propagate_without_fallback(
+    tmp_path: Path,
+    stage: str,
+    error: Exception,
+) -> None:
+    agent = _ImplementationFailingAgent(error)
+
+    with pytest.raises(type(error)) as caught:
+        if stage == "activation":
+            AgentBackedActivationPolicy(
+                agent=agent,
+                project_root=tmp_path,
+            ).decide(PersonaInput(user_message="Review this"))
+        elif stage == "contribution":
+            AgentBackedPersonaNode(
+                agent=agent,
+                project_root=tmp_path,
+            )(
+                ANALYST_PERSONA,
+                PersonaInput(user_message="Review this"),
+            )
+        else:
+            AgentBackedSynthesizerNode(
+                agent=agent,
+                project_root=tmp_path,
+            )(
+                PersonaTurnState(
+                    input=PersonaInput(user_message="Review this"),
+                    selected_personas=(),
+                    contributions=(
+                        PersonaContribution(
+                            persona_id="analyst_self",
+                            notes=("Analyze the boundary.",),
+                        ),
+                    ),
+                )
+            )
+
+    assert caught.value is error
+    assert read_log_events(
+        project_root=tmp_path,
+        component="persona",
+    ) == []
 
 
 def test_completion_diagnostic_failure_does_not_replace_fallback(

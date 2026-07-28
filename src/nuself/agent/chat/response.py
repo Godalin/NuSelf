@@ -19,7 +19,10 @@ from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
-from nuself.agent.failover import invoke_agent_endpoint
+from nuself.agent.failover import (
+    invoke_agent_endpoint,
+    is_recoverable_agent_failure,
+)
 from nuself.agent.middleware import (
     ToolCaptureMiddleware,
     ToolOutcome,
@@ -35,19 +38,6 @@ from nuself.runtime.observability import (
     report_observed_failure,
     write_observed_log_event,
 )
-
-_CHAT_IMPLEMENTATION_ERRORS = (
-    AssertionError,
-    AttributeError,
-    TypeError,
-)
-
-
-def _is_recoverable_chat_invocation_failure(exc: Exception) -> bool:
-    """Return whether a pre-tool failure may use model recovery policy."""
-
-    return not isinstance(exc, _CHAT_IMPLEMENTATION_ERRORS)
-
 
 class ConversationResponseService(Protocol):
     """Typed response capability consumed by the conversation graph."""
@@ -143,12 +133,12 @@ class ConversationResponseSynthesizer:
                 attempts_per_endpoint=2,
                 retry_if=lambda exc: (
                     not retry_suppressed
-                    and _is_recoverable_chat_invocation_failure(exc)
+                    and is_recoverable_agent_failure(exc)
                     and not is_endpoint_availability_error(str(exc))
                 ),
                 failover_if=lambda exc: (
                     not retry_suppressed
-                    and _is_recoverable_chat_invocation_failure(exc)
+                    and is_recoverable_agent_failure(exc)
                     and is_endpoint_availability_error(str(exc))
                 ),
                 on_retry=self._log_retry,
@@ -160,7 +150,7 @@ class ConversationResponseSynthesizer:
                     exc,
                 )
                 return _local_response_output(prompt)
-            if not _is_recoverable_chat_invocation_failure(exc):
+            if not is_recoverable_agent_failure(exc):
                 raise
             report_observed_failure(
                 RuntimeError(redact_llm_error(str(exc))),

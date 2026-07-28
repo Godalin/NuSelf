@@ -9,6 +9,7 @@ from typing import Any, TypedDict, cast
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
 
+from nuself.agent.failover import is_recoverable_agent_failure
 from nuself.agent.structured import (
     LangChainStructuredAgent,
     StructuredAgent,
@@ -204,6 +205,8 @@ class AgentBackedPersonaNode:
                 confidence=structured.confidence,
             )
         except Exception as exc:
+            if not is_recoverable_agent_failure(exc):
+                raise
             report_observed_failure(
                 exc,
                 component="persona",
@@ -264,6 +267,8 @@ class AgentBackedSynthesizerNode:
                 confidence=structured.confidence,
             )
         except Exception as exc:
+            if not is_recoverable_agent_failure(exc):
+                raise
             report_observed_failure(
                 exc,
                 component="persona",
@@ -300,6 +305,8 @@ class AgentBackedActivationPolicy:
             output = self._agent.invoke(self._build_prompt(persona_input))
             return self._activation_from_structured(output)
         except Exception as exc:
+            if not is_recoverable_agent_failure(exc):
+                raise
             report_observed_failure(
                 exc,
                 component="persona",
