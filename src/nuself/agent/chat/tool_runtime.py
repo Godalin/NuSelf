@@ -17,6 +17,7 @@ from nuself.agent.tool_utils import tool_log_metadata
 from nuself.agent.tools import build_langchain_chat_tools
 from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQueryService
+from nuself.reason.output import SectionPlanner
 from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.jobs import JobSink
 
@@ -31,6 +32,7 @@ class ConversationToolRuntime:
         query_service: MemoryQueryService,
         selves_consult: Callable[..., str],
         job_sink: JobSink | None = None,
+        section_planner: SectionPlanner | None = None,
     ) -> None:
         self._project_root = project_root
         tools = build_langchain_chat_tools(
@@ -39,6 +41,7 @@ class ConversationToolRuntime:
             project_root=project_root,
             selves_consult=selves_consult,
             job_sink=job_sink,
+            section_planner=section_planner,
         )
         self._tools = {tool.name: tool for tool in tools}
         self._skills = load_agent_skills()

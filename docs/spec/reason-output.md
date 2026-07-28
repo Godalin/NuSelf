@@ -53,6 +53,20 @@ For reason output, an item is typically one reason step and should expose:
 - optional evidence references
 - optional kind or type metadata
 
+### Section planner ownership
+
+`ReasonOutputService` receives an optional section planner through its
+constructor. The planner is instance-scoped and is used only by that service's
+`plan_job()` calls.
+
+- Chat/daemon composition passes the daemon's configured LLM planner through
+  the conversation runtime and reason-export tool factory.
+- CLI, tests, and callers that do not inject a planner use the deterministic
+  `plan_sections()` fallback.
+- No module-level setter or mutable process-global planner is allowed.
+- Constructing or starting one daemon/runtime must not alter planner behavior
+  in another project or service instance.
+
 ### Segment
 
 A segment is a batch of ordered items processed together.

@@ -33,7 +33,6 @@ from nuself.reason.output import (
     ReasonOutputProgress,
     ReasonOutputSection,
     ReasonOutputService,
-    set_section_planner,
     write_json_atomic,
 )
 from nuself.reflection import ReflectionScheduler
@@ -122,11 +121,7 @@ def _persist_export_failure(
 
 
 def _llm_section_planner(project_root: Path) -> Callable[[ReasoningThread, Sequence[ReasoningStep], str], tuple[ReasonOutputSection, ...]]:
-    """Return a section planner that uses the LLM to organize steps into chapters.
-
-    The returned planner is registered via set_section_planner() so plan_job
-    uses it instead of the mechanical _plan_sections.
-    """
+    """Return an instance-scoped LLM section planner for chat export tools."""
     lang = ConfigSystem.load(project_root=project_root).chat.language_preference
 
     def planner(thread: ReasoningThread, steps: Sequence[ReasoningStep], mode: str) -> tuple[ReasonOutputSection, ...]:
@@ -201,7 +196,11 @@ class DaemonState:
         self.shutdown_requested = threading.Event()
         self.activity_broker = ActivityBroker()
         self._export_queue: queue.SimpleQueue[JobMessage] = queue.SimpleQueue()
-        self.chat_agent = ChatAgent(project_root, job_sink=self._export_queue.put)
+        self.chat_agent = ChatAgent(
+            project_root,
+            job_sink=self._export_queue.put,
+            section_planner=_llm_section_planner(project_root),
+        )
         
         config = ConfigSystem.load(project_root=project_root)
         
@@ -405,7 +404,6 @@ class DaemonState:
     def start_background_export_worker(self) -> None:
         if self._export_worker_thread is not None:
             return
-        set_section_planner(_llm_section_planner(self.project_root))
         self._export_worker_thread = threading.Thread(
             target=self._run_background_export_worker,
             name="nuself-export-worker",

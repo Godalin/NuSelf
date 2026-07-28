@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import queue
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -64,6 +65,59 @@ def test_plan_without_job_sink_skips_enqueue(tmp_path: Path) -> None:
     # No queue file, no callback — but manifest was still written
     assert not (paths.root / "queue").exists()
     assert paths.manifest.is_file()
+
+
+def test_section_planners_are_isolated_per_service(tmp_path: Path) -> None:
+    def planner(title: str):
+        def plan(
+            thread: ReasoningThread,
+            steps: Sequence[ReasoningStep],
+            mode: str,
+        ) -> tuple[ReasonOutputSection, ...]:
+            return (
+                ReasonOutputSection(
+                    index=0,
+                    title=title,
+                    focus=mode,
+                    step_ids=tuple(step.id for step in steps),
+                    source_start_index=0,
+                    source_end_index=len(steps) - 1,
+                    summary=thread.topic,
+                ),
+            )
+
+        return plan
+
+    root_a = tmp_path / "a"
+    root_b = tmp_path / "b"
+    reason_a = _reason_service(root_a)
+    reason_b = _reason_service(root_b)
+    thread_a = reason_a.start_thread("A")
+    thread_b = reason_b.start_thread("B")
+    reason_a.advance_thread(
+        thread_a.id,
+        step=_step(thread_a.id, "A", "Out A", "D A"),
+    )
+    reason_b.advance_thread(
+        thread_b.id,
+        step=_step(thread_b.id, "B", "Out B", "D B"),
+    )
+    output_a = ReasonOutputService(
+        root_a,
+        reason_service=reason_a,
+        section_planner=planner("Planner A"),
+    )
+    output_b = ReasonOutputService(
+        root_b,
+        reason_service=reason_b,
+        section_planner=planner("Planner B"),
+    )
+
+    manifest_a = output_a.plan_job(thread_a.id)
+    manifest_b = output_b.plan_job(thread_b.id)
+
+    assert manifest_a.sections[0].title == "Planner A"
+    assert manifest_b.sections[0].title == "Planner B"
 
 
 def test_compose_from_enqueued_job(

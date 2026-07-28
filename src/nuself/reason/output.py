@@ -25,23 +25,6 @@ REASON_OUTPUT_STORAGE_VERSION = "NuSelfReasonOutput/v1"
 REASON_OUTPUT_MODES: tuple[str, ...] = ("outline", "narrative", "report", "summary")
 REASON_OUTPUT_FORMATS: tuple[str, ...] = ("markdown",)
 
-_section_planner: Callable[[ReasoningThread, Sequence[ReasoningStep], str], tuple[ReasonOutputSection, ...]] | None = None
-
-
-def set_section_planner(
-    cb: Callable[[ReasoningThread, Sequence[ReasoningStep], str], tuple[ReasonOutputSection, ...]] | None,
-) -> None:
-    """Set the module-level section planner used by plan_job.
-
-    Called once by the daemon during startup. The planner receives
-    (thread, steps, mode) and returns a section plan (tuple of
-    ReasonOutputSection). When not set, the mechanical
-    plan_sections is used.
-    """
-    global _section_planner  # noqa: PLW0603
-    _section_planner = cb
-
-
 @dataclass(frozen=True)
 class ReasonOutputSection:
     index: int
@@ -77,6 +60,12 @@ class ReasonOutputSection:
             summary=_expect_str(data, "summary"),
             created_at=_optional_str(data, "created_at") or utc_now_iso(),
         )
+
+
+SectionPlanner = Callable[
+    [ReasoningThread, Sequence[ReasoningStep], str],
+    tuple[ReasonOutputSection, ...],
+]
 
 
 @dataclass(frozen=True)
@@ -263,11 +252,13 @@ class ReasonOutputService:
         reason_service: ReasonService | None = None,
         workspace_store: PrivateWorkspaceStore | None = None,
         job_sink: JobSink | None = None,
+        section_planner: SectionPlanner | None = None,
     ) -> None:
         self._reason_service = reason_service or ReasonService(project_root)
         self._project_root = project_root or self._reason_service._project_root  # pyright: ignore[reportPrivateUsage]
         self._workspace_store = workspace_store or PrivateWorkspaceStore(self._project_root, scope="reason")
         self._job_sink = job_sink
+        self._section_planner = section_planner
 
     def list_jobs(self, thread_id: str) -> list[ReasonOutputManifest]:
         root = self._export_root(thread_id)
@@ -319,8 +310,8 @@ class ReasonOutputService:
         mode = _validate_choice(mode, REASON_OUTPUT_MODES, label="mode")
         output_format = _validate_choice(output_format, REASON_OUTPUT_FORMATS, label="output format")
         segment_size = _validate_positive_int(segment_size, label="segment_size")
-        if _section_planner is not None:
-            sections = _section_planner(thread, list(selected), mode)
+        if self._section_planner is not None:
+            sections = self._section_planner(thread, list(selected), mode)
         else:
             sections = plan_sections(thread, list(selected), mode=mode)
         job_id = _export_job_id(

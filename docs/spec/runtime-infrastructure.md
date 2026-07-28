@@ -195,6 +195,12 @@ operation. It records the failure through the structured log sink and falls
 back to Python warnings only when that sink is unavailable. Domains must not
 implement equivalent broad `try/except/pass` wrappers locally.
 
+Runtime behavior configured at composition time must be instance-scoped.
+Callbacks such as reason-output section planners flow explicitly from the
+daemon/chat composition root into the owning service. Domain modules must not
+install process-global callback setters whose value can leak across projects,
+tests, or concurrent runtimes.
+
 ## Migration Order
 
 1. Add and test the shared handler registry; migrate daemon request dispatch.
