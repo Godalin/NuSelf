@@ -4,11 +4,29 @@ from __future__ import annotations
 
 from fcntl import LOCK_EX, LOCK_NB, LOCK_UN, flock
 from pathlib import Path
-from typing import IO
+from typing import IO, Literal
 
 
 class DaemonInstanceLockContended(RuntimeError):
     """Raised when another process owns the project daemon."""
+
+
+class DaemonInstanceLockCleanupError(RuntimeError):
+    """A lock operation and its required handle close both failed."""
+
+    def __init__(
+        self,
+        operation: Literal["acquire", "release"],
+        *,
+        primary_error: BaseException,
+        cleanup_error: BaseException,
+    ) -> None:
+        super().__init__(
+            f"daemon instance lock {operation} and handle cleanup both failed"
+        )
+        self.operation = operation
+        self.primary_error = primary_error
+        self.cleanup_error = cleanup_error
 
 
 class DaemonInstanceLock:
@@ -30,12 +48,27 @@ class DaemonInstanceLock:
         try:
             flock(handle.fileno(), LOCK_EX | LOCK_NB)
         except BlockingIOError:
-            handle.close()
-            raise DaemonInstanceLockContended(
+            primary_error = DaemonInstanceLockContended(
                 "another daemon owns this project runtime"
-            ) from None
-        except Exception:
-            handle.close()
+            )
+            try:
+                handle.close()
+            except BaseException as cleanup_error:
+                raise DaemonInstanceLockCleanupError(
+                    "acquire",
+                    primary_error=primary_error,
+                    cleanup_error=cleanup_error,
+                ) from primary_error
+            raise primary_error from None
+        except BaseException as primary_error:
+            try:
+                handle.close()
+            except BaseException as cleanup_error:
+                raise DaemonInstanceLockCleanupError(
+                    "acquire",
+                    primary_error=primary_error,
+                    cleanup_error=cleanup_error,
+                ) from primary_error
             raise
         self._handle = handle
 
@@ -46,7 +79,17 @@ class DaemonInstanceLock:
         self._handle = None
         try:
             flock(handle.fileno(), LOCK_UN)
-        finally:
+        except BaseException as primary_error:
+            try:
+                handle.close()
+            except BaseException as cleanup_error:
+                raise DaemonInstanceLockCleanupError(
+                    "release",
+                    primary_error=primary_error,
+                    cleanup_error=cleanup_error,
+                ) from primary_error
+            raise
+        else:
             handle.close()
 
     def __enter__(self) -> DaemonInstanceLock:

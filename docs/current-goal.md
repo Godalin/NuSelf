@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The shared atomic file boundary preserves both the authoritative
-write/replace failure and temporary-file cleanup failure when both occur.
+Idle. Daemon instance locking preserves ownership failure provenance when
+flock/unlock and file-handle close fail together during acquire or release.
 
 ## Active Branch
 
@@ -23,17 +23,20 @@ code.
 
 ## Completion Evidence
 
-- A partial write failure propagates unchanged, preserves the prior
-  destination, and removes its unique sibling temporary file.
-- A replace failure with successful cleanup retains its existing exception and
-  leaves no temporary artifact.
-- Simultaneous replace and unlink failures raise `AtomicWriteCleanupError`,
-  exposing `primary_error`, `cleanup_error`, and the residual temporary path,
-  with the primary persistence error as the explicit cause.
-- Successful text/JSON writes, validation, destination replacement,
-  concurrency, and retry behavior are unchanged.
-- Focused storage, daemon PID, and LLM state tests: 31 passed.
-- Final full tests: 1298 passed.
+- Normal contention still raises `DaemonInstanceLockContended`, closes the
+  contender handle, and leaves the owner resources untouched.
+- A single system flock, unlock, or close failure retains its existing
+  exception; acquire/release marks `acquired` false only when ownership was not
+  obtained or was relinquished by the Python owner.
+- Simultaneous flock/unlock and close failures raise
+  `DaemonInstanceLockCleanupError` with operation, primary error, cleanup
+  error, and the primary lock failure as explicit cause.
+- Acquire cleanup also runs for `BaseException` lock failures, preventing a
+  process interruption from skipping handle close.
+- Contention exit/status/log behavior, cleanup order, and retry behavior are
+  unchanged.
+- Focused instance-lock, signal, and daemon-server tests: 43 passed.
+- Final full tests: 1305 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -44,4 +47,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-the shared atomic writer preserves dual failure provenance.
+daemon instance locking preserves acquire/release dual failure provenance.

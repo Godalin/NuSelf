@@ -122,6 +122,13 @@ bind, serve, or another primary operation also failed, that original exception
 is retained as `primary_error` and as the lifecycle error's explicit cause.
 A cleanup error must never silently replace or discard the primary failure.
 
+Instance-lock acquire/release has the same provenance rule before lifecycle
+aggregation. `DaemonInstanceLockCleanupError` is raised only when flock or
+unlock fails and closing that operation's file handle also fails. It names the
+operation and retains both errors with the lock-operation error as cause.
+Ordinary contention, single flock/unlock failure, and single close failure
+keep their existing exception behavior.
+
 The `daemon/stopped` audit event is written only after all owned cleanup steps
 before instance-lock release succeed. Failed cleanup emits
 `daemon/shutdown_cleanup_failed` as a best-effort diagnostic and propagates the

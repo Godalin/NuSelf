@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon instance-lock acquire and release now retain both flock/unlock failure
+  and simultaneous file-handle close failure in a typed
+  `DaemonInstanceLockCleanupError`, instead of allowing cleanup to mask lock
+  ownership state.
 - Atomic text/JSON persistence now retains both the original write/replace
   failure and a simultaneous temporary-file cleanup failure in a typed
   `AtomicWriteCleanupError`, instead of allowing unlink failure to mask the

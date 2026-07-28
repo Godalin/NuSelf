@@ -31,6 +31,9 @@ Persona graph 的 LLM 故障会保留确定性的贡献、汇总和激活 fallba
 运行时文件的原子写入在临时文件清理也失败时仍保留原始持久化错误，并向调用方
 同时暴露两个错误和残留路径。
 
+Daemon instance lock 的获取和释放也会同时保留锁操作与句柄关闭错误，避免清理
+故障掩盖真实所有权状态。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

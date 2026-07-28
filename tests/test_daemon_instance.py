@@ -5,12 +5,14 @@ from __future__ import annotations
 
 from pathlib import Path
 import threading
+from typing import IO, cast
 
 import pytest
 
 from nuself.config import runtime_paths
 from nuself.daemon.instance import (
     DaemonInstanceLock,
+    DaemonInstanceLockCleanupError,
     DaemonInstanceLockContended,
 )
 from nuself.logs import read_log_events
@@ -32,6 +34,179 @@ def test_instance_lock_contends_then_releases(tmp_path: Path) -> None:
     assert contender.acquired is True
     contender.release()
     assert lock_path.exists()
+
+
+class _FakeLockHandle:
+    def __init__(self, close_error: BaseException | None = None) -> None:
+        self.close_error = close_error
+        self.close_calls = 0
+
+    def fileno(self) -> int:
+        return 42
+
+    def close(self) -> None:
+        self.close_calls += 1
+        if self.close_error is not None:
+            raise self.close_error
+
+
+@pytest.mark.parametrize(
+    ("flock_error", "primary_type"),
+    [
+        (BlockingIOError("contended"), DaemonInstanceLockContended),
+        (OSError("flock failed"), OSError),
+        (KeyboardInterrupt(), KeyboardInterrupt),
+    ],
+)
+def test_instance_lock_acquire_retains_flock_and_close_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    flock_error: BaseException,
+    primary_type: type[BaseException],
+) -> None:
+    import nuself.daemon.instance as instance_module
+
+    handle = _FakeLockHandle(OSError("close failed"))
+    lock = DaemonInstanceLock(tmp_path / "runtime" / "nuself.lock")
+
+    def fake_open(
+        path: Path,
+        mode: str = "r",
+        buffering: int = -1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> IO[str]:
+        return cast(IO[str], handle)
+
+    monkeypatch.setattr(
+        Path,
+        "open",
+        fake_open,
+    )
+
+    def fail_flock(fd: int, operation: int) -> None:
+        raise flock_error
+
+    monkeypatch.setattr(instance_module, "flock", fail_flock)
+
+    with pytest.raises(DaemonInstanceLockCleanupError) as captured:
+        lock.acquire()
+
+    error = captured.value
+    assert error.operation == "acquire"
+    assert isinstance(error.primary_error, primary_type)
+    assert str(error.cleanup_error) == "close failed"
+    assert error.__cause__ is error.primary_error
+    assert handle.close_calls == 1
+    assert lock.acquired is False
+
+
+def test_instance_lock_acquire_retains_single_system_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import nuself.daemon.instance as instance_module
+
+    handle = _FakeLockHandle()
+    lock = DaemonInstanceLock(tmp_path / "runtime" / "nuself.lock")
+
+    def fake_open(
+        path: Path,
+        mode: str = "r",
+        buffering: int = -1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> IO[str]:
+        return cast(IO[str], handle)
+
+    def fail_flock(fd: int, operation: int) -> None:
+        raise OSError("flock failed")
+
+    monkeypatch.setattr(Path, "open", fake_open)
+    monkeypatch.setattr(instance_module, "flock", fail_flock)
+
+    with pytest.raises(OSError, match="flock failed"):
+        lock.acquire()
+
+    assert handle.close_calls == 1
+    assert lock.acquired is False
+
+
+def test_instance_lock_release_retains_unlock_and_close_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import nuself.daemon.instance as instance_module
+
+    handle = _FakeLockHandle(OSError("close failed"))
+    lock = DaemonInstanceLock(tmp_path / "runtime" / "nuself.lock")
+    lock._handle = cast(IO[str], handle)
+
+    def fail_unlock(fd: int, operation: int) -> None:
+        raise OSError("unlock failed")
+
+    monkeypatch.setattr(instance_module, "flock", fail_unlock)
+
+    with pytest.raises(DaemonInstanceLockCleanupError) as captured:
+        lock.release()
+
+    error = captured.value
+    assert error.operation == "release"
+    assert str(error.primary_error) == "unlock failed"
+    assert str(error.cleanup_error) == "close failed"
+    assert error.__cause__ is error.primary_error
+    assert handle.close_calls == 1
+    assert lock.acquired is False
+
+
+def test_instance_lock_release_retains_single_unlock_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import nuself.daemon.instance as instance_module
+
+    handle = _FakeLockHandle()
+    lock = DaemonInstanceLock(tmp_path / "runtime" / "nuself.lock")
+    lock._handle = cast(IO[str], handle)
+
+    def fail_unlock(fd: int, operation: int) -> None:
+        raise OSError("unlock failed")
+
+    monkeypatch.setattr(instance_module, "flock", fail_unlock)
+
+    with pytest.raises(OSError, match="unlock failed"):
+        lock.release()
+
+    assert handle.close_calls == 1
+    assert lock.acquired is False
+
+
+def test_instance_lock_release_retains_single_close_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import nuself.daemon.instance as instance_module
+
+    handle = _FakeLockHandle(OSError("close failed"))
+    lock = DaemonInstanceLock(tmp_path / "runtime" / "nuself.lock")
+    lock._handle = cast(IO[str], handle)
+
+    def unlock(fd: int, operation: int) -> None:
+        return None
+
+    monkeypatch.setattr(
+        instance_module,
+        "flock",
+        unlock,
+    )
+
+    with pytest.raises(OSError, match="close failed"):
+        lock.release()
+
+    assert handle.close_calls == 1
+    assert lock.acquired is False
 
 
 def test_contended_daemon_preserves_owner_resources(

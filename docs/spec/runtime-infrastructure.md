@@ -603,6 +603,15 @@ non-blocking exclusive process lock on
 `private/runtime/nuself.lock`. The lock file is a stable coordination inode and
 is not deleted during normal cleanup.
 
+Failed lock acquisition closes its newly opened file handle before returning
+contention or another flock error. Release marks the Python owner inactive,
+attempts unlock, and always attempts handle close. A single failure retains its
+existing exception contract. If flock/unlock and close both fail,
+`DaemonInstanceLockCleanupError` retains `operation`, `primary_error`, and
+`cleanup_error`, with the primary lock operation as its explicit cause.
+Handle cleanup never silently masks the lock ownership failure, and no lock or
+close operation is retried.
+
 The owner holds the lock until request serving and all background-worker
 shutdown are complete. Only that owner may:
 
