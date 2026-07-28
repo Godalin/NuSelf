@@ -4,18 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import replace
-import json
 import logging
 import time
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
-from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
-from langchain.agents.structured_output import ToolStrategy as _ToolStrategy
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
-from nuself.agent.middleware import ToolCaptureMiddleware
 from nuself.agent.chat.types import (
     ChatAgentSettings,
     ChatResult,
@@ -27,6 +22,7 @@ from nuself.agent.chat.types import (
 )
 from nuself.agent.chat.context import ConversationContextPreparer
 from nuself.agent.chat.persona import ConversationPersonaOrchestrator
+from nuself.agent.chat.response import ConversationResponseSynthesizer
 from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.skills import AgentSkill, load_agent_skills, render_tool_placeholders
 from nuself.agent.chat.thread import ThreadMessage, ThreadState, ThreadStore
@@ -39,9 +35,6 @@ from nuself.llm import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
     default_llm,
-    is_endpoint_availability_error,
-    record_llm_endpoint_success,
-    redact_llm_error,
 )
 from nuself.logs import log_context, write_log_event
 from nuself.memory.query import MemoryQueryService
@@ -138,6 +131,13 @@ class ConversationGraphRuntime:
             for skill in self._skills
         }
         self._tools["load_skill"] = self._build_skill_loader_tool()
+        self._response_synthesizer = ConversationResponseSynthesizer(
+            project_root=project_root,
+            llm=self._llm,
+            langchain_models=self._langchain_models,
+            tools=self._tools.values(),
+            log_tool_call=self._log_langchain_service_tool_call,
+        )
         graph: Any = StateGraph(_ConversationGraphState)
         graph.add_node("prepare_context", self._graph_prepare_context)
         graph.add_node("respond", self._graph_respond)
@@ -376,100 +376,14 @@ class ConversationGraphRuntime:
     # ------------------------------------------------------------------
 
     def _complete_response(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
-        if self._langchain_models:
-            return self._complete_response_with_langchain_tools(prompt)
-        raw = self._llm.complete(prompt)
-        return self._parse_llm_output(raw)
-
-    def _complete_response_with_langchain_tools(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
-        last_error: Exception | None = None
-        for position, endpoint in enumerate(self._langchain_models):
-            for attempt in range(2):
-                try:
-                    response = self._complete_response_with_langchain_endpoint(endpoint, prompt)
-                except Exception as exc:
-                    last_error = exc
-                    if attempt == 0 and not is_endpoint_availability_error(str(exc)):
-                        write_log_event(
-                            "chat",
-                            "llm_endpoint_retry",
-                            "LLM endpoint error; retrying",
-                            project_root=self._project_root,
-                            status="retry",
-                            error=redact_llm_error(str(exc)),
-                            metadata={
-                                "endpoint_index": endpoint.index,
-                                "base_url": endpoint.settings.base_url,
-                                "model": endpoint.settings.model,
-                            },
-                        )
-                        continue
-                    remaining = self._langchain_models[position + 1 :]
-                    if remaining:
-                        status = "failed_over" if is_endpoint_availability_error(str(exc)) else "error"
-                        write_log_event(
-                            "chat",
-                            "llm_endpoint_failed_over" if is_endpoint_availability_error(str(exc)) else "llm_endpoint_error",
-                            "LLM endpoint failed; trying next configured endpoint",
-                            project_root=self._project_root,
-                            status=status,
-                            error=redact_llm_error(str(exc)),
-                            metadata={
-                                "endpoint_index": endpoint.index,
-                                "base_url": endpoint.settings.base_url,
-                                "model": endpoint.settings.model,
-                                "next_endpoint_index": remaining[0].index,
-                            },
-                        )
-                    break
-                else:
-                    record_llm_endpoint_success(self._project_root, endpoint.index)
-                    return response
-        if last_error is not None:
-            write_log_event(
-                "chat",
-                "llm_endpoints_exhausted",
-                "all LLM endpoints failed; falling back to local LLM",
-                project_root=self._project_root,
-                status="fallback",
-                error=redact_llm_error(str(last_error)),
-            )
-        raw = self._llm.complete(prompt)
-        return self._parse_llm_output(raw)
-
-    def _complete_response_with_langchain_endpoint(
-        self,
-        endpoint: LangChainLLMEndpoint,
-        prompt: list[ChatMessage],
-    ) -> ChatStructuredOutput:
-        supervisor = _LangChainChatSupervisor(
-            endpoint=endpoint,
-            tools=self._tools.values(),
-            log_tool_call=self._log_langchain_service_tool_call,
-        )
-        return supervisor.complete(prompt)
+        return self._response_synthesizer.complete(prompt)
 
     @staticmethod
     def _parse_llm_output(raw: str) -> ChatStructuredOutput:
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            return ChatStructuredOutput(answer=raw)
-        if isinstance(parsed, dict):
-            return ChatStructuredOutput.model_validate(cast(dict[str, object], parsed))
-        return ChatStructuredOutput(answer=raw)
+        return ConversationResponseSynthesizer.parse_output(raw)
 
     def _finalize_draft_response(self, state: ConversationTurnState, draft: ChatStructuredOutput) -> ChatStructuredOutput:
-        write_log_event(
-            "chat",
-            "final_response_completed",
-            "final response accepted from chat supervisor",
-            project_root=self._project_root,
-            thread_id=state.thread_id,
-            status="completed",
-            metadata={"epistemic_status": draft.epistemic_status},
-        )
-        return draft
+        return self._response_synthesizer.finalize(state, draft)
 
     def _log_langchain_service_tool_call(
         self,
@@ -566,117 +480,6 @@ class ConversationGraphRuntime:
             tags=("readonly",),
             metadata={"service_component": "skill"},
         )
-
-
-# ======================================================================
-# LangChain supervisor (inline — wraps create_agent for one chat turn)
-# ======================================================================
-
-
-class _LangChainChatSupervisor:
-    """Runs one chat turn through LangChain's agent/tool runtime.
-
-    The agent graph is rebuilt per turn so that the system prompt
-    (which varies with conversation context) can be baked in by
-    ``create_agent`` — this ensures tool descriptions and the
-    ``response_format`` instruction are properly injected.
-    """
-
-    def __init__(
-        self,
-        *,
-        endpoint: LangChainLLMEndpoint,
-        tools: Iterable[BaseTool],
-        log_tool_call: Callable[..., None],
-    ) -> None:
-        self._endpoint = endpoint
-        self._tools = tuple(tools)
-        self._log_tool_call = log_tool_call
-
-    def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
-        system_prompt, messages = _split_prompt(prompt)
-        tool_cache: dict[str, str] = {}
-        middleware = ToolCaptureMiddleware(
-            log_callback=self._log_tool_call,
-            cache=tool_cache,
-        )
-        create_agent = cast(Any, _create_agent)
-        agent = create_agent(
-            model=self._endpoint.model,
-            tools=list(self._tools),
-            system_prompt=system_prompt,
-            response_format=_ToolStrategy(schema=ChatStructuredOutput),
-            middleware=[middleware],
-        )
-        result = agent.invoke({"messages": messages})
-        return _structured_output_from_state(result)
-
-
-def _structured_output_from_state(result: object) -> ChatStructuredOutput:
-    """Extract ChatStructuredOutput from agent state.
-
-    1. Prefer ``state.structured_response`` (set by LangChain's
-       ``response_format`` mechanism) — validated that the answer
-       doesn't contain tool call markers.
-    2. Fall through to parse the last message content directly.
-    """
-    if not isinstance(result, dict):
-        raise ValueError(f"LangChain agent returned invalid state: {type(result).__name__}")
-    state = cast(dict[str, object], result)
-
-    # Priority 1 — structured_response from response_format mechanism.
-    structured = state.get("structured_response")
-    if isinstance(structured, ChatStructuredOutput):
-        if not _looks_like_tool_call(structured.answer):
-            return structured
-    elif isinstance(structured, dict):
-        try:
-            parsed = ChatStructuredOutput.model_validate(structured)
-            if not _looks_like_tool_call(parsed.answer):
-                return parsed
-        except Exception:
-            pass
-
-    # Priority 2 — parse last message content.
-    msgs = state.get("messages")
-    if isinstance(msgs, list) and msgs:
-        last = cast(object, msgs[-1])
-        content = getattr(last, "content", None)
-        if isinstance(content, str):
-            if _looks_like_tool_call(content):
-                raise ValueError(
-                    f"Agent produced tool call text instead of structured response: {content[:200]!r}"
-                )
-            try:
-                parsed = json.loads(content)
-                if isinstance(parsed, dict):
-                    return ChatStructuredOutput.model_validate(cast(dict[str, object], parsed))
-            except json.JSONDecodeError:
-                pass
-            return ChatStructuredOutput(answer=content)
-    raise ValueError("no valid structured output in agent state")
-
-
-def _looks_like_tool_call(text: str) -> bool:
-    """Heuristic: does the text look like a serialised tool call?"""
-    # Minimax serialises tool calls as ``minimax:tool_call`` XML markers.
-    return "minimax:tool_call" in text
-
-
-def _split_prompt(prompt: list[ChatMessage]) -> tuple[str | None, list[BaseMessage]]:
-    system_parts: list[str] = []
-    messages: list[BaseMessage] = []
-    for message in prompt:
-        if message.role == "system":
-            system_parts.append(message.content)
-        elif message.role == "assistant":
-            messages.append(AIMessage(content=message.content))
-        else:
-            messages.append(HumanMessage(content=message.content))
-    return ("\n\n".join(system_parts) if system_parts else None), messages
-
-
-
 
 
 # ======================================================================

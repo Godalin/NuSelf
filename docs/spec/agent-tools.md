@@ -121,6 +121,8 @@ implementing every node directly:
   summarization for **state_update** and **compression**.
 - `ConversationPersonaOrchestrator` owns persona activation, bounded selves
   consultation, discussion escalation, and persona activity logging.
+- `ConversationResponseSynthesizer` owns endpoint failover, framework-native
+  tool execution, structured-output parsing, and final response acceptance.
 
 `ConversationGraphRuntime` retains compatibility node methods that delegate to
 these collaborators, and remains responsible for graph wiring and turn-level
