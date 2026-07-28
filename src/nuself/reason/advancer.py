@@ -12,6 +12,7 @@ from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
+from nuself.agent.failover import invoke_agent_endpoint
 from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
 
 from nuself.llm import LangChainLLMEndpoint
@@ -226,13 +227,14 @@ class ReasonAdvancer:
         self._captured: list[ToolOutcome] = []
         self._invoke_lock = Lock()
         self._middleware = ToolCaptureMiddleware(captured=self._captured)
-        self._agent = self._build_agent()
+        self._agents = self._build_agents()
 
-    def _build_agent(self) -> Any:
-        """Build the LangGraph agent graph once, or None if no models configured."""
+    def _build_agents(
+        self,
+    ) -> tuple[tuple[LangChainLLMEndpoint, Any], ...]:
+        """Build one equivalent LangGraph agent per configured endpoint."""
         if not self._langchain_models:
-            return None
-        endpoint = self._langchain_models[0]
+            return ()
         ws_tools = self._build_workspace_tools()
         persona_tools = self._build_persona_tools()
         all_tools = list(self._readonly_tools) + list(ws_tools) + list(persona_tools)
@@ -241,16 +243,22 @@ class ReasonAdvancer:
         for tool in all_tools:
             if hasattr(tool, "metadata") and tool.metadata and "service_component" in tool.metadata:
                 self._tool_service_map[tool.name] = tool.metadata["service_component"]
-        return create_agent(
-            model=endpoint.model,
-            tools=all_tools,
-            response_format=ToolStrategy(ReasonStepOutput),
-            middleware=[self._middleware],
+        return tuple(
+            (
+                endpoint,
+                create_agent(
+                    model=endpoint.model,
+                    tools=all_tools,
+                    response_format=ToolStrategy(ReasonStepOutput),
+                    middleware=[self._middleware],
+                ),
+            )
+            for endpoint in self._langchain_models
         )
 
     def advance(self, thread: ReasoningThread) -> ReasoningStep | None:
         """Generate a reasoning step for the given thread, or None on failure."""
-        if self._agent is None:
+        if not self._agents:
             raise ReasonAdvanceError(
                 "No LangChain models configured — cannot advance reason thread"
             )
@@ -258,15 +266,56 @@ class ReasonAdvancer:
             return self._advance(thread)
 
     def _advance(self, thread: ReasoningThread) -> ReasoningStep | None:
-        assert self._agent is not None
+        assert self._agents
         with runtime_context(thread_id=thread.id):
             try:
                 self._captured.clear()
                 base = build_advance_prompt(thread)
                 system = SystemMessage(content=build_system_prompt(thread))
                 messages = [system, HumanMessage(content=base)]
+                agents = {
+                    endpoint.index: agent
+                    for endpoint, agent in self._agents
+                }
+
+                def invoke(endpoint: LangChainLLMEndpoint) -> object:
+                    try:
+                        return agents[endpoint.index].invoke(
+                            {"messages": messages}
+                        )
+                    except Exception as exc:
+                        if self._captured:
+                            report_observed_failure(
+                                exc,
+                                component="reasoning",
+                                event=(
+                                    "llm_failover_suppressed_after_tool_call"
+                                ),
+                                message=(
+                                    "Reason endpoint failover suppressed after "
+                                    "tool execution"
+                                ),
+                                project_root=self._project_root,
+                                level="warning",
+                                status="failed",
+                                metadata={"thread_id": thread.id},
+                            )
+                            raise ReasonAdvanceError(
+                                "Reason endpoint failover suppressed after "
+                                "tool execution"
+                            ) from exc
+                        raise
+
                 try:
-                    result = self._agent.invoke({"messages": messages})
+                    result = invoke_agent_endpoint(
+                        tuple(
+                            endpoint
+                            for endpoint, _agent in self._agents
+                        ),
+                        invoke,
+                        project_root=self._project_root,
+                        component="reasoning",
+                    )
                 except Exception:
                     self._project_tool_outcomes()
                     raise

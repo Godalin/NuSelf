@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- `ReasonAdvancer` now builds equivalent agents for all configured endpoints
+  and uses shared availability failover before any tool runs. Once middleware
+  records a tool outcome, endpoint switching is suppressed with a chained
+  `ReasonAdvanceError`, preventing workspace or persona tool replay.
 - Shared agent middleware now transfers tool execution through immutable typed
   `ToolOutcome` records with distinct result/error fields. Reason tool outcomes
   are projected even when the enclosing agent later fails, so executed or

@@ -343,6 +343,9 @@ tool outcome，后续模型失败就不能启动新的 agent run 或切换 endpo
 agent middleware 使用不可变 typed record 传递每个 tool outcome，并明确区分 result
 与 error。因此 reason agent 在工具运行后失败时，工具活动仍会被准确记录，同时原始
 agent failure 继续作为权威错误。
+reason advance 会在首个 tool outcome 之前使用所有已配置 endpoint 做 availability
+failover；workspace、persona 或 service tool 已运行后出现 provider failure 时，
+系统会返回带 cause 的 reason error，而不会启动可能重复操作的新 agent。
 
 ## 守护进程
 

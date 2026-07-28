@@ -377,6 +377,10 @@ Agent middleware carries each tool outcome as an immutable typed record with
 separate result and error states. Reason tool activity is therefore still
 logged accurately when the enclosing reasoning agent fails after a tool ran;
 the original agent failure remains authoritative.
+Reason advancement now uses every configured endpoint for availability
+failover, but only before its first tool outcome. A provider failure after a
+workspace, persona, or service tool ran becomes a chained reason error instead
+of starting another agent that could repeat the operation.
 
 ## Daemon
 

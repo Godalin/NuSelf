@@ -12,9 +12,11 @@ import time
 from typing import Any, cast
 
 import pytest
+from langchain_core.language_models.chat_models import BaseChatModel
 from pydantic import ValidationError
 
 from nuself.agent.middleware import ToolOutcome
+from nuself.llm import LLMSettings, LangChainLLMEndpoint
 from nuself.logs import read_log_events
 from nuself.reason.advancer import (
     REASON_ADVANCE_SYSTEM_PROMPT,
@@ -117,7 +119,41 @@ def _advancer_with_agent(
 ) -> ReasonAdvancer:
     advancer = ReasonAdvancer(project_root=project_root)
     dynamic = cast(Any, advancer)
-    dynamic._agent = agent
+    endpoint = LangChainLLMEndpoint(
+        index=0,
+        settings=LLMSettings(
+            base_url="https://reason.test/v1",
+            api_key="test",
+            model="reason-test",
+        ),
+        model=cast(BaseChatModel, object()),
+    )
+    dynamic._agents = ((endpoint, agent),)
+    dynamic._tool_service_map = {}
+    return advancer
+
+
+def _advancer_with_agents(
+    project_root: Path,
+    agents: tuple[Any, ...],
+) -> ReasonAdvancer:
+    advancer = ReasonAdvancer(project_root=project_root)
+    dynamic = cast(Any, advancer)
+    dynamic._agents = tuple(
+        (
+            LangChainLLMEndpoint(
+                index=index,
+                settings=LLMSettings(
+                    base_url=f"https://reason-{index}.test/v1",
+                    api_key="test",
+                    model=f"reason-{index}",
+                ),
+                model=cast(BaseChatModel, object()),
+            ),
+            agent,
+        )
+        for index, agent in enumerate(agents)
+    )
     dynamic._tool_service_map = {}
     return advancer
 
@@ -174,6 +210,70 @@ def test_advance_uses_shared_reason_thread_context_and_restores_caller(
         )
     ]
     assert current_runtime_context() == RuntimeContext()
+
+
+def test_reason_advancer_fails_over_before_tool_execution(
+    tmp_path: Path,
+) -> None:
+    class UnavailableAgent:
+        calls = 0
+
+        def invoke(self, _input: object) -> dict[str, object]:
+            self.calls += 1
+            raise RuntimeError("HTTP 429 rate limit")
+
+    primary = UnavailableAgent()
+    secondary = _RecordingAgent()
+    advancer = _advancer_with_agents(
+        tmp_path,
+        (primary, secondary),
+    )
+
+    step = advancer.advance(
+        ReasoningThread(id="reason-test", topic="Q")
+    )
+
+    assert step is not None
+    assert step.summary == "advanced"
+    assert primary.calls == 1
+    assert len(secondary.contexts) == 1
+    events = read_log_events(
+        project_root=tmp_path,
+        component="reasoning",
+    )
+    assert any(
+        event.event == "llm_endpoint_failed_over"
+        for event in events
+    )
+
+
+def test_reason_advancer_does_not_fail_over_protocol_error(
+    tmp_path: Path,
+) -> None:
+    class ProtocolFailureAgent:
+        calls = 0
+
+        def invoke(self, _input: object) -> dict[str, object]:
+            self.calls += 1
+            raise ValueError("invalid structured response")
+
+    primary = ProtocolFailureAgent()
+    secondary = _RecordingAgent()
+    advancer = _advancer_with_agents(
+        tmp_path,
+        (primary, secondary),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="invalid structured response",
+    ):
+        advancer.advance(
+            ReasoningThread(id="reason-test", topic="Q")
+        )
+
+    assert primary.calls == 1
+    assert secondary.contexts == []
 
 
 def test_advance_rejects_dictionary_structured_response(
@@ -249,12 +349,14 @@ def test_agent_failure_still_projects_prior_failed_tool_outcome(
     agent.advancer = advancer
 
     with pytest.raises(
-        RuntimeError,
-        match="agent failed after tool",
-    ):
+        ReasonAdvanceError,
+        match="failover suppressed after tool execution",
+    ) as caught:
         advancer.advance(
             ReasoningThread(id="reason-test", topic="Q")
         )
+    assert isinstance(caught.value.__cause__, RuntimeError)
+    assert str(caught.value.__cause__) == "agent failed after tool"
 
     events = read_log_events(
         project_root=tmp_path,
@@ -269,8 +371,15 @@ def test_agent_failure_still_projects_prior_failed_tool_outcome(
     assert tool_event.metadata is not None
     assert tool_event.metadata["tool"] == "workspace_put"
     assert tool_event.metadata["error"] == "storage unavailable"
+    assert any(
+        event.event == "llm_failover_suppressed_after_tool_call"
+        for event in events
+    )
     assert events[-1].event == "advance_tool_failed"
-    assert events[-1].error == "agent failed after tool"
+    assert events[-1].error == (
+        "Reason endpoint failover suppressed after tool execution "
+        "<- agent failed after tool"
+    )
 
 
 def test_advance_failure_log_cannot_mask_original_exception(

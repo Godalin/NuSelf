@@ -416,6 +416,18 @@ advance(thread)
 
 CLI, REPL, scheduler, and service-driven advance must converge on the same `ReasonAdvancer` path when a generated step is needed. Silent downgrade to a raw `ChatLLM.complete()` path, a placeholder step, or any other fake advance is not allowed. If no LangChain model is configured, or if the advancer fails to return a structured step, the operation fails clearly and no step is persisted.
 
+`ReasonAdvancer` builds one equivalent tool-enabled agent per configured
+endpoint and uses the shared agent endpoint-failover primitive only for
+availability failures that occur before any tool outcome. Successful endpoint
+selection updates the shared active-endpoint preference.
+
+Once middleware records any successful or failed `ToolOutcome`, the advancer
+must not switch endpoints. It writes
+`reasoning/llm_failover_suppressed_after_tool_call`, projects the captured tool
+outcomes, and raises a non-retryable `ReasonAdvanceError` chained from the
+endpoint failure. This prevents workspace, persona, or other tools from being
+executed twice by a fresh agent run. Non-availability errors never fail over.
+
 An exception from the advancer's agent/tool/structured-step path is
 authoritative and propagates unchanged. Its `advance_tool_failed` projection
 uses shared failure reporting with thread/runtime correlation; audit storage

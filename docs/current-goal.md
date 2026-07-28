@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The typed tool-outcome migration is complete.
+Idle. The reason advancer tool-safe failover migration is complete.
 
 ## Active Branch
 
@@ -21,21 +21,21 @@ None while idle.
 
 ## Completion Evidence
 
-- Shared middleware emits immutable `ToolOutcome` records with detached
-  arguments and exactly one of result or error.
-- Chat retry suppression consumes typed outcomes without positional tuples.
-- Reason tool-log projection preserves result/error status in the existing
-  public wire shape.
-- Tool outcomes are projected before a later reason-agent failure propagates;
-  projection failure cannot replace the agent error.
-- `.venv/bin/pytest -q`: `1477 passed`.
+- `ReasonAdvancer` builds one equivalent tool-enabled agent per configured
+  endpoint.
+- Availability failures before tool execution use the shared endpoint
+  failover primitive and persist endpoint success.
+- Non-availability errors do not fail over.
+- Any typed tool outcome suppresses endpoint switching and raises a chained
+  `ReasonAdvanceError` after projecting tool evidence.
+- `.venv/bin/pytest -q`: `1479 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `1f8f661`.
+`dev/v0.3.x` is published through `75c397c`.
 
 ## Next Review Batch
 
-Add tool-safe reason endpoint failover using typed outcomes.
+Audit remaining legacy chat response fallback and LLM adapter boundaries.
