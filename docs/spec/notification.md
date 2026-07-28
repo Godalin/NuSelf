@@ -2,7 +2,10 @@
 
 ## Purpose
 
-The notification outbox is a **generic event bus** for "something happened, go look at X" style events. It is **not** owned by reflection.
+The notification outbox is a durable user-attention and delivery queue for
+"something happened, go look at X" notifications. It is not a generic internal
+event bus and is **not** owned by reflection. Runtime control flow must not
+publish arbitrary events to the outbox or consume notifications as commands.
 
 Sources that may create outbox entries:
 - Reflection scheduler (when `reflection.auto_notify` is `true`)

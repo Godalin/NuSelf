@@ -296,111 +296,19 @@ Discussion traces rendered by `render_discussion_trace()` must:
 5. Render each group header as a square-bracket tag, such as `[host]`, `[candidate]`, or `[turn-1]`.
 6. If the group header and speaker are the same, render one tag followed by the content instead of repeating `[host] [host]` or `[candidate] [candidate]`.
 
-## Turn-Confirmation Protocol
+## Approval And Event Boundaries
 
-A shared architecture layer for any subsystem to ask the user a yes/no question in the chat flow without blocking the agent.
+User confirmation is a synchronous request boundary, not a post-turn log
+consumer. Approval-gated agent tools prompt through the interactive tool
+wrapper before executing a durable or destructive action. A declined request
+does not execute the action.
 
-### Architecture
+`proposal_created` and similar structured log entries are append-only audit
+records. The CLI may render them as activity, but it must never replay a log
+record to execute a proposal, deduplicate command execution, or reconstruct an
+approval request. There is no `_PROPOSAL_HANDLERS` log-dispatch registry.
 
-This protocol uses the existing log system as a **domain event bus**, not as operational logging:
-
-- **Domain events** (`proposal_created`, `candidate_created`) carry structured payloads that CLI code consumes to drive interactive behavior. They are written by domain logic (tools, curators) and read by the CLI after each chat turn.
-- **Operational logs** (`turn_completed`, `service_tool_called`) record what happened for display and debugging. They are a read-only record and must never drive control flow.
-
-The log file is the transport medium: the producer writes an event entry, the consumer reads it after the turn. It is NOT an audit trail — confirmed proposals are consumed immediately and should not be replayed.
-
-### Lifecycle
-
-```
-producer (tool/curator)                     consumer (CLI)
-        │                                        │
-        │  write_log_event(component,             │
-        │    "proposal_created",                  │
-        │    metadata={...})                      │
-        ├─────────────────────────────────────────►
-        │                                        │
-        │  return "PENDING:{ns}:{id}"            │
-        │                                        │
-        │                              turn finishes
-        │                              reply printed
-        │                              _handle_proposals_after_turn()
-        │                                        │
-        │                              print "[tag] Confirm? (y/n):"
-        │                              readline()
-        │                                        │
-        │                              if y/yes: execute action
-        │                              if n/no:  discard silently
-        │                                        │
-        │                              resume normal chat loop
-```
-
-### Event Schema
-
-```python
-write_log_event(
-    component,              # e.g. "reasoning", "memory"
-    "proposal_created",     # fixed event name for all proposals
-    f"{description}",       # human-readable one-liner
-    project_root=...,
-    metadata={
-        "proposal_id": str,     # unique id — CLI deduplicates stale entries
-        # ... subsystem-specific fields ...
-    },
-)
-```
-
-### CLI Dispatch
-
-After each chat turn, the CLI may still inspect `proposal_created` events for
-future post-turn proposal flows. Reasoning proposals no longer confirm here:
-`reason_propose` is a decorated tool that prompts interactively before writing
-the proposal, and the resulting `proposal_created` event remains an audit log.
-
-```python
-def _handle_proposals_after_turn(events, project_root):
-    # Legacy/future proposal hooks may still live here.
-    return
-```
-
-A dispatch registry maps `(component, event)` to handlers:
-
-```python
-_PROPOSAL_HANDLERS: dict[tuple[str, str], Callable] = {
-    # Reserved for future post-turn proposal flows.
-}
-```
-
-Any future handler that does use this path should follow the same confirmation
-shape, but reasoning proposals no longer use it.
-
-### Daemon Mode
-
-In daemon mode the proposal event is written on the daemon side but the log files are shared (`private/logs/` under the same project root). The CLI reads the daemon's events from the shared log in step 2 of the dispatch scan. The daemon never blocks for user input — prompting is always the CLI's responsibility.
-
-### One-Shot Mode
-
-One-shot chat (`nuself chat --message "..."`) does not enter the interactive loop. Proposal events are silently ignored because there is no context to prompt in.
-
-### Extending To Other Subsystems
-
-Any subsystem can still write `proposal_created` events for audit or
-visibility. If a subsystem wants a post-turn confirmation flow, it may add a
-handler in `_PROPOSAL_HANDLERS` under its `(component, "proposal_created")`
-key. Reasoning does not use that path anymore; it confirms through the
-decorated `reason_propose` tool wrapper instead.
-
-### Approval Decorator
-
-The CLI may wrap proposal handlers with an approval decorator instead of
-hand-writing a separate prompt function for each subsystem. The decorator is a
-small adapter around the turn-confirmation protocol, but reasoning uses the
-direct tool-wrapper path now for subsystems that still use post-turn proposal handlers:
-
-- it checks whether the incoming event is a `proposal_created` event for the registered component,
-- it deduplicates already-handled proposal IDs,
-- it prompts the user with subsystem-specific confirmation text,
-- and it only calls the wrapped handler after the user explicitly confirms.
-
-The decorator must keep the transport rules of the turn-confirmation protocol unchanged. Proposal events still come from domain logic, the CLI still owns the prompt, and one-shot mode still ignores proposals because there is no interactive confirmation context.
-
-Approval decorators are intended for user-confirmed state transitions such as thread creation, archival, reprioritization, or similar destructive or durable actions. Pure read-only handlers should not use them.
+Ephemeral in-process activity may use `EventPublisher`. Cross-process commands
+must use the daemon request protocol or a durable typed job contract. One-shot
+mode cannot perform an interactive approval unless its invoked tool wrapper has
+an input channel capable of obtaining that approval.
