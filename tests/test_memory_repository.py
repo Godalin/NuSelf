@@ -238,6 +238,45 @@ def test_memory_entry_has_memory_object_migration_shape() -> None:
     assert restored == entry
 
 
+def test_memory_entry_wire_uses_only_canonical_relations() -> None:
+    entry = MemoryEntry(
+        type="belief",
+        title="Canonical relations",
+        body="Relations have one wire representation.",
+        relations={
+            "supersedes": ["mem_old"],
+            "related_to": ["mem_peer"],
+        },
+    )
+
+    wire = entry.to_wire()
+    payload = entry.to_memory_object().payload
+
+    assert wire["relations"] == {
+        "supersedes": ["mem_old"],
+        "related_to": ["mem_peer"],
+    }
+    assert "supersedes" not in wire
+    assert "related_memory_ids" not in wire
+    assert "supersedes" not in payload
+    assert "related_memory_ids" not in payload
+
+
+@pytest.mark.parametrize("field_name", ["supersedes", "related_memory_ids"])
+def test_memory_entry_rejects_obsolete_relation_fields(
+    field_name: str,
+) -> None:
+    wire = MemoryEntry(
+        type="belief",
+        title="Canonical relations",
+        body="Relations have one wire representation.",
+    ).to_wire()
+    wire[field_name] = ["mem_old"]
+
+    with pytest.raises(ValueError, match="obsolete memory relation"):
+        MemoryEntry.from_wire(wire)
+
+
 def test_memory_entry_importance_roundtrip(tmp_path: Path) -> None:
     repo = MemoryEntryRepository(tmp_path)
     entry = repo.save(

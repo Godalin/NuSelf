@@ -47,6 +47,13 @@ validation, merge, conversion, retrieval, and relation traversal must accept
 the immutable in-memory `Mapping` and `Sequence` forms without weakening their
 existing wire-shape validation.
 
+`relations` is the only persisted relation field for memory entries,
+candidates, profile items, and the entry payload embedded in `MemoryObject`.
+Relation names map to lists of target memory ids. The obsolete top-level and
+payload fields `supersedes` and `related_memory_ids` are neither written nor
+decoded; records using those shapes require an explicit storage migration
+before they can be loaded.
+
 Repository statistics results follow the same read-ownership principle.
 `MemoryStats` and `ProfileStats` detach and freeze their mapping fields during
 construction. A caller may retain or inspect a statistics snapshot but cannot

@@ -153,6 +153,21 @@ def test_profile_item_importance_roundtrip(tmp_path: Path) -> None:
     assert restored.importance == 0.85
 
 
+@pytest.mark.parametrize("field_name", ["supersedes", "related_memory_ids"])
+def test_profile_item_rejects_obsolete_relation_fields(
+    field_name: str,
+) -> None:
+    wire = ProfileItem(
+        type="profile_fact",
+        title="Canonical relations",
+        body="Profile relations use one field.",
+    ).to_wire()
+    wire[field_name] = ["mem_old"]
+
+    with pytest.raises(ValueError, match="obsolete profile relation"):
+        ProfileItem.from_wire(wire)
+
+
 def test_profile_item_with_updates_importance(tmp_path: Path) -> None:
     repo = ProfileItemRepository(tmp_path)
     original = ProfileItem(

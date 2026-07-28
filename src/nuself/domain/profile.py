@@ -184,22 +184,19 @@ class ProfileItem:
             "valid_until": self.valid_until,
             "temporal_note": self.temporal_note,
             "relations": self.relations,
-            "supersedes": self.relations.get("supersedes", []),
-            "related_memory_ids": self.relations.get("related_to", []),
             "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
         return cast(dict[str, object], thaw_json_value(wire))
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> "ProfileItem":
-        relations = _optional_relations_dict(data, "relations")
-        if not relations:
-            supersedes = _optional_str_list(data, "supersedes")
-            related = _optional_str_list(data, "related_memory_ids")
-            if supersedes:
-                relations["supersedes"] = supersedes
-            if related:
-                relations["related_to"] = related
+        for field_name in ("supersedes", "related_memory_ids"):
+            if field_name in data:
+                raise ValueError(
+                    f"obsolete profile relation field '{field_name}'; "
+                    "use 'relations'"
+                )
+        relations = _expect_relations_dict(data, "relations")
         return cls(
             id=_expect_str(data, "id"),
             type=_expect_str(data, "type"),
@@ -285,26 +282,15 @@ def _expect_privacy(data: dict[str, object], field_name: str) -> PrivacyLevel:
     return cast(PrivacyLevel, value)
 
 
-def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
-    value = data.get(field_name)
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise ValueError(f"field '{field_name}' must be a list or null")
-    result: list[str] = []
-    for item in cast(list[object], value):
-        if not isinstance(item, str):
-            raise ValueError(f"field '{field_name}' must contain only strings")
-        result.append(item)
-    return result
-
-
-def _optional_relations_dict(data: dict[str, object], field_name: str) -> dict[str, list[str]]:
-    value = data.get(field_name)
-    if value is None:
-        return {}
+def _expect_relations_dict(
+    data: dict[str, object],
+    field_name: str,
+) -> dict[str, list[str]]:
+    if field_name not in data:
+        raise ValueError(f"missing required field '{field_name}'")
+    value = data[field_name]
     if not isinstance(value, dict):
-        raise ValueError(f"field '{field_name}' must be an object or null")
+        raise ValueError(f"field '{field_name}' must be an object")
     result: dict[str, list[str]] = {}
     for k, v in cast(dict[str, object], value).items():
         if not isinstance(v, list):

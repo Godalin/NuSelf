@@ -70,20 +70,6 @@ def merge_relations(
     return merged
 
 
-def _migrate_legacy_relations(data: dict[str, object]) -> dict[str, list[str]]:
-    """Backward-compat: read old supersedes/related_memory_ids into relations dict."""
-    relations = _optional_relations_dict(data, "relations")
-    if relations:
-        return relations
-    supersedes = _optional_str_list(data, "supersedes")
-    related = _optional_str_list(data, "related_memory_ids")
-    if supersedes:
-        relations["supersedes"] = supersedes
-    if related:
-        relations["related_to"] = related
-    return relations
-
-
 @dataclass(frozen=True)
 class MemoryEvidence:
     """Structured source evidence attached to a memory object."""
@@ -226,8 +212,6 @@ class MemoryEntry:
             "valid_until": self.valid_until,
             "temporal_note": self.temporal_note,
             "relations": self.relations,
-            "supersedes": self.relations.get("supersedes", []),
-            "related_memory_ids": self.relations.get("related_to", []),
             "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
         if self.payload:
@@ -247,8 +231,6 @@ class MemoryEntry:
             "valid_until": self.valid_until,
             "temporal_note": self.temporal_note,
             "relations": self.relations,
-            "supersedes": self.relations.get("supersedes", []),
-            "related_memory_ids": self.relations.get("related_to", []),
             "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
         payload.update(self.payload)
@@ -286,7 +268,7 @@ class MemoryEntry:
             valid_from=_optional_str(data, "valid_from"),
             valid_until=_optional_str(data, "valid_until"),
             temporal_note=_optional_str(data, "temporal_note") or "",
-            relations=_migrate_legacy_relations(data),
+            relations=_expect_relations_dict(data, "relations"),
             evidence=_optional_evidence_list(data, "evidence"),
             payload=_optional_dict(data, "payload"),
         )
@@ -294,18 +276,12 @@ class MemoryEntry:
     @classmethod
     def from_memory_object(cls, memory: "MemoryObject") -> "MemoryEntry":
         payload = memory.payload
-        relations = _optional_mapping_relations_dict(payload, "relations")
-        if not relations:
-            supersedes = _optional_mapping_str_list(payload, "supersedes")
-            related = _optional_mapping_str_list(payload, "related_memory_ids")
-            if supersedes:
-                relations["supersedes"] = supersedes
-            if related:
-                relations["related_to"] = related
+        _reject_legacy_relation_fields(payload)
+        relations = _expect_mapping_relations_dict(payload, "relations")
         known_fields = {
             "title", "body", "tags", "revisit_at", "observed_at",
             "valid_from", "valid_until", "temporal_note", "relations",
-            "supersedes", "related_memory_ids", "evidence",
+            "evidence",
         }
         extra_payload = {k: v for k, v in payload.items() if k not in known_fields}
         return cls(
@@ -454,8 +430,6 @@ class MemoryCandidate:
             "valid_until": self.valid_until,
             "temporal_note": self.temporal_note,
             "relations": self.relations,
-            "supersedes": self.relations.get("supersedes", []),
-            "related_memory_ids": self.relations.get("related_to", []),
             "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
         return MemoryObject(
@@ -495,8 +469,6 @@ class MemoryCandidate:
             "valid_until": self.valid_until,
             "temporal_note": self.temporal_note,
             "relations": self.relations,
-            "supersedes": self.relations.get("supersedes", []),
-            "related_memory_ids": self.relations.get("related_to", []),
             "evidence": [evidence.to_wire() for evidence in self.evidence],
         }
         return cast(dict[str, object], thaw_json_value(wire))
@@ -524,7 +496,7 @@ class MemoryCandidate:
             valid_from=_optional_str(data, "valid_from"),
             valid_until=_optional_str(data, "valid_until"),
             temporal_note=_optional_str(data, "temporal_note") or "",
-            relations=_migrate_legacy_relations(data),
+            relations=_expect_relations_dict(data, "relations"),
             evidence=_optional_evidence_list(data, "evidence"),
         )
 
@@ -1264,20 +1236,6 @@ def _expect_str_list(data: dict[str, object], field_name: str) -> list[str]:
     return result
 
 
-def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
-    value = data.get(field_name)
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise ValueError(f"field '{field_name}' must be a list")
-    result: list[str] = []
-    for item in cast(list[object], value):
-        if not isinstance(item, str):
-            raise ValueError(f"field '{field_name}' must contain only strings")
-        result.append(item)
-    return result
-
-
 def _expect_memory_type(data: dict[str, object], field_name: str) -> MemoryEntryType:
     value = _expect_str(data, field_name)
     return cast(MemoryEntryType, value)
@@ -1375,17 +1333,14 @@ def _validate_entry_payload(payload: Mapping[str, object]) -> list[MemoryValidat
                 )
             ):
                 issues.append(MemoryValidationIssue(f"payload.relations.{key}", "must be a list of strings"))
-    for field_name in ["supersedes", "related_memory_ids"]:
-        value = payload.get(field_name, [])
-        if (
-            isinstance(value, str)
-            or not isinstance(value, Sequence)
-            or any(
-                not isinstance(item, str)
-                for item in cast(Sequence[object], value)
+    for field_name in ("supersedes", "related_memory_ids"):
+        if field_name in payload:
+            issues.append(
+                MemoryValidationIssue(
+                    f"payload.{field_name}",
+                    "is obsolete; use payload.relations",
+                )
             )
-        ):
-            issues.append(MemoryValidationIssue(f"payload.{field_name}", "must be a list of strings"))
     evidence = payload.get("evidence", [])
     if isinstance(evidence, str) or not isinstance(evidence, Sequence):
         issues.append(MemoryValidationIssue("payload.evidence", "must be a list"))
@@ -1477,12 +1432,16 @@ def _optional_mapping_evidence_list(
     return result
 
 
-def _optional_relations_dict(data: dict[str, object], field_name: str) -> dict[str, list[str]]:
-    value = data.get(field_name)
-    if value is None:
-        return {}
+def _expect_relations_dict(
+    data: dict[str, object],
+    field_name: str,
+) -> dict[str, list[str]]:
+    _reject_legacy_relation_fields(data)
+    if field_name not in data:
+        raise ValueError(f"missing required field '{field_name}'")
+    value = data[field_name]
     if not isinstance(value, dict):
-        raise ValueError(f"field '{field_name}' must be an object or null")
+        raise ValueError(f"field '{field_name}' must be an object")
     result: dict[str, list[str]] = {}
     for k, v in cast(dict[str, object], value).items():
         if not isinstance(v, list):
@@ -1495,12 +1454,15 @@ def _optional_relations_dict(data: dict[str, object], field_name: str) -> dict[s
     return result
 
 
-def _optional_mapping_relations_dict(data: Mapping[str, object], field_name: str) -> dict[str, list[str]]:
-    value = data.get(field_name)
-    if value is None:
-        return {}
+def _expect_mapping_relations_dict(
+    data: Mapping[str, object],
+    field_name: str,
+) -> dict[str, list[str]]:
+    if field_name not in data:
+        raise ValueError(f"missing required field '{field_name}'")
+    value = data[field_name]
     if not isinstance(value, Mapping):
-        raise ValueError(f"field '{field_name}' must be an object or null")
+        raise ValueError(f"field '{field_name}' must be an object")
     result: dict[str, list[str]] = {}
     for k, v in cast(Mapping[str, object], value).items():
         if isinstance(v, str) or not isinstance(v, Sequence):
@@ -1511,6 +1473,19 @@ def _optional_mapping_relations_dict(data: Mapping[str, object], field_name: str
                 raise ValueError(f"field '{field_name}.{k}' must contain only strings")
             result[k].append(item)
     return result
+
+
+def _reject_legacy_relation_fields(data: Mapping[str, object]) -> None:
+    obsolete = {
+        field_name
+        for field_name in ("supersedes", "related_memory_ids")
+        if field_name in data
+    }
+    if obsolete:
+        fields = ", ".join(sorted(obsolete))
+        raise ValueError(
+            f"obsolete memory relation fields: {fields}; use 'relations'"
+        )
 
 
 def _optional_payload_str(data: Mapping[str, object], field_name: str) -> str:

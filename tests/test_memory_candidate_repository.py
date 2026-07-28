@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
@@ -233,6 +235,21 @@ def test_memory_candidate_importance_roundtrip_and_accept(tmp_path: Path) -> Non
     accepted = repo.accept(candidate.id)
     assert isinstance(accepted, MemoryEntry)
     assert accepted.importance == 0.85
+
+
+@pytest.mark.parametrize("field_name", ["supersedes", "related_memory_ids"])
+def test_memory_candidate_rejects_obsolete_relation_fields(
+    field_name: str,
+) -> None:
+    wire = MemoryCandidate(
+        type="belief",
+        title="Canonical relations",
+        body="Candidates use the relations object.",
+    ).to_wire()
+    wire[field_name] = ["mem_old"]
+
+    with pytest.raises(ValueError, match="obsolete memory relation"):
+        MemoryCandidate.from_wire(wire)
 
 
 def test_memory_candidate_edit_importance(tmp_path: Path) -> None:
