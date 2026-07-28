@@ -218,6 +218,10 @@ atomic writer；thread、persona 和 reason 子系统不再各自维护不同的
 
 memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出时运行。它会用 agent 判断新的 working-memory 对话应该新增、修改还是忽略长期记忆。无意义闲聊会被忽略，已有相似记忆会优先更新而不是重复创建，原始对话流水账会被拒绝写入。默认情况下，候选记忆会自动提升为持久记忆条目（`auto_accept=True`）；如果 validation 失败，可恢复的候选会保留为 pending 并输出诊断，而不会静默消失。每个 thread 的 curator cursor 会原子写入；如果 cursor 损坏，本轮整理会停止并报告 corruption diagnostic，而不会重放旧对话。另有一个 memory optimizer 可以手动、低频运行，用来整合已经存在的杂乱条目。更新事件会写入 `private/logs/memory.log`，交互式聊天也会用紧凑 activity lines 显示新的 chat、daemon 和 memory 事件。
 
+同步 post-chat curation 遇到可恢复失败时，已经完成的 assistant reply 仍会返回，
+失败会带 turn correlation context 记录为
+`memory/post_chat_curation_failed`，而不会静默表现为普通 no-op。
+
 当前 conversation graph 有意保持较小：它保留 CLI 和 daemon protocol 边界，同时为后续 persona subgraphs 和更丰富的 agent routing 留出空间。
 
 ## 守护进程

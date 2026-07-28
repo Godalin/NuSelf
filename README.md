@@ -223,6 +223,11 @@ subsystems no longer maintain divergent replacement implementations.
 
 The memory curator runs in the background in the daemon and also runs when interactive chat exits. It uses an agent to decide whether new working-memory turns should create, update, or ignore long-term memory. Trivial chat is ignored, similar existing memories should be updated instead of duplicated, and raw chat transcripts are rejected. By default, accepted candidates are automatically promoted to durable memory entries (`auto_accept=True`); validation failures leave the recoverable candidate pending and emit a diagnostic instead of disappearing silently. Per-thread curator cursors are written atomically; a malformed cursor stops that curation run with a corruption diagnostic instead of replaying old conversation history. A separate memory optimizer can be run manually, less frequently, to consolidate messy existing entries. Update events are written to `private/logs/memory.log`, and interactive chat prints compact activity lines for new chat, daemon, and memory events.
 
+When synchronous post-chat curation has a recoverable failure, the completed
+assistant reply is still returned and the failure is recorded as
+`memory/post_chat_curation_failed` with the turn correlation context; it is not
+silently presented as an ordinary no-op.
+
 The current conversation graph is intentionally small: it preserves the CLI and daemon protocol boundary while keeping room for later persona subgraphs and richer agent routing.
 
 ## Daemon

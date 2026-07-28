@@ -10,6 +10,7 @@ from nuself.agent.chat import ChatAgent
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.server import DaemonState, handle_request
 from nuself.llm import ChatMessage
+from nuself.logs import read_log_events
 from nuself.memory.curator import MemoryCuratorResult
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.runtime.workers import OwnedWorker
@@ -123,6 +124,19 @@ class FakeChangedCurator:
         )
 
 
+class RecoverableFailingCurator:
+    def run_once(self, **kwargs: object) -> MemoryCuratorResult:
+        try:
+            raise RuntimeError("curator backend unavailable")
+        except RuntimeError as exc:
+            raise RuntimeError("post-chat curation failed") from exc
+
+
+class UnexpectedFailingCurator:
+    def run_once(self, **kwargs: object) -> MemoryCuratorResult:
+        raise ValueError("curator invariant broken")
+
+
 def test_daemon_chat_runs_memory_curator_after_reply(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     state.memory_curator = FakeChangedCurator()  # type: ignore[assignment]
@@ -132,6 +146,52 @@ def test_daemon_chat_runs_memory_curator_after_reply(tmp_path: Path) -> None:
 
     assert response.status == "ok"
     assert response.payload["memory_update"] == "processed=2 created=1 updated=0 ignored=0"
+
+
+def test_daemon_chat_observes_recoverable_curator_failure(
+    tmp_path: Path,
+) -> None:
+    state = DaemonState(tmp_path)
+    state.memory_curator = RecoverableFailingCurator()  # type: ignore[assignment]
+    request = DaemonRequest(
+        type="chat",
+        payload={
+            "message": "remember this",
+            "thread_id": "project",
+            "turn_id": "turn-curator-failure",
+        },
+        request_id="chat-curator-failure",
+    )
+
+    response = handle_request(request, state)
+
+    assert response.status == "ok"
+    assert "memory_update" not in response.payload
+    event = read_log_events(project_root=tmp_path, component="memory")[-1]
+    assert event.event == "post_chat_curation_failed"
+    assert event.status == "degraded"
+    assert event.error == (
+        "post-chat curation failed <- curator backend unavailable"
+    )
+    assert event.request_id == "chat-curator-failure"
+    assert event.thread_id == "project"
+    assert event.turn_id == "turn-curator-failure"
+    assert event.source == "daemon"
+
+
+def test_daemon_chat_does_not_degrade_unexpected_curator_failure(
+    tmp_path: Path,
+) -> None:
+    state = DaemonState(tmp_path)
+    state.memory_curator = UnexpectedFailingCurator()  # type: ignore[assignment]
+    request = DaemonRequest(
+        type="chat",
+        payload={"message": "remember this"},
+        request_id="chat-curator-invariant",
+    )
+
+    with pytest.raises(ValueError, match="curator invariant broken"):
+        handle_request(request, state)
 
 
 def test_daemon_ping_returns_pong(tmp_path: Path) -> None:

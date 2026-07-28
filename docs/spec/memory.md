@@ -62,6 +62,14 @@ Rules:
 2. After every daemon chat turn.
 3. Manual CLI: `nuself memory update`.
 
+Post-chat curation is a secondary effect after the assistant reply has already
+been produced and persisted. A declared recoverable `RuntimeError` must not
+replace that reply: the daemon returns it with no `memory_update` and emits
+`memory/post_chat_curation_failed` through the shared observability boundary.
+The event inherits the chat request, thread, turn, and source context and
+preserves the compact exception chain. Undeclared storage or implementation
+errors are not degraded and continue to the daemon request backstop.
+
 ### Per-Thread Cursor
 
 - Load cursor from `private/memory/cursors/{thread_id}.json`.

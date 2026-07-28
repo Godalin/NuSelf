@@ -40,6 +40,7 @@ from nuself.logs import (
 )
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.runtime.handlers import HandlerRegistry, UnknownHandlerError
+from nuself.runtime.observability import run_observed_best_effort
 
 
 class DaemonRequestState(Protocol):
@@ -161,6 +162,7 @@ def _handle_chat(
             )
             memory_update = _run_memory_curator_once(
                 state.memory_curator,
+                project_root=state.project_root,
                 source_trace_id=result.trace_id,
             )
         except RuntimeError as exc:
@@ -286,12 +288,20 @@ def _handle_activity_close(
 def _run_memory_curator_once(
     memory_curator: MemoryCurator,
     *,
+    project_root: Path,
     source_trace_id: str | None = None,
 ) -> MemoryCuratorResult | None:
-    try:
-        return memory_curator.run_once(source_trace_id=source_trace_id)
-    except RuntimeError:
-        return None
+    return run_observed_best_effort(
+        lambda: memory_curator.run_once(
+            source_trace_id=source_trace_id
+        ),
+        component="memory",
+        event="post_chat_curation_failed",
+        message="post-chat memory curation failed",
+        project_root=project_root,
+        metadata={"source_trace_id": source_trace_id},
+        errors=(RuntimeError,),
+    )
 
 
 def _format_exception_chain(exc: BaseException) -> str:

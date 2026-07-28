@@ -54,6 +54,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Recoverable post-chat memory-curator failures now emit an inherited-context
+  `memory/post_chat_curation_failed` event while preserving the completed chat
+  reply. They no longer silently appear as an ordinary "no memory change".
 - Reason export state and artifacts, chat threads, and persona prompt records
   now use one shared unique-temp atomic writer. Fixed-name temporary-file
   collisions and subsystem-specific failure cleanup can no longer expose

@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make `nuself.storage` the sole atomic file-write boundary for runtime JSON and
-text state so subsystems cannot diverge on collision and cleanup behavior.
+Make daemon post-chat memory curation use the shared observability boundary so
+recoverable curation failures cannot silently masquerade as "no memory change".
 
 ## Active Branch
 
@@ -14,33 +14,34 @@ text state so subsystems cannot diverge on collision and cleanup behavior.
 
 ## Ordered Work
 
-1. [x] Audit duplicate atomic writers and direct runtime-state writes.
-2. [x] Specify one shared unique-temp, cleanup-on-failure write contract.
-3. [x] Move reason manifest, progress, chunk, and combined output writes to the
-   shared boundary.
-4. [x] Move chat thread and persona prompt JSON writes to the shared boundary.
-5. [x] Update daemon export recovery to import the neutral storage writer.
-6. [x] Remove all subsystem-local atomic JSON writer implementations.
-7. [x] Run focused/full tests, type checking, and formatting checks.
-8. [x] Update user-facing docs/changelog and commit this stage.
+1. [x] Trace daemon chat reply and synchronous curator failure behavior.
+2. [x] Specify post-chat curation as an observable secondary effect.
+3. [x] Replace the private RuntimeError catch with
+   `run_observed_best_effort(errors=(RuntimeError,))`.
+4. [x] Preserve successful replies and `memory_update=None` on recoverable
+   curation failure.
+5. [x] Preserve propagation of undeclared exceptions to the daemon request
+   backstop.
+6. [x] Run focused/full tests, type checking, and formatting checks.
+7. [x] Update user-facing docs/changelog and commit this stage.
 
 ## Out Of Scope
 
-- Changing persisted JSON schemas or record identities.
-- Changing reason output composition, chunking, or retry policy.
-- Changing thread locking or persona name-index rebuild behavior.
-- Making explicit user-selected export/transcript destinations atomic.
+- Changing curator decisions, cursor behavior, or auto-accept policy.
+- Retrying curation inside the chat request.
+- Making the curator authoritative for chat reply success.
+- Changing background curator worker behavior.
 
 ## Completion Evidence
 
-- All migrated writes preserve their exact serialized content and paths.
-- Every write uses a unique sibling temporary file and atomic replacement.
-- A failed write preserves an existing destination and removes its temporary
-  file.
-- Concurrent writes do not share a fixed temporary path.
-- `rg` finds no local `write_json_atomic` definition outside `nuself.storage`
-  and no direct runtime-state writes in the migrated modules.
-- Focused storage/reason/thread/persona tests, full pytest, Pyright, and
+- A post-chat `RuntimeError` still returns the completed chat response with no
+  memory update.
+- The same failure emits `memory/post_chat_curation_failed` with inherited
+  request, thread, turn, and source context plus a compact error chain.
+- An undeclared exception is not swallowed and reaches the daemon connection
+  backstop.
+- No private try/except wrapper remains around the post-chat curator call.
+- Focused daemon/observability tests, full pytest, Pyright, and
   `git diff --check` pass.
 
 ## Publication
@@ -49,5 +50,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit remaining explicit exports and user artifact writes for documented
-partial-file semantics.
+Audit remaining private silent secondary-effect catches, beginning with CLI
+persona lifecycle trace recording.
