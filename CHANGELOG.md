@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Reason export job listing now reports and isolates malformed manifests
+  without exposing their contents. Direct lookup no longer turns corrupt
+  manifests or authoritative filesystem failures into an ordinary not-found
+  result.
 - Notification outbox timestamps are now decoded as timezone-aware ISO-8601
   values. Malformed records are reported and isolated during listing, invalid
   retention arguments are rejected, and dismissed-entry deletion failures are

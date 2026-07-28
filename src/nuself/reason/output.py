@@ -9,8 +9,9 @@ import shutil
 import subprocess
 import textwrap
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
-from typing import Callable, Sequence, cast
+from typing import Callable, Sequence, TypeVar, cast
 from uuid import uuid4
 
 from nuself.clock import utc_now, utc_now_iso
@@ -19,13 +20,56 @@ from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
 from nuself.reason.repository import ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.runtime.jobs import JobMessage, JobSink
-from nuself.runtime.observability import run_observed_best_effort
+from nuself.runtime.observability import (
+    report_corrupt_record,
+    run_observed_best_effort,
+)
 from nuself.storage import write_json_atomic, write_text_atomic
 from nuself.workspace import PrivateWorkspaceStore
 
 REASON_OUTPUT_STORAGE_VERSION = "NuSelfReasonOutput/v1"
 REASON_OUTPUT_MODES: tuple[str, ...] = ("outline", "narrative", "report", "summary")
 REASON_OUTPUT_FORMATS: tuple[str, ...] = ("markdown",)
+REASON_OUTPUT_STATUSES: tuple[str, ...] = ("planned", "complete", "failed")
+_SECTION_FIELDS = frozenset(
+    {
+        "index",
+        "title",
+        "focus",
+        "step_ids",
+        "source_start_index",
+        "source_end_index",
+        "summary",
+        "created_at",
+    }
+)
+_CHUNK_FIELDS = frozenset(
+    {"index", "filename", "step_ids", "created_at"}
+)
+_MANIFEST_FIELDS = frozenset(
+    {
+        "schema",
+        "job_id",
+        "thread_id",
+        "mode",
+        "output_format",
+        "source_start_index",
+        "source_end_index",
+        "source_step_ids",
+        "segment_size",
+        "status",
+        "combined_filename",
+        "progress_filename",
+        "created_at",
+        "updated_at",
+        "sections",
+        "chunks",
+        "attempts",
+        "last_error",
+        "last_attempt_at",
+    }
+)
+_DecodedRecord = TypeVar("_DecodedRecord")
 
 @dataclass(frozen=True)
 class ReasonOutputSection:
@@ -52,15 +96,16 @@ class ReasonOutputSection:
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> ReasonOutputSection:
+        _expect_exact_fields(data, _SECTION_FIELDS, label="reason output section")
         return cls(
             index=_expect_int(data, "index"),
-            title=_expect_str(data, "title"),
-            focus=_expect_str(data, "focus"),
-            step_ids=tuple(str(item) for item in _expect_list(data, "step_ids") if isinstance(item, str)),
+            title=_expect_nonblank_str(data, "title"),
+            focus=_expect_nonblank_str(data, "focus"),
+            step_ids=_expect_str_tuple(data, "step_ids"),
             source_start_index=_expect_int(data, "source_start_index"),
             source_end_index=_expect_int(data, "source_end_index"),
             summary=_expect_str(data, "summary"),
-            created_at=_optional_str(data, "created_at") or utc_now_iso(),
+            created_at=_expect_aware_iso(data, "created_at"),
         )
 
 
@@ -87,11 +132,12 @@ class ReasonOutputChunk:
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> ReasonOutputChunk:
+        _expect_exact_fields(data, _CHUNK_FIELDS, label="reason output chunk")
         return cls(
             index=_expect_int(data, "index"),
-            filename=_expect_str(data, "filename"),
-            step_ids=tuple(str(item) for item in _expect_list(data, "step_ids") if isinstance(item, str)),
-            created_at=_optional_str(data, "created_at") or utc_now_iso(),
+            filename=_expect_nonblank_str(data, "filename"),
+            step_ids=_expect_str_tuple(data, "step_ids"),
+            created_at=_expect_aware_iso(data, "created_at"),
         )
 
 
@@ -141,33 +187,64 @@ class ReasonOutputManifest:
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> ReasonOutputManifest:
+        _expect_exact_fields(data, _MANIFEST_FIELDS, label="reason output manifest")
+        schema = _expect_str(data, "schema")
+        if schema != REASON_OUTPUT_STORAGE_VERSION:
+            raise ValueError("reason output manifest schema is unsupported")
+        mode = _expect_str(data, "mode")
+        if mode not in REASON_OUTPUT_MODES:
+            raise ValueError("reason output manifest mode is invalid")
+        output_format = _expect_str(data, "output_format")
+        if output_format not in REASON_OUTPUT_FORMATS:
+            raise ValueError("reason output manifest output format is invalid")
+        status = _expect_str(data, "status")
+        if status not in REASON_OUTPUT_STATUSES:
+            raise ValueError("reason output manifest status is invalid")
+        source_start_index = _expect_int(data, "source_start_index")
+        source_end_index = _optional_int(data, "source_end_index")
+        segment_size = _expect_int(data, "segment_size")
+        attempts = _expect_int(data, "attempts")
+        if source_start_index < 0:
+            raise ValueError("source_start_index must be non-negative")
+        if source_end_index is not None and source_end_index < source_start_index:
+            raise ValueError("source_end_index must not precede source_start_index")
+        if segment_size < 1:
+            raise ValueError("segment_size must be positive")
+        if attempts < 0:
+            raise ValueError("attempts must be non-negative")
         return cls(
-            job_id=_expect_str(data, "job_id"),
-            thread_id=_expect_str(data, "thread_id"),
-            mode=_expect_str(data, "mode"),
-            output_format=_expect_str(data, "output_format"),
-            source_start_index=_expect_int(data, "source_start_index"),
-            source_end_index=_optional_int(data, "source_end_index"),
-            source_step_ids=tuple(str(item) for item in _expect_list(data, "source_step_ids") if isinstance(item, str)),
-            segment_size=_expect_int(data, "segment_size"),
-            status=_optional_str(data, "status") or "planned",
-            combined_filename=_optional_str(data, "combined_filename") or "combined.md",
-            progress_filename=_optional_str(data, "progress_filename") or "progress.json",
-            created_at=_optional_str(data, "created_at") or utc_now_iso(),
-            updated_at=_optional_str(data, "updated_at") or utc_now_iso(),
-            sections=tuple(
-                ReasonOutputSection.from_wire(cast(dict[str, object], section))
-                for section in _expect_list(data, "sections")
-                if isinstance(section, dict)
-            ) if "sections" in data else (),
-            chunks=tuple(
-                ReasonOutputChunk.from_wire(cast(dict[str, object], chunk))
-                for chunk in _expect_list(data, "chunks")
-                if isinstance(chunk, dict)
+            job_id=_expect_nonblank_str(data, "job_id"),
+            thread_id=_expect_nonblank_str(data, "thread_id"),
+            mode=mode,
+            output_format=output_format,
+            source_start_index=source_start_index,
+            source_end_index=source_end_index,
+            source_step_ids=_expect_str_tuple(data, "source_step_ids"),
+            segment_size=segment_size,
+            status=status,
+            combined_filename=_expect_nonblank_str(
+                data,
+                "combined_filename",
             ),
-            attempts=_optional_int(data, "attempts") or 0,
+            progress_filename=_expect_nonblank_str(
+                data,
+                "progress_filename",
+            ),
+            created_at=_expect_aware_iso(data, "created_at"),
+            updated_at=_expect_aware_iso(data, "updated_at"),
+            sections=_expect_object_tuple(
+                data,
+                "sections",
+                ReasonOutputSection.from_wire,
+            ),
+            chunks=_expect_object_tuple(
+                data,
+                "chunks",
+                ReasonOutputChunk.from_wire,
+            ),
+            attempts=attempts,
             last_error=_optional_str(data, "last_error"),
-            last_attempt_at=_optional_str(data, "last_attempt_at"),
+            last_attempt_at=_optional_aware_iso(data, "last_attempt_at"),
         )
 
     def with_updates(
@@ -274,11 +351,22 @@ class ReasonOutputService:
             if not job_dir.is_dir():
                 continue
             manifest_path = job_dir / "manifest.json"
-            if not manifest_path.exists():
+            try:
+                manifest = self._read_manifest(manifest_path)
+                if (
+                    manifest.job_id != job_dir.name
+                    or manifest.thread_id != thread_id
+                ):
+                    raise ValueError(
+                        "reason output manifest identity does not match its path"
+                    )
+            except FileNotFoundError as exc:
+                self._report_corrupt_manifest(exc, job_dir.name)
                 continue
-            manifest = self._read_manifest(manifest_path)
-            if manifest is not None:
-                jobs.append(manifest)
+            except (json.JSONDecodeError, ValueError) as exc:
+                self._report_corrupt_manifest(exc, job_dir.name)
+                continue
+            jobs.append(manifest)
         return sorted(jobs, key=lambda m: (m.created_at, m.job_id))
 
     def get_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
@@ -288,11 +376,15 @@ class ReasonOutputService:
             manifest_path = self._job_paths(thread_id, job_id).manifest
         except ValueError as exc:
             raise ReasonNotFound(job_id) from exc
-        if manifest_path.exists():
+        try:
             manifest = self._read_manifest(manifest_path)
-            if manifest is not None and manifest.job_id == job_id:
-                return manifest
-        raise ReasonNotFound(job_id)
+        except FileNotFoundError as exc:
+            raise ReasonNotFound(job_id) from exc
+        if manifest.job_id != job_id or manifest.thread_id != thread_id:
+            raise ValueError(
+                "reason output manifest identity does not match its path"
+            )
+        return manifest
 
     def plan_job(
         self,
@@ -634,17 +726,24 @@ class ReasonOutputService:
         )
         return updated
 
-    def _read_manifest(self, path: Path) -> ReasonOutputManifest | None:
-        try:
-            raw: object = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError, ValueError):
-            return None
+    def _read_manifest(self, path: Path) -> ReasonOutputManifest:
+        raw: object = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
-            return None
-        try:
-            return ReasonOutputManifest.from_wire(cast(dict[str, object], raw))
-        except ValueError:
-            return None
+            raise ValueError("reason output manifest must be a JSON object")
+        return ReasonOutputManifest.from_wire(cast(dict[str, object], raw))
+
+    def _report_corrupt_manifest(
+        self,
+        exc: Exception,
+        job_id: str,
+    ) -> None:
+        report_corrupt_record(
+            exc,
+            component="reasoning",
+            collection="reason_output_manifests",
+            record_id=job_id,
+            project_root=self._project_root,
+        )
 
     def _write_manifest(self, path: Path, manifest: ReasonOutputManifest) -> None:
         write_json_atomic(path, manifest.to_wire())
@@ -990,6 +1089,16 @@ def _expect_str(data: dict[str, object], field_name: str) -> str:
     return value
 
 
+def _expect_nonblank_str(
+    data: dict[str, object],
+    field_name: str,
+) -> str:
+    value = _expect_str(data, field_name)
+    if not value.strip():
+        raise ValueError(f"field '{field_name}' must not be blank")
+    return value
+
+
 def _optional_str(data: dict[str, object], field_name: str) -> str | None:
     value = data.get(field_name)
     if value is None:
@@ -1008,7 +1117,7 @@ def _expect_list(data: dict[str, object], field_name: str) -> list[object]:
 
 def _expect_int(data: dict[str, object], field_name: str) -> int:
     value = data.get(field_name)
-    if not isinstance(value, int):
+    if type(value) is not int:
         raise ValueError(f"field '{field_name}' must be an integer")
     return value
 
@@ -1017,6 +1126,85 @@ def _optional_int(data: dict[str, object], field_name: str) -> int | None:
     value = data.get(field_name)
     if value is None:
         return None
-    if not isinstance(value, int):
+    if type(value) is not int:
         raise ValueError(f"field '{field_name}' must be an integer or null")
     return value
+
+
+def _expect_exact_fields(
+    data: dict[str, object],
+    fields: frozenset[str],
+    *,
+    label: str,
+) -> None:
+    present = set(data)
+    missing = sorted(fields - present)
+    unknown = sorted(present - fields)
+    if missing or unknown:
+        raise ValueError(
+            f"{label} fields are invalid "
+            f"(missing={missing!r}, unknown={unknown!r})"
+        )
+
+
+def _expect_str_tuple(
+    data: dict[str, object],
+    field_name: str,
+) -> tuple[str, ...]:
+    values = _expect_list(data, field_name)
+    result: list[str] = []
+    for value in values:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(
+                f"field '{field_name}' must contain non-blank strings"
+            )
+        result.append(value)
+    return tuple(result)
+
+
+def _expect_object_tuple(
+    data: dict[str, object],
+    field_name: str,
+    decoder: Callable[[dict[str, object]], _DecodedRecord],
+) -> tuple[_DecodedRecord, ...]:
+    decoded: list[_DecodedRecord] = []
+    for value in _expect_list(data, field_name):
+        if not isinstance(value, dict):
+            raise ValueError(
+                f"field '{field_name}' must contain objects"
+            )
+        decoded.append(
+            decoder(cast(dict[str, object], value))
+        )
+    return tuple(decoded)
+
+
+def _expect_aware_iso(
+    data: dict[str, object],
+    field_name: str,
+) -> str:
+    value = _expect_nonblank_str(data, field_name)
+    _parse_aware_iso(value, field_name=field_name)
+    return value
+
+
+def _optional_aware_iso(
+    data: dict[str, object],
+    field_name: str,
+) -> str | None:
+    value = _optional_str(data, field_name)
+    if value is not None:
+        _parse_aware_iso(value, field_name=field_name)
+    return value
+
+
+def _parse_aware_iso(value: str, *, field_name: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(
+            f"field '{field_name}' must be an ISO-8601 timestamp"
+        ) from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"field '{field_name}' must include a timezone")
+    return parsed

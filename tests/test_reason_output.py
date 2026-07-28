@@ -7,10 +7,15 @@ import json
 
 import pytest
 
-from nuself.reason.output import ReasonOutputService
-from nuself.reason.output import ReasonOutputPaths
-from nuself.reason.repository import ReasonRepository
+from nuself.logs import read_log_events
+from nuself.reason.output import (
+    ReasonOutputManifest,
+    ReasonOutputPaths,
+    ReasonOutputService,
+)
+from nuself.reason.repository import ReasonNotFound, ReasonRepository
 from nuself.reason.service import ReasonService
+from nuself.storage import write_json_atomic
 
 
 def _reason_service(tmp_path: Path) -> ReasonService:
@@ -130,6 +135,187 @@ def test_reason_output_list_jobs_and_resume(tmp_path: Path, monkeypatch: pytest.
     resumed = output_service.resume_job(thread.id, manifest.job_id)
     assert resumed.status == "complete"
     assert (output_service.job_paths(thread.id, manifest.job_id).combined).is_file()
+
+
+def test_reason_output_list_isolates_corrupt_manifest_neighbors(
+    tmp_path: Path,
+) -> None:
+    service = _reason_service(tmp_path)
+    thread = service.start_thread("List healthy export jobs")
+    service.advance_thread(
+        thread.id,
+        step=_step(thread.id, "Only", "Only output", "Only delta"),
+    )
+    output_service = ReasonOutputService(
+        project_root=tmp_path,
+        reason_service=service,
+    )
+    healthy = output_service.plan_job(thread.id)
+    export_root = output_service.job_paths(
+        thread.id,
+        healthy.job_id,
+    ).root.parent
+
+    malformed_dir = export_root / "malformed-job"
+    malformed_dir.mkdir()
+    (malformed_dir / "manifest.json").write_text(
+        '{"private":"secret body"',
+        encoding="utf-8",
+    )
+    mismatched_dir = export_root / "mismatched-job"
+    mismatched_dir.mkdir()
+    write_json_atomic(
+        mismatched_dir / "manifest.json",
+        healthy.to_wire(),
+    )
+    missing_dir = export_root / "missing-job"
+    missing_dir.mkdir()
+
+    assert output_service.list_jobs(thread.id) == [healthy]
+
+    events = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="reasoning",
+        )
+        if event.event == "record_decode_failed"
+        and event.metadata is not None
+        and event.metadata.get("collection")
+        == "reason_output_manifests"
+    ]
+    assert {
+        event.metadata["record_id"]
+        for event in events
+        if event.metadata is not None
+    } == {"malformed-job", "mismatched-job", "missing-job"}
+    assert "secret body" not in "\n".join(
+        str(event.to_record()) for event in events
+    )
+
+
+def test_reason_output_get_job_is_strict_for_corrupt_manifest(
+    tmp_path: Path,
+) -> None:
+    service = _reason_service(tmp_path)
+    thread = service.start_thread("Strict export lookup")
+    service.advance_thread(
+        thread.id,
+        step=_step(thread.id, "Only", "Only output", "Only delta"),
+    )
+    output_service = ReasonOutputService(
+        project_root=tmp_path,
+        reason_service=service,
+    )
+    manifest = output_service.plan_job(thread.id)
+    manifest_path = output_service.job_paths(
+        thread.id,
+        manifest.job_id,
+    ).manifest
+    manifest_path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(json.JSONDecodeError):
+        output_service.get_job(thread.id, manifest.job_id)
+    with pytest.raises(ReasonNotFound):
+        output_service.get_job(thread.id, "missing-job")
+
+
+def test_reason_output_manifest_io_failures_propagate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _reason_service(tmp_path)
+    thread = service.start_thread("Visible export storage failure")
+    service.advance_thread(
+        thread.id,
+        step=_step(thread.id, "Only", "Only output", "Only delta"),
+    )
+    output_service = ReasonOutputService(
+        project_root=tmp_path,
+        reason_service=service,
+    )
+    manifest = output_service.plan_job(thread.id)
+    manifest_path = output_service.job_paths(
+        thread.id,
+        manifest.job_id,
+    ).manifest
+    original_read_text = Path.read_text
+
+    def fail_manifest_read(
+        path: Path,
+        encoding: str | None = None,
+        errors: str | None = None,
+    ) -> str:
+        if path == manifest_path:
+            raise PermissionError("manifest permission denied")
+        return original_read_text(
+            path,
+            encoding=encoding,
+            errors=errors,
+        )
+
+    monkeypatch.setattr(Path, "read_text", fail_manifest_read)
+
+    with pytest.raises(PermissionError, match="manifest permission denied"):
+        output_service.list_jobs(thread.id)
+    with pytest.raises(PermissionError, match="manifest permission denied"):
+        output_service.get_job(thread.id, manifest.job_id)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    (
+        ("schema", "NuSelfReasonOutput/v2"),
+        ("status", "unknown"),
+        ("created_at", "2026-01-01T00:00:00"),
+        ("attempts", True),
+        ("sections", ["not-an-object"]),
+    ),
+)
+def test_reason_output_manifest_rejects_invalid_wire_fields(
+    tmp_path: Path,
+    field_name: str,
+    value: object,
+) -> None:
+    service = _reason_service(tmp_path)
+    thread = service.start_thread("Strict manifest schema")
+    service.advance_thread(
+        thread.id,
+        step=_step(thread.id, "Only", "Only output", "Only delta"),
+    )
+    manifest = ReasonOutputService(
+        project_root=tmp_path,
+        reason_service=service,
+    ).plan_job(thread.id)
+    wire = manifest.to_wire()
+    wire[field_name] = value
+
+    with pytest.raises(ValueError):
+        ReasonOutputManifest.from_wire(wire)
+
+
+def test_reason_output_manifest_rejects_shape_drift(
+    tmp_path: Path,
+) -> None:
+    service = _reason_service(tmp_path)
+    thread = service.start_thread("Strict manifest shape")
+    service.advance_thread(
+        thread.id,
+        step=_step(thread.id, "Only", "Only output", "Only delta"),
+    )
+    manifest = ReasonOutputService(
+        project_root=tmp_path,
+        reason_service=service,
+    ).plan_job(thread.id)
+    wire = manifest.to_wire()
+    del wire["updated_at"]
+    wire["unexpected"] = True
+
+    with pytest.raises(
+        ValueError,
+        match="missing=.*updated_at.*unknown=.*unexpected",
+    ):
+        ReasonOutputManifest.from_wire(wire)
 
 
 def _step(thread_id: str, summary: str, output: str, delta: str):

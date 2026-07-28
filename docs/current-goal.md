@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The strict symmetric runtime envelope codec stage is complete; no
+Idle. The strict reason export manifest read-boundary stage is complete; no
 implementation change is currently active.
 
 ## Active Branch
@@ -14,7 +14,8 @@ implementation change is currently active.
 
 ## Ordered Work
 
-No active implementation steps. Completed work is recorded in Git.
+No active implementation steps. Completed work is recorded in Git and
+`CHANGELOG.md`.
 
 ## Out Of Scope
 
@@ -30,5 +31,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit remaining silent exception handlers against the shared authoritative,
-best-effort, and corrupt-record boundaries.
+Harden persisted reason-thread timestamps so malformed cooldown state cannot
+silently make a thread scheduler-eligible.

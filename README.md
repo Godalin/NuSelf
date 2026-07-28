@@ -267,8 +267,10 @@ Failures in secondary audit or thought-trace recording appear as structured
 `*_failed` warnings without changing the result of the primary operation.
 Malformed stored records are isolated during collection reads and reported as
 payload-safe `record_decode_failed` warnings.
-Invalid reason-export manifests stop composition safely; invalid progress and
-retry-state persistence failures are reported in daemon logs.
+Invalid reason-export manifests stop composition safely. Job listing reports
+and isolates malformed manifests without exposing their contents, while direct
+lookup and filesystem failures remain visible; invalid progress and retry-state
+persistence failures are reported in daemon logs.
 
 Check system health:
 

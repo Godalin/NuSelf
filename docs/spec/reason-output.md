@@ -189,6 +189,20 @@ Progress is a read-friendly summary of the manifest state. The manifest is alway
 
 ### Recovery read contract
 
+- `ReasonOutputManifest.from_wire()` strictly requires the complete version-1
+  manifest shape written by `to_wire()`, including the exact
+  `NuSelfReasonOutput/v1` schema marker. Missing, unknown, wrongly typed, or
+  unsupported-version fields are corrupt state; the decoder never fills
+  persisted control fields from current defaults.
+- `ReasonOutputService.list_jobs()` treats each job directory as an independent
+  record. A missing, malformed, non-object, schema-invalid, or identity-mismatched
+  manifest emits one payload-safe `reasoning/record_decode_failed` diagnostic
+  and is omitted while healthy neighboring jobs remain visible.
+- `ReasonOutputService.get_job()` is a direct authoritative lookup. A missing
+  manifest raises `ReasonNotFound`; corrupt content or identity mismatch raises
+  a decode error. Non-missing filesystem failures such as permission errors
+  propagate from both list and direct lookup and are never converted into an
+  empty result or not-found response.
 - Startup reconciliation and dequeue processing decode `manifest.json` through
   `ReasonOutputManifest.from_wire()` before inspecting status or identity.
 - Missing, unreadable, non-object, or schema-invalid manifests are corrupt job
