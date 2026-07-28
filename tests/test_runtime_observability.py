@@ -20,6 +20,16 @@ def test_format_exception_chain_preserves_unique_cause_messages() -> None:
         assert format_exception_chain(exc) == "outer <- root"
 
 
+def test_format_exception_chain_respects_suppressed_context() -> None:
+    try:
+        try:
+            raise OSError("private path")
+        except OSError:
+            raise RuntimeError("safe summary") from None
+    except RuntimeError as exc:
+        assert format_exception_chain(exc) == "safe summary"
+
+
 def test_best_effort_returns_none_and_writes_structured_failure(
     tmp_path: Path,
 ) -> None:

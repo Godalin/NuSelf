@@ -223,6 +223,11 @@ Recoverable CLI persona lifecycle trace failures are recorded as
 `persona/trace_recording_failed` without reversing the already-successful
 create, enable, or disable mutation.
 
+Missing `private/email.toml` still means email delivery is intentionally
+disabled. If the file exists but is unreadable or invalid, NuSelf records a
+payload-safe `outbox/email_config_invalid` diagnostic rather than silently
+treating it as absent.
+
 `private/threads/default.json` is shared working memory for the current NuSelf mind. Multiple terminal attachments to the same daemon share it. The thread store serializes writes with a lock so concurrent turns do not overwrite each other.
 
 The memory curator runs in the background in the daemon and also runs when interactive chat exits. It uses an agent to decide whether new working-memory turns should create, update, or ignore long-term memory. Trivial chat is ignored, similar existing memories should be updated instead of duplicated, and raw chat transcripts are rejected. By default, accepted candidates are automatically promoted to durable memory entries (`auto_accept=True`); validation failures leave the recoverable candidate pending and emit a diagnostic instead of disappearing silently. Per-thread curator cursors are written atomically; a malformed cursor stops that curation run with a corruption diagnostic instead of replaying old conversation history. A separate memory optimizer can be run manually, less frequently, to consolidate messy existing entries. Update events are written to `private/logs/memory.log`, and interactive chat prints compact activity lines for new chat, daemon, and memory events.

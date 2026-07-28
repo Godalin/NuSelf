@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make CLI persona lifecycle trace recording use the shared observability
-boundary so a successful persona mutation cannot lose its trace failure silently.
+Make `private/email.toml` decoding strict and observable so present-but-invalid
+notification configuration cannot silently look identical to missing config.
 
 ## Active Branch
 
@@ -14,32 +14,34 @@ boundary so a successful persona mutation cannot lose its trace failure silently
 
 ## Ordered Work
 
-1. [x] Trace CLI create/enable/disable mutation and trace ordering.
-2. [x] Specify lifecycle trace recording as an observable secondary effect.
-3. [x] Replace the private RuntimeError catch with
-   `run_observed_best_effort(errors=(RuntimeError,))`.
-4. [x] Preserve successful command status and output after a recoverable trace
-   failure.
-5. [x] Preserve propagation of unknown actions and undeclared exceptions.
-6. [x] Run focused/full tests, type checking, and formatting checks.
-7. [x] Update user-facing docs/changelog and commit this stage.
+1. [x] Audit email config parsing and delivery fallback behavior.
+2. [x] Specify missing versus invalid configuration semantics.
+3. [x] Strictly validate section shapes, required non-empty strings, port range,
+   TLS boolean, and paired optional credentials.
+4. [x] Convert declared file/TOML/schema failures into one payload-safe
+   `email_config_invalid` event and disable the adapter.
+5. [x] Preserve silent normal behavior only when the file is absent.
+6. [x] Preserve propagation of undeclared implementation failures.
+7. [x] Run focused/full tests, type checking, and formatting checks.
+8. [x] Update user-facing docs/changelog and commit this stage.
 
 ## Out Of Scope
 
-- Changing persona CRUD, confirmation, handle, or output behavior.
-- Adding delete trace semantics.
-- Changing agent-facing persona tool trace behavior in this same commit.
-- Broadly suppressing all trace implementation failures.
+- Changing SMTP send, TLS, login, or retry mechanics.
+- Moving email configuration into the main YAML config.
+- Logging email addresses, credentials, or raw TOML content.
+- Retrying configuration reads after adapter construction.
 
 ## Completion Evidence
 
-- A create/enable/disable `RuntimeError` still returns command success after the
-  persona mutation.
-- The same failure emits `persona/trace_recording_failed` with persona identity,
-  action, and compact exception chain.
-- An unknown lifecycle action or undeclared exception is not swallowed.
-- No private try/except wrapper remains around CLI lifecycle trace recording.
-- Focused CLI/observability tests, full pytest, Pyright, and
+- Missing `private/email.toml` produces no config-invalid event.
+- A valid config preserves current dry-run and SMTP behavior.
+- Syntax, IO, section, required-field, port, TLS, and credential-pair failures
+  produce one `outbox/email_config_invalid` event without raw values.
+- Delivery remains disabled and continues to return `False` after invalid
+  config, with the existing `email_no_config` delivery event.
+- Undeclared exceptions are not swallowed.
+- Focused email/observability tests, full pytest, Pyright, and
   `git diff --check` pass.
 
 ## Publication
@@ -48,5 +50,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit email notification configuration loading and outbox timestamp cleanup for
-silent parse failures.
+Audit outbox timestamp cleanup and delivery state transitions for silent
+per-record parse failures.

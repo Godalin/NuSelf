@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from nuself.logs import read_log_events
 from nuself.notification import OutboxEntry
 from nuself.notification.email import EmailNotificationAdapter
 
@@ -39,6 +40,7 @@ def test_dry_run_returns_true_and_logs(tmp_path: Path, entry: OutboxEntry) -> No
 
 def test_no_config_returns_false(tmp_path: Path, entry: OutboxEntry) -> None:
     adapter = EmailNotificationAdapter(tmp_path, dry_run=False)
+    assert read_log_events(project_root=tmp_path, component="outbox") == []
     assert adapter.send(entry) is False
 
 
@@ -100,4 +102,96 @@ def test_load_config_ignores_invalid_port_type(tmp_path: Path, entry: OutboxEntr
         encoding="utf-8",
     )
     adapter = EmailNotificationAdapter(tmp_path, dry_run=False)
+    event = read_log_events(project_root=tmp_path, component="outbox")[-1]
+    assert event.event == "email_config_invalid"
+    assert event.status == "degraded"
+    assert event.metadata == {"record": "email.toml"}
     assert adapter.send(entry) is False
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        'secret = "do-not-log"\nthis is not toml',
+        (
+            'smtp = "not-a-table"\n'
+            '[notification]\nfrom = "from@example.com"\n'
+            'to = "to@example.com"\n'
+        ),
+        (
+            '[smtp]\nhost = ""\nport = 25\n'
+            '[notification]\nfrom = "from@example.com"\n'
+            'to = "to@example.com"\n'
+        ),
+        (
+            '[smtp]\nhost = "smtp.example.com"\nport = true\n'
+            '[notification]\nfrom = "from@example.com"\n'
+            'to = "to@example.com"\n'
+        ),
+        (
+            '[smtp]\nhost = "smtp.example.com"\nport = 65536\n'
+            '[notification]\nfrom = "from@example.com"\n'
+            'to = "to@example.com"\n'
+        ),
+        (
+            '[smtp]\nhost = "smtp.example.com"\nport = 25\n'
+            'use_tls = "yes"\n'
+            '[notification]\nfrom = "from@example.com"\n'
+            'to = "to@example.com"\n'
+        ),
+        (
+            '[smtp]\nhost = "smtp.example.com"\nport = 25\n'
+            'user = "user"\n'
+            '[notification]\nfrom = "from@example.com"\n'
+            'to = "to@example.com"\n'
+        ),
+    ],
+)
+def test_present_invalid_config_is_observable_without_values(
+    tmp_path: Path,
+    content: str,
+) -> None:
+    config_path = tmp_path / "private" / "email.toml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(content, encoding="utf-8")
+
+    adapter = EmailNotificationAdapter(tmp_path)
+
+    assert adapter._config is None  # pyright: ignore[reportPrivateUsage]
+    events = read_log_events(project_root=tmp_path, component="outbox")
+    assert len(events) == 1
+    assert events[0].event == "email_config_invalid"
+    assert events[0].metadata == {"record": "email.toml"}
+    assert "do-not-log" not in (events[0].error or "")
+
+
+def test_present_unreadable_config_is_observable(tmp_path: Path) -> None:
+    config_path = tmp_path / "private" / "email.toml"
+    config_path.mkdir(parents=True)
+
+    adapter = EmailNotificationAdapter(tmp_path)
+
+    assert adapter._config is None  # pyright: ignore[reportPrivateUsage]
+    event = read_log_events(project_root=tmp_path, component="outbox")[-1]
+    assert event.event == "email_config_invalid"
+    assert event.error == "email configuration could not be read"
+
+
+def test_undeclared_config_decoder_failure_propagates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "private" / "email.toml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("", encoding="utf-8")
+
+    def fail(config_path: Path) -> dict[str, object]:
+        raise TypeError("decoder invariant broken")
+
+    monkeypatch.setattr(
+        "nuself.notification.email._decode_email_config",
+        fail,
+    )
+
+    with pytest.raises(TypeError, match="decoder invariant broken"):
+        EmailNotificationAdapter(tmp_path)

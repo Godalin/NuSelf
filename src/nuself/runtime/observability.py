@@ -26,7 +26,12 @@ def format_exception_chain(exc: BaseException) -> str:
         message = str(current).strip()
         if message and message not in messages:
             messages.append(message)
-        current = current.__cause__ or current.__context__
+        if current.__cause__ is not None:
+            current = current.__cause__
+        elif current.__suppress_context__:
+            current = None
+        else:
+            current = current.__context__
     return " <- ".join(messages) if messages else exc.__class__.__name__
 
 

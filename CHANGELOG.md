@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Present-but-invalid `private/email.toml` files now emit a payload-safe
+  `outbox/email_config_invalid` diagnostic. Syntax, section, required-field,
+  port, TLS, and credential-pair errors no longer silently look like an absent
+  configuration file.
 - CLI persona create/enable/disable trace failures now emit
   `persona/trace_recording_failed` after the successful mutation instead of
   being silently discarded.

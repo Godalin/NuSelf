@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 import smtplib
+from collections.abc import Mapping
 from email.message import EmailMessage
 from pathlib import Path
+from typing import cast
 
 from nuself.notification import OutboxEntry
+from nuself.runtime.observability import run_observed_best_effort
+
+EmailConfig = dict[str, str | int | bool]
+
+
+class EmailConfigError(ValueError):
+    """Declared private email configuration failure."""
 
 
 class EmailNotificationAdapter:
@@ -98,37 +107,113 @@ class EmailNotificationAdapter:
 
         return True
 
-    def _load_config(self) -> dict[str, str | int | bool] | None:
+    def _load_config(self) -> EmailConfig | None:
         config_path = self._project_root / "private" / "email.toml"
         if not config_path.exists():
             return None
-        import tomllib
 
-        try:
-            with config_path.open("rb") as f:
-                data = tomllib.load(f)
-        except (OSError, tomllib.TOMLDecodeError):
-            return None
+        return run_observed_best_effort(
+            lambda: _decode_email_config(config_path),
+            component="outbox",
+            event="email_config_invalid",
+            message="Email configuration is invalid; delivery is disabled",
+            project_root=self._project_root,
+            metadata={"record": config_path.name},
+            errors=(EmailConfigError,),
+        )
 
-        smtp = data.get("smtp", {})
-        notification = data.get("notification", {})
-        config: dict[str, str | int | bool] = {}
-        for key in ("host", "user", "password"):
-            val = smtp.get(key)
-            if isinstance(val, str):
-                config[key] = val
-        port = smtp.get("port")
-        if isinstance(port, int):
-            config["port"] = port
-        use_tls = smtp.get("use_tls")
-        if isinstance(use_tls, bool):
-            config["use_tls"] = use_tls
-        for key in ("from", "to"):
-            val = notification.get(key)
-            if isinstance(val, str):
-                config[key] = val
 
-        required = {"host", "port", "from", "to"}
-        if not required.issubset(config.keys()):
-            return None
-        return config
+def _decode_email_config(config_path: Path) -> EmailConfig:
+    """Decode one present email config without exposing values in errors."""
+
+    import tomllib
+
+    try:
+        with config_path.open("rb") as file:
+            data: dict[str, object] = tomllib.load(file)
+    except OSError:
+        raise EmailConfigError(
+            "email configuration could not be read"
+        ) from None
+    except tomllib.TOMLDecodeError:
+        raise EmailConfigError(
+            "email configuration TOML is malformed"
+        ) from None
+
+    smtp = _require_table(data, "smtp")
+    notification = _require_table(data, "notification")
+
+    config: EmailConfig = {
+        "host": _require_nonempty_string(smtp, "host", section="smtp"),
+        "from": _require_nonempty_string(
+            notification,
+            "from",
+            section="notification",
+        ),
+        "to": _require_nonempty_string(
+            notification,
+            "to",
+            section="notification",
+        ),
+    }
+
+    port = smtp.get("port")
+    if type(port) is not int or not 1 <= port <= 65_535:
+        raise EmailConfigError(
+            "email configuration smtp.port must be an integer from 1 to 65535"
+        )
+    config["port"] = port
+
+    use_tls = smtp.get("use_tls")
+    if use_tls is not None:
+        if not isinstance(use_tls, bool):
+            raise EmailConfigError(
+                "email configuration smtp.use_tls must be a boolean"
+            )
+        config["use_tls"] = use_tls
+
+    user = smtp.get("user")
+    password = smtp.get("password")
+    if (user is None) != (password is None):
+        raise EmailConfigError(
+            "email configuration smtp.user and smtp.password must be provided together"
+        )
+    if user is not None and password is not None:
+        if not isinstance(user, str) or not user.strip():
+            raise EmailConfigError(
+                "email configuration smtp.user must be a non-empty string"
+            )
+        if not isinstance(password, str) or not password.strip():
+            raise EmailConfigError(
+                "email configuration smtp.password must be a non-empty string"
+            )
+        config["user"] = user
+        config["password"] = password
+
+    return config
+
+
+def _require_table(
+    data: Mapping[str, object],
+    key: str,
+) -> dict[str, object]:
+    value = data.get(key)
+    if not isinstance(value, dict):
+        raise EmailConfigError(
+            f"email configuration [{key}] must be a table"
+        )
+    return cast(dict[str, object], value)
+
+
+def _require_nonempty_string(
+    data: Mapping[str, object],
+    key: str,
+    *,
+    section: str,
+) -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise EmailConfigError(
+            f"email configuration {section}.{key} must be a non-empty string"
+        )
+    return value

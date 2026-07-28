@@ -69,7 +69,23 @@ any     ──► deleted   [clear(status)]  triggered by: CLI notify clear
 | Adapter | Preconditions | Dry Run | Failure Mode |
 |---|---|---|---|
 | `LogOnlyNotificationAdapter` | None | N/A | Always returns `True`; writes to `outbox.log` |
-| `EmailNotificationAdapter` | `private/email.toml` with `[smtp]` and `[notification]` sections | `dry_run=True` logs intent | Missing config → `False` + `email_no_config`; SMTP error → `False` + `email_failed` |
+| `EmailNotificationAdapter` | `private/email.toml` with `[smtp]` and `[notification]` sections | `dry_run=True` logs intent | Missing config → `False` + `email_no_config`; invalid config → `email_config_invalid`, then delivery returns `False` + `email_no_config`; SMTP error → `False` + `email_failed` |
+
+### Email Configuration
+
+An absent `private/email.toml` is the normal disabled state and emits no
+configuration diagnostic. When the file exists, decoding is strict:
+
+- `[smtp]` and `[notification]` must be TOML tables;
+- `smtp.host`, `notification.from`, and `notification.to` are required
+  non-empty strings;
+- `smtp.port` is an integer from 1 through 65535, excluding booleans;
+- optional `smtp.use_tls` is a boolean;
+- optional non-empty `smtp.user` and `smtp.password` must be present together.
+
+Read failures, malformed TOML, and schema failures emit one payload-safe
+`outbox/email_config_invalid` warning without raw values or credentials, then
+leave the adapter disabled. Undeclared implementation failures propagate.
 | `MacOSNotificationAdapter` | `osascript` on `$PATH` | `dry_run=True` logs intent | Missing `osascript` → returns `True` (graceful degradation); subprocess non-zero → `False` + `macos_failed` |
 
 ## Deep Links
