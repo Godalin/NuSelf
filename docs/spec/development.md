@@ -95,6 +95,22 @@ Rules:
 - Agent skills must be explicit about when tool use is expected, when it is optional, and what claims are invalid without a tool result.
 - Shared renderers should be reused so CLI, REPL, transcripts, and logs stay consistent.
 
+## CLI Module Boundaries
+
+`nuself.cli` remains the composition root and parser entrypoint, but subsystem
+command implementations must move into focused modules as they are touched.
+
+- `cli_daemon.py` owns daemon lifecycle/health handlers and daemon status
+  formatting.
+- Extracted command modules accept `argparse.Namespace` only at the CLI edge;
+  domain work continues to flow through lifecycle, client, service, and
+  repository APIs.
+- Parser command names, exit codes, stdout/stderr placement, and rendered text
+  remain governed by `cli.md` and must not change during a mechanical split.
+- REPL session orchestration remains separate from one-shot command handlers;
+  later extractions should not introduce imports from subsystem command modules
+  back into `nuself.cli`.
+
 ## Memory Architecture Direction
 
 - Prefer open typed memory (`MemoryObject + MemoryTypeDescriptor`) over closed enums.
