@@ -148,6 +148,15 @@ Fallback LLMs that do not implement native tool calling may produce a plain answ
 
 If the active model or test double is not a LangChain chat model, NuSelf may use a deterministic local fallback parser that accepts a plain JSON envelope (`{"answer": ..., "evidence_references": ..., ...}`) or markdown-fenced JSON. This parser must never be a parallel production protocol for tool calling.
 
+The local parser and LangChain message-state compatibility path use the same
+codec. Ordinary non-JSON text may become an answer, but text that is clearly a
+response-protocol candidate (including a JSON fence or a leading object with
+response field names) must decode and validate completely. JSON syntax errors,
+unknown fields, invalid epistemic status, confidence outside `[0, 1]`, and
+visible tool-call text are protocol failures; raw candidate text must not be
+reinterpreted as the user-facing answer. Malformed brace-prefixed prose without
+response-protocol fields remains ordinary text.
+
 Within one logical chat turn, repeated tool calls with the same normalized tool name and identical arguments should reuse the first result. The runtime should still return a `ToolMessage` for every LangChain tool call id, but it should not execute or log duplicate service calls. This keeps interactive logs readable and prevents repeated status queries such as `memory_count` from looking like retries.
 
 Direct service-status queries, such as asking how many memory/reflection/reason/trace records exist, should call those service tools directly. These are operational tool queries; persona discussion before tool results tends to invent capability limits and adds noise.

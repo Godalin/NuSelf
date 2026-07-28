@@ -22,6 +22,7 @@ from nuself.llm import (
     ChatMessage,
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
+    parse_llm_json_object,
     record_llm_endpoint_success,
     redact_llm_error,
 )
@@ -72,15 +73,7 @@ class ConversationResponseSynthesizer:
 
     @staticmethod
     def parse_output(raw: str) -> ChatStructuredOutput:
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            return ChatStructuredOutput(answer=raw)
-        if isinstance(parsed, dict):
-            return ChatStructuredOutput.model_validate(
-                cast(dict[str, object], parsed)
-            )
-        return ChatStructuredOutput(answer=raw)
+        return _parse_compatibility_output(raw)
 
     def _complete_with_langchain_tools(
         self,
@@ -236,36 +229,65 @@ def _structured_output_from_state(
                 "LangChain agent returned invalid structured_response: "
                 f"{type(structured).__name__}"
             )
-        if _looks_like_tool_call(parsed.answer):
-            raise ValueError(
-                "Agent produced tool call text instead of structured response: "
-                f"{parsed.answer[:200]!r}"
-            )
+        _reject_visible_tool_call(parsed)
         return parsed
 
     messages = state.get("messages")
     if isinstance(messages, list) and messages:
         content = getattr(cast(object, messages[-1]), "content", None)
         if isinstance(content, str):
-            if _looks_like_tool_call(content):
-                raise ValueError(
-                    "Agent produced tool call text instead of "
-                    f"structured response: {content[:200]!r}"
-                )
-            try:
-                parsed = json.loads(content)
-                if isinstance(parsed, dict):
-                    return ChatStructuredOutput.model_validate(
-                        cast(dict[str, object], parsed)
-                    )
-            except json.JSONDecodeError:
-                pass
-            return ChatStructuredOutput(answer=content)
+            return _parse_compatibility_output(content)
     raise ValueError("no valid structured output in agent state")
 
 
 def _looks_like_tool_call(text: str) -> bool:
     return "minimax:tool_call" in text
+
+
+def _parse_compatibility_output(raw: str) -> ChatStructuredOutput:
+    try:
+        record = parse_llm_json_object(raw)
+    except (json.JSONDecodeError, ValueError) as exc:
+        if _looks_like_response_protocol(raw):
+            raise ValueError(
+                "Agent returned malformed structured response"
+            ) from exc
+        parsed = ChatStructuredOutput(answer=raw)
+    else:
+        parsed = ChatStructuredOutput.model_validate(record)
+    _reject_visible_tool_call(parsed)
+    return parsed
+
+
+def _looks_like_response_protocol(text: str) -> bool:
+    stripped = text.lstrip()
+    first_line = stripped.splitlines()[0].strip().lower() if stripped else ""
+    if first_line == "```json":
+        return True
+    if stripped.startswith("```"):
+        stripped = "\n".join(stripped.splitlines()[1:]).lstrip()
+    if not stripped.startswith("{"):
+        return False
+    prefix = stripped[:500]
+    return any(
+        f'"{field_name}"' in prefix
+        for field_name in (
+            "answer",
+            "evidence_references",
+            "confidence",
+            "epistemic_status",
+        )
+    )
+
+
+def _reject_visible_tool_call(
+    response: ChatStructuredOutput,
+) -> None:
+    if _looks_like_tool_call(response.answer):
+        raise ValueError(
+            "Agent produced visible tool call text instead of "
+            "a structured response"
+        )
 
 
 def _split_prompt(

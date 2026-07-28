@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Local and LangChain compatibility response extraction now share one strict
+  codec. Malformed protocol-looking JSON, unknown fields, invalid epistemic
+  status or confidence, and visible tool-call text can no longer silently
+  become the user-visible answer.
 - Styled interactive prompt capability and IO failures now emit
   `chat/interactive_prompt_failed` before falling back to built-in input.
   Unexpected prompt failures and user interrupts are no longer covered by a

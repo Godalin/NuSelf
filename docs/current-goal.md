@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The observed styled-input fallback stage is complete; no implementation
-change is currently active.
+Idle. The strict shared chat response compatibility codec stage is complete; no
+implementation change is currently active.
 
 ## Active Branch
 
@@ -31,5 +31,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Continue the silent-exception audit with agent response parsing and SQLite
-cleanup/rollback boundaries.
+Audit SQLite initialization, close, transaction rollback, and cache invalidation
+exception boundaries.

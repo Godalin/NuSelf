@@ -65,6 +65,93 @@ def test_missing_structured_output_uses_compatibility_message() -> None:
     assert result.answer == "Compatibility answer"
 
 
+@pytest.mark.parametrize("source", ("local", "state"))
+def test_compatibility_output_accepts_fenced_json(
+    source: str,
+) -> None:
+    raw = (
+        "```json\n"
+        '{"answer":"Fenced answer","epistemic_status":"uncertain"}\n'
+        "```"
+    )
+
+    if source == "local":
+        result = ConversationResponseSynthesizer.parse_output(raw)
+    else:
+        result = _structured_output_from_state(
+            {"messages": [AIMessage(content=raw)]}
+        )
+
+    assert result.answer == "Fenced answer"
+    assert result.epistemic_status == "uncertain"
+
+
+@pytest.mark.parametrize("source", ("local", "state"))
+def test_compatibility_output_rejects_malformed_protocol_candidate(
+    source: str,
+) -> None:
+    raw = '{"answer":"private draft"'
+
+    with pytest.raises(
+        ValueError,
+        match="malformed structured response",
+    ) as captured:
+        if source == "local":
+            ConversationResponseSynthesizer.parse_output(raw)
+        else:
+            _structured_output_from_state(
+                {"messages": [AIMessage(content=raw)]}
+            )
+
+    assert "private draft" not in str(captured.value)
+
+
+def test_compatibility_output_preserves_non_protocol_brace_text() -> None:
+    raw = "{This is ordinary unfinished prose"
+
+    local = ConversationResponseSynthesizer.parse_output(raw)
+    state = _structured_output_from_state(
+        {"messages": [AIMessage(content=raw)]}
+    )
+
+    assert local.answer == raw
+    assert state.answer == raw
+
+
+@pytest.mark.parametrize(
+    "raw",
+    (
+        '{"answer":"A","unknown":true}',
+        '{"answer":"A","epistemic_status":"certain"}',
+        '{"answer":"A","confidence":1.1}',
+        '{"answer":"A","confidence":-0.1}',
+    ),
+)
+def test_compatibility_output_rejects_invalid_response_schema(
+    raw: str,
+) -> None:
+    with pytest.raises(ValueError):
+        ConversationResponseSynthesizer.parse_output(raw)
+    with pytest.raises(ValueError):
+        _structured_output_from_state(
+            {"messages": [AIMessage(content=raw)]}
+        )
+
+
+@pytest.mark.parametrize(
+    "raw",
+    (
+        "minimax:tool_call private",
+        '{"answer":"minimax:tool_call private"}',
+    ),
+)
+def test_compatibility_output_rejects_visible_tool_call(
+    raw: str,
+) -> None:
+    with pytest.raises(ValueError, match="visible tool call text"):
+        ConversationResponseSynthesizer.parse_output(raw)
+
+
 @pytest.mark.parametrize(
     "state",
     [

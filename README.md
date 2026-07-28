@@ -190,6 +190,10 @@ failure, NuSelf records `chat/interactive_prompt_failed` and falls back to
 built-in input. EOF, keyboard interrupt, and unexpected prompt failures retain
 their normal control-flow behavior.
 
+Non-LangChain local models may return plain text or a valid JSON/fenced-JSON
+response envelope. Protocol-looking output is decoded strictly; malformed
+protocol JSON and invalid response fields are never displayed as raw answers.
+
 Current chat uses a LangGraph-backed conversation runtime that searches memory entries, derived profile items, and imported source chunks, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The agent can also invoke tools during conversation: `search_memory` for targeted retrieval, `list_pending_reflections` / `dismiss_reflection` to inspect and manage proactive ideas, `archive_memory` / `update_memory_importance` to curate durable memory, `list_active_reasoning_threads` / `show_reasoning_thread` to inspect durable reasoning state, and `search_trace` / `show_trace` to inspect thought provenance. The memory search is deterministic lexical retrieval with descriptor-aware type hints, type/tag filters, relation expansion over existing memory links, and ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
 
 Thread-scoped dynamic persona prompt files are authoritative; their derived name index is validated and atomically rebuilt when missing, malformed, or stale, so damaged lookup metadata does not hide healthy personas or retain old names after a rename.

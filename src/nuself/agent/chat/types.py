@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.chat.thread import ThreadMessage, ThreadState
 from nuself.config import ConfigSystem
@@ -25,6 +25,8 @@ EpistemicStatus = Literal[
 class ChatStructuredOutput(BaseModel):
     """Structured chat response returned by LangChain response_format."""
 
+    model_config = ConfigDict(extra="forbid")
+
     answer: str = Field(
         description=(
             "Plain user-facing answer text. "
@@ -36,9 +38,12 @@ class ChatStructuredOutput(BaseModel):
         description="Memory, source, or trace ids used.",
     )
     confidence: float | None = Field(
-        default=None, description="Optional confidence from 0.0 to 1.0."
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional confidence from 0.0 to 1.0.",
     )
-    epistemic_status: str = Field(
+    epistemic_status: EpistemicStatus = Field(
         default="inferred",
         description=(
             "One of grounded, inferred, uncertain, unsupported."
