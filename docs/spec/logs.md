@@ -375,22 +375,27 @@ Structured component logs use `LogRetentionPolicy`. The production default is
   active-file append failures still propagate.
 - A record append captures the active file length under the stable lock and
   writes the encoded JSONL record to completion, including retrying short
-  writes. If writing fails after a partial append, the writer truncates back to
-  that captured record boundary before propagating the original error. The
-  failed event is not delivered to observers. If rollback itself fails, one
-  non-raising terminal warning reports only component plus rollback exception
-  type; it never replaces the primary append error or includes event content,
-  paths, or exception messages.
-- Successful writes pass through an unbuffered file handle but are not
-  individually `fsync`-durable. A successful handle close completes the
-  process-visible append contract. A close failure may report delayed I/O, so
-  it propagates as `LogAppendLifecycleError` with
-  `record_may_have_persisted=True`; the event is not delivered to observers.
+  writes, then `fsync`s the active file. The logs directory is synchronized
+  before every record append, covering a newly created active name, rotation
+  changes, and retry after a prior directory-sync failure. If writing or
+  synchronization fails, the writer truncates back to the captured boundary
+  and `fsync`s that rollback before propagating the original error. The failed
+  event is not delivered to observers. If truncate or rollback synchronization
+  fails, one non-raising terminal warning reports only component plus rollback
+  exception type; it never replaces the primary append error or includes event
+  content, paths, or exception messages.
+- A successful data-handle close after append synchronization completes the
+  durable append contract. Process-local observers run only afterward. A close
+  failure propagates as `LogAppendLifecycleError`; the event is not delivered
+  to observers even though its persistence outcome is `persisted`.
 - `LogAppendLifecycleError` retains the append `primary_error`, rollback error,
-  and close error independently. The append error is its explicit cause when
-  present, otherwise the close error is. A failed rollback makes
-  `record_may_have_persisted=True`; a failed append followed by successful
-  rollback keeps the original append exception unchanged when close succeeds.
+  and close error independently, plus a `persistence_outcome` of
+  `not_persisted`, `persisted`, or `uncertain`. The append error is its explicit
+  cause when present, otherwise the close error is. A failed rollback makes the
+  outcome `uncertain`; successful append synchronization makes it `persisted`;
+  successful rollback synchronization makes it `not_persisted`. A failed
+  append followed by successful rollback keeps the original append exception
+  unchanged when close succeeds.
 - Readers include numbered backups in chronological sorting.
 - Incremental cursors track file identity as well as byte offset. If rotation
   replaces the active file, a cursor finishes the matching `.1` inode from its

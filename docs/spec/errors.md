@@ -254,9 +254,11 @@ are excluded from the warning.
 Structured log append lifecycle failures preserve phase provenance.
 `LogAppendLifecycleError` is raised when rollback or active data-handle close
 fails. It retains the primary append error, rollback error, close error, and
-whether the record may already have persisted. The primary append error is the
-explicit cause when present; otherwise the close error is. A lone append error
-whose rollback and close both succeed remains the original exception.
+an explicit `persistence_outcome`: `not_persisted`, `persisted`, or
+`uncertain`. The primary append error is the explicit cause when present;
+otherwise the close error is. A lone append or file-sync error whose durable
+rollback and close both succeed remains the original exception. Observer
+delivery occurs only after append sync and close both succeed.
 Auxiliary chat audits never retry the uncertain record. They report the append
 failure through the shared best-effort boundary, while the existing typed
 daemon transport result remains the sole retry decision.

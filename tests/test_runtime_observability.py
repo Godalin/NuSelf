@@ -240,12 +240,12 @@ def test_invalid_observed_failure_metadata_uses_terminal_warning(
     assert read_log_events(project_root=tmp_path) == []
 
 
-def test_observed_log_reports_uncertain_write_without_retrying_record(
+def test_observed_log_reports_persisted_close_failure_without_retrying_record(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     write_log_event = observability.write_log_event
-    close_error = OSError("uncertain close")
+    close_error = OSError("close failed after durable append")
     calls: list[str] = []
 
     def fail_original_then_write_diagnostic(
@@ -261,7 +261,7 @@ def test_observed_log_reports_uncertain_write_without_retrying_record(
                 primary_error=None,
                 rollback_error=None,
                 close_error=close_error,
-                record_may_have_persisted=True,
+                persistence_outcome="persisted",
             ) from close_error
         return write_log_event(
             "reflection",

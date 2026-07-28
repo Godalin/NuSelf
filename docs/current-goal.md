@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make shared atomic writes crash-durable with truthful failure semantics.
+Make each acknowledged structured-log append crash-durable.
 
 ## Active Branch
 
@@ -13,46 +13,46 @@ Make shared atomic writes crash-durable with truthful failure semantics.
 
 ## Ordered Work
 
-1. Audit the write, replace, close, and storage-synchronization sequence.
-2. Define success only after file content and the parent directory are synced.
-3. Preserve the old destination when content sync or replacement fails.
-4. Distinguish post-replace directory-sync uncertainty from pre-replace failure.
-5. Preserve primary and cleanup failures, including process interruptions.
-6. Verify operation ordering, filesystem outcomes, and exception provenance.
+1. Audit append, synchronization, rollback, close, and observer ordering.
+2. Define acknowledgment only after the complete JSONL record is synced.
+3. Make rollback truncate and sync the prior durable boundary.
+4. Replace ambiguous persistence booleans with explicit outcome states.
+5. Deliver observers only after durable append and successful handle close.
+6. Verify write/sync and truncate/sync failures plus lifecycle provenance.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Append-only logs retain their separately documented process-visible,
-  non-`fsync` contract in this batch.
 - SQLite durability remains governed by SQLite journal and synchronous modes.
-- No hidden retries are added to write, sync, replace, or cleanup operations.
+- No asynchronous batching or resident flush queue is introduced; each event
+  remains an independent append transaction.
+- SQLite and non-log append streams retain their subsystem-specific durability
+  contracts.
 
 ## Completion Evidence
 
-- `write_text_atomic(...)` now synchronizes the complete `0600` temporary file
-  before replacement and synchronizes its `0700` parent directory afterward.
-- File-sync and replace failures leave the previous destination authoritative
-  and remove the owned temporary file.
-- Cleanup runs for ordinary exceptions and `BaseException` interruptions while
-  preserving dual-failure provenance through `AtomicWriteCleanupError`.
-- A post-replace directory-sync failure raises
-  `AtomicWriteDurabilityError`; the complete new destination remains visible,
-  its crash persistence is explicitly uncertain, and the consumed temporary
-  pathname is never unlinked.
-- Tests verify write/sync/replace/sync ordering, both filesystem outcomes,
-  exception causes, interruption cleanup, collision ownership, and existing
-  atomic-write behavior.
-- Focused storage and atomic-writer consumer suites: `221 passed`.
-- Full test suite: `1660 passed`.
+- The logs directory is synchronized before every append, covering new active
+  names, post-rotation files, and retry after an earlier directory-sync failure.
+- Each complete JSONL record is written with short-write handling and `fsync`ed
+  before close and observer delivery.
+- Write or append-sync failure triggers `truncate` plus `fsync` back to the
+  captured durable boundary; successful rollback preserves the original error.
+- Rollback failure emits the existing content-safe warning and raises
+  `LogAppendLifecycleError` with `persistence_outcome="uncertain"`.
+- Close failure after successful append sync reports
+  `persistence_outcome="persisted"` and suppresses observer delivery.
+- The former ambiguous `record_may_have_persisted` boolean is removed from
+  implementation, tests, and specifications.
+- Focused logging and observability suites: `88 passed`.
+- Full test suite: `1665 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through implementation commit `3bda10f`.
+`dev/v0.3.x` is published through `a4c65fa`.
 
 ## Next Review Batch
 
-Review append-only log durability and batching policy after atomic replacement
-has a truthful crash-durable success contract.
+Review structured-log batching and throughput policy after individual append
+transactions have a truthful crash-durable contract.

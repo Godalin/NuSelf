@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Structured-log appends now sync each complete record before acknowledgment,
+  durably sync rollback truncation, and report persisted/not-persisted/uncertain
+  lifecycle outcomes explicitly.
 - Shared atomic text/JSON writes now sync temporary-file content before
   replacement and the parent directory afterward, with an explicit
   post-replacement durability error when crash persistence is uncertain.

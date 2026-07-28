@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Callable, Generator, Iterable, Mapping
 from contextlib import contextmanager
@@ -37,6 +38,11 @@ from nuself.runtime.messages import (
 )
 
 LogLevel = Literal["debug", "info", "warning", "error"]
+LogPersistenceOutcome = Literal[
+    "not_persisted",
+    "persisted",
+    "uncertain",
+]
 LogComponent = Literal[
     "daemon",
     "chat",
@@ -97,18 +103,16 @@ class LogAppendLifecycleError(RuntimeError):
         primary_error: BaseException | None,
         rollback_error: BaseException | None,
         close_error: BaseException | None,
-        record_may_have_persisted: bool,
+        persistence_outcome: LogPersistenceOutcome,
     ) -> None:
-        persistence = (
-            "record may have persisted"
-            if record_may_have_persisted
-            else "record was not persisted"
+        super().__init__(
+            "structured log append lifecycle failed; "
+            f"persistence={persistence_outcome}"
         )
-        super().__init__(f"structured log append lifecycle failed; {persistence}")
         self.primary_error = primary_error
         self.rollback_error = rollback_error
         self.close_error = close_error
-        self.record_may_have_persisted = record_may_have_persisted
+        self.persistence_outcome = persistence_outcome
 
 
 def _log_write_lock(path: Path) -> RLock:
@@ -608,12 +612,13 @@ def _append_encoded_log_line(
     log_file = _open_log_data_file(path)
     primary_error: BaseException | None = None
     rollback_error: BaseException | None = None
-    record_may_have_persisted = False
+    persistence_outcome: LogPersistenceOutcome = "not_persisted"
     try:
         record_boundary = log_file.seek(0, 2)
         try:
             _write_log_bytes(log_file, encoded_line)
-            record_may_have_persisted = True
+            _sync_log_file(log_file)
+            persistence_outcome = "persisted"
         except BaseException as exc:
             primary_error = exc
             rollback_error = _rollback_failed_log_append(
@@ -621,7 +626,11 @@ def _append_encoded_log_line(
                 record_boundary,
                 component=component,
             )
-            record_may_have_persisted = rollback_error is not None
+            persistence_outcome = (
+                "uncertain"
+                if rollback_error is not None
+                else "not_persisted"
+            )
     except BaseException as exc:
         if primary_error is None:
             primary_error = exc
@@ -637,7 +646,7 @@ def _append_encoded_log_line(
             primary_error=primary_error,
             rollback_error=rollback_error,
             close_error=close_error,
-            record_may_have_persisted=record_may_have_persisted,
+            persistence_outcome=persistence_outcome,
         )
         cause = primary_error if primary_error is not None else close_error
         raise lifecycle_error from cause
@@ -647,6 +656,7 @@ def _append_encoded_log_line(
 
 def _open_log_data_file(path: Path) -> BinaryIO:
     ensure_private_file(path)
+    _sync_log_directory(path.parent)
     return path.open("a+b", buffering=0)
 
 
@@ -659,6 +669,18 @@ def _write_log_bytes(log_file: BinaryIO, encoded_line: bytes) -> None:
         written += count
 
 
+def _sync_log_file(log_file: BinaryIO) -> None:
+    os.fsync(log_file.fileno())
+
+
+def _sync_log_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def _rollback_failed_log_append(
     log_file: BinaryIO,
     record_boundary: int,
@@ -667,6 +689,7 @@ def _rollback_failed_log_append(
 ) -> BaseException | None:
     try:
         log_file.truncate(record_boundary)
+        _sync_log_file(log_file)
     except BaseException as exc:
         emit_runtime_warning(
             "logs/append_rollback_failed: "

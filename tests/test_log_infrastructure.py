@@ -1235,7 +1235,202 @@ def test_partial_log_append_rolls_back_before_propagating(
     ]
 
 
-def test_log_data_close_failure_reports_uncertain_persistence(
+def test_log_sync_failure_durably_rolls_back_before_propagating(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed: list[LogEvent] = []
+    existing = write_log_event(
+        "chat",
+        "turn_started",
+        "existing",
+        project_root=tmp_path,
+    )
+    sync_log_file = logs._sync_log_file  # pyright: ignore[reportPrivateUsage]
+    sync_error = OSError("append sync failed")
+    sync_calls = 0
+
+    def fail_append_sync(log_file: BinaryIO) -> None:
+        nonlocal sync_calls
+        sync_calls += 1
+        if sync_calls == 1:
+            raise sync_error
+        sync_log_file(log_file)
+
+    monkeypatch.setattr(logs, "_sync_log_file", fail_append_sync)
+
+    with observe_log_events(observed.append):
+        with pytest.raises(OSError, match="append sync failed") as captured:
+            write_log_event(
+                "chat",
+                "turn_completed",
+                "failed",
+                project_root=tmp_path,
+            )
+
+    assert captured.value is sync_error
+    assert sync_calls == 2
+    assert observed == []
+    assert read_log_events(project_root=tmp_path, component="chat") == [existing]
+
+
+def test_log_rollback_sync_failure_reports_uncertain_outcome(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    existing = write_log_event(
+        "chat",
+        "turn_started",
+        "existing",
+        project_root=tmp_path,
+    )
+    append_sync_error = OSError("append sync failed")
+    rollback_sync_error = OSError("rollback sync failed")
+    sync_calls = 0
+
+    def fail_both_syncs(log_file: BinaryIO) -> None:
+        nonlocal sync_calls
+        sync_calls += 1
+        if sync_calls == 1:
+            raise append_sync_error
+        raise rollback_sync_error
+
+    monkeypatch.setattr(logs, "_sync_log_file", fail_both_syncs)
+
+    with pytest.warns(RuntimeWarning, match="append_rollback_failed"):
+        with pytest.raises(LogAppendLifecycleError) as captured:
+            write_log_event(
+                "chat",
+                "turn_completed",
+                "uncertain",
+                project_root=tmp_path,
+            )
+
+    error = captured.value
+    assert error.primary_error is append_sync_error
+    assert error.rollback_error is rollback_sync_error
+    assert error.close_error is None
+    assert error.persistence_outcome == "uncertain"
+    assert error.__cause__ is append_sync_error
+    assert read_log_events(project_root=tmp_path, component="chat") == [existing]
+
+
+def test_log_observer_runs_only_after_directory_and_append_sync(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    operations: list[str] = []
+    sync_log_file = logs._sync_log_file  # pyright: ignore[reportPrivateUsage]
+    sync_log_directory = (
+        logs._sync_log_directory  # pyright: ignore[reportPrivateUsage]
+    )
+
+    def record_sync(log_file: BinaryIO) -> None:
+        sync_log_file(log_file)
+        operations.append("file_sync")
+
+    def record_directory_sync(path: Path) -> None:
+        sync_log_directory(path)
+        operations.append("directory_sync")
+
+    monkeypatch.setattr(logs, "_sync_log_file", record_sync)
+    monkeypatch.setattr(logs, "_sync_log_directory", record_directory_sync)
+
+    with observe_log_events(lambda event: operations.append("observer")):
+        write_log_event(
+            "chat",
+            "turn_completed",
+            "durable",
+            project_root=tmp_path,
+        )
+
+    assert operations == ["directory_sync", "file_sync", "observer"]
+
+
+def test_new_log_directory_sync_failure_prevents_append_and_observer(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed: list[LogEvent] = []
+    sync_error = OSError("log directory sync failed")
+    sync_log_directory = (
+        logs._sync_log_directory  # pyright: ignore[reportPrivateUsage]
+    )
+
+    def fail_directory_sync(path: Path) -> None:
+        raise sync_error
+
+    monkeypatch.setattr(logs, "_sync_log_directory", fail_directory_sync)
+
+    with observe_log_events(observed.append):
+        with pytest.raises(
+            OSError,
+            match="log directory sync failed",
+        ) as captured:
+            write_log_event(
+                "chat",
+                "turn_completed",
+                "not appended",
+                project_root=tmp_path,
+            )
+
+    assert captured.value is sync_error
+    assert observed == []
+    path = log_path("chat", project_root=tmp_path)
+    assert path.exists()
+    assert path.stat().st_size == 0
+
+    retried_syncs: list[Path] = []
+
+    def record_retry_sync(directory: Path) -> None:
+        sync_log_directory(directory)
+        retried_syncs.append(directory)
+
+    monkeypatch.setattr(logs, "_sync_log_directory", record_retry_sync)
+    retried = write_log_event(
+        "chat",
+        "turn_completed",
+        "retried",
+        project_root=tmp_path,
+    )
+
+    assert retried_syncs == [path.parent]
+    assert read_log_events(project_root=tmp_path, component="chat") == [retried]
+
+
+def test_rotation_syncs_directory_for_new_active_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    write_log_event(
+        "chat",
+        "turn_started",
+        "existing",
+        project_root=tmp_path,
+    )
+    synced_directories: list[Path] = []
+    sync_log_directory = (
+        logs._sync_log_directory  # pyright: ignore[reportPrivateUsage]
+    )
+
+    def record_directory_sync(path: Path) -> None:
+        sync_log_directory(path)
+        synced_directories.append(path)
+
+    monkeypatch.setattr(logs, "_sync_log_directory", record_directory_sync)
+
+    write_log_event(
+        "chat",
+        "turn_completed",
+        "rotated",
+        project_root=tmp_path,
+        retention_policy=LogRetentionPolicy(max_bytes=1, backup_count=1),
+    )
+
+    assert synced_directories == [tmp_path / "private" / "logs"]
+
+
+def test_log_data_close_failure_reports_persisted_outcome(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1257,6 +1452,9 @@ def test_log_data_close_failure_reports_uncertain_persistence(
 
         def truncate(self, size: int | None = None) -> int:
             return self.wrapped.truncate(size)
+
+        def fileno(self) -> int:
+            return self.wrapped.fileno()
 
         def close(self) -> None:
             self.wrapped.close()
@@ -1284,9 +1482,9 @@ def test_log_data_close_failure_reports_uncertain_persistence(
     assert error.primary_error is None
     assert error.rollback_error is None
     assert error.close_error is close_error
-    assert error.record_may_have_persisted is True
+    assert error.persistence_outcome == "persisted"
     assert error.__cause__ is close_error
-    assert "record may have persisted" in str(error)
+    assert "persistence=persisted" in str(error)
     assert observed == []
     assert [
         event.message
@@ -1317,6 +1515,9 @@ def test_log_append_lifecycle_retains_write_rollback_and_close_failures(
 
         def truncate(self, _size: int | None = None) -> int:
             raise rollback_error
+
+        def fileno(self) -> int:
+            return self.wrapped.fileno()
 
         def close(self) -> None:
             self.wrapped.close()
@@ -1349,9 +1550,9 @@ def test_log_append_lifecycle_retains_write_rollback_and_close_failures(
     assert error.primary_error is primary_error
     assert error.rollback_error is rollback_error
     assert error.close_error is close_error
-    assert error.record_may_have_persisted is True
+    assert error.persistence_outcome == "uncertain"
     assert error.__cause__ is primary_error
-    assert "record may have persisted" in str(error)
+    assert "persistence=uncertain" in str(error)
 
 
 def test_log_byte_writer_retries_short_writes() -> None:
