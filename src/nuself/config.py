@@ -224,7 +224,6 @@ class MacosNotificationConfig(BaseModel):
 class ExperimentalConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    langmem_adapter: bool = False
     vector_index: bool = False
 
 

@@ -359,11 +359,6 @@
       "description": "Experimental features",
       "additionalProperties": false,
       "properties": {
-        "langmem_adapter": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable LangMem memory adapter"
-        },
         "vector_index": {
           "type": "boolean",
           "default": false,

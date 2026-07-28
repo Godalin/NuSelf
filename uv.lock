@@ -237,18 +237,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dydantic"
-version = "0.0.8"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pydantic" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/08/c5/2d097e5a4816b15186c1ae06c5cfe3c332e69a0f3556dc6cee2d370acf2a/dydantic-0.0.8.tar.gz", hash = "sha256:14a31d4cdfce314ce3e69e8f8c7c46cbc26ce3ce4485de0832260386c612942f", size = 8115, upload-time = "2025-01-29T20:36:13.771Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7a/7c/a1b120141a300853d82291faf0ba1a95133fa390e4b7d773647b69c8c0f4/dydantic-0.0.8-py3-none-any.whl", hash = "sha256:cd0a991f523bd8632699872f1c0c4278415dd04783e36adec5428defa0afb721", size = 8637, upload-time = "2025-01-29T20:36:12.217Z" },
-]
-
-[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -397,20 +385,6 @@ wheels = [
 ]
 
 [[package]]
-name = "langchain"
-version = "1.2.18"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "langchain-core" },
-    { name = "langgraph" },
-    { name = "pydantic" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/1d/4e/b651ecac63af474b28519384f7011294493d139937b1a9591581291eef34/langchain-1.2.18.tar.gz", hash = "sha256:7e829dbf117affadfd2067a0e97b4af20222f535f30fb812a28472d842c1074c", size = 582882, upload-time = "2026-05-08T13:59:19.895Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/59/20/959f6098c79158afe5aedce7de05c3700f10d293890ef9e5dace6c3ad94b/langchain-1.2.18-py3-none-any.whl", hash = "sha256:8432d43a65540845ed6f1a783d38d869c4659a6b9405f9a510169ad40d2f7bae", size = 113643, upload-time = "2026-05-08T13:59:18.461Z" },
-]
-
-[[package]]
 name = "langchain-anthropic"
 version = "1.4.3"
 source = { registry = "https://pypi.org/simple" }
@@ -527,25 +501,6 @@ wheels = [
 ]
 
 [[package]]
-name = "langmem"
-version = "0.0.30"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "langchain" },
-    { name = "langchain-anthropic" },
-    { name = "langchain-core" },
-    { name = "langchain-openai" },
-    { name = "langgraph" },
-    { name = "langgraph-checkpoint" },
-    { name = "langsmith" },
-    { name = "trustcall" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e2/34/82c96c749984690fdfccd7d13297853a6ac6d04b022ca39abca6e5c13c59/langmem-0.0.30.tar.gz", hash = "sha256:4e27920979f8253a96d279f4f97b1aebbfb49e95a46d5269433488ed044756e1", size = 244334, upload-time = "2025-10-27T22:21:56.246Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ae/08/c7bc95456f6e02819e9fed56aa01578c3b8ee1a47b520994efc37e9febcc/langmem-0.0.30-py3-none-any.whl", hash = "sha256:142f040014493eebd67e1055c0642f9ab38868b5b1fde5c8f2d39add57f4ba5b", size = 67122, upload-time = "2025-10-27T22:21:54.647Z" },
-]
-
-[[package]]
 name = "langsmith"
 version = "0.8.2"
 source = { registry = "https://pypi.org/simple" }
@@ -595,7 +550,6 @@ dependencies = [
     { name = "langchain-core" },
     { name = "langchain-openai" },
     { name = "langgraph" },
-    { name = "langmem" },
     { name = "prompt-toolkit" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -614,7 +568,6 @@ requires-dist = [
     { name = "langchain-core", specifier = ">=1.2.21" },
     { name = "langchain-openai", specifier = ">=1.1.10" },
     { name = "langgraph", specifier = ">=1.1.10" },
-    { name = "langmem", specifier = ">=0.0.30" },
     { name = "prompt-toolkit", specifier = ">=3.0.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -1146,20 +1099,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/09/a9/6ba95a270c6f1fbcd8dac228323f2777d886cb206987444e4bce66338dd4/tqdm-4.67.3.tar.gz", hash = "sha256:7d825f03f89244ef73f1d4ce193cb1774a8179fd96f31d7e1dcde62092b960bb", size = 169598, upload-time = "2026-02-03T17:35:53.048Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/16/e1/3079a9ff9b8e11b846c6ac5c8b5bfb7ff225eee721825310c91b3b50304f/tqdm-4.67.3-py3-none-any.whl", hash = "sha256:ee1e4c0e59148062281c49d80b25b67771a127c85fc9676d3be5f243206826bf", size = 78374, upload-time = "2026-02-03T17:35:50.982Z" },
-]
-
-[[package]]
-name = "trustcall"
-version = "0.0.39"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "dydantic" },
-    { name = "jsonpatch" },
-    { name = "langgraph" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/2b/72/4cdb54a31952827e8b58e11ea286bbfe2d3aa0ffb77a2f87dbc1c7ea77d3/trustcall-0.0.39.tar.gz", hash = "sha256:ec315818224501b9537ce6b7618dbc21be41210c6e8f2e239169a5a00912cd6e", size = 38637, upload-time = "2025-04-14T22:02:50.857Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2c/3a/58de925a104ce554fc250b833fe76401c7822aa8d65f2002cb53195e6c64/trustcall-0.0.39-py3-none-any.whl", hash = "sha256:d7da42e0bba816c0539b2936dfed90ffb3ea8d789e548e73865d416f8ac4ee64", size = 30073, upload-time = "2025-04-14T22:02:49.402Z" },
 ]
 
 [[package]]

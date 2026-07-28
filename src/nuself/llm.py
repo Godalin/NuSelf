@@ -29,18 +29,6 @@ class LLMSettings:
     provider: Literal["openai", "anthropic"] = "openai"
     timeout_seconds: float = 60.0
 
-    @classmethod
-    def from_project(cls, project_root: Path | None = None) -> LLMSettings:
-        config = ConfigSystem.load(project_root=project_root)
-        endpoint = config.llm.endpoints[0]
-        return cls(
-            base_url=endpoint.base_url,
-            api_key=endpoint.api_key,
-            model=endpoint.model,
-            provider="anthropic" if endpoint.anthropic else "openai",
-            timeout_seconds=endpoint.timeout_seconds,
-        )
-
 
 @dataclass(frozen=True)
 class LangChainLLMEndpoint:

@@ -9,7 +9,6 @@ dependencies = [
     "langchain-core>=1.2.21",
     "langchain-openai>=1.1.10",
     "langgraph>=1.1.10",
-    "langmem>=0.0.30",
     "pydantic>=2.12.5",
     "pyyaml>=6.0",
     "rich>=15.0.0",

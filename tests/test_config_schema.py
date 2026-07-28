@@ -29,3 +29,26 @@ def test_config_json_schema_exposes_chat_request_timeout() -> None:
     chat_properties = cast(dict[str, Any], chat_schema["properties"])
 
     assert chat_properties["request_timeout_seconds"]["default"] == 120
+
+
+def test_experimental_schema_has_no_removed_langmem_runtime() -> None:
+    root = Path(__file__).resolve().parents[1]
+    schema = cast(
+        dict[str, Any],
+        json.loads(
+            (root / "docs" / "nuself-config.schema.json").read_text(
+                encoding="utf-8"
+            )
+        ),
+    )
+    properties = cast(dict[str, Any], schema["properties"])
+    experimental = cast(dict[str, Any], properties["experimental"])
+    experimental_properties = cast(
+        dict[str, Any],
+        experimental["properties"],
+    )
+
+    assert set(experimental_properties) == {"vector_index"}
+    assert "langmem_adapter" not in (
+        root / "examples" / "private" / "config.yaml"
+    ).read_text(encoding="utf-8")

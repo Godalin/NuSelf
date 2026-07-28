@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Unify strict LangGraph `structured_response` decoding across shared structured
-agents, chat, and reason without hiding their distinct tool middleware state.
+Remove the orphaned LangMem adapter and its parallel first-endpoint model
+runtime so memory generation has no hidden provider/failover protocol.
 
 ## Active Branch
 
@@ -14,40 +14,38 @@ agents, chat, and reason without hiding their distinct tool middleware state.
 
 ## Ordered Work
 
-1. Specify the shared strict structured-state decoder contract.
-2. Extract the decoder into shared agent infrastructure.
-3. Migrate `LangChainStructuredAgent`, chat, and reason.
-4. Preserve chat's visible-tool-call rejection after typed decoding.
-5. Verify wrong state, missing fields, dictionaries, and wrong schemas fail.
+1. Verify the adapter has no production caller.
+2. Remove the adapter, its tests, and the dead experimental config flag.
+3. Remove the unused direct LangMem dependency.
+4. Remove `LLMSettings.from_project`, which exists only for this bypass.
+5. Regenerate the lock and verify no LangMem/runtime references remain.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep `create_agent` composition local to each capability because chat and
-  reason own distinct tools, prompts, and middleware state.
-- Keep domain conversion and extra semantic validation after shared decoding.
+- Keep the active NuSelf memory curator and optimizer on shared structured
+  agents.
+- Keep `experimental.vector_index`; it is unrelated to this dead adapter.
 
 ## Completion Evidence
 
-- `require_structured_response` is the sole production decoder for LangGraph
-  `structured_response` state.
-- `LangChainStructuredAgent`, chat response, and reason advance all use the
-  shared decoder.
-- The decoder rejects non-dictionary state, missing response state,
-  dictionary-shaped payloads, and wrong schema instances without coercion.
-- Chat runs visible tool-call rejection after the shared typed check.
-- Reason projects captured tool outcomes before translating decoder failure to
-  `ReasonAdvanceError`.
-- Full-tree search finds no other manual structured-response extraction.
-- `.venv/bin/pytest -q`: `1468 passed`.
+- Full-tree import search confirms the LangMem adapter had no production
+  caller.
+- The adapter module, its dedicated tests, `experimental.langmem_adapter`, and
+  `LLMSettings.from_project` were removed.
+- `pyproject.toml` and `uv.lock` contain no LangMem reference.
+- Lock regeneration also removed the adapter-only `langchain`, `trustcall`, and
+  `dydantic` dependency chain.
+- Active memory curator and optimizer continue to use shared structured agents.
+- `.venv/bin/pytest -q`: `1463 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `bd08835`.
+`dev/v0.3.x` is published through `debcefc`.
 
 ## Next Review Batch
 
-Audit remaining framework state parsing and model invocation outside shared
-agent infrastructure.
+Remove redundant endpoint-availability preflight from reason prompt generation
+and let the shared structured agent own model availability.

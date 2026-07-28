@@ -21,6 +21,10 @@
 | `macos_notification` | `MacosNotificationConfig` | macOS notifications toggle |
 | `experimental` | `ExperimentalConfig` | Feature flags |
 
+`experimental` currently contains only `vector_index`. The removed
+`langmem_adapter` flag is not accepted by the editor-facing schema and does
+not select an alternate memory-model runtime.
+
 ## JSON Schema
 
 `docs/nuself-config.schema.json` is the editor-facing and external validation schema for `private/config.yaml`.

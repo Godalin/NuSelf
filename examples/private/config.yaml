@@ -6,7 +6,8 @@
 llm:
   # OpenAI-compatible API endpoint
   - base_url: https://api.openai.com/v1
-    # Leave empty for local fallback (non-reasoning mode)
+    # Leave empty to disable this endpoint. If all endpoints are disabled,
+    # chat returns local configuration guidance.
     api_key: ""
     # Model name for completions
     model: gpt-4.1-mini
@@ -84,7 +85,6 @@ macos_notification:
 
 # Experimental Features
 experimental:
-  langmem_adapter: false
   vector_index: false
 
 # Example: Fast testing configuration
