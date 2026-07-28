@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Daemon reason-output recovery now validates typed manifest/progress state
+  before composition, skips terminal jobs, reports corrupt manifests and
+  optional progress explicitly, and schedules a retry only after the updated
+  attempt state is durably persisted.
 - Repository collection reads now isolate malformed records and emit
   payload-safe `record_decode_failed` warnings with collection and recoverable
   record identity. Healthy memory, candidate, source, profile, persona, reason,

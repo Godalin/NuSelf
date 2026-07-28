@@ -219,6 +219,7 @@ uv run nuself dev logs --component reflection --tail 10
 
 次要的审计或 thought trace 记录失败会显示为结构化的 `*_failed` 警告，但不会改变主操作的结果。
 读取集合时会隔离损坏的存储记录，并通过不包含正文的 `record_decode_failed` 警告报告。
+无效的 reason export manifest 会安全停止合成；无效 progress 和 retry state 持久化失败会写入 daemon 日志。
 
 检查系统健康：
 

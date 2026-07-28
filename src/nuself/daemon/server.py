@@ -9,6 +9,7 @@ import queue
 import socketserver
 import threading
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast, override
 
@@ -29,6 +30,7 @@ from nuself.reason import ReasonScheduler
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.output import (
     ReasonOutputManifest,
+    ReasonOutputProgress,
     ReasonOutputSection,
     ReasonOutputService,
     set_section_planner,
@@ -36,19 +38,84 @@ from nuself.reason.output import (
 )
 from nuself.reflection import ReflectionScheduler
 from nuself.runtime.jobs import JobMessage
+from nuself.runtime.observability import format_exception_chain
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
 
 
-def _format_exception_chain(exc: BaseException) -> str:
-    messages: list[str] = []
-    current: BaseException | None = exc
-    while current is not None:
-        message = str(current)
-        if message:
-            messages.append(message)
-        current = current.__cause__ or current.__context__
-    return " <- ".join(messages) if messages else exc.__class__.__name__
+@dataclass(frozen=True)
+class ExportJobInspection:
+    manifest: ReasonOutputManifest
+    total_chunks: int | str
+    progress_error: Exception | None = None
+
+    @property
+    def terminal(self) -> bool:
+        return self.manifest.status in ("complete", "failed")
+
+
+def _read_json_object(path: Path) -> dict[str, object]:
+    raw: object = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path.name} must contain a JSON object")
+    return cast(dict[str, object], raw)
+
+
+def _read_export_manifest(path: Path) -> ReasonOutputManifest:
+    return ReasonOutputManifest.from_wire(_read_json_object(path))
+
+
+def _read_export_progress(path: Path) -> ReasonOutputProgress:
+    return ReasonOutputProgress.from_wire(_read_json_object(path))
+
+
+def _inspect_export_job(
+    manifest_path: Path,
+    *,
+    job_id: str,
+    thread_id: str,
+) -> ExportJobInspection:
+    manifest = _read_export_manifest(manifest_path)
+    if manifest.job_id != job_id or manifest.thread_id != thread_id:
+        raise ValueError("export manifest identity does not match queue message")
+    if manifest.status in ("complete", "failed"):
+        return ExportJobInspection(manifest=manifest, total_chunks="?")
+
+    progress_path = manifest_path.with_name(manifest.progress_filename)
+    if not progress_path.exists():
+        return ExportJobInspection(manifest=manifest, total_chunks="?")
+    try:
+        progress = _read_export_progress(progress_path)
+        if progress.job_id != job_id or progress.thread_id != thread_id:
+            raise ValueError("export progress identity does not match queue message")
+    except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
+        return ExportJobInspection(
+            manifest=manifest,
+            total_chunks="?",
+            progress_error=exc,
+        )
+    return ExportJobInspection(
+        manifest=manifest,
+        total_chunks=progress.total_chunks,
+    )
+
+
+def _persist_export_failure(
+    manifest_path: Path,
+    operation_error: Exception,
+    *,
+    max_attempts: int,
+) -> ReasonOutputManifest:
+    manifest = _read_export_manifest(manifest_path)
+    attempts = manifest.attempts + 1
+    updated = manifest.with_updates(
+        status="failed" if attempts >= max_attempts else None,
+        attempts=attempts,
+        last_error=format_exception_chain(operation_error),
+        last_attempt_at=utc_now_iso(),
+    )
+    write_json_atomic(manifest_path, updated.to_wire())
+    return updated
 
 
 # Export chunk runner protocol intentionally omitted; inline runner typing used.
@@ -209,7 +276,7 @@ class DaemonState:
             )
 
     def _record_worker_failure(self, name: str, exc: BaseException) -> str:
-        chain = _format_exception_chain(exc)
+        chain = format_exception_chain(exc)
         with self._worker_health_lock:
             previous = self._worker_health[name]
             self._worker_health[name] = WorkerHealth(
@@ -360,7 +427,13 @@ class DaemonState:
             except queue.Empty:
                 break
         if drained:
-            write_log_event("daemon", "export_queue_drained", f"Drained {drained} unprocessed export jobs", level="warning")
+            write_log_event(
+                "daemon",
+                "export_queue_drained",
+                f"Drained {drained} unprocessed export jobs",
+                project_root=self.project_root,
+                level="warning",
+            )
         self._join_thread(self._export_worker_thread, "export_worker")
 
     def _run_background_export_worker(self) -> None:
@@ -446,32 +519,34 @@ class DaemonState:
                 if not manifest_path.exists():
                     continue
                 try:
-                    raw = json.loads(manifest_path.read_text(encoding="utf-8"))
-                except Exception:
+                    manifest = _read_export_manifest(manifest_path)
+                except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
+                    self._record_worker_failure("export_worker", exc)
                     write_log_event(
                         "daemon",
                         "export_reconciliation_skip",
-                        f"Skipping corrupted manifest: {manifest_path}",
+                        f"Skipping invalid export manifest for {job_dir.name}",
                         project_root=self.project_root,
                         level="warning",
                         status="error",
-                        metadata={"owner_id": owner_id, "path": str(manifest_path)},
+                        error=format_exception_chain(exc),
+                        metadata={
+                            "thread_id": owner_id,
+                            "job_id": job_dir.name,
+                        },
                     )
                     continue
-                status = raw.get("status")
-                if status in ("complete", "failed"):
+                if manifest.status in ("complete", "failed"):
                     continue
-                job_id = raw.get("job_id", job_dir.name)
-                if isinstance(job_id, str):
-                    self._export_queue.put(
-                        JobMessage.create(
-                            name="reason.output.export",
-                            producer="daemon.reconciliation",
-                            job_id=job_id,
-                            resource_id=owner_id,
-                        )
+                self._export_queue.put(
+                    JobMessage.create(
+                        name="reason.output.export",
+                        producer="daemon.reconciliation",
+                        job_id=manifest.job_id,
+                        resource_id=owner_id,
                     )
-                    reconciled += 1
+                )
+                reconciled += 1
 
         write_log_event(
             "daemon",
@@ -527,58 +602,81 @@ class DaemonState:
 
             manifest_path = store.paths(thread_id).artifacts / "export" / "jobs" / job_id / "manifest.json"
             try:
-                if manifest_path.exists():
-                    try:
-                        raw: dict[str, object] = json.loads(manifest_path.read_text(encoding="utf-8"))
-                    except Exception:
-                        raw = {}
-                    if raw.get("status") == "complete":
-                        continue
-                    progress_path = store.paths(thread_id).artifacts / "export" / "jobs" / job_id / "progress.json"
-                    total_chunks: int | str = "?"
-                    try:
-                        if progress_path.exists():
-                            progress_raw: dict[str, object] = json.loads(progress_path.read_text(encoding="utf-8"))
-                            val = progress_raw.get("total_chunks")
-                            if isinstance(val, int):
-                                total_chunks = val
-                    except Exception:
-                        pass
-                    write_log_event(
-                        "daemon",
-                        "export_job_composition_started",
-                        f"Composing {total_chunks} chunk(s) for job {job_id}",
-                        project_root=self.project_root,
-                        metadata={"job_id": job_id, "thread_id": thread_id, "chunks": total_chunks},
-                    )
+                inspection = _inspect_export_job(
+                    manifest_path,
+                    job_id=job_id,
+                    thread_id=thread_id,
+                )
+            except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
+                self._record_worker_failure("export_worker", exc)
+                write_log_event(
+                    "daemon",
+                    "export_job_manifest_invalid",
+                    f"Cannot process export job {job_id}: invalid manifest",
+                    project_root=self.project_root,
+                    level="error",
+                    status="error",
+                    error=format_exception_chain(exc),
+                    metadata={"job_id": job_id, "thread_id": thread_id},
+                )
+                continue
 
+            if inspection.terminal:
+                continue
+
+            if inspection.progress_error is not None:
+                write_log_event(
+                    "daemon",
+                    "export_job_progress_invalid",
+                    f"Ignoring invalid progress for export job {job_id}",
+                    project_root=self.project_root,
+                    level="warning",
+                    status="degraded",
+                    error=format_exception_chain(inspection.progress_error),
+                    metadata={"job_id": job_id, "thread_id": thread_id},
+                )
+
+            write_log_event(
+                "daemon",
+                "export_job_composition_started",
+                f"Composing {inspection.total_chunks} chunk(s) for job {job_id}",
+                project_root=self.project_root,
+                metadata={
+                    "job_id": job_id,
+                    "thread_id": thread_id,
+                    "chunks": inspection.total_chunks,
+                },
+            )
+
+            try:
                 service.compose_with_runner(thread_id, job_id, _llm_runner)
                 self._record_worker_success("export_worker")
             except Exception as exc:
                 self._record_worker_failure("export_worker", exc)
-                # Persist attempts + error info on every failure using the
-                # typed manifest model, so crash recovery preserves counters.
-                attempts = 1
-                now_iso = utc_now_iso()
-                if manifest_path.exists():
-                    try:
-                        raw: dict[str, object] = json.loads(manifest_path.read_text(encoding="utf-8"))
-                        manifest = ReasonOutputManifest.from_wire(raw)
-                        raw_attempts = manifest.attempts
-                        attempts = raw_attempts + 1
-                        if attempts >= MAX_ATTEMPTS:
-                            updated = manifest.with_updates(
-                                status="failed", attempts=attempts,
-                                last_error=str(exc), last_attempt_at=now_iso,
-                            )
-                        else:
-                            updated = manifest.with_updates(
-                                attempts=attempts,
-                                last_error=str(exc), last_attempt_at=now_iso,
-                            )
-                        write_json_atomic(manifest_path, updated.to_wire())
-                    except Exception:
-                        pass
+                try:
+                    failed_manifest = _persist_export_failure(
+                        manifest_path,
+                        exc,
+                        max_attempts=MAX_ATTEMPTS,
+                    )
+                except Exception as state_exc:
+                    write_log_event(
+                        "daemon",
+                        "export_job_state_persist_failed",
+                        f"Could not persist failure state for export job {job_id}",
+                        project_root=self.project_root,
+                        level="error",
+                        status="error",
+                        error=format_exception_chain(state_exc),
+                        metadata={
+                            "job_id": job_id,
+                            "thread_id": thread_id,
+                            "operation_error": format_exception_chain(exc),
+                        },
+                    )
+                    continue
+
+                attempts = failed_manifest.attempts
 
                 if attempts >= MAX_ATTEMPTS:
                     write_log_event(
@@ -588,7 +686,7 @@ class DaemonState:
                         project_root=self.project_root,
                         level="error",
                         status="error",
-                        error=str(exc),
+                        error=format_exception_chain(exc),
                         metadata={"job_id": job_id, "thread_id": thread_id, "attempts": attempts},
                     )
                 else:
@@ -722,7 +820,7 @@ class RequestHandler(socketserver.StreamRequestHandler):
             # Backstop: any unhandled error in request handling must still return a
             # failed response with the compact exception chain (errors.md daemon
             # boundary contract), never leave the client hanging on a dead thread.
-            chain = _format_exception_chain(exc)
+            chain = format_exception_chain(exc)
             project_root: Path | None = None
             try:
                 project_root = self._daemon_state().project_root

@@ -67,6 +67,9 @@ unexpected per-iteration exception unless shutdown has been requested.
   configured scheduled iteration is the retry boundary.
 - Fatal initialization failures before a worker loop starts remain daemon
   startup failures and must be surfaced to the caller.
+- A retryable worker operation must persist its retry/attempt transition before
+  scheduling another execution. If that durable transition fails, log the
+  state-persistence failure separately and do not enqueue an untracked retry.
 
 ## Best-Effort Side Effects
 

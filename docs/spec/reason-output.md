@@ -173,6 +173,23 @@ Progress is a typed dataclass (`ReasonOutputProgress`) persisted as JSON:
 
 Progress is a read-friendly summary of the manifest state. The manifest is always the authoritative source of truth.
 
+### Recovery read contract
+
+- Startup reconciliation and dequeue processing decode `manifest.json` through
+  `ReasonOutputManifest.from_wire()` before inspecting status or identity.
+- Missing, unreadable, non-object, or schema-invalid manifests are corrupt job
+  state. The worker logs `export_job_manifest_invalid` (or the reconciliation
+  equivalent), records degraded worker health, and does not compose or
+  automatically retry that job.
+- `complete` and `failed` manifests are terminal and are never recomposed from
+  a stale queue wake-up.
+- `progress.json` is non-authoritative. A missing progress file is normal. An
+  unreadable or schema-invalid progress file writes
+  `export_job_progress_invalid`; composition may continue from the valid
+  manifest.
+- Recovery diagnostics identify the thread and job but do not include chunk
+  contents or the raw manifest/progress payload.
+
 ### Queue model: typed in-memory job wake-ups
 
 The export queue is **not** a filesystem directory or a general event bus. It
@@ -197,6 +214,13 @@ Retries are scheduled via `threading.Timer` rather than a persistent `next_attem
 - If retryable, it starts a `threading.Timer` with exponential backoff (capped at 600s).
 - When the timer fires, it enqueues a new typed wake-up for the same durable job.
 - If `attempts >= MAX_ATTEMPTS`, the worker updates the manifest status to `failed` and does not re-enqueue.
+- A failed compose attempt is retryable only after its incremented attempt
+  count, last error, and attempt timestamp are atomically persisted to the
+  manifest.
+- If the manifest cannot be decoded or the retry-state write fails, the worker
+  logs `export_job_state_persist_failed` and does not schedule an in-memory
+  retry. Startup reconciliation must not be relied on to recover state that was
+  never durably recorded.
 
 This is a purely in-memory retry schedule. On daemon crash, all in-flight retry timers are lost; the reconciliation step (see below) restores them.
 

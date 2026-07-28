@@ -5,8 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make malformed authoritative records observable without making one corrupt
-record prevent healthy records from being listed or rebuilt.
+Harden daemon reason-output export recovery so corrupt manifests, unreadable
+progress, and failed retry-state persistence are explicit and cannot silently
+cause duplicate or untracked composition.
 
 ## Active Branch
 
@@ -14,42 +15,24 @@ record prevent healthy records from being listed or rebuilt.
 
 ## Ordered Work
 
-1. [x] Inventory repository decode-and-skip paths and their existing contracts.
-2. [x] Specify corrupt-record isolation, diagnostics, and identity handling.
-3. [x] Add one shared repository decode boundary with focused tests.
-4. [x] Migrate the highest-risk authoritative repositories in reviewable
-   groups.
-5. [x] Audit remaining repositories and record the next robustness batch.
+1. [x] Audit export job dequeue, recovery, retry, and shutdown paths.
+2. [x] Update reason-output and error specifications with recovery invariants.
+3. [x] Separate manifest inspection from job execution with typed outcomes.
+4. [x] Make corrupt/unreadable durable state fail visibly and safely.
+5. [x] Add focused recovery and persistence-failure tests.
 6. [x] Run full tests, type checking, and formatting checks.
 7. [ ] Commit and push in reviewable stages.
 
 ## Out Of Scope
 
-- Rejecting an entire collection because one record is malformed.
-- Automatically rewriting or deleting corrupt authoritative data.
-- Logging expected missing records or cleanup races as corruption.
+- Changing the reason-output document format or normal composition behavior.
+- Retrying immediately outside the existing scheduled retry policy.
+- Treating a missing optional progress snapshot as job corruption.
 
 ## Completion Evidence
 
-- Every migrated skipped record produces a structured warning with collection,
-  record identity when recoverable, and compact error detail.
-- Healthy records remain readable when one neighboring record is corrupt.
-- Diagnostics do not expose complete private record contents.
-- Focused tests cover identity-present and identity-missing corrupt records.
-- Full pytest, Pyright, and `git diff --check` pass.
-
-## Migration Groups
-
-- [x] Memory entries/candidates, source documents/chunks, and profile items.
-- [x] Persona prompts, including thread-scoped legacy files.
-- [x] Reason threads/steps.
-- [x] Reflection entries and notification outbox.
-- [x] Thought traces/links.
-- [x] File-backend JSON syntax and top-level shape failures.
-
-## Next Review Batch
-
-Harden daemon reason-export manifest recovery. Manifest/progress read failures
-and failed retry-state writes currently have local broad exception fallbacks;
-they need explicit durable-state and structured diagnostic behavior without
-causing duplicate composition.
+- A corrupt manifest never falls through as an ordinary pending job.
+- A completed job is not recomposed.
+- Failure to persist retry state is separately logged with job/thread identity.
+- Worker health records the operation failure without killing the loop.
+- Focused tests, full pytest, Pyright, and `git diff --check` pass.
