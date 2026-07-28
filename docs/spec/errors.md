@@ -217,10 +217,10 @@ after a memory or persona update.
   before structured persistence and sanitizes the complete fallback warning
   again if structured logging fails. This includes implicit exception context
   inherited from the operation being diagnosed.
-- Observed-failure metadata is recursively copied and sanitized before
-  persistence. Values under credential-like keys become `***`; other string
-  values use shared sensitive-text redaction; nested mappings and sequences
-  follow the same rules.
+- Audit metadata is recursively copied and sanitized at the canonical log
+  projection before persistence. Values under credential-like keys become
+  `***`; other string values use shared sensitive-text redaction; nested
+  mappings and sequences follow the same rules.
 - Sanitization never mutates caller-owned containers and never stringifies or
   coerces unsupported objects. Strict JSON validation remains authoritative;
   invalid diagnostic metadata still reaches the non-raising terminal-warning

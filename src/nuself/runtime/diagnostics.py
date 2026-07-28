@@ -69,7 +69,7 @@ def redact_sensitive_text(message: str) -> str:
 def sanitize_diagnostic_metadata(
     metadata: Mapping[str, object] | None,
 ) -> dict[str, object] | None:
-    """Copy and recursively sanitize failure-only diagnostic metadata."""
+    """Copy and recursively sanitize persisted diagnostic metadata."""
 
     if metadata is None:
         return None

@@ -214,6 +214,39 @@ def test_runtime_event_log_sink_preserves_event_identity(tmp_path: Path) -> None
     assert logged.metadata == {"worker": "memory"}
 
 
+def test_runtime_event_log_sink_sanitizes_without_mutating_envelope(
+    tmp_path: Path,
+) -> None:
+    publisher = EventPublisher()
+    publisher.subscribe(runtime_event_log_sink(tmp_path))
+    payload = {
+        "message": "worker started api_key=message-secret",
+        "status": "started",
+        "error": "provider rejected token=error-secret",
+        "metadata": {
+            "worker": "memory",
+            "clientSecret": "metadata-secret",
+            "detail": "request used access_token=query-secret",
+        },
+    }
+
+    event = publisher.publish(
+        name="worker.started",
+        producer="daemon",
+        payload=payload,
+    )
+
+    [logged] = read_log_events(project_root=tmp_path, component="daemon")
+    assert logged.message == "worker started api_key=***"
+    assert logged.error == "provider rejected token=***"
+    assert logged.metadata == {
+        "worker": "memory",
+        "clientSecret": "***",
+        "detail": "request used access_token=***",
+    }
+    assert event.payload == payload
+
+
 def test_event_publisher_rejects_unknown_or_wrong_producer() -> None:
     publisher = EventPublisher()
 

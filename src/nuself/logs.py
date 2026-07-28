@@ -24,6 +24,8 @@ from nuself.runtime.context import (
 from nuself.runtime.diagnostics import (
     diagnostic_exception_message,
     emit_runtime_warning,
+    redact_sensitive_text,
+    sanitize_diagnostic_metadata,
 )
 from nuself.runtime.event_payloads import RuntimeLogEventPayload
 from nuself.runtime.messages import (
@@ -436,16 +438,17 @@ def _write_envelope_log_projection(
     payload = RuntimeLogEventPayload.from_mapping(envelope.payload)
     if required_kind == "audit" and payload.message is None:
         raise ValueError("audit envelope requires a message")
+    message = (
+        payload.message
+        if payload.message is not None
+        else envelope.name
+    )
     event_record = LogEvent(
         time=envelope.created_at,
         level=payload.level,
         component=envelope.producer,
         event=envelope.name,
-        message=(
-            payload.message
-            if payload.message is not None
-            else envelope.name
-        ),
+        message=redact_sensitive_text(message),
         event_id=envelope.message_id,
         schema_version=envelope.schema_version,
         thread_id=envelope.context.thread_id,
@@ -457,8 +460,12 @@ def _write_envelope_log_projection(
         node=payload.node,
         duration_ms=payload.duration_ms,
         status=payload.status,
-        error=payload.error,
-        metadata=payload.metadata,
+        error=(
+            redact_sensitive_text(payload.error)
+            if payload.error is not None
+            else None
+        ),
+        metadata=sanitize_diagnostic_metadata(payload.metadata),
     )
     return _append_log_event(
         event_record,

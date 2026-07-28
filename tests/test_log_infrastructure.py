@@ -90,6 +90,46 @@ def test_audit_envelope_round_trip_retains_complete_projection(
     )
 
 
+def test_audit_projection_sanitizes_persisted_diagnostics(
+    tmp_path: Path,
+) -> None:
+    metadata: dict[str, object] = {
+        "worker": "memory",
+        "apiKey": "metadata-secret",
+        "nested": {
+            "detail": "request failed access_token=query-secret",
+        },
+    }
+    observed: list[LogEvent] = []
+
+    with observe_log_events(observed.append):
+        written = write_log_event(
+            "chat",
+            "turn_failed",
+            "turn failed api_key=message-secret",
+            project_root=tmp_path,
+            error="provider rejected Bearer error-secret",
+            metadata=metadata,
+        )
+
+    assert written.message == "turn failed api_key=***"
+    assert written.error == "provider rejected Bearer ***"
+    assert written.metadata == {
+        "worker": "memory",
+        "apiKey": "***",
+        "nested": {"detail": "request failed access_token=***"},
+    }
+    assert observed == [written]
+    assert read_log_events(project_root=tmp_path, component="chat") == [written]
+    assert metadata == {
+        "worker": "memory",
+        "apiKey": "metadata-secret",
+        "nested": {
+            "detail": "request failed access_token=query-secret",
+        },
+    }
+
+
 def test_audit_writer_rejects_wrong_kind_or_missing_message(
     tmp_path: Path,
 ) -> None:

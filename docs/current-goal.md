@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Protect nested observed-failure metadata at the shared persistence boundary.
+Sanitize every persisted audit projection at the canonical log sink.
 
 ## Active Branch
 
@@ -13,45 +13,48 @@ Protect nested observed-failure metadata at the shared persistence boundary.
 
 ## Ordered Work
 
-1. Audit every observed-failure and failure-metadata producer.
-2. Distinguish safe identifiers from arbitrary nested diagnostic context.
-3. Define recursive metadata privacy rules without weakening JSON validation.
-4. Sanitize all shared observed-failure persistence paths centrally.
-5. Verify sensitive keys, embedded credentials, immutability, and invalid types.
+1. Audit ordinary audit metadata and observed-failure producers.
+2. Identify the single runtime-envelope-to-`LogEvent` persistence boundary.
+3. Define recursive field privacy rules without weakening JSON validation.
+4. Sanitize message, error, and metadata at the canonical log projection.
+5. Verify direct audit, runtime-event projection, observers, and immutability.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Ordinary successful audit metadata remains governed by its domain contract.
+- Non-credential domain content such as topics and discussion traces remains
+  governed by its subsystem contract.
 - Invalid non-JSON diagnostic values still fail strict validation and enter the
   existing terminal-warning fallback.
-- Sanitization never mutates caller-owned metadata.
+- Sanitization never mutates caller-owned metadata or runtime envelopes.
 
 ## Completion Evidence
 
 - `sanitize_diagnostic_metadata(...)` recursively copies mappings and
   sequences, redacts credential text in ordinary strings, and replaces values
   under sensitive snake-case, kebab-case, camelCase, or dotted keys.
-- `report_observed_failure(...)` applies the sanitizer at the central
-  persistence boundary, covering direct reports, best-effort operations,
-  observed event publication, and audit-projection failure metadata.
-- Caller-owned nested containers remain unchanged.
+- The runtime-envelope-to-`LogEvent` projection sanitizes every persisted
+  audit and runtime-event message, error, and metadata field before both
+  observer delivery and disk append.
+- `report_observed_failure(...)` retains defense-in-depth sanitization before
+  constructing its audit envelope.
+- Caller-owned nested containers and source runtime envelopes remain unchanged.
 - Unsupported objects and non-string mapping keys are not coerced or rendered;
   strict `LogEvent` JSON validation still fails into the existing non-raising
   terminal-warning path.
-- Tests cover nested sensitive keys, embedded query credentials, sequences,
-  camelCase labels, input immutability, persisted output, and invalid objects.
-- Focused observability, logging, chat, daemon, reflection, persona, and reason
-  suites: `295 passed`.
-- Full test suite: `1649 passed`.
+- Tests cover direct audits, runtime-event projections, observer delivery,
+  nested sensitive keys, embedded query credentials, sequences, camelCase
+  labels, input immutability, persisted output, and invalid objects.
+- Focused logging, runtime-event, and observability suites: `106 passed`.
+- Full test suite: `1651 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `0f2cb13`.
+`dev/v0.3.x` is published through `7e98606`; this batch is pending publication.
 
 ## Next Review Batch
 
-Review ordinary audit metadata ownership separately after failure metadata is
-protected centrally.
+Review privacy ownership for non-log durable trace and export artifacts after
+all persisted audit projections are protected centrally.
