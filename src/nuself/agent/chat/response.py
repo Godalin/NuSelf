@@ -20,7 +20,11 @@ from nuself.agent.chat.types import (
     ConversationTurnState,
 )
 from nuself.agent.failover import invoke_agent_endpoint
-from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
+from nuself.agent.middleware import (
+    ToolCaptureMiddleware,
+    ToolOutcome,
+    ToolOutcomeLogger,
+)
 from nuself.agent.structured import require_structured_response
 from nuself.llm import (
     LangChainLLMEndpoint,
@@ -58,13 +62,13 @@ class ConversationResponseSynthesizer:
         project_root: Path | None,
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         tools: Iterable[BaseTool],
-        log_tool_call: Callable[..., None],
+        log_tool_outcome: ToolOutcomeLogger,
         report_tool_log_failure: Callable[[Exception], None] | None = None,
     ) -> None:
         self._project_root = project_root
         self._langchain_models = langchain_models
         self._tools = tuple(tools)
-        self._log_tool_call = log_tool_call
+        self._log_tool_outcome = log_tool_outcome
         self._report_tool_log_failure = report_tool_log_failure
 
     def complete(
@@ -115,7 +119,7 @@ class ConversationResponseSynthesizer:
             supervisor = _LangChainChatSupervisor(
                 endpoint=endpoint,
                 tools=self._tools,
-                log_tool_call=self._log_tool_call,
+                log_tool_outcome=self._log_tool_outcome,
                 report_tool_log_failure=self._report_tool_log_failure,
             )
             try:
@@ -206,12 +210,12 @@ class _LangChainChatSupervisor:
         *,
         endpoint: LangChainLLMEndpoint,
         tools: Iterable[BaseTool],
-        log_tool_call: Callable[..., None],
+        log_tool_outcome: ToolOutcomeLogger,
         report_tool_log_failure: Callable[[Exception], None] | None,
     ) -> None:
         self._endpoint = endpoint
         self._tools = tuple(tools)
-        self._log_tool_call = log_tool_call
+        self._log_tool_outcome = log_tool_outcome
         self._report_tool_log_failure = report_tool_log_failure
         self._tool_outcomes: list[ToolOutcome] = []
 
@@ -225,7 +229,7 @@ class _LangChainChatSupervisor:
     ) -> ChatStructuredOutput:
         system_prompt, messages = _split_prompt(prompt)
         middleware = ToolCaptureMiddleware(
-            log_callback=self._log_tool_call,
+            log_callback=self._log_tool_outcome,
             log_error_callback=self._report_tool_log_failure,
             captured=self._tool_outcomes,
             cache={},

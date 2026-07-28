@@ -58,6 +58,9 @@ class ToolOutcome:
         return cls(name=name, args=args, error=error)
 
 
+ToolOutcomeLogger = Callable[[ToolOutcome], None]
+
+
 class ToolCaptureMiddleware(AgentMiddleware):
     """AgentMiddleware that captures, logs, and optionally caches tool calls.
 
@@ -67,8 +70,7 @@ class ToolCaptureMiddleware(AgentMiddleware):
     Parameters
     ----------
     log_callback:
-        Called as ``log_callback(name, args, result=text)`` or
-        ``log_callback(name, args, error=text)`` after each tool execution.
+        Receives the same immutable ``ToolOutcome`` stored by the capture sink.
     log_error_callback:
         Called when ``log_callback`` fails. Neither callback may change the
         primary tool result or exception.
@@ -89,7 +91,7 @@ class ToolCaptureMiddleware(AgentMiddleware):
     def __init__(
         self,
         *,
-        log_callback: Callable[..., None] | None = None,
+        log_callback: ToolOutcomeLogger | None = None,
         log_error_callback: Callable[[Exception], None] | None = None,
         captured: list[ToolOutcome] | None = None,
         cache: dict[str, str] | None = None,
@@ -103,32 +105,57 @@ class ToolCaptureMiddleware(AgentMiddleware):
 
     def _log(
         self,
-        name: str,
-        args: dict[str, Any],
-        **outcome: str,
+        outcome: ToolOutcome,
     ) -> None:
         """Project one tool outcome without changing the primary operation."""
 
         if self._log_callback is None:
             return
         try:
-            self._log_callback(name, args, **outcome)
+            self._log_callback(outcome)
         except Exception as exc:  # noqa: BLE001 - observer failures are secondary
-            if self._log_error_callback is not None:
-                try:
-                    self._log_error_callback(exc)
-                    return
-                except Exception as report_exc:  # noqa: BLE001 - preserve primary outcome
-                    emit_runtime_warning(
-                        "tool log callback failed: "
-                        f"{exc}; failure reporter failed: {report_exc}",
-                        stacklevel=3,
-                    )
-                    return
-            emit_runtime_warning(
-                f"tool log callback failed: {exc}",
-                stacklevel=3,
+            self._report_projection_failure(exc)
+
+    def _capture_and_log(
+        self,
+        name: str,
+        args: dict[str, Any],
+        *,
+        result: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        if self._captured is None and self._log_callback is None:
+            return
+        try:
+            outcome = ToolOutcome(
+                name=name,
+                args=args,
+                result=result,
+                error=error,
             )
+        except Exception as exc:  # noqa: BLE001 - projection remains secondary
+            self._report_projection_failure(exc)
+            return
+        if self._captured is not None:
+            self._captured.append(outcome)
+        self._log(outcome)
+
+    def _report_projection_failure(self, exc: Exception) -> None:
+        if self._log_error_callback is not None:
+            try:
+                self._log_error_callback(exc)
+                return
+            except Exception as report_exc:  # noqa: BLE001 - preserve primary outcome
+                emit_runtime_warning(
+                    "tool log callback failed: "
+                    f"{exc}; failure reporter failed: {report_exc}",
+                    stacklevel=3,
+                )
+                return
+        emit_runtime_warning(
+            f"tool log callback failed: {exc}",
+            stacklevel=3,
+        )
 
     def wrap_tool_call(
         self,
@@ -154,11 +181,7 @@ class ToolCaptureMiddleware(AgentMiddleware):
         try:
             result = handler(request)
         except Exception as exc:
-            self._log(name, args, error=str(exc))
-            if self._captured is not None:
-                self._captured.append(
-                    ToolOutcome.failed(name, args, str(exc))
-                )
+            self._capture_and_log(name, args, error=str(exc))
             raise
 
         result_text = _middleware_result_text(result)
@@ -167,11 +190,7 @@ class ToolCaptureMiddleware(AgentMiddleware):
             with self._cache_lock:
                 self._cache[cache_key] = result_text
 
-        self._log(name, args, result=result_text)
-        if self._captured is not None:
-            self._captured.append(
-                ToolOutcome.succeeded(name, args, result_text)
-            )
+        self._capture_and_log(name, args, result=result_text)
 
         return result
 

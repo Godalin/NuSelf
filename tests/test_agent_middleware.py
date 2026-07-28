@@ -125,6 +125,54 @@ def test_tool_middleware_bypasses_cache_for_non_json_arguments() -> None:
     assert _message_content(second) == "result-2"
 
 
+def test_non_json_outcome_projection_failure_preserves_tool_result() -> None:
+    projected: list[ToolOutcome] = []
+    projection_errors: list[Exception] = []
+    middleware = ToolCaptureMiddleware(
+        log_callback=projected.append,
+        log_error_callback=projection_errors.append,
+        captured=[],
+    )
+
+    result = middleware.wrap_tool_call(
+        _request({"value": object()}, call_id="call-1"),
+        lambda request: ToolMessage(
+            content="completed",
+            name="memory_count",
+            tool_call_id=request.tool_call["id"] or "",
+        ),
+    )
+
+    assert isinstance(result, ToolMessage)
+    assert _message_content(result) == "completed"
+    assert projected == []
+    assert len(projection_errors) == 1
+    assert isinstance(projection_errors[0], TypeError)
+
+
+def test_non_json_outcome_projection_failure_preserves_tool_exception() -> None:
+    projection_errors: list[Exception] = []
+    middleware = ToolCaptureMiddleware(
+        log_callback=lambda _outcome: None,
+        log_error_callback=projection_errors.append,
+        captured=[],
+    )
+    primary_error = LookupError("primary")
+
+    def fail_tool(_request: ToolCallRequest) -> ToolMessage:
+        raise primary_error
+
+    with pytest.raises(LookupError) as captured:
+        middleware.wrap_tool_call(
+            _request({"value": object()}, call_id="call-1"),
+            fail_tool,
+        )
+
+    assert captured.value is primary_error
+    assert len(projection_errors) == 1
+    assert isinstance(projection_errors[0], TypeError)
+
+
 def test_tool_log_failure_does_not_replace_successful_result() -> None:
     observed: list[Exception] = []
 
@@ -179,6 +227,42 @@ def test_tool_capture_preserves_success_and_failure_semantics() -> None:
     assert captured[1].error == "primary failure"
     with pytest.raises(TypeError):
         captured[0].args["new"] = "mutation"  # type: ignore[index]
+
+
+def test_tool_projection_and_capture_share_exact_outcome_objects() -> None:
+    captured: list[ToolOutcome] = []
+    projected: list[ToolOutcome] = []
+    middleware = ToolCaptureMiddleware(
+        log_callback=projected.append,
+        captured=captured,
+    )
+
+    middleware.wrap_tool_call(
+        _request({"value": 1}, call_id="success"),
+        lambda request: ToolMessage(
+            content="completed",
+            name="memory_count",
+            tool_call_id=request.tool_call["id"] or "",
+        ),
+    )
+
+    primary_error = LookupError("failed")
+
+    def fail_tool(_request: ToolCallRequest) -> ToolMessage:
+        raise primary_error
+
+    with pytest.raises(LookupError) as failed:
+        middleware.wrap_tool_call(
+            _request({"value": 2}, call_id="failure"),
+            fail_tool,
+        )
+
+    assert failed.value is primary_error
+    assert len(captured) == len(projected) == 2
+    assert projected[0] is captured[0]
+    assert projected[1] is captured[1]
+    assert captured[0].result == "completed"
+    assert captured[1].error == "failed"
 
 
 def test_tool_outcome_requires_exactly_one_result_kind() -> None:

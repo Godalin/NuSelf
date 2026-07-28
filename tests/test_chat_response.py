@@ -10,6 +10,7 @@ from langchain_core.messages import (
     HumanMessage,
 )
 
+from nuself.agent.middleware import ToolOutcome
 from nuself.agent.chat.response import (
     ConversationResponseSynthesizer,
     _LangChainChatSupervisor,
@@ -24,6 +25,10 @@ from nuself.llm import (
     LLMSettings,
     LangChainLLMEndpoint,
 )
+
+
+def _ignore_tool_outcome(_outcome: ToolOutcome) -> None:
+    return None
 
 
 def test_structured_output_state_is_authoritative() -> None:
@@ -109,9 +114,6 @@ def test_endpoint_state_failure_retries_then_uses_local_fallback(
         fail_endpoint,
     )
 
-    def ignore_tool_call(*args: object, **kwargs: object) -> None:
-        return None
-
     endpoint = LangChainLLMEndpoint(
         index=0,
         settings=LLMSettings(
@@ -125,7 +127,7 @@ def test_endpoint_state_failure_retries_then_uses_local_fallback(
         project_root=tmp_path,
         langchain_models=(endpoint,),
         tools=(),
-        log_tool_call=ignore_tool_call,
+        log_tool_outcome=_ignore_tool_outcome,
     )
 
     result = synthesizer.complete(
@@ -172,7 +174,7 @@ def test_protocol_failure_retries_same_endpoint_without_failover(
         project_root=tmp_path,
         langchain_models=endpoints,
         tools=(),
-        log_tool_call=lambda *args, **kwargs: None,
+        log_tool_outcome=_ignore_tool_outcome,
     )
 
     result = synthesizer.complete(
@@ -220,7 +222,7 @@ def test_availability_failure_uses_shared_endpoint_failover(
         project_root=tmp_path,
         langchain_models=endpoints,
         tools=(),
-        log_tool_call=lambda *args, **kwargs: None,
+        log_tool_outcome=_ignore_tool_outcome,
     )
 
     result = synthesizer.complete(
@@ -289,7 +291,7 @@ def test_tool_outcome_suppresses_retry_and_endpoint_failover(
         project_root=tmp_path,
         langchain_models=endpoints,
         tools=(),
-        log_tool_call=lambda *args, **kwargs: None,
+        log_tool_outcome=_ignore_tool_outcome,
     )
 
     result = synthesizer.complete(
@@ -341,7 +343,7 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
         project_root=tmp_path,
         langchain_models=(endpoint,),
         tools=(),
-        log_tool_call=lambda *args, **kwargs: None,
+        log_tool_outcome=_ignore_tool_outcome,
     )
 
     with pytest.warns(RuntimeWarning) as captured:
@@ -379,7 +381,7 @@ def test_finalize_log_failure_cannot_replace_accepted_response(
         project_root=tmp_path,
         langchain_models=(),
         tools=(),
-        log_tool_call=lambda *args, **kwargs: None,
+        log_tool_outcome=_ignore_tool_outcome,
     )
     state = ConversationTurnState.start(
         ThreadState.empty("thread-1"),

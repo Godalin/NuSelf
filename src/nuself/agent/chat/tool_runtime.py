@@ -13,6 +13,7 @@ from nuself.agent.skills import (
     load_agent_skills,
     render_tool_placeholders,
 )
+from nuself.agent.middleware import ToolOutcome
 from nuself.agent.tool_utils import (
     tool_log_metadata,
     tool_service_component,
@@ -65,15 +66,10 @@ class ConversationToolRuntime:
     def has_tool(self, name: str) -> bool:
         return name in self._tools
 
-    def log_call(
-        self,
-        tool_name: str,
-        args: dict[str, object],
-        *,
-        result: str | None = None,
-        error: str | None = None,
-    ) -> None:
-        tool = self._tools.get(tool_name)
+    def log_outcome(self, outcome: ToolOutcome) -> None:
+        """Project one immutable middleware tool outcome."""
+
+        tool = self._tools.get(outcome.name)
         if tool is None:
             return
         service_component = tool_service_component(tool)
@@ -82,16 +78,19 @@ class ConversationToolRuntime:
         write_log_event(
             "chat",
             "service_tool_called",
-            f"{tool_name} {'failed' if error is not None else 'completed'}",
+            (
+                f"{outcome.name} "
+                f"{'failed' if outcome.error is not None else 'completed'}"
+            ),
             project_root=self._project_root,
-            status="failed" if error is not None else "completed",
-            error=error,
+            status="failed" if outcome.error is not None else "completed",
+            error=outcome.error,
             metadata=tool_log_metadata(
-                args=args,
-                result=result,
-                error=error,
+                args=outcome.args,
+                result=outcome.result,
+                error=outcome.error,
                 service_component=service_component,
-                tool_name=tool_name,
+                tool_name=outcome.name,
             ),
         )
 

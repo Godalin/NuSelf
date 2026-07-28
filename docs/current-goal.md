@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Migrate Reason lifecycle/output/proposal audits to the shared observed log API
-without weakening authoritative delivery or tool-middleware boundaries.
+Use one immutable `ToolOutcome` object for tool capture and log projection
+through the shared agent middleware.
 
 ## Active Branch
 
@@ -14,41 +14,39 @@ without weakening authoritative delivery or tool-middleware boundaries.
 
 ## Ordered Work
 
-1. Classify reason, notification, and tool log effects by authority.
-2. Preserve authoritative log-only delivery and middleware-owned callbacks.
-3. Migrate reason scheduler, output, and proposal lifecycle audits.
-4. Remove redundant reason-output lambda wrappers.
-5. Verify committed/planned/composed results survive audit failure.
+1. Audit middleware callback, capture, and failure reporter ownership.
+2. Confirm one reporter produces one diagnostic without recursive warnings.
+3. Replace the parallel callback argument protocol with `ToolOutcome`.
+4. Rename chat composition contracts around outcome projection.
+5. Verify success/error identity across logging and capture.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- `LogOnlyNotificationAdapter.send(...)` remains authoritative because its log
-  write is the configured delivery effect.
-- Tool runtime callbacks remain direct because shared middleware owns their
-  failure reporter and primary-outcome isolation.
-- Durable manifests, chunks, progress, queues, and Reason domain mutations
-  continue to propagate failures.
+- Middleware remains the only layer that catches callback failure.
+- The composition-root reporter remains responsible for structured degradation.
+- Tool execution, cache, and retry-suppression semantics remain unchanged.
 
 ## Completion Evidence
 
-- Reason scheduler completion, output plan/enqueue/chunk/compose/PDF lifecycle,
-  and proposal records now use `write_observed_log_event(...)`.
-- A missing audit store cannot block an approved proposal from creating its
-  thread or change a persisted scheduler step and cooldown.
-- Full output planning/composition remains complete with manifests, progress,
-  chunks, combined Markdown, and PDF when every lifecycle audit is unavailable.
-- `LogOnlyNotificationAdapter` remains direct and authoritative; middleware
-  tool-log callbacks remain direct with their existing shared failure reporter.
-- Focused reason, export recovery, agent, and subagent tests: `122 passed`.
-- `.venv/bin/pytest -q`: `1561 passed` with no warnings.
+- `ToolCaptureMiddleware` constructs one immutable `ToolOutcome` and passes the
+  exact same object to both projection callback and capture sink.
+- Chat composition and `ConversationToolRuntime` now accept
+  `log_tool_outcome`/`log_outcome` rather than the parallel variadic protocol.
+- Reason outcome projection consumes the captured `ToolOutcome` directly while
+  retaining its middleware-independent best-effort boundary.
+- Non-JSON arguments still execute; outcome construction failure reaches the
+  single reporter and preserves both successful results and tool exceptions.
+- Focused middleware, chat response/runtime, reason advancer, and agent tests:
+  `112 passed`.
+- `.venv/bin/pytest -q`: `1564 passed` with no warnings.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `d72f49f`.
+`dev/v0.3.x` is published through `99759ea`.
 
 ## Next Review Batch
 
-Audit middleware-owned tool-log callbacks and failure reporters for duplication.
+Audit remaining direct auxiliary projections and domain-owned exceptions.

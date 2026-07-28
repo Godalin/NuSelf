@@ -168,7 +168,7 @@ class ConversationGraphRuntime:
                 project_root=project_root,
                 langchain_models=self._langchain_models,
                 tools=self._tools.values(),
-                log_tool_call=self._tool_runtime.log_call,
+                log_tool_outcome=self._tool_runtime.log_outcome,
                 report_tool_log_failure=self._tool_runtime.report_log_failure,
             )
         )

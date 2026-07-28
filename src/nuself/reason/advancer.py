@@ -47,23 +47,33 @@ def _current_reason_thread_id() -> str:
     return thread_id
 
 
-def _log_tool_call(tool_name: str, args: dict[str, object], *, tool_service_map: dict[str, str] | None = None, project_root: Path | None, result: str | None = None, error: str | None = None) -> None:
+def _log_tool_outcome(
+    outcome: ToolOutcome,
+    *,
+    tool_service_map: dict[str, str] | None = None,
+    project_root: Path | None,
+) -> None:
     """Emit a service_tool_called log event for a reasoning tool invocation."""
     from nuself.logs import write_log_event
 
-    service_component = (tool_service_map or {}).get(tool_name) or "reason_advancer"
+    service_component = (
+        (tool_service_map or {}).get(outcome.name) or "reason_advancer"
+    )
     write_log_event(
         "reasoning",
         "service_tool_called",
-        f"{tool_name} {'failed' if error is not None else 'completed'}",
+        (
+            f"{outcome.name} "
+            f"{'failed' if outcome.error is not None else 'completed'}"
+        ),
         project_root=project_root,
-        status="completed" if error is None else "failed",
+        status="completed" if outcome.error is None else "failed",
         metadata=tool_log_metadata(
-            args=args,
-            result=result,
-            error=error,
+            args=outcome.args,
+            result=outcome.result,
+            error=outcome.error,
             service_component=service_component,
-            tool_name=tool_name,
+            tool_name=outcome.name,
         ),
     )
 
@@ -360,12 +370,9 @@ class ReasonAdvancer:
         for outcome in self._captured:
             args = dict(outcome.args)
             run_observed_best_effort(
-                lambda outcome=outcome, args=args: _log_tool_call(
-                    outcome.name,
-                    args,
+                lambda outcome=outcome: _log_tool_outcome(
+                    outcome,
                     project_root=self._project_root,
-                    result=outcome.result,
-                    error=outcome.error,
                     tool_service_map=self._tool_service_map,
                 ),
                 component="reasoning",

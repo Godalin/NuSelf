@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Agent tool logging and capture now consume the same immutable typed outcome
+  instead of parallel callback arguments. Non-JSON tool arguments still reach
+  the framework tool; projection failure cannot replace its result or error.
 - Reason proposal, background advance, and output planning/composition/PDF
   audits now use the shared auxiliary projection boundary. Audit-store failure
   no longer blocks an approved thread, a persisted step/cooldown, or durable

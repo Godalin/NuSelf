@@ -308,6 +308,15 @@ effects are not replaced between invocations. A caller that needs different
 per-invocation effects creates another middleware instance; a reused agent
 must instead serialize access to any shared mutable capture state.
 
+Middleware constructs exactly one immutable `ToolOutcome` for each executed
+tool whose arguments can cross the strict JSON boundary. The same object is
+passed to the tool-log callback and appended to the capture sink; logging does
+not reconstruct a parallel `name/args/result/error` message. `ToolOutcome`
+requires exactly one of result or error and freezes its JSON-safe argument
+mapping before either consumer sees it. Non-JSON arguments still execute; an
+outcome-construction failure follows the same secondary log-failure reporter
+and cannot replace the tool result or exception.
+
 Tool-log projection is a secondary observation effect:
 
 - failure after a successful tool execution cannot replace its `ToolMessage`

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from langchain_core.tools import BaseTool
@@ -29,7 +29,7 @@ def index_tool_service_components(
 
 def tool_log_metadata(
     *,
-    args: dict[str, Any],
+    args: Mapping[str, Any],
     result: str | None = None,
     error: str | None = None,
     service_component: str,
