@@ -5,10 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Any, Literal, Protocol, TypeAlias, cast
+from typing import Any, Literal, TypeAlias, cast
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 
@@ -16,7 +15,6 @@ from nuself.config import ConfigSystem
 from nuself.config import runtime_paths
 from nuself.runtime.observability import (
     report_corrupt_record,
-    report_observed_failure,
     run_observed_best_effort,
 )
 from nuself.storage import write_json_atomic
@@ -34,12 +32,6 @@ class ChatMessage:
 
     def to_wire(self) -> dict[str, JsonValue]:
         return {"role": self.role, "content": self.content}
-
-
-class ChatLLM(Protocol):
-    """Minimal chat-completion interface used by agents."""
-
-    def complete(self, messages: list[ChatMessage]) -> str: ...
 
 
 @dataclass(frozen=True)
@@ -72,130 +64,6 @@ class LangChainLLMEndpoint:
     index: int
     settings: LLMSettings
     model: BaseChatModel
-
-
-class LocalFallbackLLM:
-    """Deterministic local fallback when no API key is configured."""
-
-    def complete(self, messages: list[ChatMessage]) -> str:
-        if messages and "Compress a private NuSelf conversation" in messages[0].content:
-            raise RuntimeError("LLM API key is not configured")
-        last_user = ""
-        for message in reversed(messages):
-            if message.role == "user":
-                last_user = message.content
-                break
-        return (
-            "LLM API is not configured yet. I saved the message and can use local memory/context, "
-            f"but real reasoning needs an API key. Last message: {last_user}"
-        )
-
-
-# ============================================================================
-# LangChain-backed default LLM with endpoint failover
-# ============================================================================
-
-
-def default_llm(project_root: Path | None = None) -> ChatLLM:
-    """Return the configured LLM, or a deterministic local fallback."""
-    langchain_endpoints = _configured_llm_endpoints(project_root)
-    if not langchain_endpoints:
-        return LocalFallbackLLM()
-    return _LangChainFailoverLLM(langchain_endpoints, project_root=project_root)
-
-
-class _LangChainFailoverLLM:
-    """LangChain-backed LLM with ordered endpoint failover.
-
-    Wraps ``configured_langchain_chat_models`` so that background agents
-    (curator, optimizer, intake, etc.) get failover without importing
-    LangChain model classes directly.
-    """
-
-    def __init__(
-        self,
-        endpoints: tuple[LangChainLLMEndpoint, ...],
-        *,
-        project_root: Path | None = None,
-    ) -> None:
-        self._endpoints = endpoints
-        self._project_root = project_root
-        self._start_index = _load_llm_state(
-            project_root,
-            available_indices={endpoint.index for endpoint in endpoints},
-        )
-
-    def complete(self, messages: list[ChatMessage]) -> str:
-        last_error: RuntimeError | None = None
-        for endpoint in self._ordered_endpoints():
-            try:
-                result = _invoke_langchain_model(endpoint.model, messages)
-            except RuntimeError as exc:
-                last_error = exc
-                if not is_endpoint_availability_error(str(exc)):
-                    raise
-                self._log_failover(exc, endpoint)
-                continue
-            record_llm_endpoint_success(
-                self._project_root,
-                endpoint.index,
-            )
-            return result
-        if last_error is not None:
-            raise RuntimeError(f"all configured LLM endpoints failed: {redact_llm_error(str(last_error))}") from last_error
-        raise RuntimeError("LLM API key is not configured")
-
-    def _ordered_endpoints(self) -> tuple[LangChainLLMEndpoint, ...]:
-        start = self._start_index
-        by_index = {ep.index: ep for ep in self._endpoints}
-        ordered: list[LangChainLLMEndpoint] = []
-        if start in by_index:
-            ordered.append(by_index[start])
-        ordered.extend(ep for ep in self._endpoints if ep.index not in {ep.index for ep in ordered})
-        return tuple(ordered)
-
-    def _log_failover(self, exc: RuntimeError, failed: LangChainLLMEndpoint) -> None:
-        remaining = [ep for ep in self._ordered_endpoints() if ep.index != failed.index]
-        event = "llm_endpoint_failed_over" if remaining else "llm_endpoint_unavailable"
-        status = "failed_over" if remaining else "exhausted"
-        message = "LLM endpoint failed; trying next configured endpoint" if remaining else (
-            "LLM endpoint failed and no fallback endpoint remains"
-        )
-        metadata: dict[str, object] = {
-            "endpoint_index": failed.index,
-            "base_url": failed.settings.base_url,
-            "model": failed.settings.model,
-        }
-        if remaining:
-            metadata["next_endpoint_index"] = remaining[0].index
-        report_observed_failure(
-            RuntimeError(redact_llm_error(str(exc))),
-            component="chat",
-            event=event,
-            message=message,
-            project_root=self._project_root,
-            level="warning",
-            status=status,
-            metadata=metadata,
-        )
-
-
-def _invoke_langchain_model(model: BaseChatModel, messages: list[ChatMessage]) -> str:
-    """Invoke a LangChain chat model with NuSelf messages, return text."""
-    lc_messages: list[SystemMessage | HumanMessage] = []
-    for m in messages:
-        if m.role == "system":
-            lc_messages.append(SystemMessage(content=m.content))
-        else:
-            lc_messages.append(HumanMessage(content=m.content))
-    try:
-        result = model.invoke(lc_messages)
-    except Exception as exc:
-        raise RuntimeError(str(exc)) from exc
-    content: object = result.content  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
-    if isinstance(content, str):
-        return content
-    return str(cast(Any, content))
 
 
 # ============================================================================

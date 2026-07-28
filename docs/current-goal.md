@@ -5,8 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Remove the legacy `ChatLLM` injection protocol from chat runtime/response and
-make no-model behavior an explicit deterministic local response policy.
+Delete the dead text-completion adapter stack from `nuself.llm` so the module
+only owns framework model endpoints, endpoint preference, and shared error
+classification.
 
 ## Active Branch
 
@@ -14,37 +15,36 @@ make no-model behavior an explicit deterministic local response policy.
 
 ## Ordered Work
 
-1. Specify local response versus framework agent behavior.
-2. Remove `llm=` and `default_llm()` from chat runtime composition.
-3. Replace endpoint exhaustion fallback with deterministic local response
-   construction.
-4. Migrate test doubles to `ConversationResponseService`.
-5. Verify chat runtime owns only one real model protocol.
+1. Specify the remaining responsibilities of `nuself.llm`.
+2. Remove `ChatLLM`, `LocalFallbackLLM`, and `default_llm`.
+3. Remove the private text failover adapter and raw LangChain text invocation.
+4. Delete adapter-only tests while retaining endpoint state and classification
+   coverage.
+5. Verify no production caller depends on the deleted protocol.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep `ChatMessage` prompt DTO until the separate LangChain-message migration.
-- Remove now-dead legacy adapters from `llm.py` in the next commit.
-- Preserve the visible no-model configuration guidance.
+- Keep `ChatMessage` as a temporary domain prompt DTO until its separate
+  LangChain-message migration.
+- Keep endpoint construction, preference persistence, redaction, and
+  availability classification in `nuself.llm`.
 
 ## Completion Evidence
 
-- `ConversationGraphRuntime` and `ConversationResponseSynthesizer` no longer
-  accept `llm=` or construct `default_llm()`.
-- No-model, exhausted-endpoint, and post-tool retry-suppression paths construct
-  deterministic typed local responses without invoking or parsing a fallback
-  model.
-- Generated chat test behavior now injects `ConversationResponseService`.
-- `.venv/bin/pytest -q`: `1473 passed`.
+- Production code has no references to `ChatLLM`, `LocalFallbackLLM`,
+  `default_llm`, `_LangChainFailoverLLM`, or `_invoke_langchain_model`.
+- `nuself.llm` retains only endpoint construction, endpoint preference state,
+  shared availability classification/redaction, and the temporary prompt DTO.
+- Adapter-only tests were deleted while endpoint state coverage remains.
+- `.venv/bin/pytest -q`: `1466 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `9f47913`.
+`dev/v0.3.x` is published through `d4cace5`.
 
 ## Next Review Batch
 
-Delete dead `ChatLLM`, `default_llm`, and failover adapter code from
-`nuself.llm`.
+Move the remaining `ChatMessage` DTO out of the endpoint infrastructure module.
