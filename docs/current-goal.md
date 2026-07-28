@@ -5,9 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. SQLite transaction rollback dual failures are structurally inspectable
-while preserving the original body, commit, interruption, or rollback-only
-failure and restoring transaction-local state.
+Idle. Reason advancer, scheduler, and output-runner failure diagnostics cannot
+mask the original exception or change scheduler cooldown/return behavior.
 
 ## Active Branch
 
@@ -24,17 +23,19 @@ code.
 
 ## Completion Evidence
 
-- `SqliteTransactionCleanupError` exposes the exact `primary_error` and
-  `rollback_error` objects and retains the primary operation as explicit cause.
-- Transaction-body `RuntimeError`, `KeyboardInterrupt`, commit failure, and
-  rollback-only failure use the same dual-failure contract.
-- Every rollback path clears the column cache and resets thread-local depth and
-  rollback-only state before propagating; a recovered connection can start and
-  commit a subsequent transaction.
-- Exception type, message compatibility, nested transaction policy, and retry
-  behavior are unchanged.
-- Focused SQLite, reason service, and reason advancer tests: 89 passed.
-- Final full tests: 1308 passed.
+- Advancer agent/tool failure writes structured `advance_tool_failed` without
+  traceback payloads and propagates the exact original exception object.
+- Scheduler applies and persists cooldown before best-effort
+  `scheduler_advance_failed`; audit failure emits a terminal warning while
+  `run_once()` returns `None` and persists no step.
+- Output runner failure writes `reason_output_chunk_failed` best effort,
+  propagates the exact runner exception, and writes no failed chunk.
+- All three projections retain runtime/thread/job/chunk correlation and cannot
+  introduce a hidden retry when structured logging fails.
+- Successful events, prompts, step parsing, cooldown duration, and output
+  retry behavior are unchanged.
+- Focused advancer, scheduler, and output-runner tests: 23 passed.
+- Final full tests: 1311 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -45,4 +46,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-SQLite transaction rollback preserves structured dual failure provenance.
+reason failure projections cannot replace their primary outcomes.

@@ -187,6 +187,41 @@ def test_advance_failure_logs_shared_context_and_restores_caller(
     assert failure.thread_id == "reason-test"
     assert failure.request_id == "request-1"
     assert failure.source == "client"
+    assert failure.error == "agent failed"
+    assert "Traceback" not in failure.message
+
+
+def test_advance_failure_log_cannot_mask_original_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    primary_error = RuntimeError("agent failed")
+
+    class FailingAgent:
+        def invoke(self, _input: object) -> dict[str, object]:
+            raise primary_error
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    advancer = _advancer_with_agent(tmp_path, FailingAgent())
+    thread = ReasoningThread(id="reason-test", topic="Q")
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "reasoning/advance_tool_failed: agent failed; "
+            "structured logging failed: audit store unavailable"
+        ),
+    ), pytest.raises(RuntimeError) as captured:
+        advancer.advance(thread)
+
+    assert captured.value is primary_error
+    assert current_runtime_context() == RuntimeContext()
 
 
 def test_concurrent_advances_isolate_invocation_tool_capture(

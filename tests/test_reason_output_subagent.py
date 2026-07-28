@@ -65,6 +65,61 @@ def test_compose_with_runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     assert "Out B" in combined
 
 
+def test_chunk_failure_log_cannot_mask_runner_exception(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _reason_service(tmp_path)
+    thread = service.start_thread("Subagent export")
+    service.advance_thread(
+        thread.id,
+        step=_step(thread.id, "A", "Out A", "D A"),
+    )
+    output_service = ReasonOutputService(
+        project_root=tmp_path,
+        reason_service=service,
+    )
+    manifest = output_service.plan_job(thread.id, segment_size=1)
+    primary_error = RuntimeError("runner failed")
+
+    def fail_runner(
+        thread: ReasoningThread,
+        manifest: ReasonOutputManifest,
+        steps: list[ReasoningStep],
+        *,
+        section: ReasonOutputSection,
+        section_plan: tuple[ReasonOutputSection, ...],
+        index: int,
+        total: int,
+    ) -> str:
+        raise primary_error
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "reasoning/reason_output_chunk_failed: runner failed; "
+            "structured logging failed: audit store unavailable"
+        ),
+    ), pytest.raises(RuntimeError) as captured:
+        output_service.compose_with_runner(
+            thread.id,
+            manifest.job_id,
+            fail_runner,
+        )
+
+    assert captured.value is primary_error
+    paths = output_service.job_paths(thread.id, manifest.job_id)
+    assert list(paths.chunks_dir.glob("chunk-*.md")) == []
+
+
 def _step(thread_id: str, summary: str, output: str, delta: str):
     from nuself.reason.domain import ReasoningStep
 

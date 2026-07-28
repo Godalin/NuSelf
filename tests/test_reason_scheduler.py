@@ -201,6 +201,46 @@ def test_run_once_logs_and_cools_down_failed_advance(tmp_path: Path) -> None:
     assert failed[0].metadata == {"error_type": "FileNotFoundError", "thread_id": thread.id}
 
 
+def test_scheduler_failure_log_cannot_raise_or_undo_cooldown(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    service = _reason_service(repository=ReasonRepository(tmp_path))
+    thread = service.start_thread("Test failure")
+
+    class FailingAdvancer:
+        def advance(self, t: ReasoningThread) -> ReasoningStep | None:
+            raise FileNotFoundError("missing tmp")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    scheduler = ReasonScheduler(
+        project_root=tmp_path,
+        advancer=cast(ReasonAdvancer, FailingAdvancer()),
+        service=service,
+        interval_seconds=600,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "reasoning/scheduler_advance_failed: missing tmp; "
+            "structured logging failed: audit store unavailable"
+        ),
+    ):
+        result = scheduler.run_once()
+
+    assert result is None
+    updated = service.show_thread(thread.id)
+    assert updated.skip_next_advance_until is not None
+    assert service.list_steps(thread.id) == []
+
+
 def _null_advancer() -> ReasonAdvancer:
     class NullAdvancer:
         def advance(self, t: ReasoningThread) -> ReasoningStep | None:

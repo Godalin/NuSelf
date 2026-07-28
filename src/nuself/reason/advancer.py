@@ -17,6 +17,7 @@ from nuself.agent.middleware import ToolCaptureMiddleware
 from nuself.llm import LangChainLLMEndpoint
 from nuself.reason.domain import STEP_KINDS, TERMINAL_STATUSES, ReasoningStep, ReasoningThread
 from nuself.runtime import current_runtime_context, runtime_context
+from nuself.runtime.observability import report_observed_failure
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -300,14 +301,14 @@ class ReasonAdvancer:
                     if isinstance(data, dict):
                         return step_from_data(cast(dict[str, object], data), thread.id, tool_logs=step_tool_logs)
                 return None
-            except Exception:
-                import traceback
-                from nuself.logs import write_log_event
-                write_log_event(
-                    "reasoning",
-                    "advance_tool_failed",
-                    traceback.format_exc(),
+            except Exception as exc:
+                report_observed_failure(
+                    exc,
+                    component="reasoning",
+                    event="advance_tool_failed",
+                    message=f"Reason advance failed for thread {thread.id}",
                     project_root=self._project_root,
+                    level="error",
                     status="failed",
                     metadata={"thread_id": thread.id},
                 )

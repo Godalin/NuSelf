@@ -15,6 +15,7 @@ from nuself.reason.domain import ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.runtime.context import runtime_context
+from nuself.runtime.observability import report_observed_failure
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -78,14 +79,14 @@ class ReasonScheduler:
                 step = self._advancer.advance(candidate)
             except Exception as exc:
                 self._apply_cooldown(candidate)
-                write_log_event(
-                    "reasoning",
-                    "scheduler_advance_failed",
-                    f"Background advance for thread {candidate.id} failed: {exc}",
+                report_observed_failure(
+                    exc,
+                    component="reasoning",
+                    event="scheduler_advance_failed",
+                    message=f"Background advance for thread {candidate.id} failed",
                     project_root=self._project_root,
                     level="error",
                     status="error",
-                    error=str(exc),
                     metadata={"thread_id": candidate.id, "error_type": type(exc).__name__},
                 )
                 return

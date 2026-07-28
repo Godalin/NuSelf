@@ -394,6 +394,12 @@ Each segment is rewritten into a chunk.
 
 The chunk writer must summarize and reframe the source material rather than merely concatenate raw step text.
 
+An exception from the injected chunk runner remains authoritative and
+propagates unchanged. `reason_output_chunk_failed` is a secondary structured
+projection with thread, job, and chunk identity; diagnostic persistence
+failure emits a terminal warning without replacing the runner exception,
+writing the failed chunk, or adding an implicit retry.
+
 ### Persist
 
 Each completed chunk is written to the workspace and marked complete in the manifest.

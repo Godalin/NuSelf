@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reason advancer, scheduler, and output-runner failure logs now use shared
+  observable reporting. Audit storage failure cannot mask the original
+  advancer/runner exception or turn a cooled-down scheduler failure into a new
+  raised error.
 - SQLite transaction cleanup errors now expose structured `primary_error` and
   `rollback_error` fields for body, interruption, commit, and rollback-only
   failures, while retaining the original operation as the explicit cause and

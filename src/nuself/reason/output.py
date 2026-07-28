@@ -22,6 +22,7 @@ from nuself.reason.service import ReasonService
 from nuself.runtime.jobs import JobMessage, JobSink
 from nuself.runtime.observability import (
     report_corrupt_record,
+    report_observed_failure,
     run_observed_best_effort,
 )
 from nuself.storage import write_json_atomic, write_text_atomic
@@ -634,14 +635,17 @@ class ReasonOutputService:
                 composed_text = runner(thread, manifest, batch, section=section, section_plan=section_plan, index=index, total=total)
                 duration_ms = int((utc_now().timestamp() - start_ts) * 1000)
             except Exception as exc:
-                write_log_event(
-                    "reasoning",
-                    "reason_output_chunk_failed",
-                    f"Chunk {index+1}/{total} failed for job {manifest.job_id}: {str(exc)}",
+                report_observed_failure(
+                    exc,
+                    component="reasoning",
+                    event="reason_output_chunk_failed",
+                    message=(
+                        f"Chunk {index+1}/{total} failed for job "
+                        f"{manifest.job_id}"
+                    ),
                     project_root=self._project_root,
                     level="error",
                     status="error",
-                    error=str(exc),
                     metadata={"thread_id": thread.id, "job_id": manifest.job_id, "chunk_index": index},
                 )
                 raise

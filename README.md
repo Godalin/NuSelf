@@ -43,6 +43,10 @@ cleanup.
 SQLite transaction cleanup errors expose both the failed primary operation and
 failed rollback while resetting thread-local transaction state.
 
+Reason execution failure logs are secondary to the original advancer,
+scheduler, or output-runner outcome, including when structured audit storage
+is unavailable.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).
