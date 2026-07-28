@@ -143,6 +143,8 @@ top-level application namespace stays focused on subsystem APIs.
   choices and REPL preview rendering as explicit shared CLI interfaces.
   `commands/memory/maintenance.py` owns explicit curator/optimizer runs and
   durable entry import/export commands.
+  `commands/memory/parser.py` owns the complete memory command argument tree;
+  the root parser composes it as one subsystem registration.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
   repository APIs.
