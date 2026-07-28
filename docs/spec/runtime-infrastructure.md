@@ -551,10 +551,14 @@ The reason-output export queue is the first migration target. Its existing
 durable manifest remains authoritative while the in-memory queue becomes a
 typed wake-up mechanism rather than the job record itself.
 
-`nuself.runtime.jobs.JobMessage` is that immutable wake-up contract. It carries
-a versioned `kind="job"` envelope plus explicit `job_id` and `resource_id`.
-Producers receive a `JobSink` through composition; domain modules must not
-install process-global enqueue callbacks.
+`nuself.runtime.jobs.JobMessage` is that immutable wake-up contract. It is a
+typed view over one versioned `kind="job"` envelope, not a second routing
+container. `job_id` is derived from the envelope context; `resource_id` and
+optional domain wake-up data are decoded from one strict job payload. The
+payload rejects missing, blank, or unknown routing fields. Serializing only the
+envelope and decoding it again therefore retains every value required to route
+the wake-up. Producers receive a `JobSink` through composition; domain modules
+must not install process-global enqueue callbacks.
 
 The durable job record is authoritative and queue delivery is a best-effort
 wake-up. If wake-up delivery fails, the producer keeps the durable record,

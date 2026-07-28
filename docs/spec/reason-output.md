@@ -236,10 +236,13 @@ is a `queue.SimpleQueue[JobMessage]` owned by the daemon composition root.
 
 #### Queue event
 
-A queue item is an immutable `JobMessage` with a versioned `kind="job"`
-envelope, `job_id`, and `resource_id` (the reason thread id). The chat tool
-receives the queue's typed `JobSink` through constructor injection; the reason
-module does not install a process-global enqueue callback.
+A queue item is an immutable `JobMessage` backed entirely by a versioned
+`kind="job"` envelope. Its `job_id` property comes from envelope context and
+its `resource_id` property (the reason thread id) comes from the strict job
+payload. Optional wake-up hints live under the payload's `data` mapping.
+The chat tool receives the queue's typed `JobSink` through constructor
+injection; the reason module does not install a process-global enqueue
+callback.
 
 The worker reconstructs the job data path from `thread_id` and `job_id`: `private/workspaces/reason/{thread_id}/artifacts/export/jobs/{job_id}/manifest.json`.
 

@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Give log-projected runtime events one typed payload contract shared by
-producers, event definitions, and the log sink.
+Make `JobMessage` a self-contained typed view of one job envelope instead of a
+wrapper with duplicated routing identity.
 
 ## Active Branch
 
@@ -14,43 +14,40 @@ producers, event definitions, and the log sink.
 
 ## Ordered Work
 
-1. Audit payload construction and sink-side coercion for every core event.
-2. Specify one strict runtime log-projection payload.
-3. Validate core event payloads before envelope creation and subscriber calls.
-4. Migrate chat and daemon worker producers to the typed payload.
-5. Reuse the same parser in the log sink and reject ignored fields.
+1. Audit request, job, audit, and notification envelope ownership.
+2. Specify job routing entirely inside the envelope.
+3. Add a strict job payload with resource identity and domain data.
+4. Derive `JobMessage.job_id` and `resource_id` from the envelope.
+5. Verify envelope record round trips retain all queue routing information.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep extension events free to define their own payload validator.
-- Preserve runtime envelope identity and context behavior.
-- Do not turn direct domain audit records into runtime events.
+- Keep the durable job manifest authoritative over queue wake-ups.
+- Preserve the existing `JobMessage` consumer property API.
+- Keep daemon wire frames and durable notification entries in their documented
+  ownership models.
 
 ## Completion Evidence
 
-- `RuntimeLogEventPayload` is the single typed schema for core event log
-  projections, including exact scalar types, non-negative durations, mapping
-  metadata, and rejection of unknown fields.
-- Every core `RuntimeEventDefinition` validates that schema before
-  `RuntimeEnvelope` creation or subscriber delivery; extension definitions
-  retain an optional custom payload validator.
-- Chat-turn and daemon-worker producers construct the typed payload directly,
-  while `write_runtime_event()` parses the same type instead of independently
-  coercing or dropping fields.
-- Tests prove invalid core payloads and prebuilt envelopes reach no
-  subscribers, invalid projection fields fail precisely, and manually
-  supplied envelopes cannot bypass the strict log sink parser.
-- Focused runtime-event, observability, daemon-worker, chat, and log tests:
-  `120 passed`.
-- `.venv/bin/pytest -q`: `1511 passed`.
+- `JobPayload` strictly owns `resource_id` and optional wake-up `data`, rejecting
+  missing, blank, non-mapping, or unknown routing fields.
+- `JobMessage` now stores only its `RuntimeEnvelope`; `job_id`, `resource_id`,
+  and domain payload are derived views over envelope context and payload.
+- `JobMessage.create()` embeds every routing value in the envelope, eliminating
+  the duplicated wrapper identity and preserving strict JSON immutability.
+- Tests prove envelope record round trips retain job/resource routing and data,
+  and malformed or duplicate routing fields are rejected.
+- Focused runtime-message, reason-output queue, and export-recovery tests:
+  `70 passed`.
+- `.venv/bin/pytest -q`: `1514 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `e1aa5db`.
+`dev/v0.3.x` is published through `6f1d934`.
 
 ## Next Review Batch
 
-Audit runtime envelope kinds and transport-specific message wrappers.
+Audit unused envelope kinds and make the declared message taxonomy truthful.

@@ -341,6 +341,7 @@ def test_job_message_correlates_envelope_with_durable_job() -> None:
             producer="reasoning",
             job_id="job-1",
             resource_id="thread-1",
+            payload={"attempt": 2},
         )
 
     assert message.envelope.kind == "job"
@@ -348,3 +349,61 @@ def test_job_message_correlates_envelope_with_durable_job() -> None:
     assert message.envelope.context.job_id == "job-1"
     assert message.job_id == "job-1"
     assert message.resource_id == "thread-1"
+    assert message.payload == {"attempt": 2}
+    assert message.envelope.payload == {
+        "resource_id": "thread-1",
+        "data": {"attempt": 2},
+    }
+
+
+def test_job_message_envelope_round_trip_retains_routing() -> None:
+    original = JobMessage.create(
+        name="reason.output.export",
+        producer="reasoning",
+        job_id="job-1",
+        resource_id="thread-1",
+        payload={"attempt": 3},
+    )
+
+    decoded = JobMessage(
+        RuntimeEnvelope.from_record(original.envelope.to_record())
+    )
+
+    assert decoded.job_id == "job-1"
+    assert decoded.resource_id == "thread-1"
+    assert decoded.payload == {"attempt": 3}
+
+
+def test_job_message_rejects_envelope_without_job_identity() -> None:
+    envelope = RuntimeEnvelope(
+        kind="job",
+        name="reason.output.export",
+        producer="reasoning",
+        payload={"resource_id": "thread-1", "data": {}},
+    )
+
+    with pytest.raises(ValueError, match="requires job_id"):
+        JobMessage(envelope)
+
+
+def test_job_message_rejects_incomplete_or_extra_payload() -> None:
+    context = RuntimeContext(job_id="job-1")
+    payloads: tuple[dict[str, object], ...] = (
+        {"resource_id": "thread-1"},
+        {
+            "resource_id": "thread-1",
+            "data": {},
+            "job_id": "duplicate",
+        },
+    )
+    for payload in payloads:
+        envelope = RuntimeEnvelope(
+            kind="job",
+            name="reason.output.export",
+            producer="reasoning",
+            context=context,
+            payload=payload,
+        )
+
+        with pytest.raises(ValueError, match="fields are invalid"):
+            JobMessage(envelope)
