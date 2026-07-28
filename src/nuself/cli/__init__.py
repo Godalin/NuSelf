@@ -415,10 +415,9 @@ def _send_chat_interactive(
 
 
 def _chat_request_timeout_seconds(project_root: Path | None) -> float:
-    try:
-        return ConfigSystem.load(project_root=project_root).chat.request_timeout_seconds
-    except Exception:
-        return CHAT_REQUEST_TIMEOUT_SECONDS
+    return ConfigSystem.load(
+        project_root=project_root
+    ).chat.request_timeout_seconds
 
 
 def _interactive_loop(

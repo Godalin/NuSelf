@@ -339,7 +339,7 @@ uv run nuself thread open <thread-id>
 uv run nuself thread open <thread-id> --message "hello"
 ```
 
-In the REPL, switch threads with `:thread <id>`, view recent messages with `:history`, inspect sources with `:mem sources`, search memory with `:mem search <query>`, archive the current thread with `:archive`, restore an archived thread with `:unarchive <id>`, list archived threads with `:archived`, and delete the current thread with `:delete`.
+In the REPL, switch threads with `:thread <id>`, view recent messages with `:history`, inspect sources with `:mem sources`, search memory with `:mem search <query>`, archive the current thread with `:archive`, restore an archived thread with `:unarchive <id>`, list archived threads with `:archived`, and delete the current thread with `:delete`. If persisted thread history is malformed or unreadable, `:history` reports the load error instead of presenting the thread as empty.
 
 ## Memory Entries
 

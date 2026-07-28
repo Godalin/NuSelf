@@ -32,6 +32,7 @@ from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.repository import ReasonNotFound
 from nuself.reason.service import ReasonService
+from nuself.runtime.observability import format_exception_chain
 from nuself.storage import auto_backend
 from nuself.trace.repository import TraceNotFound
 from nuself.trace.service import TraceQueryService
@@ -443,12 +444,13 @@ def interactive_memory_help(command: str | None = None) -> str:
 
 
 def handle_interactive_history_command(project_root: Path | None, thread_id: str) -> str:
-    from nuself.agent.chat import ThreadStore
-
     try:
         state = ThreadStore(project_root).load(thread_id)
-    except Exception:
-        return "No thread state available."
+    except Exception as exc:
+        return (
+            f"Unable to load thread history for '{thread_id}': "
+            f"{format_exception_chain(exc)}"
+        )
     if not state.messages:
         return "No messages in this thread."
     lines = [f"Recent messages in '{thread_id}':"]

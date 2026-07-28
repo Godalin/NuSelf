@@ -99,6 +99,10 @@ interactive input state.
   are never stored in mutable module globals.
 - Consecutive history de-duplication and the existing history file path remain
   unchanged.
+- `:history` reports the existing empty-history message when a thread is absent
+  or has no messages. A malformed or unreadable persisted thread instead
+  renders a concise load-failure message with the compact exception chain; it
+  must not be presented as an empty thread.
 - Last-rendered daemon status and thread ID belong to the session so header
   suppression cannot leak between concurrent or sequential REPL connections.
 - Input fallback, command completion, and visible header behavior remain

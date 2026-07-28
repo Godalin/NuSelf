@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make LangChain structured-response state authoritative when present, without
-removing the compatibility path for runtimes that omit it.
+Stop CLI chat-timeout and history helpers from hiding unexpected configuration
+or persisted-thread failures.
 
 ## Active Branch
 
@@ -14,29 +14,28 @@ removing the compatibility path for runtimes that omit it.
 
 ## Ordered Work
 
-1. [x] Trace structured-response parsing and endpoint failover behavior.
-2. [x] Specify authoritative and compatibility state paths.
-3. [x] Reject malformed or protocol-like structured responses explicitly.
-4. [x] Preserve message fallback only when structured state is absent.
-5. [x] Add focused parser and endpoint-boundary tests.
+1. [x] Trace timeout configuration and history state loading behavior.
+2. [x] Correct config and CLI error-boundary specifications.
+3. [x] Remove the redundant broad timeout-config fallback.
+4. [x] Distinguish empty history from corrupt or unreadable thread state.
+5. [x] Update user-facing docs/changelog and add focused tests.
 6. [x] Run full tests, type checking, and formatting checks.
 7. [x] Commit this stage as one functional change.
 
 ## Out Of Scope
 
-- Changing `ChatStructuredOutput` fields or user-visible response payloads.
-- Removing local-LLM fallback after all configured LangChain endpoints fail.
-- Changing tool definitions, middleware, or conversation graph nodes.
-- Auditing CLI configuration and history fallbacks in the same commit.
+- Changing YAML fallback behavior for expected read/parse failures.
+- Changing the configured or default daemon chat timeout values.
+- Repairing or quarantining corrupt thread files automatically.
+- Changing prompt-toolkit completion degradation in this commit.
 
 ## Completion Evidence
 
-- Valid framework structured output is accepted.
-- Present-but-invalid structured output raises into retry/failover rather than
-  being reinterpreted from ordinary messages.
-- Missing structured state can still parse the final message for compatibility.
-- Protocol-like tool-call text is rejected in either path.
-- Focused parser tests, full pytest, Pyright, and `git diff --check` pass.
+- Missing or malformed YAML retains its documented default behavior.
+- Unexpected config loader failures propagate instead of silently choosing 120s.
+- Missing/empty thread history still renders the existing empty message.
+- Corrupt or unreadable history renders a concise exception-chain diagnostic.
+- Focused CLI tests, full pytest, Pyright, and `git diff --check` pass.
 
 ## Publication
 
@@ -44,5 +43,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Continue the classified exception audit with CLI configuration and history
-boundaries.
+Continue the classified exception audit with optional completion and terminal
+input degradation.

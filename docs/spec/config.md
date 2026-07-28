@@ -4,7 +4,7 @@
 
 | Priority | Source | Override Behavior |
 |---|---|---|
-| 1 (highest) | `private/config.yaml` | Overrides hardcoded defaults; silently ignored if missing or malformed |
+| 1 (highest) | `private/config.yaml` | Overrides defaults; missing uses defaults and malformed/unreadable warns before fallback |
 | 2 (lowest) | Hardcoded defaults in `ConfigSystem._default_config()` | Safe production values |
 
 **Key rule**: YAML overrides hardcoded defaults. No other override mechanisms exist.
@@ -69,6 +69,12 @@ Supported values: any IETF language tag string (e.g. `en`, `zh-CN`, `zh-TW`). De
 ## Missing Config File Behavior
 
 If `private/config.yaml` is missing, `ConfigSystem.load()` proceeds with hardcoded defaults. No error is raised.
+
+Malformed YAML, invalid encoding, and expected file-read failures print one
+concise warning and fall back to defaults. Unexpected exceptions are not
+configuration fallback: they propagate so programming defects remain visible.
+Callers must not wrap `ConfigSystem.load()` in a broad catch merely to recover
+one default field.
 
 ## LLM Endpoint List And Failover
 
