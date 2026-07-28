@@ -12,6 +12,7 @@ from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     diagnostic_exception_message,
     emit_runtime_warning,
+    sanitize_diagnostic_metadata,
 )
 from nuself.runtime.observability import (
     decode_observed_record,
@@ -99,6 +100,48 @@ def test_diagnostic_exception_message_is_safe_and_sanitized() -> None:
     ) == "failed password=***"
 
 
+def test_diagnostic_metadata_is_recursively_copied_and_sanitized() -> None:
+    metadata: dict[str, object] = {
+        "api_key": "top-secret",
+        "apiKey": "camel-secret",
+        "safe_id": "worker-1",
+        "nested": {
+            "authorization": "Bearer nested-secret",
+            "detail": "request failed token=embedded-secret",
+        },
+        "items": [
+            {
+                "smtp.password": "mail-secret",
+                "status": "failed",
+            }
+        ],
+    }
+
+    sanitized = sanitize_diagnostic_metadata(metadata)
+
+    assert sanitized == {
+        "api_key": "***",
+        "apiKey": "***",
+        "safe_id": "worker-1",
+        "nested": {
+            "authorization": "***",
+            "detail": "request failed token=***",
+        },
+        "items": [
+            {
+                "smtp.password": "***",
+                "status": "failed",
+            }
+        ],
+    }
+    assert metadata["api_key"] == "top-secret"
+    assert metadata["apiKey"] == "camel-secret"
+    assert metadata["nested"] == {
+        "authorization": "Bearer nested-secret",
+        "detail": "request failed token=embedded-secret",
+    }
+
+
 def test_best_effort_returns_none_and_writes_structured_failure(
     tmp_path: Path,
 ) -> None:
@@ -145,6 +188,56 @@ def test_observed_failure_redacts_credentials_from_compact_chain(
     [event] = read_log_events(project_root=tmp_path, component="chat")
     assert event.error == "provider failed api_key=***"
     assert provider_secret not in str(event.to_record())
+
+
+def test_observed_failure_sanitizes_metadata_before_persistence(
+    tmp_path: Path,
+) -> None:
+    metadata: dict[str, object] = {
+        "client_secret": "private-value",
+        "context": {
+            "url": "https://provider.invalid?access_token=query-secret",
+        },
+    }
+
+    report_observed_failure(
+        RuntimeError("provider failed"),
+        component="chat",
+        event="provider_failed",
+        message="Provider request failed",
+        project_root=tmp_path,
+        metadata=metadata,
+    )
+
+    [event] = read_log_events(project_root=tmp_path, component="chat")
+    assert event.to_record()["metadata"] == {
+        "client_secret": "***",
+        "context": {
+            "url": "https://provider.invalid?access_token=***",
+        },
+    }
+    assert metadata["client_secret"] == "private-value"
+
+
+def test_invalid_observed_failure_metadata_uses_terminal_warning(
+    tmp_path: Path,
+) -> None:
+    private_object = object()
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="value is not JSON-safe: object",
+    ):
+        report_observed_failure(
+            RuntimeError("provider failed"),
+            component="chat",
+            event="provider_failed",
+            message="Provider request failed",
+            project_root=tmp_path,
+            metadata={"context": private_object},
+        )
+
+    assert read_log_events(project_root=tmp_path) == []
 
 
 def test_observed_log_reports_uncertain_write_without_retrying_record(

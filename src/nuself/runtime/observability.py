@@ -18,6 +18,7 @@ from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     emit_runtime_warning,
     redact_sensitive_text,
+    sanitize_diagnostic_metadata,
 )
 from nuself.runtime.events import EventDeliveryError, EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
@@ -213,7 +214,7 @@ def report_observed_failure(
             level=level,
             status=status,
             error=error,
-            metadata=metadata,
+            metadata=sanitize_diagnostic_metadata(metadata),
         )
     except Exception as log_exc:
         warning = (

@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Eliminate direct caught-exception rendering across the whole codebase.
+Protect nested observed-failure metadata at the shared persistence boundary.
 
 ## Active Branch
 
@@ -13,47 +13,45 @@ Eliminate direct caught-exception rendering across the whole codebase.
 
 ## Ordered Work
 
-1. Classify every remaining direct exception-text use.
-2. Separate diagnostic projection from control-flow classification.
-3. Define one repository-wide caught-exception rendering rule.
-4. Migrate agent, persona, reflection, reason, notification, daemon, and config.
-5. Add an architecture test that prevents local rendering from returning.
+1. Audit every observed-failure and failure-metadata producer.
+2. Distinguish safe identifiers from arbitrary nested diagnostic context.
+3. Define recursive metadata privacy rules without weakening JSON validation.
+4. Sanitize all shared observed-failure persistence paths centrally.
+5. Verify sensitive keys, embedded credentials, immutability, and invalid types.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Original exception objects, explicit causes, retry decisions, and fallback
-  eligibility remain authoritative.
-- Successful domain strings and subprocess control fields are unchanged.
-- Raw exception text may exist only inside the shared safe renderer itself.
+- Ordinary successful audit metadata remains governed by its domain contract.
+- Invalid non-JSON diagnostic values still fail strict validation and enter the
+  existing terminal-warning fallback.
+- Sanitization never mutates caller-owned metadata.
 
 ## Completion Evidence
 
-- All caught exceptions used for output, fallback, wrapping, tool results,
-  metadata, evaluation failures, or persisted status now pass through
-  `diagnostic_exception_message(...)` or the sanitized compact-chain helper.
-- LLM availability and SQLite compatibility classification use
-  `safe_exception_message(...)`, so broken renderers cannot replace control
-  flow while original exception objects remain authoritative.
-- Subprocess stderr/stdout selected for reason PDF diagnostics is sanitized
-  before persistence.
-- Agent tools, persona graph/discussion/tools, reflection scheduler/service,
-  reason prompt/output, notification evaluation, daemon payload/client, config
-  warnings, and storage classification were migrated together.
-- The repository-wide AST architecture test rejects direct `str(...)` or
-  f-string rendering of any named caught exception.
-- Source search finds no direct exception rendering outside the shared
-  diagnostic implementation.
-- Focused cross-domain and architecture suites: `355 passed`.
-- Full test suite: `1646 passed`.
+- `sanitize_diagnostic_metadata(...)` recursively copies mappings and
+  sequences, redacts credential text in ordinary strings, and replaces values
+  under sensitive snake-case, kebab-case, camelCase, or dotted keys.
+- `report_observed_failure(...)` applies the sanitizer at the central
+  persistence boundary, covering direct reports, best-effort operations,
+  observed event publication, and audit-projection failure metadata.
+- Caller-owned nested containers remain unchanged.
+- Unsupported objects and non-string mapping keys are not coerced or rendered;
+  strict `LogEvent` JSON validation still fails into the existing non-raising
+  terminal-warning path.
+- Tests cover nested sensitive keys, embedded query credentials, sequences,
+  camelCase labels, input immutability, persisted output, and invalid objects.
+- Focused observability, logging, chat, daemon, reflection, persona, and reason
+  suites: `295 passed`.
+- Full test suite: `1649 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `6bfb515`.
+`dev/v0.3.x` is published through `0f2cb13`.
 
 ## Next Review Batch
 
-Review whether diagnostic metadata values beyond exception text need typed
-privacy classification after caught-exception rendering is globally enforced.
+Review ordinary audit metadata ownership separately after failure metadata is
+protected centrally.

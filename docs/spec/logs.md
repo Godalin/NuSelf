@@ -227,6 +227,13 @@ are callable delivery effects, not serializable correlation identity.
   that genuinely continues the same live projection must bind that effect
   explicitly; long-lived workers must establish their own ownership.
 
+Failure-only metadata supplied through shared observability is a diagnostic
+projection, not arbitrary business payload. It is recursively sanitized at the
+shared observed-failure boundary before `LogEvent` construction. Sensitive
+keys are replaced wholesale, embedded credential text is redacted, and the
+caller's containers remain unchanged. Ordinary successful audit metadata is
+not implicitly rewritten by this rule.
+
 ## Log Components
 
 | Component    | File             | Responsibility                                                       |

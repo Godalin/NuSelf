@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Observed-failure metadata is now recursively copied and sanitized at the
+  shared persistence boundary, including nested credential keys and embedded
+  secret text, without weakening strict JSON validation.
 - Agent tools, persona, reflection, reason, notification, daemon payload, and
   configuration adapters now share safe caught-exception rendering; retry and
   compatibility classification remain based on the original exception.
