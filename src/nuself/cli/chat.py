@@ -11,14 +11,32 @@ from nuself.cli.commands.output import print_ansi
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.config import ConfigSystem
 from nuself.daemon import client
-from nuself.logs import write_log_event
+from nuself.logs import LogComponent, write_log_event
 from nuself.memory.curator import MemoryCurator
 from nuself.runtime.context import runtime_context
+from nuself.runtime.observability import run_observed_best_effort
 from nuself.tui.render import TerminalTheme
 
 ReplyPrinter = Callable[[str], None]
 
 _theme = TerminalTheme()
+
+
+def _record_chat_audit(
+    operation: Callable[[], object],
+    *,
+    component: LogComponent,
+    audit_event: str,
+    project_root: Path | None,
+) -> None:
+    run_observed_best_effort(
+        operation,
+        component=component,
+        event="audit_projection_failed",
+        message="Chat client audit projection failed",
+        project_root=project_root,
+        metadata={"audit_event": audit_event},
+    )
 
 
 def send_daemon_chat(
@@ -83,23 +101,33 @@ def send_daemon_chat_interactive(
             )
         except client.DaemonApplicationError as exc:
             error = str(exc)
-            write_log_event(
-                "chat",
-                "daemon_chat_failed",
-                "daemon chat request failed",
+            _record_chat_audit(
+                lambda: write_log_event(
+                    "chat",
+                    "daemon_chat_failed",
+                    "daemon chat request failed",
+                    project_root=project_root,
+                    level="error",
+                    status="error",
+                    error=error,
+                ),
+                component="chat",
+                audit_event="daemon_chat_failed",
                 project_root=project_root,
-                level="error",
-                status="error",
-                error=error,
             )
             return InteractiveChatResult(code=1, error=error)
         with runtime_context(thread_id=response.thread_id):
-            write_log_event(
-                "chat",
-                "daemon_chat_completed",
-                "daemon chat request completed",
+            _record_chat_audit(
+                lambda: write_log_event(
+                    "chat",
+                    "daemon_chat_completed",
+                    "daemon chat request completed",
+                    project_root=project_root,
+                    status="ok",
+                ),
+                component="chat",
+                audit_event="daemon_chat_completed",
                 project_root=project_root,
-                status="ok",
             )
         return InteractiveChatResult(
             code=0,
@@ -156,24 +184,34 @@ def send_one_shot_chat_interactive(
                 thread_id,
                 turn_id=turn_id,
             )
-            write_log_event(
-                "chat",
-                "one_shot_chat_completed",
-                "one-shot chat turn completed",
+            _record_chat_audit(
+                lambda: write_log_event(
+                    "chat",
+                    "one_shot_chat_completed",
+                    "one-shot chat turn completed",
+                    project_root=project_root,
+                    status="ok",
+                ),
+                component="chat",
+                audit_event="one_shot_chat_completed",
                 project_root=project_root,
-                status="ok",
             )
             run_memory_curator(project_root)
             return InteractiveChatResult(code=0, reply=reply)
         except RuntimeError as exc:
-            write_log_event(
-                "chat",
-                "one_shot_chat_failed",
-                "one-shot chat turn failed",
+            _record_chat_audit(
+                lambda: write_log_event(
+                    "chat",
+                    "one_shot_chat_failed",
+                    "one-shot chat turn failed",
+                    project_root=project_root,
+                    level="error",
+                    status="error",
+                    error=str(exc),
+                ),
+                component="chat",
+                audit_event="one_shot_chat_failed",
                 project_root=project_root,
-                level="error",
-                status="error",
-                error=str(exc),
             )
             print(str(exc), file=sys.stderr)
             return InteractiveChatResult(code=1)
@@ -185,14 +223,19 @@ def run_memory_curator(project_root: Path | None) -> None:
     try:
         result = MemoryCurator(project_root).run_once()
     except RuntimeError as exc:
-        write_log_event(
-            "memory",
-            "curator_failed",
-            "memory curator failed",
+        _record_chat_audit(
+            lambda: write_log_event(
+                "memory",
+                "curator_failed",
+                "memory curator failed",
+                project_root=project_root,
+                level="error",
+                status="error",
+                error=str(exc),
+            ),
+            component="memory",
+            audit_event="curator_failed",
             project_root=project_root,
-            level="error",
-            status="error",
-            error=str(exc),
         )
         print_ansi(
             f"{_theme.tag('[memory]', 'memory')} curator failed: {exc}",
@@ -200,13 +243,18 @@ def run_memory_curator(project_root: Path | None) -> None:
         )
         return
     if result.changed:
-        write_log_event(
-            "memory",
-            "curator_changed",
-            "memory curator changed durable memory",
+        _record_chat_audit(
+            lambda: write_log_event(
+                "memory",
+                "curator_changed",
+                "memory curator changed durable memory",
+                project_root=project_root,
+                status="changed",
+                metadata={"summary": result.summary()},
+            ),
+            component="memory",
+            audit_event="curator_changed",
             project_root=project_root,
-            status="changed",
-            metadata={"summary": result.summary()},
         )
         print_ansi(
             f"{_theme.tag('[memory]', 'memory')} {result.summary()}"

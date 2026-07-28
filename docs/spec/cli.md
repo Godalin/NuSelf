@@ -145,6 +145,12 @@ alias string sets.
   The interactive result retains the failure phase, daemon request id, and
   possible-completion flag, and `turn_retry` records them in metadata.
 - A REPL retry is the same logical chat turn, not a second user turn. The client must reuse the same `turn_id` for every attempt of one user input. The daemon/chat layer must treat a completed `turn_id` as idempotent: if the first attempt completed after the client timed out, a retry returns the already-saved assistant reply instead of appending the same user message again or rerunning persona work.
+- Daemon/one-shot completion and failure records, curator status records, and
+  the `turn_retry` marker are auxiliary projections through the shared
+  best-effort observability boundary. Their failure, including an uncertain
+  `LogAppendLifecycleError`, cannot replace a completed reply, convert an
+  application result, or suppress/trigger a transport retry. Only the typed
+  daemon connection result controls retry.
 - `:restart` and `:r` restart the daemon from inside the current REPL, then reconnect future requests to the restarted daemon. The command preserves the current thread and interactive transcript session. Restart failures print a concise error and keep the REPL open.
 - The session header is printed once at startup, once after every completed
   non-command turn (including a failed turn returning to the prompt), and once

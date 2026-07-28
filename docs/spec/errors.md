@@ -213,6 +213,9 @@ fails. It retains the primary append error, rollback error, close error, and
 whether the record may already have persisted. The primary append error is the
 explicit cause when present; otherwise the close error is. A lone append error
 whose rollback and close both succeed remains the original exception.
+Auxiliary chat audits never retry the uncertain record. They report the append
+failure through the shared best-effort boundary, while the existing typed
+daemon transport result remains the sole retry decision.
 
 Reflection trace recording and organizer execution after a persisted
 reflection are secondary under this contract. Corrupt reflection schedule

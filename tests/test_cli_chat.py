@@ -10,7 +10,7 @@ from nuself.daemon.client import (
     DaemonConnectionError,
 )
 from nuself.daemon.payloads import ChatResponsePayload
-from nuself.logs import read_log_events
+from nuself.logs import LogAppendLifecycleError, read_log_events
 from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
@@ -187,6 +187,55 @@ def test_daemon_success_projects_reply_and_memory_update(
     assert event.source == "client"
 
 
+def test_daemon_success_survives_uncertain_completion_audit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def succeed_chat(*args: object, **kwargs: object) -> ChatResponsePayload:
+        del args, kwargs
+        return ChatResponsePayload(
+            answer="answer",
+            reply="reply",
+            thread_id="thread-1",
+            evidence_references=(),
+            epistemic_status=None,
+            memory_update="",
+        )
+
+    monkeypatch.setattr(
+        chat.client,
+        "chat",
+        succeed_chat,
+    )
+    close_error = OSError("completion audit close failed")
+
+    def fail_audit(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise LogAppendLifecycleError(
+            primary_error=None,
+            rollback_error=None,
+            close_error=close_error,
+            record_may_have_persisted=True,
+        ) from close_error
+
+    monkeypatch.setattr(chat, "write_log_event", fail_audit)
+
+    result = chat.send_daemon_chat_interactive(
+        "hello",
+        tmp_path,
+        "thread-1",
+        turn_id="turn-1",
+    )
+
+    assert result == chat.InteractiveChatResult(code=0, reply="reply")
+    [diagnostic] = read_log_events(
+        project_root=tmp_path,
+        component="chat",
+    )
+    assert diagnostic.event == "audit_projection_failed"
+    assert diagnostic.metadata == {"audit_event": "daemon_chat_completed"}
+
+
 def test_one_shot_success_runs_curator_after_reply(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -257,3 +306,50 @@ def test_one_shot_success_runs_curator_after_reply(
     assert event.turn_id == "turn-1"
     assert event.trace_id == "trace-1"
     assert event.source == "client"
+
+
+def test_one_shot_success_survives_uncertain_completion_audit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def reply(*args: object, **kwargs: object) -> str:
+        del args, kwargs
+        return "done"
+
+    def curate(_project_root: Path | None) -> None:
+        calls.append("curator")
+
+    monkeypatch.setattr(
+        chat,
+        "one_shot_reply",
+        reply,
+    )
+    monkeypatch.setattr(
+        chat,
+        "run_memory_curator",
+        curate,
+    )
+    close_error = OSError("completion audit close failed")
+
+    def fail_audit(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise LogAppendLifecycleError(
+            primary_error=None,
+            rollback_error=None,
+            close_error=close_error,
+            record_may_have_persisted=True,
+        ) from close_error
+
+    monkeypatch.setattr(chat, "write_log_event", fail_audit)
+
+    result = chat.send_one_shot_chat_interactive(
+        "hello",
+        tmp_path,
+        "thread-1",
+        turn_id="turn-1",
+    )
+
+    assert result == chat.InteractiveChatResult(code=0, reply="done")
+    assert calls == ["curator"]

@@ -17,6 +17,7 @@ from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.logs import InteractiveLogCursor, LogEvent, write_log_event
 from nuself.runtime.context import RuntimeContext, use_runtime_context
+from nuself.runtime.observability import run_observed_best_effort
 from nuself.tui.render import TerminalTheme
 
 SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
@@ -67,22 +68,29 @@ def send_interactive_chat_turn(
             )
         ):
             if attempt > 1:
-                write_log_event(
-                    "chat",
-                    "turn_retry",
-                    "retrying chat turn after retryable transport failure",
+                run_observed_best_effort(
+                    lambda: write_log_event(
+                        "chat",
+                        "turn_retry",
+                        "retrying chat turn after retryable transport failure",
+                        project_root=project_root,
+                        status="retry",
+                        metadata={
+                            "attempt": attempt,
+                            "max_attempts": max_attempts,
+                            "previous_error": result.error,
+                            "failure_phase": result.failure_phase,
+                            "request_id": result.request_id,
+                            "request_may_have_completed": (
+                                result.request_may_have_completed
+                            ),
+                        },
+                    ),
+                    component="chat",
+                    event="audit_projection_failed",
+                    message="Chat retry audit projection failed",
                     project_root=project_root,
-                    status="retry",
-                    metadata={
-                        "attempt": attempt,
-                        "max_attempts": max_attempts,
-                        "previous_error": result.error,
-                        "failure_phase": result.failure_phase,
-                        "request_id": result.request_id,
-                        "request_may_have_completed": (
-                            result.request_may_have_completed
-                        ),
-                    },
+                    metadata={"audit_event": "turn_retry"},
                 )
                 print()
                 print(

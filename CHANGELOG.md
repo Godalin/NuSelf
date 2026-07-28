@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon-backed and one-shot chat results, curator status, and REPL transport
+  retries no longer fail or change classification when their auxiliary audit
+  record cannot be written. Uncertain audit persistence is reported separately
+  without retrying the original record.
 - Structured log append failures now distinguish a cleanly rolled-back write
   from an uncertain close-time outcome. The reported lifecycle error preserves
   write, rollback, and close causes and explicitly warns when the record may
