@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sqlite3
+from typing import cast
 
 import pytest
 
@@ -13,7 +14,40 @@ from nuself.storage import (
     get_default_backend,
     reset_default_backend,
 )
-from nuself.storage_sqlite import COLLECTION_NAMES, SqliteStorageBackend
+from nuself.storage_sqlite import (
+    COLLECTION_NAMES,
+    SqliteStorageBackend,
+    SqliteTransactionCleanupError,
+    SqliteTransactionRollbackOnlyError,
+)
+
+
+class TransactionConnectionProxy:
+    def __init__(
+        self,
+        delegate: sqlite3.Connection,
+        *,
+        fail_commit: bool = False,
+        fail_rollback: bool = False,
+    ) -> None:
+        self._delegate = delegate
+        self._fail_commit = fail_commit
+        self._fail_rollback = fail_rollback
+        self.rollback_calls = 0
+
+    def execute(self, sql: str) -> sqlite3.Cursor:
+        return self._delegate.execute(sql)
+
+    def commit(self) -> None:
+        if self._fail_commit:
+            raise sqlite3.OperationalError("commit unavailable")
+        self._delegate.commit()
+
+    def rollback(self) -> None:
+        self.rollback_calls += 1
+        if self._fail_rollback:
+            raise sqlite3.OperationalError("rollback unavailable")
+        self._delegate.rollback()
 
 
 def test_create_sqlite_backend_creates_db(tmp_path: Path) -> None:
@@ -204,6 +238,109 @@ def test_nested_transaction_commits_once(tmp_path: Path) -> None:
         with backend.transaction():
             col.put("b", {"id": "b", "value": 2})
     assert {item["id"] for item in col.list()} == {"a", "b"}
+
+
+def test_caught_nested_failure_makes_outer_transaction_rollback_only(
+    tmp_path: Path,
+) -> None:
+    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    col = backend.collection("memory_entries")
+
+    with pytest.raises(
+        SqliteTransactionRollbackOnlyError,
+        match="cannot commit after a nested transaction failure",
+    ):
+        with backend.transaction():
+            try:
+                with backend.transaction():
+                    col.put("inner", {"id": "inner", "value": 1})
+                    raise RuntimeError("inner failed")
+            except RuntimeError:
+                pass
+            col.put("outer", {"id": "outer", "value": 2})
+
+    assert col.get("inner") is None
+    assert col.get("outer") is None
+
+    with backend.transaction():
+        col.put("recovered", {"id": "recovered", "value": 3})
+    assert col.get("recovered") is not None
+
+
+def test_keyboard_interrupt_rolls_back_and_restores_transaction_state(
+    tmp_path: Path,
+) -> None:
+    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    col = backend.collection("memory_entries")
+
+    with pytest.raises(KeyboardInterrupt):
+        with backend.transaction():
+            col.put("interrupted", {"id": "interrupted", "value": 1})
+            raise KeyboardInterrupt
+
+    assert col.get("interrupted") is None
+    with backend.transaction():
+        col.put("after", {"id": "after", "value": 2})
+    assert col.get("after") is not None
+
+
+def test_commit_failure_rolls_back_and_preserves_primary_error(
+    tmp_path: Path,
+) -> None:
+    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    col = backend.collection("memory_entries")
+    original = cast(
+        sqlite3.Connection,
+        getattr(backend, "_conn"),
+    )
+    proxy = TransactionConnectionProxy(original, fail_commit=True)
+    setattr(backend, "_conn", cast(sqlite3.Connection, proxy))
+
+    with pytest.raises(
+        sqlite3.OperationalError,
+        match="commit unavailable",
+    ):
+        with backend.transaction():
+            col.put("not-committed", {"id": "not-committed"})
+
+    assert proxy.rollback_calls == 1
+    assert col.get("not-committed") is None
+
+    setattr(backend, "_conn", original)
+    with backend.transaction():
+        col.put("recovered", {"id": "recovered"})
+    assert col.get("recovered") is not None
+
+
+def test_rollback_failure_retains_primary_commit_cause(
+    tmp_path: Path,
+) -> None:
+    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    col = backend.collection("memory_entries")
+    original = cast(
+        sqlite3.Connection,
+        getattr(backend, "_conn"),
+    )
+    proxy = TransactionConnectionProxy(
+        original,
+        fail_commit=True,
+        fail_rollback=True,
+    )
+    setattr(backend, "_conn", cast(sqlite3.Connection, proxy))
+
+    with pytest.raises(
+        SqliteTransactionCleanupError,
+        match="rollback unavailable",
+    ) as captured:
+        with backend.transaction():
+            col.put("not-committed", {"id": "not-committed"})
+
+    assert isinstance(captured.value.__cause__, sqlite3.OperationalError)
+    assert str(captured.value.__cause__) == "commit unavailable"
+    assert proxy.rollback_calls == 1
+
+    setattr(backend, "_conn", original)
+    original.rollback()
 
 
 def _create_v1_database(

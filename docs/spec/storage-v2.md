@@ -220,6 +220,16 @@ wire 字典；SQLite 使用 conflict update 实现替换语义，不能依赖
   commit。
 - 同一线程允许嵌套 transaction；只有最外层上下文拥有数据库事务。
 - transaction 抛出异常时，本批次所有写入回滚。
+- 任意内层 transaction 抛出 `BaseException` 后，当前最外层事务进入
+  rollback-only 状态。即使调用方在外层 block 内捕获了内层异常，最外层退出时也
+  必须回滚并抛出 `SqliteTransactionRollbackOnlyError`，不得提交部分失败批次。
+- `KeyboardInterrupt`、`SystemExit`、commit 失败和 rollback 失败都必须恢复
+  thread-local transaction depth/state。Commit 失败先尝试 rollback，再传播原始
+  commit 错误；若 rollback 也失败，稳定的 transaction cleanup 错误必须以原始
+  操作错误为 cause，同时描述 rollback 失败。
+- 事务内的动态 `ALTER TABLE` 也会被 SQLite rollback。每次 rollback（包括
+  rollback 自身报错、数据库状态未知的情况）都必须清空共享 column cache，后续
+  collection 操作重新读取真实 schema，不能使用已回滚的列集合。
 - 文件后端无法提供跨文件数据库事务；它至少序列化批次，并继续依赖单文件
   atomic replace。调用方不得把它描述为跨文件原子提交。
 

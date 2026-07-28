@@ -52,6 +52,27 @@ class _TransactionState:
     def depth(self, value: int) -> None:
         self.local.depth = value
 
+    @property
+    def rollback_only(self) -> bool:
+        value = getattr(self.local, "rollback_only", False)
+        return value if isinstance(value, bool) else False
+
+    @rollback_only.setter
+    def rollback_only(self, value: bool) -> None:
+        self.local.rollback_only = value
+
+
+class SqliteTransactionError(RuntimeError):
+    """Base class for SQLite transaction-state failures."""
+
+
+class SqliteTransactionRollbackOnlyError(SqliteTransactionError):
+    """Raised when a caught inner failure prevents the outer commit."""
+
+
+class SqliteTransactionCleanupError(SqliteTransactionError):
+    """Raised when rollback fails while preserving the primary cause."""
+
 
 class _Lock(Protocol):
     def acquire(self) -> bool: ...
@@ -369,18 +390,53 @@ class SqliteStorageBackend:
             outermost = self._transaction_state.depth == 0
             if outermost:
                 self._conn.execute("BEGIN IMMEDIATE")
+                self._transaction_state.rollback_only = False
             self._transaction_state.depth += 1
             try:
                 yield
-            except Exception:
+            except BaseException as exc:
                 self._transaction_state.depth -= 1
+                self._transaction_state.rollback_only = True
                 if outermost:
-                    self._conn.rollback()
+                    self._rollback_after_failure(exc)
                 raise
             else:
                 self._transaction_state.depth -= 1
-                if outermost:
+                if not outermost:
+                    return
+                if self._transaction_state.rollback_only:
+                    error = SqliteTransactionRollbackOnlyError(
+                        "SQLite transaction cannot commit after a nested "
+                        "transaction failure"
+                    )
+                    self._rollback_after_failure(error)
+                    raise error
+                try:
                     self._conn.commit()
+                except BaseException as exc:
+                    self._rollback_after_failure(exc)
+                    raise
+                self._reset_transaction_state()
+
+    def _rollback_after_failure(
+        self,
+        primary_error: BaseException,
+    ) -> None:
+        try:
+            self._conn.rollback()
+        except BaseException as rollback_error:
+            self._column_cache.clear()
+            self._reset_transaction_state()
+            raise SqliteTransactionCleanupError(
+                "SQLite rollback failed after "
+                f"{type(primary_error).__name__}: {rollback_error}"
+            ) from primary_error
+        self._column_cache.clear()
+        self._reset_transaction_state()
+
+    def _reset_transaction_state(self) -> None:
+        self._transaction_state.depth = 0
+        self._transaction_state.rollback_only = False
 
     def collection(self, name: str) -> SqliteCollection:
         table = _collection_table(name)

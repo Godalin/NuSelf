@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The strict shared chat response compatibility codec stage is complete; no
-implementation change is currently active.
+Idle. The SQLite rollback-only transaction and schema-cache recovery stage is
+complete; no implementation change is currently active.
 
 ## Active Branch
 
@@ -14,8 +14,7 @@ implementation change is currently active.
 
 ## Ordered Work
 
-No active implementation steps. Completed work is recorded in Git and
-`CHANGELOG.md`.
+No active implementation steps. Completed work is recorded in Git.
 
 ## Out Of Scope
 
@@ -31,5 +30,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit SQLite initialization, close, transaction rollback, and cache invalidation
-exception boundaries.
+Audit SQLite row JSON corruption and explicit close/checkpoint visibility.
