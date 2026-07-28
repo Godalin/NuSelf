@@ -98,6 +98,11 @@ The gate is LLM-driven (L2 judgment). The LLM receives the candidate, recent ref
 
 - All floats are clamped to `[0, 1]`.
 - `passes` is the LLM's holistic judgment, not a derived formula.
+- The Pydantic response models are the authoritative parse boundary. Boolean
+  fields must be JSON booleans, candidate types must be declared
+  `IdeaCandidateType` values, and a malformed item invalidates its complete
+  candidate-generation batch. A handwritten dict parser must not coerce or
+  partially accept output after schema validation fails.
 - On any LLM/JSON/parsing failure, fallback to `passes=false`, `composite=0.0`, `reason="llm_fallback"`.
 - `cooldown_ok` remains L1 deterministic: checked before the LLM call using `config.scheduler.cooldown_seconds`.
 

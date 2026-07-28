@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Reflection relevance and candidate generation now use their typed schemas as
+  the sole parse boundary; malformed batches, string booleans, and unknown
+  candidate types take the safe fallback instead of being coerced or partially
+  accepted by a second handwritten parser.
 - Thread-scoped persona name indexes are now validated against authoritative
   prompt files and atomically rebuilt when missing, malformed, or stale;
   renaming a prompt no longer leaves its old name as an alias.

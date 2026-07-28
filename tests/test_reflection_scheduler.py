@@ -439,6 +439,45 @@ def test_generator_llm_bad_json_returns_empty(tmp_path: Path) -> None:
     assert candidates == []
 
 
+@pytest.mark.parametrize(
+    "candidates",
+    [
+        [
+            {
+                "title": "Valid-looking idea",
+                "body": "This item is valid by itself.",
+                "candidate_type": "question",
+            },
+            {
+                "title": "Missing body",
+                "candidate_type": "action",
+            },
+        ],
+        [
+            {
+                "title": "Unknown type",
+                "body": "Unknown types must not be coerced.",
+                "candidate_type": "surprise",
+            },
+        ],
+    ],
+)
+def test_generator_rejects_entire_malformed_candidate_batch(
+    tmp_path: Path,
+    candidates: list[dict[str, object]],
+) -> None:
+    _seed_memory(tmp_path)
+    llm = _FakeLLM(candidates=candidates)
+    gen = IdeaCandidateGenerator(tmp_path, llm=llm)
+
+    assert gen.generate() == []
+    event = read_log_events(
+        project_root=tmp_path,
+        component="reflection",
+    )[-1]
+    assert event.event == "candidate_generation_failed"
+
+
 def test_generator_parses_multiple_candidates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """LLM returning multiple candidates → all parsed."""
     multi_llm = _FakeLLM(candidates=[
@@ -604,7 +643,7 @@ def test_relevance_gate_fallback_on_missing_field(tmp_path: Path) -> None:
     assert score.reasons == ("llm_fallback",)
 
 
-def test_relevance_gate_parses_passes_from_string(tmp_path: Path) -> None:
+def test_relevance_gate_rejects_passes_from_string(tmp_path: Path) -> None:
     from nuself.reflection import LLMRelevanceGate
 
     class _StringPassesLLM:
@@ -617,7 +656,9 @@ def test_relevance_gate_parses_passes_from_string(tmp_path: Path) -> None:
 
     gate = LLMRelevanceGate(tmp_path, llm=_StringPassesLLM())  # type: ignore[arg-type]
     score = gate.score(_make_candidate("String true"))
-    assert score.passes is True
+    assert score.passes is False
+    assert score.composite == 0.0
+    assert score.reasons == ("llm_fallback",)
 
 
 def test_relevance_gate_cooldown_uses_config(tmp_path: Path) -> None:
