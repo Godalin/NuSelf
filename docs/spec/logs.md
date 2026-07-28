@@ -328,7 +328,14 @@ Structured component logs use `LogRetentionPolicy`. The production default is
   oldest backup beyond `backup_count` is deleted.
 - A stable sidecar advisory lock serializes rotation and append across
   processes; locking the active inode itself is insufficient because rotation
-  replaces that inode.
+  replaces that inode. The sidecar is not unlinked after a write: its stable
+  path-to-inode identity must remain valid for processes that already have it
+  open.
+- The supplementary process-local lock registry uses normalized paths as keys
+  and weak lock values. Active holders and waiters keep one shared lock alive;
+  once no operation references it, the registry may reclaim both the lock and
+  its path key. A long-lived process therefore does not retain every project
+  path it has ever logged to.
 - Rotation is bounded-retention maintenance, not a prerequisite for event
   persistence. An `OSError` while deleting or replacing rotation files does
   not reject the current event: the writer appends it to whichever active file

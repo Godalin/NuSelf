@@ -14,6 +14,7 @@ from pathlib import Path
 from threading import Lock, RLock
 from typing import BinaryIO, Literal, cast
 from uuid import uuid4
+from weakref import WeakValueDictionary
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.runtime.context import (
@@ -55,7 +56,7 @@ _AUDIT_EVENT_NAME = re.compile(
     r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$"
 )
 _LOG_LOCKS_GUARD = Lock()
-_LOG_WRITE_LOCKS: dict[Path, RLock] = {}
+_LOG_WRITE_LOCKS: WeakValueDictionary[Path, RLock] = WeakValueDictionary()
 _LEGACY_LOG_INSTANT = datetime.min.replace(tzinfo=UTC)
 
 

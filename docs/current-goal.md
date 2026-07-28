@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Recover the active structured log cleanly when a single-record append fails
-after writing only part of its JSONL bytes.
+Bound process-local log lock memory without destabilizing the persistent
+sidecar inode used for cross-process coordination.
 
 ## Active Branch
 
@@ -14,38 +14,38 @@ after writing only part of its JSONL bytes.
 
 ## Ordered Work
 
-1. Audit text-stream write, flush, and failure behavior.
-2. Specify record-boundary rollback for failed appends.
-3. Add a complete-write loop under the existing process lock.
-4. Preserve the primary append error if rollback also fails.
-5. Verify recovery from an injected partial write.
+1. Audit sidecar and process-local lock ownership lifetimes.
+2. Specify persistent filesystem and weak in-memory identities.
+3. Replace strong path retention with a guarded weak-value registry.
+4. Preserve one shared lock for active holders and waiters.
+5. Verify idle path reclamation plus contended writes.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Successful appends remain process-visible rather than `fsync`-durable.
-- Rollback is limited to bytes written by the failing append while holding the
-  stable inter-process lock.
-- Failed events are not delivered to observers.
+- Sidecar lock files remain on disk and are not unlinked during normal writes.
+- Active holders and waiters retain a strong reference to their shared lock.
+- Registry reclamation does not alter the cross-process `flock` protocol.
 
 ## Completion Evidence
 
-- Active-file appends capture the record boundary under the existing stable
-  lock and use an unbuffered complete-write loop.
-- Short writes are retried until the full JSONL record is process-visible.
-- An injected partial write rolls back to the prior boundary, propagates the
-  original `OSError`, skips observer delivery, and permits a clean later write.
-- Rollback failure emits one non-raising diagnostic containing only component
-  and exception type; private paths and exception messages remain excluded.
-- Focused log infrastructure tests: `51 passed`.
-- `.venv/bin/pytest -q`: `1547 passed`.
+- The process-local path registry now holds `RLock` values weakly while a
+  guarded lookup still returns one shared lock to active holders and waiters.
+- Idle locks and their normalized path keys are reclaimed after the last
+  operation releases its strong reference.
+- Cross-process `.lock` sidecars remain on disk after local lock reclamation,
+  preserving their stable path-to-inode coordination identity.
+- Existing 50-write thread-contention coverage remains green alongside direct
+  active-lock reuse and idle-path reclamation tests.
+- Focused log infrastructure tests: `53 passed`.
+- `.venv/bin/pytest -q`: `1549 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `4089880`.
+`dev/v0.3.x` is published through `3a8f054`.
 
 ## Next Review Batch
 
-Audit sidecar lock lifecycle and in-process lock registry growth.
+Audit lock release and file-close failures for primary-error preservation.

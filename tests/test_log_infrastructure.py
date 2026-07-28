@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import json
 import threading
 import warnings
@@ -673,6 +674,50 @@ def test_log_writes_are_complete_under_thread_contention(tmp_path: Path) -> None
 
     assert len(records) == 50
     assert len({record["event_id"] for record in records}) == 50
+
+
+def test_process_local_log_lock_registry_reclaims_idle_paths(
+    tmp_path: Path,
+) -> None:
+    held_path = tmp_path / "held.log"
+    idle_path = tmp_path / "idle.log"
+    held_lock = logs._log_write_lock(  # pyright: ignore[reportPrivateUsage]
+        held_path
+    )
+    assert (
+        logs._log_write_lock(held_path)  # pyright: ignore[reportPrivateUsage]
+        is held_lock
+    )
+
+    logs._log_write_lock(idle_path)  # pyright: ignore[reportPrivateUsage]
+    gc.collect()
+
+    registry = logs._LOG_WRITE_LOCKS  # pyright: ignore[reportPrivateUsage]
+    assert held_path.absolute() in registry
+    assert idle_path.absolute() not in registry
+
+    del held_lock
+    gc.collect()
+    assert held_path.absolute() not in registry
+
+
+def test_sidecar_lock_file_persists_after_local_lock_reclamation(
+    tmp_path: Path,
+) -> None:
+    write_log_event(
+        "chat",
+        "turn_completed",
+        "persist sidecar",
+        project_root=tmp_path,
+    )
+    path = log_path("chat", project_root=tmp_path)
+
+    gc.collect()
+
+    assert path.with_name(f"{path.name}.lock").is_file()
+    assert path.absolute() not in (
+        logs._LOG_WRITE_LOCKS  # pyright: ignore[reportPrivateUsage]
+    )
 
 
 def test_incremental_cursor_waits_for_complete_lines(tmp_path: Path) -> None:
