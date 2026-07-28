@@ -9,6 +9,8 @@
 | `component`   | `LogComponent`                              | yes      |
 | `event`       | `str` (slug)                                | yes      |
 | `message`     | `str`                                       | yes      |
+| `event_id`    | `str`                                       | new records |
+| `schema_version` | `int`                                    | new records |
 | `thread_id`   | `str \| None`                               | no       |
 | `request_id`  | `str \| None`                               | no       |
 | `turn_id`     | `str \| None`                               | no       |
@@ -130,6 +132,10 @@ Display name mapping: `persona` → `selves`.
 - JSON Lines format (`sort_keys=True`, `ensure_ascii=True`).
 - Append mode (`"a"`, `encoding="utf-8"`).
 - Directory creation before open.
+- New writes project a version-1 `RuntimeEnvelope`, including its stable
+  `message_id` as `event_id`.
+- Writes are serialized by a per-path process lock and an advisory file lock;
+  one complete JSON line is flushed before releasing the locks.
 - Returns the constructed `LogEvent`.
 
 ## Read Contract
@@ -140,6 +146,12 @@ Display name mapping: `persona` → `selves`.
 - `tail > 0` returns `events[-tail:]`.
 - Non-JSON lines wrapped as `event="legacy"`.
 - Invalid JSON lines skipped.
+- Records predating the envelope fields remain readable with `event_id=None`
+  and `schema_version=None`.
+- `InteractiveLogCursor` starts at the current byte length of each component
+  file, reads only newly appended complete lines, and retains an incomplete
+  trailing line for the next read. Stable event IDs provide deduplication;
+  canonical record content is used only for legacy records.
 
 ## Log Rotation
 

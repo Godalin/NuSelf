@@ -46,7 +46,7 @@ These are review-driven refactors that should not block local v0.2 testing. They
 - [x] Centralize typed CLI handler binding and dispatch while retaining
   argparse for parsing.
 - [x] Introduce a versioned runtime envelope and neutral correlation context.
-- [ ] Make structured logs an envelope sink with stable event IDs, serialized
+- [x] Make structured logs an envelope sink with stable event IDs, serialized
   writes, and incremental cursors.
 - [ ] Replace tuple queues and process-global job callbacks with typed internal
   job messages, starting with reason output export.
