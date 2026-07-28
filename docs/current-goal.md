@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. REPL top-level commands now use one typed, sealed handler registry owned
-by the CLI composition root.
+Idle. `nuself.runtime.context` is now the only public and internal
+correlation-context API.
 
 ## Active Branch
 
@@ -23,16 +23,16 @@ code.
 
 ## Completion Evidence
 
-- The authoritative catalog indexes unique canonical names and aliases, and
-  resolves each input once to a canonical name plus argument body.
-- `ReplCommandDispatcher` owns a sealed `HandlerRegistry` with exactly one
-  handler for every catalog command; composition rejects a missing or extra
-  handler.
-- The CLI composition root creates one dispatcher per interactive loop instead
-  of using a process-global mutable registry.
-- Argparse and LangChain tool dispatch remain on their framework-native
-  boundaries.
-- Focused REPL/CLI tests: 338 passed.
+- `nuself.logs` reads `current_runtime_context()` directly and no longer
+  defines `LogContext`, `current_log_context()`, or `log_context()`.
+- Reason scheduling, chat turns, and persona consultation use the neutral
+  runtime API; no production or test caller imports a logging-owned context
+  name.
+- The logging spec defines logs as a consumer of context while keeping
+  process-local observers separate from serializable correlation identity.
+- Existing persisted `LogEvent` fields and intentional per-event overrides are
+  unchanged.
+- Focused runtime/log/chat/reason/persona/daemon/notification tests: 452 passed.
 - Final full tests: 1273 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
@@ -43,5 +43,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Continue auditing runtime context, observability, event, and audit-log adoption
-after this handler boundary is complete.
+Audit direct correlation overrides and event-to-audit projection after context
+API ownership is singular.

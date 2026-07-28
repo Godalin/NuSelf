@@ -18,7 +18,6 @@ from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
-    runtime_context,
 )
 from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
@@ -76,9 +75,6 @@ _CURRENT_LOG_EVENT_OBSERVERS: ContextVar[tuple[LogEventObserver, ...]] = Context
     "nuself_log_event_observers",
     default=(),
 )
-
-
-LogContext = RuntimeContext
 
 
 def _log_write_lock(path: Path) -> RLock:
@@ -218,7 +214,7 @@ def write_log_event(
     """Append a structured log event and return it."""
 
     _require_log_identity(component, event)
-    context = current_log_context()
+    context = current_runtime_context()
     envelope = RuntimeEnvelope(
         kind="audit",
         name=event,
@@ -424,15 +420,6 @@ def _rotate_log_if_needed(
 
 def _rotated_log_path(path: Path, index: int) -> Path:
     return path.with_name(f"{path.name}.{index}")
-
-
-def current_log_context() -> LogContext:
-    """Return the shared runtime correlation context."""
-
-    return current_runtime_context()
-
-
-log_context = runtime_context
 
 
 @contextmanager

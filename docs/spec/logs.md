@@ -36,11 +36,14 @@ observe one stable event snapshot.
 ## Log Context
 
 `LogEvent` is append-only evidence. The authoritative ephemeral correlation
-state is `nuself.runtime.context.RuntimeContext`. `LogContext`,
-`current_log_context()`, and `log_context(...)` remain compatibility names that
-delegate to the shared runtime context rather than owning separate state.
+state and its complete public API live in `nuself.runtime.context`.
+`nuself.logs` consumes the active `RuntimeContext`; it does not define logging-
+specific context types, accessors, aliases, or state.
 
-Runtime code may establish a `log_context(...)` around a daemon request, chat turn, background job, or trace-producing operation. `write_log_event(...)` inherits unset ownership fields from the current context:
+Runtime code may establish a `runtime_context(...)` around a daemon request,
+chat turn, background job, or trace-producing operation.
+`write_log_event(...)` inherits unset ownership fields from the current
+runtime context:
 
 - `thread_id` for conversation thread ownership;
 - `request_id` for daemon/client request ownership;

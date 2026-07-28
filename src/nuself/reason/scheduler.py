@@ -9,11 +9,12 @@ from typing import Any
 
 from nuself.clock import utc_now
 from nuself.llm import LangChainLLMEndpoint
-from nuself.logs import log_context, write_log_event
+from nuself.logs import write_log_event
 from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
+from nuself.runtime.context import runtime_context
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -69,7 +70,10 @@ class ReasonScheduler:
         if candidate is None:
             return
 
-        with log_context(thread_id=candidate.id, source="reason_scheduler"):
+        with runtime_context(
+            thread_id=candidate.id,
+            source="reason_scheduler",
+        ):
             try:
                 step = self._advancer.advance(candidate)
             except Exception as exc:

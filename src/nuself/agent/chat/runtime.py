@@ -34,12 +34,13 @@ from nuself.llm import (
     configured_langchain_chat_models,
     default_llm,
 )
-from nuself.logs import log_context, write_log_event
+from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.output import SectionPlanner
+from nuself.runtime.context import runtime_context
 from nuself.runtime.jobs import JobSink
 from nuself.trace.service import TraceRecorder
 
@@ -174,7 +175,11 @@ class ConversationGraphRuntime:
         turn_id: str | None = None,
     ) -> tuple[ThreadState, ChatResult, tuple[ConversationNodeName, ...]]:
         started_at = time.monotonic()
-        with log_context(thread_id=thread_id, turn_id=turn_id, source="chat_runtime"):
+        with runtime_context(
+            thread_id=thread_id,
+            turn_id=turn_id,
+            source="chat_runtime",
+        ):
             write_log_event(
                 "chat",
                 "turn_started",
@@ -198,7 +203,11 @@ class ConversationGraphRuntime:
         updated = _require_thread_state(turn_state.updated_thread_state)
         final_response = _require_final_response(turn_state.final_response)
         duration_ms = int((time.monotonic() - started_at) * 1000)
-        with log_context(thread_id=thread_id, turn_id=turn_id, source="chat_runtime"):
+        with runtime_context(
+            thread_id=thread_id,
+            turn_id=turn_id,
+            source="chat_runtime",
+        ):
             write_log_event(
                 "chat",
                 "turn_completed",

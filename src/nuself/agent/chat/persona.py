@@ -7,7 +7,7 @@ from pathlib import Path
 
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatLLM, LangChainLLMEndpoint
-from nuself.logs import LogLevel, current_log_context, write_log_event
+from nuself.logs import LogLevel, write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.persona import (
     LLMBackedActivationPolicy,
@@ -20,6 +20,7 @@ from nuself.persona import (
     SharedPersonaDiscussionService,
     load_persona_definitions,
 )
+from nuself.runtime.context import current_runtime_context
 from nuself.runtime.observability import (
     format_exception_chain,
     run_observed_best_effort,
@@ -73,7 +74,7 @@ class ConversationPersonaOrchestrator:
         mode: str = "consult",
         context: str | None = None,
     ) -> str:
-        thread_id = current_log_context().thread_id or "default"
+        thread_id = current_runtime_context().thread_id or "default"
         memory_context = self._memory_query_service.pack(
             MemoryQuery(text=topic)
         ).text

@@ -33,7 +33,6 @@ from nuself.domain.profile import ProfileItem
 from nuself.logs import (
     InteractiveLogCursor,
     LogEvent,
-    log_context,
     read_log_events,
     write_log_event,
 )
@@ -1465,8 +1464,8 @@ def test_logs_command_accepts_storage_component(
     assert "[storage] backend_close_failed" in captured.out
 
 
-def test_log_context_applies_runtime_ownership_fields(tmp_path: Path) -> None:
-    with log_context(
+def test_runtime_context_applies_log_ownership_fields(tmp_path: Path) -> None:
+    with runtime_context(
         thread_id="default", request_id="req-1", turn_id="turn-1", source="test"
     ):
         event = write_log_event(
