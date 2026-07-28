@@ -258,10 +258,12 @@ nuself inbox notify show <id>
 ### Daemon
 
 ```
-nuself daemon start | stop | restart | status | list
+nuself daemon start | stop | restart | status | health | list
 ```
 
 - **Output**: Plain text state lines (`daemon running pid=... socket=...`).
+- `daemon health` queries the running process and prints one line per background
+  worker with `alive`, consecutive failures, last success, and last error.
 - **Error**: State mismatch printed to stderr with exit code `1`.
 
 ### Memory

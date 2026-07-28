@@ -10,7 +10,7 @@ from uuid import uuid4
 PROTOCOL_VERSION = 1
 
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
-RequestType: TypeAlias = Literal["ping", "echo", "chat", "shutdown"]
+RequestType: TypeAlias = Literal["ping", "health", "echo", "chat", "shutdown"]
 ResponseStatus: TypeAlias = Literal["ok", "error"]
 
 
@@ -144,7 +144,7 @@ def _expect_int(raw: dict[str, Any], field_name: str) -> int:
 
 def _expect_request_type(raw: dict[str, Any], field_name: str) -> RequestType:
     value = _expect_str(raw, field_name)
-    if value not in {"ping", "echo", "chat", "shutdown"}:
+    if value not in {"ping", "health", "echo", "chat", "shutdown"}:
         raise ProtocolError(f"unsupported request type: {value}")
     return cast(RequestType, value)
 

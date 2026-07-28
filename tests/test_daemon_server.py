@@ -142,6 +142,55 @@ def test_daemon_ping_returns_pong(tmp_path: Path) -> None:
     assert response.payload["message"] == "pong"
 
 
+def test_daemon_health_returns_worker_snapshots(tmp_path: Path) -> None:
+    state = DaemonState(tmp_path)
+    response = handle_request(
+        DaemonRequest(type="health", payload={}, request_id="health1"),
+        state,
+    )
+    assert response.status == "ok"
+    workers = response.payload["workers"]
+    assert isinstance(workers, list)
+    names: set[str] = set()
+    for item in workers:
+        if isinstance(item, dict):
+            name = item.get("name")
+            if isinstance(name, str):
+                names.add(name)
+    assert names == {
+        "memory_curator",
+        "reflection_scheduler",
+        "reason_scheduler",
+        "export_worker",
+        "notification_delivery",
+    }
+
+
+def test_memory_curator_worker_survives_unexpected_error(
+    tmp_path: Path,
+) -> None:
+    state = DaemonState(tmp_path)
+    state.memory_curator_interval_seconds = 0.01
+
+    class BrokenCurator:
+        def run_once(self) -> None:
+            raise ValueError("bad curator data")
+
+    state.memory_curator = BrokenCurator()  # type: ignore[assignment]
+    state.start_background_memory_curator()
+    deadline = time.monotonic() + 1.0
+    health = state.worker_health()[0]
+    while health.consecutive_failures == 0 and time.monotonic() < deadline:
+        time.sleep(0.01)
+        health = state.worker_health()[0]
+
+    assert health.alive is True
+    assert health.consecutive_failures >= 1
+    assert health.last_error == "bad curator data"
+    state.shutdown_requested.set()
+    state.stop_background_memory_curator()
+
+
 def test_daemon_echo_returns_payload(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     request = DaemonRequest(type="echo", payload={"test": "data"}, request_id="echo1")

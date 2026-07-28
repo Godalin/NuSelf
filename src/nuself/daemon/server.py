@@ -11,6 +11,8 @@ import socketserver
 import threading
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import cast, override
 
 from nuself.agent.chat import ChatAgent
@@ -41,6 +43,15 @@ def _format_exception_chain(exc: BaseException) -> str:
             messages.append(message)
         current = current.__cause__ or current.__context__
     return " <- ".join(messages) if messages else exc.__class__.__name__
+
+
+@dataclass(frozen=True)
+class WorkerHealth:
+    name: str
+    alive: bool = False
+    last_success_at: str | None = None
+    last_error: str | None = None
+    consecutive_failures: int = 0
 
 
 # Export chunk runner protocol intentionally omitted; inline runner typing used.
@@ -133,7 +144,7 @@ class DaemonState:
         config = ConfigSystem.load(project_root=project_root)
         
         self.memory_curator = MemoryCurator(project_root)
-        self.memory_curator_interval_seconds = config.daemon.memory_curator.interval_seconds
+        self.memory_curator_interval_seconds: float = config.daemon.memory_curator.interval_seconds
         self._memory_curator_thread: threading.Thread | None = None
         
         self.reflection_scheduler = ReflectionScheduler(project_root)
@@ -159,6 +170,62 @@ class DaemonState:
         self._export_timers: list[threading.Timer] = []
         self._export_timers_lock = threading.Lock()
         self._export_worker_thread: threading.Thread | None = None
+        self._worker_health_lock = threading.Lock()
+        self._worker_health: dict[str, WorkerHealth] = {
+            name: WorkerHealth(name=name)
+            for name in (
+                "memory_curator",
+                "reflection_scheduler",
+                "reason_scheduler",
+                "export_worker",
+                "notification_delivery",
+            )
+        }
+
+    def worker_health(self) -> tuple[WorkerHealth, ...]:
+        """Return a stable snapshot of daemon worker health."""
+        with self._worker_health_lock:
+            snapshots: list[WorkerHealth] = []
+            threads = {
+                "memory_curator": self._memory_curator_thread,
+                "reflection_scheduler": self._reflection_scheduler_thread,
+                "reason_scheduler": self._reason_scheduler_thread,
+                "export_worker": self._export_worker_thread,
+                "notification_delivery": self._notification_delivery_thread,
+            }
+            for name, health in self._worker_health.items():
+                thread = threads[name]
+                snapshots.append(
+                    WorkerHealth(
+                        name=name,
+                        alive=thread.is_alive() if thread is not None else False,
+                        last_success_at=health.last_success_at,
+                        last_error=health.last_error,
+                        consecutive_failures=health.consecutive_failures,
+                    )
+                )
+            return tuple(snapshots)
+
+    def _record_worker_success(self, name: str) -> None:
+        with self._worker_health_lock:
+            self._worker_health[name] = WorkerHealth(
+                name=name,
+                alive=True,
+                last_success_at=datetime.now(UTC).isoformat(),
+            )
+
+    def _record_worker_failure(self, name: str, exc: BaseException) -> str:
+        chain = _format_exception_chain(exc)
+        with self._worker_health_lock:
+            previous = self._worker_health[name]
+            self._worker_health[name] = WorkerHealth(
+                name=name,
+                alive=True,
+                last_success_at=previous.last_success_at,
+                last_error=chain,
+                consecutive_failures=previous.consecutive_failures + 1,
+            )
+        return chain
 
     def start_background_memory_curator(self) -> None:
         if self._memory_curator_thread is not None:
@@ -197,7 +264,18 @@ class DaemonState:
         while not self.shutdown_requested.wait(self.memory_curator_interval_seconds):
             try:
                 self.memory_curator.run_once()
-            except RuntimeError:
+                self._record_worker_success("memory_curator")
+            except Exception as exc:
+                chain = self._record_worker_failure("memory_curator", exc)
+                write_log_event(
+                    "daemon",
+                    "memory_curator_error",
+                    "memory curator iteration failed",
+                    project_root=self.project_root,
+                    level="error",
+                    status="error",
+                    error=chain,
+                )
                 continue
 
     def start_background_reflection_scheduler(self) -> None:
@@ -230,15 +308,19 @@ class DaemonState:
                 should_reflect = self.reflection_scheduler.should_reflect()
                 if should_reflect:
                     self.reflection_scheduler.reflect()
-            except RuntimeError as e:
+                self._record_worker_success("reflection_scheduler")
+            except Exception as exc:
+                chain = self._record_worker_failure(
+                    "reflection_scheduler", exc
+                )
                 write_log_event(
                     "daemon",
                     "reflection_scheduler_error",
-                    f"reflection scheduler error: {str(e)}",
+                    "reflection scheduler iteration failed",
                     project_root=self.project_root,
                     level="error",
                     status="error",
-                    error=str(e)
+                    error=chain,
                 )
                 continue
 
@@ -472,9 +554,11 @@ class DaemonState:
                     )
 
                 service.compose_with_runner(thread_id, job_id, _llm_runner)
+                self._record_worker_success("export_worker")
             except Exception as exc:
                 from nuself.reason.output import ReasonOutputManifest, write_json_atomic
 
+                self._record_worker_failure("export_worker", exc)
                 # Persist attempts + error info on every failure using the
                 # typed manifest model, so crash recovery preserves counters.
                 attempts = 1
@@ -547,15 +631,17 @@ class DaemonState:
             try:
                 if self.reason_scheduler is not None:
                     self.reason_scheduler.run_once()
-            except Exception as e:
+                self._record_worker_success("reason_scheduler")
+            except Exception as exc:
+                chain = self._record_worker_failure("reason_scheduler", exc)
                 write_log_event(
                     "daemon",
                     "reason_scheduler_error",
-                    f"reason scheduler error: {str(e)}",
+                    "reason scheduler iteration failed",
                     project_root=self.project_root,
                     level="error",
                     status="error",
-                    error=str(e),
+                    error=chain,
                 )
                 continue
 
@@ -587,7 +673,20 @@ class DaemonState:
         while not self.shutdown_requested.wait(self.notification_delivery_interval_seconds):
             try:
                 self.notification_delivery_loop.run_once()
-            except RuntimeError:
+                self._record_worker_success("notification_delivery")
+            except Exception as exc:
+                chain = self._record_worker_failure(
+                    "notification_delivery", exc
+                )
+                write_log_event(
+                    "daemon",
+                    "notification_delivery_error",
+                    "notification delivery iteration failed",
+                    project_root=self.project_root,
+                    level="error",
+                    status="error",
+                    error=chain,
+                )
                 continue
 
 
@@ -650,6 +749,18 @@ def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse
 
     if request.type == "ping":
         return DaemonResponse.ok(request, {"message": "pong"})
+    if request.type == "health":
+        workers: list[JsonValue] = [
+            {
+                "name": item.name,
+                "alive": item.alive,
+                "last_success_at": item.last_success_at,
+                "last_error": item.last_error,
+                "consecutive_failures": item.consecutive_failures,
+            }
+            for item in state.worker_health()
+        ]
+        return DaemonResponse.ok(request, {"workers": workers})
     if request.type == "echo":
         return DaemonResponse.ok(request, request.payload)
     if request.type == "chat":

@@ -50,6 +50,24 @@ When daemon chat handling fails:
 - Do not save a partial assistant message for a failed turn.
 - Preserve pre-failure log events, including persona, reflection, memory, and chat logs.
 
+## Background Worker Boundary
+
+Every daemon-owned background worker must keep its loop alive after an
+unexpected per-iteration exception unless shutdown has been requested.
+
+- The outer iteration boundary catches `Exception`, preserves the compact
+  exception chain in a structured error log, and continues after the normal
+  configured interval.
+- Catching only an expected application exception is insufficient at this
+  boundary because validation, storage, and adapter failures must not silently
+  terminate the worker thread.
+- Workers track their last successful run, last error, consecutive failure
+  count, and thread liveness so daemon status can expose degraded subsystems.
+- The loop itself must not retry the failed operation immediately. The next
+  configured scheduled iteration is the retry boundary.
+- Fatal initialization failures before a worker loop starts remain daemon
+  startup failures and must be surfaced to the caller.
+
 ## REPL Retry Contract
 
 Interactive chat may retry exactly once only when the send result is explicitly marked retryable.
@@ -119,3 +137,5 @@ Error-handling changes should include tests for:
 - REPL does not retry daemon/application errors;
 - logs produced before failure are still printed/captured;
 - transcript export remains valid Markdown when failure logs are included.
+- curator, reflection, reason, export, and notification worker boundaries stay
+  alive and log an unexpected non-`RuntimeError` iteration failure.

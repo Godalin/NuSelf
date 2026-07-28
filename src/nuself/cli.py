@@ -340,6 +340,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_handler(daemon_subparsers.add_parser("stop", help="Stop the background daemon."), handle_daemon_stop)
     _add_handler(daemon_subparsers.add_parser("restart", help="Restart the background daemon."), handle_daemon_restart)
     _add_handler(daemon_subparsers.add_parser("status", help="Show daemon status."), handle_daemon_status)
+    _add_handler(
+        daemon_subparsers.add_parser(
+            "health", help="Show background worker health."
+        ),
+        handle_daemon_health,
+    )
     _add_handler(daemon_subparsers.add_parser("list", help="List daemon status in table form."), handle_daemon_list)
     daemon_logs_parser = daemon_subparsers.add_parser("logs", help="Show daemon logs.")
     _add_log_arguments(daemon_logs_parser)
@@ -882,6 +888,38 @@ def handle_daemon_status(args: argparse.Namespace) -> int:
     result = lifecycle.status(args.project_root)
     print(_format_status(result))
     return 0 if result.running else 1
+
+
+def handle_daemon_health(args: argparse.Namespace) -> int:
+    try:
+        response = client.request(
+            "health", project_root=args.project_root, timeout=2.0
+        )
+    except client.DaemonConnectionError as exc:
+        print(f"Daemon health unavailable: {exc}", file=sys.stderr)
+        return 1
+    if response.status != "ok":
+        print(
+            f"Daemon health unavailable: {response.error or 'unknown error'}",
+            file=sys.stderr,
+        )
+        return 1
+    workers = response.payload.get("workers")
+    if not isinstance(workers, list):
+        print("Daemon health unavailable: invalid response", file=sys.stderr)
+        return 1
+    for raw in workers:
+        if not isinstance(raw, dict):
+            continue
+        print(
+            "worker"
+            f" name={raw.get('name', '?')}"
+            f" alive={str(raw.get('alive', False)).lower()}"
+            f" failures={raw.get('consecutive_failures', 0)}"
+            f" last_success={raw.get('last_success_at') or '-'}"
+            f" last_error={raw.get('last_error') or '-'}"
+        )
+    return 0
 
 
 def handle_daemon_list(args: argparse.Namespace) -> int:

@@ -74,6 +74,14 @@ def test_response_rejects_invalid_status() -> None:
     raise AssertionError("expected ProtocolError")
 
 
+def test_health_request_round_trips() -> None:
+    request = DaemonRequest(
+        type="health", payload={}, request_id="health-request"
+    )
+    decoded = DaemonRequest.from_json_line(request.to_json_line())
+    assert decoded.type == "health"
+
+
 def test_response_rejects_non_string_error() -> None:
     line = b'{"version":1,"request_id":"r6","status":"error","payload":{},"error":123}\n'
 
