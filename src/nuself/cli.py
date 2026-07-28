@@ -105,6 +105,15 @@ try:
         handle_reflection_promote,
         handle_reflection_show,
     )
+    from nuself.commands.persona import (
+        handle_persona_create,
+        handle_persona_delete,
+        handle_persona_disable,
+        handle_persona_enable,
+        handle_persona_list,
+        handle_persona_show,
+        resolve_persona_id as _resolve_persona_id,
+    )
     from nuself.domain.memory import (
         MemoryCandidate,
         MemoryEntry,
@@ -161,9 +170,8 @@ try:
     from nuself.tui.reason import render_reason_detail, render_reason_row
     from nuself.tui.render import TerminalTheme, format_display_timestamp, render_log_event, render_log_event_json, render_session_header
     from nuself.tui.trace import render_trace_detail, render_trace_row
-    from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
+    from nuself.persona.prompt_repo import PersonaPromptRepository
     from nuself.storage import auto_backend
-    from nuself.persona.definition import BUILTIN_PERSONAS, MODERATOR_PERSONA, SYNTHESIZER_PERSONA
 finally:
     warnings.warn = _original_warn
 
@@ -1199,28 +1207,6 @@ def _resolve_memory_entry_ids(args: argparse.Namespace) -> list[str] | None:
     )
 
 
-def _resolve_persona_id(args: argparse.Namespace) -> str | None:
-    return _resolve_handle(
-        args.persona_id,
-        _persona_prompts_for_list(args.project_root),
-        label="persona",
-        get_id=lambda prompt: prompt.id,
-    )
-
-
-def _resolve_persona_ids(args: argparse.Namespace) -> list[str] | None:
-    return _resolve_handle_selection(
-        args.persona_id,
-        _persona_prompts_for_list(args.project_root),
-        label="persona",
-        get_id=lambda prompt: prompt.id,
-    )
-
-
-def _persona_prompts_for_list(project_root: Path | None) -> tuple[PersonaPrompt, ...]:
-    return PersonaPromptRepository(backend=auto_backend(project_root)).list()
-
-
 def handle_memory_stats(args: argparse.Namespace) -> int:
     print(_format_memory_stats(memory_stats(args.project_root)))
     return 0
@@ -1994,155 +1980,6 @@ def _resolve_profile_id(args: argparse.Namespace) -> str | None:
         label="profile",
         get_id=lambda item: item.id,
     )
-
-
-def handle_persona_list(args: argparse.Namespace) -> int:
-    from nuself.tui.persona import render_persona_row
-
-    static = list(BUILTIN_PERSONAS) + [MODERATOR_PERSONA, SYNTHESIZER_PERSONA]
-    all_lines: list[str] = [f"{_theme.tag('[persona]', 'persona')} Built-in personas (static):"]
-    for p in static:
-        all_lines.append(f"  {_theme.muted(p.id)}: {p.description}")
-    repo = PersonaPromptRepository(backend=auto_backend(args.project_root))
-    prompts = repo.list()
-    if prompts:
-        all_lines.append("")
-        all_lines.append(f"{_theme.tag('[persona]', 'persona')} Custom personas (dynamic):")
-        for i, p in enumerate(prompts):
-            all_lines.append(render_persona_row(p, index=i))
-    else:
-        all_lines.append(f"  {_theme.muted('(no custom personas yet — use persona_craft in chat to create one)')}")
-    _print_ansi("\n".join(all_lines))
-    return 0
-
-
-def handle_persona_create(args: argparse.Namespace) -> int:
-    repo = PersonaPromptRepository(backend=auto_backend(args.project_root))
-    persona = create_persona_prompt(args.name, args.prompt, project_root=args.project_root)
-    existing = repo.get_by_name(args.name)
-    if existing is not None:
-        persona = PersonaPrompt(
-            id=existing.id,
-            name=args.name,
-            prompt=args.prompt,
-            disabled=existing.disabled,
-            created_at=existing.created_at,
-            updated_at=persona.updated_at,
-        )
-    repo.save(persona)
-    try:
-        from nuself.trace.service import TraceRecorder
-        TraceRecorder(project_root=args.project_root).record_persona_prompt_created(
-            persona_prompt_id=persona.id,
-            name=persona.name,
-            participants=["cli"],
-        )
-    except RuntimeError:
-        pass
-    _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.paint(f'Created: {persona.name}', '32')} (id={_theme.muted(persona.id)})")
-    return 0
-
-
-def handle_persona_show(args: argparse.Namespace) -> int:
-    from nuself.tui.persona import render_persona_detail
-
-    repo = PersonaPromptRepository(backend=auto_backend(args.project_root))
-    prompt_id = _resolve_persona_id(args)
-    if prompt_id is None:
-        return 1
-    prompt = repo.get(prompt_id)
-    if prompt is None:
-        _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.error(f'Persona not found: {args.persona_id}')}")
-        return 1
-    _print_ansi(render_persona_detail(prompt))
-    return 0
-
-
-def handle_persona_delete(args: argparse.Namespace) -> int:
-    repo = PersonaPromptRepository(backend=auto_backend(args.project_root))
-    prompt_ids = _resolve_persona_ids(args)
-    if prompt_ids is None:
-        return 1
-    if not args.yes:
-        names = [p.name for p in [repo.get(pid) for pid in prompt_ids] if p is not None]
-        if not names:
-            return 1
-        label = ", ".join(names)
-        confirm = input(f"Delete persona(s): {label}? [y/N] ").strip().lower()
-        if confirm != "y":
-            print("Aborted.")
-            return 0
-    deleted: list[str] = []
-    for pid in prompt_ids:
-        prompt = repo.get(pid)
-        if prompt is not None:
-            repo.delete(pid)
-            deleted.append(prompt.name)
-    for name in deleted:
-        _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.warning(f'Deleted: {name}')}")
-    return 0
-
-
-def handle_persona_disable(args: argparse.Namespace) -> int:
-    repo = PersonaPromptRepository(backend=auto_backend(args.project_root))
-    prompt_id = _resolve_persona_id(args)
-    if prompt_id is None:
-        return 1
-    prompt = repo.get(prompt_id)
-    if prompt is None:
-        _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.error(f'Persona not found: {args.persona_id}')}")
-        return 1
-    if prompt.disabled:
-        _print_ansi(f"{_theme.tag('[persona]', 'persona')} Persona '{prompt.name}' is already {_theme.muted('disabled')}.")
-        return 0
-    if not args.yes:
-        confirm = input(f"Disable persona '{prompt.name}'? [y/N] ").strip().lower()
-        if confirm != "y":
-            print("Aborted.")
-            return 0
-    repo.set_disabled(prompt.id, True)
-    try:
-        from nuself.trace.service import TraceRecorder
-        TraceRecorder(project_root=args.project_root).record_persona_disabled(
-            persona_prompt_id=prompt.id,
-            name=prompt.name,
-            participants=["cli"],
-        )
-    except RuntimeError:
-        pass
-    _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.warning(f'Disabled: {prompt.name}')}")
-    return 0
-
-
-def handle_persona_enable(args: argparse.Namespace) -> int:
-    repo = PersonaPromptRepository(backend=auto_backend(args.project_root))
-    prompt_id = _resolve_persona_id(args)
-    if prompt_id is None:
-        return 1
-    prompt = repo.get(prompt_id)
-    if prompt is None:
-        _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.error(f'Persona not found: {args.persona_id}')}")
-        return 1
-    if not prompt.disabled:
-        _print_ansi(f"{_theme.tag('[persona]', 'persona')} Persona '{prompt.name}' is already {_theme.muted('enabled')}.")
-        return 0
-    if not args.yes:
-        confirm = input(f"Enable persona '{prompt.name}'? [y/N] ").strip().lower()
-        if confirm != "y":
-            print("Aborted.")
-            return 0
-    repo.set_disabled(prompt.id, False)
-    try:
-        from nuself.trace.service import TraceRecorder
-        TraceRecorder(project_root=args.project_root).record_persona_enabled(
-            persona_prompt_id=prompt.id,
-            name=prompt.name,
-            participants=["cli"],
-        )
-    except RuntimeError:
-        pass
-    _print_ansi(f"{_theme.tag('[persona]', 'persona')} {_theme.paint(f'Enabled: {prompt.name}', '32')}")
-    return 0
 
 
 def _send_chat(message: str, project_root: Path | None, thread_id: str = "default") -> int:

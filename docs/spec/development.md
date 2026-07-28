@@ -115,6 +115,9 @@ top-level application namespace stays focused on subsystem APIs.
   and their command-line filter normalization.
 - `commands/reflections.py` owns one-shot reflection list/show/lifecycle/promote/
   organize handlers; reflection REPL shortcuts remain in the REPL layer.
+- `commands/persona.py` owns dynamic persona list/create/show/delete/enable/
+  disable handlers and visible-handle resolution shared with persona REPL
+  shortcuts.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
   repository APIs.
