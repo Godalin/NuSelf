@@ -94,6 +94,13 @@ Logs, `memory list/show`, `reflection list/show`, `notify list/show`, and REPL v
 
 All interactive commands start with `:`.
 
+Top-level REPL command names, aliases, one-line descriptions, and detailed help
+lines have one authoritative registry in `nuself.cli.repl.registry`. Command
+matching, completion, unknown-command suggestions, and `:help` render from that
+registry. Subsystem-specific argument parsing may remain with its handler, but
+must resolve the top-level command through the registry instead of repeating
+alias string sets.
+
 ### Output Formatting
 
 - Default interactive startup prints only the banner, one concise help line, and the session header. It must not also print daemon preamble or a separate tip line.

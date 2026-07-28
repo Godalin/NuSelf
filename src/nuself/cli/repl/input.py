@@ -14,6 +14,11 @@ from prompt_toolkit.shortcuts import prompt as _prompt
 from prompt_toolkit.styles import Style
 
 from nuself.agent.chat import ThreadStore
+from nuself.cli.repl.registry import (
+    command_tokens,
+    render_help_lines,
+    tokens_for,
+)
 from nuself.config import ensure_runtime_dirs, runtime_paths
 
 
@@ -69,36 +74,6 @@ def append_history(line: str) -> None:
         _history.append_string(line)
 
 
-_INTERACTIVE_COMMANDS = [
-    ":q",
-    ":quit",
-    ":exit",
-    ":history",
-    ":whoami",
-    ":help",
-    ":export",
-    ":e",
-    ":mem",
-    ":m",
-    ":inbox",
-    ":i",
-    ":thread",
-    ":t",
-    ":reason",
-    ":trace",
-    ":persona", ":p",
-    ":restart",
-    ":r",
-    ":dev",
-    ":rename",
-    ":branch",
-    ":archive",
-    ":unarchive",
-    ":archived",
-    ":delete",
-]
-
-
 class InteractiveCompleter(Completer):
     def __init__(self, project_root: Path | None) -> None:
         super().__init__()
@@ -109,22 +84,27 @@ class InteractiveCompleter(Completer):
         stripped = text.lstrip()
         word = text.split()[-1] if text.split() else ""
 
-        if (stripped.startswith(":thread ") or stripped.startswith(":t ")) and word and not word.startswith(":"):
+        if any(
+            stripped.startswith(f"{token} ")
+            for token in tokens_for("thread")
+        ) and word and not word.startswith(":"):
             yield from self._thread_completions(word)
             return
         if stripped.startswith(":unarchive ") and word and not word.startswith(":"):
             yield from self._archived_thread_completions(word)
             return
-        if text.rstrip().endswith(":reason") or text.rstrip().endswith(":re"):
-            # Cursor at :reason or :re — offer all subcommands
+        if text.rstrip().endswith(tokens_for("reason")):
             for cmd, desc, _ in self._REASON_SUBCOMMANDS:
                 yield Completion(f"{cmd} ", start_position=0, display=cmd, display_meta=desc)
             return
-        if (stripped.startswith(":reason ") or stripped.startswith(":re ")) and word and not word.startswith(":"):
+        if any(
+            stripped.startswith(f"{token} ")
+            for token in tokens_for("reason")
+        ) and word and not word.startswith(":"):
             yield from self._reason_subcommand_completions(stripped, word)
             return
         if word.startswith(":"):
-            for cmd in _INTERACTIVE_COMMANDS:
+            for cmd in command_tokens():
                 if cmd.startswith(word):
                     yield Completion(cmd, start_position=-len(word))
 
@@ -142,7 +122,9 @@ class InteractiveCompleter(Completer):
     ]
 
     def _reason_subcommand_completions(self, stripped: str, word: str) -> Iterable[Completion]:
-        prefix = stripped.removeprefix(":reason ").removeprefix(":re ")
+        prefix = stripped.removeprefix(
+            f"{tokens_for('reason')[0]} "
+        )
         subcmd = prefix.split()[0] if prefix.strip() else ""
         # After a subcommand that takes a thread id, offer thread completions
         needs_id = any(cmd == subcmd for cmd, _, needs in self._REASON_SUBCOMMANDS if needs)
@@ -185,7 +167,11 @@ class InteractiveCompleter(Completer):
 
 
 def interactive_command_hints(partial: str) -> list[str]:
-    return [cmd for cmd in _INTERACTIVE_COMMANDS if cmd.startswith(partial) and cmd != partial]
+    return [
+        cmd
+        for cmd in command_tokens()
+        if cmd.startswith(partial) and cmd != partial
+    ]
 
 
 def interactive_help(command: str | None = None) -> str:
@@ -195,54 +181,5 @@ def interactive_help(command: str | None = None) -> str:
         hints = interactive_command_hints(command)
         if hints:
             lines.append(f"Did you mean: {', '.join(hints)}?")
-    lines.extend(
-        [
-            "Interactive commands:",
-            "  :q         exit",
-            "  :quit      exit",
-            "  :exit      exit",
-            "  :history   show recent thread messages",
-            "  :whoami    show core profile",
-            "  :inbox, :i                    list pending reflections and notifications",
-            "  :inbox reflection             list pending reflection ideas",
-            "  :inbox reflection list        list reflection ideas",
-            "  :inbox reflection show <id>   show one reflection idea",
-            "  :inbox reflection dismiss <id> dismiss a reflection idea",
-            "  :inbox reflection archive <id> archive a reflection idea",
-            "  :inbox reflection promote <id> promote a reflection into reason",
-            "  :inbox notify                 list pending notifications",
-            "  :inbox notify list            list all notifications",
-            "  :inbox notify show <id>       show one notification",
-            "  :inbox notify send <id>       send a notification",
-            "  :inbox notify dismiss <id>    dismiss a notification",
-            "  :inbox notify watch           watch outbox for new entries",
-            "  :help      show this help",
-            "  :dev status                   show daemon and thread status",
-            "  :dev logs                     show recent activity logs",
-            "  :export [all] [noclip]    save and copy this connection's transcript",
-            "  :e [all] [noclip]         shorthand for :export",
-            "  :mem, :m                  preview memory entries",
-            "  :mem search <query>       search memory entries",
-            "  :mem show <entry-id>      show one memory entry",
-            "  :mem review               list pending memory review items",
-            "  :mem review <id>          show one memory review item",
-            "  :mem profile <query>      search profile items",
-            "  :mem sources              list imported sources",
-            "  :mem source <source-id>   show one source",
-            "  :thread, :t               list active threads",
-            "  :thread <id>, :t <id>     switch to or create a thread",
-            "  :reason                   long-run reasoning commands",
-            "  :persona, :p             list/manage custom personas",
-            "  :trace                    list thought trace records",
-            "  :trace show <id|index>    show one thought trace",
-            "  :trace search <query>     search thought trace records",
-            "  :restart, :r              restart daemon and reconnect",
-            "  :rename <new-id>          rename the current thread",
-            "  :branch <new-id> [index]  branch current thread at index",
-            "  :archive                  archive the current thread",
-            "  :unarchive <id>           restore an archived thread",
-            "  :archived                 list archived threads",
-            "  :delete                   delete the current thread",
-        ]
-    )
+    lines.extend(["Interactive commands:", *render_help_lines()])
     return "\n".join(lines)

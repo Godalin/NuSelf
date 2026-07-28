@@ -66,6 +66,7 @@ try:
         InteractiveCompleter as _InteractiveCompleter,
         interactive_help as _interactive_help,
     )
+    from nuself.cli.repl.registry import command_body, command_matches
     from nuself.cli.repl.runtime import (
         ReplCallbacks,
         run_interactive_loop,
@@ -610,99 +611,87 @@ def _handle_interactive_command(
     current_thread_id: str,
     session: InteractiveSession,
 ) -> tuple[str, str]:
-    if command in {":q", ":quit", ":exit"}:
+    if command_matches(command, "q"):
         _auto_save_interactive_transcripts(project_root, session)
         return ("exit", current_thread_id)
-    if command == ":history":
+    if command_matches(command, "history"):
         print()
         _print_ansi(_handle_interactive_history_command(project_root, current_thread_id))
         return ("", current_thread_id)
-    if command == ":whoami":
+    if command_matches(command, "whoami"):
         print()
         _print_ansi(_handle_interactive_whoami_command(project_root))
         return ("", current_thread_id)
-    if command in {":inbox", ":i"}:
+    inbox_body = command_body(command, "inbox")
+    if inbox_body is not None:
         print()
-        _print_ansi(_handle_interactive_inbox_command(project_root))
-        return ("", current_thread_id)
-    if command.startswith(":inbox reflection ") or command.startswith(":i reflection "):
-        print()
-        body = command.removeprefix(":inbox reflection").removeprefix(":i reflection").strip()
-        parts = body.split(maxsplit=1)
-        if not parts:
-            print(_interactive_help(":inbox reflection"))
-        elif parts[0] == "list":
-            _print_ansi(_handle_interactive_reflection_list_command(project_root))
-        elif parts[0] == "show" and len(parts) == 2:
-            _print_ansi(_handle_interactive_reflection_show_command(project_root, parts[1]))
-        elif len(parts) == 2:
-            subcmd, entry_id = parts[0], parts[1]
-            _print_ansi(_handle_interactive_reflection_subcommand(project_root, subcmd, entry_id))
+        if inbox_body == "":
+            _print_ansi(_handle_interactive_inbox_command(project_root))
+        elif inbox_body == "reflection":
+            _print_ansi(_handle_interactive_reflection_command(project_root))
+        elif inbox_body.startswith("reflection "):
+            parts = inbox_body.removeprefix("reflection ").split(maxsplit=1)
+            if parts[0] == "list":
+                _print_ansi(_handle_interactive_reflection_list_command(project_root))
+            elif parts[0] == "show" and len(parts) == 2:
+                _print_ansi(_handle_interactive_reflection_show_command(project_root, parts[1]))
+            elif len(parts) == 2:
+                _print_ansi(_handle_interactive_reflection_subcommand(project_root, parts[0], parts[1]))
+            else:
+                print(_interactive_help(":inbox reflection"))
+        elif inbox_body == "notify":
+            _print_ansi(_handle_interactive_notify_command(project_root))
+        elif inbox_body.startswith("notify "):
+            parts = inbox_body.removeprefix("notify ").split(maxsplit=1)
+            if parts[0] == "list":
+                _print_ansi(_handle_interactive_notify_list_command(project_root))
+            elif parts[0] == "show" and len(parts) == 2:
+                _print_ansi(_handle_interactive_notify_show_command(project_root, parts[1]))
+            elif parts[0] == "watch":
+                _handle_interactive_watch_command(project_root)
+            elif len(parts) == 2:
+                _print_ansi(_handle_interactive_notify_subcommand(project_root, parts[0], parts[1]))
+            else:
+                print(_interactive_help(":inbox notify"))
         else:
-            print(_interactive_help(":inbox reflection"))
+            print(_interactive_help(command))
         return ("", current_thread_id)
-    if command in {":inbox reflection", ":i reflection"}:
-        print()
-        _print_ansi(_handle_interactive_reflection_command(project_root))
-        return ("", current_thread_id)
-    if command.startswith(":inbox notify ") or command.startswith(":i notify "):
-        print()
-        body = command.removeprefix(":inbox notify").removeprefix(":i notify").strip()
-        parts = body.split(maxsplit=1)
-        if not parts:
-            print(_interactive_help(":inbox notify"))
-        elif parts[0] == "list":
-            _print_ansi(_handle_interactive_notify_list_command(project_root))
-        elif parts[0] == "show" and len(parts) == 2:
-            _print_ansi(_handle_interactive_notify_show_command(project_root, parts[1]))
-        elif parts[0] == "watch":
-            _handle_interactive_watch_command(project_root)
-        elif len(parts) == 2:
-            subcmd, entry_id = parts[0], parts[1]
-            _print_ansi(_handle_interactive_notify_subcommand(project_root, subcmd, entry_id))
-        else:
-            print(_interactive_help(":inbox notify"))
-        return ("", current_thread_id)
-    if command in {":inbox notify", ":i notify"}:
-        print()
-        _print_ansi(_handle_interactive_notify_command(project_root))
-        return ("", current_thread_id)
-    if command == ":help":
+    if command_matches(command, "help"):
         print()
         print(_interactive_help())
         return ("", current_thread_id)
-    if command == ":dev status":
+    dev_body = command_body(command, "dev")
+    if dev_body == "status":
         print()
         print(_format_status(lifecycle.status(project_root)))
         return ("", current_thread_id)
-    if command == ":dev logs":
+    if dev_body == "logs":
         print()
         _print_recent_logs(project_root, limit=8)
         return ("", current_thread_id)
-    if command == ":dev":
+    if dev_body is not None:
         print()
         print(_interactive_help(":dev"))
         return ("", current_thread_id)
-    if command in {":export", ":e"} or command.startswith(":export ") or command.startswith(":e "):
+    if command_body(command, "export") is not None:
         print()
         _print_ansi(_handle_interactive_export_command(command, project_root, current_thread_id, session))
         return ("", current_thread_id)
-    if command in {":mem", ":m"}:
+    memory_body = command_body(command, "mem")
+    if memory_body is not None:
         print()
-        _print_ansi(_format_memory_preview(project_root))
+        if memory_body == "":
+            _print_ansi(_format_memory_preview(project_root))
+        else:
+            _print_ansi(_handle_interactive_memory_command(memory_body, project_root))
         return ("", current_thread_id)
-    if command.startswith(":mem ") or command.startswith(":m "):
+    thread_body = command_body(command, "thread")
+    if thread_body is not None:
         print()
-        body = command.removeprefix(":mem").removeprefix(":m").strip()
-        _print_ansi(_handle_interactive_memory_command(body, project_root))
-        return ("", current_thread_id)
-    if command in {":thread", ":t"}:
-        print()
-        _print_ansi(_handle_interactive_threads_command(project_root))
-        return ("", current_thread_id)
-    if command.startswith(":thread ") or command.startswith(":t "):
-        print()
-        new_id = command.removeprefix(":thread").removeprefix(":t").strip()
+        if thread_body == "":
+            _print_ansi(_handle_interactive_threads_command(project_root))
+            return ("", current_thread_id)
+        new_id = thread_body
         if new_id == "":
             print(_interactive_help(":thread"))
         else:
@@ -711,39 +700,37 @@ def _handle_interactive_command(
                 store.save(ThreadState.empty(new_id))
             print(f"Switched to thread: {new_id}")
         return ("redraw_header", new_id if new_id != "" else current_thread_id)
-    if command.startswith(":reason watch"):
+    reason_body = command_body(command, "reason")
+    if reason_body is not None and (
+        reason_body == "watch" or reason_body.startswith("watch ")
+    ):
         print()
-        body = command.removeprefix(":reason watch").strip()
+        body = reason_body.removeprefix("watch").strip()
         thread_ref = body if body else None
         _handle_interactive_reason_watch(project_root, thread_ref=thread_ref)
         return ("", current_thread_id)
-    if command.startswith(":reason"):
+    if reason_body is not None:
         print()
-        body = command.removeprefix(":reason").strip()
-        _print_ansi(_handle_interactive_reason_command(body, project_root))
+        _print_ansi(_handle_interactive_reason_command(reason_body, project_root))
         return ("", current_thread_id)
-    if command.startswith(":trace"):
+    trace_body = command_body(command, "trace")
+    if trace_body is not None:
         print()
-        body = command.removeprefix(":trace").strip()
-        _print_ansi(_handle_interactive_trace_command(body, project_root))
+        _print_ansi(_handle_interactive_trace_command(trace_body, project_root))
         return ("", current_thread_id)
-    if command in {":persona", ":p"}:
+    persona_body = command_body(command, "persona")
+    if persona_body is not None:
         print()
-        _print_ansi(_handle_interactive_persona_command("list", project_root))
+        _print_ansi(_handle_interactive_persona_command(persona_body or "list", project_root))
         return ("", current_thread_id)
-    if command.startswith(":persona ") or command.startswith(":p "):
-        print()
-        prefix = ":persona " if command.startswith(":persona ") else ":p "
-        body = command.removeprefix(prefix).strip()
-        _print_ansi(_handle_interactive_persona_command(body, project_root))
-        return ("", current_thread_id)
-    if command in {":restart", ":r"}:
+    if command_matches(command, "restart"):
         print()
         _print_ansi(_handle_interactive_restart_command(project_root))
         return ("redraw_header", current_thread_id)
-    if command.startswith(":rename "):
+    rename_body = command_body(command, "rename")
+    if rename_body is not None:
         print()
-        new_id = command[8:].strip()
+        new_id = rename_body
         if new_id == "":
             print(_interactive_help(":rename"))
         else:
@@ -753,9 +740,10 @@ def _handle_interactive_command(
             except ValueError as exc:
                 print(f"Error: {exc}")
         return ("redraw_header", new_id if new_id != "" else current_thread_id)
-    if command.startswith(":branch "):
+    branch_body = command_body(command, "branch")
+    if branch_body is not None:
         print()
-        parts = command[8:].strip().split()
+        parts = branch_body.split()
         new_id = parts[0] if parts else ""
         index: int | None = None
         if len(parts) >= 2:
@@ -773,7 +761,7 @@ def _handle_interactive_command(
             except ValueError as exc:
                 print(f"Error: {exc}")
         return ("redraw_header", new_id if new_id != "" else current_thread_id)
-    if command == ":archive":
+    if command_matches(command, "archive"):
         print()
         try:
             ThreadStore(project_root).archive(current_thread_id)
@@ -781,9 +769,10 @@ def _handle_interactive_command(
         except ValueError as exc:
             print(f"Error: {exc}")
         return ("redraw_header", "default")
-    if command.startswith(":unarchive "):
+    unarchive_body = command_body(command, "unarchive")
+    if unarchive_body is not None:
         print()
-        thread_id = command[11:].strip()
+        thread_id = unarchive_body
         if thread_id == "":
             print(_interactive_help(":unarchive"))
         else:
@@ -793,7 +782,7 @@ def _handle_interactive_command(
             except ValueError as exc:
                 print(f"Error: {exc}")
         return ("", current_thread_id)
-    if command == ":archived":
+    if command_matches(command, "archived"):
         print()
         store = ThreadStore(project_root)
         ids = store.list_archived()
@@ -803,7 +792,7 @@ def _handle_interactive_command(
             for thread_id in ids:
                 print(thread_id)
         return ("", current_thread_id)
-    if command == ":delete":
+    if command_matches(command, "delete"):
         print()
         try:
             ThreadStore(project_root).delete(current_thread_id)
@@ -948,8 +937,10 @@ def _handle_interactive_export_command(
     thread_id: str,
     session: InteractiveSession,
 ) -> str:
-    body = command.removeprefix(":export") if command.startswith(":export") else command.removeprefix(":e")
-    args = body.strip().split()
+    body = command_body(command, "export")
+    if body is None:
+        return _interactive_help(":export")
+    args = body.split()
     copy_requested = True
     include_all_logs = False
     if args:
