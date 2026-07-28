@@ -57,10 +57,10 @@ behavior, grouped by subsystem. Configurable defaults live in
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `MAX_ATTEMPTS` | `daemon/server.py:338` | 5 | Max export job composition retries |
-| `BASE_BACKOFF` | `daemon/server.py:339` | 10 s | Export retry base backoff |
-| `MAX_BACKOFF` | `daemon/server.py:340` | 600 s | Export retry max backoff |
-| `timeout=1.0` | `daemon/server.py:393` | 1 s | Export queue poll timeout |
+| `MAX_EXPORT_ATTEMPTS` | `daemon/reason_export.py` | 5 | Max export job composition retries |
+| `EXPORT_RETRY_BASE_SECONDS` | `daemon/reason_export.py` | 10 s | Export retry base backoff |
+| `EXPORT_RETRY_MAX_SECONDS` | `daemon/reason_export.py` | 600 s | Export retry max backoff |
+| `EXPORT_QUEUE_POLL_SECONDS` | `daemon/reason_export.py` | 1 s | Export queue poll timeout |
 | poll iterations | `daemon/lifecycle.py:56,71` | 40 | Max startup/shutdown poll loops |
 | poll interval | `daemon/lifecycle.py:57,72` | 0.05 s | Startup/shutdown poll sleep |
 | `timeout=2.0` | `daemon/client.py:21` | 2 s | Daemon socket connection timeout |

@@ -1,14 +1,15 @@
 import json
+import threading
 from pathlib import Path
 import time
 
 import pytest
 
-from nuself.daemon.server import (
-    DaemonState,
-    _inspect_export_job,  # pyright: ignore[reportPrivateUsage]
-    _persist_export_failure,  # pyright: ignore[reportPrivateUsage]
+from nuself.daemon.reason_export import (
+    inspect_export_job,
+    persist_export_failure,
 )
+from nuself.daemon.server import DaemonState
 from nuself.logs import LogEvent, read_log_events
 from nuself.reason.output import (
     ReasonOutputManifest,
@@ -93,7 +94,7 @@ def test_inspection_marks_completed_manifest_terminal(tmp_path: Path) -> None:
         _manifest(status="complete").to_wire(),
     )
 
-    inspection = _inspect_export_job(
+    inspection = inspect_export_job(
         manifest_path,
         job_id="job_1",
         thread_id="thread_1",
@@ -109,7 +110,7 @@ def test_inspection_keeps_valid_manifest_when_progress_is_corrupt(
     write_json_atomic(manifest_path, _manifest().to_wire())
     progress_path.write_text("{", encoding="utf-8")
 
-    inspection = _inspect_export_job(
+    inspection = inspect_export_job(
         manifest_path,
         job_id="job_1",
         thread_id="thread_1",
@@ -126,7 +127,7 @@ def test_inspection_treats_missing_progress_as_normal(
     manifest_path, _ = _job_paths(tmp_path)
     write_json_atomic(manifest_path, _manifest().to_wire())
 
-    inspection = _inspect_export_job(
+    inspection = inspect_export_job(
         manifest_path,
         job_id="job_1",
         thread_id="thread_1",
@@ -160,7 +161,7 @@ def test_inspection_retains_progress_io_failure(
 
     monkeypatch.setattr(Path, "read_text", fail_progress_read)
 
-    inspection = _inspect_export_job(
+    inspection = inspect_export_job(
         manifest_path,
         job_id="job_1",
         thread_id="thread_1",
@@ -213,7 +214,7 @@ def test_persist_export_failure_updates_attempt_state(tmp_path: Path) -> None:
         _manifest(attempts=4).to_wire(),
     )
 
-    updated = _persist_export_failure(
+    updated = persist_export_failure(
         manifest_path,
         RuntimeError("compose failed"),
         max_attempts=5,
@@ -253,7 +254,7 @@ def test_worker_does_not_compose_corrupt_manifest(
         trace_id="trace-1",
         source="daemon",
     ):
-        state._export_queue.put(  # pyright: ignore[reportPrivateUsage]
+        state.reason_export_worker.enqueue(
             JobMessage.create(
                 name="reason.output.export",
                 producer="test",
@@ -299,7 +300,7 @@ def test_worker_reports_invalid_progress_and_continues(
 
     monkeypatch.setattr(ReasonOutputService, "compose_with_runner", compose)
     state = DaemonState(tmp_path)
-    state._export_queue.put(  # pyright: ignore[reportPrivateUsage]
+    state.reason_export_worker.enqueue(
         JobMessage.create(
             name="reason.output.export",
             producer="test",
@@ -359,7 +360,10 @@ def test_worker_retry_message_inherits_job_correlation(
             return False
 
     monkeypatch.setattr(ReasonOutputService, "compose_with_runner", compose)
-    monkeypatch.setattr("nuself.daemon.server.threading.Timer", FakeTimer)
+    monkeypatch.setattr(
+        "nuself.daemon.reason_export.threading.Timer",
+        FakeTimer,
+    )
 
     def no_owners(self: PrivateWorkspaceStore) -> list[str]:
         del self
@@ -377,7 +381,7 @@ def test_worker_retry_message_inherits_job_correlation(
         trace_id="trace-retry",
         source="daemon",
     ):
-        state._export_queue.put(  # pyright: ignore[reportPrivateUsage]
+        state.reason_export_worker.enqueue(
             JobMessage.create(
                 name="reason.output.export",
                 producer="test",
@@ -404,6 +408,65 @@ def test_worker_retry_message_inherits_job_correlation(
     assert retry.envelope.context.source == "daemon.worker.export_worker"
 
 
+def test_worker_stop_closes_retry_scheduling_race(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path, progress_path = _job_paths(tmp_path)
+    write_json_atomic(manifest_path, _manifest().to_wire())
+    write_json_atomic(progress_path, _progress().to_wire())
+    compose_started = threading.Event()
+    release_compose = threading.Event()
+    scheduled: list[JobMessage] = []
+
+    def compose(
+        self: ReasonOutputService,
+        thread_id: str,
+        job_id: str,
+        runner: object,
+    ) -> ReasonOutputManifest:
+        del self, thread_id, job_id, runner
+        compose_started.set()
+        assert release_compose.wait(1)
+        raise RuntimeError("compose failed during shutdown")
+
+    class FakeTimer:
+        def __init__(
+            self,
+            interval: float,
+            function: object,
+            args: tuple[JobMessage, ...],
+        ) -> None:
+            del interval, function
+            scheduled.extend(args)
+
+        def start(self) -> None:
+            return None
+
+        def cancel(self) -> None:
+            return None
+
+        def is_alive(self) -> bool:
+            return False
+
+    monkeypatch.setattr(ReasonOutputService, "compose_with_runner", compose)
+    monkeypatch.setattr(
+        "nuself.daemon.reason_export.threading.Timer",
+        FakeTimer,
+    )
+    state = DaemonState(tmp_path)
+    state.start_background_export_worker()
+    assert compose_started.wait(1)
+
+    state.shutdown_requested.set()
+    state.reason_export_worker.stop()
+    release_compose.set()
+    state.stop_background_export_worker()
+
+    assert scheduled == []
+    assert state.reason_export_worker.pending_retry_count == 0
+
+
 def test_worker_logs_state_persistence_failure_without_retry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -428,7 +491,7 @@ def test_worker_logs_state_persistence_failure_without_retry(
 
     monkeypatch.setattr(ReasonOutputService, "compose_with_runner", compose)
     monkeypatch.setattr(
-        "nuself.daemon.server._persist_export_failure",
+        "nuself.daemon.reason_export.persist_export_failure",
         fail_persist,
     )
     state = DaemonState(tmp_path)
@@ -443,4 +506,4 @@ def test_worker_logs_state_persistence_failure_without_retry(
         "thread_id": "thread_1",
         "operation_error": "compose failed",
     }
-    assert state._export_timers == []  # pyright: ignore[reportPrivateUsage]
+    assert state.reason_export_worker.pending_retry_count == 0

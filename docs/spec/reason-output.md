@@ -247,10 +247,12 @@ The worker reconstructs the job data path from `thread_id` and `job_id`: `privat
 
 Retries are scheduled via `threading.Timer` rather than a persistent `next_attempt` field:
 
-- On failure, the worker checks `manifest.attempts < MAX_ATTEMPTS`.
+- On failure, the worker checks
+  `manifest.attempts < MAX_EXPORT_ATTEMPTS`.
 - If retryable, it starts a `threading.Timer` with exponential backoff (capped at 600s).
 - When the timer fires, it enqueues a new typed wake-up for the same durable job.
-- If `attempts >= MAX_ATTEMPTS`, the worker updates the manifest status to `failed` and does not re-enqueue.
+- If `attempts >= MAX_EXPORT_ATTEMPTS`, the worker updates the manifest status
+  to `failed` and does not re-enqueue.
 - A failed compose attempt is retryable only after its incremented attempt
   count, last error, and attempt timestamp are atomically persisted to the
   manifest.
@@ -338,6 +340,31 @@ The chat-facing interface must allow the caller to specify:
 Chat must not need to store the full long-form result in the chat context to complete the job.
 
 The first chat-facing export tool call must be approval-gated, but the agent should call it directly when the user asks for an export rather than waiting for a separate confirmation turn. During the call, it prompts the user for confirmation, then plans the job, writes the manifest, pushes to the in-memory queue, and returns structured JSON that includes whether the user approved and, when approved, the queued job metadata. The daemon worker is a single process-global event loop responsible for composing chunks and writing the final artifact, and it must reconcile on startup (re-enqueue incomplete jobs from manifests) before entering its event loop.
+
+### Daemon worker ownership
+
+`nuself.daemon.reason_export.ReasonExportWorker` owns the daemon-side lifecycle
+of reason export jobs. It exposes four composition capabilities:
+
+- `enqueue(JobMessage)` accepts an already-typed job envelope;
+- `prepare()` constructs workspace and output-service dependencies before the
+  owned thread starts, so initialization failure cannot create a live worker;
+- `run()` performs startup reconciliation and then consumes the in-memory
+  queue until daemon shutdown;
+- `stop()` cancels retry timers and drains queued work before the supervisor
+  joins the owned thread.
+
+The worker restores each dequeued envelope context and replaces its thread,
+job, and source with the authoritative export resource identity. It reports
+operation success/failure through `DaemonWorkerSupervisor`, but owns manifest
+inspection, failure persistence, retry scheduling, reconciliation, and export
+audit events itself. `DaemonState` must not retain parallel export queues,
+timers, stores, services, or processor helpers.
+
+`stop()` closes the in-memory enqueue boundary before draining it. A concurrent
+or later enqueue/retry callback is ignored because the already-persisted
+manifest remains authoritative and will be recovered by the next startup
+reconciliation; no in-memory work may appear after the drain.
 
 When the Markdown artifact is finished, the export pipeline should automatically invoke the PDF helper script so the thread can be shared as both Markdown and PDF.
 

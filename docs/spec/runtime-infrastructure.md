@@ -262,12 +262,13 @@ this pattern and deliberately does not add a redundant `RuntimeEnvelope`.
 Delivery installs the saved entry context per record under the notification
 worker source, using the same exact replacement/restoration semantics.
 
-Scheduled worker iterations are ephemeral jobs. `_run_worker_iteration`
-creates one fresh `job_id` and exactly installs a context containing only that
-identity plus `source="daemon.worker.<name>"` for each tick. Nested scheduler
-and domain scopes inherit the tick job id while adding their own thread, turn,
-or trace ownership. Success and failure both restore the prior ambient context;
-the next tick never inherits correlation left by the previous one.
+Scheduled worker iterations are ephemeral jobs.
+`DaemonWorkerSupervisor.run_iteration()` creates one fresh `job_id` and
+exactly installs a context containing only that identity plus
+`source="daemon.worker.<name>"` for each tick. Nested scheduler and domain
+scopes inherit the tick job id while adding their own thread, turn, or trace
+ownership. Success and failure both restore the prior ambient context; the
+next tick never inherits correlation left by the previous one.
 
 The continuously blocking reason export worker is not tick-scoped: each of its
 operations is scoped by the dequeued `JobMessage` as specified above.

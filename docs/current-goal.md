@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Daemon worker supervision has been extracted from `DaemonState`.
+Idle. The daemon-side reason export job lifecycle has been extracted.
 
 ## Active Branch
 
@@ -22,19 +22,22 @@ code.
 
 ## Completion Evidence
 
-- `daemon/workers.py` owns sealed unique registration, `OwnedWorker`
-  lifecycle, health projection, fresh iteration context, failure observation,
-  scheduled loops, start audits, and join-timeout translation.
-- `DaemonState` registers five subsystem-specific targets during composition
-  and delegates common worker execution semantics to one supervisor.
-- Export processing reports its job-level success and failure through the same
-  supervisor health boundary instead of parallel state bookkeeping.
-- Supervisor tests cover duplicate/late/unknown registration, start-before-seal
-  rejection, ambient-context replacement/restoration, escaping target
-  observation, iteration correlation, and retryable join timeout.
-- `daemon/server.py` decreased from 1282 to 1116 lines.
-- Focused daemon worker/server/lifecycle tests: 54 passed.
-- Final full tests: 1269 passed.
+- `daemon/reason_export.py` owns typed enqueue, pre-thread dependency
+  preparation, manifest/progress inspection, single-job processing, failure
+  persistence, retry timers, startup reconciliation, message-context
+  activation, queue polling, and shutdown drain.
+- `DaemonState` injects `ReasonExportWorker.enqueue` into `ChatAgent`, registers
+  `ReasonExportWorker.run` with the shared supervisor, and retains only
+  prepare/start plus stop/join composition.
+- The stopping gate and lifecycle lock close enqueue before drain; a regression
+  test proves a composition failure racing with shutdown cannot create a new
+  retry timer.
+- Recovery tests patch and inspect the owning module rather than daemon server
+  internals.
+- `daemon/server.py` decreased from 1116 to 582 lines and contains no export
+  queue, timer, store, service, manifest, or progress implementation.
+- Focused export/daemon/reason-output tests: 67 passed.
+- Final full tests: 1270 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -44,5 +47,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Extract the reason export job processor or continue daemon lifecycle
-composition review.
+Continue daemon lifecycle composition review or resolve the REPL presentation
+contract.
