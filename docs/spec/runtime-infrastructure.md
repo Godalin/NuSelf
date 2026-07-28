@@ -658,8 +658,16 @@ Structured logs are an append-only sink and read model.
 - Every newly written event has a stable id and schema version.
 - Ephemeral runtime events and their producer ownership come from registered
   definitions. Their audit projections retain that registered dotted name.
-  Direct domain audit writes use stable validated slugs governed by the
+- Direct domain audit writes use stable validated slugs governed by the
   owning domain spec rather than a process-global definition registry.
+- Domains with a closed audit taxonomy use a sealed domain-local registry
+  built on the shared definition-registry mechanics. Each definition owns its
+  component and payload validator. Producers resolve and validate before the
+  best-effort sink: an unknown event or invalid level, status, error, or
+  metadata is a programming error, not an audit persistence failure.
+- Neutral audit component and level types live below the log sink in
+  `runtime.audit_types`; definition infrastructure must not import the
+  persistence module merely to describe a contract.
 - Metadata must be JSON-safe before it reaches the sink.
 - Runtime envelopes and log events use the same recursive JSON freeze/thaw
   boundary. Frozen payloads do not retain caller container aliases, while

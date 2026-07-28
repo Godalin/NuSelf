@@ -316,6 +316,10 @@ def test_reflect_result_survives_unavailable_auxiliary_logs(
         del args, kwargs
 
     monkeypatch.setattr(
+        "nuself.reflection.scheduler.write_reflection_audit",
+        drop_log,
+    )
+    monkeypatch.setattr(
         "nuself.reflection.scheduler.write_observed_log_event",
         drop_log,
     )
@@ -346,7 +350,7 @@ def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
         fail_log,
     )
     monkeypatch.setattr(
-        "nuself.reflection.scheduler.write_observed_log_event",
+        "nuself.reflection.scheduler.write_reflection_audit",
         drop_cycle_log,
     )
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)

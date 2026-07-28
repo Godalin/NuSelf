@@ -195,16 +195,35 @@ Default is `false` — no outbox entry created.
 
 ## Audit Log Events
 
-The scheduler still emits these events into `reflection.log`:
+Reflection-owned audit names form a closed set in a sealed domain registry.
+Each definition owns the exact level, status, error policy, and metadata
+schema. Scheduler and organizer producers resolve and validate the definition
+before entering the best-effort log sink; unknown events and schema violations
+are programming errors and are not converted into an audit-write failure.
 
-| Event | Status | Visibility |
-|---|---|---|
-| `schedule_blocked` | `skipped` | `nuself dev logs --component reflection` |
-| `cycle_started` | `started` | `nuself dev logs --component reflection` |
-| `organizer_completed` | `completed` | `nuself dev logs --component reflection` |
-| `persona_discussion` | `approved` / `rejected` | `nuself dev logs --component reflection` |
-| `cycle_discussion_rejected` | `completed` | `nuself dev logs --component reflection` |
-| `cycle_completed` | `completed` | `nuself dev logs --component reflection` |
+All events below are visible through
+`nuself dev logs --component reflection`:
+
+| Event | Level | Status | Metadata |
+|---|---|---|---|
+| `schedule_blocked` | `info` | `skipped` | non-empty `reason` |
+| `cycle_started` | `info` | `started` | none |
+| `cycle_filtered` | `info` | `completed` | `reason`, score in `[0, 1]` |
+| `cycle_discussion_rejected` | `info` | `completed` | non-empty `reason` |
+| `cycle_completed` | `info` | `completed` | `reason`, score in `[0, 1]`, `idea_type` |
+| `relevance_gate_fallback` | `warning` | `error` | none |
+| `candidate_generation_skipped` | `debug` | `skipped` | non-empty `reason` |
+| `cycle_no_candidates` | `info` | `completed` | non-empty `reason` |
+| `candidate_generation_failed` | `warning` | `error` | required error, no metadata |
+| `schedule_state_corrupt` | `warning` | `degraded` | required error, non-empty `record` |
+| `trace_recording_failed` | `error` | `failed` | required error, non-empty `reflection_id` |
+| `organizer_failed` | `error` | `failed` | required error, no metadata |
+| `organizer_completed` | `info` | `completed` | non-negative `merged_groups` and `archived_entries` |
+
+`persona_discussion` is emitted during this pipeline but belongs to the
+persona audit contract. `audit_projection_failed` and
+`organizer_audit_write_failed` describe observability failure rather than
+Reflection behavior and remain governed by the shared observability contract.
 
 ## CLI Contracts
 

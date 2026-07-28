@@ -17,14 +17,15 @@ from nuself.clock import utc_now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.notification.deep_link import DeepLink
+from nuself.reflection.audit import (
+    report_reflection_failure,
+    write_reflection_audit,
+)
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.persona import PersonaCompetitionResult, SharedPersonaDiscussionService
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.observability import (
-    report_observed_failure,
-    write_observed_log_event,
-)
+from nuself.runtime.observability import write_observed_log_event
 from nuself.storage import write_json_atomic
 
 REFLECTION_SCHEDULE_STATE_VERSION = 1
@@ -153,24 +154,18 @@ class ReflectionScheduler:
         
         block_reason = self._schedule_block_reason(now)
         if block_reason is not None:
-            write_observed_log_event(
-                "reflection",
+            write_reflection_audit(
                 "schedule_blocked",
                 "reflection cycle skipped by schedule limits",
                 project_root=self._project_root,
-                level="info",
-                status="skipped",
                 metadata={"reason": block_reason},
             )
             return False
         
-        write_observed_log_event(
-            "reflection",
+        write_reflection_audit(
             "cycle_started",
             "reflection cycle triggered",
             project_root=self._project_root,
-            level="info",
-            status="started"
         )
 
         self._organize_pending_reflections()
@@ -183,13 +178,10 @@ class ReflectionScheduler:
         best = candidates[0]
         score = gate.score(best)
         if not score.passes:
-            write_observed_log_event(
-                "reflection",
+            write_reflection_audit(
                 "cycle_filtered",
                 f"best candidate filtered by relevance gate: {best.title}",
                 project_root=self._project_root,
-                level="info",
-                status="completed",
                 metadata={"reason": "filtered_by_gate", "score": float(score.composite)}
             )
             return False
@@ -208,13 +200,10 @@ class ReflectionScheduler:
             discussion_approved = result.approved
             discussion_trace = result.discussion_trace
             if not result.approved:
-                write_observed_log_event(
-                    "reflection",
+                write_reflection_audit(
                     "cycle_discussion_rejected",
                     f"persona discussion rejected candidate: {best.title}",
                     project_root=self._project_root,
-                    level="info",
-                    status="completed",
                     metadata={"reason": "discussion_rejected"}
                 )
                 return False
@@ -257,14 +246,11 @@ class ReflectionScheduler:
                 decision_points=decision_points,
             )
         except Exception as exc:
-            report_observed_failure(
+            report_reflection_failure(
                 exc,
-                component="reflection",
                 event="trace_recording_failed",
                 message="Failed to record trace for persisted reflection",
                 project_root=self._project_root,
-                level="error",
-                status="failed",
                 metadata={"reflection_id": entry.id},
             )
         self._organize_pending_reflections()
@@ -274,13 +260,10 @@ class ReflectionScheduler:
             intent = self._candidate_to_notify_entry(entry)
             self._outbox.add(intent)
 
-        write_observed_log_event(
-            "reflection",
+        write_reflection_audit(
             "cycle_completed",
             f"reflection cycle published: {title}",
             project_root=self._project_root,
-            level="info",
-            status="completed",
             metadata={"reason": "published", "score": float(score.composite), "idea_type": best.candidate_type}
         )
         return True
@@ -290,14 +273,11 @@ class ReflectionScheduler:
         try:
             ReflectionOrganizer(self._project_root, repository=self._reflection_repo).organize_pending()
         except Exception as exc:
-            report_observed_failure(
+            report_reflection_failure(
                 exc,
-                component="reflection",
                 event="organizer_failed",
                 message="Reflection organizer failed",
                 project_root=self._project_root,
-                level="error",
-                status="failed",
                 metadata=None,
             )
 
@@ -404,14 +384,11 @@ class ReflectionScheduler:
         self,
         exc: ReflectionScheduleStateError,
     ) -> None:
-        report_observed_failure(
+        report_reflection_failure(
             exc,
-            component="reflection",
             event="schedule_state_corrupt",
             message="Reflection schedule state is invalid; scheduling is blocked",
             project_root=self._project_root,
-            level="warning",
-            status="degraded",
             metadata={"record": self._last_reflection_path.name},
         )
 
@@ -523,13 +500,10 @@ class LLMRelevanceGate:
             return self._score_with_agent(candidate, cooldown_ok)
         except (RuntimeError, ValueError) as e:
             error = diagnostic_exception_message(e)
-            write_observed_log_event(
-                "reflection",
+            write_reflection_audit(
                 "relevance_gate_fallback",
                 f"Relevance agent failed, using fallback: {error}",
                 project_root=self._project_root,
-                level="warning",
-                status="error",
             )
             return self._fallback_score(candidate, cooldown_ok)
 
@@ -627,17 +601,14 @@ class LLMRelevanceGate:
                 self._last_reflection_path
             )
         except ReflectionScheduleStateError as exc:
-            report_observed_failure(
+            report_reflection_failure(
                 exc,
-                component="reflection",
                 event="schedule_state_corrupt",
                 message=(
                     "Reflection schedule state is invalid; "
                     "cooldown remains active"
                 ),
                 project_root=self._project_root,
-                level="warning",
-                status="degraded",
                 metadata={"record": self._last_reflection_path.name},
             )
             return False
@@ -684,39 +655,30 @@ class IdeaCandidateGenerator:
         
         context = self._collect_context()
         if context.is_empty():
-            write_observed_log_event(
-                "reflection",
+            write_reflection_audit(
                 "candidate_generation_skipped",
                 "no context available for idea generation",
                 project_root=self._project_root,
-                level="debug",
-                status="skipped",
                 metadata={"reason": "empty_context"}
             )
             return []
         try:
             candidates = self._generate_with_agent(context, max_candidates)
             if not candidates:
-                write_observed_log_event(
-                    "reflection",
+                write_reflection_audit(
                     "cycle_no_candidates",
                     "reflection cycle generated no candidates",
                     project_root=self._project_root,
-                    level="info",
-                    status="completed",
                     metadata={"reason": "no_candidates"}
                 )
             return candidates
         except (RuntimeError, ValueError) as e:
-            error = diagnostic_exception_message(e)
-            write_observed_log_event(
-                "reflection",
-                "candidate_generation_failed",
-                f"failed to generate candidates: {type(e).__name__}",
+            report_reflection_failure(
+                e,
+                event="candidate_generation_failed",
+                message=f"failed to generate candidates: {type(e).__name__}",
                 project_root=self._project_root,
-                level="warning",
-                status="error",
-                error=error,
+                metadata=None,
             )
             return []
 

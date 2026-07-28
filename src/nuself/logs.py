@@ -23,6 +23,11 @@ from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
 )
+from nuself.runtime.audit_types import (
+    LOG_COMPONENTS,
+    LogComponent,
+    LogLevel,
+)
 from nuself.runtime.diagnostics import (
     diagnostic_exception_message,
     emit_runtime_warning,
@@ -42,33 +47,11 @@ from nuself.runtime.messages import (
     thaw_json_value,
 )
 
-LogLevel = Literal["debug", "info", "warning", "error"]
 LogPersistenceOutcome = Literal[
     "not_persisted",
     "persisted",
     "uncertain",
 ]
-LogComponent = Literal[
-    "daemon",
-    "chat",
-    "memory",
-    "persona",
-    "outbox",
-    "reflection",
-    "reasoning",
-    "storage",
-]
-
-LOG_COMPONENTS: tuple[LogComponent, ...] = (
-    "daemon",
-    "chat",
-    "memory",
-    "persona",
-    "outbox",
-    "reflection",
-    "reasoning",
-    "storage",
-)
 _LOG_LOCKS_GUARD = Lock()
 _LOG_WRITE_LOCKS: WeakValueDictionary[Path, RLock] = WeakValueDictionary()
 _LOG_DIRECTORY_SYNC_GUARD = Lock()
