@@ -453,6 +453,11 @@ nuself pack inspect [<path>]      → 展示 <path> 或主库的表统计
   WAL data and remains consistent while another connection is writing.
 - The source default backend remains owned by the outer CLI lifecycle. The
   backup operation owns and always closes its destination connection.
+- Runtime export, validated import, and pre-migration backup all use one
+  connection-to-path backup primitive. It creates the destination directory,
+  owns exactly one destination connection, and closes it once. If backup and
+  close both fail, the cleanup error is retained without replacing the backup
+  error as the explicit cause.
 - **不包含 runtime state**（chat threads, daemon state, logs, cache — 这些不在 nuself.sqlite 里）
 - **不包含本地配置**（config.yaml — 不在库里）
 - **保持 identity 来源信息**（出处可追溯）

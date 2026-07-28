@@ -33,6 +33,7 @@ from nuself.trace.repository import TraceRepository
 from nuself.storage_sqlite import (
     COLLECTION_NAMES,
     SqliteStorageBackend,
+    SqliteStorageBackupCleanupError,
     SqliteStorageCheckpointError,
     SqliteStorageCloseError,
     SqliteStorageInitializationCleanupError,
@@ -124,6 +125,15 @@ class TrackingConnection(sqlite3.Connection):
     def close(self) -> None:
         self.close_calls += 1
         super().close()
+
+
+class BackupFailingConnectionProxy:
+    def __init__(self, error: BaseException) -> None:
+        self.error = error
+
+    def backup(self, target: sqlite3.Connection) -> None:
+        del target
+        raise self.error
 
 
 class CloseBackend:
@@ -374,6 +384,51 @@ def test_online_backup_includes_wal_data_and_closes_destination(
         }
     finally:
         snapshot.close()
+
+
+def test_backup_and_destination_close_failure_retain_both_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = SqliteStorageBackend(tmp_path / "source.sqlite")
+    original_source = cast(
+        sqlite3.Connection,
+        getattr(backend, "_conn"),
+    )
+    backup_error = RuntimeError("backup failed")
+    source = BackupFailingConnectionProxy(backup_error)
+    raw_destination = sqlite3.connect(
+        tmp_path / "destination.sqlite"
+    )
+    destination = LifecycleConnectionProxy(
+        raw_destination,
+        fail_close=True,
+    )
+
+    def connect_destination(database: str) -> sqlite3.Connection:
+        del database
+        return cast(sqlite3.Connection, destination)
+
+    monkeypatch.setattr(
+        "nuself.storage_sqlite.sqlite3.connect",
+        connect_destination,
+    )
+    setattr(backend, "_conn", cast(sqlite3.Connection, source))
+
+    try:
+        with pytest.raises(
+            SqliteStorageBackupCleanupError
+        ) as captured:
+            backend.backup_to(tmp_path / "backup.sqlite")
+    finally:
+        setattr(backend, "_conn", original_source)
+        raw_destination.close()
+        backend.close()
+
+    assert captured.value.backup_error is backup_error
+    assert captured.value.cleanup_error is not None
+    assert captured.value.__cause__ is backup_error
+    assert destination.close_calls == 1
 
 
 def test_backend_rejects_future_schema_version(

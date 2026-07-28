@@ -489,21 +489,8 @@ class SqliteStorageBackend:
         """Write one consistent online backup and close its connection."""
         if destination.resolve() == self._db_path.resolve():
             raise ValueError("SQLite backup destination must differ from source")
-        destination.parent.mkdir(parents=True, exist_ok=True)
         with self._lock:
-            backup = sqlite3.connect(str(destination))
-            try:
-                self._conn.backup(backup)
-            except BaseException as backup_error:
-                try:
-                    backup.close()
-                except Exception as cleanup_error:
-                    raise SqliteStorageBackupCleanupError(
-                        backup_error=backup_error,
-                        cleanup_error=cleanup_error,
-                    ) from backup_error
-                raise
-            backup.close()
+            _backup_connection_to_path(self._conn, destination)
 
     def _init_schema(self) -> None:
         self._conn.execute(
@@ -611,11 +598,7 @@ class SqliteStorageBackend:
         if not has_payload:
             return
         backup_path = self._db_path.with_name(f"{self._db_path.name}.v1.bak")
-        backup = sqlite3.connect(str(backup_path))
-        try:
-            self._conn.backup(backup)
-        finally:
-            backup.close()
+        _backup_connection_to_path(self._conn, backup_path)
 
     @contextmanager
     def transaction(self) -> Generator[None, None, None]:
@@ -741,20 +724,7 @@ def import_sqlite_thought_pack(
     with _readonly_thought_pack(source) as source_connection:
         try:
             version = _validate_thought_pack_connection(source_connection)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            backup = sqlite3.connect(str(temporary))
-            try:
-                source_connection.backup(backup)
-            except BaseException as backup_error:
-                try:
-                    backup.close()
-                except Exception as cleanup_error:
-                    raise SqliteStorageBackupCleanupError(
-                        backup_error=backup_error,
-                        cleanup_error=cleanup_error,
-                    ) from backup_error
-                raise
-            backup.close()
+            _backup_connection_to_path(source_connection, temporary)
             temporary.replace(destination)
             return version
         finally:
@@ -796,6 +766,26 @@ def _readonly_thought_pack(
         yield connection
     finally:
         connection.close()
+
+
+def _backup_connection_to_path(
+    source: sqlite3.Connection,
+    destination: Path,
+) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    backup = sqlite3.connect(str(destination))
+    try:
+        source.backup(backup)
+    except BaseException as backup_error:
+        try:
+            backup.close()
+        except Exception as cleanup_error:
+            raise SqliteStorageBackupCleanupError(
+                backup_error=backup_error,
+                cleanup_error=cleanup_error,
+            ) from backup_error
+        raise
+    backup.close()
 
 
 def _thought_pack_collection_count(
