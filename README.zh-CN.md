@@ -285,7 +285,10 @@ private/logs/
 
 ## 通知
 
-通知 outbox 是一个通用事件总线，用于存放"发生了某事"的提醒。任何后台任务都可以使用它（如 reflection 在 `auto_notify` 开启时、memory curator 等）。
+通知 outbox 是持久化的用户注意力队列，用于存放“发生了某事，请查看 X”的提醒，
+它与内部 runtime 事件总线相互独立。需要提醒用户的后台任务可以使用它（如
+开启 `auto_notify` 的 reflection、memory curator 等）。持久化通知时间戳必须
+包含时区；损坏记录会被报告并隔离，不会再静默影响保留期清理。
 
 ```bash
 uv run nuself inbox notify list

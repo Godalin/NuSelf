@@ -295,7 +295,12 @@ The first protocol is JSON lines over a Unix domain socket at `private/runtime/n
 
 ## Notifications
 
-The notification outbox is a generic event bus for "something happened" alerts. It can be used by any background job (reflection with `auto_notify`, memory curator, etc.).
+The notification outbox is a durable user-attention queue for "something
+happened, go look at X" alerts. It is separate from the internal runtime event
+bus and may be used by background jobs that need to notify the user (reflection
+with `auto_notify`, memory curator, etc.). Persisted notification timestamps are
+timezone-aware; malformed records are reported and isolated rather than
+silently influencing retention cleanup.
 
 ```bash
 uv run nuself inbox notify list

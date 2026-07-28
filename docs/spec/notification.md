@@ -38,9 +38,30 @@ any     ──► deleted   [clear(status)]  triggered by: CLI notify clear
 
 ### Persistence
 
-- One JSON file per entry: `private/outbox/{id}.json`.
-- Atomic write via `.tmp` + `replace()`.
+- File storage uses one JSON file per entry under
+  `private/notifications/outbox/{id}.json`; other configured storage backends
+  preserve the same record contract.
+- Writes use the shared atomic storage boundary.
 - `get()` raises `OutboxEntryNotFound` if file missing.
+- `created_at` and present `sent_at` values are non-empty, timezone-aware
+  ISO-8601 strings. Naive timestamps are invalid because retention decisions
+  must not depend on the host timezone.
+- `list()` isolates records with malformed fields through one payload-safe
+  `outbox/record_decode_failed` diagnostic. It does not repair or delete them.
+  `get()` is strict and propagates schema failures for the requested record.
+
+### Dismissed Retention
+
+`clear_dismissed_older_than(days)` removes dismissed entries whose `created_at`
+instant is strictly earlier than the shared UTC clock minus `days * 24` hours.
+`days` must be a non-negative integer and must not be a boolean. Entries exactly
+at the cutoff are retained.
+
+Record schema failures are isolated by `list()` before retention is evaluated.
+Deletion is an authoritative storage mutation: delete failures propagate and
+stop the cleanup instead of being reported as a malformed timestamp or silently
+skipped. The delivery loop invokes this cleanup with seven days after processing
+pending entries.
 
 ## Delivery Pipeline
 

@@ -2,12 +2,24 @@
 
 from __future__ import annotations
 
+from contextlib import AbstractContextManager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import cast
 
+import pytest
+
+import nuself.notification as notification_module
+from nuself.logs import read_log_events
 from nuself.notification import (
     NotificationDeliveryLoop,
     NotificationOutbox,
     OutboxEntry,
+)
+from nuself.storage import (
+    FileStorageBackend,
+    StorageBackend,
+    StorageCollection,
 )
 
 
@@ -21,6 +33,43 @@ class FakeAdapter:
     def send(self, entry: OutboxEntry) -> bool:
         self.sent_entries.append(entry)
         return self.succeed
+
+
+class DeleteFailingCollection:
+    def __init__(self, delegate: StorageCollection) -> None:
+        self._delegate = delegate
+
+    def get(self, key: str) -> dict[str, object] | None:
+        return self._delegate.get(key)
+
+    def put(self, key: str, value: dict[str, object]) -> None:
+        self._delegate.put(key, value)
+
+    def delete(self, key: str) -> None:
+        raise OSError(f"delete unavailable for {key}")
+
+    def list(self) -> tuple[dict[str, object], ...]:
+        return self._delegate.list()
+
+    def find(self, **filters: object) -> tuple[dict[str, object], ...]:
+        return self._delegate.find(**filters)
+
+
+class DeleteFailingBackend:
+    def __init__(self, root: Path) -> None:
+        delegate = FileStorageBackend(root)
+        self._delegate = delegate
+        self._outbox = DeleteFailingCollection(
+            delegate.collection("notification_outbox")
+        )
+
+    def collection(self, name: str) -> StorageCollection:
+        if name == "notification_outbox":
+            return self._outbox
+        return self._delegate.collection(name)
+
+    def transaction(self) -> AbstractContextManager[None]:
+        return self._delegate.transaction()
 
 
 def test_delivery_loop_sends_pending_entries(tmp_path: Path) -> None:
@@ -80,8 +129,6 @@ def test_delivery_loop_all_adapters_must_succeed(tmp_path: Path) -> None:
 
 
 def test_outbox_clear_dismissed_older_than_removes_old_entries(tmp_path: Path) -> None:
-    from datetime import UTC, datetime, timedelta
-
     outbox = NotificationOutbox(tmp_path)
     old = OutboxEntry(
         id="old",
@@ -108,9 +155,113 @@ def test_outbox_clear_dismissed_older_than_removes_old_entries(tmp_path: Path) -
     assert outbox.list(status="dismissed") == [recent]
 
 
-def test_delivery_loop_auto_clears_old_dismissed_entries(tmp_path: Path) -> None:
-    from datetime import UTC, datetime, timedelta
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    (
+        ("created_at", "not-a-timestamp"),
+        ("created_at", "2026-01-01T00:00:00"),
+        ("sent_at", "2026-01-01T00:00:00"),
+        ("sent_at", 42),
+    ),
+)
+def test_outbox_list_isolates_invalid_persisted_timestamps(
+    tmp_path: Path,
+    field_name: str,
+    value: object,
+) -> None:
+    backend = FileStorageBackend(tmp_path / "private")
+    wire = OutboxEntry(
+        id="corrupt-time",
+        title="Private title",
+        body="Private body",
+        status="dismissed",
+        idempotency_key="corrupt-time",
+    ).to_wire()
+    wire[field_name] = value
+    backend.collection("notification_outbox").put("corrupt-time", wire)
+    outbox = NotificationOutbox(tmp_path, backend=backend)
 
+    assert outbox.list() == []
+
+    event = read_log_events(project_root=tmp_path, component="outbox")[-1]
+    assert event.event == "record_decode_failed"
+    assert event.metadata == {
+        "collection": "notification_outbox",
+        "record_id": "corrupt-time",
+    }
+    assert "Private title" not in str(event.to_record())
+    assert "Private body" not in str(event.to_record())
+    with pytest.raises(ValueError):
+        outbox.get("corrupt-time")
+
+
+@pytest.mark.parametrize("days", (-1, True, 1.5))
+def test_outbox_clear_rejects_invalid_retention_days(
+    tmp_path: Path,
+    days: object,
+) -> None:
+    outbox = NotificationOutbox(tmp_path)
+
+    with pytest.raises(
+        ValueError,
+        match="retention days must be a non-negative integer",
+    ):
+        outbox.clear_dismissed_older_than(cast(int, days))
+
+
+def test_outbox_clear_propagates_delete_failure(tmp_path: Path) -> None:
+    backend: StorageBackend = DeleteFailingBackend(tmp_path / "private")
+    outbox = NotificationOutbox(tmp_path, backend=backend)
+    outbox.add(
+        OutboxEntry(
+            id="old",
+            title="Old",
+            body="B",
+            status="dismissed",
+            idempotency_key="old",
+            created_at=(
+                datetime.now(UTC) - timedelta(days=10)
+            ).isoformat(),
+        )
+    )
+
+    with pytest.raises(OSError, match="delete unavailable for old"):
+        outbox.clear_dismissed_older_than(days=7)
+
+
+def test_outbox_clear_retains_entry_exactly_at_cutoff(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2026, 7, 28, 12, tzinfo=UTC)
+    monkeypatch.setattr(notification_module, "utc_now", lambda: now)
+    outbox = NotificationOutbox(tmp_path)
+    at_cutoff = OutboxEntry(
+        id="at-cutoff",
+        title="At cutoff",
+        body="B",
+        status="dismissed",
+        idempotency_key="at-cutoff",
+        created_at=(now - timedelta(days=7)).isoformat(),
+    )
+    before_cutoff = OutboxEntry(
+        id="before-cutoff",
+        title="Before cutoff",
+        body="B",
+        status="dismissed",
+        idempotency_key="before-cutoff",
+        created_at=(
+            now - timedelta(days=7, microseconds=1)
+        ).isoformat(),
+    )
+    outbox.add(at_cutoff)
+    outbox.add(before_cutoff)
+
+    assert outbox.clear_dismissed_older_than(days=7) == 1
+    assert outbox.list(status="dismissed") == [at_cutoff]
+
+
+def test_delivery_loop_auto_clears_old_dismissed_entries(tmp_path: Path) -> None:
     outbox = NotificationOutbox(tmp_path)
     outbox.add(OutboxEntry(id="pending1", title="P", body="B", status="pending", idempotency_key="p1"))
     old_dismissed = OutboxEntry(

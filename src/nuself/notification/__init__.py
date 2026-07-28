@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Literal, Protocol, cast
 
+from nuself.clock import utc_now, utc_now_iso
 from nuself.config import runtime_paths
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend
@@ -24,9 +25,14 @@ class OutboxEntry:
     status: OutboxStatus
     idempotency_key: str
     deep_link: str | None = None
-    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    created_at: str = field(default_factory=utc_now_iso)
     sent_at: str | None = None
     attempts: int = 0
+
+    def __post_init__(self) -> None:
+        _parse_aware_iso(self.created_at, field_name="created_at")
+        if self.sent_at is not None:
+            _parse_aware_iso(self.sent_at, field_name="sent_at")
 
     def to_wire(self) -> dict[str, object]:
         wire: dict[str, object] = {
@@ -54,7 +60,7 @@ class OutboxEntry:
             idempotency_key=_expect_str(data, "idempotency_key"),
             deep_link=_optional_str(data, "deep_link"),
             created_at=_expect_str(data, "created_at"),
-            sent_at=_optional_str(data, "sent_at"),
+            sent_at=_optional_timestamp(data, "sent_at"),
             attempts=_expect_int(data, "attempts"),
         )
 
@@ -153,7 +159,7 @@ class NotificationOutbox:
             idempotency_key=entry.idempotency_key,
             deep_link=entry.deep_link,
             created_at=entry.created_at,
-            sent_at=datetime.now(UTC).isoformat(),
+            sent_at=utc_now_iso(),
             attempts=entry.attempts + 1,
         )
         self._write_entry(updated)
@@ -199,16 +205,18 @@ class NotificationOutbox:
         return removed
 
     def clear_dismissed_older_than(self, days: int) -> int:
+        if type(days) is not int or days < 0:
+            raise ValueError("retention days must be a non-negative integer")
         removed = 0
-        cutoff = datetime.now(UTC).timestamp() - days * 86400
+        cutoff = utc_now().timestamp() - days * 86400
         for entry in self.list(status="dismissed"):
-            try:
-                created = datetime.fromisoformat(entry.created_at)
-                if created.timestamp() < cutoff:
-                    self._col.delete(entry.id)
-                    removed += 1
-            except (ValueError, OSError):
-                continue
+            created = _parse_aware_iso(
+                entry.created_at,
+                field_name="created_at",
+            )
+            if created.timestamp() < cutoff:
+                self._col.delete(entry.id)
+                removed += 1
         return removed
 
     def _find_by_idempotency_key(self, key: str) -> OutboxEntry | None:
@@ -272,11 +280,37 @@ def _optional_str(data: dict[str, object], field_name: str) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _optional_timestamp(
+    data: dict[str, object],
+    field_name: str,
+) -> str | None:
+    value = data.get(field_name)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"field '{field_name}' must be a string")
+    return value
+
+
 def _expect_int(data: dict[str, object], field_name: str) -> int:
     value = data.get(field_name)
     if not isinstance(value, int):
         raise ValueError(f"field '{field_name}' must be an integer")
     return value
+
+
+def _parse_aware_iso(value: str, *, field_name: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(
+            f"field '{field_name}' must be an ISO-8601 timestamp"
+        ) from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(
+            f"field '{field_name}' must include a timezone"
+        )
+    return parsed
 
 
 def _expect_status(data: dict[str, object], field_name: str) -> OutboxStatus:
