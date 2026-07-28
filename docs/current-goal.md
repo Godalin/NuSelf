@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make daemon status observation single-use, reusable, and uniformly surfaced.
+Make daemon lifecycle transitions explicit and audit their actual outcomes.
 
 ## Active Branch
 
@@ -13,42 +13,44 @@ Make daemon status observation single-use, reusable, and uniformly surfaced.
 
 ## Ordered Work
 
-1. Audit every status call and identify duplicate observations per CLI decision.
-2. Define explicit same-decision snapshot reuse without global caching.
-3. Validate reused snapshots belong to the requested runtime project.
-4. Reuse the default entrypoint snapshot when starting the daemon.
-5. Centralize CLI status observation and safe failure reporting.
-6. Cover REPL status failure and prove commands do not duplicate observation.
+1. Audit start/stop return values, restart orchestration, and completion audits.
+2. Define typed start, stop, and restart transition results.
+3. Distinguish changed transitions from already-ready/stopped idempotent calls.
+4. Centralize restart orchestration for one-shot and interactive callers.
+5. Project outcome and before/after phases in every completion audit.
+6. Reuse the stop result as restart's initial start snapshot.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Status remains an instantaneous observation, not a lease or durable fact.
-- Start/stop polling always takes fresh snapshots after the initial decision.
-- No process-global, time-based, or cross-command status cache is introduced.
+- Status phase semantics and server readiness ordering remain unchanged.
+- Failure exception types and safe terminal messages remain unchanged.
+- Lifecycle audit persistence remains best-effort and non-authoritative.
 
 ## Completion Evidence
 
-- Status-call audit found one duplicate default-launch observation and one REPL
-  error path that bypassed the shared safe CLI boundary.
-- `lifecycle.start(initial_status=...)` reuses only an explicitly supplied
-  same-decision snapshot and rejects socket/PID paths from another project
-  before creating runtime directories.
-- Startup polling after the initial decision remains fresh, and daemon instance
-  locking remains the authoritative competing-start race boundary.
-- The default launcher now passes its initial stopped snapshot into startup, so
-  that command decision performs one initial typed ping and ownership probe.
-- `cli.daemon_status.observe_daemon_status()` is the single status/error
-  boundary used by daemon commands, system checks, launch entrypoints,
-  interactive headers, and REPL `:dev status`.
-- Status inspection failure is rendered once with the stable safe message;
-  internal cause details remain absent from CLI output and the REPL stays alive.
-- Tests patch the real `nuself.daemon.lifecycle` owner rather than depending on
-  an incidental re-export from the CLI composition root.
-- Direct tests prove snapshot reuse, cross-project rejection, one observation
-  per default launch decision, and safe REPL status failure.
-- Focused lifecycle and CLI suites: `363 passed`.
-- Full test suite: `1726 passed`.
+- `lifecycle.start()` and `stop()` now return invariant-checked typed results
+  retaining the before/final snapshots and explicit idempotent outcomes.
+- `changed` is derived from `started`/`stopped` rather than inferred from the
+  final phase; `already_ready` and `already_stopped` remain successful no-ops.
+- Result construction rejects invalid final phases, cross-runtime snapshots,
+  and restart transitions whose start input is not the stop output.
+- `cli/daemon_lifecycle.py` is the shared observable orchestration boundary for
+  one-shot commands, the default launcher, and interactive restart.
+- CLI and REPL no longer own separate restart algorithms. Both consume one
+  `DaemonRestartResult` containing the authoritative stop and start results.
+- Restart passes the stop result's final snapshot directly into start, avoiding
+  a redundant observation between the ordered transition phases.
+- Start/stop completion audits now record outcome, changed, and before/after
+  phases. Restart emits one combined completion containing both transitions.
+- Restart failure audits identify the failed `stop` or `start` stage while
+  preserving the existing typed exception and safe terminal behavior.
+- Common status formatting and lifecycle orchestration no longer live in the
+  concrete daemon command-handler module.
+- Direct tests cover result invariants, idempotent audit semantics, combined
+  restart metadata, snapshot handoff, and failure-stage projection.
+- Focused lifecycle and CLI suites: `368 passed`.
+- Full test suite: `1731 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
@@ -58,4 +60,4 @@ Make daemon status observation single-use, reusable, and uniformly surfaced.
 
 ## Next Review Batch
 
-Review lifecycle transition result types and audit projection semantics.
+Review lifecycle audit event/schema typing after orchestration is centralized.

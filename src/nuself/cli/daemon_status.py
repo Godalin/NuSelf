@@ -9,6 +9,11 @@ from nuself.daemon import lifecycle
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
+def format_status(status: lifecycle.DaemonStatus) -> str:
+    pid = status.pid if status.pid is not None else "-"
+    return f"daemon {status.phase} pid={pid} socket={status.socket_path}"
+
+
 def observe_daemon_status(
     project_root: Path | None,
 ) -> lifecycle.DaemonStatus | None:

@@ -67,6 +67,14 @@ requested/completed events use the same failure event,
 metadata. A failed sink is observable but cannot alter the lifecycle decision
 that the record describes.
 
+Successful CLI lifecycle completion records describe the authoritative typed
+transition result. Start and stop completion metadata includes `outcome`,
+`changed`, `from_phase`, and `to_phase`. Restart has one requested record and
+one completed record containing both stop and start outcomes and phase
+boundaries. An idempotent start or stop is still a completed request, but its
+outcome is `already_ready` or `already_stopped` and `changed=false`; it must not
+masquerade as a newly performed transition.
+
 ## Service Call Logs
 
 When one subsystem invokes another subsystem through an agent-facing service/tool boundary, write a caller-owned log event with a service tag in metadata.

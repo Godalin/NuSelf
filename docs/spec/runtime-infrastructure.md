@@ -793,6 +793,22 @@ the requested runtime socket and PID paths before using it. Any later polling
 iteration always observes a fresh snapshot; the instance lock remains the
 authoritative race boundary for competing process startup.
 
+Successful lifecycle mutations return typed transition results rather than a
+bare final status. A start result retains `before`, final `status`, and outcome
+`started` or `already_ready`; a stop result retains the same snapshots with
+outcome `stopped` or `already_stopped`. Their `changed` flag is derived from the
+outcome. Result construction rejects before/final snapshots from different
+runtime paths and final phases inconsistent with the operation. A restart
+result contains both transition results and requires the start input to equal
+the stop output, so callers never infer whether work occurred from the final
+phase alone.
+
+Restart is one lifecycle orchestration owned by the shared CLI lifecycle
+boundary, not separate one-shot and REPL algorithms. It stops first, then uses
+the stop result's final status as the explicit initial snapshot for start.
+Therefore it does not repeat a fresh initial status probe between its two
+ordered phases; later start polling remains fresh.
+
 ### PID Metadata
 
 After socket binding, the lock owner publishes

@@ -10,12 +10,11 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.agent.chat import ThreadState, ThreadStore
-from nuself.cli.commands.daemon import (
+from nuself.cli.daemon_lifecycle import (
     format_start_failure,
-    format_status,
     start_daemon_observed,
 )
-from nuself.cli.daemon_status import observe_daemon_status
+from nuself.cli.daemon_status import format_status, observe_daemon_status
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import lifecycle
 from nuself.notification.deep_link import DeepLink
@@ -91,9 +90,8 @@ class EntrypointController:
         else:
             print("Starting NuSelf daemon...")
             try:
-                result = start_daemon_observed(
+                transition = start_daemon_observed(
                     args.project_root,
-                    operation="start",
                     initial_status=result,
                 )
             except lifecycle.DaemonStartError as exc:
@@ -102,12 +100,7 @@ class EntrypointController:
                     file=sys.stderr,
                 )
                 return 1
-            if not result.running:
-                print(
-                    f"Failed to start daemon: {format_status(result)}",
-                    file=sys.stderr,
-                )
-                return 1
+            result = transition.status
             print(f"Daemon started: {format_status(result)}")
         if args.message is not None:
             return self._callbacks.send_daemon_chat(

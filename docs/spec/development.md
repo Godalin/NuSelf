@@ -240,11 +240,13 @@ under the same package.
   construction. Chat failure/completion and accepted-shutdown audit records
   use shared observability and cannot replace the already-decided response or
   shutdown flag.
-- `daemon/audit.py` owns lifecycle audit projection for the daemon server,
-  one-shot daemon commands, and interactive restart. Callers retain ownership
-  of lifecycle execution, status rendering, and exit decisions.
-- `cli/commands/daemon.py` owns daemon lifecycle/health handlers and daemon status
-  formatting.
+- `daemon/audit.py` owns the best-effort lifecycle audit sink boundary.
+  `cli/daemon_lifecycle.py` owns shared observable start/stop/restart
+  orchestration and typed transition projection for one-shot, launch, and REPL
+  surfaces.
+- `cli/daemon_status.py` owns shared status observation, safe failure rendering,
+  and status-line formatting. `cli/commands/daemon.py` owns only daemon command
+  handlers plus list/health presentation and exit decisions.
 - `cli/commands/threads.py` owns one-shot thread list/show/create/rename/branch/archive
   lifecycle handlers; REPL thread switching remains in the REPL layer.
 - `cli/commands/output.py` owns ANSI-aware printing and visible-handle error rendering

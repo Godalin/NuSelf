@@ -7,13 +7,12 @@ import sys
 from pathlib import Path
 
 from nuself.agent.chat import ThreadStore
-from nuself.cli.commands.daemon import (
+from nuself.cli.daemon_lifecycle import (
     format_start_failure,
     format_stop_failure,
-    format_status,
-    start_daemon_observed,
-    stop_daemon_observed,
+    restart_daemon_observed,
 )
+from nuself.cli.daemon_status import format_status
 from nuself.cli.commands.output import print_ansi
 from nuself.cli.commands.persona import (
     handle_persona_create,
@@ -23,7 +22,6 @@ from nuself.cli.commands.persona import (
     resolve_persona_id,
 )
 from nuself.daemon import lifecycle
-from nuself.daemon.audit import write_lifecycle_audit
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
     MemoryCandidateRepository,
@@ -407,30 +405,16 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
 
 
 def handle_interactive_restart_command(project_root: Path | None) -> str:
-    write_lifecycle_audit(
-        "restart_requested",
-        "daemon restart requested",
-        project_root=project_root,
-    )
     try:
-        stop_result = stop_daemon_observed(
-            project_root,
-            operation="restart",
-        )
+        result = restart_daemon_observed(project_root)
     except lifecycle.DaemonStopError as exc:
         return f"Failed to restart daemon: {format_stop_failure(exc)}"
-    if stop_result.running:
-        return f"Failed to stop daemon: {format_status(stop_result)}"
-    try:
-        start_result = start_daemon_observed(
-            project_root,
-            operation="restart",
-        )
     except lifecycle.DaemonStartError as exc:
         return f"Failed to restart daemon: {format_start_failure(exc)}"
-    if not start_result.running:
-        return f"Failed to restart daemon: {format_status(start_result)}"
-    return f"Restarted daemon: {format_status(start_result)}"
+    return (
+        f"Restarted daemon: {format_status(result.status)} "
+        f"stop={result.stop.outcome} start={result.start.outcome}"
+    )
 
 
 def interactive_persona_help(command: str | None = None) -> str:

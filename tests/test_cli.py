@@ -22,6 +22,8 @@ from nuself.config import runtime_paths
 from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.lifecycle import (
     DaemonStartError,
+    DaemonStartResult,
+    DaemonStopResult,
     DaemonStatus,
     DaemonStatusError,
     DaemonStopError,
@@ -1340,9 +1342,13 @@ def test_default_entrypoint_creates_daemon_when_missing(
         project_root: Path | None,
         *,
         initial_status: DaemonStatus | None = None,
-    ) -> DaemonStatus:
+    ) -> DaemonStartResult:
         assert initial_status is stopped
-        return running
+        return DaemonStartResult(
+            before=stopped,
+            status=running,
+            outcome="started",
+        )
 
     def fake_send(message: str, project_root: Path | None) -> int:
         print(f"sent {message}")
@@ -3591,6 +3597,80 @@ def test_thread_show_missing_thread(tmp_path: Path, capsys: CaptureFixture) -> N
     assert "Thread not found: missing" in captured.err
 
 
+def test_daemon_start_noop_audits_explicit_transition(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
+    ready = DaemonStatus(
+        phase="ready",
+        pid=789,
+        socket_path=tmp_path / "private/runtime/nuself.sock",
+        pid_path=tmp_path / "private/runtime/nuself.pid",
+    )
+
+    def fake_start(project_root: Path | None) -> DaemonStartResult:
+        return DaemonStartResult(
+            before=ready,
+            status=ready,
+            outcome="already_ready",
+        )
+
+    monkeypatch.setattr("nuself.daemon.lifecycle.start", fake_start)
+
+    assert main(["--project-root", str(tmp_path), "daemon", "start"]) == 0
+
+    events = read_log_events(project_root=tmp_path, component="daemon")
+    assert [event.event for event in events] == [
+        "start_requested",
+        "start_completed",
+    ]
+    assert events[-1].metadata == {
+        "changed": False,
+        "from_phase": "ready",
+        "outcome": "already_ready",
+        "pid": 789,
+        "socket": str(ready.socket_path),
+        "to_phase": "ready",
+    }
+
+
+def test_daemon_stop_noop_audits_explicit_transition(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
+    stopped = DaemonStatus(
+        phase="stopped",
+        pid=None,
+        socket_path=tmp_path / "private/runtime/nuself.sock",
+        pid_path=tmp_path / "private/runtime/nuself.pid",
+    )
+
+    def fake_stop(project_root: Path | None) -> DaemonStopResult:
+        return DaemonStopResult(
+            before=stopped,
+            status=stopped,
+            outcome="already_stopped",
+        )
+
+    monkeypatch.setattr("nuself.daemon.lifecycle.stop", fake_stop)
+
+    assert main(["--project-root", str(tmp_path), "daemon", "stop"]) == 0
+
+    events = read_log_events(project_root=tmp_path, component="daemon")
+    assert [event.event for event in events] == [
+        "stop_requested",
+        "stop_completed",
+    ]
+    assert events[-1].metadata == {
+        "changed": False,
+        "from_phase": "stopped",
+        "outcome": "already_stopped",
+        "pid": None,
+        "socket": str(stopped.socket_path),
+        "to_phase": "stopped",
+    }
+
+
 def test_daemon_restart_stops_then_starts(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
@@ -3607,11 +3687,24 @@ def test_daemon_restart_stops_then_starts(
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
     )
 
-    def fake_stop(project_root: Path | None) -> DaemonStatus:
-        return stopped
+    def fake_stop(project_root: Path | None) -> DaemonStopResult:
+        return DaemonStopResult(
+            before=running,
+            status=stopped,
+            outcome="stopped",
+        )
 
-    def fake_start(project_root: Path | None) -> DaemonStatus:
-        return running
+    def fake_start(
+        project_root: Path | None,
+        *,
+        initial_status: DaemonStatus | None = None,
+    ) -> DaemonStartResult:
+        assert initial_status is stopped
+        return DaemonStartResult(
+            before=stopped,
+            status=running,
+            outcome="started",
+        )
 
     monkeypatch.setattr("nuself.daemon.lifecycle.stop", fake_stop)
     monkeypatch.setattr("nuself.daemon.lifecycle.start", fake_start)
@@ -3626,9 +3719,69 @@ def test_daemon_restart_stops_then_starts(
         )
     captured = capsys.readouterr()
     assert result == 0
-    assert "Stopped:" in captured.out
-    assert "Started:" in captured.out
+    assert "Restarted:" in captured.out
+    assert "stop=stopped start=started" in captured.out
     assert "pid=789" in captured.out
+
+
+def test_daemon_restart_audits_both_transition_results(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
+    stopped = DaemonStatus(
+        phase="stopped",
+        pid=None,
+        socket_path=tmp_path / "private/runtime/nuself.sock",
+        pid_path=tmp_path / "private/runtime/nuself.pid",
+    )
+    ready = DaemonStatus(
+        phase="ready",
+        pid=789,
+        socket_path=stopped.socket_path,
+        pid_path=stopped.pid_path,
+    )
+
+    def fake_stop(project_root: Path | None) -> DaemonStopResult:
+        return DaemonStopResult(
+            before=ready,
+            status=stopped,
+            outcome="stopped",
+        )
+
+    def fake_start(
+        project_root: Path | None,
+        *,
+        initial_status: DaemonStatus | None = None,
+    ) -> DaemonStartResult:
+        assert initial_status is stopped
+        return DaemonStartResult(
+            before=stopped,
+            status=ready,
+            outcome="started",
+        )
+
+    monkeypatch.setattr("nuself.daemon.lifecycle.stop", fake_stop)
+    monkeypatch.setattr("nuself.daemon.lifecycle.start", fake_start)
+
+    assert main(["--project-root", str(tmp_path), "daemon", "restart"]) == 0
+
+    events = read_log_events(project_root=tmp_path, component="daemon")
+    assert [event.event for event in events] == [
+        "restart_requested",
+        "restart_completed",
+    ]
+    assert events[-1].metadata == {
+        "pid": 789,
+        "socket": str(ready.socket_path),
+        "start_changed": True,
+        "start_from_phase": "stopped",
+        "start_outcome": "started",
+        "start_to_phase": "ready",
+        "stop_changed": True,
+        "stop_from_phase": "ready",
+        "stop_outcome": "stopped",
+        "stop_to_phase": "stopped",
+    }
 
 
 def test_interactive_restart_restarts_daemon_and_keeps_session(
@@ -3652,17 +3805,31 @@ def test_interactive_restart_restarts_daemon_and_keeps_session(
     def fake_status(project_root: Path | None) -> DaemonStatus:
         return current_status
 
-    def fake_stop(project_root: Path | None) -> DaemonStatus:
+    def fake_stop(project_root: Path | None) -> DaemonStopResult:
         nonlocal current_status
         calls.append("stop")
+        before = current_status
         current_status = stopped
-        return current_status
+        return DaemonStopResult(
+            before=before,
+            status=stopped,
+            outcome="stopped",
+        )
 
-    def fake_start(project_root: Path | None) -> DaemonStatus:
+    def fake_start(
+        project_root: Path | None,
+        *,
+        initial_status: DaemonStatus | None = None,
+    ) -> DaemonStartResult:
         nonlocal current_status
         calls.append("start")
+        assert initial_status is stopped
         current_status = running
-        return current_status
+        return DaemonStartResult(
+            before=stopped,
+            status=running,
+            outcome="started",
+        )
 
     monkeypatch.setattr("sys.stdin", _TextInput(":r\n:q\n"))
     monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
@@ -3694,8 +3861,12 @@ def test_daemon_start_with_mocked_lifecycle(
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
     )
 
-    def fake_start(project_root: Path | None) -> DaemonStatus:
-        return running
+    def fake_start(project_root: Path | None) -> DaemonStartResult:
+        return DaemonStartResult(
+            before=running,
+            status=running,
+            outcome="already_ready",
+        )
 
     monkeypatch.setattr("nuself.daemon.lifecycle.start", fake_start)
     _fail_lifecycle_audit_storage(monkeypatch)
@@ -3820,10 +3991,19 @@ def test_interactive_restart_start_failure_keeps_repl_alive(
     def fake_status(project_root: Path | None) -> DaemonStatus:
         return running
 
-    def fake_stop(project_root: Path | None) -> DaemonStatus:
-        return stopped
+    def fake_stop(project_root: Path | None) -> DaemonStopResult:
+        return DaemonStopResult(
+            before=running,
+            status=stopped,
+            outcome="stopped",
+        )
 
-    def fail_start(project_root: Path | None) -> DaemonStatus:
+    def fail_start(
+        project_root: Path | None,
+        *,
+        initial_status: DaemonStatus | None = None,
+    ) -> DaemonStartResult:
+        assert initial_status is stopped
         raise failure
 
     monkeypatch.setattr("sys.stdin", _TextInput(":r\n:q\n"))
@@ -3845,6 +4025,8 @@ def test_interactive_restart_start_failure_keeps_repl_alive(
         "restart_requested",
         "restart_failed",
     ]
+    assert events[-1].metadata is not None
+    assert events[-1].metadata["stage"] == "start"
 
 
 def test_daemon_stop_with_mocked_lifecycle(
@@ -3857,8 +4039,12 @@ def test_daemon_stop_with_mocked_lifecycle(
         pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
     )
 
-    def fake_stop(project_root: Path | None) -> DaemonStatus:
-        return stopped
+    def fake_stop(project_root: Path | None) -> DaemonStopResult:
+        return DaemonStopResult(
+            before=stopped,
+            status=stopped,
+            outcome="already_stopped",
+        )
 
     monkeypatch.setattr("nuself.daemon.lifecycle.stop", fake_stop)
     _fail_lifecycle_audit_storage(monkeypatch)
@@ -3961,6 +4147,8 @@ def test_interactive_restart_stop_failure_keeps_repl_alive(
         "restart_requested",
         "restart_failed",
     ]
+    assert events[-1].metadata is not None
+    assert events[-1].metadata["stage"] == "stop"
 
 
 def test_interactive_sources_lists_documents(

@@ -219,7 +219,14 @@ def test_start_isolates_raw_process_output_from_structured_daemon_log(
     monkeypatch.setattr(lifecycle.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(lifecycle.time, "sleep", _no_sleep)
 
-    assert lifecycle.start(tmp_path) == running
+    result = lifecycle.start(tmp_path)
+
+    assert result == lifecycle.DaemonStartResult(
+        before=missing,
+        status=running,
+        outcome="started",
+    )
+    assert result.changed is True
 
     assert process_logs[0].closed is True
     assert (
@@ -247,7 +254,14 @@ def test_start_reuses_matching_initial_ready_status(
 
     monkeypatch.setattr(lifecycle, "status", fail_status)
 
-    assert lifecycle.start(tmp_path, initial_status=ready) is ready
+    result = lifecycle.start(tmp_path, initial_status=ready)
+
+    assert result == lifecycle.DaemonStartResult(
+        before=ready,
+        status=ready,
+        outcome="already_ready",
+    )
+    assert result.changed is False
 
 
 def test_start_rejects_initial_status_from_another_project(
@@ -266,6 +280,76 @@ def test_start_rejects_initial_status_from_another_project(
         match="different runtime project",
     ):
         lifecycle.start(tmp_path, initial_status=stopped)
+
+
+def test_start_result_rejects_non_ready_final_status(tmp_path: Path) -> None:
+    paths = runtime_paths(tmp_path)
+    stopped = lifecycle.DaemonStatus(
+        phase="stopped",
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+
+    with pytest.raises(ValueError, match="must end ready"):
+        lifecycle.DaemonStartResult(
+            before=stopped,
+            status=stopped,
+            outcome="started",
+        )
+
+
+def test_stop_result_rejects_non_stopped_final_status(tmp_path: Path) -> None:
+    paths = runtime_paths(tmp_path)
+    ready = lifecycle.DaemonStatus(
+        phase="ready",
+        pid=42,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+
+    with pytest.raises(ValueError, match="must end stopped"):
+        lifecycle.DaemonStopResult(
+            before=ready,
+            status=ready,
+            outcome="stopped",
+        )
+
+
+def test_restart_result_requires_connected_transitions(tmp_path: Path) -> None:
+    paths = runtime_paths(tmp_path)
+    ready = lifecycle.DaemonStatus(
+        phase="ready",
+        pid=42,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    stopped = lifecycle.DaemonStatus(
+        phase="stopped",
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    owned_unready = lifecycle.DaemonStatus(
+        phase="owned_unready",
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+
+    with pytest.raises(ValueError, match="consume the stop result"):
+        lifecycle.DaemonRestartResult(
+            stop=lifecycle.DaemonStopResult(
+                before=ready,
+                status=stopped,
+                outcome="stopped",
+            ),
+            start=lifecycle.DaemonStartResult(
+                before=owned_unready,
+                status=ready,
+                outcome="started",
+            ),
+        )
 
 
 def test_start_rotates_bounded_raw_process_log_before_spawn(
@@ -405,9 +489,11 @@ def test_process_log_rotation_failure_warns_safely_and_continues_start(
     monkeypatch.setattr(lifecycle.time, "sleep", _no_sleep)
 
     with pytest.warns(RuntimeWarning) as captured:
-        assert lifecycle.start(tmp_path) == running
+        result = lifecycle.start(tmp_path)
 
     assert spawned is True
+    assert result.outcome == "started"
+    assert result.status is running
     warning = str(captured[0].message)
     assert "process_log_rotation_failed" in warning
     assert "error_type=PermissionError" in warning
@@ -676,10 +762,13 @@ def test_stop_ignores_stale_pid_when_no_instance_owner(
     monkeypatch.setattr(lifecycle.client, "ping", failed_ping)
     monkeypatch.setattr(lifecycle.client, "shutdown", unexpected_shutdown)
 
-    snapshot = lifecycle.stop(tmp_path)
+    result = lifecycle.stop(tmp_path)
 
-    assert snapshot.running is False
-    assert snapshot.pid is None
+    assert result.outcome == "already_stopped"
+    assert result.changed is False
+    assert result.before is result.status
+    assert result.status.running is False
+    assert result.status.pid is None
     assert shutdown_called is False
     assert paths.pid_path.read_text(encoding="utf-8") == "98765\n"
 
@@ -727,7 +816,7 @@ def test_stop_uses_real_instance_lock_as_completion_boundary(
     monkeypatch.setattr(lifecycle.time, "sleep", release_during_sleep)
 
     try:
-        snapshot = lifecycle.stop(
+        result = lifecycle.stop(
             tmp_path,
             shutdown_policy=lifecycle.DaemonWaitPolicy(
                 timeout_seconds=0.2,
@@ -737,8 +826,11 @@ def test_stop_uses_real_instance_lock_as_completion_boundary(
     finally:
         owner.release()
 
-    assert snapshot.running is False
-    assert snapshot.pid is None
+    assert result.outcome == "stopped"
+    assert result.changed is True
+    assert result.before.phase == "owned_unready"
+    assert result.status.running is False
+    assert result.status.pid is None
     assert shutdown_called is True
     assert sleeps == [0.05]
 
@@ -783,7 +875,14 @@ def test_stop_waits_for_ping_and_instance_ownership_release(
     monkeypatch.setattr(lifecycle, "status", fake_status)
     monkeypatch.setattr(lifecycle.client, "shutdown", shutdown)
 
-    assert lifecycle.stop(tmp_path) is stopped
+    result = lifecycle.stop(tmp_path)
+
+    assert result == lifecycle.DaemonStopResult(
+        before=running,
+        status=stopped,
+        outcome="stopped",
+    )
+    assert result.changed is True
     assert len(shutdown_timeouts) == 1
     assert 0 < shutdown_timeouts[0] <= 2
 

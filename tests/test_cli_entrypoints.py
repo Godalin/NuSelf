@@ -14,7 +14,11 @@ from nuself.cli.entrypoints import (
     InteractiveSender,
 )
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.daemon.lifecycle import DaemonStartError, DaemonStatus
+from nuself.daemon.lifecycle import (
+    DaemonStartError,
+    DaemonStartResult,
+    DaemonStatus,
+)
 
 
 class RecordingCallbacks:
@@ -113,27 +117,6 @@ def _return_status(
     return get_status
 
 
-def test_default_entrypoint_stops_when_daemon_start_fails(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    stopped = _status(tmp_path, running=False)
-    monkeypatch.setattr(entrypoints.lifecycle, "status", _return_status(stopped))
-    monkeypatch.setattr(entrypoints.lifecycle, "start", _return_status(stopped))
-    callbacks = RecordingCallbacks()
-
-    result = callbacks.controller().handle_default(
-        argparse.Namespace(project_root=tmp_path, message="hello")
-    )
-
-    assert result == 1
-    assert callbacks.calls == []
-    captured = capsys.readouterr()
-    assert "Starting NuSelf daemon..." in captured.out
-    assert "Failed to start daemon:" in captured.err
-
-
 def test_default_entrypoint_reuses_its_initial_status(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -151,9 +134,13 @@ def test_default_entrypoint_reuses_its_initial_status(
         project_root: Path | None,
         *,
         initial_status: DaemonStatus | None = None,
-    ) -> DaemonStatus:
+    ) -> DaemonStartResult:
         assert initial_status is stopped
-        return ready
+        return DaemonStartResult(
+            before=stopped,
+            status=ready,
+            outcome="started",
+        )
 
     monkeypatch.setattr(entrypoints.lifecycle, "status", observe)
     monkeypatch.setattr(entrypoints.lifecycle, "start", start)

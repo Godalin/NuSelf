@@ -99,6 +99,84 @@ class DaemonStatus:
         return self.phase in {"owned_unready", "ready"}
 
 
+DaemonStartOutcome = Literal["started", "already_ready"]
+DaemonStopOutcome = Literal["stopped", "already_stopped"]
+
+
+@dataclass(frozen=True)
+class DaemonStartResult:
+    before: DaemonStatus
+    status: DaemonStatus
+    outcome: DaemonStartOutcome
+
+    def __post_init__(self) -> None:
+        _validate_transition_runtime(self.before, self.status)
+        if self.status.phase != "ready":
+            raise ValueError("a successful daemon start must end ready")
+        if self.outcome == "already_ready" and self.before.phase != "ready":
+            raise ValueError("already_ready requires a ready initial status")
+        if self.outcome == "started" and self.before.phase == "ready":
+            raise ValueError("started requires a non-ready initial status")
+
+    @property
+    def changed(self) -> bool:
+        return self.outcome == "started"
+
+
+@dataclass(frozen=True)
+class DaemonStopResult:
+    before: DaemonStatus
+    status: DaemonStatus
+    outcome: DaemonStopOutcome
+
+    def __post_init__(self) -> None:
+        _validate_transition_runtime(self.before, self.status)
+        if self.status.phase != "stopped":
+            raise ValueError("a successful daemon stop must end stopped")
+        if (
+            self.outcome == "already_stopped"
+            and self.before.phase != "stopped"
+        ):
+            raise ValueError(
+                "already_stopped requires a stopped initial status"
+            )
+        if self.outcome == "stopped" and self.before.phase == "stopped":
+            raise ValueError("stopped requires a non-stopped initial status")
+
+    @property
+    def changed(self) -> bool:
+        return self.outcome == "stopped"
+
+
+@dataclass(frozen=True)
+class DaemonRestartResult:
+    stop: DaemonStopResult
+    start: DaemonStartResult
+
+    def __post_init__(self) -> None:
+        if self.start.before != self.stop.status:
+            raise ValueError(
+                "daemon restart start must consume the stop result status"
+            )
+
+    @property
+    def status(self) -> DaemonStatus:
+        return self.start.status
+
+
+def _validate_transition_runtime(
+    before: DaemonStatus,
+    status: DaemonStatus,
+) -> None:
+    if (
+        before.socket_path != status.socket_path
+        or before.pid_path != status.pid_path
+    ):
+        raise ValueError(
+            "daemon transition statuses belong to different runtimes"
+        )
+
+
 class DaemonStatusError(RuntimeError):
     """Daemon ownership could not be observed authoritatively."""
 
@@ -209,7 +287,7 @@ def start(
         DEFAULT_DAEMON_PROCESS_LOG_RETENTION
     ),
     startup_policy: DaemonWaitPolicy = DEFAULT_DAEMON_STARTUP_POLICY,
-) -> DaemonStatus:
+) -> DaemonStartResult:
     paths = runtime_paths(project_root)
     if initial_status is None:
         ensure_runtime_dirs(paths)
@@ -219,7 +297,12 @@ def start(
         ensure_runtime_dirs(paths)
         current = initial_status
     if current.running:
-        return current
+        return DaemonStartResult(
+            before=current,
+            status=current,
+            outcome="already_ready",
+        )
+    before = current
     if current.phase == "owned_unready":
         raise DaemonStartError(
             "owner_unready",
@@ -281,7 +364,11 @@ def start(
             ping_timeout=remaining,
         )
         if current.running:
-            return current
+            return DaemonStartResult(
+                before=before,
+                status=current,
+                outcome="started",
+            )
         exit_code = process.poll()
         if exit_code is not None:
             raise DaemonStartError(
@@ -354,7 +441,7 @@ def stop(
     project_root: Path | None = None,
     *,
     shutdown_policy: DaemonWaitPolicy = DEFAULT_DAEMON_SHUTDOWN_POLICY,
-) -> DaemonStatus:
+) -> DaemonStopResult:
     paths = runtime_paths(project_root)
     deadline = time.monotonic() + shutdown_policy.timeout_seconds
     current = _status_for_stop(
@@ -364,7 +451,12 @@ def stop(
     owner_active = current.owner_active
     assert owner_active is not None
     if not current.running and not owner_active:
-        return current
+        return DaemonStopResult(
+            before=current,
+            status=current,
+            outcome="already_stopped",
+        )
+    before = current
     request_error: client.DaemonConnectionError | None = None
     remaining = deadline - time.monotonic()
     if remaining <= 0:
@@ -403,7 +495,11 @@ def stop(
         owner_active = current.owner_active
         assert owner_active is not None
         if not current.running and not owner_active:
-            return current
+            return DaemonStopResult(
+                before=before,
+                status=current,
+                outcome="stopped",
+            )
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             _raise_daemon_stop_timeout(

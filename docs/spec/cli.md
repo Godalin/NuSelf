@@ -378,6 +378,9 @@ nuself daemon start | stop | restart | status | health | list
 
 - **Output**: Plain text state lines
   (`daemon <stopped|owned_unready|ready|inconsistent> pid=... socket=...`).
+- Restart success is one line:
+  `Restarted: daemon <phase> pid=... socket=... stop=<outcome> start=<outcome>`.
+  Interactive restart uses the same outcome fields.
 - `daemon health` queries the running process and prints one line per background
   worker with `alive`, consecutive failures, last success, and last error.
 - **Error**: State mismatch or typed startup failure printed to stderr with exit

@@ -7,8 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nuself.agent.chat import ThreadState, ThreadStore
-from nuself.cli.commands.daemon import format_status
-from nuself.cli.daemon_status import observe_daemon_status
+from nuself.cli.daemon_status import format_status, observe_daemon_status
 from nuself.cli.commands.memory.entries import format_memory_preview
 from nuself.cli.commands.output import print_ansi
 from nuself.cli.repl.commands import (
