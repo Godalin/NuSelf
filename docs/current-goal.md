@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Bound daemon raw process output without blocking daemon startup.
+Make daemon startup failure and timeout reporting authoritative and actionable.
 
 ## Active Branch
 
@@ -13,37 +13,38 @@ Bound daemon raw process output without blocking daemon startup.
 
 ## Ordered Work
 
-1. Audit ownership of the inherited daemon stdout/stderr descriptor.
-2. Define the only safe rotation window before spawning a new daemon.
-3. Add an injectable bounded size/backup policy for the raw stream.
-4. Rotate owner-only backups before opening the next child descriptor.
-5. Treat retention maintenance as secondary to daemon startup.
-6. Verify ordering, backup bounds, permissions, warning safety, and handle close.
+1. Audit readiness polling, child ownership, and every CLI start entrypoint.
+2. Define one typed lifecycle failure for spawn, exit, and timeout.
+3. Replace iteration-count waiting with an injectable monotonic policy.
+4. Preserve latest status, exit code, and original spawn cause.
+5. Project failed starts consistently without exposing raw process output.
+6. Verify deadlines, early exits, safe messages, audits, and REPL survival.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- A single long-running daemon may exceed the threshold; the next start
-  restores the configured bound.
-- The raw stream remains best-effort and is not parsed as structured JSONL.
-- Structured component log retention and durability remain unchanged.
+- Shutdown escalation and timeout behavior are a later review batch.
+- Startup does not tail or parse the raw process log for error messages.
+- Server initialization and worker construction behavior remain unchanged.
 
 ## Completion Evidence
 
-- `DaemonProcessLogRetentionPolicy` owns a 5 MiB threshold and three backups,
-  validates positive bounds, and remains injectable for tests.
-- Rotation runs only after confirming no daemon is active and before the next
-  child inherits the raw process-log descriptor.
-- Active and numbered raw-stream files are hardened to `0600`; rotation keeps
-  newest-first `.1` ordering and deletes the oldest bounded backup.
-- The parent process closes its append handle immediately after spawn while the
-  child retains the inherited descriptor.
-- Rotation failure emits one warning containing only the exception type and
-  continues daemon startup without exposing paths or exception text.
-- The specification explicitly states that a single long-running daemon may
-  exceed the threshold until its next start.
-- Focused lifecycle and runtime-path suites: `21 passed`.
-- Full test suite: `1672 passed`.
+- `DaemonStartError` distinguishes `spawn_failed`, `process_exited`, and
+  `timeout` while retaining the latest status, exit code, and explicit spawn
+  cause.
+- `DaemonStartupPolicy` validates positive finite timing and remains injectable
+  for deterministic lifecycle tests.
+- Readiness uses a monotonic deadline; every sleep and daemon ping is capped by
+  the remaining budget so socket I/O cannot extend the wait silently.
+- The raw process stream is never read for terminal diagnostics; CLI messages
+  use one stable safe formatter while structured audits retain the sanitized
+  exception chain.
+- `start_daemon_observed()` owns requested, completed, and failed projections
+  for explicit start, default startup, one-shot restart, and REPL restart.
+- Early exit, timeout, spawn cause, deadline timing, audit metadata, default
+  entrypoint failure, and interactive REPL survival have direct tests.
+- Focused lifecycle, CLI, and daemon transport suites: `372 passed`.
+- Full test suite: `1687 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
@@ -53,5 +54,5 @@ Bound daemon raw process output without blocking daemon startup.
 
 ## Next Review Batch
 
-Review daemon startup timeout and failure reporting after raw output retention
-is bounded at the descriptor ownership boundary.
+Review shutdown timeout, escalation ownership, and stale PID safety after
+startup failure reporting is authoritative.

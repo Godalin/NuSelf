@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 import os
 import signal
 import subprocess
 import sys
 import time
+from typing import Literal
 
 from nuself.config import RuntimePaths, ensure_runtime_dirs, runtime_paths
 from nuself.daemon import client
@@ -35,6 +37,33 @@ DEFAULT_DAEMON_PROCESS_LOG_RETENTION = DaemonProcessLogRetentionPolicy()
 
 
 @dataclass(frozen=True)
+class DaemonStartupPolicy:
+    """Monotonic readiness deadline for one spawned daemon."""
+
+    timeout_seconds: float = 2.0
+    poll_interval_seconds: float = 0.05
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("timeout_seconds", self.timeout_seconds),
+            ("poll_interval_seconds", self.poll_interval_seconds),
+        ):
+            if isinstance(value, bool) or not isfinite(value) or value <= 0:
+                raise ValueError(
+                    f"daemon startup {name} must be positive and finite"
+                )
+
+
+DEFAULT_DAEMON_STARTUP_POLICY = DaemonStartupPolicy()
+
+DaemonStartFailureReason = Literal[
+    "spawn_failed",
+    "process_exited",
+    "timeout",
+]
+
+
+@dataclass(frozen=True)
 class DaemonStatus:
     running: bool
     pid: int | None
@@ -42,11 +71,48 @@ class DaemonStatus:
     pid_path: Path
 
 
-def status(project_root: Path | None = None) -> DaemonStatus:
+class DaemonStartError(RuntimeError):
+    """A spawned daemon could not become ready."""
+
+    def __init__(
+        self,
+        reason: DaemonStartFailureReason,
+        *,
+        status: DaemonStatus,
+        exit_code: int | None = None,
+        timeout_seconds: float | None = None,
+    ) -> None:
+        if reason == "spawn_failed":
+            message = "daemon process could not be spawned"
+        elif reason == "process_exited":
+            message = (
+                "daemon process exited before becoming ready "
+                f"(exit_code={exit_code})"
+            )
+        else:
+            message = (
+                "daemon did not become ready within "
+                f"{timeout_seconds:g} seconds"
+            )
+        super().__init__(message)
+        self.reason = reason
+        self.status = status
+        self.exit_code = exit_code
+        self.timeout_seconds = timeout_seconds
+
+
+def status(
+    project_root: Path | None = None,
+    *,
+    ping_timeout: float = 2.0,
+) -> DaemonStatus:
     paths = runtime_paths(project_root)
     pid = read_pid(paths)
     return DaemonStatus(
-        running=client.ping(paths.project_root),
+        running=client.ping(
+            paths.project_root,
+            timeout=ping_timeout,
+        ),
         pid=pid,
         socket_path=paths.socket_path,
         pid_path=paths.pid_path,
@@ -59,6 +125,7 @@ def start(
     process_log_retention: DaemonProcessLogRetentionPolicy = (
         DEFAULT_DAEMON_PROCESS_LOG_RETENTION
     ),
+    startup_policy: DaemonStartupPolicy = DEFAULT_DAEMON_STARTUP_POLICY,
 ) -> DaemonStatus:
     paths = runtime_paths(project_root)
     ensure_runtime_dirs(paths)
@@ -78,25 +145,55 @@ def start(
         )
     ensure_private_file(paths.daemon_process_log_path)
     with paths.daemon_process_log_path.open("ab") as process_log:
-        subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "nuself.daemon.server",
-                "--project-root",
-                str(paths.project_root),
-            ],
-            cwd=paths.project_root,
-            stdout=process_log,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
+        try:
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "nuself.daemon.server",
+                    "--project-root",
+                    str(paths.project_root),
+                ],
+                cwd=paths.project_root,
+                stdout=process_log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        except OSError as exc:
+            raise DaemonStartError(
+                "spawn_failed",
+                status=current,
+            ) from exc
+    deadline = time.monotonic() + startup_policy.timeout_seconds
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise DaemonStartError(
+                "timeout",
+                status=current,
+                timeout_seconds=startup_policy.timeout_seconds,
+            )
+        current = status(
+            paths.project_root,
+            ping_timeout=remaining,
         )
-    for _ in range(40):
-        time.sleep(0.05)
-        current = status(paths.project_root)
         if current.running:
             return current
-    return status(paths.project_root)
+        exit_code = process.poll()
+        if exit_code is not None:
+            raise DaemonStartError(
+                "process_exited",
+                status=current,
+                exit_code=exit_code,
+            )
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise DaemonStartError(
+                "timeout",
+                status=current,
+                timeout_seconds=startup_policy.timeout_seconds,
+            )
+        time.sleep(min(startup_policy.poll_interval_seconds, remaining))
 
 
 def _rotate_daemon_process_log_if_needed(

@@ -20,7 +20,9 @@ from nuself.daemon.protocol import (
     DaemonPeerDisconnected,
     DaemonRequest,
     DaemonResponse,
+    JsonValue,
     ProtocolError,
+    RequestType,
 )
 from nuself.daemon.transport import (
     read_socket_frame,
@@ -748,6 +750,36 @@ def test_client_wraps_extra_response_frame_as_connection_error(
 def test_client_rejects_invalid_timeout(timeout: object) -> None:
     with pytest.raises(ValueError, match="positive and finite"):
         client.request("ping", timeout=timeout)  # type: ignore[arg-type]
+
+
+def test_ping_forwards_readiness_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_timeout = 0.0
+
+    def fake_request(
+        request_type: RequestType,
+        payload: dict[str, JsonValue] | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        nonlocal captured_timeout
+        del payload
+        assert request_type == "ping"
+        assert project_root == tmp_path
+        captured_timeout = timeout
+        return DaemonResponse(
+            request_id="ping-request",
+            status="ok",
+            payload=MessagePayload(message="pong").to_wire(),
+        )
+
+    monkeypatch.setattr(client, "request", fake_request)
+
+    assert client.ping(tmp_path, timeout=0.125) is True
+    assert captured_timeout == 0.125
 
 
 def test_typed_response_decoder_distinguishes_application_failure() -> None:

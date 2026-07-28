@@ -149,6 +149,31 @@ unexpected per-iteration exception unless shutdown has been requested.
 
 ## Daemon Lifecycle Cleanup
 
+Daemon startup has one lifecycle-owned readiness boundary. After spawning the
+child, it polls daemon readiness against a monotonic deadline and also observes
+the child process:
+
+- A child that exits before readiness raises a typed daemon-start failure with
+  reason `process_exited` and its exit code.
+- A child that remains alive but does not become ready before the deadline
+  raises the same typed failure with reason `timeout`.
+- Failure to spawn the child raises the same typed failure with reason
+  `spawn_failed` and preserves the original exception as its explicit cause.
+- The failure retains the latest `DaemonStatus`, but terminal output never
+  reads or echoes the raw daemon process log. That stream may contain private
+  provider or application output.
+- The startup timeout and polling interval are positive finite values owned by
+  an injectable lifecycle policy. Polling uses `time.monotonic()` and never
+  sleeps beyond the remaining deadline. Each readiness ping also receives no
+  more than the remaining budget, so socket I/O cannot silently extend it.
+- CLI start, default startup, restart, and interactive restart use the
+  lifecycle failure's stable safe message. One-shot commands exit non-zero;
+  interactive restart returns to the existing REPL.
+- A failed lifecycle operation is projected as a structured lifecycle audit
+  with the reason, latest status, exit code when known, and sanitized compact
+  exception chain. The terminal still receives only the stable outer message.
+  Audit failure remains secondary and cannot replace the startup failure.
+
 Daemon shutdown owns an ordered set of named cleanup steps. It signals
 shutdown, attempts each worker stop independently, resets only the current
 project's default storage backend, removes the socket and PID independently,

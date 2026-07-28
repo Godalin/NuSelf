@@ -10,7 +10,11 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.agent.chat import ThreadState, ThreadStore
-from nuself.cli.commands.daemon import format_status
+from nuself.cli.commands.daemon import (
+    format_start_failure,
+    format_status,
+    start_daemon_observed,
+)
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import lifecycle
 from nuself.notification.deep_link import DeepLink
@@ -83,7 +87,17 @@ class EntrypointController:
                 print(f"Using current daemon: {format_status(result)}")
         else:
             print("Starting NuSelf daemon...")
-            result = lifecycle.start(args.project_root)
+            try:
+                result = start_daemon_observed(
+                    args.project_root,
+                    operation="start",
+                )
+            except lifecycle.DaemonStartError as exc:
+                print(
+                    f"Failed to start daemon: {format_start_failure(exc)}",
+                    file=sys.stderr,
+                )
+                return 1
             if not result.running:
                 print(
                     f"Failed to start daemon: {format_status(result)}",

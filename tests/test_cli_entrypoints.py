@@ -14,7 +14,7 @@ from nuself.cli.entrypoints import (
     InteractiveSender,
 )
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.daemon.lifecycle import DaemonStatus
+from nuself.daemon.lifecycle import DaemonStartError, DaemonStatus
 
 
 class RecordingCallbacks:
@@ -129,6 +129,36 @@ def test_default_entrypoint_stops_when_daemon_start_fails(
     captured = capsys.readouterr()
     assert "Starting NuSelf daemon..." in captured.out
     assert "Failed to start daemon:" in captured.err
+
+
+def test_default_entrypoint_reports_typed_start_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    stopped = _status(tmp_path, running=False)
+    failure = DaemonStartError(
+        "process_exited",
+        status=stopped,
+        exit_code=7,
+    )
+
+    def fail_start(project_root: Path | None) -> DaemonStatus:
+        raise failure
+
+    monkeypatch.setattr(entrypoints.lifecycle, "status", _return_status(stopped))
+    monkeypatch.setattr(entrypoints.lifecycle, "start", fail_start)
+    callbacks = RecordingCallbacks()
+
+    result = callbacks.controller().handle_default(
+        argparse.Namespace(project_root=tmp_path, message="hello")
+    )
+
+    assert result == 1
+    assert callbacks.calls == []
+    captured = capsys.readouterr()
+    assert "Failed to start daemon: daemon process exited" in captured.err
+    assert "daemon stopped" not in captured.err
 
 
 def test_chat_require_daemon_rejects_local_fallback(

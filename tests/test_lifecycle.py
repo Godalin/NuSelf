@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from math import isclose
 from pathlib import Path
 import stat
 from typing import BinaryIO, cast
@@ -56,7 +57,12 @@ def test_start_isolates_raw_process_output_from_structured_daemon_log(
     status_calls = 0
     process_logs: list[BinaryIO] = []
 
-    def fake_status(project_root: Path | None = None) -> lifecycle.DaemonStatus:
+    def fake_status(
+        project_root: Path | None = None,
+        *,
+        ping_timeout: float = 2.0,
+    ) -> lifecycle.DaemonStatus:
+        del project_root, ping_timeout
         nonlocal status_calls
         status_calls += 1
         return missing if status_calls == 1 else running
@@ -115,7 +121,12 @@ def test_start_rotates_bounded_raw_process_log_before_spawn(
     )
     status_calls = 0
 
-    def fake_status(project_root: Path | None = None) -> lifecycle.DaemonStatus:
+    def fake_status(
+        project_root: Path | None = None,
+        *,
+        ping_timeout: float = 2.0,
+    ) -> lifecycle.DaemonStatus:
+        del project_root, ping_timeout
         nonlocal status_calls
         status_calls += 1
         return missing if status_calls == 1 else running
@@ -188,7 +199,12 @@ def test_process_log_rotation_failure_warns_safely_and_continues_start(
     spawned = False
     private_path = tmp_path / "private rotation target"
 
-    def fake_status(project_root: Path | None = None) -> lifecycle.DaemonStatus:
+    def fake_status(
+        project_root: Path | None = None,
+        *,
+        ping_timeout: float = 2.0,
+    ) -> lifecycle.DaemonStatus:
+        del project_root, ping_timeout
         nonlocal status_calls
         status_calls += 1
         return missing if status_calls == 1 else running
@@ -237,6 +253,198 @@ def test_process_log_retention_policy_rejects_unbounded_values(
             max_bytes=max_bytes,
             backup_count=backup_count,
         )
+
+
+@pytest.mark.parametrize(
+    ("timeout_seconds", "poll_interval_seconds"),
+    [
+        (0, 0.05),
+        (float("inf"), 0.05),
+        (float("nan"), 0.05),
+        (True, 0.05),
+        (2, 0),
+        (2, float("inf")),
+        (2, float("nan")),
+        (2, True),
+    ],
+)
+def test_startup_policy_rejects_invalid_timing(
+    timeout_seconds: float,
+    poll_interval_seconds: float,
+) -> None:
+    with pytest.raises(ValueError):
+        lifecycle.DaemonStartupPolicy(
+            timeout_seconds=timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+        )
+
+
+def test_start_wraps_spawn_failure_and_preserves_cause(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stopped = lifecycle.DaemonStatus(
+        running=False,
+        pid=None,
+        socket_path=runtime_paths(tmp_path).socket_path,
+        pid_path=runtime_paths(tmp_path).pid_path,
+    )
+    failure = PermissionError("private spawn detail")
+
+    def stopped_status(
+        project_root: Path | None = None,
+        *,
+        ping_timeout: float = 2.0,
+    ) -> lifecycle.DaemonStatus:
+        del project_root, ping_timeout
+        return stopped
+
+    monkeypatch.setattr(lifecycle, "status", stopped_status)
+
+    def fail_spawn(args: object, **kwargs: object) -> object:
+        raise failure
+
+    monkeypatch.setattr(lifecycle.subprocess, "Popen", fail_spawn)
+
+    with pytest.raises(lifecycle.DaemonStartError) as captured:
+        lifecycle.start(tmp_path)
+
+    error = captured.value
+    assert error.reason == "spawn_failed"
+    assert error.status is stopped
+    assert error.exit_code is None
+    assert error.__cause__ is failure
+    assert str(error) == "daemon process could not be spawned"
+    assert "private spawn detail" not in str(error)
+
+
+def test_start_reports_child_exit_before_readiness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = runtime_paths(tmp_path)
+    stopped = lifecycle.DaemonStatus(
+        running=False,
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+
+    class ExitedProcess:
+        def poll(self) -> int:
+            return 23
+
+    def stopped_status(
+        project_root: Path | None = None,
+        *,
+        ping_timeout: float = 2.0,
+    ) -> lifecycle.DaemonStatus:
+        del project_root, ping_timeout
+        return stopped
+
+    def spawn_exited_process(
+        args: object,
+        **kwargs: object,
+    ) -> ExitedProcess:
+        del args, kwargs
+        return ExitedProcess()
+
+    monkeypatch.setattr(lifecycle, "status", stopped_status)
+    monkeypatch.setattr(
+        lifecycle.subprocess,
+        "Popen",
+        spawn_exited_process,
+    )
+
+    with pytest.raises(lifecycle.DaemonStartError) as captured:
+        lifecycle.start(tmp_path)
+
+    error = captured.value
+    assert error.reason == "process_exited"
+    assert error.status is stopped
+    assert error.exit_code == 23
+    assert str(error) == (
+        "daemon process exited before becoming ready (exit_code=23)"
+    )
+
+
+def test_start_uses_monotonic_deadline_without_oversleep(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = runtime_paths(tmp_path)
+    stopped = lifecycle.DaemonStatus(
+        running=False,
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    now = 100.0
+    sleeps: list[float] = []
+    ping_timeouts: list[float] = []
+
+    class LiveProcess:
+        def poll(self) -> None:
+            return None
+
+    def stopped_status(
+        project_root: Path | None = None,
+        *,
+        ping_timeout: float = 2.0,
+    ) -> lifecycle.DaemonStatus:
+        del project_root
+        ping_timeouts.append(ping_timeout)
+        return stopped
+
+    def spawn_live_process(
+        args: object,
+        **kwargs: object,
+    ) -> LiveProcess:
+        del args, kwargs
+        return LiveProcess()
+
+    def monotonic() -> float:
+        return now
+
+    def sleep(seconds: float) -> None:
+        nonlocal now
+        sleeps.append(seconds)
+        now += seconds
+
+    monkeypatch.setattr(lifecycle, "status", stopped_status)
+    monkeypatch.setattr(
+        lifecycle.subprocess,
+        "Popen",
+        spawn_live_process,
+    )
+    monkeypatch.setattr(lifecycle.time, "monotonic", monotonic)
+    monkeypatch.setattr(lifecycle.time, "sleep", sleep)
+
+    with pytest.raises(lifecycle.DaemonStartError) as captured:
+        lifecycle.start(
+            tmp_path,
+            startup_policy=lifecycle.DaemonStartupPolicy(
+                timeout_seconds=0.12,
+                poll_interval_seconds=0.05,
+            ),
+        )
+
+    error = captured.value
+    assert error.reason == "timeout"
+    assert error.status is stopped
+    assert error.timeout_seconds == 0.12
+    assert isclose(sum(sleeps), 0.12)
+    assert len(sleeps) == 3
+    assert all(
+        isclose(actual, expected)
+        for actual, expected in zip(sleeps, [0.05, 0.05, 0.02], strict=True)
+    )
+    assert ping_timeouts[0] == 2.0
+    assert all(
+        timeout > 0 and (timeout < 0.12 or isclose(timeout, 0.12))
+        for timeout in ping_timeouts[1:]
+    )
+    assert str(error) == "daemon did not become ready within 0.12 seconds"
 
 
 def test_read_pid_missing_file_returns_none(tmp_path: Path) -> None:

@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
+from typing import Literal
 
 from nuself.daemon import client, lifecycle
 from nuself.daemon.audit import write_lifecycle_audit
-from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.runtime.diagnostics import (
+    diagnostic_exception_chain,
+    diagnostic_exception_message,
+)
 
 
 def format_status(status: lifecycle.DaemonStatus) -> str:
@@ -27,20 +32,81 @@ def format_daemon_list(status: lifecycle.DaemonStatus) -> str:
     )
 
 
-def handle_daemon_start(args: argparse.Namespace) -> int:
+def format_start_failure(error: lifecycle.DaemonStartError) -> str:
+    """Render one safe daemon-start failure across CLI surfaces."""
+
+    return diagnostic_exception_message(error)
+
+
+def write_start_failure_audit(
+    error: lifecycle.DaemonStartError,
+    *,
+    operation: Literal["start", "restart"],
+    project_root: Path | None,
+) -> None:
+    """Project one authoritative daemon-start failure."""
+
     write_lifecycle_audit(
-        "start_requested",
-        "daemon start requested",
-        project_root=args.project_root,
+        f"{operation}_failed",
+        f"daemon {operation} failed",
+        project_root=project_root,
+        level="error",
+        status="error",
+        error=diagnostic_exception_chain(error),
+        metadata={
+            "reason": error.reason,
+            "running": error.status.running,
+            "pid": error.status.pid,
+            "socket": str(error.status.socket_path),
+            "exit_code": error.exit_code,
+        },
     )
-    result = lifecycle.start(args.project_root)
+
+
+def start_daemon_observed(
+    project_root: Path | None,
+    *,
+    operation: Literal["start", "restart"],
+) -> lifecycle.DaemonStatus:
+    """Run one daemon start with shared lifecycle projections."""
+
+    if operation == "start":
+        write_lifecycle_audit(
+            f"{operation}_requested",
+            f"daemon {operation} requested",
+            project_root=project_root,
+        )
+    try:
+        result = lifecycle.start(project_root)
+    except lifecycle.DaemonStartError as exc:
+        write_start_failure_audit(
+            exc,
+            operation=operation,
+            project_root=project_root,
+        )
+        raise
     write_lifecycle_audit(
-        "start_completed",
-        f"daemon start {'completed' if result.running else 'failed'}",
-        project_root=args.project_root,
+        f"{operation}_completed",
+        f"daemon {operation} {'completed' if result.running else 'failed'}",
+        project_root=project_root,
         status="running" if result.running else "stopped",
         metadata={"pid": result.pid, "socket": str(result.socket_path)},
     )
+    return result
+
+
+def handle_daemon_start(args: argparse.Namespace) -> int:
+    try:
+        result = start_daemon_observed(
+            args.project_root,
+            operation="start",
+        )
+    except lifecycle.DaemonStartError as exc:
+        print(
+            f"Failed to start daemon: {format_start_failure(exc)}",
+            file=sys.stderr,
+        )
+        return 1
     print(format_status(result))
     return 0 if result.running else 1
 
@@ -77,17 +143,17 @@ def handle_daemon_restart(args: argparse.Namespace) -> int:
         )
         return 1
     print(f"Stopped: {format_status(stop_result)}")
-    start_result = lifecycle.start(args.project_root)
-    write_lifecycle_audit(
-        "restart_completed",
-        f"daemon restart {'completed' if start_result.running else 'failed'}",
-        project_root=args.project_root,
-        status="running" if start_result.running else "stopped",
-        metadata={
-            "pid": start_result.pid,
-            "socket": str(start_result.socket_path),
-        },
-    )
+    try:
+        start_result = start_daemon_observed(
+            args.project_root,
+            operation="restart",
+        )
+    except lifecycle.DaemonStartError as exc:
+        print(
+            f"Failed to restart daemon: {format_start_failure(exc)}",
+            file=sys.stderr,
+        )
+        return 1
     print(f"Started: {format_status(start_result)}")
     return 0 if start_result.running else 1
 

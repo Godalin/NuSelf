@@ -61,8 +61,10 @@ behavior, grouped by subsystem. Configurable defaults live in
 | `EXPORT_RETRY_BASE_SECONDS` | `daemon/reason_export.py` | 10 s | Export retry base backoff |
 | `EXPORT_RETRY_MAX_SECONDS` | `daemon/reason_export.py` | 600 s | Export retry max backoff |
 | `EXPORT_QUEUE_POLL_SECONDS` | `daemon/reason_export.py` | 1 s | Export queue poll timeout |
-| poll iterations | `daemon/lifecycle.py:56,71` | 40 | Max startup/shutdown poll loops |
-| poll interval | `daemon/lifecycle.py:57,72` | 0.05 s | Startup/shutdown poll sleep |
+| startup readiness timeout | `daemon/lifecycle.py` | 2 s | Maximum monotonic wait for a spawned daemon to become ready |
+| startup poll interval | `daemon/lifecycle.py` | 0.05 s | Maximum sleep between readiness and child-exit checks |
+| shutdown poll iterations | `daemon/lifecycle.py` | 40 | Max graceful shutdown poll loops |
+| shutdown poll interval | `daemon/lifecycle.py` | 0.05 s | Graceful shutdown poll sleep |
 | `timeout=2.0` | `daemon/client.py:21` | 2 s | Daemon socket connection timeout |
 | `MAX_DAEMON_FRAME_BYTES` | `daemon/protocol.py` | 1 MiB | Maximum request/response JSONL frame including newline |
 | `DAEMON_REQUEST_IO_TIMEOUT_SECONDS` | `daemon/socket_server.py` | 5 s | Server timeout for receiving one request frame and delivering its response |

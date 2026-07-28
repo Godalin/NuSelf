@@ -163,11 +163,19 @@ def decode_response(
         ) from exc
 
 
-def ping(project_root: Path | None = None) -> bool:
+def ping(
+    project_root: Path | None = None,
+    *,
+    timeout: float = 2.0,
+) -> bool:
     """Return whether the daemon responds to ping."""
 
     try:
-        response = request("ping", project_root=project_root)
+        response = request(
+            "ping",
+            project_root=project_root,
+            timeout=timeout,
+        )
         payload = decode_response(
             response,
             MessagePayload.from_wire,

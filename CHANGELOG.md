@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon startup now distinguishes spawn failure, early child exit, and
+  readiness timeout through one typed lifecycle error; every CLI surface uses
+  the same safe message and failed-start audit projection.
 - Daemon raw stdout/stderr now rotates before startup at 5 MiB with three
   owner-only backups; retention failure warns safely without blocking startup.
 - Structured logs now avoid redundant directory synchronization for repeated

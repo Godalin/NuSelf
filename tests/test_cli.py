@@ -19,7 +19,7 @@ from nuself import cli
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.cli import build_parser, main
 from nuself.daemon.client import DaemonConnectionError
-from nuself.daemon.lifecycle import DaemonStatus
+from nuself.daemon.lifecycle import DaemonStartError, DaemonStatus
 from nuself.daemon.protocol import DaemonResponse
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.memory.intake import IntakeResultOutput
@@ -3659,6 +3659,103 @@ def test_daemon_start_with_mocked_lifecycle(
     assert result == 0
     assert "daemon running" in captured.out
     assert "pid=456" in captured.out
+
+
+def test_daemon_start_failure_is_safe_and_audited(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    stopped = DaemonStatus(
+        running=False,
+        pid=None,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+    failure = DaemonStartError(
+        "process_exited",
+        status=stopped,
+        exit_code=19,
+    )
+
+    def fail_start(project_root: Path | None) -> DaemonStatus:
+        raise failure
+
+    monkeypatch.setattr("nuself.cli.lifecycle.start", fail_start)
+
+    result = main(
+        ["--project-root", str(tmp_path), "daemon", "start"]
+    )
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert (
+        "Failed to start daemon: daemon process exited before becoming ready "
+        "(exit_code=19)"
+    ) in captured.err
+    events = read_log_events(project_root=tmp_path, component="daemon")
+    assert [event.event for event in events] == [
+        "start_requested",
+        "start_failed",
+    ]
+    assert events[-1].status == "error"
+    assert events[-1].error == str(failure)
+    assert events[-1].metadata == {
+        "exit_code": 19,
+        "pid": None,
+        "reason": "process_exited",
+        "running": False,
+        "socket": str(stopped.socket_path),
+    }
+
+
+def test_interactive_restart_start_failure_keeps_repl_alive(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
+    stopped = DaemonStatus(
+        running=False,
+        pid=None,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+    running = DaemonStatus(
+        running=True,
+        pid=789,
+        socket_path=stopped.socket_path,
+        pid_path=stopped.pid_path,
+    )
+    failure = DaemonStartError(
+        "timeout",
+        status=stopped,
+        timeout_seconds=2,
+    )
+
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        return running
+
+    def fake_stop(project_root: Path | None) -> DaemonStatus:
+        return stopped
+
+    def fail_start(project_root: Path | None) -> DaemonStatus:
+        raise failure
+
+    monkeypatch.setattr("sys.stdin", _TextInput(":r\n:q\n"))
+    monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
+    monkeypatch.setattr("nuself.cli.lifecycle.stop", fake_stop)
+    monkeypatch.setattr("nuself.cli.lifecycle.start", fail_start)
+
+    result = main(["--project-root", str(tmp_path), "attach"])
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert (
+        "Failed to restart daemon: "
+        "daemon did not become ready within 2 seconds"
+    ) in captured.out
+    assert captured.out.endswith("NuSelf> ")
+    events = read_log_events(project_root=tmp_path, component="daemon")
+    assert [event.event for event in events] == [
+        "restart_requested",
+        "restart_failed",
+    ]
 
 
 def test_daemon_stop_with_mocked_lifecycle(

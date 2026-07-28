@@ -379,7 +379,9 @@ nuself daemon start | stop | restart | status | health | list
 - **Output**: Plain text state lines (`daemon running pid=... socket=...`).
 - `daemon health` queries the running process and prints one line per background
   worker with `alive`, consecutive failures, last success, and last error.
-- **Error**: State mismatch printed to stderr with exit code `1`.
+- **Error**: State mismatch or typed startup failure printed to stderr with exit
+  code `1`. Startup failures distinguish spawn failure, early child exit, and
+  readiness timeout without printing the raw daemon process log.
 
 ### Memory
 
