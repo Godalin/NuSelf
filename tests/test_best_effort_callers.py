@@ -205,3 +205,47 @@ def test_persona_failure_log_cannot_mask_discussion_failure(
         "original_error": "discussion unavailable",
         "audit_event": "persona_discussion_failure",
     }
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        AssertionError("broken discussion invariant"),
+        AttributeError("missing discussion dependency"),
+        TypeError("invalid internal discussion call"),
+    ],
+    ids=["assertion", "attribute", "type"],
+)
+def test_persona_discussion_implementation_errors_propagate(
+    tmp_path: Path,
+    error: Exception,
+) -> None:
+    class FailingDiscussion:
+        def discuss(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+            raise error
+
+    orchestrator = ConversationPersonaOrchestrator.__new__(
+        ConversationPersonaOrchestrator
+    )
+    orchestrator._project_root = tmp_path  # pyright: ignore[reportPrivateUsage]
+    orchestrator._discussion_service = FailingDiscussion()  # pyright: ignore[reportPrivateUsage, reportAttributeAccessIssue]
+    turn_state = PersonaTurnState(
+        input=PersonaInput(user_message="compare"),
+        selected_personas=(),
+    )
+
+    with pytest.raises(type(error)) as caught:
+        orchestrator._run_discussion(  # pyright: ignore[reportPrivateUsage]
+            topic="compare",
+            thread_id="thread-1",
+            trigger="requested",
+            turn_state=turn_state,
+            should_escalate=True,
+        )
+
+    assert caught.value is error
+    assert read_log_events(
+        project_root=tmp_path,
+        component="persona",
+    ) == []

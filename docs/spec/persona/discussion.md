@@ -95,6 +95,14 @@ storage as the calling chat or reflection runtime. Diagnostic persistence
 failure cannot replace the documented fallback, stop the bounded discussion,
 or trigger a hidden LLM/diagnostic retry.
 
+The chat orchestration layer that invokes
+`SharedPersonaDiscussionService.discuss(...)` also uses the shared agent
+failure policy. A recoverable provider/runtime discussion failure may append
+the existing visible `Discussion failed` result and write its audit record.
+`AssertionError`, `AttributeError`, and `TypeError` propagate unchanged rather
+than being rendered as a persona conclusion; no discussion-failure audit is
+created for those implementation errors.
+
 ## Parameters
 
 | Parameter | Default | Description |

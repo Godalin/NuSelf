@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+from nuself.agent.failover import is_recoverable_agent_failure
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import LangChainLLMEndpoint
 from nuself.logs import LogLevel
@@ -203,6 +204,8 @@ class ConversationPersonaOrchestrator:
             )
             return f"\nDiscussion result: {result.reason}"
         except Exception as exc:
+            if not is_recoverable_agent_failure(exc):
+                raise
             self._write_audit(
                 "persona_discussion_failure",
                 str(exc),

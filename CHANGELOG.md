@@ -14,6 +14,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Chat persona discussion now surfaces assertion, attribute, and type errors
+  instead of appending them to the answer as an ordinary discussion failure.
 - Persona activation, contribution, and synthesis no longer turn assertion,
   attribute, or type errors into neutral fallback output; chat and persona now
   share one agent failure classification.

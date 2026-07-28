@@ -5,8 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Use one shared agent failure policy so persona fallbacks do not hide clear
-implementation errors.
+Apply the shared agent failure policy to chat persona discussion orchestration.
 
 ## Active Branch
 
@@ -14,41 +13,41 @@ implementation errors.
 
 ## Ordered Work
 
-1. Audit persona activation, contribution, and synthesis fallback boundaries.
-2. Promote chat's failure eligibility rule into shared agent infrastructure.
-3. Preserve runtime/protocol/validation fallback behavior.
-4. Propagate assertion, attribute, and type errors from persona nodes.
-5. Verify all three persona stages and the existing chat policy.
+1. Inventory remaining agent-backed fallback catches.
+2. Confirm explicitly typed reflection, memory, compression, and reason paths.
+3. Route chat discussion orchestration through shared failure eligibility.
+4. Preserve provider/runtime discussion fallback and audit behavior.
+5. Propagate implementation errors without creating a failure answer.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Competitive discussion owns separate fallback policy and remains unchanged.
-- Provider/runtime and structured-validation failures retain deterministic
-  persona fallbacks.
-- Diagnostic persistence remains secondary to a legitimate fallback.
+- Discussion engine stage-level score/selection/moderator fallbacks remain
+  unchanged.
+- A recoverable outer discussion failure retains its visible failure appendix.
+- Audit persistence remains secondary to a legitimate discussion fallback.
 
 ## Completion Evidence
 
-- `is_recoverable_agent_failure(...)` in shared agent infrastructure owns the
-  assertion/attribute/type classification previously private to chat.
-- Chat retry, failover, and local fallback consume that shared policy without
-  changing their verified tool-replay behavior.
-- Persona activation, contribution, and synthesis propagate each classified
-  implementation error as the exact original object and write no fallback
-  diagnostic.
-- Existing `RuntimeError` provider failures and structured validation failures
-  retain their deterministic persona fallbacks.
-- Focused persona, chat-response, and structured-agent tests: `52 passed`.
-- `.venv/bin/pytest -q`: `1583 passed` with no warnings.
+- Reflection scoring/candidate generation, memory curator/optimizer/intake,
+  chat compression, reason prompt, and competitive discussion stages already
+  use explicit runtime/validation catches rather than catch-all fallback.
+- Chat's outer discussion orchestration now checks
+  `is_recoverable_agent_failure(...)` before rendering a failure appendix.
+- Injected assertion, attribute, and type failures propagate as the exact
+  original object and create no persona failure audit.
+- Existing recoverable `RuntimeError` discussion fallback and audit failure
+  isolation remain covered.
+- Focused discussion, persona graph, and proactive-persona tests: `65 passed`.
+- `.venv/bin/pytest -q`: `1586 passed` with no warnings.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `133e7f8`.
+`dev/v0.3.x` is published through `a4c3a35`.
 
 ## Next Review Batch
 
-Continue classifying fallback boundaries after shared agent failure ownership
-is established.
+Continue classifying normal-result fallbacks after discussion orchestration
+uses the shared policy.

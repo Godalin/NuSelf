@@ -251,6 +251,8 @@ The pre-tool classification is shared agent infrastructure, not a chat-only
 rule. Persona activation, contribution, and synthesis use the same policy:
 provider/runtime and validation failures may produce their specified fallback,
 but `AssertionError`, `AttributeError`, and `TypeError` propagate unchanged.
+Chat's outer competitive-discussion orchestration uses the same policy and
+must not convert those implementation errors into a normal answer appendix.
 
 Reason-export manifests, composition, retry timer creation/start, and worker
 lifecycle decisions are authoritative. Export lifecycle and caught-failure
