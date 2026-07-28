@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import cast
 
 import pytest
 
 from nuself.runtime import (
     RUNTIME_SCHEMA_VERSION,
     JobMessage,
+    MessageKind,
     RuntimeContext,
     RuntimeEnvelope,
     current_runtime_context,
@@ -45,6 +47,32 @@ def test_runtime_envelope_inherits_context_and_serializes_payload() -> None:
     assert envelope.message_id
 
 
+def test_runtime_envelope_round_trips_detached_record() -> None:
+    envelope = RuntimeEnvelope(
+        kind="event",
+        name="worker.started",
+        producer="daemon",
+        message_id="event-1",
+        created_at="2026-07-28T12:00:00+08:00",
+        context=RuntimeContext(request_id="req-1"),
+        payload={"nested": {"workers": ["memory"]}},
+    )
+    record = envelope.to_record()
+
+    decoded = RuntimeEnvelope.from_record(record)
+
+    assert decoded == envelope
+    context = cast(dict[str, object], record["context"])
+    payload = cast(dict[str, object], record["payload"])
+    nested = cast(dict[str, object], payload["nested"])
+    context["request_id"] = "changed"
+    nested["workers"] = []
+    assert decoded.context.request_id == "req-1"
+    assert decoded.to_record()["payload"] == {
+        "nested": {"workers": ["memory"]}
+    }
+
+
 def test_runtime_envelope_payload_is_immutable() -> None:
     envelope = RuntimeEnvelope(
         kind="event",
@@ -67,6 +95,150 @@ def test_runtime_envelope_rejects_non_json_payload() -> None:
             producer="daemon",
             payload={"invalid": object()},
         )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value", "error_type"),
+    (
+        ("kind", "unknown", ValueError),
+        ("schema_version", True, ValueError),
+        ("schema_version", 2, ValueError),
+        ("message_id", " ", ValueError),
+        ("name", "", ValueError),
+        ("producer", 42, ValueError),
+        ("created_at", "2026-07-28T12:00:00", ValueError),
+        ("created_at", "not-a-time", ValueError),
+        ("context", [], TypeError),
+        ("payload", [], TypeError),
+    ),
+)
+def test_runtime_envelope_from_record_rejects_invalid_fields(
+    field_name: str,
+    value: object,
+    error_type: type[Exception],
+) -> None:
+    record = RuntimeEnvelope(
+        kind="event",
+        name="worker.started",
+        producer="daemon",
+    ).to_record()
+    record[field_name] = value
+
+    with pytest.raises(error_type):
+        RuntimeEnvelope.from_record(record)
+
+
+def test_runtime_envelope_from_record_rejects_shape_drift() -> None:
+    record = RuntimeEnvelope(
+        kind="event",
+        name="worker.started",
+        producer="daemon",
+    ).to_record()
+    del record["payload"]
+    record["unexpected"] = True
+
+    with pytest.raises(
+        ValueError,
+        match="missing=.*payload.*unknown=.*unexpected",
+    ):
+        RuntimeEnvelope.from_record(record)
+
+
+def test_runtime_envelope_local_construction_enforces_wire_invariants() -> None:
+    with pytest.raises(ValueError, match="kind"):
+        RuntimeEnvelope(
+            kind=cast(MessageKind, "unknown"),
+            name="worker.started",
+            producer="daemon",
+        )
+    with pytest.raises(ValueError, match="schema version"):
+        RuntimeEnvelope(
+            kind="event",
+            name="worker.started",
+            producer="daemon",
+            schema_version=True,
+        )
+    with pytest.raises(ValueError, match="include a timezone"):
+        RuntimeEnvelope(
+            kind="event",
+            name="worker.started",
+            producer="daemon",
+            created_at="2026-07-28T12:00:00",
+        )
+    with pytest.raises(TypeError, match="context"):
+        RuntimeEnvelope(
+            kind="event",
+            name="worker.started",
+            producer="daemon",
+            context=cast(RuntimeContext, []),
+        )
+    with pytest.raises(TypeError, match="payload"):
+        RuntimeEnvelope(
+            kind="event",
+            name="worker.started",
+            producer="daemon",
+            payload=cast(Mapping[str, object], []),
+        )
+
+
+@pytest.mark.parametrize("value", (float("nan"), float("inf"), -float("inf")))
+def test_runtime_envelope_rejects_non_finite_payload_float(
+    value: float,
+) -> None:
+    with pytest.raises(TypeError, match="floats must be finite"):
+        RuntimeEnvelope(
+            kind="event",
+            name="worker.started",
+            producer="daemon",
+            payload={"value": value},
+        )
+
+
+def test_runtime_envelope_rejects_non_string_payload_key() -> None:
+    payload = cast(Mapping[str, object], {1: "one"})
+
+    with pytest.raises(TypeError, match="keys must be strings"):
+        RuntimeEnvelope(
+            kind="event",
+            name="worker.started",
+            producer="daemon",
+            payload=payload,
+        )
+
+
+def test_runtime_context_strictly_decodes_populated_fields() -> None:
+    record: dict[str, object] = {
+        "request_id": "req-1",
+        "source": "daemon",
+    }
+
+    decoded = RuntimeContext.from_record(record)
+
+    record["request_id"] = "changed"
+    assert decoded == RuntimeContext(
+        request_id="req-1",
+        source="daemon",
+    )
+
+
+@pytest.mark.parametrize(
+    "record",
+    (
+        {"request_id": ""},
+        {"request_id": 42},
+        {"unknown": "value"},
+    ),
+)
+def test_runtime_context_rejects_invalid_record(
+    record: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError):
+        RuntimeContext.from_record(record)
+
+
+def test_runtime_context_rejects_blank_local_value() -> None:
+    with pytest.raises(ValueError, match="request_id"):
+        RuntimeContext(request_id=" ")
 
 
 def test_job_message_correlates_envelope_with_durable_job() -> None:

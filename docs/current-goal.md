@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The notification outbox timestamp and dismissed-retention reliability
-stage is complete; no implementation change is currently active.
+Idle. The strict symmetric runtime envelope codec stage is complete; no
+implementation change is currently active.
 
 ## Active Branch
 
@@ -14,8 +14,7 @@ stage is complete; no implementation change is currently active.
 
 ## Ordered Work
 
-No active implementation steps. Completed work is recorded in Git and
-`CHANGELOG.md`.
+No active implementation steps. Completed work is recorded in Git.
 
 ## Out Of Scope
 
@@ -31,4 +30,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit runtime envelope field validation and schema decoding boundaries.
+Audit remaining silent exception handlers against the shared authoritative,
+best-effort, and corrupt-record boundaries.

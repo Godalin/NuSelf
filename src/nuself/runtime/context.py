@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
+
+_CONTEXT_FIELDS = frozenset(
+    {
+        "thread_id",
+        "request_id",
+        "turn_id",
+        "job_id",
+        "trace_id",
+        "source",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -18,6 +29,16 @@ class RuntimeContext:
     job_id: str | None = None
     trace_id: str | None = None
     source: str | None = None
+
+    def __post_init__(self) -> None:
+        for field_name in _CONTEXT_FIELDS:
+            value = getattr(self, field_name)
+            if value is not None and (
+                not isinstance(value, str) or not value.strip()
+            ):
+                raise ValueError(
+                    f"runtime context {field_name} must be a non-blank string"
+                )
 
     def to_record(self) -> dict[str, str]:
         """Return populated context fields as a serializable record."""
@@ -34,6 +55,34 @@ class RuntimeContext:
             )
             if value is not None
         }
+
+    @classmethod
+    def from_record(
+        cls,
+        record: Mapping[str, object],
+    ) -> RuntimeContext:
+        """Strictly decode one detached correlation-context record."""
+
+        unknown = set(record) - _CONTEXT_FIELDS
+        if unknown:
+            raise ValueError(
+                f"runtime context has unknown fields: {sorted(unknown)!r}"
+            )
+        values: dict[str, str] = {}
+        for field_name, value in record.items():
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"runtime context {field_name} must be a non-blank string"
+                )
+            values[field_name] = value
+        return cls(
+            thread_id=values.get("thread_id"),
+            request_id=values.get("request_id"),
+            turn_id=values.get("turn_id"),
+            job_id=values.get("job_id"),
+            trace_id=values.get("trace_id"),
+            source=values.get("source"),
+        )
 
 
 _CURRENT_RUNTIME_CONTEXT: ContextVar[RuntimeContext | None] = ContextVar(

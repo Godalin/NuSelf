@@ -98,7 +98,25 @@ envelope for events and jobs. It contains:
 
 Payload mappings and nested collections are frozen on construction. Consumers
 receive immutable message data and `to_record()` returns a detached JSON-safe
-copy for persistence or transport.
+copy for persistence or transport. `from_record()` is the symmetric strict
+decoder for that version-1 wire shape; it rejects missing or unknown envelope
+fields rather than guessing defaults.
+
+Both locally constructed and decoded envelopes enforce the same invariants:
+
+- `kind` is one of the declared message categories;
+- `schema_version` is exactly the supported integer version, excluding
+  booleans;
+- message id, name, producer, and creation timestamp are non-blank strings;
+- the creation timestamp is timezone-aware ISO-8601;
+- context is a `RuntimeContext`, whose populated correlation values are
+  non-blank strings;
+- payload is a mapping with string keys and recursively JSON-safe values.
+
+Payload keys are never coerced because coercion can collapse distinct keys.
+Non-finite floats are not JSON values and are rejected. Decoded context and
+payload containers are detached from the caller, and nested payload mappings
+and sequences remain immutable inside the envelope.
 
 Correlation context is inherited through one neutral runtime context. Logging
 may project that context, but logging must not own it.
