@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from dataclasses import replace
 import logging
 import time
@@ -24,10 +24,8 @@ from nuself.agent.chat.context import ConversationContextPreparer
 from nuself.agent.chat.persona import ConversationPersonaOrchestrator
 from nuself.agent.chat.response import ConversationResponseSynthesizer
 from nuself.agent.chat.state import ConversationStateManager
-from nuself.agent.skills import AgentSkill, load_agent_skills, render_tool_placeholders
+from nuself.agent.chat.tool_runtime import ConversationToolRuntime
 from nuself.agent.chat.thread import ThreadMessage, ThreadState, ThreadStore
-from nuself.agent.tools import build_langchain_chat_tools
-from nuself.agent.tool_utils import tool_log_metadata
 from nuself.config import ConfigSystem
 from nuself.llm import (
     ChatLLM,
@@ -115,28 +113,18 @@ class ConversationGraphRuntime:
             language_preference=self._language_preference,
             memory_query_service=self._memory_query_service,
         )
-        from nuself.reflection.repository import ReflectionRepository
-
-        self._reflection_repo = ReflectionRepository(project_root)
-        tools = build_langchain_chat_tools(
-            query_service=self._memory_query_service,
-            reflection_repository=self._reflection_repo,
+        self._tool_runtime = ConversationToolRuntime(
             project_root=project_root,
+            query_service=self._memory_query_service,
             selves_consult=self._consult_selves_tool,
         )
-        self._tools: dict[str, BaseTool] = {tool.name: tool for tool in tools}
-        self._skills: tuple[AgentSkill, ...] = load_agent_skills()
-        self._tools_by_skill: dict[str, tuple[str, ...]] = {
-            skill.name: _tools_for_skill(skill, self._tools)
-            for skill in self._skills
-        }
-        self._tools["load_skill"] = self._build_skill_loader_tool()
+        self._tools: dict[str, BaseTool] = self._tool_runtime.tools
         self._response_synthesizer = ConversationResponseSynthesizer(
             project_root=project_root,
             llm=self._llm,
             langchain_models=self._langchain_models,
             tools=self._tools.values(),
-            log_tool_call=self._log_langchain_service_tool_call,
+            log_tool_call=self._tool_runtime.log_call,
         )
         graph: Any = StateGraph(_ConversationGraphState)
         graph.add_node("prepare_context", self._graph_prepare_context)
@@ -356,8 +344,8 @@ class ConversationGraphRuntime:
             parts.extend(["", "Relevant memory context:", state.memory_context])
         if state.persisted_state.summary != "":
             parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
-        parts.extend(_tool_prompt_sections(self._tools.values()))
-        if any(tool.name == "reason_propose" for tool in self._tools.values()):
+        parts.extend(self._tool_runtime.prompt_sections())
+        if self._tool_runtime.has_tool("reason_propose"):
             parts.extend([
                 "",
                 "Reason skill:",
@@ -385,29 +373,6 @@ class ConversationGraphRuntime:
     def _finalize_draft_response(self, state: ConversationTurnState, draft: ChatStructuredOutput) -> ChatStructuredOutput:
         return self._response_synthesizer.finalize(state, draft)
 
-    def _log_langchain_service_tool_call(
-        self,
-        tool_name: str,
-        args: dict[str, Any],
-        *,
-        result: str | None = None,
-        error: str | None = None,
-    ) -> None:
-        tool = self._tools.get(tool_name)
-        if tool is None or not tool.metadata:
-            return
-        service_component = tool.metadata.get("service_component")
-        if not isinstance(service_component, str):
-            return
-        self._write_service_tool_log(
-            tool_name,
-            service_component,
-            "failed" if error is not None else "completed",
-            args=args,
-            result=result,
-            error=error,
-        )
-
     # ------------------------------------------------------------------
     # Selves consultation (exposed as the selves_consult tool)
     # ------------------------------------------------------------------
@@ -418,69 +383,6 @@ class ConversationGraphRuntime:
             mode=mode,
             context=context,
         )
-
-    # ------------------------------------------------------------------
-    # State management
-    # ------------------------------------------------------------------
-
-    # ------------------------------------------------------------------
-    # Tool logging
-    # ------------------------------------------------------------------
-
-    def _write_service_tool_log(
-        self,
-        tool_name: str,
-        service_component: str,
-        status: str,
-        *,
-        args: dict[str, Any],
-        result: str | None = None,
-        error: str | None = None,
-    ) -> None:
-        write_log_event(
-            "chat",
-            "service_tool_called",
-            f"{tool_name} {status}",
-            project_root=self._project_root,
-            status=status,
-            error=error,
-            metadata=tool_log_metadata(
-                args=args,
-                result=result,
-                error=error,
-                service_component=service_component,
-                tool_name=tool_name,
-            ),
-        )
-
-    # ------------------------------------------------------------------
-    # Skill loader tool
-    # ------------------------------------------------------------------
-
-    def _build_skill_loader_tool(self) -> BaseTool:
-        skill_lines = "\n".join(f"  - {skill.name}: {skill.description}" for skill in self._skills)
-
-        def load_skill(skill_name: str) -> str:
-            for skill in self._skills:
-                if skill.name == skill_name:
-                    tools = self._tools_by_skill.get(skill_name, ())
-                    body = f"Service skill: {skill.name}"
-                    if tools:
-                        body += f"\nAllowed tools: {', '.join(tools)}"
-                    body += f"\n\n{render_tool_placeholders(skill.instructions, skill_name=skill_name, tools=tools)}"
-                    return body
-            return f"Error: unknown skill '{skill_name}'. Available skills:\n{skill_lines}"
-
-        from langchain_core.tools import StructuredTool
-
-        return StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
-            name="load_skill",
-            description=f"Load a service skill's behavioral policy. Skills define when and how the agent should use service tools.\n\nAvailable skills:\n{skill_lines}",
-            func=load_skill,
-            tags=("readonly",),
-            metadata={"service_component": "skill"},
-        )
-
 
 # ======================================================================
 # Module-level helpers
@@ -523,57 +425,6 @@ def _completed_turn_result(
                 return ChatResult(answer=assistant_message.content, thread_id=thread_id)
             return None
     return None
-
-
-def _tool_prompt_sections(tools: "Iterable[BaseTool]") -> list[str]:
-    lines = [
-        "",
-        "Available tools:",
-        "The following LangChain tools are loaded in the current NuSelf runtime.",
-        "CRITICAL: When the user asks a question that a tool can answer, you MUST call the tool before generating your final answer. Always use the tool to get the actual current state.",
-        "Tools are bound through LangChain's native tool-calling API.",
-        'Do not write visible markers such as "[Tool call: memory_search]" or JSON tool fields in the answer body.',
-        "The tool will be executed and its result injected back into context. Only then generate your final answer.",
-        "Service skills define when and how to use tools. Use `load_skill` to load a skill's behavioral policy.",
-        "Tools available:",
-    ]
-    for tool in tools:
-        args = _tool_args_signature(tool)
-        lines.append(f"- {tool.name}({args}): {tool.description}")
-    return lines
-
-
-def _tools_for_skill(skill: AgentSkill, tools: dict[str, BaseTool]) -> tuple[str, ...]:
-    explicit = tuple(name for name in skill.allowed_tools if name in tools)
-    if explicit:
-        return explicit
-    service_component = "reasoning" if skill.name == "reason" else skill.name
-    return tuple(
-        name for name, tool in tools.items()
-        if tool.metadata and tool.metadata.get("service_component") == service_component
-    )
-
-
-def _tool_args_signature(tool: BaseTool) -> str:
-    raw_args_schema = cast(object, getattr(tool, "args"))
-    args_schema = cast(dict[object, object], raw_args_schema) if isinstance(raw_args_schema, dict) else {}
-    pieces: list[str] = []
-    for name, schema in args_schema.items():
-        if not isinstance(name, str):
-            continue
-        type_name = "object"
-        default: object | None = None
-        if isinstance(schema, dict):
-            schema_dict = cast(dict[object, object], schema)
-            type_value = schema_dict.get("type")
-            if isinstance(type_value, str):
-                type_name = type_value
-            default = schema_dict.get("default")
-        if default is None:
-            pieces.append(f"{name}: {type_name}")
-        else:
-            pieces.append(f"{name}: {type_name} = {default!r}")
-    return ", ".join(pieces)
 
 
 # Backward-compatible alias

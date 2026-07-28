@@ -123,6 +123,8 @@ implementing every node directly:
   consultation, discussion escalation, and persona activity logging.
 - `ConversationResponseSynthesizer` owns endpoint failover, framework-native
   tool execution, structured-output parsing, and final response acceptance.
+- `ConversationToolRuntime` owns tool registration, service-skill loading,
+  prompt-facing tool metadata, and service-tool call logging.
 
 `ConversationGraphRuntime` retains compatibility node methods that delegate to
 these collaborators, and remains responsible for graph wiring and turn-level
