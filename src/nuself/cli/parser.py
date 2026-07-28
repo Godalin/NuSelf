@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nuself import __version__
-from nuself.commands.daemon import (
+from nuself.cli.commands.daemon import (
     handle_daemon_health,
     handle_daemon_list,
     handle_daemon_restart,
@@ -16,14 +16,14 @@ from nuself.commands.daemon import (
     handle_daemon_status,
     handle_daemon_stop,
 )
-from nuself.commands.dev import (
+from nuself.cli.commands.dev import (
     handle_dev_db_schema,
     handle_dev_migrate,
     handle_dev_storage,
 )
-from nuself.commands.eval import handle_eval
-from nuself.commands.memory.parser import add_memory_parser
-from nuself.commands.notifications import (
+from nuself.cli.commands.eval import handle_eval
+from nuself.cli.commands.memory.parser import add_memory_parser
+from nuself.cli.commands.notifications import (
     handle_notify_clear,
     handle_notify_dismiss,
     handle_notify_list,
@@ -32,13 +32,13 @@ from nuself.commands.notifications import (
     handle_notify_stats,
     handle_notify_watch,
 )
-from nuself.commands.pack import (
+from nuself.cli.commands.pack import (
     handle_pack_export,
     handle_pack_import,
     handle_pack_inspect,
     handle_pack_list,
 )
-from nuself.commands.persona import (
+from nuself.cli.commands.persona import (
     handle_persona_create,
     handle_persona_delete,
     handle_persona_disable,
@@ -46,7 +46,7 @@ from nuself.commands.persona import (
     handle_persona_list,
     handle_persona_show,
 )
-from nuself.commands.reason import (
+from nuself.cli.commands.reason import (
     REASON_VERBS,
     handle_reason_delete,
     handle_reason_list,
@@ -54,7 +54,7 @@ from nuself.commands.reason import (
     handle_reason_start,
     handle_reason_thread_action,
 )
-from nuself.commands.reflections import (
+from nuself.cli.commands.reflections import (
     handle_reflection_archive,
     handle_reflection_dismiss,
     handle_reflection_list,
@@ -62,13 +62,13 @@ from nuself.commands.reflections import (
     handle_reflection_promote,
     handle_reflection_show,
 )
-from nuself.commands.system import (
+from nuself.cli.commands.system import (
     handle_config,
     handle_health,
     handle_logs,
     handle_status,
 )
-from nuself.commands.threads import (
+from nuself.cli.commands.threads import (
     handle_thread_archive,
     handle_thread_archived,
     handle_thread_branch,
@@ -79,7 +79,7 @@ from nuself.commands.threads import (
     handle_thread_show,
     handle_thread_unarchive,
 )
-from nuself.commands.trace import (
+from nuself.cli.commands.trace import (
     handle_trace_list,
     handle_trace_reindex,
     handle_trace_related,

@@ -6,7 +6,7 @@ import argparse
 import sys
 
 from nuself.agent.chat import ThreadStore
-from nuself.commands.output import print_ansi
+from nuself.cli.commands.output import print_ansi
 from nuself.config import ConfigSystem, runtime_paths
 from nuself.daemon import lifecycle
 from nuself.logs import (

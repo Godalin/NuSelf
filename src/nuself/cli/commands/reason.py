@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 
-from nuself.commands.output import print_ansi
+from nuself.cli.commands.output import print_ansi
 from nuself.reason.repository import ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.tui.reason import render_reason_detail, render_reason_row

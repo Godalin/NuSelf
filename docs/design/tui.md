@@ -45,7 +45,8 @@ This plan is grounded in the current checkout rather than a new UI concept:
 - `README.md` documents source inspection: `source list`, `show`, `chunks`, `search`, `extract`, and `delete`.
 - `README.md` documents profile inspection: `memory profile list`, `search`, `show`, and `delete`.
 - `docs/design/memory.md` explicitly names future interactive memory commands: `:mem`, `:mem last`, and `:mem why`.
-- `src/nuself/cli.py` already exposes the command handlers and formatters that the REPL inspect layer should reuse.
+- `src/nuself/cli/` exposes focused command and rendering modules that the REPL
+  inspect layer should reuse.
 - `tests/test_cli.py` already covers interactive `:memory`, memory stats/search, relations, graph nodes/edges/search, source inspection, profile inspection, and candidate review flows.
 
 ## REPL Interaction Direction

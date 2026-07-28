@@ -41,12 +41,12 @@ def _suppress_startup_warning(
 warnings.warn = _suppress_startup_warning
 try:
     from nuself import __version__
-    from nuself.cli_parser import (
+    from nuself.cli.parser import (
         InteractiveHandlers,
         build_parser as _build_parser,
     )
-    from nuself.repl.types import InteractiveChatResult
-    from nuself.repl.transcript import (
+    from nuself.cli.repl.types import InteractiveChatResult
+    from nuself.cli.repl.transcript import (
         copy_text_to_clipboard as _copy_text_to_clipboard,
         export_interactive_transcript as _export_interactive_transcript,
         is_shareable_transcript_log as _is_shareable_transcript_log,
@@ -57,26 +57,26 @@ try:
     from nuself.agent.chat import ChatAgent, ThreadState, ThreadStore
     from nuself.daemon import client, lifecycle
     from nuself.daemon.protocol import JsonValue
-    from nuself.commands.daemon import (
+    from nuself.cli.commands.daemon import (
         format_status as _format_status,
     )
-    from nuself.commands.output import (
+    from nuself.cli.commands.output import (
         print_ansi as _print_ansi,
     )
-    from nuself.commands.persona import (
+    from nuself.cli.commands.persona import (
         handle_persona_create,
         handle_persona_delete,
         handle_persona_disable,
         handle_persona_enable,
         resolve_persona_id as _resolve_persona_id,
     )
-    from nuself.commands.reflections import (
+    from nuself.cli.commands.reflections import (
         handle_reflection_archive as handle_reflection_archive,
         handle_reflection_dismiss as handle_reflection_dismiss,
         handle_reflection_list as handle_reflection_list,
         handle_reflection_show as handle_reflection_show,
     )
-    from nuself.commands.memory.entries import (
+    from nuself.cli.commands.memory.entries import (
         format_memory_preview as _format_memory_preview,
     )
     from nuself.memory.curator import MemoryCurator

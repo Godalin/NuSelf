@@ -97,56 +97,56 @@ Rules:
 
 ## CLI Module Boundaries
 
-`nuself.cli` remains the composition root and parser entrypoint. Extracted
-command implementations live under the `nuself.commands` package so the
-top-level application namespace stays focused on subsystem APIs.
+`nuself.cli` is a package whose `__init__.py` remains the composition root and
+public entrypoint. Parser, command, and REPL implementations live beside it
+under the same package.
 
-- `cli_parser.py` owns top-level parser construction and accepts the small set
+- `cli/parser.py` owns top-level parser construction and accepts the small set
   of interactive callbacks through `InteractiveHandlers`; it never imports
   `nuself.cli`.
-- `commands/daemon.py` owns daemon lifecycle/health handlers and daemon status
+- `cli/commands/daemon.py` owns daemon lifecycle/health handlers and daemon status
   formatting.
-- `commands/threads.py` owns one-shot thread list/show/create/rename/branch/archive
+- `cli/commands/threads.py` owns one-shot thread list/show/create/rename/branch/archive
   lifecycle handlers; REPL thread switching remains in the REPL layer.
-- `commands/output.py` owns ANSI-aware printing and visible-handle error rendering
+- `cli/commands/output.py` owns ANSI-aware printing and visible-handle error rendering
   shared by extracted command modules.
-- `commands/notifications.py` owns one-shot notification list/show/stats/watch/send/
+- `cli/commands/notifications.py` owns one-shot notification list/show/stats/watch/send/
   dismiss/clear handlers; notification REPL shortcuts remain in the REPL layer.
-- `commands/reason.py` owns one-shot reason list/show/start/action/delete handlers.
+- `cli/commands/reason.py` owns one-shot reason list/show/start/action/delete handlers.
   The long-running terminal watch loop remains with REPL/session orchestration.
-- `commands/trace.py` owns one-shot trace list/show/search/related/reindex handlers
+- `cli/commands/trace.py` owns one-shot trace list/show/search/related/reindex handlers
   and their command-line filter normalization.
-- `commands/reflections.py` owns one-shot reflection list/show/lifecycle/promote/
+- `cli/commands/reflections.py` owns one-shot reflection list/show/lifecycle/promote/
   organize handlers; reflection REPL shortcuts remain in the REPL layer.
-- `commands/persona.py` owns dynamic persona list/create/show/delete/enable/
+- `cli/commands/persona.py` owns dynamic persona list/create/show/delete/enable/
   disable handlers and visible-handle resolution shared with persona REPL
   shortcuts.
-- `commands/dev.py` owns storage migration, SQLite schema inspection, and active
+- `cli/commands/dev.py` owns storage migration, SQLite schema inspection, and active
   storage backend diagnostics.
-- `commands/pack.py` owns thought-pack export/import/list/inspect behavior,
+- `cli/commands/pack.py` owns thought-pack export/import/list/inspect behavior,
   including pack path resolution and human-readable archive sizes.
-- `commands/eval.py` owns conversation and notification fixture evaluation
+- `cli/commands/eval.py` owns conversation and notification fixture evaluation
   orchestration for both the canonical and compatibility CLI routes.
-- `commands/system.py` owns one-shot status, health, effective-config, and log
+- `cli/commands/system.py` owns one-shot status, health, effective-config, and log
   tail commands. Interactive log views and default/chat session orchestration
   remain in `nuself.cli`.
-- Memory CLI commands live together under the `commands/memory/` package and
+- Memory CLI commands live together under the `cli/commands/memory/` package and
   are split by subdomain instead of collected in one oversized module.
-  `commands/memory/profile.py` owns profile list/search/show/delete/reindex
+  `cli/commands/memory/profile.py` owns profile list/search/show/delete/reindex
   handlers and their list ordering and handle resolution.
-  `commands/memory/source.py` owns source ingest/list/show/delete/chunks/search/
+  `cli/commands/memory/source.py` owns source ingest/list/show/delete/chunks/search/
   extract handlers and source-specific output formatting.
-  `commands/memory/candidate.py` owns candidate review handlers, ordering, and
-  single/multiple visible-handle resolution. `commands/memory/common.py` owns
+  `cli/commands/memory/candidate.py` owns candidate review handlers, ordering, and
+  single/multiple visible-handle resolution. `cli/commands/memory/common.py` owns
   command-layer memory trace recording shared across memory command modules.
-  `commands/memory/graph.py` owns symbolic graph nodes/edges/search/path/closure
+  `cli/commands/memory/graph.py` owns symbolic graph nodes/edges/search/path/closure
   handlers and graph-specific text formatting.
-  `commands/memory/entries.py` owns durable entry CRUD/search/preview/stats/
+  `cli/commands/memory/entries.py` owns durable entry CRUD/search/preview/stats/
   relations/types/reindex/unquarantine handlers. It also exposes parser type
   choices and REPL preview rendering as explicit shared CLI interfaces.
-  `commands/memory/maintenance.py` owns explicit curator/optimizer runs and
+  `cli/commands/memory/maintenance.py` owns explicit curator/optimizer runs and
   durable entry import/export commands.
-  `commands/memory/parser.py` owns the complete memory command argument tree;
+  `cli/commands/memory/parser.py` owns the complete memory command argument tree;
   the root parser composes it as one subsystem registration.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
@@ -156,10 +156,10 @@ top-level application namespace stays focused on subsystem APIs.
 - REPL session orchestration remains separate from one-shot command handlers;
   later extractions should not introduce imports from subsystem command modules
   back into `nuself.cli`.
-- REPL modules live under `nuself.repl`; `repl/types.py` owns result contracts,
+- REPL modules live under `nuself.cli.repl`; `cli/repl/types.py` owns result contracts,
   and transcript/session/command modules depend on those contracts rather than
   importing the CLI composition root.
-- `repl/transcript.py` owns transcript projection, Markdown normalization,
+- `cli/repl/transcript.py` owns transcript projection, Markdown normalization,
   persistence naming, shareable-log filtering, and clipboard integration.
 
 Conversation runtime types follow the same rule: `agent/chat_types.py` owns

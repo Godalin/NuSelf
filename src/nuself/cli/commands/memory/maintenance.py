@@ -7,7 +7,7 @@ import json
 import sys
 from typing import cast
 
-from nuself.commands.memory.common import record_memory_trace
+from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.domain.memory import MemoryEntry
 from nuself.memory.curator import MemoryCurator
 from nuself.memory.optimizer import (

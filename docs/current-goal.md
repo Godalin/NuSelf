@@ -62,8 +62,10 @@ v0.3 optimization batches (do in order, each its own commit + tests):
 ### Batch C — dedup & dead-code cleanup
 
 - [x] `cli.py`: generic `_resolve_handle` helpers.
-- [x] Move one-shot command handlers into focused `nuself.commands` modules,
-  with memory commands grouped under `nuself.commands.memory`.
+- [x] Move one-shot command handlers into focused `nuself.cli.commands` modules,
+  with memory commands grouped under `nuself.cli.commands.memory`.
+- [x] Convert `nuself.cli` into a package containing parser, commands, and REPL
+  modules while preserving `nuself.cli:main`.
 - [x] Extract shared memory text/json/clamp helpers.
 - [x] Dedup `persona/tools.py` builders.
 - [x] Remove dead reflection event-trigger and `_handle_proposals_after_turn` paths.

@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from nuself.commands.output import print_ansi, resolve_handle
+from nuself.cli.commands.output import print_ansi, resolve_handle
 from nuself.domain.memory import PrivacyLevel
 from nuself.domain.source import SourceChunk
 from nuself.memory.repository import MemoryCandidateRepository

@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from nuself.commands.output import print_ansi, resolve_handle
+from nuself.cli.commands.output import print_ansi, resolve_handle
 from nuself.domain.profile import ProfileItem
 from nuself.profile.repository import (
     ProfileItemNotFound,

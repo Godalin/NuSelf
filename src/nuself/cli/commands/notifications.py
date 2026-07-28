@@ -6,7 +6,7 @@ import argparse
 import sys
 import time
 
-from nuself.commands.output import print_ansi, resolve_handle
+from nuself.cli.commands.output import print_ansi, resolve_handle
 from nuself.notification import (
     LogOnlyNotificationAdapter,
     NotificationOutbox,

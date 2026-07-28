@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-from nuself.commands.memory.candidate import (
+from nuself.cli.commands.memory.candidate import (
     handle_memory_candidate_accept,
     handle_memory_candidate_edit,
     handle_memory_candidate_list,
@@ -14,7 +14,7 @@ from nuself.commands.memory.candidate import (
     handle_memory_candidate_reject,
     handle_memory_candidate_show,
 )
-from nuself.commands.memory.entries import (
+from nuself.cli.commands.memory.entries import (
     DEFAULT_PREVIEW_LIMIT,
     handle_memory_add,
     handle_memory_delete,
@@ -30,27 +30,27 @@ from nuself.commands.memory.entries import (
     handle_memory_unquarantine,
     memory_type_choices,
 )
-from nuself.commands.memory.graph import (
+from nuself.cli.commands.memory.graph import (
     handle_memory_graph_closure,
     handle_memory_graph_edges,
     handle_memory_graph_nodes,
     handle_memory_graph_path,
     handle_memory_graph_search,
 )
-from nuself.commands.memory.maintenance import (
+from nuself.cli.commands.memory.maintenance import (
     handle_memory_export,
     handle_memory_import,
     handle_memory_optimize,
     handle_memory_update,
 )
-from nuself.commands.memory.profile import (
+from nuself.cli.commands.memory.profile import (
     handle_memory_profile_delete,
     handle_memory_profile_list,
     handle_memory_profile_reindex,
     handle_memory_profile_search,
     handle_memory_profile_show,
 )
-from nuself.commands.memory.source import (
+from nuself.cli.commands.memory.source import (
     handle_memory_source_chunks,
     handle_memory_source_delete,
     handle_memory_source_extract,

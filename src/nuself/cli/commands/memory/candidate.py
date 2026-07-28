@@ -6,8 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from nuself.commands.memory.common import record_memory_trace
-from nuself.commands.output import (
+from nuself.cli.commands.memory.common import record_memory_trace
+from nuself.cli.commands.output import (
     print_ansi,
     resolve_handle,
     resolve_handle_selection,
