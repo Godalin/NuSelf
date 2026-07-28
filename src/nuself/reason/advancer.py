@@ -16,6 +16,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from nuself.agent.failover import invoke_agent_endpoint
 from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
 from nuself.agent.structured import require_structured_response
+from nuself.agent.tool_utils import (
+    index_tool_service_components,
+    tool_log_metadata,
+)
 
 from nuself.llm import (
     LangChainLLMEndpoint,
@@ -45,7 +49,6 @@ def _current_reason_thread_id() -> str:
 
 def _log_tool_call(tool_name: str, args: dict[str, object], *, tool_service_map: dict[str, str] | None = None, project_root: Path | None, result: str | None = None, error: str | None = None) -> None:
     """Emit a service_tool_called log event for a reasoning tool invocation."""
-    from nuself.agent.tool_utils import tool_log_metadata
     from nuself.logs import write_log_event
 
     service_component = (tool_service_map or {}).get(tool_name) or "reason_advancer"
@@ -244,12 +247,7 @@ class ReasonAdvancer:
         persona_tools = self._build_persona_tools()
         all_tools = list(self._readonly_tools) + list(ws_tools) + list(persona_tools)
         create_agent = cast(Any, _create_agent)
-        self._tool_service_map: dict[str, str] = {}
-        for tool in all_tools:
-            metadata = tool.metadata or {}
-            service_component = metadata.get("service_component")
-            if isinstance(service_component, str):
-                self._tool_service_map[tool.name] = service_component
+        self._tool_service_map = index_tool_service_components(all_tools)
         return tuple(
             (
                 endpoint,

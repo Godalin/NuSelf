@@ -105,6 +105,12 @@ Only a string value enters the internal tool-to-service map; missing or
 non-string metadata leaves the tool valid and uses the reason default
 component. Tool objects are transferred by identity.
 
+All runtime interpretation of a framework tool's service component uses the
+shared tool metadata helpers. Chat call logging, skill grouping, and reason
+tool routing must not repeat direct dictionary interpretation. The shared
+resolver returns only string values and never infers ownership from a tool
+name; the shared index omits tools with missing or invalid metadata.
+
 Prompt text may summarize loaded tools for models that still use NuSelf's JSON response envelope, but prompt text is not the source of truth. The registered LangChain tool objects and their schemas are the source of truth.
 
 ### Agent Skills

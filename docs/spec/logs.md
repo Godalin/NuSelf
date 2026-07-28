@@ -109,7 +109,10 @@ All rendering of tool call log events must read `metadata.service_component` fro
 
 Rules:
 
-- The writer (log callback) is responsible for determining the correct `service_component` and writing it into the log event's `metadata`. The writer may use any approach (e.g. consulting tool metadata, a naming convention, or an explicit tag on the tool object).
+- The writer (log callback) is responsible for determining the correct
+  `service_component` and writing it into the log event's `metadata`.
+  Framework-tool writers use the shared validated tool metadata resolver and
+  never infer the service from the tool name.
 - The renderer (`_render_service_tool_called`) reads `metadata.service_component` directly. It must NOT re-derive the service from the tool name.
 - No subsystem stores a separate tool-call cache on domain objects. The log event is the record of a tool invocation. Any code that needs to display a past tool call queries the log system.
 

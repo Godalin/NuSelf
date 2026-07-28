@@ -13,7 +13,10 @@ from nuself.agent.skills import (
     load_agent_skills,
     render_tool_placeholders,
 )
-from nuself.agent.tool_utils import tool_log_metadata
+from nuself.agent.tool_utils import (
+    tool_log_metadata,
+    tool_service_component,
+)
 from nuself.agent.tools import build_langchain_chat_tools
 from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQueryService
@@ -71,10 +74,10 @@ class ConversationToolRuntime:
         error: str | None = None,
     ) -> None:
         tool = self._tools.get(tool_name)
-        if tool is None or not tool.metadata:
+        if tool is None:
             return
-        service_component = tool.metadata.get("service_component")
-        if not isinstance(service_component, str):
+        service_component = tool_service_component(tool)
+        if service_component is None:
             return
         write_log_event(
             "chat",
@@ -185,9 +188,7 @@ def _tools_for_skill(
     return tuple(
         name
         for name, tool in tools.items()
-        if tool.metadata
-        and tool.metadata.get("service_component")
-        == service_component
+        if tool_service_component(tool) == service_component
     )
 
 
