@@ -52,7 +52,7 @@ Sanitize every persisted audit projection at the canonical log sink.
 
 ## Publication
 
-`dev/v0.3.x` is published through `7e98606`; this batch is pending publication.
+`dev/v0.3.x` is ready for publication through `7040784`.
 
 ## Next Review Batch
 
