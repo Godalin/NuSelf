@@ -814,6 +814,28 @@ def test_conversation_runtime_registers_langchain_tools(tmp_path: Path) -> None:
     assert all(isinstance(tool, BaseTool) for tool in tools.values())
 
 
+def test_conversation_runtime_capability_snapshot_is_stable(
+    tmp_path: Path,
+) -> None:
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        response_service=FakeResponseService(),
+    )
+
+    snapshot = runtime.capability_snapshot()
+    original_readonly_tools = snapshot.readonly_tools
+    cast(Any, runtime)._tools.clear()
+
+    assert snapshot.endpoints == ()
+    assert original_readonly_tools
+    assert snapshot.readonly_tools == original_readonly_tools
+    assert all(
+        "readonly" in (tool.tags or [])
+        for tool in snapshot.readonly_tools
+    )
+    assert runtime.capability_snapshot().readonly_tools == ()
+
+
 def test_chat_agent_injects_language_instruction(tmp_path: Path) -> None:
     private_dir = tmp_path / "private"
     private_dir.mkdir(parents=True)

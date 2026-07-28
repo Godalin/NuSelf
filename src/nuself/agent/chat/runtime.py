@@ -17,6 +17,7 @@ from langchain_core.messages import (
     SystemMessage,
 )
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
+from nuself.agent.capabilities import AgentCapabilitySnapshot
 from nuself.agent.chat.types import (
     ChatAgentSettings,
     ChatResult,
@@ -178,6 +179,17 @@ class ConversationGraphRuntime:
         graph.add_edge("state_update", "compression")
         graph.add_edge("compression", END)
         self._graph = graph.compile()
+
+    def capability_snapshot(self) -> AgentCapabilitySnapshot:
+        """Return stable endpoint and readonly-tool membership."""
+        return AgentCapabilitySnapshot(
+            endpoints=tuple(self._langchain_models),
+            readonly_tools=tuple(
+                tool
+                for tool in self._tools.values()
+                if "readonly" in (tool.tags or [])
+            ),
+        )
 
     @staticmethod
     def _build_event_publisher(

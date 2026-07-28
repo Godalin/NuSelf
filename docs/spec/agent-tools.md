@@ -83,6 +83,18 @@ service boundary rather than emulate a model protocol.
 2. Wrap it as a LangChain `StructuredTool`.
 3. Register it in `ConversationGraphRuntime.__init__`.
 
+Cross-subsystem reuse does not read this registry or configured endpoints
+through private runtime fields. `ConversationGraphRuntime` exposes an
+immutable capability snapshot containing the endpoint tuple and only tools
+tagged `readonly`. The snapshot copies collection membership at call time, so
+later registry mutation cannot alter an already-issued snapshot; endpoint and
+tool objects themselves are shared by identity.
+
+Daemon reason-scheduler composition consumes this public snapshot. It must not
+use `getattr` against `_tools` or `_langchain_models`, silently treat missing
+private fields as empty capabilities, or repeat tag filtering outside the
+conversation runtime.
+
 Prompt text may summarize loaded tools for models that still use NuSelf's JSON response envelope, but prompt text is not the source of truth. The registered LangChain tool objects and their schemas are the source of truth.
 
 ### Agent Skills

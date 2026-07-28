@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Create one reason-advancer composition factory and migrate CLI, REPL, and
-scheduler so model/workspace construction cannot drift.
+Replace daemon reads of private chat runtime fields with an immutable,
+explicit agent capability snapshot.
 
 ## Active Branch
 
@@ -14,38 +14,40 @@ scheduler so model/workspace construction cannot drift.
 
 ## Ordered Work
 
-1. Specify the shared reason-advancer composition contract.
-2. Add a factory for workspace, configured endpoints, and optional tools.
-3. Migrate CLI and REPL off inline construction.
-4. Migrate scheduler while preserving explicit dependency injection.
-5. Verify scheduler defaults load configured endpoints exactly once.
+1. Specify snapshot ownership and immutability.
+2. Add a shared capability value for endpoints and readonly tools.
+3. Expose a public snapshot method on the conversation runtime.
+4. Migrate daemon scheduler startup off `_tools` and `_langchain_models`.
+5. Verify registry mutation cannot change an existing snapshot.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep `ReasonAdvancer` constructor injection-friendly for unit tests.
-- Keep daemon endpoint/tool reuse through explicit scheduler arguments.
+- Keep tool/model objects shared by identity; copy only the containing
+  collections.
+- Keep chat's internal mutable registry private.
 
 ## Completion Evidence
 
-- `default_reason_advancer` owns reason-scoped workspace and configured
-  endpoint composition.
-- CLI, REPL, and scheduler call the factory; none imports endpoint
-  construction or assembles `ReasonAdvancer` inline.
-- Default construction loads configured endpoints exactly once.
-- An explicitly injected empty endpoint tuple remains empty and does not load
-  project defaults.
-- Scheduler still accepts explicit endpoints and readonly tools for daemon
-  capability reuse.
-- `.venv/bin/pytest -q`: `1466 passed`.
+- `AgentCapabilitySnapshot` is a frozen value containing endpoint and readonly
+  tool tuples.
+- `ConversationGraphRuntime.capability_snapshot()` owns readonly-tag
+  filtering and copies collection membership.
+- Clearing the runtime tool registry after snapshot creation does not alter
+  the issued snapshot.
+- Daemon reason scheduler startup consumes only the public snapshot and works
+  with a runtime exposing no private tool/model fields.
+- Production search finds no daemon access to `_tools` or
+  `_langchain_models`.
+- `.venv/bin/pytest -q`: `1468 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `fa9152b`.
+`dev/v0.3.x` is published through `a55d750`.
 
 ## Next Review Batch
 
-Replace daemon access to private chat runtime endpoint/tool attributes with an
-explicit capability snapshot.
+Audit remaining `getattr`/private-field composition across daemon worker
+startup.

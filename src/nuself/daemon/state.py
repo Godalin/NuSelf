@@ -114,26 +114,14 @@ class DaemonState:
                 != "new"
             ):
                 return
-            tools = getattr(self.conversation_runtime, "_tools", None)
-            readonly_tools = (
-                [
-                    tool
-                    for tool in tools.values()
-                    if "readonly" in (tool.tags or [])
-                ]
-                if tools
-                else None
-            )
-            langchain_models = getattr(
-                self.conversation_runtime,
-                "_langchain_models",
-                None,
+            capabilities = (
+                self.conversation_runtime.capability_snapshot()
             )
             self.reason_scheduler = ReasonScheduler(
                 self.project_root,
                 interval_seconds=self.reason_scheduler_interval_seconds,
-                readonly_tools=readonly_tools,
-                langchain_models=langchain_models,
+                readonly_tools=capabilities.readonly_tools,
+                langchain_models=capabilities.endpoints,
             )
             self._worker_supervisor.start("reason_scheduler")
 

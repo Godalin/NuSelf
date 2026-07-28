@@ -3,10 +3,12 @@ from __future__ import annotations
 import threading
 import time
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from langchain_core.messages import BaseMessage
 
+from nuself.agent.capabilities import AgentCapabilitySnapshot
 from nuself.agent.chat import (
     ChatStructuredOutput,
     ConversationGraphRuntime,
@@ -469,6 +471,55 @@ def test_daemon_health_returns_worker_snapshots(tmp_path: Path) -> None:
         "export_worker",
         "notification_delivery",
     }
+
+
+def test_reason_scheduler_uses_public_agent_capability_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = DaemonState(tmp_path)
+    snapshot_calls = 0
+
+    class CapabilityRuntime:
+        def capability_snapshot(self) -> AgentCapabilitySnapshot:
+            nonlocal snapshot_calls
+            snapshot_calls += 1
+            return AgentCapabilitySnapshot(
+                endpoints=(),
+                readonly_tools=(),
+            )
+
+    captured: dict[str, object] = {}
+
+    def build_scheduler(
+        project_root: Path,
+        **kwargs: object,
+    ) -> object:
+        captured["project_root"] = project_root
+        captured.update(kwargs)
+        return object()
+
+    def start_worker(name: str) -> None:
+        captured["started"] = name
+
+    state.conversation_runtime = cast(Any, CapabilityRuntime())
+    monkeypatch.setattr(
+        "nuself.daemon.state.ReasonScheduler",
+        build_scheduler,
+    )
+    monkeypatch.setattr(
+        cast(Any, state)._worker_supervisor,
+        "start",
+        start_worker,
+    )
+
+    state.start_background_reason_scheduler()
+
+    assert snapshot_calls == 1
+    assert captured["project_root"] == tmp_path
+    assert captured["readonly_tools"] == ()
+    assert captured["langchain_models"] == ()
+    assert captured["started"] == "reason_scheduler"
 
 
 def test_memory_curator_worker_survives_unexpected_error(

@@ -431,6 +431,11 @@ themselves. Explicit endpoint/tool/workspace arguments remain authoritative
 for daemon reuse and tests; an explicitly empty endpoint tuple means no model,
 not "load defaults".
 
+When daemon scheduling reuses the conversation runtime's configured endpoints
+and readonly tools, it receives them through the runtime's immutable public
+capability snapshot. Daemon code does not inspect chat runtime private fields
+or reproduce the readonly-tag selection rule.
+
 `ReasonAdvancer` builds one equivalent tool-enabled agent per configured
 endpoint and uses the shared agent endpoint-failover primitive only for
 availability failures that occur before any tool outcome. Successful endpoint
