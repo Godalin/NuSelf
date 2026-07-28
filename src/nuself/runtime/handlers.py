@@ -68,6 +68,8 @@ class HandlerRegistry(
             Callable[HandlerParams, HandlerResult],
         ] = {}
         self._middleware = list(middleware)
+        for wrapper in self._middleware:
+            _require_callable(wrapper, role="handler middleware")
         self._sealed = False
         self._dispatch_handlers: MappingProxyType[
             HandlerKey,
@@ -99,6 +101,7 @@ class HandlerRegistry(
                 raise DuplicateHandlerError(
                     f"handler already registered for {key!r}"
                 )
+            _require_callable(handler, role="handler")
             self._handlers[key] = handler
 
     def use(
@@ -116,6 +119,7 @@ class HandlerRegistry(
                 raise HandlerRegistrySealedError(
                     "handler registry is sealed; cannot add middleware"
                 )
+            _require_callable(middleware, role="handler middleware")
             self._middleware.append(middleware)
 
     def handler(
@@ -209,3 +213,8 @@ def _wrap_handler(
         return middleware(key, next_handler, *args, **kwargs)
 
     return wrapped
+
+
+def _require_callable(value: object, *, role: str) -> None:
+    if not callable(value):
+        raise TypeError(f"{role} must be callable")

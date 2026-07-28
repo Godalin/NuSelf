@@ -82,6 +82,8 @@ class EventPublisher:
 
         if name == "":
             raise ValueError("event subscription name must not be empty")
+        if not callable(subscriber):
+            raise TypeError("event subscriber must be callable")
         with self._lock:
             subscription_id = self._next_subscription_id
             self._next_subscription_id += 1

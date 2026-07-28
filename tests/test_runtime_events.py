@@ -78,6 +78,15 @@ def test_event_subscription_can_be_removed() -> None:
     assert received == []
 
 
+def test_event_publisher_rejects_non_callable_subscriber() -> None:
+    publisher = EventPublisher()
+
+    with pytest.raises(TypeError, match="event subscriber must be callable"):
+        publisher.subscribe(None)  # type: ignore[arg-type]
+
+    publisher.publish(name="worker.started", producer="daemon")
+
+
 def test_event_subscription_is_bound_to_one_publisher_lifetime() -> None:
     earlier_publisher = EventPublisher()
     current_publisher = EventPublisher()
@@ -293,4 +302,17 @@ def test_event_definition_registry_rejects_duplicates_and_late_changes() -> None
                 name="entry.deleted",
                 description="A durable memory entry was deleted.",
             )
+        )
+
+
+def test_event_definition_rejects_non_callable_payload_validator() -> None:
+    with pytest.raises(
+        TypeError,
+        match="event payload validator must be callable",
+    ):
+        RuntimeEventDefinition(
+            producer="memory",
+            name="entry.changed",
+            description="A durable memory entry changed.",
+            payload_validator=object(),  # type: ignore[arg-type]
         )

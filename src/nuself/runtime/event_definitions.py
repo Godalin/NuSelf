@@ -41,6 +41,11 @@ class RuntimeEventDefinition:
     def __post_init__(self) -> None:
         if not self.producer or not self.name or not self.description:
             raise ValueError("event definition fields must not be empty")
+        if (
+            self.payload_validator is not None
+            and not callable(self.payload_validator)
+        ):
+            raise TypeError("event payload validator must be callable")
 
     def validate_payload(self, payload: Mapping[str, object]) -> None:
         if self.payload_validator is not None:

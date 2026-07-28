@@ -79,6 +79,32 @@ def test_handler_registry_rejects_duplicate_registration() -> None:
         registry.register("echo", lambda value: value)
 
 
+def test_handler_registry_rejects_non_callable_handler() -> None:
+    registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
+
+    with pytest.raises(TypeError, match="handler must be callable"):
+        registry.register("echo", None)  # type: ignore[arg-type]
+
+    assert registry.registered_keys == ()
+
+
+def test_handler_registry_rejects_non_callable_middleware() -> None:
+    registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
+
+    with pytest.raises(TypeError, match="handler middleware must be callable"):
+        registry.use(None)  # type: ignore[arg-type]
+
+
+def test_handler_registry_rejects_non_callable_constructor_middleware() -> None:
+    with pytest.raises(
+        TypeError,
+        match="handler middleware must be callable",
+    ):
+        HandlerRegistry[str, [str], str](
+            middleware=(None,),  # type: ignore[arg-type]
+        )
+
+
 def test_handler_registry_rejects_registration_after_seal() -> None:
     registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
     registry.seal()

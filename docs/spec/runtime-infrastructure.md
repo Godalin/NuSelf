@@ -51,6 +51,9 @@ event, or an ephemeral event as the only record of retryable work.
 request-dispatch primitive.
 
 - A key maps to exactly one callable.
+- Handler and middleware objects are checked for callability at composition
+  time, including middleware supplied to the registry constructor. Invalid
+  components raise `TypeError` before sealing or dispatch.
 - Duplicate registration raises immediately.
 - Registries are explicitly sealed after composition. Registration after
   sealing raises.
@@ -458,6 +461,11 @@ have run; each failure carries the same lifetime-bound handle as the failed
 registration. Its compact message includes each subscriber exception type and
 non-empty message so best-effort observability does not discard the actionable
 failure cause.
+
+Subscribers and optional event-definition payload validators must be callable
+at composition time. Invalid subscribers fail in `subscribe(...)`; invalid
+validators fail while constructing the definition. They must not survive until
+publication and be misreported as delivery or payload failures.
 
 Every published event resolves through a sealed
 `EventDefinitionRegistry`. Core lifecycle definitions ship with the runtime;

@@ -175,6 +175,9 @@ an unsealed registry, so callers cannot observe a partially composed handler
 set or middleware stack. Sealed registries reject all later registration and
 middleware changes.
 
+Handlers and middleware, including constructor-provided middleware, must be
+callable and are rejected with `TypeError` at their composition boundary.
+
 `resolve()` exposes the directly registered handler only before sealing for
 composition-time inspection. It raises `HandlerRegistrySealedError` after
 sealing; runtime callers use `dispatch()` so middleware cannot be bypassed.
