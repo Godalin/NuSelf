@@ -112,6 +112,8 @@ command implementations must move into focused modules as they are touched.
   The long-running terminal watch loop remains with REPL/session orchestration.
 - `cli_trace.py` owns one-shot trace list/show/search/related/reindex handlers
   and their command-line filter normalization.
+- `cli_reflections.py` owns one-shot reflection list/show/lifecycle/promote/
+  organize handlers; reflection REPL shortcuts remain in the REPL layer.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
   repository APIs.

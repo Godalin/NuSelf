@@ -97,6 +97,14 @@ try:
         handle_trace_search,
         handle_trace_show,
     )
+    from nuself.cli_reflections import (
+        handle_reflection_archive,
+        handle_reflection_dismiss,
+        handle_reflection_list,
+        handle_reflection_organize,
+        handle_reflection_promote,
+        handle_reflection_show,
+    )
     from nuself.domain.memory import (
         MemoryCandidate,
         MemoryEntry,
@@ -842,13 +850,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _add_handler(parser: argparse.ArgumentParser, handler: object) -> None:
     parser.set_defaults(handler=handler)
-
-
-def _print_json_wire(*entities: object) -> None:
-    """Print one or more to_wire() dicts as compact JSON lines."""
-    import json
-    for entity in entities:
-        print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
 
 
 def _add_log_arguments(parser: argparse.ArgumentParser) -> None:
@@ -1602,113 +1603,6 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
         args.project_root,
         interval=getattr(args, "interval", 5),
         thread_ref=getattr(args, "thread_id", None) or None,
-    )
-    return 0
-
-
-def _resolve_reflection_entry_id(args: argparse.Namespace) -> str | None:
-    """Resolve a reflection id or visible numeric index to the stored id."""
-    from nuself.reflection.repository import ReflectionRepository
-
-    return _resolve_handle(
-        args.entry_id,
-        ReflectionRepository(args.project_root).list(),
-        label="reflection",
-        get_id=lambda entry: entry.id,
-    )
-
-
-def handle_reflection_list(args: argparse.Namespace) -> int:
-    from nuself.reflection.repository import ReflectionRepository
-    from nuself.tui.render import render_reflection_entry_summary
-
-    repo = ReflectionRepository(args.project_root)
-    entries = repo.list(status=args.status)
-    if not entries:
-        filter_msg = f" with status '{args.status}'" if args.status else ""
-        print(f"No reflection entries{filter_msg}.")
-        return 0
-    if args.as_json:
-        _print_json_wire(*(entry.to_wire() for entry in entries))
-        return 0
-    for idx, entry in enumerate(entries):
-        _print_ansi(render_reflection_entry_summary(entry, index=idx))
-    return 0
-
-
-def handle_reflection_show(args: argparse.Namespace) -> int:
-    from nuself.reflection.repository import ReflectionEntryNotFound, ReflectionRepository
-    from nuself.tui.render import render_reflection_entry_detail
-
-    entry_id = _resolve_reflection_entry_id(args)
-    if entry_id is None:
-        return 1
-    try:
-        entry = ReflectionRepository(args.project_root).get(entry_id)
-    except ReflectionEntryNotFound:
-        print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
-        return 1
-    if args.as_json:
-        _print_json_wire(entry.to_wire())
-        return 0
-    _print_ansi(render_reflection_entry_detail(entry))
-    return 0
-
-
-def handle_reflection_dismiss(args: argparse.Namespace) -> int:
-    from nuself.reflection.repository import ReflectionEntryNotFound, ReflectionRepository
-
-    entry_id = _resolve_reflection_entry_id(args)
-    if entry_id is None:
-        return 1
-    try:
-        ReflectionRepository(args.project_root).dismiss(entry_id)
-        print(f"Dismissed: {entry_id}")
-        return 0
-    except ReflectionEntryNotFound:
-        print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
-        return 1
-
-
-def handle_reflection_archive(args: argparse.Namespace) -> int:
-    from nuself.reflection.repository import ReflectionEntryNotFound, ReflectionRepository
-
-    entry_id = _resolve_reflection_entry_id(args)
-    if entry_id is None:
-        return 1
-    try:
-        ReflectionRepository(args.project_root).archive(entry_id)
-        print(f"Archived: {entry_id}")
-        return 0
-    except ReflectionEntryNotFound:
-        print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
-        return 1
-
-
-def handle_reflection_promote(args: argparse.Namespace) -> int:
-    from nuself.reflection.repository import ReflectionEntryNotFound
-    from nuself.reflection.service import ReflectionService
-
-    entry_id = _resolve_reflection_entry_id(args)
-    if entry_id is None:
-        return 1
-    try:
-        thread = ReflectionService(args.project_root).promote_to_reason(entry_id)
-    except (ReflectionEntryNotFound, ValueError, RuntimeError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-    print(f"Promoted reflection to reason thread: {thread.id}")
-    _print_ansi(render_reason_detail(thread))
-    return 0
-
-
-def handle_reflection_organize(args: argparse.Namespace) -> int:
-    from nuself.reflection.organizer import ReflectionOrganizer
-
-    result = ReflectionOrganizer(args.project_root).organize_pending()
-    print(
-        "Organized reflections: "
-        f"merged_groups={result.merged_groups} archived_entries={result.archived_entries}"
     )
     return 0
 
