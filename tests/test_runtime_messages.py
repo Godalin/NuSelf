@@ -274,6 +274,40 @@ def test_runtime_envelope_local_construction_enforces_wire_invariants() -> None:
         )
 
 
+@pytest.mark.parametrize("kind", ("request", "notification"))
+def test_runtime_envelope_rejects_unimplemented_kinds(
+    kind: str,
+) -> None:
+    with pytest.raises(ValueError, match="kind is invalid"):
+        RuntimeEnvelope(
+            kind=cast(MessageKind, kind),
+            name="unsupported",
+            producer="test",
+        )
+
+    record = RuntimeEnvelope(
+        kind="audit",
+        name="supported",
+        producer="test",
+    ).to_record()
+    record["kind"] = kind
+    with pytest.raises(ValueError, match="kind is invalid"):
+        RuntimeEnvelope.from_record(record)
+
+
+@pytest.mark.parametrize("kind", ("event", "job", "audit"))
+def test_runtime_envelope_accepts_complete_supported_taxonomy(
+    kind: MessageKind,
+) -> None:
+    envelope = RuntimeEnvelope(
+        kind=kind,
+        name="supported",
+        producer="test",
+    )
+
+    assert RuntimeEnvelope.from_record(envelope.to_record()).kind == kind
+
+
 @pytest.mark.parametrize("value", (float("nan"), float("inf"), -float("inf")))
 def test_runtime_envelope_rejects_non_finite_payload_float(
     value: float,

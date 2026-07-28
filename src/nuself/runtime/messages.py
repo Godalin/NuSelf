@@ -14,11 +14,9 @@ from uuid import uuid4
 from nuself.clock import utc_now_iso
 from nuself.runtime.context import RuntimeContext, current_runtime_context
 
-MessageKind = Literal["request", "event", "job", "audit", "notification"]
+MessageKind = Literal["event", "job", "audit"]
 RUNTIME_SCHEMA_VERSION = 1
-_MESSAGE_KINDS = frozenset(
-    {"request", "event", "job", "audit", "notification"}
-)
+_MESSAGE_KINDS = frozenset({"event", "job", "audit"})
 _ENVELOPE_FIELDS = frozenset(
     {
         "message_id",

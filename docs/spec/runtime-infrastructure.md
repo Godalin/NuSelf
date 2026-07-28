@@ -270,7 +270,11 @@ and the nestable `runtime_context(...)` scope. The compatibility logging names
 delegate to this neutral context; logging does not maintain a second context.
 
 `nuself.runtime.messages.RuntimeEnvelope` is the versioned transport-neutral
-envelope for events and jobs. It contains:
+envelope for runtime events, typed job wake-ups, and audit identity
+projections. Its complete supported kind taxonomy is `event | job | audit`.
+Kinds are added only with a concrete producer, consumer, payload contract, and
+ownership model; the decoder must reject placeholder or unimplemented kinds.
+It contains:
 
 - stable message/event id;
 - schema version;
@@ -305,6 +309,12 @@ and sequences remain immutable inside the envelope.
 
 Correlation context is inherited through one neutral runtime context. Logging
 may project that context, but logging must not own it.
+
+Daemon `request`/response frames are transport contracts owned by
+`daemon.protocol`, including framing limits and response status; they are not
+runtime envelopes. Notification intents are durable outbox records that embed
+`RuntimeContext` directly and are likewise not runtime envelopes. Neither
+ownership model is represented by a dormant envelope kind.
 
 At an asynchronous message-consumption boundary, the consumer installs the
 message's saved `RuntimeContext` as an exact replacement for the worker's

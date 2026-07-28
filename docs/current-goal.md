@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make `JobMessage` a self-contained typed view of one job envelope instead of a
-wrapper with duplicated routing identity.
+Make the declared `RuntimeEnvelope` kind taxonomy match the messages the
+runtime actually produces and consumes.
 
 ## Active Branch
 
@@ -14,40 +14,40 @@ wrapper with duplicated routing identity.
 
 ## Ordered Work
 
-1. Audit request, job, audit, and notification envelope ownership.
-2. Specify job routing entirely inside the envelope.
-3. Add a strict job payload with resource identity and domain data.
-4. Derive `JobMessage.job_id` and `resource_id` from the envelope.
-5. Verify envelope record round trips retain all queue routing information.
+1. Trace every declared kind to a concrete producer and consumer.
+2. Document transport and durable records that deliberately do not use an
+   envelope.
+3. Remove unimplemented request and notification kinds.
+4. Reject those kinds in local construction and strict record decoding.
+5. Verify event, job, and audit remain the complete supported taxonomy.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep the durable job manifest authoritative over queue wake-ups.
-- Preserve the existing `JobMessage` consumer property API.
-- Keep daemon wire frames and durable notification entries in their documented
-  ownership models.
+- Keep daemon request/response framing under `daemon.protocol`.
+- Keep notification correlation on the durable outbox entry.
+- Do not add placeholder kinds for possible future transports.
 
 ## Completion Evidence
 
-- `JobPayload` strictly owns `resource_id` and optional wake-up `data`, rejecting
-  missing, blank, non-mapping, or unknown routing fields.
-- `JobMessage` now stores only its `RuntimeEnvelope`; `job_id`, `resource_id`,
-  and domain payload are derived views over envelope context and payload.
-- `JobMessage.create()` embeds every routing value in the envelope, eliminating
-  the duplicated wrapper identity and preserving strict JSON immutability.
-- Tests prove envelope record round trips retain job/resource routing and data,
-  and malformed or duplicate routing fields are rejected.
-- Focused runtime-message, reason-output queue, and export-recovery tests:
-  `70 passed`.
-- `.venv/bin/pytest -q`: `1514 passed`.
+- `MessageKind` and the runtime decoder now accept exactly `event`, `job`, and
+  `audit`, each backed by a concrete producer and consumer.
+- Dormant `request` and `notification` kinds were removed; daemon frames remain
+  owned by `daemon.protocol`, while notification correlation remains on the
+  durable outbox entry.
+- Local construction and strict record decoding both reject the removed kinds.
+- Tests round-trip the complete supported taxonomy and cover the independent
+  daemon protocol and notification ownership paths.
+- Focused runtime-message, event, log, protocol, and notification tests:
+  `140 passed`.
+- `.venv/bin/pytest -q`: `1519 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `6f1d934`.
+`dev/v0.3.x` is published through `bfc0912`.
 
 ## Next Review Batch
 
-Audit unused envelope kinds and make the declared message taxonomy truthful.
+Audit whether audit envelopes should become a first-class typed projection.
