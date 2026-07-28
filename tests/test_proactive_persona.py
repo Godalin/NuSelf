@@ -3,10 +3,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 import json
 from pathlib import Path
+from typing import Generic, Never, TypeVar
 
 import pytest
+from langchain_core.messages import BaseMessage
+from pydantic import BaseModel
 
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatMessage
@@ -15,7 +19,13 @@ from nuself.persona import (
     PersonaCompetitionResult,
     ProactivePersonaDiscussion,
 )
-from nuself.persona.discussion import LLMBackedScoringPersonaNode
+from nuself.persona.discussion import (
+    AgentBackedScoringPersonaNode,
+    ModeratorJudgmentOutput,
+    PersonaDiscussionAgents,
+    PersonaScoreOutput,
+    PersonaSelectionOutput,
+)
 from nuself.persona.definition import (
     ANALYST_PERSONA,
     BUILDER_PERSONA,
@@ -57,23 +67,111 @@ class _FakePersonaDriver:
         )
 
 
+OutputT = TypeVar("OutputT", bound=BaseModel)
+
+
+class _FixtureAgent(Generic[OutputT]):
+    def __init__(
+        self,
+        fixture: _FakeLLM,
+        key: str,
+        schema: type[OutputT],
+    ) -> None:
+        self._fixture = fixture
+        self._key = key
+        self._schema = schema
+
+    def invoke(
+        self,
+        messages: Sequence[BaseMessage],
+    ) -> OutputT:
+        self._fixture.agent_calls.append(messages)
+        return self._schema.model_validate_json(
+            self._fixture.response(self._key)
+        )
+
+
 class _FakeLLM:
-    """Multi-purpose fake LLM that returns different JSON based on prompt content."""
+    """Typed discussion fixtures plus a plain synthesis LLM."""
 
     def __init__(self, responses: dict[str, str] | None = None) -> None:
         self._responses = responses or {}
         self.calls: list[list[ChatMessage]] = []
+        self.agent_calls: list[Sequence[BaseMessage]] = []
+        self.agents = PersonaDiscussionAgents(
+            scoring=_FixtureAgent(self, "score", PersonaScoreOutput),
+            selection=_FixtureAgent(
+                self,
+                "select",
+                PersonaSelectionOutput,
+            ),
+            moderator=_FixtureAgent(
+                self,
+                "moderator",
+                ModeratorJudgmentOutput,
+            ),
+        )
 
     def complete(self, messages: list[ChatMessage]) -> str:
         self.calls.append(messages)
-        content = messages[0].content
-        if "Discussion Host" in content:
-            return self._responses.get("select", '{"selected_persona_ids": ["analyst_self", "skeptic_self"], "reason": "test"}')
-        if "score" in content and "note" in content:
-            return self._responses.get("score", '{"note": "test note", "score": 0.6}')
-        if "moderator" in content:
-            return self._responses.get("moderator", '{"converged": false, "emergent_persona": "none", "reason": "test"}')
-        return '{"note": "fallback", "score": 0.5}'
+        return "Discussion synthesis."
+
+    def response(self, key: str) -> str:
+        defaults = {
+            "select": (
+                '{"selected_persona_ids":'
+                '["analyst_self","skeptic_self"],"reason":"test"}'
+            ),
+            "score": '{"note":"test note","score":0.6}',
+            "moderator": (
+                '{"converged":false,"emergent_persona":"none",'
+                '"reason":"test"}'
+            ),
+        }
+        return self._responses.get(key, defaults[key])
+
+
+@pytest.mark.parametrize(
+    ("schema", "payload"),
+    [
+        (
+            PersonaScoreOutput,
+            {"note": "valid", "score": 0.5, "unknown": True},
+        ),
+        (
+            PersonaScoreOutput,
+            {"note": " ", "score": 0.5},
+        ),
+        (
+            PersonaSelectionOutput,
+            {
+                "selected_persona_ids": ["a", "b", "c", "d", "e", "f"],
+                "reason": "too many",
+            },
+        ),
+        (
+            PersonaSelectionOutput,
+            {
+                "selected_persona_ids": ["analyst_self"],
+                "reason": " ",
+            },
+        ),
+        (
+            ModeratorJudgmentOutput,
+            {
+                "converged": False,
+                "emergent_persona": "invented_self",
+                "reason": "invalid",
+            },
+        ),
+    ],
+)
+def test_discussion_output_models_fail_closed(
+    schema: type[BaseModel],
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError):
+        schema.model_validate(payload)
 
 
 def _make_candidate(
@@ -113,10 +211,10 @@ def test_discuss_approves_strong_candidate() -> None:
     assert result.reason.startswith("approved after ")
 
 
-def test_select_personas_with_llm_fallback_without_llm() -> None:
+def test_select_personas_fallback_without_agents() -> None:
     personas = (ANALYST_PERSONA, SKEPTIC_PERSONA, BUILDER_PERSONA, HISTORIAN_PERSONA)
     discussion = ProactivePersonaDiscussion(personas=personas, min_participants=2, max_participants=3)
-    selected = discussion._select_personas_with_llm(_make_candidate())
+    selected = discussion._select_personas(_make_candidate())
     assert 2 <= len(selected) <= 3
     assert all(p.id != "synthesizer_self" for p in selected)
 
@@ -190,12 +288,11 @@ def test_discuss_spawns_emergent_temporary_persona(monkeypatch: pytest.MonkeyPat
 # --- LLM-driven tests ---
 
 
-def test_llm_backed_scoring_persona_node_parses_note_and_score() -> None:
-    class _ScoringLLM:
-        def complete(self, messages: list[ChatMessage]) -> str:
-            return '{"note": "This is a strong idea.", "score": 0.85}'
-
-    node = LLMBackedScoringPersonaNode(_ScoringLLM())
+def test_agent_backed_scoring_persona_node_uses_typed_output() -> None:
+    fixture = _FakeLLM({
+        "score": '{"note":"This is a strong idea.","score":0.85}',
+    })
+    node = AgentBackedScoringPersonaNode(fixture.agents.scoring)
     persona = PersonaDefinition(id="analyst_self", description="Decomposes questions.")
     result = node(persona, PersonaInput(user_message="Test candidate"))
 
@@ -203,15 +300,12 @@ def test_llm_backed_scoring_persona_node_parses_note_and_score() -> None:
     assert result.confidence == 0.85
 
 
-def test_llm_backed_scoring_persona_node_fallback_on_bad_json(
+def test_agent_backed_scoring_persona_node_fallback_on_invalid_output(
     tmp_path: Path,
 ) -> None:
-    class _BadJsonLLM:
-        def complete(self, messages: list[ChatMessage]) -> str:
-            return "not json"
-
-    node = LLMBackedScoringPersonaNode(
-        _BadJsonLLM(),
+    fixture = _FakeLLM({"score": "not valid structured output"})
+    node = AgentBackedScoringPersonaNode(
+        fixture.agents.scoring,
         project_root=tmp_path,
     )
     persona = PersonaDefinition(id="analyst_self", description="Decomposes questions.")
@@ -230,15 +324,14 @@ def test_llm_backed_scoring_persona_node_fallback_on_bad_json(
     }
 
 
-def test_llm_backed_scoring_persona_node_rejects_numeric_string(
+def test_agent_backed_scoring_persona_node_rejects_numeric_string(
     tmp_path: Path,
 ) -> None:
-    class _StringScoreLLM:
-        def complete(self, messages: list[ChatMessage]) -> str:
-            return '{"note": "Looks strong.", "score": "0.85"}'
-
-    node = LLMBackedScoringPersonaNode(
-        _StringScoreLLM(),
+    fixture = _FakeLLM({
+        "score": '{"note":"Looks strong.","score":"0.85"}',
+    })
+    node = AgentBackedScoringPersonaNode(
+        fixture.agents.scoring,
         project_root=tmp_path,
     )
     persona = PersonaDefinition(id="analyst_self", description="Decomposes questions.")
@@ -248,35 +341,35 @@ def test_llm_backed_scoring_persona_node_rejects_numeric_string(
     assert result.confidence == 0.5
 
 
-def test_llm_backed_scoring_persona_node_clamps_score() -> None:
-    class _OverflowLLM:
-        def complete(self, messages: list[ChatMessage]) -> str:
-            return '{"note": "Overflow", "score": 1.5}'
-
-    node = LLMBackedScoringPersonaNode(_OverflowLLM())
+def test_agent_backed_scoring_persona_node_rejects_overflow() -> None:
+    fixture = _FakeLLM({
+        "score": '{"note":"Overflow","score":1.5}',
+    })
+    node = AgentBackedScoringPersonaNode(fixture.agents.scoring)
     persona = PersonaDefinition(id="analyst_self", description="Decomposes questions.")
     result = node(persona, PersonaInput(user_message="Test"))
 
-    assert result.confidence == 1.0
+    assert result.confidence == 0.5
 
 
-def test_select_personas_with_llm_uses_llm_response() -> None:
+def test_select_personas_uses_typed_agent_response() -> None:
     llm = _FakeLLM({
         "select": '{"selected_persona_ids": ["builder_self", "skeptic_self"], "reason": "needs action and critique"}',
     })
     discussion = ProactivePersonaDiscussion(
         personas=(ANALYST_PERSONA, SKEPTIC_PERSONA, BUILDER_PERSONA, HISTORIAN_PERSONA),
-        llm=llm,
+        agents=llm.agents,
+        synthesis_llm=llm,
         min_participants=2,
         max_participants=3,
     )
-    selected = discussion._select_personas_with_llm(_make_candidate())
+    selected = discussion._select_personas(_make_candidate())
     assert len(selected) == 2
     assert selected[0].id == "builder_self"
     assert selected[1].id == "skeptic_self"
 
 
-def test_select_personas_with_llm_rejects_partially_malformed_selection(
+def test_select_personas_rejects_partially_malformed_selection(
     tmp_path: Path,
 ) -> None:
     llm = _FakeLLM({
@@ -284,13 +377,14 @@ def test_select_personas_with_llm_rejects_partially_malformed_selection(
     })
     discussion = ProactivePersonaDiscussion(
         personas=(ANALYST_PERSONA, SKEPTIC_PERSONA, BUILDER_PERSONA),
-        llm=llm,
+        agents=llm.agents,
+        synthesis_llm=llm,
         min_participants=2,
         max_participants=2,
         project_root=tmp_path,
     )
 
-    selected = discussion._select_personas_with_llm(_make_candidate())
+    selected = discussion._select_personas(_make_candidate())
 
     assert selected == (ANALYST_PERSONA, SKEPTIC_PERSONA)
     [event] = read_log_events(
@@ -306,14 +400,17 @@ def test_select_personas_with_llm_rejects_partially_malformed_selection(
 
 def test_moderator_judgment_detects_convergence() -> None:
     llm = _FakeLLM({"moderator": '{"converged": true, "emergent_persona": "none", "reason": "stable consensus"}'})
-    discussion = ProactivePersonaDiscussion(llm=llm)
+    discussion = ProactivePersonaDiscussion(
+        agents=llm.agents,
+        synthesis_llm=llm,
+    )
     judgment = discussion._moderator_judgment(
         {"analyst_self": 0.8, "builder_self": 0.75},
         ["turn-1: discussion"],
         2,
     )
-    assert judgment["converged"] is True
-    assert judgment["emergent_persona"] == "none"
+    assert judgment.converged is True
+    assert judgment.emergent_persona == "none"
 
 
 def test_moderator_judgment_rejects_string_boolean(
@@ -323,7 +420,8 @@ def test_moderator_judgment_rejects_string_boolean(
         "moderator": '{"converged": "true", "emergent_persona": "bridge_self", "reason": "invalid"}',
     })
     discussion = ProactivePersonaDiscussion(
-        llm=llm,
+        agents=llm.agents,
+        synthesis_llm=llm,
         project_root=tmp_path,
     )
 
@@ -333,11 +431,11 @@ def test_moderator_judgment_rejects_string_boolean(
         2,
     )
 
-    assert judgment == {
-        "converged": False,
-        "emergent_persona": "none",
-        "reason": "fallback",
-    }
+    assert judgment == ModeratorJudgmentOutput(
+        converged=False,
+        emergent_persona="none",
+        reason="fallback",
+    )
     [event] = read_log_events(
         project_root=tmp_path,
         component="persona",
@@ -353,8 +451,11 @@ def test_discussion_diagnostic_failure_does_not_replace_scoring_fallback(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    class _BrokenLLM:
-        def complete(self, messages: list[ChatMessage]) -> str:
+    class _BrokenScoringAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> Never:
             raise RuntimeError("scoring unavailable")
 
     def fail_log(*args: object, **kwargs: object) -> None:
@@ -364,8 +465,8 @@ def test_discussion_diagnostic_failure_does_not_replace_scoring_fallback(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
-    node = LLMBackedScoringPersonaNode(
-        _BrokenLLM(),
+    node = AgentBackedScoringPersonaNode(
+        _BrokenScoringAgent(),
         project_root=tmp_path,
     )
 
@@ -387,14 +488,17 @@ def test_discussion_diagnostic_failure_does_not_replace_scoring_fallback(
 
 def test_moderator_judgment_spawns_emergent_persona() -> None:
     llm = _FakeLLM({"moderator": '{"converged": false, "emergent_persona": "bridge_self", "reason": "needs bridge"}'})
-    discussion = ProactivePersonaDiscussion(llm=llm)
+    discussion = ProactivePersonaDiscussion(
+        agents=llm.agents,
+        synthesis_llm=llm,
+    )
     judgment = discussion._moderator_judgment(
         {"analyst_self": 0.6, "skeptic_self": 0.4},
         ["turn-1: debate"],
         1,
     )
-    assert judgment["converged"] is False
-    assert judgment["emergent_persona"] == "bridge_self"
+    assert judgment.converged is False
+    assert judgment.emergent_persona == "bridge_self"
 
 
 def test_discuss_with_llm_blocks_low_scores() -> None:
@@ -405,7 +509,8 @@ def test_discuss_with_llm_blocks_low_scores() -> None:
     })
     discussion = ProactivePersonaDiscussion(
         personas=(ANALYST_PERSONA, SKEPTIC_PERSONA),
-        llm=llm,
+        agents=llm.agents,
+        synthesis_llm=llm,
         min_participants=2,
         max_participants=2,
     )
@@ -424,7 +529,8 @@ def test_discuss_with_llm_approves_high_scores() -> None:
     })
     discussion = ProactivePersonaDiscussion(
         personas=(ANALYST_PERSONA, BUILDER_PERSONA),
-        llm=llm,
+        agents=llm.agents,
+        synthesis_llm=llm,
         min_participants=2,
         max_participants=2,
     )
@@ -446,7 +552,13 @@ def test_proactive_persona_discussion_uses_llm_when_provided(monkeypatch: pytest
         "score": '{"note": "good idea", "score": 0.7}',
         "moderator": '{"converged": true, "emergent_persona": "none", "reason": "test"}',
     })
-    discussion = ProactivePersonaDiscussion(personas=personas, llm=llm, min_participants=3, max_participants=3)
+    discussion = ProactivePersonaDiscussion(
+        personas=personas,
+        agents=llm.agents,
+        synthesis_llm=llm,
+        min_participants=3,
+        max_participants=3,
+    )
     monkeypatch.setattr(discussion, "_participants_for_turn", lambda selected, emergent: personas)  # type: ignore[arg-type]
     candidate = IdeaCandidate(
         id="c1",
@@ -484,7 +596,8 @@ def test_proactive_persona_discussion_injects_language_preference() -> None:
     })
     discussion = ProactivePersonaDiscussion(
         personas=personas,
-        llm=llm,
+        agents=llm.agents,
+        synthesis_llm=llm,
         min_participants=3,
         max_participants=3,
         language_preference="zh-CN",
@@ -492,7 +605,12 @@ def test_proactive_persona_discussion_injects_language_preference() -> None:
 
     discussion.discuss(_make_candidate())
 
-    prompts = "\n".join(call[0].content for call in llm.calls)
+    prompts = "\n".join(
+        [
+            *(call[0].text for call in llm.agent_calls),
+            *(call[0].content for call in llm.calls),
+        ]
+    )
     assert "Write the note in zh-CN" in prompts
     assert "Write the summary in zh-CN" in prompts
 
@@ -566,6 +684,10 @@ def _spawn_bridge_judgment(
     scores: dict[str, float],
     trace: list[str],
     turn: int,
-) -> dict[str, object]:
+) -> ModeratorJudgmentOutput:
     del scores, trace, turn
-    return {"converged": False, "emergent_persona": "bridge_self", "reason": "test"}
+    return ModeratorJudgmentOutput(
+        converged=False,
+        emergent_persona="bridge_self",
+        reason="test",
+    )

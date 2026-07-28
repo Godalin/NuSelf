@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Persona discussion scoring, participant selection, and moderator judgment now
+  use three exact-schema agents through the shared LangChain boundary.
+  Prompted/fenced JSON, generated defaults, extra fields, score clamping, and
+  the discussion `llm=` protocol were removed while stage fallbacks remain.
 - Reflection candidate generation and relevance scoring now use the shared
   LangChain structured-agent boundary. Generated defaults, prompted/fenced
   JSON parsing, extra fields, score clamping, and legacy `llm=` injection were

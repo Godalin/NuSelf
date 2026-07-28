@@ -515,7 +515,7 @@ The macOS adapter delivers pending entries as system notifications via `osascrip
 
 ## Reflection
 
-The daemon runs a proactive reflection scheduler that generates ideas from recent threads, memory entries, and source documents. Ideas are scored for novelty, confidence, urgency, and interruption cost, then debated by a randomized set of internal personas. Approved ideas are stored in `private/reflections/` as first-class entries with `pending`, `dismissed`, or `archived` status.
+The daemon runs a proactive reflection scheduler that generates ideas from recent threads, memory entries, and source documents. Ideas are scored for novelty, confidence, urgency, and interruption cost, then debated by a randomized set of internal personas. Discussion scoring, participant selection, and moderator judgment use exact-schema agents through the shared LangChain structured-output boundary; malformed decisions use bounded stage-specific fallbacks rather than text reparsing or value repair. Approved ideas are stored in `private/reflections/` as first-class entries with `pending`, `dismissed`, or `archived` status.
 
 Reflection ideas can be inspected and managed with:
 

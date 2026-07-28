@@ -201,7 +201,7 @@ class ReflectionScheduler:
             result = SharedPersonaDiscussionService(
                 project_root=self._project_root,
                 config=self._config,
-                llm=default_llm(self._project_root),
+                synthesis_llm=default_llm(self._project_root),
             ).discuss(best)
             self._write_discussion_log(best, score, result, now)
             discussion_approved = result.approved

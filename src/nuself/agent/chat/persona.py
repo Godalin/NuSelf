@@ -64,7 +64,7 @@ class ConversationPersonaOrchestrator:
         )
         self._discussion_service = SharedPersonaDiscussionService(
             project_root=project_root,
-            llm=llm,
+            synthesis_llm=llm,
             language_preference=language_preference,
         )
 

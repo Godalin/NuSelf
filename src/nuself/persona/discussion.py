@@ -5,12 +5,15 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated, Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import ConfigSystem, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
-from nuself.llm import ChatLLM, ChatMessage
+from nuself.llm import ChatLLM
 from nuself.persona.definition import (
     BUILTIN_PERSONAS,
     MODERATOR_PERSONA,
@@ -26,34 +29,84 @@ from nuself.persona.graph import (
 from nuself.runtime.observability import report_observed_failure
 
 DiscussionTraceSink = Callable[[str], None]
+NonBlankText: TypeAlias = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1),
+]
 
 
 class PersonaScoreOutput(BaseModel):
     """Structured note and score from a scoring persona node."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict(strict=True, extra="forbid")
 
-    note: str = Field(description="Persona perspective text (1-2 sentences).")
-    score: float = Field(description="Support score from 0.0 to 1.0.")
+    note: NonBlankText = Field(
+        description="Persona perspective text (1-2 sentences)."
+    )
+    score: float = Field(
+        ge=0,
+        le=1,
+        description="Support score from 0.0 to 1.0.",
+    )
 
 
 class PersonaSelectionOutput(BaseModel):
     """Structured persona selection from the discussion host."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict(strict=True, extra="forbid")
 
-    selected_persona_ids: list[str] = Field(description="Selected persona IDs.")
-    reason: str = Field(default="", description="Reason for selection.")
+    selected_persona_ids: list[NonBlankText] = Field(
+        min_length=1,
+        max_length=5,
+        description="Selected persona IDs.",
+    )
+    reason: NonBlankText = Field(description="Reason for selection.")
 
 
 class ModeratorJudgmentOutput(BaseModel):
     """Structured moderator judgment from the discussion host."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict(strict=True, extra="forbid")
 
     converged: bool = Field(description="Whether the discussion has converged.")
-    emergent_persona: str = Field(default="none", description="Emergent persona ID or 'none'.")
-    reason: str = Field(default="", description="Reason for judgment.")
+    emergent_persona: Literal[
+        "bridge_self",
+        "urgency_self",
+        "none",
+    ] = Field(description="Emergent persona ID or 'none'.")
+    reason: NonBlankText = Field(description="Reason for judgment.")
+
+
+@dataclass(frozen=True)
+class PersonaDiscussionAgents:
+    """Typed agent capabilities used by competitive discussion."""
+
+    scoring: StructuredAgent[PersonaScoreOutput]
+    selection: StructuredAgent[PersonaSelectionOutput]
+    moderator: StructuredAgent[ModeratorJudgmentOutput]
+
+
+def default_persona_discussion_agents(
+    project_root: Path | None = None,
+) -> PersonaDiscussionAgents:
+    """Build all typed discussion decision agents."""
+    return PersonaDiscussionAgents(
+        scoring=default_structured_agent(
+            PersonaScoreOutput,
+            project_root=project_root,
+            component="persona",
+        ),
+        selection=default_structured_agent(
+            PersonaSelectionOutput,
+            project_root=project_root,
+            component="persona",
+        ),
+        moderator=default_structured_agent(
+            ModeratorJudgmentOutput,
+            project_root=project_root,
+            component="persona",
+        ),
+    )
 
 
 @dataclass(frozen=True)
@@ -71,17 +124,17 @@ class PersonaCompetitionResult:
     emergent_persona_ids: tuple[str, ...] = ()
 
 
-class LLMBackedScoringPersonaNode:
-    """LLM-driven persona node that generates both a note and a 0-1 score."""
+class AgentBackedScoringPersonaNode:
+    """Typed-agent persona node that generates a note and 0-1 score."""
 
     def __init__(
         self,
-        llm: ChatLLM,
+        agent: StructuredAgent[PersonaScoreOutput],
         *,
         language_preference: str = "en",
         project_root: Path | None = None,
     ) -> None:
-        self._llm = llm
+        self._agent = agent
         self._language_preference = language_preference
         self._project_root = project_root
 
@@ -101,19 +154,18 @@ class LLMBackedScoringPersonaNode:
             f"Your role: {persona.description}\n\n"
             f"Candidate:\n{persona_input.user_message}{prior_block}\n\n"
             "Give your perspective (1-2 sentences) AND a score (0.0-1.0) for how strongly you support this idea."
-            f"{response_language}\n\n"
-            'Return ONLY JSON: {"note": "your perspective", "score": 0.7}\n'
-            "No markdown fences."
+            f"{response_language}"
         )
 
         messages = [
-            ChatMessage(role="system", content=system),
-            ChatMessage(role="user", content="Respond with your perspective and score."),
+            SystemMessage(content=system),
+            HumanMessage(content="Respond with your perspective and score."),
         ]
         try:
-            raw = self._llm.complete(messages).strip()
-            note, score = self._parse_response(raw)
-        except (RuntimeError, ValueError, KeyError) as exc:
+            output = self._agent.invoke(messages)
+            note = output.note
+            score = output.score
+        except (RuntimeError, ValueError) as exc:
             report_observed_failure(
                 exc,
                 component="persona",
@@ -129,15 +181,6 @@ class LLMBackedScoringPersonaNode:
             score = 0.5
 
         return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=score)
-
-    def _parse_response(self, raw: str) -> tuple[str, float]:
-        stripped = raw.strip()
-        if stripped.startswith("```"):
-            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
-            stripped = "\n".join(lines).strip()
-
-        output = PersonaScoreOutput.model_validate_json(stripped)
-        return output.note, max(0.0, min(1.0, output.score))
 
 
 class ProactivePersonaDiscussion:
@@ -155,7 +198,8 @@ class ProactivePersonaDiscussion:
         composite_threshold: float = 0.4,
         consensus_spread_threshold: float = 0.15,
         config: ReflectionSettings | None = None,
-        llm: ChatLLM | None = None,
+        agents: PersonaDiscussionAgents | None = None,
+        synthesis_llm: ChatLLM | None = None,
         language_preference: str = "en",
         project_root: Path | None = None,
     ) -> None:
@@ -176,22 +220,27 @@ class ProactivePersonaDiscussion:
         self._override_threshold = override_threshold
         self._composite_threshold = composite_threshold
         self._consensus_spread_threshold = consensus_spread_threshold
-        self._llm = llm
+        self._agents = agents
         self._language_preference = language_preference
         self._project_root = project_root
 
-        if llm is not None:
+        if agents is not None:
+            synthesizer_node = (
+                LLMBackedSynthesizerNode(
+                    synthesis_llm,
+                    language_preference=language_preference,
+                    project_root=project_root,
+                )
+                if synthesis_llm is not None
+                else None
+            )
             self._driver = PersonaGraphDriver(
-                persona_node=LLMBackedScoringPersonaNode(
-                    llm,
+                persona_node=AgentBackedScoringPersonaNode(
+                    agents.scoring,
                     language_preference=language_preference,
                     project_root=project_root,
                 ),
-                synthesizer_node=LLMBackedSynthesizerNode(
-                    llm,
-                    language_preference=language_preference,
-                    project_root=project_root,
-                ),
+                synthesizer_node=synthesizer_node,
             )
         else:
             self._driver = PersonaGraphDriver()
@@ -202,7 +251,7 @@ class ProactivePersonaDiscussion:
         *,
         on_trace_entry: DiscussionTraceSink | None = None,
     ) -> PersonaCompetitionResult:
-        selected = self._select_personas_with_llm(candidate)
+        selected = self._select_personas(candidate)
         if not selected:
             return PersonaCompetitionResult(
                 approved=True,
@@ -239,12 +288,12 @@ class ProactivePersonaDiscussion:
                 on_trace_entry=on_trace_entry,
             )
             judgment = self._moderator_judgment(round_scores, discussion_trace, turn_number)
-            emergent_pid = judgment.get("emergent_persona")
-            if isinstance(emergent_pid, str) and emergent_pid not in ("none", ""):
+            emergent_pid = judgment.emergent_persona
+            if emergent_pid != "none":
                 new_emergent = self._create_emergent_persona(emergent_pid)
                 if new_emergent is not None:
                     emergent = new_emergent
-            if judgment.get("converged"):
+            if judgment.converged:
                 self._append_trace(discussion_trace, f"turn-{turn_number}: reached convergence", on_trace_entry)
                 break
             if turn_number < self._max_turns:
@@ -316,19 +365,21 @@ class ProactivePersonaDiscussion:
             return ()
         return tuple(pool[: self._max_participants])
 
-    def _select_personas_with_llm(self, candidate: IdeaCandidate) -> tuple[PersonaDefinition, ...]:
+    def _select_personas(
+        self,
+        candidate: IdeaCandidate,
+    ) -> tuple[PersonaDefinition, ...]:
         pool = [p for p in self._personas if p.id != "synthesizer_self"]
         if not pool:
             return ()
-        if self._llm is None:
+        if self._agents is None:
             count = min(self._max_participants, len(pool))
             return tuple(pool[:count])
 
         persona_lines = [f"- {p.id}: {p.description}" for p in pool]
         system = (
             "You are the Discussion Host. Select the 3-5 most relevant personas to discuss this reflection idea.\n\n"
-            'Return ONLY JSON: {"selected_persona_ids": [...], "reason": "..."}\n'
-            "No markdown fences."
+            "Explain why the selected personas fit the candidate."
         )
         user = (
             "Available personas:\n"
@@ -338,13 +389,13 @@ class ProactivePersonaDiscussion:
             f"Novelty: {candidate.novelty:.2f} | Urgency: {candidate.urgency:.2f}"
         )
         messages = [
-            ChatMessage(role="system", content=system),
-            ChatMessage(role="user", content=user),
+            SystemMessage(content=system),
+            HumanMessage(content=user),
         ]
         try:
-            raw = self._llm.complete(messages).strip()
-            selected_ids = self._parse_selected_personas(raw)
-        except (RuntimeError, ValueError, KeyError) as exc:
+            output = self._agents.selection.invoke(messages)
+            selected_ids = output.selected_persona_ids
+        except (RuntimeError, ValueError) as exc:
             report_observed_failure(
                 exc,
                 component="persona",
@@ -370,15 +421,6 @@ class ProactivePersonaDiscussion:
 
         return tuple(selected)
 
-    def _parse_selected_personas(self, raw: str) -> list[str]:
-        stripped = raw.strip()
-        if stripped.startswith("```"):
-            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
-            stripped = "\n".join(lines).strip()
-
-        output = PersonaSelectionOutput.model_validate_json(stripped)
-        return output.selected_persona_ids
-
     def _score_candidate(
         self,
         candidate: IdeaCandidate,
@@ -400,7 +442,7 @@ class ProactivePersonaDiscussion:
         )
         result = self._driver.run(turn_state)
         for contrib in result.contributions:
-            if self._llm is not None:
+            if self._agents is not None:
                 score = contrib.confidence if contrib.confidence is not None else 0.5
             else:
                 score = 0.5
@@ -446,17 +488,19 @@ class ProactivePersonaDiscussion:
         scores: dict[str, float],
         discussion_trace: list[str],
         turn_number: int,
-    ) -> dict[str, object]:
-        if self._llm is None:
-            return {"converged": False, "emergent_persona": "none", "reason": "no llm"}
+    ) -> ModeratorJudgmentOutput:
+        if self._agents is None:
+            return ModeratorJudgmentOutput(
+                converged=False,
+                emergent_persona="none",
+                reason="no agent",
+            )
 
         score_lines = [f"- {pid}: {score:.2f}" for pid, score in scores.items()]
         system = (
             "You are the moderator for a competitive persona debate.\n"
             "After reviewing the current scores and discussion, judge whether the discussion has converged "
-            "and whether an emergent persona should join the next round.\n\n"
-            'Return ONLY JSON: {"converged": true|false, "emergent_persona": "bridge_self|urgency_self|none", "reason": "..."}\n'
-            "No markdown fences."
+            "and whether an emergent persona should join the next round."
         )
         user = (
             "Current scores:\n"
@@ -466,13 +510,12 @@ class ProactivePersonaDiscussion:
             + f"\n\nTurn {turn_number} of {self._max_turns}."
         )
         messages = [
-            ChatMessage(role="system", content=system),
-            ChatMessage(role="user", content=user),
+            SystemMessage(content=system),
+            HumanMessage(content=user),
         ]
         try:
-            raw = self._llm.complete(messages).strip()
-            return self._parse_moderator_judgment(raw)
-        except (RuntimeError, ValueError, KeyError) as exc:
+            return self._agents.moderator.invoke(messages)
+        except (RuntimeError, ValueError) as exc:
             report_observed_failure(
                 exc,
                 component="persona",
@@ -484,20 +527,11 @@ class ProactivePersonaDiscussion:
                     "turn_number": turn_number,
                 },
             )
-            return {"converged": False, "emergent_persona": "none", "reason": "fallback"}
-
-    def _parse_moderator_judgment(self, raw: str) -> dict[str, object]:
-        stripped = raw.strip()
-        if stripped.startswith("```"):
-            lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
-            stripped = "\n".join(lines).strip()
-
-        output = ModeratorJudgmentOutput.model_validate_json(stripped)
-        return {
-            "converged": output.converged,
-            "emergent_persona": output.emergent_persona,
-            "reason": output.reason,
-        }
+            return ModeratorJudgmentOutput(
+                converged=False,
+                emergent_persona="none",
+                reason="fallback",
+            )
 
     def _create_emergent_persona(self, persona_id: str) -> PersonaDefinition | None:
         if persona_id == "bridge_self":
@@ -522,7 +556,8 @@ class SharedPersonaDiscussionService:
         *,
         config: ReflectionSettings | None = None,
         discussion: ProactivePersonaDiscussion | None = None,
-        llm: ChatLLM | None = None,
+        agents: PersonaDiscussionAgents | None = None,
+        synthesis_llm: ChatLLM | None = None,
         language_preference: str | None = None,
     ) -> None:
         if discussion is not None:
@@ -533,9 +568,12 @@ class SharedPersonaDiscussionService:
             config = system_config.reflection
         if language_preference is None:
             language_preference = system_config.chat.language_preference
+        if agents is None:
+            agents = default_persona_discussion_agents(project_root)
         self._discussion = ProactivePersonaDiscussion(
             config=config,
-            llm=llm,
+            agents=agents,
+            synthesis_llm=synthesis_llm,
             language_preference=language_preference,
             project_root=project_root,
         )

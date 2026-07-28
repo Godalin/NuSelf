@@ -58,12 +58,23 @@ Competitive discussion traces are user-inspectable logs. LLM-backed participant 
 
 ## Structured Output Boundaries
 
-Prompted JSON for participant scoring, participant selection, and moderator
-judgment is validated only through `PersonaScoreOutput`,
-`PersonaSelectionOutput`, and `ModeratorJudgmentOutput`. These schemas are
-strict: numeric strings are not scores, string values are not booleans, and a
-selection containing any non-string item is malformed as a whole. No secondary
-handwritten dict parser may reinterpret rejected output.
+Participant scoring, participant selection, and moderator judgment use three
+exact-schema agents composed in `PersonaDiscussionAgents`. Each invokes the
+shared framework-native structured-agent boundary and accepts only an actual
+`PersonaScoreOutput`, `PersonaSelectionOutput`, or
+`ModeratorJudgmentOutput`.
+
+The schemas are strict and extra-forbid. Scores must be floats in `[0, 1]`;
+notes and reasons are required and non-empty; selection contains one through
+five string persona ids; and emergent persona is exactly `bridge_self`,
+`urgency_self`, or `none`. Numeric strings are not scores, string values are
+not booleans, and one malformed selection item invalidates the complete
+selection. Generated values are not defaulted or clamped.
+
+Discussion prompts use LangChain framework messages. They do not request JSON,
+parse response text, or retain a secondary dictionary/fenced-text protocol.
+Natural-language synthesis remains a separate capability because it is not a
+structured host decision.
 
 Malformed output keeps the existing caller-owned safety behavior:
 
@@ -72,7 +83,7 @@ Malformed output keeps the existing caller-owned safety behavior:
 - moderator judgment remains non-converged, selects no emergent persona, and
   allows the bounded discussion loop to continue.
 
-LLM and schema failures for all three stages write
+Agent and schema failures for all three stages write
 `persona/persona_discussion_degraded` through shared best-effort observability.
 Metadata identifies `scoring`, `selection`, or `moderator`; scoring also names
 the persona, selection names the candidate, and moderator names the turn.

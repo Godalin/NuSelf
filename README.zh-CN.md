@@ -467,7 +467,7 @@ macOS adapter 通过 `osascript` 将 pending 条目投递为系统通知。email
 
 ## 主动反思
 
-守护进程运行一个主动反思调度器，从近期 threads、记忆条目和 source documents 中生成想法候选。候选想法会按新颖度、置信度、紧急度和打断代价进行评分，再由一组随机抽取的内部人格进行讨论。通过 gate 的想法会被存储到 `private/reflections/`，作为带有 `pending` / `dismissed` / `archived` 状态的一等条目。
+守护进程运行一个主动反思调度器，从近期 threads、记忆条目和 source documents 中生成想法候选。候选想法会按新颖度、置信度、紧急度和打断代价进行评分，再由一组随机抽取的内部人格进行讨论。讨论评分、参与者选择和 moderator 判断通过共享 LangChain structured-output 边界中的精确 schema agents 完成；malformed decision 使用有界的阶段 fallback，不再重新解析文本或修正数值。通过 gate 的想法会被存储到 `private/reflections/`，作为带有 `pending` / `dismissed` / `archived` 状态的一等条目。
 
 反思想法可以通过以下命令查看和管理：
 
