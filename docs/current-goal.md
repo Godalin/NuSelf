@@ -66,6 +66,8 @@ v0.3 optimization batches (do in order, each its own commit + tests):
   with memory commands grouped under `nuself.cli.commands.memory`.
 - [x] Convert `nuself.cli` into a package containing parser, commands, and REPL
   modules while preserving `nuself.cli:main`.
+- [x] Move REPL input, session state/control, subsystem commands, and transcript
+  rendering/export into focused `nuself.cli.repl` modules.
 - [x] Extract shared memory text/json/clamp helpers.
 - [x] Dedup `persona/tools.py` builders.
 - [x] Remove dead reflection event-trigger and `_handle_proposals_after_turn` paths.
