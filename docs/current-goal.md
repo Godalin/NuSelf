@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make reflection relevance and candidate-generation schemas authoritative so
-malformed LLM output cannot pass through a looser handwritten parser.
+Make persona activation and competitive-discussion schemas authoritative so
+malformed LLM output cannot pass through looser handwritten parsers.
 
 ## Active Branch
 
@@ -14,30 +14,33 @@ malformed LLM output cannot pass through a looser handwritten parser.
 
 ## Ordered Work
 
-1. [x] Compare Pydantic and handwritten reflection parser behavior.
-2. [x] Specify strict authoritative schemas and safe fallback.
-3. [x] Reject string booleans and unknown candidate types.
-4. [x] Reject an entire malformed candidate list instead of partial acceptance.
-5. [x] Remove duplicate handwritten parsing paths.
+1. [x] Compare typed and handwritten persona parser behavior.
+2. [x] Specify authoritative activation, scoring, selection, and moderator schemas.
+3. [x] Reject string booleans, numeric strings, and mixed malformed selections.
+4. [x] Remove duplicate handwritten parsing paths.
+5. [x] Preserve the existing no-activation, default-participant, neutral-score,
+   and non-converged fallbacks.
 6. [x] Run focused/full tests, type checking, and formatting checks.
 7. [x] Update user-facing docs/changelog and commit this stage.
 
 ## Out Of Scope
 
-- Changing relevance thresholds, score clamping, or cooldown policy.
-- Changing candidate limits or generated identifiers.
+- Changing activation policy, participant limits, score clamping, or moderator policy.
+- Changing valid persona identifiers or emergent-persona behavior.
 - Migrating model invocation to a different LangChain abstraction.
-- Tightening persona activation/discussion parsers in this same commit.
+- Tightening contribution or synthesis schemas in this same commit.
 
 ## Completion Evidence
 
-- Valid relevance and candidate JSON still produces the same domain values.
-- String booleans, missing fields, and wrong field types use the safe relevance
-  fallback instead of being coerced.
-- Unknown candidate types or any malformed candidate item fail the generation
-  batch and return no candidates with the existing failure event.
-- No handwritten dict parser remains behind either typed schema.
-- Focused reflection tests, full pytest, Pyright, and `git diff --check` pass.
+- Valid activation, scoring, selection, and moderator JSON produces the same
+  domain values.
+- String booleans and numeric strings fail schema validation instead of being
+  coerced.
+- One malformed selected-persona item invalidates the selection instead of
+  being silently discarded.
+- Existing safe fallback behavior remains unchanged at each caller boundary.
+- No handwritten dict parser remains behind the four typed schemas.
+- Focused persona tests, full pytest, Pyright, and `git diff --check` pass.
 
 ## Publication
 
@@ -45,5 +48,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Apply the same authoritative-schema review to persona activation and
-competitive discussion output.
+Audit the remaining derived runtime state for validation, atomic recovery, and
+observable failure behavior.

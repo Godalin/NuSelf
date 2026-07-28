@@ -191,6 +191,11 @@ thread-scoped dynamic persona prompt 文件是权威数据；其派生 name inde
 
 reflection relevance 和 candidate generation 使用严格的 typed response schema。malformed batch、字符串布尔值和未知 candidate type 会进入既有安全 fallback，而不会被强制转换或部分接受。
 
+persona activation 和 competitive discussion 同样遵循严格的 typed-output
+规则。malformed activation、score、participant selection 或 moderator JSON
+会进入既有安全 fallback，而不会转换字符串布尔值、数字字符串，或部分接受
+包含错误成员的 selection。
+
 `private/threads/default.json` 是当前 NuSelf mind 的共享 working memory。多个终端连接同一个 daemon 时会共享它。thread store 会用锁串行化写入，避免并发对话互相覆盖。
 
 memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出时运行。它会用 agent 判断新的 working-memory 对话应该新增、修改还是忽略长期记忆。无意义闲聊会被忽略，已有相似记忆会优先更新而不是重复创建，原始对话流水账会被拒绝写入。默认情况下，候选记忆会自动提升为持久记忆条目（`auto_accept=True`）；如果 validation 失败，可恢复的候选会保留为 pending 并输出诊断，而不会静默消失。每个 thread 的 curator cursor 会原子写入；如果 cursor 损坏，本轮整理会停止并报告 corruption diagnostic，而不会重放旧对话。另有一个 memory optimizer 可以手动、低频运行，用来整合已经存在的杂乱条目。更新事件会写入 `private/logs/memory.log`，交互式聊天也会用紧凑 activity lines 显示新的 chat、daemon 和 memory 事件。

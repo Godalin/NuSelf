@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Persona activation and competitive discussion now use strict typed schemas as
+  their sole prompted-JSON parse boundaries. String booleans, numeric strings,
+  and partially malformed persona selections take the existing safe fallback
+  instead of being coerced or partially accepted.
 - Reflection relevance and candidate generation now use their typed schemas as
   the sole parse boundary; malformed batches, string booleans, and unknown
   candidate types take the safe fallback instead of being coerced or partially

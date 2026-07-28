@@ -131,8 +131,15 @@ decide(persona_input) → PersonaActivation
 The policy:
 1. Checks if an LLM is available (no LLM → `trigger="no_llm"`, no activation)
 2. Tries structured output (`PersonaActivationOutput`) via LangChain endpoints
-3. Falls back to prompted JSON parsing via `ChatLLM.complete()`
+3. Falls back to prompted JSON via `ChatLLM.complete()`, validated by the same
+   strict `PersonaActivationOutput` schema
 4. On any error, returns safe fallback (`trigger="llm_fallback"`, no activation)
+
+`PersonaActivationOutput` is the sole activation parse boundary. JSON booleans
+must be booleans, persona IDs must be strings, and all declared field types must
+validate as written. The prompted-JSON fallback must not use a second
+handwritten parser, coerce string booleans, or partially accept malformed
+lists.
 
 The activation result surfaces:
 - **`selected_personas`**: Which built-in personas should respond

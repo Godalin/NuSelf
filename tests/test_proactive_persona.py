@@ -214,6 +214,19 @@ def test_llm_backed_scoring_persona_node_fallback_on_bad_json() -> None:
     assert result.confidence == 0.5
 
 
+def test_llm_backed_scoring_persona_node_rejects_numeric_string() -> None:
+    class _StringScoreLLM:
+        def complete(self, messages: list[ChatMessage]) -> str:
+            return '{"note": "Looks strong.", "score": "0.85"}'
+
+    node = LLMBackedScoringPersonaNode(_StringScoreLLM())
+    persona = PersonaDefinition(id="analyst_self", description="Decomposes questions.")
+    result = node(persona, PersonaInput(user_message="Test"))
+
+    assert result.notes == ("analyst_self considered the topic.",)
+    assert result.confidence == 0.5
+
+
 def test_llm_backed_scoring_persona_node_clamps_score() -> None:
     class _OverflowLLM:
         def complete(self, messages: list[ChatMessage]) -> str:
@@ -242,6 +255,22 @@ def test_select_personas_with_llm_uses_llm_response() -> None:
     assert selected[1].id == "skeptic_self"
 
 
+def test_select_personas_with_llm_rejects_partially_malformed_selection() -> None:
+    llm = _FakeLLM({
+        "select": '{"selected_persona_ids": ["builder_self", 7], "reason": "mixed"}',
+    })
+    discussion = ProactivePersonaDiscussion(
+        personas=(ANALYST_PERSONA, SKEPTIC_PERSONA, BUILDER_PERSONA),
+        llm=llm,
+        min_participants=2,
+        max_participants=2,
+    )
+
+    selected = discussion._select_personas_with_llm(_make_candidate())
+
+    assert selected == (ANALYST_PERSONA, SKEPTIC_PERSONA)
+
+
 def test_moderator_judgment_detects_convergence() -> None:
     llm = _FakeLLM({"moderator": '{"converged": true, "emergent_persona": "none", "reason": "stable consensus"}'})
     discussion = ProactivePersonaDiscussion(llm=llm)
@@ -252,6 +281,25 @@ def test_moderator_judgment_detects_convergence() -> None:
     )
     assert judgment["converged"] is True
     assert judgment["emergent_persona"] == "none"
+
+
+def test_moderator_judgment_rejects_string_boolean() -> None:
+    llm = _FakeLLM({
+        "moderator": '{"converged": "true", "emergent_persona": "bridge_self", "reason": "invalid"}',
+    })
+    discussion = ProactivePersonaDiscussion(llm=llm)
+
+    judgment = discussion._moderator_judgment(
+        {"analyst_self": 0.8, "builder_self": 0.75},
+        ["turn-1: discussion"],
+        2,
+    )
+
+    assert judgment == {
+        "converged": False,
+        "emergent_persona": "none",
+        "reason": "fallback",
+    }
 
 
 def test_moderator_judgment_spawns_emergent_persona() -> None:

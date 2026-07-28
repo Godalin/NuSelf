@@ -191,6 +191,11 @@ Thread-scoped dynamic persona prompt files are authoritative; their derived name
 
 Reflection relevance and candidate generation use strict typed response schemas. Malformed batches, string booleans, and unknown candidate types take the existing safe fallback instead of being coerced or partially accepted.
 
+Persona activation and competitive discussion use the same strict typed-output
+rule. Malformed activation, scoring, participant-selection, or moderator JSON
+takes the existing safe fallback instead of coercing string booleans or numeric
+strings, or partially accepting a malformed selection.
+
 `private/threads/default.json` is shared working memory for the current NuSelf mind. Multiple terminal attachments to the same daemon share it. The thread store serializes writes with a lock so concurrent turns do not overwrite each other.
 
 The memory curator runs in the background in the daemon and also runs when interactive chat exits. It uses an agent to decide whether new working-memory turns should create, update, or ignore long-term memory. Trivial chat is ignored, similar existing memories should be updated instead of duplicated, and raw chat transcripts are rejected. By default, accepted candidates are automatically promoted to durable memory entries (`auto_accept=True`); validation failures leave the recoverable candidate pending and emit a diagnostic instead of disappearing silently. Per-thread curator cursors are written atomically; a malformed cursor stops that curation run with a corruption diagnostic instead of replaying old conversation history. A separate memory optimizer can be run manually, less frequently, to consolidate messy existing entries. Update events are written to `private/logs/memory.log`, and interactive chat prints compact activity lines for new chat, daemon, and memory events.

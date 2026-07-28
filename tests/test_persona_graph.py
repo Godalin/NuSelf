@@ -270,7 +270,7 @@ def test_llm_backed_activation_ignores_unknown_persona_ids() -> None:
     assert activation.selected_personas == (SKEPTIC_PERSONA,)
 
 
-def test_llm_backed_activation_parses_string_bool() -> None:
+def test_llm_backed_activation_rejects_string_bool() -> None:
     policy = LLMBackedActivationPolicy(
         llm=_FakeActivationLLM({
             "activated": "true",
@@ -283,9 +283,10 @@ def test_llm_backed_activation_parses_string_bool() -> None:
 
     activation = policy.decide(PersonaInput(user_message="Plan this"))
 
-    assert activation.activated is True
-    assert activation.should_escalate is True
-    assert activation.selected_personas == (BUILDER_PERSONA,)
+    assert activation.activated is False
+    assert activation.trigger == "llm_fallback"
+    assert activation.should_escalate is False
+    assert activation.selected_personas == ()
 
 
 def test_llm_backed_activation_no_llm_returns_safe_fallback() -> None:

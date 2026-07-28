@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 @dataclass(frozen=True)
@@ -78,6 +78,8 @@ class PersonaSynthesisOutput(BaseModel):
 
 class PersonaActivationOutput(BaseModel):
     """Structured persona activation decision returned by a LangChain model."""
+
+    model_config = ConfigDict(strict=True)
 
     activated: bool = Field(description="Whether any personas should respond.")
     selected_persona_ids: list[str] = Field(default_factory=list, description="Persona ids to activate.")

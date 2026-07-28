@@ -56,6 +56,22 @@ This boundary is enforced as a prompt-level instruction, not by output sanitizat
 
 Competitive discussion traces are user-inspectable logs. LLM-backed participant notes, moderator notes, and synthesis summaries should follow `chat.language_preference` when it is not English, while keeping stable internal identifiers such as `analyst_self` and `turn-1` unchanged.
 
+## Structured Output Boundaries
+
+Prompted JSON for participant scoring, participant selection, and moderator
+judgment is validated only through `PersonaScoreOutput`,
+`PersonaSelectionOutput`, and `ModeratorJudgmentOutput`. These schemas are
+strict: numeric strings are not scores, string values are not booleans, and a
+selection containing any non-string item is malformed as a whole. No secondary
+handwritten dict parser may reinterpret rejected output.
+
+Malformed output keeps the existing caller-owned safety behavior:
+
+- scoring contributes a neutral `0.5` score and generic note;
+- participant selection uses the deterministic default participant pool;
+- moderator judgment remains non-converged, selects no emergent persona, and
+  allows the bounded discussion loop to continue.
+
 ## Parameters
 
 | Parameter | Default | Description |

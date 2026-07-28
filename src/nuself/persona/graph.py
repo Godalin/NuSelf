@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import json
-
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, TypeVar, TypedDict, cast
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
-from nuself.llm import parse_llm_json_object
 from nuself.llm import (
     ChatLLM,
     ChatMessage,
@@ -370,51 +367,8 @@ class LLMBackedActivationPolicy:
             lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
             stripped = "\n".join(lines).strip()
 
-        try:
-            output = PersonaActivationOutput.model_validate_json(stripped)
-            return self._activation_from_structured(output)
-        except (ValidationError, json.JSONDecodeError):
-            pass
-
-        data = parse_llm_json_object(raw)
-
-        activated = data.get("activated")
-        if isinstance(activated, bool):
-            pass
-        elif isinstance(activated, str):
-            activated = activated.lower() in {"true", "yes", "1"}
-        else:
-            activated = False
-
-        selected_ids = data.get("selected_persona_ids")
-        selected: list[PersonaDefinition] = []
-        if isinstance(selected_ids, list):
-            for pid in cast(list[object], selected_ids):
-                if isinstance(pid, str) and pid in self._persona_by_id:
-                    selected.append(self._persona_by_id[pid])
-
-        trigger = data.get("trigger")
-        if not isinstance(trigger, str):
-            trigger = "llm judgment"
-
-        should_escalate = data.get("should_escalate")
-        if isinstance(should_escalate, bool):
-            pass
-        elif isinstance(should_escalate, str):
-            should_escalate = should_escalate.lower() in {"true", "yes", "1"}
-        else:
-            should_escalate = False
-
-        escalation_reason = data.get("escalation_reason")
-        if not isinstance(escalation_reason, str):
-            escalation_reason = ""
-
-        return PersonaActivation(
-            trigger=trigger,
-            selected_personas=tuple(selected),
-            should_escalate=should_escalate,
-            escalation_reason=escalation_reason,
-        )
+        output = PersonaActivationOutput.model_validate_json(stripped)
+        return self._activation_from_structured(output)
 
 
 class PersonaGraphDriver:
