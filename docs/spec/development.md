@@ -229,6 +229,9 @@ under the same package.
   text; the composition root only dispatches parsed interactive input.
 - `cli/repl/input.py` owns prompt-toolkit input, deduplicated history,
   completion, and top-level interactive help.
+- `cli/repl/activity.py` owns incremental activity reads, transcript capture
+  inclusion, user-visible event filtering, failure classification, and
+  rendering. It does not own the send thread or daemon subscription lifecycle.
 - `cli/repl/runtime.py` owns the interactive session loop and receives
   application effects through `ReplCallbacks`.
 

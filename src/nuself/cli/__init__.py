@@ -44,6 +44,18 @@ try:
     from nuself.cli.commands.output import (
         print_ansi as _print_ansi,
     )
+    from nuself.cli.repl.activity import (
+        captured_interactive_activity_events as _captured_interactive_activity_events,
+    )
+    from nuself.cli.repl.activity import (
+        print_interactive_activity_events as _print_interactive_activity_events,
+    )
+    from nuself.cli.repl.activity import (
+        read_interactive_activity_events as _interactive_activity_events,
+    )
+    from nuself.cli.repl.activity import (
+        visible_interactive_activity_events as _visible_interactive_activity_events,
+    )
     from nuself.cli.commands.reflections import (
         handle_reflection_archive as handle_reflection_archive,
     )
@@ -1077,83 +1089,6 @@ def _print_recent_logs(project_root: Path | None, *, limit: int) -> None:
         return
     for event in events:
         _print_ansi(render_log_event(event))
-
-
-def _interactive_activity_events(
-    project_root: Path | None,
-    log_cursor: InteractiveLogCursor,
-    *,
-    turn_id: str | None = None,
-) -> list[LogEvent]:
-    events = log_cursor.read_new_events(project_root)
-    if turn_id is None:
-        return events
-    return [event for event in events if event.turn_id == turn_id]
-
-
-def _print_interactive_activity_events(events: list[LogEvent]) -> None:
-    for event in events:
-        _print_ansi(render_log_event(event))
-
-
-def _visible_interactive_activity_events(events: list[LogEvent]) -> list[LogEvent]:
-    return [event for event in events if _is_interactive_activity_log(event)]
-
-
-def _captured_interactive_activity_events(
-    events: list[LogEvent],
-) -> list[LogEvent]:
-    return [
-        event
-        for event in events
-        if event.component in {"chat", "daemon", "persona"}
-        or event.event == "approval_prompted"
-    ]
-
-
-def _is_interactive_activity_log(event: LogEvent) -> bool:
-    if event.event == "approval_prompted":
-        return True
-    if event.component == "persona":
-        return event.event in {
-            "persona_summary",
-            "host_discussion_decision",
-            "persona_discussion",
-            "persona_discussion_step",
-            "persona_crafted",
-            "persona_listed",
-            "persona_think",
-            "persona_think_failed",
-        }
-    if event.component == "chat":
-        if event.event == "service_tool_called":
-            return True
-        if event.event in {
-            "turn_started",
-            "turn_completed",
-            "turn_reused",
-            "turn_retry",
-            "final_response_retry",
-            "final_response_completed",
-        }:
-            return True
-        return _is_failure_activity_log(event)
-    if event.component == "daemon":
-        return _is_failure_activity_log(event)
-    return False
-
-
-def _is_failure_activity_log(event: LogEvent) -> bool:
-    if event.status in {"error", "failed", "failed_over", "exhausted"}:
-        return True
-    return event.event in {
-        "chat_turn_failed",
-        "daemon_chat_failed",
-        "final_response_failed",
-        "llm_endpoint_failed_over",
-        "llm_endpoint_unavailable",
-        "turn_failed",
-    }
 
 
 def _handle_interactive_export_command(
