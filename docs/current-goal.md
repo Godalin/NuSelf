@@ -50,7 +50,7 @@ Make each acknowledged structured-log append crash-durable.
 
 ## Publication
 
-`dev/v0.3.x` is ready for publication through `e2b72ec`.
+`dev/v0.3.x` is published through implementation commit `e2b72ec`.
 
 ## Next Review Batch
 
