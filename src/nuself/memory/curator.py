@@ -15,44 +15,19 @@ from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
-from nuself.logs import LogLevel
-from nuself.profile.repository import ProfileItemRepository
+from nuself.memory.audit import (
+    run_memory_curation_observed,
+    write_curator_audit,
+)
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import looks_like_raw_transcript
-from nuself.runtime.observability import (
-    report_corrupt_record,
-    run_observed_best_effort,
-    write_observed_log_event,
-)
+from nuself.profile.repository import ProfileItemRepository
+from nuself.runtime.observability import report_corrupt_record
 from nuself.storage import write_json_atomic
 from nuself.trace.service import TraceRecorder
 
 MemoryActionType: TypeAlias = Literal["create", "update", "ignore"]
 DecisionStatus: TypeAlias = Literal["ready", "deferred"]
-
-
-def _write_curator_audit_event(
-    event: str,
-    message: str,
-    *,
-    project_root: Path,
-    level: LogLevel = "info",
-    status: str | None = None,
-    metadata: dict[str, object] | None = None,
-) -> None:
-    """Project curator activity without changing durable memory results."""
-
-    write_observed_log_event(
-        "memory",
-        event,
-        message,
-        project_root=project_root,
-        level=level,
-        status=status,
-        metadata=metadata,
-        failure_event="curator_audit_write_failed",
-        failure_message=f"Could not record curator audit event {event}",
-    )
 
 
 @dataclass(frozen=True)
@@ -234,12 +209,10 @@ class MemoryCurator:
                 log_path=self._memory_log_path(),
             )
         if cursor < visible_start:
-            _write_curator_audit_event(
+            write_curator_audit(
                 "curator_history_gap",
                 "Older unprocessed turns were already compressed",
                 project_root=self._paths.project_root,
-                level="warning",
-                status="degraded",
                 metadata={
                     "thread_id": thread_id,
                     "cursor": cursor,
@@ -261,16 +234,14 @@ class MemoryCurator:
         source_ref = f"thread:{thread_id}:{source_start}-{visible_end}"
         decision = self._decide_actions(thread_id, state, source_start, new_messages)
         if decision.status == "deferred":
-            _write_curator_audit_event(
+            write_curator_audit(
                 "curator_deferred",
                 "Memory curator deferred the source range",
                 project_root=self._paths.project_root,
-                status="deferred",
                 metadata={
                     "thread_id": thread_id,
                     "source_ref": source_ref,
                     "processed_messages": 0,
-                    "reason": decision.reason,
                 },
             )
             return MemoryCuratorResult(
@@ -301,11 +272,10 @@ class MemoryCurator:
             else:
                 ignored += 1
         self._save_cursor(thread_id, visible_end)
-        _write_curator_audit_event(
+        write_curator_audit(
             "curator_completed",
             "Memory curator processed a source range",
             project_root=self._paths.project_root,
-            status="completed",
             metadata={
                 "thread_id": thread_id,
                 "source_ref": source_ref,
@@ -427,17 +397,14 @@ class MemoryCurator:
                 )
                 self._candidate_repository.save(candidate)
                 self._auto_accept(candidate)
-                _write_curator_audit_event(
+                write_curator_audit(
                     "candidate_merged",
                     "Memory curator created an update candidate by merging",
                     project_root=self._paths.project_root,
-                    status="created",
                     metadata={
                         "candidate_id": candidate.id,
                         "target_entry_id": existing.id,
                         "memory_type": candidate.type,
-                        "title": candidate.title,
-                        "reason": action.reason,
                     },
                 )
                 return "update"
@@ -462,16 +429,13 @@ class MemoryCurator:
         )
         self._candidate_repository.save(candidate)
         self._auto_accept(candidate)
-        _write_curator_audit_event(
+        write_curator_audit(
             "candidate_created",
             "Memory curator created a candidate",
             project_root=self._paths.project_root,
-            status="created",
             metadata={
                 "candidate_id": candidate.id,
                 "memory_type": candidate.type,
-                "title": candidate.title,
-                "reason": action.reason,
             },
         )
         return "create"
@@ -511,16 +475,14 @@ class MemoryCurator:
         )
         self._candidate_repository.save(candidate)
         self._auto_accept(candidate)
-        _write_curator_audit_event(
+        write_curator_audit(
             "candidate_updated",
             "Memory curator created an explicit update candidate",
             project_root=self._paths.project_root,
-            status="created",
             metadata={
                 "candidate_id": candidate.id,
                 "target_entry_id": existing.id,
                 "memory_type": candidate.type,
-                "title": candidate.title,
             },
         )
         return True
@@ -528,9 +490,8 @@ class MemoryCurator:
     def _auto_accept(self, candidate: MemoryCandidate) -> None:
         if not self._settings.auto_accept:
             return
-        result = run_observed_best_effort(
+        result = run_memory_curation_observed(
             lambda: self._candidate_repository.accept(candidate.id),
-            component="memory",
             event="auto_accept_failed",
             message="Memory candidate auto-accept failed",
             project_root=self._paths.project_root,
@@ -562,7 +523,7 @@ class MemoryCurator:
         if self._trace_recorder is None:
             return
         recorder = self._trace_recorder
-        run_observed_best_effort(
+        run_memory_curation_observed(
             lambda: recorder.record_memory_update(
                 memory_id=entry.id,
                 title=entry.title,
@@ -572,7 +533,6 @@ class MemoryCurator:
                 confidence=entry.confidence,
                 source_trace_id=self._source_trace_id,
             ),
-            component="memory",
             event="trace_recording_failed",
             message="Could not record persisted curator memory update trace",
             project_root=self._paths.project_root,

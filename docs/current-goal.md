@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Give Reason Output one closed audit contract across service and worker.
+Give Memory curation one closed, privacy-minimal audit contract.
 
 ## Active Branch
 
@@ -13,56 +13,52 @@ Give Reason Output one closed audit contract across service and worker.
 
 ## Ordered Work
 
-1. Inventory reasoning-side output and daemon-side export audit producers.
-2. Extend shared audit definitions for optional status and duration contracts.
-3. Register the complete cross-component Reason Output audit taxonomy.
-4. Migrate output planning/composition/PDF projections to the domain adapter.
-5. Migrate queue/retry/reconciliation projections to the same domain registry.
-6. Verify every canonical schema and pre-sink rejection of invalid producers.
+1. Inventory curator, optimizer, and secondary-effect failure audit producers.
+2. Define the complete Memory curation taxonomy and metadata minimization.
+3. Register exact level/status/error/metadata contracts for all owned events.
+4. Route curator and optimizer projections through domain adapters.
+5. Route auto-accept and trace failures through a validated secondary wrapper.
+6. Verify private titles/reasons never enter new curation audit metadata.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
 - No process-global registry containing every domain's audit events.
 - No migration or rewriting of historical JSONL records.
-- No change to export manifests, queue semantics, retry timing, or PDF behavior.
-- No conversion of typed job wake-ups into runtime events or persisted commands.
+- No change to curator/optimizer decisions, candidate persistence, or cursor state.
+- Generic corrupt-record diagnostics remain owned by observability.
 - Generic audit-projection failure events remain owned by observability.
 
 ## Completion Evidence
 
-- The inventory identified ten reasoning-side artifact events and fourteen
-  daemon-side wake-up, queue, retry, and reconciliation events.
-- One sealed `reason.output_audit` registry now owns all twenty-four
-  `(component, event)` identities instead of splitting the capability into
-  unrelated file-local string protocols.
-- Shared `AuditEventDefinition` now supports exact optional-status and
-  forbidden/required/optional duration policies; existing Reflection contracts
-  remain validated through the same primitive.
-- Planning, chunk, composition, PDF, enqueue, dequeue, retry, failure, drain,
-  and reconciliation producers all route through the Reason Output adapter.
-- Caught operation failures resolve their registered error contract before
-  shared failure reporting; normal projections resolve before the best-effort
-  sink.
-- The schema review clarified that `source_end_index=None` is the intentional
-  “through the final step” representation and validates it explicitly.
-- Queue drain counts and ignored job names are now structured metadata rather
-  than facts available only by parsing human-readable messages.
-- No direct `write_observed_log_event(...)`,
-  `report_observed_failure(...)`, or `run_observed_best_effort(...)` calls
-  remain in the output service or export worker.
-- Direct tests cover all twenty-four canonical schemas, unknown fields,
-  unknown identities, optional status, duration requirements, and existing
-  output/retry/recovery behavior.
-- Focused audit, output, queue, subagent, and recovery suites: `104 passed`.
-- Full test suite: `1852 passed`.
-- `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
+- The inventory identified nine primary curator/optimizer projections plus
+  registered `auto_accept_failed` and `trace_recording_failed` secondary-effect
+  failures.
+- One sealed `memory.audit` registry now owns all eleven event identities and
+  their exact level, status, error, and metadata contracts.
+- Curator and optimizer no longer accept arbitrary event/level/status strings;
+  their adapters resolve definitions before the best-effort log sink.
+- `run_memory_curation_observed(...)` validates secondary-effect failure
+  identity and metadata before executing auto-accept or trace recording.
+- Shared `run_observed_best_effort(...)` now accepts declared failure level and
+  status rather than forcing every domain diagnostic to warning/degraded.
+- Candidate curation records retain IDs, target IDs, action, and memory type
+  but no longer copy private candidate titles or free-form model reasons.
+- Corrupt cursor diagnostics remain under the generic record-decoding contract
+  and are not duplicated into the curation registry.
+- Direct tests cover all eleven canonical schemas, unknown fields, unknown
+  identities, pre-sink rejection, private metadata minimization, and declared
+  secondary-failure presentation.
+- Focused Memory audit, curator, optimizer, and observability suites:
+  `92 passed`.
+- Full test suite: `1877 passed`.
+- Pyright 1.1.409: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is ready to publish through implementation commit `0563b81`.
+The Memory curation audit-contract batch is awaiting its implementation commit.
 
 ## Next Review Batch
 
-Review Memory curator and optimizer audit schema ownership.
+Review persona consultation/discussion audit schema ownership.

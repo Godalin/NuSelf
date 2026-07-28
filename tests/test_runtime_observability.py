@@ -330,6 +330,28 @@ def test_observed_event_reports_subscriber_failure_and_returns_envelope(
     assert "subscriber unavailable" in event.error
 
 
+def test_best_effort_runner_uses_declared_failure_presentation(
+    tmp_path: Path,
+) -> None:
+    def fail() -> None:
+        raise RuntimeError("secondary failed")
+
+    result = run_observed_best_effort(
+        fail,
+        component="memory",
+        event="secondary_failed",
+        message="Secondary work failed",
+        project_root=tmp_path,
+        level="error",
+        status="failed",
+    )
+
+    assert result is None
+    [event] = read_log_events(project_root=tmp_path, component="memory")
+    assert event.level == "error"
+    assert event.status == "failed"
+
+
 def test_observed_event_producer_contract_failure_propagates(
     tmp_path: Path,
 ) -> None:

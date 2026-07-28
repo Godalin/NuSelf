@@ -162,7 +162,10 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
         "curator_completed",
     ]
     assert events[-2].metadata is not None
-    assert events[-2].metadata["candidate_id"] == candidates[0].id
+    assert events[-2].metadata == {
+        "candidate_id": candidates[0].id,
+        "memory_type": "episode",
+    }
     for line in result.log_path.read_text(
         encoding="utf-8"
     ).splitlines():
@@ -936,6 +939,8 @@ def test_memory_curator_reports_recoverable_auto_accept_failure(
         "target_entry_id": None,
     }
     assert event.error is not None
+    assert event.level == "warning"
+    assert event.status == "degraded"
     assert "rejected by test descriptor" in event.error
 
 

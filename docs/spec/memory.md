@@ -127,6 +127,11 @@ errors are not degraded and continue to the daemon request backstop.
 - Gap, deferred, candidate, and completion observations are structured
   `memory` log events. The curator never appends raw text to `memory.log`;
   that file remains JSONL under the shared log contract.
+- Memory curation owns one sealed audit registry shared by curator and
+  optimizer. Unknown events and invalid status/error/metadata fail before the
+  best-effort sink. Candidate audit metadata is identity-only: it may contain
+  candidate ID, target ID, action, memory type, thread/source identity, and
+  aggregate counts, but never candidate title/body or free-form model reason.
 - Curator audit persistence is auxiliary. Failure to write one audit or its
   diagnostic cannot replace a saved candidate/entry, prevent an authoritative
   cursor update, or make a completed run eligible for replay.
@@ -233,6 +238,22 @@ target identifiers, actions, and aggregate counts belong in typed metadata;
 private candidate titles, bodies, and free-form reasons are not copied into
 the audit record. An audit failure cannot replace a deferred result or an
 already-persisted candidate.
+
+The closed Memory curation taxonomy is:
+
+| Event | Level | Status | Metadata |
+|---|---|---|---|
+| `curator_history_gap` | `warning` | `degraded` | thread, cursor, visible start |
+| `curator_deferred` | `info` | `deferred` | thread, source range, zero processed count |
+| `curator_completed` | `info` | `completed` | thread, source range, processed/create/update/ignore counts |
+| `candidate_merged` | `info` | `created` | candidate, target, memory type |
+| `candidate_created` | `info` | `created` | candidate and memory type |
+| `candidate_updated` | `info` | `created` | candidate, target, memory type |
+| `optimizer_deferred` | `info` | none | zero reviewed count |
+| `optimizer_completed` | `info` | none | reviewed/update/delete/ignore counts |
+| `optimizer_candidate_staged` | `info` | none | action, candidate, target |
+| `auto_accept_failed` | `warning` | `degraded` | required error plus candidate/action/type/nullable target |
+| `trace_recording_failed` | `warning` | `degraded` | required error plus memory/action |
 
 ## Candidate Review Queue
 

@@ -40,6 +40,8 @@ def run_observed_best_effort(
     project_root: Path | None = None,
     metadata: dict[str, object] | None = None,
     errors: tuple[type[Exception], ...] = (Exception,),
+    level: LogLevel = "warning",
+    status: str = "degraded",
 ) -> T | None:
     """Run a secondary effect without hiding its failure."""
 
@@ -53,6 +55,8 @@ def run_observed_best_effort(
             message=message,
             project_root=project_root,
             metadata=metadata,
+            level=level,
+            status=status,
         )
         return None
 

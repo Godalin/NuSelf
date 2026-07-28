@@ -13,33 +13,13 @@ from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import runtime_paths
 from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
+from nuself.memory.audit import write_optimizer_audit
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import looks_like_raw_transcript
 from nuself.profile.repository import ProfileItemRepository
-from nuself.runtime.observability import write_observed_log_event
 
 MemoryOptimizeActionType: TypeAlias = Literal["update", "delete", "ignore"]
 OptimizeDecisionStatus: TypeAlias = Literal["ready", "deferred"]
-
-
-def _write_optimizer_audit_event(
-    event: str,
-    message: str,
-    *,
-    project_root: Path,
-    metadata: dict[str, object] | None = None,
-) -> None:
-    """Project optimizer activity without changing durable memory results."""
-
-    write_observed_log_event(
-        "memory",
-        event,
-        message,
-        project_root=project_root,
-        metadata=metadata,
-        failure_event="optimizer_audit_write_failed",
-        failure_message=f"Could not record optimizer audit event {event}",
-    )
 
 
 @dataclass(frozen=True)
@@ -160,7 +140,7 @@ class MemoryOptimizer:
 
         decision = self._decide_actions(entries)
         if decision.status == "deferred":
-            _write_optimizer_audit_event(
+            write_optimizer_audit(
                 "optimizer_deferred",
                 "Memory optimizer deferred",
                 project_root=self._paths.project_root,
@@ -191,7 +171,7 @@ class MemoryOptimizer:
                     ignored += 1
             else:
                 ignored += 1
-        _write_optimizer_audit_event(
+        write_optimizer_audit(
             "optimizer_completed",
             "Memory optimizer completed",
             project_root=self._paths.project_root,
@@ -300,7 +280,7 @@ class MemoryOptimizer:
             relations=existing.relations,
         )
         self._candidate_repository.save(candidate)
-        _write_optimizer_audit_event(
+        write_optimizer_audit(
             "optimizer_candidate_staged",
             "Memory optimizer staged a candidate",
             project_root=self._paths.project_root,
@@ -338,7 +318,7 @@ class MemoryOptimizer:
             relations=existing.relations,
         )
         self._candidate_repository.save(candidate)
-        _write_optimizer_audit_event(
+        write_optimizer_audit(
             "optimizer_candidate_staged",
             "Memory optimizer staged a candidate",
             project_root=self._paths.project_root,
