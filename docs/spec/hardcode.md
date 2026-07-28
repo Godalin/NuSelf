@@ -104,8 +104,8 @@ behavior, grouped by subsystem. Configurable defaults live in
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `limit: int = 8` | `agent/tools.py:42` | 8 | Default memory search limit in agent tools |
-| `limit: int = 5` | `agent/tools.py:74,375,417` | 5 | Default reflection/trace list limits |
+| `limit: int = 8` | `agent/tools/memory.py` | 8 | Default memory search limit in agent tools |
+| `limit: int = 5` | `agent/tools/reflection.py`, `agent/tools/trace.py` | 5 | Default reflection/trace list limits |
 | `range(2)` | `agent/chat/response.py:91` | 2 | LLM endpoint retry attempts |
 | `[:3]` | `agent/chat/persona.py:209` | 3 | Max default fallback personas |
 | note/summary truncation | `agent/chat/persona.py:309,313` | 140 | Persona contribution display truncation |
@@ -129,4 +129,4 @@ behavior, grouped by subsystem. Configurable defaults live in
   batch sizes, poll intervals) may deserve config promotion.
 - **Hardcoded caps removed**:
   - `MAX_ACTIVE_THREADS = 5` (`reason/service.py`) — removed in v0.2.2
-  - Agent-side thread cap (`agent/tools.py`) — removed in v0.2.2
+  - Agent-side thread cap (`agent/tools/reason.py`) — removed in v0.2.2

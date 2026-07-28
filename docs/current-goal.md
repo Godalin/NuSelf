@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make service ownership intrinsic to every chat tool definition and remove
-construction-time name mapping and metadata mutation.
+Replace the monolithic chat tool module with a subsystem-owned `agent.tools`
+package and a thin composition root.
 
 ## Active Branch
 
@@ -14,37 +14,38 @@ construction-time name mapping and metadata mutation.
 
 ## Ordered Work
 
-1. Audit every chat tool construction site.
-2. Specify definition-time service ownership.
-3. Add service metadata to each tool definition.
-4. Delete the name-to-service table and post-construction mutation.
-5. Verify the complete registry has expected ownership.
+1. Audit the monolith's dependency and public-import graph.
+2. Specify package ownership and composition boundaries.
+3. Extract memory, reflection, reason, trace, selves, and workspace builders.
+4. Keep `agent.tools` as the stable public composition entry.
+5. Verify subsystem registries and the complete composed registry.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
 - Do not change tool names, descriptions, schemas, tags, or execution behavior.
-- Keep persona and workspace builders independently composable.
-- Do not introduce a replacement central catalog.
+- Keep persona tools owned by `nuself.persona`.
+- Keep existing public imports from `nuself.agent.tools` working.
 
 ## Completion Evidence
 
-- Every tool built directly by `build_langchain_chat_tools` declares
-  `service_component` in its own constructor call.
-- The name-to-service table and post-construction `tool.metadata` mutation are
-  deleted; production and test search finds neither pattern.
-- The runtime registry test verifies service ownership for every chat,
-  persona, selves, and skill-loader tool.
-- Tool names, descriptions, schemas, tags, and execution paths are unchanged.
-- `.venv/bin/pytest -q`: `1471 passed`.
+- `nuself.agent.tools` is a package whose public `__init__` only constructs
+  shared service lifetimes and composes subsystem builders.
+- Memory, reflection, reason, trace, selves, and workspace definitions live in
+  focused modules; persona definitions remain owned by `nuself.persona`.
+- `ReasonAdvancer` imports the public lazy workspace builder instead of a
+  private helper.
+- Direct subsystem tests verify each builder's exact registry membership.
+- A live before/after comparison against `30d48d9` proves all 25 composed tool
+  names, order, descriptions, argument schemas, tags, and metadata are equal.
+- `.venv/bin/pytest -q`: `1473 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `991edbc`.
+`dev/v0.3.x` is published through `30d48d9`.
 
 ## Next Review Batch
 
-Review the monolithic chat tool builder and define subsystem-owned registration
-boundaries.
+Audit tool dependency lifetime ownership after the registry split.

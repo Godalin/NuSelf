@@ -406,7 +406,7 @@ class ReasonAdvancer:
         ws_store = self._workspace_store
         if ws_store is None:
             return ()
-        from nuself.agent.tools import _build_workspace_tools_from_provider  # pyright: ignore[reportPrivateUsage]
+        from nuself.agent.tools import build_workspace_tools_from_provider
         from nuself.store import ScopedWorkspace, SqliteStore
 
         def _resolve() -> ScopedWorkspace:
@@ -418,7 +418,7 @@ class ReasonAdvancer:
                 ("workspace", "reason", thread_id),
             )
 
-        return _build_workspace_tools_from_provider(_resolve)
+        return build_workspace_tools_from_provider(_resolve)
 
     def _build_persona_tools(self) -> tuple[BaseTool, ...]:
         """Build thread-scoped persona tools that resolve the current thread."""
