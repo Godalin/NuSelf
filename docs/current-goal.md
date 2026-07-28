@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Finish Memory's peripheral audit ownership so Chat, daemon, and CLI callers no
-longer author raw Memory/trace projections.
+Close Reason's audit ownership so scheduler, advancer, service, and agent-tool
+callers use one sealed domain registry instead of authoring raw projections.
 
 ## Active Branch
 
@@ -14,47 +14,42 @@ longer author raw Memory/trace projections.
 
 ## Ordered Work
 
-1. Inventory post-chat curator, daemon-triggered curator, manual Memory trace,
-   and evidence-backed chat trace projections.
-2. Expand the Memory registry from curation-only naming to the complete owned
-   direct audit surface.
-3. Register exact schemas for curator failure and chat-trace failure without
-   duplicating private summaries or correlation ids.
-4. Route Chat, daemon, CLI, and curator callers through Memory-owned adapters.
-5. Remove the redundant `curator_changed` client projection; the curator's
-   registered completion record remains authoritative for audit.
-6. Preserve curator/trace results and user presentation when auxiliary
-   projection persistence fails.
-7. Run full quality gates, commit, and push.
+1. Inventory Reason events and payloads across `output_audit`, scheduler,
+   advancer, service, and the agent tool.
+2. Separate stable audit metadata from private prompts, summaries, errors, and
+   duplicated runtime correlation fields.
+3. Expand or replace the existing output-only registry with one sealed
+   Reason-owned taxonomy and fixed event messages.
+4. Route every Reason producer through domain adapters; remove parallel raw
+   observability calls and obsolete event aliases.
+5. Preserve scheduling, advancement, workspace, trace, and tool behavior when
+   auxiliary audit persistence fails.
+6. Update the governing spec and changelog where user-visible log contracts
+   change.
+7. Run focused and full quality gates, commit by functional boundary, and
+   push.
 
 ## Out Of Scope
 
 - No process-global registry containing every domain's audit events.
-- No migration or rewriting of historical JSONL records.
-- No change to curator decisions, cursor movement, Memory mutations, trace
-  content, or post-chat scheduling.
-- No migration of historical `curator_changed` or `trace_write_failed` logs.
-- Reason trace/completion projections remain for the Reason audit batch.
+- No change to Reason model decisions, scheduling policy, workspace content,
+  trace content, or thread state transitions.
+- No migration or rewriting of historical Reason JSONL records.
+- Memory audit ownership was completed in `219df65`.
 - Generic corrupt-record and audit-projection diagnostics remain shared.
 - Generic corrupt-record diagnostics remain owned by observability.
 - Generic audit-projection failure events remain owned by observability.
 
 ## Completion Evidence
 
-- The Memory registry now owns fourteen curation, optimizer, trace, and
-  peripheral failure events with exact metadata and fixed failure messages.
-- Chat, daemon, curator, and Memory CLI callers use Memory-owned adapters;
-  `curator_changed` and its free-form summary projection were removed.
-- Historical event migration remains intentionally out of scope.
-- Focused Memory/Chat/daemon/CLI suite: `481 passed`.
-- Full test suite: `1964 passed`.
-- Pyright: `0 errors, 0 warnings, 0 informations`.
-- `git diff --check` passed.
+- Pending Reason inventory, design, implementation, and verification.
 
 ## Publication
 
-Pending this batch's implementation commit and push.
+Memory peripheral audit ownership was implemented in `219df65`; publication is
+pending the milestone commit and push.
 
 ## Next Review Batch
 
-Select after this batch is verified and published.
+Continue infrastructure review after Reason audit ownership is verified and
+published.
