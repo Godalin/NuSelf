@@ -52,6 +52,9 @@ failed rollback while resetting thread-local transaction state.
 Reason execution failure logs are secondary to the original advancer,
 scheduler, or output-runner outcome, including when structured audit storage
 is unavailable.
+Reason advances accept only the framework-returned typed `ReasonStepOutput`;
+malformed kinds, terminal decisions, confidence values, evidence references,
+and tracked items fail validation instead of being filtered or defaulted.
 
 Reflection auxiliary diagnostics cannot interrupt a persisted cycle or turn a
 corrupt schedule's fail-closed block/cooldown decision into an exception.

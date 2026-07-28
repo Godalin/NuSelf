@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from nuself.reason.domain import ReasoningStep, ReasoningThread
+from nuself.reason.domain import ReasoningStep, ReasoningThread, TrackedItem
 
 
 def test_thread_defaults() -> None:
@@ -18,6 +18,41 @@ def test_thread_defaults() -> None:
     assert t.active_items == []
     assert t.pending_items == []
     assert t.evidence_refs == ()
+
+
+def test_tracked_item_wire_preserves_documented_defaults() -> None:
+    item = TrackedItem.from_wire({"label": "Question"})
+
+    assert item == TrackedItem(
+        label="Question",
+        description="",
+        kind="",
+        status="active",
+    )
+    assert item.to_wire() == {
+        "label": "Question",
+        "description": "",
+        "kind": "",
+        "status": "active",
+    }
+
+
+@pytest.mark.parametrize(
+    "wire",
+    [
+        {},
+        {"label": ""},
+        {"label": 3},
+        {"label": "Question", "description": 3},
+        {"label": "Question", "kind": None},
+        {"label": "Question", "status": False},
+    ],
+)
+def test_tracked_item_wire_rejects_lossy_coercion(
+    wire: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError, match="tracked item field"):
+        TrackedItem.from_wire(wire)
 
 
 def test_thread_empty_question_raises() -> None:

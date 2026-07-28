@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reason advances now consume LangChain's typed `ReasonStepOutput` directly.
+  The manual dictionary parser and its filtering, clamping, and defaulting
+  fallbacks were removed; malformed generated steps now fail validation
+  instead of being silently rewritten.
 - Chat responses now use framework-native `structured_response` as the sole
   model protocol. Prompted/fenced JSON and LangChain message-state fallbacks
   were removed; no-model local chat remains a plain-text deterministic path.

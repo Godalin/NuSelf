@@ -107,6 +107,11 @@ reads inherit the same contract through `from_wire()`.
 | `kind`        | string | Free-text tag — LLM chooses based on task |
 | `status`      | string | `"active"` by default                     |
 
+Persisted tracked-item decoding requires a non-empty string `label`. Omitted
+`description`, `kind`, and `status` use their documented defaults, but present
+values must be strings; decoders never call `str(...)` on arbitrary values or
+silently replace malformed values.
+
 The `kind` field is the extension point. Different tasks use different kinds without code change:
 
 | Task             | Example kind values                                        |
@@ -157,6 +162,20 @@ the keys may not disappear. Collection fields must be lists of the documented
 member type. Missing keys, wrong container types, and malformed members are
 corrupt state; decoders must not replace them with empty collections, empty
 strings, or default values.
+
+### Framework Structured Output
+
+The reason advancer uses LangChain `create_agent` with
+`ToolStrategy(ReasonStepOutput)`. `ReasonStepOutput` is a strict Pydantic model
+whose `kind` and `terminal_status` fields use the domain enums, whose confidence
+is bounded from 0 through 1, and whose tracked-item collections contain typed
+`TrackedItemOutput` values.
+
+The agent result must expose a `structured_response` that is an actual
+`ReasonStepOutput` instance. NuSelf converts that typed model directly into a
+`ReasoningStep`. It does not accept dictionaries, call an arbitrary
+`model_dump`, filter malformed collection members, clamp invalid confidence,
+or supply a second set of response defaults after framework validation.
 
 ### State Transitions
 

@@ -10,20 +10,21 @@ from typing import Any, cast
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.middleware import ToolCaptureMiddleware
 
 from nuself.llm import LangChainLLMEndpoint
-from nuself.reason.domain import STEP_KINDS, TERMINAL_STATUSES, ReasoningStep, ReasoningThread
+from nuself.reason.domain import (
+    ReasoningStep,
+    ReasoningThread,
+    StepKind,
+    TerminalStatus,
+)
 from nuself.reason.errors import ReasonAdvanceError
 from nuself.runtime import current_runtime_context, runtime_context
 from nuself.runtime.observability import report_observed_failure
 from nuself.workspace import PrivateWorkspaceStore
-
-
-def _empty_dict_list() -> list[dict[str, object]]:
-    return []
 
 
 def _current_reason_thread_id() -> str:
@@ -55,19 +56,69 @@ def _log_tool_call(tool_name: str, args: dict[str, object], *, tool_service_map:
     )
 
 
+class TrackedItemOutput(BaseModel):
+    """Strict generated tracked-item response."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    label: str = Field(min_length=1)
+    description: str = ""
+    kind: str = ""
+    status: str = "active"
+
+
+def _empty_tracked_item_outputs() -> list[TrackedItemOutput]:
+    return []
+
+
 class ReasonStepOutput(BaseModel):
+    """Framework-native structured response for one reason advance."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
     summary: str = Field(description="Concise one-sentence summary of what happened in this step")
     delta: str = Field(description="What changed in your thinking this step — the key insight or shift")
-    kind: str = Field(description="One of: progress, no_change, question, synthesis, contradiction, resolution, planning")
+    kind: StepKind = Field(description="One of: progress, no_change, question, synthesis, contradiction, resolution, planning")
     output: str = Field(description="Your full current thinking, analysis, or draft — the observable product of this step")
     evidence_refs: list[str] = Field(default_factory=list, description="Reference strings for sources or evidence used")
-    confidence: float | None = Field(default=None, description="How confident you are in this step, from 0.0 to 1.0")
-    new_findings: list[dict[str, object]] = Field(default_factory=_empty_dict_list, description="New findings or ideas to track, each with fields: label, description, kind")
-    new_pending: list[dict[str, object]] = Field(default_factory=_empty_dict_list, description="New open questions or unresolved points, each with fields: label, description, kind")
-    retired_findings: list[dict[str, object]] = Field(default_factory=_empty_dict_list, description="Previously tracked items that are now completed or abandoned, each with fields: label, description, kind")
-    next_steps: list[dict[str, object]] = Field(default_factory=_empty_dict_list, description="Planned next actions, each with a label field")
-    terminal_status: str = Field(default="continue", description="One of: continue, suggest_resolved, suggest_paused")
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0, description="How confident you are in this step, from 0.0 to 1.0")
+    new_findings: list[TrackedItemOutput] = Field(default_factory=_empty_tracked_item_outputs, description="New findings or ideas to track")
+    new_pending: list[TrackedItemOutput] = Field(default_factory=_empty_tracked_item_outputs, description="New open questions or unresolved points")
+    retired_findings: list[TrackedItemOutput] = Field(default_factory=_empty_tracked_item_outputs, description="Previously tracked items that are now completed or abandoned")
+    next_steps: list[TrackedItemOutput] = Field(default_factory=_empty_tracked_item_outputs, description="Planned next actions")
+    terminal_status: TerminalStatus = Field(default="continue", description="One of: continue, suggest_resolved, suggest_paused")
     terminal_reason: str = Field(default="", description="Why this terminal status was chosen; empty if continuing normally")
+
+    def to_step(
+        self,
+        thread_id: str,
+        *,
+        tool_logs: tuple[dict[str, object], ...] = (),
+    ) -> ReasoningStep:
+        def tracked(
+            items: list[TrackedItemOutput],
+        ) -> tuple[dict[str, object], ...]:
+            return tuple(
+                cast(dict[str, object], item.model_dump())
+                for item in items
+            )
+
+        return ReasoningStep(
+            thread_id=thread_id,
+            kind=self.kind,
+            summary=self.summary.strip(),
+            delta=self.delta.strip(),
+            evidence_refs=self.evidence_refs,
+            output=self.output,
+            tool_logs=tool_logs,
+            confidence=self.confidence,
+            new_findings_data=tracked(self.new_findings),
+            new_pending_data=tracked(self.new_pending),
+            retired_findings_data=tracked(self.retired_findings),
+            next_steps_data=tracked(self.next_steps),
+            terminal_status=self.terminal_status,
+            terminal_reason=self.terminal_reason.strip(),
+        )
 
 
 REASON_ADVANCE_SYSTEM_PROMPT = (
@@ -146,64 +197,6 @@ def build_system_prompt(thread: ReasoningThread) -> str:
     if not thread.reasoning_prompt:
         return REASON_ADVANCE_SYSTEM_PROMPT
     return f"{REASON_ADVANCE_SYSTEM_PROMPT}\n\nTopic-specific guidance:\n{thread.reasoning_prompt}"
-
-
-def step_from_data(data: dict[str, object], thread_id: str, *, tool_logs: tuple[dict[str, object], ...] = ()) -> ReasoningStep | None:
-    kind_raw = data.get("kind")
-    summary_raw = data.get("summary")
-    delta_raw = data.get("delta")
-    if not isinstance(kind_raw, str) or kind_raw not in STEP_KINDS:
-        return None
-    if not isinstance(summary_raw, str) or not summary_raw.strip():
-        return None
-    if not isinstance(delta_raw, str):
-        return None
-
-    ev_refs = data.get("evidence_refs")
-    conf_raw = data.get("confidence")
-
-    confidence: float | None = None
-    if isinstance(conf_raw, int | float):
-        confidence = max(0.0, min(float(conf_raw), 1.0))
-
-    evidence_refs_list = _string_list(ev_refs)
-
-    def _as_tracked_list(raw: object) -> tuple[dict[str, object], ...]:
-        if not isinstance(raw, list):
-            return ()
-        items = cast(list[object], raw)
-        return tuple(cast(dict[str, object], item) for item in items if isinstance(item, dict))
-
-    output_raw = data.get("output")
-    if not isinstance(output_raw, str):
-        return None
-    terminal_status_raw = data.get("terminal_status")
-    terminal_status = terminal_status_raw if isinstance(terminal_status_raw, str) and terminal_status_raw in TERMINAL_STATUSES else "continue"
-    terminal_reason_raw = data.get("terminal_reason")
-    terminal_reason = terminal_reason_raw.strip() if isinstance(terminal_reason_raw, str) else ""
-
-    return ReasoningStep(
-        thread_id=thread_id,
-        kind=kind_raw,
-        summary=summary_raw.strip(),
-        delta=delta_raw.strip(),
-        evidence_refs=evidence_refs_list,
-        output=output_raw,
-        tool_logs=tool_logs,
-        confidence=confidence,
-        new_findings_data=_as_tracked_list(data.get("new_findings")),
-        new_pending_data=_as_tracked_list(data.get("new_pending")),
-        retired_findings_data=_as_tracked_list(data.get("retired_findings")),
-        next_steps_data=_as_tracked_list(data.get("next_steps")),
-        terminal_status=terminal_status,
-        terminal_reason=terminal_reason,
-    )
-
-
-def _string_list(value: object) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [item for item in cast(list[object], value) if isinstance(item, str)]
 
 
 class ReasonAdvancer:
@@ -294,16 +287,14 @@ class ReasonAdvancer:
                     ),
                 )
                 structured = state.get("structured_response")
-                if structured is None:
-                    return None
-                if isinstance(structured, dict):
-                    return step_from_data(cast(dict[str, object], structured), thread.id, tool_logs=step_tool_logs)
-                pydantic_data = getattr(structured, "model_dump", None)
-                if pydantic_data is not None:
-                    data = pydantic_data()
-                    if isinstance(data, dict):
-                        return step_from_data(cast(dict[str, object], data), thread.id, tool_logs=step_tool_logs)
-                return None
+                if not isinstance(structured, ReasonStepOutput):
+                    raise ReasonAdvanceError(
+                        "Reason agent did not return ReasonStepOutput"
+                    )
+                return structured.to_step(
+                    thread.id,
+                    tool_logs=step_tool_logs,
+                )
             except Exception as exc:
                 report_observed_failure(
                     exc,

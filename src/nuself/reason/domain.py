@@ -48,15 +48,24 @@ class TrackedItem:
 
     @classmethod
     def from_wire(cls, data: Mapping[str, object]) -> TrackedItem:
-        raw_label = data.get("label")
-        label = str(raw_label) if raw_label is not None else ""
-        raw_desc = data.get("description")
-        description = str(raw_desc) if isinstance(raw_desc, str) else ""
-        raw_kind = data.get("kind")
-        kind = str(raw_kind) if isinstance(raw_kind, str) else ""
-        raw_status = data.get("status")
-        status = str(raw_status) if isinstance(raw_status, str) else "active"
-        return cls(label=label, description=description, kind=kind, status=status)
+        label = data.get("label")
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError("tracked item field 'label' must be a non-empty string")
+
+        def optional_string(field_name: str, default: str) -> str:
+            value = data.get(field_name, default)
+            if not isinstance(value, str):
+                raise ValueError(
+                    f"tracked item field '{field_name}' must be a string"
+                )
+            return value
+
+        return cls(
+            label=label,
+            description=optional_string("description", ""),
+            kind=optional_string("kind", ""),
+            status=optional_string("status", "active"),
+        )
 
 
 

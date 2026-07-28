@@ -12,17 +12,20 @@ import time
 from typing import Any, cast
 
 import pytest
+from pydantic import ValidationError
 
 from nuself.logs import read_log_events
 from nuself.reason.advancer import (
     REASON_ADVANCE_SYSTEM_PROMPT,
     ReasonAdvancer,
+    ReasonStepOutput,
+    TrackedItemOutput,
     _current_reason_thread_id,
     build_advance_prompt,
     build_system_prompt,
-    step_from_data,
 )
 from nuself.reason.domain import ReasoningThread
+from nuself.reason.errors import ReasonAdvanceError
 from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
 from nuself.workspace import PrivateWorkspaceStore
 
@@ -34,12 +37,12 @@ class _RecordingAgent:
     def invoke(self, _input: object) -> dict[str, object]:
         self.contexts.append(current_runtime_context())
         return {
-            "structured_response": {
-                "summary": "advanced",
-                "delta": "changed",
-                "kind": "progress",
-                "output": "result",
-            }
+            "structured_response": ReasonStepOutput(
+                summary="advanced",
+                delta="changed",
+                kind="progress",
+                output="result",
+            )
         }
 
 
@@ -73,12 +76,12 @@ class _ConcurrentCaptureAgent:
             )
             time.sleep(0.03)
             return {
-                "structured_response": {
-                    "summary": f"advanced {thread_id}",
-                    "delta": "changed",
-                    "kind": "progress",
-                    "output": "result",
-                }
+                "structured_response": ReasonStepOutput(
+                    summary=f"advanced {thread_id}",
+                    delta="changed",
+                    kind="progress",
+                    output="result",
+                )
             }
         finally:
             with self._lock:
@@ -94,12 +97,12 @@ class _FailOnceAgent:
         if self.calls == 1:
             raise RuntimeError("first call failed")
         return {
-            "structured_response": {
-                "summary": "recovered",
-                "delta": "changed",
-                "kind": "progress",
-                "output": "result",
-            }
+            "structured_response": ReasonStepOutput(
+                summary="recovered",
+                delta="changed",
+                kind="progress",
+                output="result",
+            )
         }
 
 
@@ -166,6 +169,29 @@ def test_advance_uses_shared_reason_thread_context_and_restores_caller(
         )
     ]
     assert current_runtime_context() == RuntimeContext()
+
+
+def test_advance_rejects_dictionary_structured_response(
+    tmp_path: Path,
+) -> None:
+    class DictionaryAgent:
+        def invoke(self, _input: object) -> dict[str, object]:
+            return {
+                "structured_response": {
+                    "summary": "manual protocol",
+                    "delta": "invalid",
+                    "kind": "progress",
+                    "output": "must not be reparsed",
+                }
+            }
+
+    advancer = _advancer_with_agent(tmp_path, DictionaryAgent())
+
+    with pytest.raises(
+        ReasonAdvanceError,
+        match="did not return ReasonStepOutput",
+    ):
+        advancer.advance(ReasoningThread(id="reason-test", topic="Q"))
 
 
 def test_advance_failure_logs_shared_context_and_restores_caller(
@@ -316,61 +342,62 @@ def test_build_system_prompt_keeps_invariant_contract_with_generated_prompt() ->
     assert "Do not rely on prose alone to signal completion" in prompt
 
 
-def teststep_from_data_accepts_valid() -> None:
-    data: dict[str, object] = {
-        "summary": "s",
-        "delta": "d",
-        "kind": "progress",
-        "output": "out",
-        "terminal_status": "suggest_resolved",
-        "terminal_reason": "done",
-    }
-    step = step_from_data(data, "test-thread")
-    assert step is not None
+def test_reason_step_output_converts_typed_response() -> None:
+    response = ReasonStepOutput(
+        summary=" s ",
+        delta=" d ",
+        kind="progress",
+        output="out",
+        evidence_refs=["mem_1"],
+        confidence=0.75,
+        new_findings=[
+            TrackedItemOutput(
+                label="Finding",
+                kind="finding",
+            )
+        ],
+        terminal_status="suggest_resolved",
+        terminal_reason=" done ",
+    )
+
+    step = response.to_step("test-thread")
+
     assert step.id is not None
     assert step.thread_id == "test-thread"
     assert step.summary == "s"
     assert step.delta == "d"
     assert step.kind == "progress"
     assert step.output == "out"
+    assert step.evidence_refs == ("mem_1",)
+    assert step.confidence == 0.75
+    assert step.new_findings[0].label == "Finding"
+    assert step.new_findings[0].status == "active"
     assert step.terminal_status == "suggest_resolved"
     assert step.terminal_reason == "done"
 
 
-def teststep_from_data_defaults_invalid_terminal_status_to_continue() -> None:
-    data: dict[str, object] = {
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"kind": "invalid"},
+        {"terminal_status": "done"},
+        {"confidence": 1.1},
+        {"confidence": True},
+        {"evidence_refs": ["mem_1", 3]},
+        {"new_findings": [{"label": 3}]},
+        {"unexpected": "field"},
+    ],
+)
+def test_reason_step_output_rejects_invalid_protocol(
+    overrides: dict[str, object],
+) -> None:
+    payload: dict[str, object] = {
         "summary": "s",
         "delta": "d",
         "kind": "progress",
         "output": "out",
-        "terminal_status": "done",
     }
+    payload.update(overrides)
 
-    step = step_from_data(data, "test-thread")
-
-    assert step is not None
-    assert step.terminal_status == "continue"
-
-
-def teststep_from_data_filters_non_string_evidence_refs() -> None:
-    data: dict[str, object] = {
-        "summary": "s",
-        "delta": "d",
-        "kind": "progress",
-        "output": "out",
-        "evidence_refs": ["mem_1", 3, None],
-    }
-    step = step_from_data(data, "test-thread")
-
-    assert step is not None
-    assert step.evidence_refs == ("mem_1",)
-
-
-def teststep_from_data_rejects_missing_fields() -> None:
-    assert step_from_data({"kind": "progress"}, "t") is None  # type: ignore[reportArgumentType]
-    assert step_from_data({"summary": "s", "delta": "d"}, "t") is None  # type: ignore[reportArgumentType]
-    assert step_from_data({"summary": "s", "delta": "d", "kind": "progress"}, "t") is None  # type: ignore[reportArgumentType]
-
-
-def teststep_from_data_rejects_invalid_kind() -> None:
-    assert step_from_data({"summary": "s", "delta": "d", "kind": "invalid", "output": "out"}, "t") is None  # type: ignore[reportArgumentType]
+    with pytest.raises(ValidationError):
+        ReasonStepOutput.model_validate(payload)

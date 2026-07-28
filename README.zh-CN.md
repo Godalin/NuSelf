@@ -44,6 +44,8 @@ thread-local transaction 状态。
 
 Reason 执行失败日志不会覆盖 advancer、scheduler 或 output runner 的原始结果，
 即使结构化审计存储不可用也是如此。
+Reason advance 只接受框架返回的 typed `ReasonStepOutput`；错误的 kind、终止决策、
+confidence、evidence refs 或 tracked items 会直接验证失败，不再被过滤或补默认值。
 
 Reflection 辅助诊断不会中断已持久化的 cycle，也不会让损坏 schedule 的
 fail-closed block/cooldown 决策变成异常。
