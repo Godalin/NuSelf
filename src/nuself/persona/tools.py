@@ -9,6 +9,7 @@ from langchain_core.tools import StructuredTool
 
 from nuself.llm import ChatMessage, default_llm
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
+from nuself.runtime.observability import run_observed_best_effort
 from nuself.storage import auto_backend
 
 
@@ -178,41 +179,62 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
 
 
 def _record_prompt_trace(prompt: PersonaPrompt, *, project_root: Path | None = None) -> None:
-    try:
+    def record() -> object:
         from nuself.trace.service import TraceRecorder
 
-        TraceRecorder(project_root=project_root).record_persona_prompt_created(
+        return TraceRecorder(project_root=project_root).record_persona_prompt_created(
             persona_prompt_id=prompt.id,
             name=prompt.name,
         )
-    except RuntimeError:
-        pass
+
+    run_observed_best_effort(
+        record,
+        component="persona",
+        event="trace_recording_failed",
+        message="Could not record persona prompt creation trace",
+        project_root=project_root,
+        metadata={"persona_prompt_id": prompt.id, "action": "create"},
+    )
 
 
 def _record_prompt_disabled_trace(prompt: PersonaPrompt, *, project_root: Path | None = None) -> None:
-    try:
+    def record() -> object:
         from nuself.trace.service import TraceRecorder
 
-        TraceRecorder(project_root=project_root).record_persona_disabled(
+        return TraceRecorder(project_root=project_root).record_persona_disabled(
             persona_prompt_id=prompt.id,
             name=prompt.name,
             participants=["agent"],
         )
-    except RuntimeError:
-        pass
+
+    run_observed_best_effort(
+        record,
+        component="persona",
+        event="trace_recording_failed",
+        message="Could not record persona disable trace",
+        project_root=project_root,
+        metadata={"persona_prompt_id": prompt.id, "action": "disable"},
+    )
 
 
 def _record_prompt_enabled_trace(prompt: PersonaPrompt, *, project_root: Path | None = None) -> None:
-    try:
+    def record() -> object:
         from nuself.trace.service import TraceRecorder
 
-        TraceRecorder(project_root=project_root).record_persona_enabled(
+        return TraceRecorder(project_root=project_root).record_persona_enabled(
             persona_prompt_id=prompt.id,
             name=prompt.name,
             participants=["agent"],
         )
-    except RuntimeError:
-        pass
+
+    run_observed_best_effort(
+        record,
+        component="persona",
+        event="trace_recording_failed",
+        message="Could not record persona enable trace",
+        project_root=project_root,
+        metadata={"persona_prompt_id": prompt.id, "action": "enable"},
+    )
 
 
 def build_reason_persona_tools(

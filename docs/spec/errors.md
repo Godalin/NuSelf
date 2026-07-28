@@ -68,6 +68,27 @@ unexpected per-iteration exception unless shutdown has been requested.
 - Fatal initialization failures before a worker loop starts remain daemon
   startup failures and must be surfaced to the caller.
 
+## Best-Effort Side Effects
+
+Some secondary effects must not change the result of an already-successful
+primary operation. Examples include audit logging and thought-trace recording
+after a memory or persona update.
+
+- These effects run through one shared observable best-effort boundary rather
+  than local `try/except/pass` blocks.
+- The caller supplies the owning component, a stable failure event name,
+  operation context, and the secondary callable.
+- A secondary failure does not fail or roll back the primary operation.
+- The boundary writes a structured warning with the compact exception chain
+  and JSON-safe context.
+- If the structured log sink itself fails, the boundary emits one warning
+  through Python's standard warning channel. It must not recursively attempt
+  structured logging.
+- Best-effort handling is not allowed for authoritative persistence,
+  validation, approval, external delivery state, or retryable job transitions.
+- Expected parsing fallbacks and cleanup races should use their specific
+  exception types and do not need best-effort failure events.
+
 ## REPL Retry Contract
 
 Interactive chat may retry exactly once only when the send result is explicitly marked retryable.

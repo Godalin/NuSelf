@@ -217,6 +217,9 @@ uv run nuself dev logs --component memory --json
 uv run nuself dev logs --component reflection --tail 10
 ```
 
+Failures in secondary audit or thought-trace recording appear as structured
+`*_failed` warnings without changing the result of the primary operation.
+
 Check system health:
 
 ```bash

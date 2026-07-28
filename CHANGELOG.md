@@ -54,6 +54,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Audit logging and memory/persona thought-trace recording no longer swallow
+  secondary failures silently. They now use one observable best-effort
+  boundary that writes a structured degraded event and falls back to a Python
+  warning if the structured log sink is unavailable, without failing the
+  already-successful primary operation.
 - Daemon request handling no longer hangs the client on an unexpected error. Any
   failure that is not a `ProtocolError` (e.g. a non-chat request raising) is now
   caught at the connection boundary, logged as `daemon/request_failed`, and returned

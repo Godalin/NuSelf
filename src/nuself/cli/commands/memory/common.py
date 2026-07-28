@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
+from nuself.runtime.observability import run_observed_best_effort
 from nuself.trace.service import TraceRecorder
 
 
@@ -30,14 +31,18 @@ def record_memory_trace(
     entry: TraceableMemory,
     action: str,
 ) -> None:
-    try:
-        TraceRecorder(project_root=project_root).record_memory_update(
+    run_observed_best_effort(
+        lambda: TraceRecorder(project_root=project_root).record_memory_update(
             memory_id=entry.id,
             title=entry.title,
             summary=entry.body,
             memory_type=entry.type,
             action=action,
             confidence=entry.confidence,
-        )
-    except Exception:
-        pass
+        ),
+        component="memory",
+        event="trace_recording_failed",
+        message=f"Could not record trace for memory {action}",
+        project_root=project_root,
+        metadata={"memory_id": entry.id, "action": action},
+    )

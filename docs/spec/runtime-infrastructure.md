@@ -189,6 +189,12 @@ Structured logs are an append-only sink and read model.
 The UI, transcript exporter, and diagnostics may read logs. They must not use
 log replay to execute domain actions.
 
+`nuself.runtime.observability` owns the shared boundary for secondary effects
+whose failure must be visible but must not alter an already-successful primary
+operation. It records the failure through the structured log sink and falls
+back to Python warnings only when that sink is unavailable. Domains must not
+implement equivalent broad `try/except/pass` wrappers locally.
+
 ## Migration Order
 
 1. Add and test the shared handler registry; migrate daemon request dispatch.

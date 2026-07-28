@@ -217,6 +217,8 @@ uv run nuself dev logs --component memory --json
 uv run nuself dev logs --component reflection --tail 10
 ```
 
+次要的审计或 thought trace 记录失败会显示为结构化的 `*_failed` 警告，但不会改变主操作的结果。
+
 检查系统健康：
 
 ```bash
