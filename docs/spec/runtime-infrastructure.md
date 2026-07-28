@@ -121,6 +121,11 @@ The reason-output export queue is the first migration target. Its existing
 durable manifest remains authoritative while the in-memory queue becomes a
 typed wake-up mechanism rather than the job record itself.
 
+`nuself.runtime.jobs.JobMessage` is that immutable wake-up contract. It carries
+a versioned `kind="job"` envelope plus explicit `job_id` and `resource_id`.
+Producers receive a `JobSink` through composition; domain modules must not
+install process-global enqueue callbacks.
+
 ## Logging
 
 Structured logs are an append-only sink and read model.

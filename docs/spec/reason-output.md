@@ -173,19 +173,19 @@ Progress is a typed dataclass (`ReasonOutputProgress`) persisted as JSON:
 
 Progress is a read-friendly summary of the manifest state. The manifest is always the authoritative source of truth.
 
-### Queue model: in-memory event bus
+### Queue model: typed in-memory job wake-ups
 
-The export queue is **not** a filesystem directory. It is an in-memory event bus implemented via `queue.SimpleQueue` on the daemon process.
+The export queue is **not** a filesystem directory or a general event bus. It
+is a `queue.SimpleQueue[JobMessage]` owned by the daemon composition root.
 
 **Rationale**: The `manifest.json` in the job directory is the real persistent state. The queue event is purely a signal — "there is a pending job, go look at its manifest". Writing that signal to a file is unnecessary I/O that introduces its own failure modes (duplicate events, partial writes, stale processing claims). An in-memory queue eliminates the `queue/`, `processing/`, and `failed/` directory tree entirely.
 
 #### Queue event
 
-A queue event is a lightweight in-memory tuple:
-
-```
-(thread_id: str, job_id: str)
-```
+A queue item is an immutable `JobMessage` with a versioned `kind="job"`
+envelope, `job_id`, and `resource_id` (the reason thread id). The chat tool
+receives the queue's typed `JobSink` through constructor injection; the reason
+module does not install a process-global enqueue callback.
 
 The worker reconstructs the job data path from `thread_id` and `job_id`: `private/workspaces/reason/{thread_id}/artifacts/export/jobs/{job_id}/manifest.json`.
 
@@ -195,7 +195,7 @@ Retries are scheduled via `threading.Timer` rather than a persistent `next_attem
 
 - On failure, the worker checks `manifest.attempts < MAX_ATTEMPTS`.
 - If retryable, it starts a `threading.Timer` with exponential backoff (capped at 600s).
-- When the timer fires, it re-enqueues `(thread_id, job_id)` back to `SimpleQueue`.
+- When the timer fires, it enqueues a new typed wake-up for the same durable job.
 - If `attempts >= MAX_ATTEMPTS`, the worker updates the manifest status to `failed` and does not re-enqueue.
 
 This is a purely in-memory retry schedule. On daemon crash, all in-flight retry timers are lost; the reconciliation step (see below) restores them.
@@ -217,7 +217,7 @@ Lock protocol:
 
 When the daemon export worker starts, it must run a one-time reconciliation step before entering its event loop:
 
-1. **Re-enqueue incomplete jobs**: Scan `private/workspaces/reason/*/artifacts/export/jobs/*/manifest.json`. For each manifest with status other than `complete` or `failed`, push `(thread_id, job_id)` into the in-memory queue. This recovers any jobs that were in flight when the daemon last exited.
+1. **Re-enqueue incomplete jobs**: Scan `private/workspaces/reason/*/artifacts/export/jobs/*/manifest.json`. For each manifest with status other than `complete` or `failed`, construct a typed `JobMessage` and push it into the in-memory queue. This recovers any jobs that were in flight when the daemon last exited.
 2. **Clear stale locks**: Scan `private/workspaces/reason/*/artifacts/export/jobs/*/.lock`. Remove any `.lock` file found — these were held by crashed processes and are now stale.
 
 This ensures that no pending work is lost across daemon restarts without requiring a persistent queue. The number of pending jobs at any time is bounded by the number of reason threads, so the startup scan is fast.

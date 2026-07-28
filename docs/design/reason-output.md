@@ -115,7 +115,8 @@ Chat should avoid keeping the full long-form output in memory when that output c
 
 ### Export Worker Subagent
 
-The worker dequeues `(thread_id, job_id)` tuples from the daemon-global in-memory queue and performs the heavy lifting:
+The worker dequeues typed `JobMessage` wake-ups from the daemon-owned in-memory
+queue and performs the heavy lifting:
 
 1. read the selected reason steps
 2. batch them into segments
@@ -177,11 +178,13 @@ All persistent export state (manifest, progress) must use typed dataclasses:
 - **`ReasonOutputProgress`** — frozen dataclass with `to_wire()` / `from_wire()`. Read-friendly summary of manifest state.
 - Raw `dict[str, object]` manipulation of manifest or progress files is prohibited. The worker's failure handler uses `dataclasses.replace()` + `to_wire()` instead of inline JSON manipulation.
 
-#### Queue model: in-memory event bus
+#### Queue model: typed job wake-ups
 
-The worker reads from a `queue.SimpleQueue` that carries `(thread_id, job_id)` tuples.
+The worker reads from a `queue.SimpleQueue[JobMessage]`. The durable manifest
+remains authoritative; the message only wakes the worker.
 
-- **Enqueue**: `plan_job` pushes `(thread_id, job_id)` onto the queue (only for new jobs).
+- **Enqueue**: `plan_job` publishes a `JobMessage` through an injected `JobSink`
+  (only for new jobs).
 - **Dequeue**: The worker thread calls `queue.get()` — blocking, zero CPU.
 - **Retry**: On failure, a `threading.Timer` fires after exponential backoff and re-enqueues.
 - **Startup**: The worker scans all workspaces for non-complete manifests and re-enqueues them (crash recovery).

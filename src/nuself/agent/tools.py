@@ -18,6 +18,7 @@ from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.output import ReasonOutputService
 from nuself.reason.repository import ReasonNotFound
 from nuself.reason.service import ReasonService
+from nuself.runtime.jobs import JobSink
 from nuself.store import ScopedWorkspace
 from nuself.reflection.repository import ReflectionRepository
 from nuself.trace.repository import TraceNotFound
@@ -34,6 +35,7 @@ def build_langchain_chat_tools(
     reflection_repository: ReflectionRepository,
     project_root: Path | None,
     selves_consult: Callable[[str, str, str | None], str] | None = None,
+    job_sink: JobSink | None = None,
 ) -> tuple[BaseTool, ...]:
     """Build the LangChain tool registry for the chat runtime."""
 
@@ -365,7 +367,7 @@ def build_langchain_chat_tools(
         if not tid:
             return "Error: thread_id must be a non-empty string"
         try:
-            service = ReasonOutputService(project_root)
+            service = ReasonOutputService(project_root, job_sink=job_sink)
             manifest = service.plan_job(
                 tid,
                 mode=mode,

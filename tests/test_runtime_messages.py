@@ -6,6 +6,7 @@ import pytest
 
 from nuself.runtime import (
     RUNTIME_SCHEMA_VERSION,
+    JobMessage,
     RuntimeContext,
     RuntimeEnvelope,
     current_runtime_context,
@@ -66,3 +67,19 @@ def test_runtime_envelope_rejects_non_json_payload() -> None:
             producer="daemon",
             payload={"invalid": object()},
         )
+
+
+def test_job_message_correlates_envelope_with_durable_job() -> None:
+    with runtime_context(request_id="req-1"):
+        message = JobMessage.create(
+            name="reason.output.export",
+            producer="reasoning",
+            job_id="job-1",
+            resource_id="thread-1",
+        )
+
+    assert message.envelope.kind == "job"
+    assert message.envelope.context.request_id == "req-1"
+    assert message.envelope.context.job_id == "job-1"
+    assert message.job_id == "job-1"
+    assert message.resource_id == "thread-1"

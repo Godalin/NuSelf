@@ -19,7 +19,6 @@ from nuself.reason.output import (
     ReasonOutputManifest,
     ReasonOutputSection,
     ReasonOutputService,
-    set_enqueue_callback,
     set_section_planner,
     write_json_atomic,
 )
@@ -36,6 +35,7 @@ from nuself.notification.email import EmailNotificationAdapter
 from nuself.notification.macos import MacOSNotificationAdapter
 from nuself.reason import ReasonScheduler
 from nuself.reflection import ReflectionScheduler
+from nuself.runtime.jobs import JobMessage
 
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
@@ -133,7 +133,8 @@ class DaemonState:
     def __init__(self, project_root: Path) -> None:
         self.project_root = project_root
         self.shutdown_requested = threading.Event()
-        self.chat_agent = ChatAgent(project_root)
+        self._export_queue: queue.SimpleQueue[JobMessage] = queue.SimpleQueue()
+        self.chat_agent = ChatAgent(project_root, job_sink=self._export_queue.put)
         
         config = ConfigSystem.load(project_root=project_root)
         
@@ -160,7 +161,6 @@ class DaemonState:
         self.reason_scheduler: ReasonScheduler | None = None
         self.reason_scheduler_interval_seconds = config.daemon.reason_scheduler.interval_seconds
         self._reason_scheduler_thread: threading.Thread | None = None
-        self._export_queue: queue.SimpleQueue[tuple[str, str]] = queue.SimpleQueue()
         self._export_timers: list[threading.Timer] = []
         self._export_timers_lock = threading.Lock()
         self._export_worker_thread: threading.Thread | None = None
@@ -338,9 +338,6 @@ class DaemonState:
     def start_background_export_worker(self) -> None:
         if self._export_worker_thread is not None:
             return
-        # Register module-level callbacks so all ReasonOutputService
-        # instances share the queue and section planner.
-        set_enqueue_callback(lambda tid, jid: self._export_queue.put((tid, jid)))
         set_section_planner(_llm_section_planner(self.project_root))
         self._export_worker_thread = threading.Thread(
             target=self._run_background_export_worker,
@@ -466,7 +463,14 @@ class DaemonState:
                     continue
                 job_id = raw.get("job_id", job_dir.name)
                 if isinstance(job_id, str):
-                    self._export_queue.put((owner_id, job_id))
+                    self._export_queue.put(
+                        JobMessage.create(
+                            name="reason.output.export",
+                            producer="daemon.reconciliation",
+                            job_id=job_id,
+                            resource_id=owner_id,
+                        )
+                    )
                     reconciled += 1
 
         write_log_event(
@@ -483,7 +487,7 @@ class DaemonState:
         # immediately via the in-memory queue.
         while not self.shutdown_requested.is_set():
             try:
-                thread_id, job_id = self._export_queue.get(timeout=1.0)
+                job_message = self._export_queue.get(timeout=1.0)
             except queue.Empty:
                 continue
             except Exception as exc:
@@ -500,6 +504,18 @@ class DaemonState:
 
             if self.shutdown_requested.is_set():
                 break
+            if job_message.envelope.name != "reason.output.export":
+                write_log_event(
+                    "daemon",
+                    "export_job_type_ignored",
+                    f"Ignored unsupported export job type {job_message.envelope.name}",
+                    project_root=self.project_root,
+                    level="warning",
+                    metadata={"message_id": job_message.envelope.message_id},
+                )
+                continue
+            thread_id = job_message.resource_id
+            job_id = job_message.job_id
 
             write_log_event(
                 "daemon",
@@ -589,7 +605,18 @@ class DaemonState:
                         # Drop timers that have already fired so the list cannot
                         # grow unbounded over a long-lived daemon with many retries.
                         self._export_timers = [x for x in self._export_timers if x.is_alive()]
-                        t = threading.Timer(backoff, self._export_queue.put, args=((thread_id, job_id),))
+                        retry_message = JobMessage.create(
+                            name="reason.output.export",
+                            producer="daemon.retry",
+                            job_id=job_id,
+                            resource_id=thread_id,
+                            payload={"attempt": attempts + 1},
+                        )
+                        t = threading.Timer(
+                            backoff,
+                            self._export_queue.put,
+                            args=(retry_message,),
+                        )
                         self._export_timers.append(t)
                         t.start()
 

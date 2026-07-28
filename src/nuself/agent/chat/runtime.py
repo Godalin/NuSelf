@@ -39,6 +39,7 @@ from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
+from nuself.runtime.jobs import JobSink
 from nuself.trace.service import TraceRecorder
 
 LOGGER = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ class ConversationGraphRuntime:
         settings: ChatAgentSettings | None = None,
         memory_query_service: MemoryQueryService | None = None,
         thread_store: ThreadStore | None = None,
+        job_sink: JobSink | None = None,
     ) -> None:
         self._llm = llm or default_llm(project_root)
         self._langchain_models: tuple[LangChainLLMEndpoint, ...] = (
@@ -117,6 +119,7 @@ class ConversationGraphRuntime:
             project_root=project_root,
             query_service=self._memory_query_service,
             selves_consult=self._consult_selves_tool,
+            job_sink=job_sink,
         )
         self._tools: dict[str, BaseTool] = self._tool_runtime.tools
         self._response_synthesizer = ConversationResponseSynthesizer(

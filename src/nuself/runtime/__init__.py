@@ -16,12 +16,15 @@ from nuself.runtime.messages import (
     MessageKind,
     RuntimeEnvelope,
 )
+from nuself.runtime.jobs import JobMessage, JobSink
 
 __all__ = [
     "RUNTIME_SCHEMA_VERSION",
     "DuplicateHandlerError",
     "HandlerRegistry",
     "HandlerRegistrySealedError",
+    "JobMessage",
+    "JobSink",
     "MessageKind",
     "RuntimeContext",
     "RuntimeEnvelope",

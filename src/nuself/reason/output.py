@@ -18,28 +18,14 @@ from nuself.logs import write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
 from nuself.reason.repository import ReasonNotFound
 from nuself.reason.service import ReasonService
+from nuself.runtime.jobs import JobMessage, JobSink
 from nuself.workspace import PrivateWorkspaceStore
 
 REASON_OUTPUT_STORAGE_VERSION = "NuSelfReasonOutput/v1"
 REASON_OUTPUT_MODES: tuple[str, ...] = ("outline", "narrative", "report", "summary")
 REASON_OUTPUT_FORMATS: tuple[str, ...] = ("markdown",)
 
-# Module-level export queue callback set by the daemon.
-# When set, plan_job pushes (thread_id, job_id) to this callback
-# instead of writing a file-based queue event. Tests and CLI-only
-# usage leave it unset, in which case plan_job skips enqueueing.
-_enqueue_callback: Callable[[str, str], None] | None = None
 _section_planner: Callable[[ReasoningThread, Sequence[ReasoningStep], str], tuple[ReasonOutputSection, ...]] | None = None
-
-
-def set_enqueue_callback(cb: Callable[[str, str], None] | None) -> None:
-    """Set the module-level enqueue callback used by plan_job.
-
-    Called once by the daemon during startup so all ReasonOutputService
-    instances share the same in-memory queue.
-    """
-    global _enqueue_callback  # noqa: PLW0603
-    _enqueue_callback = cb
 
 
 def set_section_planner(
@@ -276,10 +262,12 @@ class ReasonOutputService:
         project_root: Path | None = None,
         reason_service: ReasonService | None = None,
         workspace_store: PrivateWorkspaceStore | None = None,
+        job_sink: JobSink | None = None,
     ) -> None:
         self._reason_service = reason_service or ReasonService(project_root)
         self._project_root = project_root or self._reason_service._project_root  # pyright: ignore[reportPrivateUsage]
         self._workspace_store = workspace_store or PrivateWorkspaceStore(self._project_root, scope="reason")
+        self._job_sink = job_sink
 
     def list_jobs(self, thread_id: str) -> list[ReasonOutputManifest]:
         root = self._export_root(thread_id)
@@ -390,10 +378,16 @@ class ReasonOutputService:
             },
         )
 
-        # Push to the daemon's in-memory queue if the callback is set.
-        if _enqueue_callback is not None:
+        if self._job_sink is not None:
+            job_message = JobMessage.create(
+                name="reason.output.export",
+                producer="reasoning",
+                job_id=job_id,
+                resource_id=thread.id,
+                payload={"mode": mode, "output_format": output_format},
+            )
             try:
-                _enqueue_callback(thread.id, job_id)
+                self._job_sink(job_message)
                 write_log_event(
                     "daemon",
                     "export_job_enqueued",
