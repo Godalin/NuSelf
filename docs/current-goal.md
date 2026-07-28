@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close Reason's audit ownership so scheduler, advancer, service, and agent-tool
-callers use one sealed domain registry instead of authoring raw projections.
+Harden internal message transport so event, job, and audit envelopes cross
+subsystem boundaries through typed, definition-validated adapters.
 
 ## Active Branch
 
@@ -14,57 +14,46 @@ callers use one sealed domain registry instead of authoring raw projections.
 
 ## Ordered Work
 
-1. Inventory Reason events and payloads across the former output-only
-   registry, scheduler, advancer, service, and the agent tool.
-2. Separate stable audit metadata from private prompts, summaries, errors, and
-   duplicated runtime correlation fields.
-3. Expand or replace the existing output-only registry with one sealed
-   Reason-owned taxonomy and fixed event messages.
-4. Route every Reason producer through domain adapters; remove parallel raw
-   observability calls and obsolete event aliases.
-5. Preserve scheduling, advancement, workspace, trace, and tool behavior when
-   auxiliary audit persistence fails.
-6. Update the governing spec and changelog where user-visible log contracts
-   change.
+1. Inventory every `RuntimeEnvelope` construction, decode, publication, queue,
+   and persistence boundary.
+2. Compare the event definition registry, job wrapper, and audit/log adapter
+   for duplicated validation and untyped escape hatches.
+3. Define the target transport contract in the governing runtime/log specs
+   before implementation.
+4. Add closed job definitions and typed event/job/audit decoding where raw
+   envelope kind checks currently leak across owners.
+5. Route producers and consumers through shared typed adapters without
+   weakening immutable payload or runtime-context guarantees.
+6. Remove obsolete constructors, aliases, and duplicate validation paths
+   rather than preserving compatibility shims.
 7. Run focused and full quality gates, commit by functional boundary, and
    push.
 
 ## Out Of Scope
 
 - No process-global registry containing every domain's audit events.
-- No change to Reason model decisions, scheduling policy, workspace content,
-  trace content, or thread state transitions.
-- No migration or rewriting of historical Reason JSONL records.
-- Memory audit ownership was completed in `219df65`.
+- No change to domain payload semantics, daemon delivery ordering, durable job
+  state, or audit JSONL wire format without an explicit spec decision.
+- No process-external message broker in this batch.
+- Reason audit ownership was completed in `b2d2b07`.
 - Generic corrupt-record and audit-projection diagnostics remain shared.
 - Generic corrupt-record diagnostics remain owned by observability.
 - Generic audit-projection failure events remain owned by observability.
 
 ## Completion Evidence
 
-- Inventory found 24 output/export events already closed in an output-only
-  registry and 12 lifecycle, proposal, trace, scheduler, and advancer events
-  still authored as parallel string protocols.
-- `service_tool_called` remains the intentional shared tool-event contract and
-  is not duplicated into the Reason registry.
-- `docs/spec/reason.md` and `docs/spec/reason-output.md` now define the unified
-  registry, fixed messages, exact metadata, and privacy boundary before code
-  migration.
-- `nuself.reason.audit` now owns all 36 Reason lifecycle, peripheral, output,
-  and export-worker event definitions; the output-only module and names were
-  removed without compatibility aliases.
-- All Reason producers use domain adapters except the intentionally shared
-  `service_tool_called` projection.
-- Focused Reason/Output/export-worker/Chat suite: `228 passed`.
-- Full test suite: `1988 passed`.
-- Pyright: `0 errors, 0 warnings, 0 informations`.
-- `git diff --check` passed.
+- Initial inspection confirms `RuntimeEnvelope` is the shared immutable wire
+  shape, while events validate through a definition registry, jobs use a typed
+  wrapper without closed name definitions, and audits adapt the envelope
+  separately in `logs.py`.
+- Pending full inventory, design, implementation, and verification.
 
 ## Publication
 
-Pending this batch's implementation commit and push.
+Reason audit ownership was implemented in `b2d2b07`; publication is pending
+the milestone commit and push.
 
 ## Next Review Batch
 
-Continue infrastructure review after Reason audit ownership is verified and
-published.
+Continue shared handler/log/message infrastructure review after the transport
+contract is verified and published.
