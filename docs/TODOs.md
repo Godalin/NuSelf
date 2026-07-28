@@ -50,7 +50,7 @@ These are review-driven refactors that should not block local v0.2 testing. They
   writes, and incremental cursors.
 - [x] Replace tuple queues and process-global job callbacks with typed internal
   job messages, starting with reason output export.
-- [ ] Add an explicit in-process event publisher for live activity; logs remain
+- [x] Add an explicit in-process event publisher for live activity; logs remain
   audit/read-model storage rather than a command bus.
 
 ## Current Goal

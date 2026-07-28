@@ -134,6 +134,8 @@ Display name mapping: `persona` → `selves`.
 - Directory creation before open.
 - New writes project a version-1 `RuntimeEnvelope`, including its stable
   `message_id` as `event_id`.
+- An `EventPublisher` may attach `runtime_event_log_sink(...)`; this projection
+  retains the published event's ID and correlation context.
 - Writes are serialized by a per-path process lock and an advisory file lock;
   one complete JSON line is flushed before releasing the locks.
 - Returns the constructed `LogEvent`.

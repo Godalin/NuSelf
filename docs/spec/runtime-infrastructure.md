@@ -102,6 +102,16 @@ Ephemeral events use an in-process publisher/subscriber interface:
 - cross-process live activity requires an explicit transport or cursor store,
   not repeated full-file scans presented as an event bus.
 
+`nuself.runtime.events.EventPublisher` implements this boundary. Subscriptions
+may target one event name or all events, preserve registration order, and are
+removed through publisher-scoped opaque handles. Delivery continues across
+subscriber failures and raises one `EventDeliveryError` containing every
+failure after all matching subscribers have run.
+
+`runtime_event_log_sink(...)` is an optional subscriber. Its audit projection
+preserves the original envelope ID; attaching it never changes event delivery
+into log-driven control flow.
+
 Events that can trigger durable or destructive state changes require a
 request/job path with idempotency and explicit user approval. Replaying an
 audit log must never repeat the action.

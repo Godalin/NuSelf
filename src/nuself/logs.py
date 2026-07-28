@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
@@ -195,9 +195,74 @@ def write_log_event(
         error=error,
         metadata=metadata,
     )
+    return _append_log_event(event_record, project_root=project_root)
+
+
+def write_runtime_event(
+    envelope: RuntimeEnvelope,
+    *,
+    project_root: Path | None = None,
+) -> LogEvent:
+    """Persist an event envelope as an audit projection with the same identity."""
+
+    if envelope.kind != "event":
+        raise ValueError("log event sink requires an event envelope")
+    if envelope.producer not in LOG_COMPONENTS:
+        raise ValueError("runtime event producer is not a log component")
+    payload = envelope.payload
+    level = payload.get("level", "info")
+    if level not in {"debug", "info", "warning", "error"}:
+        raise ValueError("runtime event log level is invalid")
+    message = payload.get("message", envelope.name)
+    if not isinstance(message, str):
+        raise TypeError("runtime event log message must be a string")
+    metadata_value = payload.get("metadata")
+    metadata: dict[str, object] | None = None
+    if isinstance(metadata_value, Mapping):
+        metadata_mapping = cast(Mapping[object, object], metadata_value)
+        metadata = cast(dict[str, object], _safe_json_value(metadata_mapping))
+    event_record = LogEvent(
+        time=envelope.created_at,
+        level=cast(LogLevel, level),
+        component=envelope.producer,
+        event=envelope.name,
+        message=message,
+        event_id=envelope.message_id,
+        schema_version=envelope.schema_version,
+        thread_id=envelope.context.thread_id,
+        request_id=envelope.context.request_id,
+        turn_id=envelope.context.turn_id,
+        job_id=envelope.context.job_id,
+        trace_id=envelope.context.trace_id,
+        source=envelope.context.source,
+        node=_optional_str(payload.get("node")),
+        duration_ms=_optional_int(payload.get("duration_ms")),
+        status=_optional_str(payload.get("status")),
+        error=_optional_str(payload.get("error")),
+        metadata=metadata,
+    )
+    return _append_log_event(event_record, project_root=project_root)
+
+
+def runtime_event_log_sink(
+    project_root: Path | None = None,
+) -> Callable[[RuntimeEnvelope], None]:
+    """Build an event subscriber that persists audit projections."""
+
+    def sink(envelope: RuntimeEnvelope) -> None:
+        write_runtime_event(envelope, project_root=project_root)
+
+    return sink
+
+
+def _append_log_event(
+    event_record: LogEvent,
+    *,
+    project_root: Path | None,
+) -> LogEvent:
     paths = runtime_paths(project_root)
     ensure_runtime_dirs(paths)
-    path = log_path(component, project_root=paths.project_root)
+    path = log_path(event_record.component, project_root=paths.project_root)
     line = (
         json.dumps(event_record.to_record(), sort_keys=True, ensure_ascii=True) + "\n"
     )
@@ -289,8 +354,8 @@ def _safe_json_value(value: object) -> object:
     if isinstance(value, list | tuple):
         sequence = cast(Iterable[object], value)
         return [_safe_json_value(item) for item in sequence]
-    if isinstance(value, dict):
-        mapping = cast(dict[object, object], value)
+    if isinstance(value, Mapping):
+        mapping = cast(Mapping[object, object], value)
         return {str(key): _safe_json_value(item) for key, item in mapping.items()}
     return str(value)
 
