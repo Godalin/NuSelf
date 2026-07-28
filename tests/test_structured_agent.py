@@ -211,3 +211,17 @@ def test_structured_agent_does_not_fail_over_protocol_errors(
         runner.invoke([HumanMessage(content="classify")])
 
     assert invoked == [0]
+
+
+def test_shared_endpoint_runner_rejects_invalid_attempt_count() -> None:
+    with pytest.raises(
+        ValueError,
+        match="attempts_per_endpoint must be at least 1",
+    ):
+        failover_module.invoke_agent_endpoint(
+            (_endpoint(0),),
+            lambda endpoint: endpoint,
+            project_root=None,
+            component="memory",
+            attempts_per_endpoint=0,
+        )

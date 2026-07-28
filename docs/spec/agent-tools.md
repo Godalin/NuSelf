@@ -146,6 +146,18 @@ agent run, but it is not authority to replay a completed tool in a new agent
 run. Before any tool executes, the existing bounded same-endpoint retry and
 endpoint failover behavior remains unchanged.
 
+All agent capabilities use the shared endpoint runner. The runner may perform
+a caller-configured bounded retry on the same endpoint, but only an endpoint
+availability failure may advance to another configured endpoint. Chat retries
+one non-availability failure once on the same endpoint. A repeated protocol or
+validation failure enters the local response policy without probing another
+endpoint.
+
+Retry eligibility is evaluated after each failed invocation so middleware
+state can close the retry gate. Once chat has any tool outcome, both same-
+endpoint retry and endpoint switching are disabled before the runner can
+invoke another agent.
+
 ### No-Model Local Response
 
 The chat runtime has one real model protocol: LangChain endpoints and agents.

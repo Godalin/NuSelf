@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Delete the temporary `ChatMessage` protocol and use framework-native LangChain
-messages across chat response, evaluation, and optional memory extraction.
+Converge chat response retry/failover on the shared agent endpoint runner while
+preserving tool-safe replay suppression and deterministic local fallback.
 
 ## Active Branch
 
@@ -14,41 +14,40 @@ messages across chat response, evaluation, and optional memory extraction.
 
 ## Ordered Work
 
-1. Specify the framework-native prompt message contract.
-2. Make `ConversationResponseService` consume LangChain `BaseMessage` values.
-3. Build chat prompts directly as system, human, and AI messages.
-4. Pass framework messages directly to optional LangMem extraction.
-5. Delete `nuself.agent.messages` and migrate all tests.
+1. Specify shared same-endpoint retry and endpoint-switch policy.
+2. Extend the shared endpoint runner with bounded retry hooks.
+3. Migrate chat response off its private endpoint loop.
+4. Preserve immediate suppression after any tool outcome.
+5. Verify protocol errors retry once but never switch endpoints.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep endpoint construction, preference persistence, redaction, and
-  availability classification in `nuself.llm`.
-- Keep persisted `ThreadMessage` as the chat storage wire model; it is not a
-  model-invocation protocol.
+- Keep chat's deterministic local response after exhausted or unsafe model
+  execution.
+- Keep supervisor construction in chat because it owns chat tools and
+  middleware.
 
 ## Completion Evidence
 
-- `ConversationResponseService`, its LangChain supervisor, eval fixtures, and
-  test doubles exchange `BaseMessage` values directly.
-- `ConversationGraphRuntime` constructs `SystemMessage`, `HumanMessage`, and
-  `AIMessage` prompts without an intermediate NuSelf DTO.
-- Optional LangMem extraction receives the same framework-native messages
-  directly.
-- `nuself.agent.messages` and every production/test `ChatMessage` reference
-  were removed.
-- Endpoint-exhaustion logging names the deterministic local response policy,
-  not a local LLM.
-- `.venv/bin/pytest -q`: `1465 passed`.
+- `ConversationResponseSynthesizer` delegates endpoint ordering, success
+  preference, availability classification, and failover diagnostics to
+  `invoke_agent_endpoint`.
+- The shared runner supports validated bounded same-endpoint attempts, a retry
+  predicate, a failover predicate, and a retry observer.
+- Chat protocol failures retry endpoint 0 once and do not invoke endpoint 1.
+- Chat availability failures switch from endpoint 0 to endpoint 1.
+- Any captured tool outcome closes both predicates before another invocation
+  and enters the deterministic local response.
+- `.venv/bin/pytest -q`: `1468 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `76b2feb`.
+`dev/v0.3.x` is published through `627123d`.
 
 ## Next Review Batch
 
-Audit chat response orchestration for convergence with the shared structured
-agent and endpoint failover infrastructure.
+Audit whether chat's tool-enabled supervisor can reuse more of the structured
+agent construction without hiding middleware state.

@@ -19,11 +19,11 @@ from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
+from nuself.agent.failover import invoke_agent_endpoint
 from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
 from nuself.llm import (
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
-    record_llm_endpoint_success,
     redact_llm_error,
 )
 from nuself.logs import write_log_event
@@ -103,49 +103,53 @@ class ConversationResponseSynthesizer:
         self,
         prompt: list[BaseMessage],
     ) -> ChatStructuredOutput:
-        last_error: Exception | None = None
         retry_suppressed = False
-        for position, endpoint in enumerate(self._langchain_models):
-            for attempt in range(2):
-                supervisor = _LangChainChatSupervisor(
-                    endpoint=endpoint,
-                    tools=self._tools,
-                    log_tool_call=self._log_tool_call,
-                    report_tool_log_failure=self._report_tool_log_failure,
-                )
-                try:
-                    response = supervisor.complete(prompt)
-                except Exception as exc:
-                    last_error = exc
-                    if supervisor.has_tool_outcomes:
-                        retry_suppressed = True
-                        self._log_retry_suppressed(endpoint, exc)
-                        break
-                    if (
-                        attempt == 0
-                        and not is_endpoint_availability_error(str(exc))
-                    ):
-                        self._log_retry(endpoint, exc)
-                        continue
-                    remaining = self._langchain_models[position + 1 :]
-                    if remaining:
-                        self._log_failover(
-                            endpoint,
-                            next_endpoint=remaining[0],
-                            error=exc,
-                        )
-                    break
-                else:
-                    record_llm_endpoint_success(
-                        self._project_root,
-                        endpoint.index,
-                    )
-                    return response
+        failed_endpoint = self._langchain_models[0]
+
+        def complete(
+            endpoint: LangChainLLMEndpoint,
+        ) -> ChatStructuredOutput:
+            nonlocal failed_endpoint, retry_suppressed
+            failed_endpoint = endpoint
+            supervisor = _LangChainChatSupervisor(
+                endpoint=endpoint,
+                tools=self._tools,
+                log_tool_call=self._log_tool_call,
+                report_tool_log_failure=self._report_tool_log_failure,
+            )
+            try:
+                return supervisor.complete(prompt)
+            except Exception:
+                if supervisor.has_tool_outcomes:
+                    retry_suppressed = True
+                raise
+
+        try:
+            return invoke_agent_endpoint(
+                self._langchain_models,
+                complete,
+                project_root=self._project_root,
+                component="chat",
+                attempts_per_endpoint=2,
+                retry_if=lambda exc: (
+                    not retry_suppressed
+                    and not is_endpoint_availability_error(str(exc))
+                ),
+                failover_if=lambda exc: (
+                    not retry_suppressed
+                    and is_endpoint_availability_error(str(exc))
+                ),
+                on_retry=self._log_retry,
+            )
+        except Exception as exc:
             if retry_suppressed:
-                break
-        if last_error is not None and not retry_suppressed:
+                self._log_retry_suppressed(
+                    failed_endpoint,
+                    exc,
+                )
+                return _local_response_output(prompt)
             report_observed_failure(
-                RuntimeError(redact_llm_error(str(last_error))),
+                RuntimeError(redact_llm_error(str(exc))),
                 component="chat",
                 event="llm_endpoints_exhausted",
                 message=(
@@ -192,35 +196,6 @@ class ConversationResponseSynthesizer:
             status="retry",
             metadata=_endpoint_metadata(endpoint),
         )
-
-    def _log_failover(
-        self,
-        endpoint: LangChainLLMEndpoint,
-        *,
-        next_endpoint: LangChainLLMEndpoint,
-        error: Exception,
-    ) -> None:
-        unavailable = is_endpoint_availability_error(str(error))
-        report_observed_failure(
-            RuntimeError(redact_llm_error(str(error))),
-            component="chat",
-            event=(
-                "llm_endpoint_failed_over"
-                if unavailable
-                else "llm_endpoint_error"
-            ),
-            message=(
-                "LLM endpoint failed; trying next configured endpoint"
-            ),
-            project_root=self._project_root,
-            level="warning",
-            status="failed_over" if unavailable else "error",
-            metadata={
-                **_endpoint_metadata(endpoint),
-                "next_endpoint_index": next_endpoint.index,
-            },
-        )
-
 
 class _LangChainChatSupervisor:
     """Runs one chat turn through LangChain's native agent runtime."""

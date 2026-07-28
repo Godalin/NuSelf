@@ -137,6 +137,100 @@ def test_endpoint_state_failure_retries_then_uses_local_fallback(
     assert result.answer.endswith("Last message: hello")
 
 
+def test_protocol_failure_retries_same_endpoint_without_failover(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    endpoint_calls: list[int] = []
+
+    def fail_endpoint(
+        self: _LangChainChatSupervisor,
+        prompt: list[BaseMessage],
+    ) -> None:
+        del prompt
+        endpoint_calls.append(self._endpoint.index)
+        raise ValueError("invalid structured response")
+
+    monkeypatch.setattr(
+        _LangChainChatSupervisor,
+        "complete",
+        fail_endpoint,
+    )
+    endpoints = tuple(
+        LangChainLLMEndpoint(
+            index=index,
+            settings=LLMSettings(
+                base_url=f"https://endpoint-{index}.invalid",
+                api_key="test",
+                model=f"model-{index}",
+            ),
+            model=cast(Any, object()),
+        )
+        for index in range(2)
+    )
+    synthesizer = ConversationResponseSynthesizer(
+        project_root=tmp_path,
+        langchain_models=endpoints,
+        tools=(),
+        log_tool_call=lambda *args, **kwargs: None,
+    )
+
+    result = synthesizer.complete(
+        [HumanMessage(content="hello")]
+    )
+
+    assert endpoint_calls == [0, 0]
+    assert result.answer.endswith("Last message: hello")
+
+
+def test_availability_failure_uses_shared_endpoint_failover(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    endpoint_calls: list[int] = []
+
+    def invoke_endpoint(
+        self: _LangChainChatSupervisor,
+        prompt: list[BaseMessage],
+    ) -> ChatStructuredOutput:
+        del prompt
+        endpoint_calls.append(self._endpoint.index)
+        if self._endpoint.index == 0:
+            raise RuntimeError("HTTP 429 rate limit")
+        return ChatStructuredOutput(answer="backup response")
+
+    monkeypatch.setattr(
+        _LangChainChatSupervisor,
+        "complete",
+        invoke_endpoint,
+    )
+    endpoints = tuple(
+        LangChainLLMEndpoint(
+            index=index,
+            settings=LLMSettings(
+                base_url=f"https://endpoint-{index}.invalid",
+                api_key="test",
+                model=f"model-{index}",
+            ),
+            model=cast(Any, object()),
+        )
+        for index in range(2)
+    )
+    synthesizer = ConversationResponseSynthesizer(
+        project_root=tmp_path,
+        langchain_models=endpoints,
+        tools=(),
+        log_tool_call=lambda *args, **kwargs: None,
+    )
+
+    result = synthesizer.complete(
+        [HumanMessage(content="hello")]
+    )
+
+    assert endpoint_calls == [0, 1]
+    assert result.answer == "backup response"
+
+
 def test_tool_outcome_suppresses_retry_and_endpoint_failover(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

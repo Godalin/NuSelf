@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Chat response now uses the shared agent endpoint runner for bounded
+  same-endpoint retry, availability failover, success preference, and
+  diagnostics. Protocol and structured-output failures retry the current
+  endpoint once but no longer probe another endpoint; any tool outcome still
+  suppresses all replay before the runner can invoke again.
 - Chat runtime and response synthesis no longer accept `llm=` or construct
   `default_llm()`. Missing endpoints, exhausted endpoints, and tool-safe retry
   suppression now enter an explicit deterministic local response policy that
