@@ -229,7 +229,7 @@ def teststep_from_data_filters_non_string_evidence_refs() -> None:
     step = step_from_data(data, "test-thread")
 
     assert step is not None
-    assert step.evidence_refs == ["mem_1"]
+    assert step.evidence_refs == ("mem_1",)
 
 
 def teststep_from_data_rejects_missing_fields() -> None:

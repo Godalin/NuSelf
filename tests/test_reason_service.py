@@ -125,7 +125,7 @@ def test_start_and_list(tmp_path: Path) -> None:
 def test_start_with_evidence(tmp_path: Path) -> None:
     service = _reason_service(repository=ReasonRepository(tmp_path))
     thread = service.start_thread("Test", evidence_refs=("ref-1", "ref-2"))
-    assert thread.evidence_refs == ["ref-1", "ref-2"]
+    assert thread.evidence_refs == ("ref-1", "ref-2")
 
 
 def test_start_thread_records_trace(tmp_path: Path) -> None:
@@ -335,6 +335,5 @@ def _test_step(thread_id: str) -> ReasoningStep:
         delta="Moved forward",
         output="Observable output",
     )
-
 
 

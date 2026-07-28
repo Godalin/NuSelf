@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import cast
 
 from nuself.logs import LogComponent, LogEvent
@@ -218,7 +219,7 @@ def _append_multi_field(
     lines: list[str],
     pad: str,
     tag: str,
-    items: tuple[str, ...] | list[str],
+    items: Sequence[str],
     theme: TerminalTheme,
     *,
     full: bool,

@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The strict persistence JSON and failure-atomicity batch is complete.
+Idle. The persisted Reason read-model ownership batch is complete.
 
 ## Active Branch
 
@@ -22,12 +22,13 @@ code.
 
 ## Completion Evidence
 
-- File JSON replacement validates before creating a temporary file.
-- Invalid SQLite values cannot add columns or replace an existing row.
-- One invalid workspace operation rolls back every earlier write in its batch.
-- Persisted reads reject non-standard non-finite JSON constants as corruption.
-- Focused tests: 109 passed.
-- Full tests: 1225 passed.
+- `ReasoningThread` and `ReasoningStep` detach and recursively freeze
+  collection inputs.
+- Direct nested model mutation fails while `to_wire()` returns detached
+  standard list/dict containers.
+- Existing persisted wire fields and repository round trips remain unchanged.
+- Focused Reason tests: 71 passed.
+- Full tests: 1228 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -37,4 +38,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit persisted read models for detached-container ownership.
+Audit Memory and Trace persisted read models for the same ownership contract.

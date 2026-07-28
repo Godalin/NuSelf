@@ -85,6 +85,19 @@ Properties:
 - `next_steps` — returns `[TrackedItem]` from `next_steps_data`.
 - `mandates` — returns `list[str]` from `mandates_data`.
 
+### Read-Model Collection Ownership
+
+`ReasoningThread` and `ReasoningStep` are immutable persisted read models.
+Their collection-valued fields must not retain aliases to caller-owned
+containers. Construction and wire decoding recursively freeze JSON mappings
+and sequences, including nested tool-log metadata. Direct mutation through a
+model field therefore fails instead of changing an apparently frozen record.
+
+The persisted wire contract remains ordinary JSON lists and objects.
+`to_wire()` returns a recursively detached mutable-container tree; mutating
+that result must not affect the model or a later serialization. Repository
+reads inherit the same contract through `from_wire()`.
+
 ### TrackedItem
 
 | Field         | Type   | Meaning                                   |

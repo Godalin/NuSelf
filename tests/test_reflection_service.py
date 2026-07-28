@@ -49,7 +49,7 @@ def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:
 
     assert thread.topic == entry.title
     assert thread.working_summary == entry.body
-    assert thread.evidence_refs == [f"reflection:{entry.id}"]
+    assert thread.evidence_refs == (f"reflection:{entry.id}",)
     assert repo.get(entry.id).status == "pending"
 
     query = TraceQueryService(tmp_path)

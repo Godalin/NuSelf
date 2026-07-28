@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, TypeAlias, cast
 from uuid import uuid4
 
 from nuself.clock import utc_now, utc_now_iso
+from nuself.runtime import freeze_json_value, thaw_json_value
 
 ReasonStatus: TypeAlias = Literal["active", "paused", "resolved", "archived"]
 StepKind: TypeAlias = Literal["progress", "no_change", "question", "synthesis", "contradiction", "resolution", "planning"]
@@ -30,10 +32,6 @@ def new_step_id() -> str:
     return f"step-{utc_now().strftime('%Y%m%dT%H%M%S%fZ')}-{uuid4().hex[:8]}"
 
 
-def _empty_str_list() -> list[str]:
-    return []
-
-
 @dataclass(frozen=True)
 class TrackedItem:
     """A single tracked item in reasoning state — can represent any kind of active
@@ -49,7 +47,7 @@ class TrackedItem:
         return {"label": self.label, "description": self.description, "kind": self.kind, "status": self.status}
 
     @classmethod
-    def from_wire(cls, data: dict[str, object]) -> TrackedItem:
+    def from_wire(cls, data: Mapping[str, object]) -> TrackedItem:
         raw_label = data.get("label")
         label = str(raw_label) if raw_label is not None else ""
         raw_desc = data.get("description")
@@ -68,16 +66,16 @@ class ReasoningThread:
     topic: str = ""
     status: ReasonStatus = "active"
     working_summary: str = ""
-    evidence_refs: list[str] = field(default_factory=_empty_str_list)
+    evidence_refs: Sequence[str] = ()
     priority: ReasonPriority = "normal"
     last_advanced_at: str | None = None
     next_review_after: str | None = None
     skip_next_advance_until: str | None = None
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
-    active_items_data: tuple[dict[str, object], ...] = ()
-    pending_items_data: tuple[dict[str, object], ...] = ()
-    next_steps_data: tuple[dict[str, object], ...] = ()
+    active_items_data: tuple[Mapping[str, object], ...] = ()
+    pending_items_data: tuple[Mapping[str, object], ...] = ()
+    next_steps_data: tuple[Mapping[str, object], ...] = ()
     mandates_data: tuple[str, ...] = ()
     reasoning_prompt: str = ""
 
@@ -99,6 +97,32 @@ class ReasoningThread:
                 getattr(self, field_name),
                 field_name=field_name,
             )
+        object.__setattr__(
+            self,
+            "evidence_refs",
+            _freeze_str_sequence(self.evidence_refs, field_name="evidence_refs"),
+        )
+        for field_name in (
+            "active_items_data",
+            "pending_items_data",
+            "next_steps_data",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                _freeze_mapping_sequence(
+                    getattr(self, field_name),
+                    field_name=field_name,
+                ),
+            )
+        object.__setattr__(
+            self,
+            "mandates_data",
+            _freeze_str_sequence(
+                self.mandates_data,
+                field_name="mandates_data",
+            ),
+        )
 
     @property
     def active_items(self) -> list[TrackedItem]:
@@ -117,15 +141,15 @@ class ReasoningThread:
         return list(self.mandates_data)
 
     def to_wire(self) -> dict[str, object]:
-        return {
+        record = {
             "id": self.id,
             "topic": self.topic,
             "status": self.status,
             "working_summary": self.working_summary,
-            "active_items_data": [t for t in self.active_items_data],
-            "pending_items_data": [t for t in self.pending_items_data],
-            "next_steps_data": [t for t in self.next_steps_data],
-            "mandates_data": [m for m in self.mandates_data],
+            "active_items_data": self.active_items_data,
+            "pending_items_data": self.pending_items_data,
+            "next_steps_data": self.next_steps_data,
+            "mandates_data": self.mandates_data,
             "reasoning_prompt": self.reasoning_prompt,
             "evidence_refs": self.evidence_refs,
             "priority": self.priority,
@@ -135,6 +159,7 @@ class ReasoningThread:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
+        return cast(dict[str, object], thaw_json_value(record))
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> ReasoningThread:
@@ -186,15 +211,15 @@ class ReasoningStep:
     kind: StepKind = "progress"
     summary: str = ""
     delta: str = ""
-    evidence_refs: list[str] = field(default_factory=_empty_str_list)
+    evidence_refs: Sequence[str] = ()
     output: str = ""
-    tool_logs: tuple[dict[str, object], ...] = ()
+    tool_logs: tuple[Mapping[str, object], ...] = ()
     confidence: float | None = None
     created_at: str = field(default_factory=utc_now_iso)
-    new_findings_data: tuple[dict[str, object], ...] = ()
-    new_pending_data: tuple[dict[str, object], ...] = ()
-    retired_findings_data: tuple[dict[str, object], ...] = ()
-    next_steps_data: tuple[dict[str, object], ...] = ()
+    new_findings_data: tuple[Mapping[str, object], ...] = ()
+    new_pending_data: tuple[Mapping[str, object], ...] = ()
+    retired_findings_data: tuple[Mapping[str, object], ...] = ()
+    next_steps_data: tuple[Mapping[str, object], ...] = ()
     terminal_status: TerminalStatus = "continue"
     terminal_reason: str = ""
 
@@ -207,6 +232,26 @@ class ReasoningStep:
             raise ValueError("step thread_id must not be empty")
         if self.summary.strip() == "":
             raise ValueError("step summary must not be empty")
+        object.__setattr__(
+            self,
+            "evidence_refs",
+            _freeze_str_sequence(self.evidence_refs, field_name="evidence_refs"),
+        )
+        for field_name in (
+            "tool_logs",
+            "new_findings_data",
+            "new_pending_data",
+            "retired_findings_data",
+            "next_steps_data",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                _freeze_mapping_sequence(
+                    getattr(self, field_name),
+                    field_name=field_name,
+                ),
+            )
 
     @property
     def new_findings(self) -> list[TrackedItem]:
@@ -225,7 +270,7 @@ class ReasoningStep:
         return [TrackedItem.from_wire(d) for d in self.next_steps_data]
 
     def to_wire(self) -> dict[str, object]:
-        result: dict[str, object] = {
+        result = {
             "id": self.id,
             "thread_id": self.thread_id,
             "kind": self.kind,
@@ -233,17 +278,17 @@ class ReasoningStep:
             "delta": self.delta,
             "evidence_refs": self.evidence_refs,
             "output": self.output,
-            "tool_logs": [dict(t) for t in self.tool_logs],
+            "tool_logs": self.tool_logs,
             "confidence": self.confidence,
             "created_at": self.created_at,
-            "new_findings_data": [t for t in self.new_findings_data],
-            "new_pending_data": [t for t in self.new_pending_data],
-            "retired_findings_data": [t for t in self.retired_findings_data],
-            "next_steps_data": [t for t in self.next_steps_data],
+            "new_findings_data": self.new_findings_data,
+            "new_pending_data": self.new_pending_data,
+            "retired_findings_data": self.retired_findings_data,
+            "next_steps_data": self.next_steps_data,
             "terminal_status": self.terminal_status,
             "terminal_reason": self.terminal_reason,
         }
-        return result
+        return cast(dict[str, object], thaw_json_value(result))
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> ReasoningStep:
@@ -281,7 +326,10 @@ def partition_steps(items: ReasonStepList, size: int) -> list[ReasonStepList]:
     return result
 
 
-def _optional_tracked_items(data: dict[str, object], field_name: str) -> tuple[dict[str, object], ...]:
+def _optional_tracked_items(
+    data: dict[str, object],
+    field_name: str,
+) -> tuple[Mapping[str, object], ...]:
     value = data.get(field_name)
     if value is None:
         return ()
@@ -340,7 +388,10 @@ def _optional_str_with_default(data: dict[str, object], field_name: str, default
     return default
 
 
-def _optional_tool_logs(data: dict[str, object], field_name: str) -> tuple[dict[str, object], ...]:
+def _optional_tool_logs(
+    data: dict[str, object],
+    field_name: str,
+) -> tuple[Mapping[str, object], ...]:
     value = data.get(field_name)
     if value is None:
         return ()
@@ -352,6 +403,36 @@ def _optional_tool_logs(data: dict[str, object], field_name: str) -> tuple[dict[
             raise ValueError(f"field '{field_name}' must contain objects")
         result.append(cast(dict[str, object], item))
     return tuple(result)
+
+
+def _freeze_str_sequence(
+    value: object,
+    *,
+    field_name: str,
+) -> tuple[str, ...]:
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        raise TypeError(f"field '{field_name}' must be a sequence of strings")
+    items = cast(Sequence[object], value)
+    if not all(isinstance(item, str) for item in items):
+        raise TypeError(f"field '{field_name}' must be a sequence of strings")
+    return tuple(cast(Sequence[str], items))
+
+
+def _freeze_mapping_sequence(
+    value: object,
+    *,
+    field_name: str,
+) -> tuple[Mapping[str, object], ...]:
+    if not isinstance(value, tuple):
+        raise TypeError(f"field '{field_name}' must be a tuple of mappings")
+    items = cast(tuple[object, ...], value)
+    frozen = freeze_json_value(items)
+    if not isinstance(frozen, tuple):
+        raise TypeError(f"field '{field_name}' must contain mappings")
+    frozen_items = cast(tuple[object, ...], frozen)
+    if not all(isinstance(item, Mapping) for item in frozen_items):
+        raise TypeError(f"field '{field_name}' must contain mappings")
+    return cast(tuple[Mapping[str, object], ...], frozen_items)
 
 
 def _optional_float(data: dict[str, object], field_name: str) -> float | None:

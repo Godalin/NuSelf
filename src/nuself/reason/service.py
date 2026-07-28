@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Protocol
 
@@ -30,17 +30,22 @@ def _pick_working_summary(step: ReasoningStep | None, thread: ReasoningThread) -
     return thread.working_summary
 
 
-def _merge_str_lists(existing: list[str], new_items: list[str], *, max_items: int = 10) -> list[str]:
+def _merge_str_lists(
+    existing: Sequence[str],
+    new_items: Sequence[str],
+    *,
+    max_items: int = 10,
+) -> tuple[str, ...]:
     seen = set(existing)
-    merged = existing + [item for item in new_items if item not in seen]
+    merged = (*existing, *(item for item in new_items if item not in seen))
     return merged[-max_items:]
 
 
 def _merge_tracked_items(
-    existing: tuple[dict[str, object], ...],
-    new_items: tuple[dict[str, object], ...],
-    retired: tuple[dict[str, object], ...],
-) -> tuple[dict[str, object], ...]:
+    existing: tuple[Mapping[str, object], ...],
+    new_items: tuple[Mapping[str, object], ...],
+    retired: tuple[Mapping[str, object], ...],
+) -> tuple[Mapping[str, object], ...]:
     retired_labels = {d.get("label", "") for d in retired}
     merged = list(existing)
     merged = [d for d in merged if d.get("label", "") not in retired_labels]
@@ -130,7 +135,7 @@ class ReasonService:
             topic=topic.strip(),
             working_summary=working_summary.strip(),
             priority=priority_value,
-            evidence_refs=list(evidence_refs),
+            evidence_refs=evidence_refs,
             active_items_data=tuple(active_items),
             mandates_data=tuple(mandates),
             reasoning_prompt=reasoning_prompt,
