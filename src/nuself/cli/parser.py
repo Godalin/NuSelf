@@ -85,7 +85,7 @@ from nuself.cli.commands.trace import (
     handle_trace_search,
     handle_trace_show,
 )
-from nuself.cli.handlers import CliHandler, bind_handler, bind_help
+from nuself.cli.handlers import CliHandler, CliHandlerBindings
 from nuself.cli.repl.commands import handle_reason_watch
 from nuself.logs import LOG_COMPONENTS
 from nuself.trace.domain import TRACE_KINDS
@@ -99,16 +99,22 @@ class EntrypointHandlers:
     open_thread: CliHandler
 
 
-def _add_log_arguments(parser: argparse.ArgumentParser) -> None:
+def _add_log_arguments(
+    parser: argparse.ArgumentParser,
+    bindings: CliHandlerBindings,
+) -> None:
     parser.add_argument("--component", choices=list(LOG_COMPONENTS), default=None)
     parser.add_argument("--tail", type=int, default=50)
     parser.add_argument("--follow", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--no-color", action="store_true")
-    bind_handler(parser, handle_logs)
+    bindings.bind(parser, handle_logs)
 
 
 def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
+    bindings = CliHandlerBindings()
+    bind_handler = bindings.bind
+    bind_help = bindings.bind_help
     parser = argparse.ArgumentParser(prog="nuself")
     parser.add_argument("--version", action="version", version=f"nuself {__version__}")
     parser.add_argument("--project-root", type=Path, default=None)
@@ -150,8 +156,7 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         handle_daemon_list,
     )
     daemon_logs_parser = daemon_subparsers.add_parser("logs", help="Show daemon logs.")
-    _add_log_arguments(daemon_logs_parser)
-    bind_handler(daemon_logs_parser, handle_logs)
+    _add_log_arguments(daemon_logs_parser, bindings)
     daemon_attach_parser = daemon_subparsers.add_parser(
         "attach", help="Attach chat to the running daemon."
     )
@@ -175,7 +180,7 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     attach_parser.add_argument("--message", "-m", default=None)
     bind_handler(attach_parser, handlers.attach)
 
-    add_memory_parser(subparsers)
+    add_memory_parser(subparsers, bindings)
 
     thread_parser = subparsers.add_parser(
         "thread",
@@ -554,8 +559,7 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         handle_config,
     )
     dev_logs_parser = dev_subparsers.add_parser("logs", help="Show structured logs.")
-    _add_log_arguments(dev_logs_parser)
-    bind_handler(dev_logs_parser, handle_logs)
+    _add_log_arguments(dev_logs_parser, bindings)
     dev_eval_parser = dev_subparsers.add_parser("eval", help="Run evaluation fixtures.")
     dev_eval_parser.add_argument("--fixtures", type=Path, default=None)
     dev_eval_parser.add_argument(
@@ -632,4 +636,5 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     )
     bind_handler(pack_inspect_parser, handle_pack_inspect)
 
+    bindings.seal(parser)
     return parser

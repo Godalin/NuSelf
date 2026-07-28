@@ -44,14 +44,24 @@ and a sealed shared registry performs dispatch.
 - Initial inspection finds daemon requests and REPL commands already use
   `HandlerRegistry`, while one-shot argparse embeds raw callables in parsed
   namespaces.
-- The one-shot parser currently has 103 handler bindings across the root and
-  Memory parser modules.
-- Pending full inventory, design, implementation, and verification.
+- Initial inventory found 103 handler bindings across the root and Memory
+  parser modules.
+- `CliHandlerBindings` now derives stable keys from complete parser `prog`
+  values, composes one registry per parser tree, and seals it before returning
+  the root parser.
+- Parsed namespaces contain `handler_key` only; dispatch resolves through the
+  sealed registry and retains strict integer exit-status validation.
+- Registry composition exposed and removed two duplicate log-command
+  bindings that argparse previously overwrote silently, leaving 101 unique
+  one-shot command handlers.
+- Focused CLI suite: `315 passed`.
+- Full test suite: `2007 passed`.
+- Pyright: `0 errors, 0 warnings, 0 informations`.
+- `git diff --check` passed.
 
 ## Publication
 
-Closed job message contracts were implemented in `2c74e2d`; publication is
-pending the milestone commit and push.
+Pending this batch's implementation commit and push.
 
 ## Next Review Batch
 

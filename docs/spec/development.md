@@ -223,8 +223,21 @@ under the same package.
 - `cli/parser.py` owns top-level parser construction and accepts only dynamic
   chat launch-policy callbacks through `EntrypointHandlers`; it never imports
   `nuself.cli`.
-- `cli/handlers.py` owns typed argparse handler binding, help-only group
-  binding, and exit-status validation at the single CLI dispatch boundary.
+- `cli/handlers.py` owns one-shot handler composition. `CliHandlerBindings`
+  derives stable command keys from each parser's complete `prog`, registers
+  the callable in one shared `HandlerRegistry`, and stores only the key in
+  argparse defaults. After the parser tree is complete, the bindings seal the
+  registry and attach it to the root parser.
+- Parsed `argparse.Namespace` values never carry handler callables. Runtime
+  dispatch reads the stable key and uses the sealed registry; missing,
+  unsealed, duplicate, and unknown bindings fail through the shared handler
+  errors rather than falling back to dynamic `callable(...)` checks.
+- Help-only groups store no handler key and retain their selected parser for
+  presentation. The single CLI dispatch boundary still rejects booleans and
+  all non-integer exit statuses.
+- Parser construction has no process-global handler registry. Repeated parser
+  builds in tests or embedded callers compose independent sealed registries,
+  including dependency-injected entrypoint controller methods.
 - `cli/entrypoints.py` owns the launch policy for the default, `chat`,
   `attach`, and `open` entrypoints: daemon startup/selection,
   require-daemon handling, deep-link/thread preparation, and the choice

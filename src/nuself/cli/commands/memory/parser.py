@@ -58,11 +58,16 @@ from nuself.cli.commands.memory.source import (
     handle_memory_source_search,
     handle_memory_source_show,
 )
-from nuself.cli.handlers import bind_handler, bind_help
+from nuself.cli.handlers import CliHandlerBindings
 from nuself.domain.memory import default_relation_descriptor_registry
 
 
-def add_memory_parser(subparsers: Any) -> None:
+def add_memory_parser(
+    subparsers: Any,
+    bindings: CliHandlerBindings,
+) -> None:
+    bind_handler = bindings.bind
+    bind_help = bindings.bind_help
     memory_parser = subparsers.add_parser(
         "memory",
         help="Manage memory entries, sources, profiles, reviews, and the memory graph.",
