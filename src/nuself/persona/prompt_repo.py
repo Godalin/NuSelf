@@ -11,7 +11,10 @@ from typing import cast
 from uuid import uuid4
 
 from nuself.config import find_project_root, runtime_paths
-from nuself.runtime.observability import decode_observed_record
+from nuself.runtime.observability import (
+    decode_observed_record,
+    report_corrupt_record,
+)
 from nuself.storage import StorageBackend, auto_backend
 
 _REPO_LOCKS_LOCK = threading.Lock()
@@ -127,7 +130,8 @@ class PersonaPromptRepository:
 
     def get_by_name(self, name: str) -> PersonaPrompt | None:
         if self._mode == "legacy_file":
-            return self._legacy_get_by_name(name)
+            with self._lock:
+                return self._legacy_get_by_name(name)
         for p in self.list():
             if p.name == name:
                 return p
@@ -175,7 +179,7 @@ class PersonaPromptRepository:
     def _legacy_save(self, prompt: PersonaPrompt) -> None:
         self._root.mkdir(parents=True, exist_ok=True)
         _write_json_atomic(self._root / f"{prompt.id}.json", prompt.to_wire())
-        self._legacy_update_name_index(prompt)
+        self._legacy_rebuild_name_index()
 
     def _legacy_get(self, prompt_id: str) -> PersonaPrompt | None:
         path = self._root / f"{prompt_id}.json"
@@ -221,34 +225,73 @@ class PersonaPromptRepository:
         self._legacy_rebuild_name_index()
 
     def _legacy_load_name_index(self) -> dict[str, str]:
+        projected = self._legacy_project_name_index()
         path = self._root / "name_index.json"
         if not path.exists():
-            return {}
+            if self._root.exists():
+                _write_json_atomic(
+                    path,
+                    cast("dict[str, object]", dict(projected)),
+                )
+            return projected
         try:
             raw: object = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(raw, dict):
-                result: dict[str, str] = {}
-                for k, v in cast("dict[str, object]", raw).items():
-                    if isinstance(v, str):
-                        result[k] = v
-                return result
-        except (OSError, json.JSONDecodeError):
-            pass
-        return {}
+            if not isinstance(raw, dict):
+                raise ValueError("persona name index must be a JSON object")
+            index: dict[str, str] = {}
+            for name, prompt_id in cast(
+                "dict[str, object]",
+                raw,
+            ).items():
+                if not isinstance(prompt_id, str):
+                    raise ValueError(
+                        "persona name index values must be strings"
+                    )
+                index[name] = prompt_id
+            if index != projected:
+                raise ValueError(
+                    "persona name index does not match prompt records"
+                )
+            return index
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+            report_corrupt_record(
+                exc,
+                component="persona",
+                collection="persona_prompt_name_index",
+                record_id="name_index",
+                project_root=self._project_root,
+            )
+            _write_json_atomic(
+                path,
+                cast("dict[str, object]", dict(projected)),
+            )
+            return projected
 
-    def _legacy_update_name_index(self, prompt: PersonaPrompt) -> None:
-        index = self._legacy_load_name_index()
-        index[prompt.name] = prompt.id
-        _write_json_atomic(self._root / "name_index.json", cast("dict[str, object]", dict(index)))
-
-    def _legacy_rebuild_name_index(self) -> None:
+    def _legacy_project_name_index(self) -> dict[str, str]:
         index: dict[str, str] = {}
-        for path in self._root.iterdir():
+        if not self._root.exists():
+            return index
+        for path in sorted(self._root.iterdir()):
             if path.suffix == ".json" and path.name != "name_index.json":
                 prompt = self._decode_legacy_prompt(path)
                 if prompt is not None:
+                    previous = index.get(prompt.name)
+                    if previous is not None and previous != prompt.id:
+                        raise ValueError(
+                            "duplicate persona prompt name "
+                            f"{prompt.name!r}: {previous}, {prompt.id}"
+                        )
                     index[prompt.name] = prompt.id
-        _write_json_atomic(self._root / "name_index.json", cast("dict[str, object]", dict(index)))
+        return index
+
+    def _legacy_rebuild_name_index(self) -> dict[str, str]:
+        index = self._legacy_project_name_index()
+        if self._root.exists():
+            _write_json_atomic(
+                self._root / "name_index.json",
+                cast("dict[str, object]", dict(index)),
+            )
+        return index
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────

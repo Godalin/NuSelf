@@ -54,6 +54,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Thread-scoped persona name indexes are now validated against authoritative
+  prompt files and atomically rebuilt when missing, malformed, or stale;
+  renaming a prompt no longer leaves its old name as an alias.
 - Recoverable memory-curator auto-accept failures now retain the durable pending
   candidate and emit `memory/auto_accept_failed`; unexpected storage or
   programming failures still propagate instead of being broadly suppressed.
