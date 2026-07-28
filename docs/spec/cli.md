@@ -107,6 +107,11 @@ interactive input state.
   suppression cannot leak between concurrent or sequential REPL connections.
 - Input fallback, command completion, and visible header behavior remain
   unchanged.
+- Dynamic thread/reason completion and persisted input history are optional UI
+  effects. Their failure yields no storage-backed suggestions or skips the
+  history write, but never rejects an already accepted input line. Each failure
+  is reported through the shared observable best-effort boundary; local broad
+  exception suppression is not allowed.
 - Tests and embedded callers may construct two sessions in one process without
   requiring a global reset hook.
 

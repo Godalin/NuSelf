@@ -20,16 +20,35 @@ from nuself.cli.repl.registry import (
     tokens_for,
 )
 from nuself.config import ensure_runtime_dirs, runtime_paths
+from nuself.runtime.observability import run_observed_best_effort
 
 
 class DedupFileHistory(FileHistory):
     """FileHistory that skips consecutive duplicate entries."""
 
+    def __init__(
+        self,
+        filename: str,
+        *,
+        project_root: Path | None,
+    ) -> None:
+        super().__init__(filename)
+        self._project_root = project_root
+
     def append_string(self, string: str) -> None:
+        run_observed_best_effort(
+            lambda: self._append_string(string),
+            component="chat",
+            event="interactive_history_write_failed",
+            message="Failed to persist interactive input history",
+            project_root=self._project_root,
+        )
+
+    def _append_string(self, string: str) -> None:
         loaded = self.get_strings()
         if loaded and loaded[-1] == string:
             return
-        super().append_string(string)
+        FileHistory.append_string(self, string)
 
 
 _PROMPT_STYLE = Style.from_dict({
@@ -104,27 +123,52 @@ class InteractiveCompleter(Completer):
                 yield Completion(f"{cmd} ", start_position=-len(word), display=cmd, display_meta=desc)
 
     def _all_thread_ids_with_status(self) -> list[str]:
-        try:
+        def load() -> list[str]:
             from nuself.reason.repository import ReasonRepository
+
             repo = ReasonRepository(self._project_root)
             return [f"{t.id} ({t.status}, {t.topic[:40]})" for t in repo.list_threads(status="all")]
-        except Exception:
-            return []
+
+        return (
+            run_observed_best_effort(
+                load,
+                component="reasoning",
+                event="completion_load_failed",
+                message="Failed to load reason thread completions",
+                project_root=self._project_root,
+                metadata={"completion": "reason_threads"},
+            )
+            or []
+        )
 
     def _thread_completions(self, word: str) -> Iterable[Completion]:
-        try:
-            threads = ThreadStore(self._project_root).list()
-        except Exception:
-            return ()
+        threads = (
+            run_observed_best_effort(
+                lambda: ThreadStore(self._project_root).list(),
+                component="chat",
+                event="completion_load_failed",
+                message="Failed to load thread completions",
+                project_root=self._project_root,
+                metadata={"completion": "threads"},
+            )
+            or []
+        )
         for t in threads:
             if t.startswith(word):
                 yield Completion(t, start_position=-len(word))
 
     def _archived_thread_completions(self, word: str) -> Iterable[Completion]:
-        try:
-            threads = ThreadStore(self._project_root).list_archived()
-        except Exception:
-            return ()
+        threads = (
+            run_observed_best_effort(
+                lambda: ThreadStore(self._project_root).list_archived(),
+                component="chat",
+                event="completion_load_failed",
+                message="Failed to load archived thread completions",
+                project_root=self._project_root,
+                metadata={"completion": "archived_threads"},
+            )
+            or []
+        )
         for t in threads:
             if t.startswith(word):
                 yield Completion(t, start_position=-len(word))
@@ -137,7 +181,10 @@ class InteractiveInput:
         paths = runtime_paths(project_root)
         ensure_runtime_dirs(paths)
         history_path = paths.runtime_dir / "interactive_history"
-        self.history: FileHistory = DedupFileHistory(str(history_path))
+        self.history: FileHistory = DedupFileHistory(
+            str(history_path),
+            project_root=project_root,
+        )
         self.completer = InteractiveCompleter(project_root)
 
     def read(self) -> str:

@@ -1,8 +1,12 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+from prompt_toolkit.history import FileHistory
+
 from nuself.cli.repl.input import InteractiveInput
 from nuself.cli.repl.session import InteractiveSession
+from nuself.logs import read_log_events
 
 
 def test_interactive_input_instances_do_not_share_mutable_objects(
@@ -31,3 +35,25 @@ def test_header_suppression_is_scoped_to_session() -> None:
         thread_id="default",
         daemon_status="running",
     )
+
+
+def test_builtin_input_survives_history_persistence_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interactive_input = InteractiveInput(tmp_path)
+
+    def fail_history(self: FileHistory, line: str) -> None:
+        raise OSError("history file unavailable")
+
+    def fake_input(prompt: str) -> str:
+        return "accepted line"
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    monkeypatch.setattr("builtins.input", fake_input)
+    monkeypatch.setattr(FileHistory, "append_string", fail_history)
+
+    assert interactive_input.read() == "accepted line"
+    event = read_log_events(project_root=tmp_path, component="chat")[-1]
+    assert event.event == "interactive_history_write_failed"
+    assert event.error == "history file unavailable"

@@ -54,6 +54,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- REPL dynamic completion and input-history persistence failures are now
+  observable degraded events; they no longer fail silently or discard a line
+  already accepted through the builtin input fallback.
 - Interactive `:history` now distinguishes an empty thread from malformed or
   unreadable persisted state, and daemon chat timeout lookup no longer hides
   unexpected configuration loader failures behind the 120-second default.
