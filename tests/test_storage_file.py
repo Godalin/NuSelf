@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from nuself.logs import read_log_events
-from nuself.storage import FileStorageBackend
+from nuself.storage import FileStorageBackend, write_text_atomic
 
 
 @pytest.mark.parametrize(
@@ -37,3 +37,42 @@ def test_file_collection_lists_isolate_corrupt_json_but_get_surfaces_it(
     }
     with pytest.raises(error_type):
         collection.get("corrupt")
+
+
+def test_write_text_atomic_replaces_complete_destination(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "runtime" / "state.txt"
+    path.parent.mkdir()
+    path.write_text("old", encoding="utf-8")
+
+    write_text_atomic(path, "new\n")
+
+    assert path.read_text(encoding="utf-8") == "new\n"
+    assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_write_text_atomic_failure_preserves_destination_and_cleans_temp(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "runtime" / "state.txt"
+    path.parent.mkdir()
+    path.write_text("old", encoding="utf-8")
+    original_replace = Path.replace
+
+    def fail_destination_replace(
+        source: Path,
+        target: Path,
+    ) -> Path:
+        if target == path:
+            raise OSError("replace failed")
+        return original_replace(source, target)
+
+    monkeypatch.setattr(Path, "replace", fail_destination_replace)
+
+    with pytest.raises(OSError, match="replace failed"):
+        write_text_atomic(path, "new")
+
+    assert path.read_text(encoding="utf-8") == "old"
+    assert list(path.parent.glob("*.tmp")) == []

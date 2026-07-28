@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Give each project root one cross-process daemon owner so concurrent starts
-cannot unlink or replace a live daemon's socket and PID resources.
+Make daemon PID metadata atomically published and observably decoded so
+malformed lifecycle state cannot silently appear identical to a stopped daemon.
 
 ## Active Branch
 
@@ -14,34 +14,33 @@ cannot unlink or replace a live daemon's socket and PID resources.
 
 ## Ordered Work
 
-1. [x] Audit daemon PID, socket, startup, and shutdown ownership.
-2. [x] Specify a stable per-project daemon instance lock.
-3. [x] Acquire the lock before touching socket or PID resources.
-4. [x] Make lock contention observable and return non-zero without constructing
-   daemon state or modifying the current owner's resources.
-5. [x] Keep socket/PID cleanup inside the lock owner's `finally` boundary,
-   including partial startup failures.
-6. [x] Start workers only after the Unix server binds successfully.
+1. [x] Audit PID publication, status reads, and stop escalation use.
+2. [x] Specify missing, malformed, and unreadable PID semantics.
+3. [x] Add one shared atomic text writer and publish the owner PID through it.
+4. [x] Accept only a positive base-10 integer after surrounding whitespace.
+5. [x] Report empty, non-integer, zero, and negative PID files through the
+   shared payload-safe corruption boundary, then return no PID.
+6. [x] Preserve propagation for non-missing filesystem failures.
 7. [x] Run focused/full tests, type checking, and formatting checks.
 8. [x] Update user-facing docs/changelog and commit this stage.
 
 ## Out Of Scope
 
-- Changing daemon protocol, request handlers, or client retry behavior.
-- Automatically killing an existing process based on PID contents.
+- Changing daemon instance-lock or socket ownership behavior.
+- Verifying PID process identity through `kill(pid, 0)` or process metadata.
+- Automatically deleting a malformed PID file.
 - Changing CLI start polling duration or stop escalation policy.
-- Strictly validating PID contents in this same commit.
 
 ## Completion Evidence
 
-- The first daemon holds an exclusive lock for its complete owned lifecycle.
-- A second daemon returns non-zero, emits `instance_lock_contended`, and leaves
-  the first daemon's socket and PID files unchanged.
-- A lock becomes acquirable after the owner releases it.
-- Stale socket/PID resources are removed only after ownership is acquired.
-- Bind or partial startup failures still stop started workers and clean owned
-  socket/PID resources before releasing the lock.
-- Focused daemon tests, full pytest, Pyright, and `git diff --check` pass.
+- Missing PID state returns `None` without a warning.
+- A valid positive PID round-trips through atomic owner publication.
+- Empty, non-integer, zero, and negative content each returns `None` and emits
+  one `record_decode_failed` event without echoing file contents.
+- Directory, permission, and other non-missing read failures propagate.
+- Failed atomic publication leaves no partial destination or temporary file.
+- Focused lifecycle/storage tests, full pytest, Pyright, and
+  `git diff --check` pass.
 
 ## Publication
 
@@ -49,5 +48,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit daemon PID parsing and start/stop status reporting for observable stale or
-malformed lifecycle metadata.
+Audit daemon start/stop polling and PID-to-process identity assumptions.

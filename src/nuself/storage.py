@@ -125,14 +125,13 @@ def _list_json_record(
         return None
 
 
-def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
+def write_text_atomic(path: Path, text: str) -> None:
+    """Replace one UTF-8 text file without exposing partial destination data."""
+
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
     try:
-        tmp_path.write_text(
-            json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n",
-            encoding="utf-8",
-        )
+        tmp_path.write_text(text, encoding="utf-8")
         tmp_path.replace(path)
     except Exception:
         try:
@@ -140,6 +139,19 @@ def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
         except FileNotFoundError:
             pass
         raise
+
+
+def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
+    write_text_atomic(
+        path,
+        json.dumps(
+            payload,
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=True,
+        )
+        + "\n",
+    )
 
 
 class _FileCollection:

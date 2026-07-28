@@ -257,6 +257,18 @@ construct daemon state or modify socket/PID resources. Unix-server binding must
 complete before background workers start. Any bind or partial-start failure
 still runs owner cleanup before the lock is released.
 
+### PID Metadata
+
+The lock owner publishes `private/runtime/nuself.pid` through atomic text-file
+replacement. A valid PID record is one positive base-10 integer; surrounding
+whitespace is ignored.
+
+Missing PID state is the normal stopped/starting boundary and returns no PID
+without a diagnostic. Empty, non-integer, zero, or negative content is corrupt
+derived lifecycle metadata: readers emit a payload-safe
+`record_decode_failed` event and return no PID. Non-missing filesystem failures
+such as permission errors remain authoritative IO failures and propagate.
+
 ## Migration Order
 
 1. Add and test the shared handler registry; migrate daemon request dispatch.

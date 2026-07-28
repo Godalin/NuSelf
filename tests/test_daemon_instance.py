@@ -129,6 +129,8 @@ def test_bind_failure_starts_no_workers_and_cleans_owned_resources(
         handler: object,
         state: object,
     ) -> object:
+        assert int(paths.pid_path.read_text(encoding="utf-8")) > 0
+        assert list(paths.runtime_dir.glob("nuself.pid.*.tmp")) == []
         raise OSError("bind failed")
 
     def ignore_signal(

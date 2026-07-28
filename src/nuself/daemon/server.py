@@ -48,6 +48,7 @@ from nuself.reflection import ReflectionScheduler
 from nuself.runtime.jobs import JobMessage
 from nuself.runtime.observability import format_exception_chain
 from nuself.runtime.workers import OwnedWorker
+from nuself.storage import write_text_atomic
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
 
@@ -880,7 +881,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
 
     if paths.socket_path.exists():
         paths.socket_path.unlink()
-    paths.pid_path.write_text(f"{os.getpid()}\n", encoding="utf-8")
+    write_text_atomic(paths.pid_path, f"{os.getpid()}\n")
 
     state: DaemonState | None = None
     started = False

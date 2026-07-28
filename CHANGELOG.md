@@ -54,6 +54,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Daemon PID metadata is now atomically published and strictly decoded.
+  Malformed, empty, zero, or negative PID files emit a payload-safe diagnostic
+  instead of silently looking identical to a missing PID file.
 - Daemon startup now holds a per-project cross-process instance lock before
   touching socket or PID resources. Concurrent starts no longer risk deleting
   a live daemon's socket; the contender exits visibly without modifying the

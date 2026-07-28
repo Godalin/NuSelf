@@ -12,6 +12,7 @@ import time
 
 from nuself.config import RuntimePaths, ensure_runtime_dirs, runtime_paths
 from nuself.daemon import client
+from nuself.runtime.observability import report_corrupt_record
 
 
 @dataclass(frozen=True)
@@ -84,10 +85,21 @@ def read_pid(paths: RuntimePaths) -> int | None:
         raw_pid = paths.pid_path.read_text(encoding="utf-8").strip()
     except FileNotFoundError:
         return None
-    if raw_pid == "":
+    if not raw_pid.isascii() or not raw_pid.isdecimal():
+        _report_invalid_pid(paths)
         return None
-    try:
-        return int(raw_pid)
-    except ValueError:
+    pid = int(raw_pid)
+    if pid <= 0:
+        _report_invalid_pid(paths)
         return None
+    return pid
 
+
+def _report_invalid_pid(paths: RuntimePaths) -> None:
+    report_corrupt_record(
+        ValueError("daemon PID metadata is invalid"),
+        component="daemon",
+        collection="daemon_runtime",
+        record_id=paths.pid_path.stem,
+        project_root=paths.project_root,
+    )
