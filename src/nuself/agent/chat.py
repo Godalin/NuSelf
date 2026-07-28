@@ -26,6 +26,8 @@ from nuself.agent.chat_types import (
     ConversationNodeResult,
     ConversationTurnState,
 )
+from nuself.agent.chat_context import ConversationContextPreparer
+from nuself.agent.chat_state import ConversationStateManager
 from nuself.agent.skills import AgentSkill, load_agent_skills, render_tool_placeholders
 from nuself.agent.thread import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.tools import build_langchain_chat_tools
@@ -143,6 +145,13 @@ class ConversationGraphRuntime:
             MemoryEntryRepository(project_root),
             SourceRepository(project_root),
             ProfileItemRepository(project_root),
+        )
+        self._context_preparer = ConversationContextPreparer(
+            self._memory_query_service
+        )
+        self._state_manager = ConversationStateManager(
+            llm=self._llm,
+            settings=self._settings,
         )
         from nuself.reflection.repository import ReflectionRepository
 
@@ -320,18 +329,7 @@ class ConversationGraphRuntime:
     # ------------------------------------------------------------------
 
     def prepare_context_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        base_messages = tuple(_messages_for_prompt_context(state.persisted_state.messages))
-        active_messages = (*base_messages, ThreadMessage(role="user", content=state.user_message, turn_id=state.turn_id))
-        packed_memory = self._memory_query_service.pack(MemoryQuery(text=state.user_message))
-        return ConversationNodeResult(
-            state=replace(
-                state,
-                base_messages=base_messages,
-                active_messages=active_messages,
-                memory_context=packed_memory.text,
-                node_trace=(*state.node_trace, "prepare_context"),
-            ),
-        )
+        return self._context_preparer.prepare(state)
 
     def respond_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         prompt = self._build_prompt(state)
@@ -351,32 +349,10 @@ class ConversationGraphRuntime:
         )
 
     def state_update_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        updated = ThreadState(
-            thread_id=state.thread_id,
-            summary=state.persisted_state.summary,
-            messages=list(state.saved_messages),
-            message_start_index=state.persisted_state.message_start_index,
-            next_message_index=(
-                state.persisted_state.next_message_index + len(state.saved_messages) - len(state.base_messages)
-            ),
-        )
-        return ConversationNodeResult(
-            state=replace(
-                state,
-                updated_thread_state=updated,
-                node_trace=(*state.node_trace, "state_update"),
-            ),
-        )
+        return self._state_manager.update(state)
 
     def compression_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        updated = _require_thread_state(state.updated_thread_state)
-        return ConversationNodeResult(
-            state=replace(
-                state,
-                updated_thread_state=self._compress_if_needed(updated),
-                node_trace=(*state.node_trace, "compression"),
-            ),
-        )
+        return self._state_manager.compress(state)
 
     # ------------------------------------------------------------------
     # Prompt building
@@ -712,42 +688,6 @@ class ConversationGraphRuntime:
     # State management
     # ------------------------------------------------------------------
 
-    def _compress_if_needed(self, state: ThreadState) -> ThreadState:
-        if len(state.messages) <= self._settings.summary_trigger_messages:
-            return state
-        recent = state.messages[-self._settings.recent_messages :]
-        older = state.messages[: -self._settings.recent_messages]
-        summary = self._summarize(state.summary, older)
-        return ThreadState(
-            thread_id=state.thread_id,
-            summary=summary,
-            messages=recent,
-            message_start_index=state.next_message_index - len(recent),
-            next_message_index=state.next_message_index,
-        )
-
-    def _summarize(self, previous_summary: str, messages: list[ThreadMessage]) -> str:
-        transcript = "\n".join(f"{message.role}: {message.content}" for message in messages)
-        prompt = [
-            ChatMessage(
-                role="system",
-                content=(
-                    "Compress a private NuSelf conversation into durable context. "
-                    "Preserve user preferences, decisions, unresolved questions, and useful facts. "
-                    "Do not add new facts."
-                ),
-            ),
-            ChatMessage(
-                role="user",
-                content=f"Previous summary:\n{previous_summary or '(none)'}\n\nNew transcript:\n{transcript}",
-            ),
-        ]
-        try:
-            summary = self._llm.complete(prompt).strip()
-        except RuntimeError:
-            summary = _local_summary(previous_summary, transcript, self._settings.summary_target_chars)
-        return summary[: self._settings.summary_target_chars]
-
     # ------------------------------------------------------------------
     # Tool logging
     # ------------------------------------------------------------------
@@ -925,13 +865,6 @@ def _split_prompt(prompt: list[ChatMessage]) -> tuple[str | None, list[BaseMessa
 # ======================================================================
 
 
-def _local_summary(previous_summary: str, transcript: str, target_chars: int) -> str:
-    combined = "\n\n".join(part for part in [previous_summary, transcript] if part != "")
-    if len(combined) <= target_chars:
-        return combined
-    return combined[-target_chars:]
-
-
 def _compact_persona_summary(turn_state: "PersonaTurnState") -> str:
     parts: list[str] = []
     for contrib in turn_state.contributions:
@@ -973,10 +906,6 @@ def _format_selves_consult_result(
     if discussion_note:
         lines.append(discussion_note.strip())
     return "\n".join(lines)
-
-
-def _messages_for_prompt_context(messages: list[ThreadMessage]) -> list[ThreadMessage]:
-    return [message for message in messages if not (message.role == "assistant" and message.content.startswith("LLM API is not configured yet."))]
 
 
 def _require_thread_state(state: ThreadState | None) -> ThreadState:
