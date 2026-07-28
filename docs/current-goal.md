@@ -49,7 +49,7 @@ Bound daemon raw process output without blocking daemon startup.
 
 ## Publication
 
-`dev/v0.3.x` is ready to publish through implementation commit `ff1cafc`.
+`dev/v0.3.x` is published through implementation commit `ff1cafc`.
 
 ## Next Review Batch
 
