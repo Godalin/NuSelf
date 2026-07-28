@@ -525,11 +525,11 @@ Supported entry types:
 
 ## Project Docs
 
-- [Architecture](docs/design/architecture.md)
-- [Development plan](docs/development-plan.md)
-- [Agent framework plan](docs/design/agent.md)
-- [Interaction layer plan](docs/design/interaction.md)
+- [Current architecture](docs/architecture.md)
 - [System specifications](docs/spec/) — behavioral contracts for CLI, memory, reflection, notifications, etc.
+- [Active development goal](docs/current-goal.md)
+- [Unresolved backlog](docs/TODOs.md)
+- [Changelog](CHANGELOG.md)
 - [Agent instructions](AGENTS.md)
 
 ## Development Policy

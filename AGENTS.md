@@ -24,6 +24,7 @@ An AI mirror for deep personal discussion — someone with similar life experien
 
 - [`docs/current-goal.md`](docs/current-goal.md) — active objective, ordered work, and completion evidence
 - [`docs/TODOs.md`](docs/TODOs.md) — unresolved medium/long-term backlog
+- [`docs/architecture.md`](docs/architecture.md) — current system boundaries and design rationale
 - [`docs/spec/development.md`](docs/spec/development.md) — code standards, commit policy, architecture direction
 - [`docs/spec/cli.md`](docs/spec/cli.md) — CLI/REPL output contracts
 - [`docs/spec/memory.md`](docs/spec/memory.md) — memory system behavioral contracts

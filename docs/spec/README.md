@@ -31,6 +31,7 @@ This directory contains the authoritative behavioral specifications for NuSelf. 
 
 - Specs are authoritative. A behavioral change is not complete until the spec is updated.
 - When adding a new subsystem, create a new spec file and register it here.
-- Current architecture rationale lives in `docs/architecture.md`. Historical
+- Current architecture rationale lives in
+  [`../architecture.md`](../architecture.md). Historical
   plans remain available through Git history rather than as parallel active
   behavior documents.

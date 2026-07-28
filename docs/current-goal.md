@@ -21,9 +21,9 @@ active development progress.
 2. [x] Repair specification indexes, status labels, and internal links.
 3. [x] Reduce `TODOs.md` to unresolved backlog and remove the completed
    milestone plan from active documentation.
-4. [ ] Replace overlapping historical design documents with one concise
+4. [x] Replace overlapping historical design documents with one concise
    current architecture document.
-5. [ ] Update English/Chinese README and `AGENTS.md` navigation.
+5. [x] Update English/Chinese README and `AGENTS.md` navigation.
 6. [ ] Run link, anchor, spec-index, formatting, and repository validation.
 7. [ ] Commit in reviewable stages and push `dev/v0.3.x`.
 
