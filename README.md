@@ -20,6 +20,10 @@ Approval-gated tools keep prompting and tool results authoritative when
 secondary audit storage is unavailable; the failure is reported through
 structured degraded diagnostics or a runtime warning.
 
+Process-local log observers are isolated from business operations and from one
+another. If both an observer and its structured failure record fail, NuSelf
+emits a terminal runtime warning rather than silently losing the diagnostic.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).

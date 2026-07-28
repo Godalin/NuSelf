@@ -7,6 +7,7 @@ from nuself.runtime.context import (
     runtime_context,
     use_runtime_context,
 )
+from nuself.runtime.diagnostics import emit_runtime_warning
 from nuself.runtime.event_definitions import (
     CORE_EVENT_DEFINITIONS,
     DuplicateEventDefinitionError,
@@ -77,6 +78,7 @@ __all__ = [
     "current_runtime_context",
     "decode_json_value",
     "encode_json_value",
+    "emit_runtime_warning",
     "freeze_json_value",
     "runtime_context",
     "thaw_json_value",

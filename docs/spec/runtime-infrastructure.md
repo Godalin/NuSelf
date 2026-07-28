@@ -547,6 +547,12 @@ operation. It records the failure through the structured log sink and falls
 back to Python warnings only when that sink is unavailable. Domains must not
 implement equivalent broad `try/except/pass` wrappers locally.
 
+`nuself.runtime.diagnostics.emit_runtime_warning` is the terminal warning
+primitive for that fallback and other non-authoritative observers. It catches
+warning filters or hooks that promote or fail `RuntimeWarning`, so
+process-global warning policy cannot replace the primary result or exception.
+It does not retry or recursively report its own failure.
+
 The caller may declare a narrower tuple of recoverable exception classes.
 Only those failures are degraded; undeclared storage, programming, and
 invariant failures continue to propagate. Omitting the tuple retains the

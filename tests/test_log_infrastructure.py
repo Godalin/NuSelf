@@ -9,6 +9,7 @@ from typing import cast
 
 import pytest
 
+import nuself.logs as logs
 from nuself.logs import (
     InteractiveLogCursor,
     LogComponent,
@@ -154,6 +155,52 @@ def test_log_observer_failure_is_isolated_from_later_observers(
     )
     assert diagnostic.event == "log_observer_failed"
     assert diagnostic.error == "projection failed"
+
+
+def test_log_observer_diagnostic_failure_warns_without_affecting_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    delivered: list[LogEvent] = []
+    append_log_event = logs._append_log_event  # pyright: ignore[reportPrivateUsage]
+
+    def fail_daemon_diagnostic(
+        event_record: LogEvent,
+        **kwargs: object,
+    ) -> LogEvent:
+        if event_record.component == "daemon":
+            raise OSError("diagnostic store unavailable")
+        return append_log_event(
+            event_record,
+            **kwargs,  # type: ignore[arg-type]
+        )
+
+    def fail_observer(_event: LogEvent) -> None:
+        raise RuntimeError("projection failed")
+
+    monkeypatch.setattr(logs, "_append_log_event", fail_daemon_diagnostic)
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "daemon/log_observer_failed: projection failed; "
+            "structured logging failed: diagnostic store unavailable"
+        ),
+    ) as captured:
+        with observe_log_events(fail_observer), observe_log_events(
+            delivered.append
+        ):
+            written = write_log_event(
+                "chat",
+                "observer_test",
+                "persisted",
+                project_root=tmp_path,
+            )
+
+    assert len(captured) == 1
+    assert delivered == [written]
+    assert read_log_events(project_root=tmp_path, component="chat") == [written]
+    assert read_log_events(project_root=tmp_path, component="daemon") == []
 
 
 def test_log_observers_are_not_inherited_by_new_threads(tmp_path: Path) -> None:

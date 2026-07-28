@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import threading
-import warnings
 from collections.abc import Callable
 from typing import Any
 
@@ -13,6 +12,7 @@ from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
 from nuself.runtime import encode_json_value
+from nuself.runtime.diagnostics import emit_runtime_warning
 
 
 class ToolCaptureMiddleware(AgentMiddleware):
@@ -76,16 +76,14 @@ class ToolCaptureMiddleware(AgentMiddleware):
                     self._log_error_callback(exc)
                     return
                 except Exception as report_exc:  # noqa: BLE001 - preserve primary outcome
-                    warnings.warn(
+                    emit_runtime_warning(
                         "tool log callback failed: "
                         f"{exc}; failure reporter failed: {report_exc}",
-                        RuntimeWarning,
                         stacklevel=3,
                     )
                     return
-            warnings.warn(
+            emit_runtime_warning(
                 f"tool log callback failed: {exc}",
-                RuntimeWarning,
                 stacklevel=3,
             )
 

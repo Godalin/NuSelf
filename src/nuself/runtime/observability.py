@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TypeVar
-import warnings
 
 from nuself.logs import LogComponent, LogLevel, write_log_event
+from nuself.runtime.diagnostics import emit_runtime_warning
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
 
@@ -164,9 +164,8 @@ def report_observed_failure(
             metadata=metadata,
         )
     except Exception as log_exc:
-        warnings.warn(
+        emit_runtime_warning(
             f"{component}/{event}: {error}; structured logging failed: "
             f"{format_exception_chain(log_exc)}",
-            RuntimeWarning,
             stacklevel=3,
         )

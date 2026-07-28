@@ -19,6 +19,9 @@ LangGraph 现已支撑 conversation runtime。聊天 agent 可在对话中调用
 审批门控工具在次要审计存储不可用时仍以用户提示和工具结果为准；
 故障会通过结构化降级诊断记录，并在诊断日志也失败时退化为运行时警告。
 
+进程内日志 observer 彼此隔离，也不会影响业务操作；如果 observer 和对应的
+结构化故障记录同时失败，NuSelf 会发出最终运行时警告，不再静默丢失诊断。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

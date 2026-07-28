@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Process-local log observer failures now fall back to a contextual
+  `RuntimeWarning` when their structured `log_observer_failed` diagnostic
+  cannot be persisted, instead of becoming completely invisible. Observer
+  failures remain isolated from audit writes, later observers, and business
+  operations, even when process warning policy promotes warnings to errors.
 - Approval-gated tools now treat prompt, execution, and approval audit writes
   as observable best-effort effects. Audit storage failure no longer suppresses
   the prompt, changes a decline, or replaces an approved tool result; degraded

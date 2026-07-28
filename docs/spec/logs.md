@@ -144,8 +144,10 @@ are callable delivery effects, not serializable correlation identity.
   observers, undo the audit write, or fail the business operation that logged.
 - Observer failures produce a best-effort `daemon/log_observer_failed`
   diagnostic with observation temporarily suspended. Diagnostic failure is
-  swallowed, so observer errors cannot recurse or escape into the business
-  operation.
+  reported once as a `RuntimeWarning` containing both the observer failure and
+  structured-log failure. The warning is the terminal fallback: it does not
+  recurse, retry, or escape into the business operation, including when
+  process warning policy promotes runtime warnings to errors.
 - Observers are not implicitly copied to new threads. A future deferred path
   that genuinely continues the same live projection must bind that effect
   explicitly; long-lived workers must establish their own ownership.

@@ -1,9 +1,11 @@
+import warnings
 from pathlib import Path
 
 import pytest
 
 from nuself.logs import read_log_events
 from nuself.runtime.events import EventPublisher
+from nuself.runtime.diagnostics import emit_runtime_warning
 from nuself.runtime.observability import (
     decode_observed_record,
     format_exception_chain,
@@ -157,6 +159,26 @@ def test_best_effort_warns_when_structured_sink_also_fails(
         )
 
     assert result is None
+
+
+def test_terminal_runtime_warning_cannot_be_promoted_to_primary_failure() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        emit_runtime_warning("secondary diagnostic")
+
+
+def test_terminal_runtime_warning_cannot_be_failed_by_warning_hook(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_warning_hook(*args: object, **kwargs: object) -> None:
+        raise OSError("warning hook unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.diagnostics.warnings.showwarning",
+        fail_warning_hook,
+    )
+
+    emit_runtime_warning("secondary diagnostic")
 
 
 @pytest.mark.parametrize(

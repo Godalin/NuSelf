@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Synchronous approval now keeps prompting, decisions, tool execution, and
-structured results authoritative when secondary audit persistence fails.
+Idle. Process-local log observer failures remain visible through a shared
+terminal runtime warning when their structured diagnostic cannot be persisted.
 
 ## Active Branch
 
@@ -23,17 +23,18 @@ code.
 
 ## Completion Evidence
 
-- The approval decorator routes `approval_prompted`,
-  `service_tool_executed`, and `service_tool_approved` through shared
-  best-effort observability.
-- Audit failure cannot skip a prompt, execute a declined tool, replace an
-  approved result, or mask the original wrapped-tool exception.
-- Each failure diagnostic identifies the failed approval operation and tool;
-  diagnostic persistence failure emits `RuntimeWarning` without retry.
-- Prompt text, JSON output, approval policy, decorator composition, and
-  exactly-once tool execution are unchanged.
-- Focused approval and best-effort tests: 13 passed.
-- Final full tests: 1287 passed.
+- A failed observer still cannot undo its already-persisted audit record,
+  suppress later observers, or fail the business operation.
+- If `daemon/log_observer_failed` cannot be persisted, one `RuntimeWarning`
+  reports both the original observer error and the structured-log error.
+- Observer delivery is suspended while reporting the failure, so the terminal
+  warning path cannot recursively invoke observers.
+- Log observers, shared observability, and agent tool-log middleware use one
+  terminal warning primitive that suppresses warning-policy escalation rather
+  than replacing the primary result or exception.
+- No observer or diagnostic retry was introduced.
+- Focused affected-boundary tests: 74 passed.
+- Final full tests: 1290 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -44,4 +45,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-the approval boundary uses shared observability.
+the log-observer terminal fallback is explicit.

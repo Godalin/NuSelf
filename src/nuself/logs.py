@@ -19,6 +19,7 @@ from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
 )
+from nuself.runtime.diagnostics import emit_runtime_warning
 from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
     RuntimeEnvelope,
@@ -391,8 +392,14 @@ def _report_log_observer_failure(
                     "observer_type": type(observer).__name__,
                 },
             )
-        except Exception:
-            pass
+        except Exception as log_exc:
+            observer_error = str(exc).strip() or type(exc).__name__
+            log_error = str(log_exc).strip() or type(log_exc).__name__
+            emit_runtime_warning(
+                "daemon/log_observer_failed: "
+                f"{observer_error}; structured logging failed: {log_error}",
+                stacklevel=3,
+            )
     finally:
         _CURRENT_LOG_EVENT_OBSERVERS.reset(token)
 
