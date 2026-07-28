@@ -8,15 +8,45 @@ from typing import Protocol
 
 from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
-from nuself.logs import write_log_event
+from nuself.logs import LogLevel, write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
 from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
 from nuself.store import ScopedWorkspace, SqliteStore
+from nuself.runtime.observability import run_observed_best_effort
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 
 _MAX_EVIDENCE_REFS = 20
+
+
+def _write_reason_audit_event(
+    event: str,
+    message: str,
+    *,
+    project_root: Path,
+    level: LogLevel = "info",
+    status: str | None = None,
+    metadata: dict[str, object] | None = None,
+) -> None:
+    """Project a reason lifecycle event without changing domain results."""
+
+    run_observed_best_effort(
+        lambda: write_log_event(
+            "reasoning",
+            event,
+            message,
+            project_root=project_root,
+            level=level,
+            status=status,
+            metadata=metadata,
+        ),
+        component="reasoning",
+        event="reason_audit_write_failed",
+        message=f"Could not record reason audit event {event}",
+        project_root=project_root,
+        metadata={"audit_event": event},
+    )
 
 
 class ReasonAdvancerProtocol(Protocol):
@@ -143,14 +173,27 @@ class ReasonService:
         saved = self._repository.save_thread(thread)
         workspace = self._workspace_store.ensure(thread.id)
         if self._trace_recorder is not None:
-            self._trace_recorder.record_reason_thread_created(
-                thread=saved,
-                source_trace_ids=list(source_trace_ids),
-                metadata={"workspace": str(workspace.root), "mandates": list(thread.mandates_data)},
+            recorder = self._trace_recorder
+            run_observed_best_effort(
+                lambda: recorder.record_reason_thread_created(
+                    thread=saved,
+                    source_trace_ids=list(source_trace_ids),
+                    metadata={
+                        "workspace": str(workspace.root),
+                        "mandates": list(thread.mandates_data),
+                    },
+                ),
+                component="reasoning",
+                event="trace_recording_failed",
+                message="Could not record created reason thread trace",
+                project_root=self._project_root,
+                metadata={
+                    "operation": "start_thread",
+                    "thread_id": saved.id,
+                },
             )
 
-        write_log_event(
-            "reasoning",
+        _write_reason_audit_event(
             "thread_started",
             f"Started reasoning thread: {thread.topic[:80]}",
             project_root=self._project_root,
@@ -170,8 +213,7 @@ class ReasonService:
         if thread.status != "active":
             raise RuntimeError(f"Cannot advance thread {thread.id}: status is '{thread.status}', expected 'active'")
 
-        write_log_event(
-            "reasoning",
+        _write_reason_audit_event(
             "advance_started",
             f"Advancing reasoning thread: {thread.topic[:80]}",
             project_root=self._project_root,
@@ -215,10 +257,24 @@ class ReasonService:
             self._repository.save_step(step)
             self._repository.save_thread(updated)
         if self._trace_recorder is not None:
-            self._trace_recorder.record_reason_step(thread=updated, step=step)
+            recorder = self._trace_recorder
+            run_observed_best_effort(
+                lambda: recorder.record_reason_step(
+                    thread=updated,
+                    step=step,
+                ),
+                component="reasoning",
+                event="trace_recording_failed",
+                message="Could not record persisted reason step trace",
+                project_root=self._project_root,
+                metadata={
+                    "operation": "advance_thread",
+                    "thread_id": updated.id,
+                    "step_id": step.id,
+                },
+            )
 
-        write_log_event(
-            "reasoning",
+        _write_reason_audit_event(
             "advance_completed",
             f"Advance completed for thread: {thread.topic[:80]}",
             project_root=self._project_root,
@@ -234,8 +290,7 @@ class ReasonService:
             },
         )
         if final_status != thread.status:
-            write_log_event(
-                "reasoning",
+            _write_reason_audit_event(
                 "terminal_recommendation_applied",
                 f"Applied terminal recommendation for thread: {thread.topic[:80]}",
                 project_root=self._project_root,
@@ -270,21 +325,19 @@ class ReasonService:
     def delete_thread(self, id_or_index: str) -> str:
         thread = self._repository.resolve_thread(id_or_index)
 
-        write_log_event(
-            "reasoning",
-            "thread_deleted",
-            f"Deleted reasoning thread: {thread.topic[:80]}",
-            project_root=self._project_root,
-            status="deleted",
-            metadata={"thread_id": thread.id, "topic": thread.topic},
-        )
-
         import shutil
         ws = self._workspace_store.paths(thread.id)
         if ws.root.exists():
             shutil.rmtree(ws.root)
 
         self._repository.delete_thread(thread.id)
+        _write_reason_audit_event(
+            "thread_deleted",
+            f"Deleted reasoning thread: {thread.topic[:80]}",
+            project_root=self._project_root,
+            status="deleted",
+            metadata={"thread_id": thread.id, "topic": thread.topic},
+        )
         return thread.id
 
     # ── Internal ───────────────────────────────────────────────────
@@ -303,8 +356,7 @@ class ReasonService:
         self._repository.save_thread(updated)
 
         event_name = "thread_status_changed"
-        write_log_event(
-            "reasoning",
+        _write_reason_audit_event(
             event_name,
             f"Thread {thread.id} status changed: {thread.status} -> {new_status}",
             project_root=self._project_root,

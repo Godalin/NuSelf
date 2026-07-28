@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Daemon reason-export audit writes cannot change durable failure
-transitions, suppress an eligible retry/composition, interrupt startup
-reconciliation, or make worker shutdown fail after its state changed.
+Idle. ReasonService lifecycle audits and post-persistence traces cannot block
+valid operations or make committed thread/step/status state appear to have
+failed and become eligible for accidental duplicate execution.
 
 ## Active Branch
 
@@ -24,21 +24,20 @@ code.
 
 ## Completion Evidence
 
-- Export lifecycle writes use one shared best-effort audit helper; caught
-  failures retain their original exception chain through shared reporting.
-- After a compose failure increments the durable manifest attempt, complete
-  audit-store failure cannot suppress creation/start of the eligible retry
-  timer.
-- Corrupt optional progress still reaches composition when both its diagnostic
-  and lifecycle audits fail.
-- A corrupt reconciliation manifest and unavailable audit sink do not prevent
-  a later valid incomplete job from being enqueued.
-- Queue drain and closed enqueue state survive failure of the shutdown audit.
-- Manifest/progress writes, composition, timer start, attempt/backoff policy,
-  queue ownership, and reconciliation scope remain authoritative and
-  unchanged.
-- Focused export recovery and daemon worker tests: 26 passed.
-- Final full tests: 1323 passed.
+- Start and advance commit their thread/step state exactly once when trace
+  writes and both structured diagnostic/audit sinks fail.
+- Start, advance, terminal recommendation, transition, and delete lifecycle
+  events use one shared best-effort reason audit boundary.
+- A transition returns and retains its persisted status when its audit and
+  terminal diagnostic both fail.
+- Successful deletion remains successful when its audit cannot be stored;
+  authoritative repository deletion failure emits no `thread_deleted` success
+  event.
+- Repository/workspace/batch writes and deletion errors remain authoritative;
+  prompt generation, advance semantics, transition rules, and trace contents
+  are unchanged.
+- Focused reason service, advancer, and scheduler tests: 49 passed.
+- Final full tests: 1328 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -49,4 +48,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-daemon export audit projections preserve durable worker control flow.
+ReasonService projections preserve committed domain operations.

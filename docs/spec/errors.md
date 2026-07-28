@@ -174,6 +174,12 @@ audit records are secondary: audit failure cannot suppress a retry after its
 state is durably persisted, block composition after optional progress
 degradation, truncate reconciliation, or undo queue drain/shutdown state.
 
+ReasonService repository/workspace mutations are authoritative. Thread and
+step traces plus lifecycle audits are secondary after a successful mutation;
+their failure or diagnostic failure cannot replace a committed start, advance,
+status transition, or deletion result. Delete success is not projected before
+the authoritative delete finishes.
+
 ## Atomic File Failure Provenance
 
 Shared atomic text/JSON persistence propagates an ordinary write or replace

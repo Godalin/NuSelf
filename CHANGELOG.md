@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- ReasonService lifecycle audits and post-persistence traces now use shared
+  observable boundaries. Projection failure cannot replace committed thread,
+  step, transition, or deletion results, and delete success is logged only
+  after authoritative deletion.
 - Daemon reason-export lifecycle and failure audit writes now use the shared
   observable boundary. Audit storage failure cannot suppress durable retries,
   block composition on degraded progress, truncate reconciliation, or undo

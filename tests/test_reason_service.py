@@ -6,6 +6,8 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
+import pytest
+
 from nuself.logs import read_log_events
 from nuself.reason.domain import ReasoningStep
 from nuself.reason.repository import ReasonRepository
@@ -149,6 +151,47 @@ def test_start_thread_records_trace_when_repository_is_injected(tmp_path: Path) 
     assert traces[0].outputs == (f"reason:{thread.id}",)
 
 
+def test_start_projections_cannot_replace_persisted_thread(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_trace(*args: object, **kwargs: object) -> None:
+        raise OSError("trace store unavailable")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.trace.service.TraceRecorder.record_reason_thread_created",
+        fail_trace,
+    )
+    monkeypatch.setattr(
+        "nuself.reason.service.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    service = _reason_service(project_root=tmp_path)
+
+    with pytest.warns(RuntimeWarning) as captured:
+        thread = service.start_thread("Persist despite projections")
+
+    assert service.show_thread(thread.id) == thread
+    messages = [str(warning.message) for warning in captured]
+    assert any(
+        "reasoning/trace_recording_failed: trace store unavailable"
+        in message
+        for message in messages
+    )
+    assert any(
+        "reasoning/reason_audit_write_failed: audit store unavailable"
+        in message
+        for message in messages
+    )
+
+
 def test_show_thread_by_id(tmp_path: Path) -> None:
     service = _reason_service(repository=ReasonRepository(tmp_path))
     created = service.start_thread("Show me")
@@ -163,6 +206,35 @@ def test_pause_and_resume_thread(tmp_path: Path) -> None:
     assert paused.status == "paused"
     resumed = service.resume_thread(t.id)
     assert resumed.status == "active"
+
+
+def test_transition_audit_failure_cannot_replace_persisted_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _reason_service(project_root=tmp_path)
+    thread = service.start_thread("Transition survives audit")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.reason.service.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="reasoning/reason_audit_write_failed",
+    ):
+        paused = service.pause_thread(thread.id)
+
+    assert paused.status == "paused"
+    assert service.show_thread(thread.id).status == "paused"
 
 
 def test_resolve_thread(tmp_path: Path) -> None:
@@ -275,6 +347,110 @@ def test_advance_thread_records_trace(tmp_path: Path) -> None:
     assert traces[0].metadata["step_kind"] == "progress"
 
 
+def test_advance_projections_cannot_replace_committed_step(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _reason_service(project_root=tmp_path)
+    thread = service.start_thread("Advance survives projections")
+    step = _test_step(thread.id)
+
+    def fail_trace(*args: object, **kwargs: object) -> None:
+        raise OSError("trace store unavailable")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.trace.service.TraceRecorder.record_reason_step",
+        fail_trace,
+    )
+    monkeypatch.setattr(
+        "nuself.reason.service.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(RuntimeWarning) as captured:
+        advanced = service.advance_thread(thread.id, step=step)
+
+    assert advanced.last_advanced_at is not None
+    assert service.show_thread(thread.id) == advanced
+    assert service.list_steps(thread.id) == [step]
+    messages = [str(warning.message) for warning in captured]
+    assert any(
+        "reasoning/trace_recording_failed: trace store unavailable"
+        in message
+        for message in messages
+    )
+    assert any(
+        "reasoning/reason_audit_write_failed: audit store unavailable"
+        in message
+        for message in messages
+    )
+
+
+def test_delete_success_audit_failure_cannot_replace_deletion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _reason_service(project_root=tmp_path)
+    thread = service.start_thread("Delete survives audit")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.reason.service.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="reasoning/reason_audit_write_failed",
+    ):
+        deleted_id = service.delete_thread(thread.id)
+
+    assert deleted_id == thread.id
+    assert service.list_threads(status="all") == []
+
+
+def test_delete_failure_does_not_emit_success_audit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = ReasonRepository(tmp_path)
+    service = _reason_service(
+        project_root=tmp_path,
+        repository=repository,
+    )
+    thread = service.start_thread("Failed delete is not success")
+
+    def fail_delete(thread_id: str) -> None:
+        raise OSError("repository delete failed")
+
+    monkeypatch.setattr(repository, "delete_thread", fail_delete)
+
+    with pytest.raises(OSError, match="repository delete failed"):
+        service.delete_thread(thread.id)
+
+    events = read_log_events(
+        project_root=tmp_path,
+        component="reasoning",
+    )
+    assert not any(
+        event.event == "thread_deleted"
+        for event in events
+    )
+
+
 def test_reason_step_rejects_non_object_tool_logs() -> None:
     try:
         ReasoningStep.from_wire(
@@ -338,4 +514,3 @@ def _test_step(thread_id: str) -> ReasoningStep:
         delta="Moved forward",
         output="Observable output",
     )
-

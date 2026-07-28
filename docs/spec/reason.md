@@ -226,6 +226,19 @@ Rules:
 - Reason treats tool use as part of reasoning. Tool calls and tool results should become evidence refs, step metadata, or trace links when they materially change the reasoning state.
 - Chat may inspect active reason summaries through tools, but must not create or advance a reason thread without explicit user confirmation.
 
+Reason repository writes, workspace creation/deletion, and repository batch
+writes are authoritative. Lifecycle audit records and trace records written
+after a successful domain mutation are auxiliary projections and use the
+shared observable best-effort boundary:
+
+- a trace or audit failure cannot turn a persisted thread, step, or status
+  transition into an apparent operation failure;
+- failure of the structured diagnostic sink terminates in one runtime warning
+  and cannot make the caller repeat the committed operation;
+- `advance_started` remains an intent audit and cannot block model/domain work;
+- `thread_deleted` is emitted only after workspace and repository deletion
+  complete, so it never claims success before the authoritative operation.
+
 ### Service Methods
 
 | Method               | Parameters                                                                                                                                 |

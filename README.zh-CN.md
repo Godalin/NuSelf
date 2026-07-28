@@ -49,6 +49,9 @@ LLM endpoint preference 和 chat response 诊断从属于已接受的模型输�
 Daemon reason-export 审计记录从属于 durable manifest、composition、retry、
 reconciliation 和 shutdown 决策；审计失败不会改变这些 worker 结果。
 
+ReasonService lifecycle 审计和 provenance trace 从属于已提交的 thread、step、
+status 与 deletion 状态，避免投影失败把成功操作伪装成失败。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

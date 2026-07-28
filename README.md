@@ -58,6 +58,10 @@ Daemon reason-export audit records are auxiliary to durable manifest,
 composition, retry, reconciliation, and shutdown decisions; audit failure
 cannot alter those worker outcomes.
 
+ReasonService lifecycle audits and provenance traces are auxiliary to committed
+thread, step, status, and deletion state, preventing projection failures from
+turning successful operations into apparent failures.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).
