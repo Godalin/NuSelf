@@ -121,15 +121,22 @@ try:
         handle_memory_profile_search,
         handle_memory_profile_show,
     )
+    from nuself.commands.memory.source import (
+        handle_memory_source_chunks,
+        handle_memory_source_delete,
+        handle_memory_source_extract,
+        handle_memory_source_ingest,
+        handle_memory_source_list,
+        handle_memory_source_search,
+        handle_memory_source_show,
+    )
     from nuself.domain.memory import (
         MemoryCandidate,
         MemoryEntry,
-        PrivacyLevel,
         default_memory_type_registry,
         default_relation_descriptor_registry,
     )
     from nuself.domain.profile import ProfileItem
-    from nuself.domain.source import SourceChunk
     from nuself.memory.curator import MemoryCurator
     from nuself.memory.intake import MemoryIntakeAgent
     from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
@@ -148,7 +155,7 @@ try:
         SymbolicGraphNodeFilters,
         memory_stats,
     )
-    from nuself.memory.source_repository import SourceChunkMatch, SourceDocumentNotFound, SourceRepository
+    from nuself.memory.source_repository import SourceDocumentNotFound, SourceRepository
     from nuself.profile.repository import ProfileItemRepository
     from nuself.trace.domain import TRACE_KINDS
     from nuself.trace.repository import TraceNotFound
@@ -1797,111 +1804,6 @@ def _resolve_memory_candidate_ids(args: argparse.Namespace) -> list[str] | None:
         _memory_candidates_for_list(args.project_root),
         label="memory candidate",
         get_id=lambda candidate: candidate.id,
-    )
-
-
-def handle_memory_source_ingest(args: argparse.Namespace) -> int:
-    repo = SourceRepository(args.project_root)
-    try:
-        result = repo.ingest_path(args.path, tags=list(args.tag), privacy=_privacy_arg(args.privacy))
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    print(f"Source ingest: {result.summary()}")
-    return 0
-
-
-def handle_memory_source_list(args: argparse.Namespace) -> int:
-    repo = SourceRepository(args.project_root)
-    documents = repo.list_documents()
-    if not documents:
-        print("No source documents.")
-        return 0
-    for index, document in enumerate(documents):
-        _print_ansi(render_source_row(document, index=index))
-    return 0
-
-
-def handle_memory_source_show(args: argparse.Namespace) -> int:
-    repo = SourceRepository(args.project_root)
-    source_id = _resolve_source_id(args)
-    if source_id is None:
-        return 1
-    try:
-        document = repo.get_document(source_id)
-    except SourceDocumentNotFound:
-        print(f"Source document not found: {source_id}", file=sys.stderr)
-        return 1
-    _print_ansi(render_source_detail(document, chunk_count=len(repo.list_chunks(document.id))))
-    return 0
-
-
-def handle_memory_source_delete(args: argparse.Namespace) -> int:
-    source_repo = SourceRepository(args.project_root)
-    profile_repo = ProfileItemRepository(args.project_root)
-    source_id = _resolve_source_id(args)
-    if source_id is None:
-        return 1
-    try:
-        source_repo.delete_document(source_id)
-    except SourceDocumentNotFound:
-        print(f"Source document not found: {source_id}", file=sys.stderr)
-        return 1
-    source_repo.reindex()
-    profile_repo.reindex()
-    print(f"Deleted source document: {source_id}")
-    return 0
-
-
-def handle_memory_source_chunks(args: argparse.Namespace) -> int:
-    source_id = _resolve_source_id(args) if getattr(args, "source_id", None) is not None else None
-    if getattr(args, "source_id", None) is not None and source_id is None:
-        return 1
-    chunks = SourceRepository(args.project_root).list_chunks(source_id)
-    if not chunks:
-        print("No source chunks.")
-        return 0
-    for chunk in chunks:
-        print(_format_source_chunk_summary(chunk))
-    return 0
-
-
-def handle_memory_source_search(args: argparse.Namespace) -> int:
-    matches = SourceRepository(args.project_root).search(args.query, limit=args.limit)
-    if not matches:
-        print("No matching source chunks.")
-        return 0
-    for match in matches:
-        print(_format_source_chunk_match(match))
-    return 0
-
-
-def handle_memory_source_extract(args: argparse.Namespace) -> int:
-    source_repo = SourceRepository(args.project_root)
-    candidate_repo = MemoryCandidateRepository(args.project_root)
-    source_id = _resolve_source_id(args)
-    if source_id is None:
-        return 1
-    try:
-        candidates = source_repo.extract_candidates(source_id)
-    except SourceDocumentNotFound:
-        print(f"Source document not found: {source_id}", file=sys.stderr)
-        return 1
-    if not candidates:
-        print("No source chunks to extract.")
-        return 0
-    for candidate in candidates:
-        candidate_repo.save(candidate)
-    print(f"Extracted source candidates: source={source_id} candidates={len(candidates)}")
-    return 0
-
-
-def _resolve_source_id(args: argparse.Namespace) -> str | None:
-    return _resolve_handle(
-        args.source_id,
-        SourceRepository(args.project_root).list_documents(),
-        label="source",
-        get_id=lambda document: document.id,
     )
 
 
@@ -3668,29 +3570,6 @@ def _format_symbolic_graph_edge(edge: SymbolicGraphEdge) -> str:
 
 
 
-def _format_source_chunk_summary(chunk: SourceChunk) -> str:
-    preview = _compact_text(chunk.text, 96)
-    return f"{chunk.source_ref} {chunk.title} chars={len(chunk.text)} {preview}"
-
-
-def _format_source_chunk_match(match: SourceChunkMatch) -> str:
-    chunk = match.chunk
-    document = match.document
-    preview = _compact_text(chunk.text, 96)
-    reasons = ",".join(match.reasons)
-    tags = ",".join(document.tags) if document.tags else "-"
-    return (
-        f"{chunk.source_ref} {document.title} score={match.score:.2f} match={reasons} "
-        f"tags={tags} path={document.path} {preview}"
-    )
-
-
-def _privacy_arg(value: object) -> PrivacyLevel:
-    if value == "shareable":
-        return "shareable"
-    return "private"
-
-
 def _format_counts(counts: dict[str, int]) -> str:
     if not counts:
         return "-"
@@ -3718,13 +3597,6 @@ def _format_memory_preview(project_root: Path | None, limit: int = DEFAULT_MEMOR
     if len(entries) > normalized_limit:
         lines.append(f"  Use `nuself memory list` or `nuself memory preview --limit N` to see more.")
     return "\n".join(lines)
-
-
-def _compact_text(text: str, limit: int) -> str:
-    compact = " ".join(text.split())
-    if len(compact) <= limit:
-        return compact
-    return compact[: max(limit - 3, 0)].rstrip() + "..."
 
 
 def _memory_type_choices() -> list[str]:

@@ -123,6 +123,8 @@ top-level application namespace stays focused on subsystem APIs.
   `commands/memory/profile.py` owns profile list/search/show/delete/reindex
   handlers and their list ordering and handle resolution. Sibling modules own
   source, candidate, entry, and graph operations as they are extracted.
+  `commands/memory/source.py` owns source ingest/list/show/delete/chunks/search/
+  extract handlers and source-specific output formatting.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
   repository APIs.
