@@ -281,7 +281,9 @@ make a thread eligible for background advancement.
 
 The SQLite backend applies the same isolation to malformed dynamic-column JSON:
 healthy neighboring rows remain readable, direct lookups stay strict, and
-diagnostics never include the corrupt column contents.
+diagnostics never include the corrupt column contents. Explicit backend
+shutdown checkpoints the WAL and surfaces checkpoint or connection-close
+failures; a failed close remains retryable rather than being marked complete.
 Invalid reason-export manifests stop composition safely. Job listing reports
 and isolates malformed manifests without exposing their contents, while direct
 lookup and filesystem failures remain visible; invalid progress and retry-state

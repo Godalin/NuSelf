@@ -11,13 +11,19 @@ import pytest
 
 from nuself.logs import read_log_events
 from nuself.storage import (
+    DefaultBackendResetError,
+    StorageBackend,
     create_sqlite_backend,
     get_default_backend,
     reset_default_backend,
+    set_default_backend,
 )
 from nuself.storage_sqlite import (
     COLLECTION_NAMES,
     SqliteStorageBackend,
+    SqliteStorageCheckpointError,
+    SqliteStorageCloseError,
+    SqliteStorageInitializationCleanupError,
     SqliteTransactionCleanupError,
     SqliteTransactionRollbackOnlyError,
 )
@@ -49,6 +55,70 @@ class TransactionConnectionProxy:
         if self._fail_rollback:
             raise sqlite3.OperationalError("rollback unavailable")
         self._delegate.rollback()
+
+
+class LifecycleConnectionProxy:
+    def __init__(
+        self,
+        delegate: sqlite3.Connection,
+        *,
+        fail_checkpoint: bool = False,
+        fail_close: bool = False,
+        fail_schema_init: bool = False,
+        checkpoint_result: tuple[int, int, int] | None = None,
+    ) -> None:
+        self._delegate = delegate
+        self.fail_checkpoint = fail_checkpoint
+        self.fail_close = fail_close
+        self.fail_schema_init = fail_schema_init
+        self.checkpoint_result = checkpoint_result
+        self.checkpoint_calls = 0
+        self.close_calls = 0
+
+    def execute(self, sql: str) -> sqlite3.Cursor:
+        if sql.startswith("PRAGMA wal_checkpoint"):
+            self.checkpoint_calls += 1
+            if self.fail_checkpoint:
+                raise sqlite3.OperationalError("checkpoint unavailable")
+            if self.checkpoint_result is not None:
+                return cast(
+                    sqlite3.Cursor,
+                    CheckpointCursor(self.checkpoint_result),
+                )
+        if self.fail_schema_init and sql.startswith("CREATE TABLE"):
+            raise sqlite3.OperationalError("schema init unavailable")
+        return self._delegate.execute(sql)
+
+    def close(self) -> None:
+        self.close_calls += 1
+        if self.fail_close:
+            raise sqlite3.OperationalError("close unavailable")
+        self._delegate.close()
+
+
+class CheckpointCursor:
+    def __init__(self, result: tuple[int, int, int]) -> None:
+        self._result = result
+
+    def fetchone(self) -> tuple[int, int, int]:
+        return self._result
+
+
+class CloseBackend:
+    def __init__(self, *, error: Exception | None = None) -> None:
+        self.error = error
+        self.close_calls = 0
+
+    def collection(self, name: str) -> object:
+        raise AssertionError(f"unexpected collection access: {name}")
+
+    def transaction(self) -> object:
+        raise AssertionError("unexpected transaction access")
+
+    def close(self) -> None:
+        self.close_calls += 1
+        if self.error is not None:
+            raise self.error
 
 
 def _set_raw_sqlite_column(
@@ -95,6 +165,160 @@ def test_default_backend_is_scoped_by_project_root(tmp_path: Path) -> None:
         )
     finally:
         reset_default_backend()
+
+
+def test_reset_default_backend_attempts_every_owned_close(
+    tmp_path: Path,
+) -> None:
+    failed = CloseBackend(error=RuntimeError("first close failed"))
+    healthy = CloseBackend()
+    set_default_backend(cast(StorageBackend, failed), tmp_path / "first")
+    set_default_backend(cast(StorageBackend, healthy), tmp_path / "second")
+
+    with pytest.raises(
+        DefaultBackendResetError,
+        match="failed to close 1 default storage backend",
+    ) as captured:
+        reset_default_backend()
+
+    assert failed.close_calls == 1
+    assert healthy.close_calls == 1
+    assert captured.value.failures == (failed.error,)
+
+
+def test_close_is_idempotent_after_connection_closes(
+    tmp_path: Path,
+) -> None:
+    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    original = cast(sqlite3.Connection, getattr(backend, "_conn"))
+    proxy = LifecycleConnectionProxy(original)
+    setattr(backend, "_conn", cast(sqlite3.Connection, proxy))
+
+    backend.close()
+    backend.close()
+
+    assert proxy.checkpoint_calls == 1
+    assert proxy.close_calls == 1
+
+
+def test_checkpoint_failure_is_raised_after_connection_closes(
+    tmp_path: Path,
+) -> None:
+    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    original = cast(sqlite3.Connection, getattr(backend, "_conn"))
+    proxy = LifecycleConnectionProxy(original, fail_checkpoint=True)
+    setattr(backend, "_conn", cast(sqlite3.Connection, proxy))
+
+    with pytest.raises(
+        SqliteStorageCheckpointError,
+        match="closed after WAL checkpoint failed",
+    ) as captured:
+        backend.close()
+
+    assert isinstance(captured.value.__cause__, sqlite3.OperationalError)
+    assert str(captured.value.__cause__) == "checkpoint unavailable"
+    assert proxy.close_calls == 1
+    backend.close()
+    assert proxy.close_calls == 1
+
+
+def test_busy_checkpoint_status_is_raised_after_connection_closes(
+    tmp_path: Path,
+) -> None:
+    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    original = cast(sqlite3.Connection, getattr(backend, "_conn"))
+    proxy = LifecycleConnectionProxy(
+        original,
+        checkpoint_result=(1, 4, 2),
+    )
+    setattr(backend, "_conn", cast(sqlite3.Connection, proxy))
+
+    with pytest.raises(SqliteStorageCheckpointError) as captured:
+        backend.close()
+
+    assert isinstance(captured.value.__cause__, RuntimeError)
+    assert str(captured.value.__cause__) == (
+        "SQLite WAL checkpoint remained busy"
+    )
+    assert proxy.close_calls == 1
+
+
+def test_close_failure_is_visible_and_retryable(tmp_path: Path) -> None:
+    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    original = cast(sqlite3.Connection, getattr(backend, "_conn"))
+    proxy = LifecycleConnectionProxy(original, fail_close=True)
+    setattr(backend, "_conn", cast(sqlite3.Connection, proxy))
+
+    with pytest.raises(
+        SqliteStorageCloseError,
+        match="connection could not be closed",
+    ) as captured:
+        backend.close()
+
+    assert isinstance(captured.value.__cause__, sqlite3.OperationalError)
+    assert str(captured.value.__cause__) == "close unavailable"
+    proxy.fail_close = False
+    backend.close()
+    assert proxy.close_calls == 2
+
+
+def test_close_failure_retains_checkpoint_diagnostic(
+    tmp_path: Path,
+) -> None:
+    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    original = cast(sqlite3.Connection, getattr(backend, "_conn"))
+    proxy = LifecycleConnectionProxy(
+        original,
+        fail_checkpoint=True,
+        fail_close=True,
+    )
+    setattr(backend, "_conn", cast(sqlite3.Connection, proxy))
+
+    with pytest.raises(SqliteStorageCloseError) as captured:
+        backend.close()
+
+    checkpoint_error = captured.value.checkpoint_error
+    assert isinstance(checkpoint_error, sqlite3.OperationalError)
+    assert str(checkpoint_error) == "checkpoint unavailable"
+    proxy.fail_checkpoint = False
+    proxy.fail_close = False
+    backend.close()
+
+
+def test_initialization_cleanup_preserves_both_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection = sqlite3.connect(tmp_path / "delegate.sqlite")
+    proxy = LifecycleConnectionProxy(
+        connection,
+        fail_close=True,
+        fail_schema_init=True,
+    )
+
+    def connect_proxy(
+        *args: object,
+        **kwargs: object,
+    ) -> sqlite3.Connection:
+        return cast(sqlite3.Connection, proxy)
+
+    monkeypatch.setattr(sqlite3, "connect", connect_proxy)
+
+    with pytest.raises(
+        SqliteStorageInitializationCleanupError,
+        match="initialization failed",
+    ) as captured:
+        SqliteStorageBackend(tmp_path / "nuself.sqlite")
+
+    assert isinstance(captured.value.__cause__, sqlite3.OperationalError)
+    assert str(captured.value.__cause__) == "schema init unavailable"
+    assert isinstance(
+        captured.value.cleanup_error,
+        sqlite3.OperationalError,
+    )
+    assert str(captured.value.cleanup_error) == "close unavailable"
+    proxy.fail_close = False
+    proxy.close()
 
 
 @pytest.mark.parametrize("name", COLLECTION_NAMES)

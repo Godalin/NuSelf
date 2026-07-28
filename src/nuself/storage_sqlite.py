@@ -74,6 +74,46 @@ class SqliteTransactionCleanupError(SqliteTransactionError):
     """Raised when rollback fails while preserving the primary cause."""
 
 
+class SqliteStorageLifecycleError(RuntimeError):
+    """Base class for explicit SQLite backend lifecycle failures."""
+
+
+class SqliteStorageCheckpointError(SqliteStorageLifecycleError):
+    """Raised after close succeeds but the requested WAL checkpoint fails."""
+
+
+class SqliteStorageCloseError(SqliteStorageLifecycleError):
+    """Raised when the connection cannot be closed."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        checkpoint_error: Exception | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.checkpoint_error = checkpoint_error
+
+
+class SqliteStorageInitializationCleanupError(
+    SqliteStorageLifecycleError
+):
+    """Raised when a failed initialization also cannot release its connection."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        cleanup_error: Exception,
+    ) -> None:
+        super().__init__(message)
+        self.cleanup_error = cleanup_error
+
+
+class _SqliteWalCheckpointBusyError(RuntimeError):
+    """Internal diagnostic for a checkpoint that returned SQLITE_BUSY."""
+
+
 class _Lock(Protocol):
     def acquire(self) -> bool: ...
     def release(self) -> None: ...
@@ -300,8 +340,6 @@ class SqliteStorageBackend:
         )
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA synchronous=NORMAL")
         self._lock = threading.RLock()
         self._transaction_state = _TransactionState()
         self._closed = False
@@ -309,9 +347,18 @@ class SqliteStorageBackend:
         # dynamic ALTER by one collection is visible to the others.
         self._column_cache: dict[str, tuple[str, ...]] = {}
         try:
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA synchronous=NORMAL")
             self._init_schema()
-        except Exception:
-            self._conn.close()
+        except BaseException as init_error:
+            try:
+                self._conn.close()
+            except Exception as cleanup_error:
+                raise SqliteStorageInitializationCleanupError(
+                    "SQLite initialization failed and its connection "
+                    "could not be closed",
+                    cleanup_error=cleanup_error,
+                ) from init_error
             self._closed = True
             raise
 
@@ -320,18 +367,42 @@ class SqliteStorageBackend:
         return self._db_path
 
     def close(self) -> None:
-        """Close the database connection, checkpointing WAL first."""
-        if self._closed:
-            return
-        self._closed = True
-        try:
-            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        except sqlite3.Error:
-            pass
-        try:
-            self._conn.close()
-        except sqlite3.Error:
-            pass
+        """Checkpoint and close the owned connection with truthful state."""
+        with self._lock:
+            if self._closed:
+                return
+            checkpoint_error: Exception | None = None
+            try:
+                checkpoint = self._conn.execute(
+                    "PRAGMA wal_checkpoint(TRUNCATE)"
+                ).fetchone()
+                if (
+                    checkpoint is None
+                    or len(checkpoint) != 3
+                    or any(type(value) is not int for value in checkpoint)
+                ):
+                    raise RuntimeError(
+                        "SQLite WAL checkpoint returned an invalid status"
+                    )
+                busy, _, _ = checkpoint
+                if busy:
+                    raise _SqliteWalCheckpointBusyError(
+                        "SQLite WAL checkpoint remained busy"
+                    )
+            except Exception as exc:
+                checkpoint_error = exc
+            try:
+                self._conn.close()
+            except sqlite3.Error as close_error:
+                raise SqliteStorageCloseError(
+                    "SQLite connection could not be closed",
+                    checkpoint_error=checkpoint_error,
+                ) from close_error
+            self._closed = True
+            if checkpoint_error is not None:
+                raise SqliteStorageCheckpointError(
+                    "SQLite connection closed after WAL checkpoint failed"
+                ) from checkpoint_error
 
     def _init_schema(self) -> None:
         self._conn.execute(

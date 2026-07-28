@@ -179,6 +179,36 @@ id, not column text or the complete row. The SQLite collection adapter retains
 its project root and collection-to-component ownership so these diagnostics
 flow to the correct structured log.
 
+### SQLite Backend Lifecycle
+
+The creator of a `SqliteStorageBackend` owns it and must call `close()` when
+the backend is no longer needed. Process-default backends are owned by the
+default-backend registry and released by `reset_default_backend()`; temporary
+thought-pack backends are owned by the command that opens them.
+Owners must quiesce concurrent users before closing the backend.
+
+`close()` is lock-protected and idempotent after the underlying connection has
+closed successfully. It first requests a truncating WAL checkpoint and always
+attempts to close the connection even if that checkpoint fails. A checkpoint
+exception, invalid status, or non-zero SQLite `busy` result is surfaced after
+a successful connection close because data remains recoverable in the WAL but
+the requested lifecycle operation was degraded. A
+connection-close failure is authoritative: the backend remains open and the
+failure is retryable. If both operations fail, the close error exposes the
+checkpoint error as secondary diagnostic context without replacing the close
+failure.
+
+Schema initialization failures remain the primary cause. The constructor
+attempts to close its partially initialized connection; if that cleanup also
+fails, it raises a stable initialization-cleanup error whose cause is the
+original initialization failure and whose secondary diagnostic retains the
+close failure.
+
+Resetting default backends removes their registry ownership before closing
+them, attempts every selected backend even when an earlier close fails, and
+then raises one cleanup error containing all close failures. It never leaves a
+failed backend registered as if it were safe to reuse.
+
 ### Unify Long-Lived Object IDs
 
 统一 ID 格式为 `{prefix}_{uuid_short}`：

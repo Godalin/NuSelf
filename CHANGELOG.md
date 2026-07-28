@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- SQLite shutdown now reports WAL checkpoint and connection-close failures
+  instead of silently claiming success. Failed closes remain retryable,
+  initialization cleanup preserves the original failure, and resetting
+  process-default storage attempts every owned backend before reporting errors.
 - SQLite dynamic columns now decode strictly as JSON. Corrupt rows are reported
   and isolated during collection reads instead of leaking raw column text into
   domain models, and JSON null now round-trips as a present `None` value.

@@ -270,7 +270,8 @@ Reason thread 的调度时间戳必须包含时区，因此损坏的 cooldown �
 进入后台推进。
 
 SQLite 后端对损坏的动态列 JSON 采用相同隔离规则：健康的相邻记录仍可读取，直接查询
-保持严格，诊断中也不会包含损坏列的内容。
+保持严格，诊断中也不会包含损坏列的内容。显式关闭 backend 时会先 checkpoint WAL，
+并明确返回 checkpoint 或连接关闭失败；关闭失败仍可重试，不会被错误标记为已完成。
 无效的 reason export manifest 会安全停止合成。任务列表会报告并隔离损坏 manifest，
 且不会暴露其中内容；直接查询和文件系统失败仍会明确返回。无效 progress 和 retry
 state 持久化失败会写入 daemon 日志。Progress 缺失属于正常状态，但无法读取或格式

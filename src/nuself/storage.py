@@ -292,6 +292,16 @@ _default_backends: dict[Path, StorageBackend] = {}
 _DEFAULT_BACKEND_LOCK = threading.Lock()
 
 
+class DefaultBackendResetError(RuntimeError):
+    """Raised after one or more owned default backends fail to close."""
+
+    def __init__(self, failures: tuple[Exception, ...]) -> None:
+        super().__init__(
+            f"failed to close {len(failures)} default storage backend(s)"
+        )
+        self.failures = failures
+
+
 def get_default_backend(project_root: Path | None = None) -> StorageBackend:
     """Return a lazily-created default backend scoped to one project root."""
     root = runtime_paths(project_root).project_root
@@ -322,10 +332,16 @@ def reset_default_backend(project_root: Path | None = None) -> None:
             root = runtime_paths(project_root).project_root
             backend = _default_backends.pop(root, None)
             backends = (backend,) if backend is not None else ()
+    failures: list[Exception] = []
     for backend in backends:
         close = getattr(backend, "close", None)
         if callable(close):
-            close()
+            try:
+                close()
+            except Exception as exc:
+                failures.append(exc)
+    if failures:
+        raise DefaultBackendResetError(tuple(failures))
 
 
 # ── Migration tools ──────────────────────────────────────────────────────

@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The strict SQLite dynamic-column decode and row-isolation stage is
-complete; no implementation change is currently active.
+Idle. The SQLite backend lifecycle and ownership stage is complete; no
+implementation change is currently active.
 
 ## Active Branch
 
@@ -31,4 +31,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit explicit SQLite close/checkpoint visibility and ownership semantics.
+Audit unified handler dispatch middleware and observability semantics.
