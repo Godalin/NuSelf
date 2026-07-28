@@ -39,6 +39,20 @@ These are review-driven refactors that should not block local v0.2 testing. They
 - [x] Standardize local import policy for optional/heavy modules and make that policy explicit in the development spec.
 - [x] Replace rough eval fixture counts with structured fixture result parsing across all dev eval commands.
 
+## Shared Runtime Infrastructure
+
+- [x] Add a sealed, duplicate-safe handler registry and migrate daemon request
+  dispatch.
+- [ ] Centralize typed CLI handler binding and dispatch while retaining
+  argparse for parsing.
+- [ ] Introduce a versioned runtime envelope and neutral correlation context.
+- [ ] Make structured logs an envelope sink with stable event IDs, serialized
+  writes, and incremental cursors.
+- [ ] Replace tuple queues and process-global job callbacks with typed internal
+  job messages, starting with reason output export.
+- [ ] Add an explicit in-process event publisher for live activity; logs remain
+  audit/read-model storage rather than a command bus.
+
 ## Current Goal
 
 - [x] Complete REPL-shaped TUI, structured logging, and memory inspect polish.

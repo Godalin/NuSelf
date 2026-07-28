@@ -9,9 +9,7 @@ import os
 import queue
 import socketserver
 import threading
-import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 from typing import cast, override
 
 from nuself.agent.chat import ChatAgent
@@ -27,10 +25,12 @@ from nuself.reason.output import (
 )
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.config import ConfigSystem
-from nuself.daemon.protocol import DaemonRequest, DaemonResponse, JsonValue, ProtocolError
+from nuself.daemon.protocol import DaemonRequest, DaemonResponse, ProtocolError
+from nuself.daemon.request_handlers import handle_request
+from nuself.daemon.types import WorkerHealth
 from nuself.llm import ChatMessage, default_llm
-from nuself.logs import log_context, write_log_event
-from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
+from nuself.logs import write_log_event
+from nuself.memory.curator import MemoryCurator
 from nuself.notification import NotificationAdapter, NotificationDeliveryLoop
 from nuself.notification.email import EmailNotificationAdapter
 from nuself.notification.macos import MacOSNotificationAdapter
@@ -50,15 +50,6 @@ def _format_exception_chain(exc: BaseException) -> str:
             messages.append(message)
         current = current.__cause__ or current.__context__
     return " <- ".join(messages) if messages else exc.__class__.__name__
-
-
-@dataclass(frozen=True)
-class WorkerHealth:
-    name: str
-    alive: bool = False
-    last_success_at: str | None = None
-    last_error: str | None = None
-    consecutive_failures: int = 0
 
 
 # Export chunk runner protocol intentionally omitted; inline runner typing used.
@@ -728,106 +719,6 @@ class RequestHandler(socketserver.StreamRequestHandler):
         if not isinstance(server, NuSelfUnixServer):
             raise RuntimeError("unexpected server type")
         return server.state
-
-
-def handle_request(request: DaemonRequest, state: DaemonState) -> DaemonResponse:
-    """Handle a typed daemon request."""
-
-    if request.type == "ping":
-        return DaemonResponse.ok(request, {"message": "pong"})
-    if request.type == "health":
-        workers: list[JsonValue] = [
-            {
-                "name": item.name,
-                "alive": item.alive,
-                "last_success_at": item.last_success_at,
-                "last_error": item.last_error,
-                "consecutive_failures": item.consecutive_failures,
-            }
-            for item in state.worker_health()
-        ]
-        return DaemonResponse.ok(request, {"workers": workers})
-    if request.type == "echo":
-        return DaemonResponse.ok(request, request.payload)
-    if request.type == "chat":
-        message = request.payload.get("message")
-        if not isinstance(message, str):
-            write_log_event(
-                "daemon",
-                "request_failed",
-                "chat request rejected",
-                project_root=state.project_root,
-                level="warning",
-                request_id=request.request_id,
-                status="error",
-                error="chat request requires string payload field 'message'",
-            )
-            return DaemonResponse.fail(request.request_id, "chat request requires string payload field 'message'")
-        thread_id_raw = request.payload.get("thread_id")
-        thread_id = thread_id_raw if isinstance(thread_id_raw, str) else "default"
-        turn_id_raw = request.payload.get("turn_id")
-        turn_id = turn_id_raw if isinstance(turn_id_raw, str) else None
-        started_at = time.monotonic()
-        with log_context(request_id=request.request_id, thread_id=thread_id, turn_id=turn_id, source="daemon"):
-            try:
-                result = state.chat_agent.respond(message, thread_id=thread_id, turn_id=turn_id)
-                memory_update = _run_memory_curator_once(state.memory_curator, source_trace_id=result.trace_id)
-            except RuntimeError as exc:
-                error_detail = _format_exception_chain(exc)
-                write_log_event(
-                    "daemon",
-                    "chat_turn_failed",
-                    "daemon chat turn failed",
-                    project_root=state.project_root,
-                    level="error",
-                    status="error",
-                    error=error_detail,
-                )
-                return DaemonResponse.fail(request.request_id, error_detail)
-        duration_ms = int((time.monotonic() - started_at) * 1000)
-        payload: dict[str, JsonValue] = {
-            "answer": result.answer,
-            "reply": result.reply,
-            "thread_id": result.thread_id,
-            "evidence_references": list(result.evidence_references),
-            "epistemic_status": result.epistemic_status,
-        }
-        if result.confidence is not None:
-            payload["confidence"] = result.confidence
-        if memory_update is not None and memory_update.changed:
-            payload["memory_update"] = memory_update.summary()
-        with log_context(request_id=request.request_id, thread_id=result.thread_id, turn_id=turn_id, source="daemon"):
-            write_log_event(
-                "daemon",
-                "chat_turn_completed",
-                "daemon chat turn completed",
-                project_root=state.project_root,
-                duration_ms=duration_ms,
-                status="ok",
-                metadata={
-                    "evidence_references": len(result.evidence_references),
-                    "memory_changed": memory_update.changed if memory_update is not None else False,
-                },
-            )
-        return DaemonResponse.ok(request, payload)
-    if request.type == "shutdown":
-        write_log_event(
-            "daemon",
-            "shutdown_requested",
-            "daemon shutdown requested",
-            project_root=state.project_root,
-            request_id=request.request_id,
-        )
-        state.shutdown_requested.set()
-        return DaemonResponse.ok(request, {"message": "shutdown requested"})
-    return DaemonResponse.fail(request.request_id, f"unsupported request type: {request.type}")
-
-
-def _run_memory_curator_once(memory_curator: MemoryCurator, *, source_trace_id: str | None = None) -> MemoryCuratorResult | None:
-    try:
-        return memory_curator.run_once(source_trace_id=source_trace_id)
-    except RuntimeError:
-        return None
 
 
 def run_daemon(project_root: Path | None = None) -> int:

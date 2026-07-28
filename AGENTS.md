@@ -25,5 +25,7 @@ An AI mirror for deep personal discussion — someone with similar life experien
 - [`docs/spec/persona/`](docs/spec/persona/) — persona subsystem: builtin (`static.md`), competitive discussion (`discussion.md`), dynamic prompts (`dynamic.md`)
 - [`docs/spec/errors.md`](docs/spec/errors.md) — error classes, retry policy, exception-chain preservation
 - [`docs/spec/logs.md`](docs/spec/logs.md) — log write/read contracts
+- [`docs/spec/runtime-infrastructure.md`](docs/spec/runtime-infrastructure.md) —
+  shared handlers, events, jobs, correlation, and log boundaries
 - [`docs/spec/config.md`](docs/spec/config.md) — config hierarchy and runtime paths
 - [`docs/spec/versioning.md`](docs/spec/versioning.md) — version, changelog, and release rules

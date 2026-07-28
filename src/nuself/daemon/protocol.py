@@ -12,6 +12,13 @@ PROTOCOL_VERSION = 1
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 RequestType: TypeAlias = Literal["ping", "health", "echo", "chat", "shutdown"]
 ResponseStatus: TypeAlias = Literal["ok", "error"]
+REQUEST_TYPES: tuple[RequestType, ...] = (
+    "ping",
+    "health",
+    "echo",
+    "chat",
+    "shutdown",
+)
 
 
 class ProtocolError(ValueError):
@@ -144,9 +151,9 @@ def _expect_int(raw: dict[str, Any], field_name: str) -> int:
 
 def _expect_request_type(raw: dict[str, Any], field_name: str) -> RequestType:
     value = _expect_str(raw, field_name)
-    if value not in {"ping", "health", "echo", "chat", "shutdown"}:
+    if value not in REQUEST_TYPES:
         raise ProtocolError(f"unsupported request type: {value}")
-    return cast(RequestType, value)
+    return value
 
 
 def _expect_response_status(raw: dict[str, Any], field_name: str) -> ResponseStatus:
