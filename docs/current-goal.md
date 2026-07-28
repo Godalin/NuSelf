@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make daemon runtime metadata recovery explicit and ownership-safe.
+Make daemon readiness publication match actual service readiness.
 
 ## Active Branch
 
@@ -13,39 +13,36 @@ Make daemon runtime metadata recovery explicit and ownership-safe.
 
 ## Ordered Work
 
-1. Audit stale socket/PID creation, publication, cleanup, and crash windows.
-2. Define one lock-owned recovery boundary for both metadata resources.
-3. Attempt all stale cleanup and retain every recovery failure.
-4. Publish PID only after Unix socket binding succeeds.
-5. Observe successful recovery without exposing runtime contents.
-6. Verify contention, bind failure, hard-crash residue, and cleanup aggregation.
+1. Audit socket bind, PID publish, worker start, started audit, and request loop.
+2. Define one ordered readiness boundary before requests can be accepted.
+3. Publish `started` only after every worker starts successfully.
+4. Publish successful `stopped` only for a daemon that reached readiness.
+5. Keep started/stopped audit failure secondary to lifecycle decisions.
+6. Verify partial worker failure, ordering, request visibility, and cleanup.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Instance-lock implementation and shutdown waiting remain unchanged.
-- Recovery does not delete the stable instance-lock file.
-- Durable business-state recovery remains owned by each subsystem.
+- Client status remains based on a successful typed ping response.
+- PID remains diagnostic metadata, not a readiness signal.
+- Worker-internal health degradation after startup remains separately reported.
 
 ## Completion Evidence
 
-- `_reconcile_stale_runtime_metadata()` runs inside the lock-owned daemon
-  boundary and independently removes stale socket and PID resources.
-- `DaemonRuntimeRecoveryError` retains every named reconciliation failure and
-  chains the first root error; normal owned cleanup still runs afterward.
-- Successful crash recovery emits one best-effort
-  `runtime_metadata_recovered` audit containing only socket/PID booleans.
-- PID publication moved inside the successfully bound Unix-server context and
-  still uses the crash-durable atomic text writer.
-- Bind failure cannot publish a PID; PID-publication failure stops before
-  workers start and removes the already-bound socket.
-- A contended starter still returns before recovery and preserves the active
-  owner's socket and PID unchanged.
-- Recovery success, dual failure, audit failure, bind ordering, publication
-  failure, and cleanup behavior have direct tests.
-- Focused daemon instance, server, lifecycle, config, and transport suites:
-  `137 passed`.
-- Full test suite: `1711 passed`.
+- `_run_owned_daemon()` now publishes `started` and marks readiness only after
+  socket bind, PID publication, and all five worker starts succeed.
+- The request loop begins strictly after readiness publication, so a successful
+  typed ping cannot precede the authoritative server boundary.
+- A partial worker-start failure runs every owned cleanup step but publishes
+  neither `started` nor the matching successful `stopped` record.
+- Successful `stopped` remains conditional on having reached readiness and on
+  every owned cleanup step succeeding.
+- Existing audit-failure coverage proves a failed `started` projection cannot
+  undo readiness or suppress the later authoritative cleanup decision.
+- Direct order tests cover PID-before-workers, all-workers-before-started,
+  started-before-request, request-before-stopped, and partial-start failure.
+- Focused daemon instance and server suites: `52 passed`.
+- Full test suite: `1713 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
@@ -55,5 +52,5 @@ Make daemon runtime metadata recovery explicit and ownership-safe.
 
 ## Next Review Batch
 
-Review daemon readiness publication and client observation after crash recovery
-has one explicit lock-owned boundary.
+Review explicit ownership/readiness status modeling after server publication
+order is authoritative.

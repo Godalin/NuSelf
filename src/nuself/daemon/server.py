@@ -127,7 +127,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
 
     state: DaemonState | None = None
     signal_owner: DaemonSignalOwner | None = None
-    started = False
+    ready = False
     primary_error: BaseException | None = None
     try:
         _reconcile_stale_runtime_metadata(paths)
@@ -141,17 +141,17 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
             state,
         ) as server:
             write_text_atomic(paths.pid_path, f"{os.getpid()}\n")
-            write_lifecycle_audit(
-                "started",
-                "daemon started",
-                project_root=paths.project_root,
-            )
-            started = True
             state.start_background_memory_curator()
             state.start_background_reflection_scheduler()
             state.start_background_reason_scheduler()
             state.start_background_export_worker()
             state.start_background_notification_delivery()
+            write_lifecycle_audit(
+                "started",
+                "daemon started",
+                project_root=paths.project_root,
+            )
+            ready = True
             server.timeout = 0.2
             while not state.shutdown_requested.is_set():
                 server.handle_request()
@@ -202,7 +202,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
         )
     )
     cleanup_failures = run_cleanup_steps(cleanup_steps)
-    if started and not cleanup_failures:
+    if ready and not cleanup_failures:
         write_lifecycle_audit(
             "stopped",
             "daemon stopped",

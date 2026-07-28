@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon `started`/`stopped` lifecycle records now represent actual readiness:
+  `started` is published only after every background worker starts and before
+  the first request can be accepted.
 - Daemon startup now reconciles stale socket and PID metadata explicitly while
   holding the instance lock, audits successful crash recovery, and publishes
   the current PID only after Unix-socket binding succeeds.

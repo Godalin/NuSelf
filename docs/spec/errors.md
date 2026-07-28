@@ -209,6 +209,13 @@ failure aborts initialization but does not skip the normal owned cleanup
 boundary. Binding precedes PID publication, so bind failure cannot publish a
 current-process PID. Recovery audit failure remains secondary.
 
+Daemon readiness is authoritative only after socket binding, PID publication,
+and every worker start operation succeed. The server publishes `started` at
+that boundary and begins request handling afterward. A partial worker-start
+failure performs full cleanup without publishing either a successful `started`
+or `stopped` record. Failure of the `started` audit itself remains secondary and
+does not undo readiness.
+
 Daemon shutdown owns an ordered set of named cleanup steps. It signals
 shutdown, attempts each worker stop independently, resets only the current
 project's default storage backend, removes the socket and PID independently,

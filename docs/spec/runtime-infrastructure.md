@@ -752,6 +752,20 @@ aggregated without discarding the primary failure. The daemon resets only the
 current project root's default storage backend; other in-process project
 backends are not part of its ownership.
 
+Daemon readiness has one ordered publication boundary:
+
+1. bind the Unix socket;
+2. publish the current PID;
+3. start every owned background worker;
+4. project `daemon/started` and mark the lifecycle ready;
+5. begin accepting socket requests.
+
+The `started` projection is best-effort and cannot prevent readiness. A worker
+startup failure before step 4 is a startup failure: it runs full cleanup but
+must not publish `started` or the matching successful `stopped` lifecycle
+record. A daemon ping can succeed only after this boundary because request
+handling begins last.
+
 ### PID Metadata
 
 After socket binding, the lock owner publishes

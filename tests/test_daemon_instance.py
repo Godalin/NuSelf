@@ -488,6 +488,180 @@ def test_pid_is_published_only_after_successful_bind(
     assert not paths.pid_path.exists()
 
 
+def test_readiness_is_published_after_all_workers_and_before_requests(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import signal
+    import nuself.daemon.server as server_module
+
+    paths = runtime_paths(tmp_path)
+    paths.runtime_dir.mkdir(parents=True)
+    states: list[_UnstartedDaemonState] = []
+    transitions: list[str] = []
+
+    class OrderedState(_UnstartedDaemonState):
+        def start_background_memory_curator(self) -> None:
+            assert int(paths.pid_path.read_text(encoding="utf-8")) > 0
+            super().start_background_memory_curator()
+
+    class OneRequestServer:
+        def __init__(
+            self,
+            socket_path: str,
+            handler: object,
+            state: object,
+        ) -> None:
+            assert isinstance(state, OrderedState)
+            self.state = state
+            self.timeout = 0.0
+
+        def __enter__(self) -> OneRequestServer:
+            return self
+
+        def __exit__(
+            self,
+            exc_type: object,
+            exc: object,
+            traceback: object,
+        ) -> None:
+            return None
+
+        def handle_request(self) -> None:
+            assert transitions == ["started"]
+            transitions.append("request")
+            self.state.shutdown_requested.set()
+
+    def make_state(project_root: Path) -> OrderedState:
+        state = OrderedState(project_root)
+        states.append(state)
+        return state
+
+    def capture_write(
+        component: object,
+        event: str,
+        message: str,
+        **kwargs: object,
+    ) -> object:
+        if event == "started":
+            assert states[0].start_calls == [
+                "memory",
+                "reflection",
+                "reason",
+                "export",
+                "notification",
+            ]
+            transitions.append("started")
+        elif event == "stopped":
+            assert transitions == ["started", "request"]
+            transitions.append("stopped")
+        return object()
+
+    def ignore_signal(
+        signal_number: int,
+        handler: object,
+    ) -> object:
+        return handler
+
+    monkeypatch.setattr(server_module, "DaemonState", make_state)
+    monkeypatch.setattr(server_module, "NuSelfUnixServer", OneRequestServer)
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        capture_write,
+    )
+    monkeypatch.setattr(signal, "signal", ignore_signal)
+
+    assert server_module._run_owned_daemon(paths) == 0
+    assert transitions == ["started", "request", "stopped"]
+
+
+def test_partial_worker_start_failure_never_publishes_ready_lifecycle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import signal
+    import nuself.daemon.server as server_module
+
+    paths = runtime_paths(tmp_path)
+    paths.runtime_dir.mkdir(parents=True)
+    states: list[_UnstartedDaemonState] = []
+    lifecycle_events: list[str] = []
+    start_error = RuntimeError("reason worker start failed")
+
+    class FailingState(_UnstartedDaemonState):
+        def start_background_reason_scheduler(self) -> None:
+            super().start_background_reason_scheduler()
+            raise start_error
+
+    class BoundServer:
+        def __init__(
+            self,
+            socket_path: str,
+            handler: object,
+            state: object,
+        ) -> None:
+            paths.socket_path.write_text("bound", encoding="utf-8")
+
+        def __enter__(self) -> BoundServer:
+            return self
+
+        def __exit__(
+            self,
+            exc_type: object,
+            exc: object,
+            traceback: object,
+        ) -> None:
+            return None
+
+    def make_state(project_root: Path) -> FailingState:
+        state = FailingState(project_root)
+        states.append(state)
+        return state
+
+    def capture_write(
+        component: object,
+        event: str,
+        message: str,
+        **kwargs: object,
+    ) -> object:
+        lifecycle_events.append(event)
+        return object()
+
+    def ignore_signal(
+        signal_number: int,
+        handler: object,
+    ) -> object:
+        return handler
+
+    monkeypatch.setattr(server_module, "DaemonState", make_state)
+    monkeypatch.setattr(server_module, "NuSelfUnixServer", BoundServer)
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        capture_write,
+    )
+    monkeypatch.setattr(signal, "signal", ignore_signal)
+
+    with pytest.raises(RuntimeError) as captured:
+        server_module._run_owned_daemon(paths)
+
+    assert captured.value is start_error
+    assert lifecycle_events == []
+    assert states[0].start_calls == [
+        "memory",
+        "reflection",
+        "reason",
+    ]
+    assert states[0].stop_calls == [
+        "memory",
+        "reflection",
+        "reason",
+        "export",
+        "notification",
+    ]
+    assert not paths.socket_path.exists()
+    assert not paths.pid_path.exists()
+
+
 def test_bind_failure_starts_no_workers_and_cleans_owned_resources(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
