@@ -65,6 +65,45 @@ def test_global_persona_think_uses_injected_text_agent(
     assert agent.calls[0][1].text == "What is missing?"
 
 
+def test_persona_think_sanitizes_agent_failure(
+    tmp_path: Path,
+) -> None:
+    agent_secret = "persona-secret-value"
+
+    class _FailingTextAgent(_TextAgent):
+        def invoke(self, messages: Sequence[BaseMessage]) -> str:
+            self.calls.append(messages)
+            raise RuntimeError(
+                f"persona unavailable api_key={agent_secret}"
+            )
+
+    tools = build_persona_tools(
+        tmp_path,
+        text_agent=_FailingTextAgent(),
+    )
+    _invoke_tool(
+        _tool(tools, "persona_craft"),
+        {
+            "name": "reviewer",
+            "prompt": "Review assumptions carefully.",
+        },
+    )
+
+    result = _invoke_tool(
+        _tool(tools, "persona_think"),
+        {
+            "persona": "reviewer",
+            "question": "What is missing?",
+        },
+    )
+
+    assert result == (
+        "Error consulting persona 'reviewer': "
+        "persona unavailable api_key=***"
+    )
+    assert agent_secret not in str(result)
+
+
 def test_reason_persona_think_uses_same_injected_text_agent(
     tmp_path: Path,
 ) -> None:

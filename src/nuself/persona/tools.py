@@ -10,6 +10,7 @@ from langchain_core.tools import StructuredTool
 
 from nuself.agent.text import TextAgent, default_text_agent
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.observability import run_observed_best_effort
 from nuself.storage import get_default_backend
 from nuself.store import ScopedWorkspace, WorkspaceCollection
@@ -133,7 +134,10 @@ def build_persona_tools(
         try:
             response = persona_agent.invoke(messages)
         except (RuntimeError, ValueError) as exc:
-            return f"Error consulting persona '{prompt.name}': {exc}"
+            return (
+                f"Error consulting persona '{prompt.name}': "
+                f"{diagnostic_exception_message(exc)}"
+            )
 
         return response
 
@@ -380,7 +384,10 @@ def build_reason_persona_tools(
         try:
             result = persona_agent.invoke(messages)
         except (RuntimeError, ValueError) as exc:
-            return f"persona_think failed: {exc}"
+            return (
+                "persona_think failed: "
+                f"{diagnostic_exception_message(exc)}"
+            )
         return result
 
     def _disable(persona: str) -> str:

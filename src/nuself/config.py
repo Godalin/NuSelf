@@ -13,6 +13,8 @@ from typing import Any, cast
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from nuself.runtime.diagnostics import diagnostic_exception_message
+
 
 # ============================================================================
 # Runtime Paths
@@ -379,7 +381,11 @@ class ConfigSystem:
                 # other exception is a real bug and is left to propagate.
                 import sys
 
-                print(f"nuself: ignoring unreadable config {config_path}: {exc}", file=sys.stderr)
+                print(
+                    f"nuself: ignoring unreadable config {config_path}: "
+                    f"{diagnostic_exception_message(exc)}",
+                    file=sys.stderr,
+                )
 
         # Normalize llm: [...] (YAML list) to llm: {endpoints: [...]}
         llm_raw: object = yaml_data.get("llm")

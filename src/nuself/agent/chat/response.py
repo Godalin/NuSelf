@@ -34,6 +34,7 @@ from nuself.llm import (
     is_endpoint_availability_error,
     redacted_llm_diagnostic,
 )
+from nuself.runtime.diagnostics import safe_exception_message
 from nuself.runtime.observability import (
     report_observed_failure,
     write_observed_log_event,
@@ -134,12 +135,16 @@ class ConversationResponseSynthesizer:
                 retry_if=lambda exc: (
                     not retry_suppressed
                     and is_recoverable_agent_failure(exc)
-                    and not is_endpoint_availability_error(str(exc))
+                    and not is_endpoint_availability_error(
+                        safe_exception_message(exc)
+                    )
                 ),
                 failover_if=lambda exc: (
                     not retry_suppressed
                     and is_recoverable_agent_failure(exc)
-                    and is_endpoint_availability_error(str(exc))
+                    and is_endpoint_availability_error(
+                        safe_exception_message(exc)
+                    )
                 ),
                 on_retry=self._log_retry,
             )

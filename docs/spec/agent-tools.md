@@ -345,6 +345,12 @@ Tool-log projection is a secondary observation effect:
   exception stringification is broken;
 - no logging or reporting failure triggers a hidden tool retry.
 
+Domain tool adapters also use the shared diagnostic exception formatter when
+returning an expected error result to the model. A repository, validation, or
+lookup error may retain its existing tool-result classification, but its local
+adapter must not directly stringify the caught exception or expose
+credential-like values.
+
 Direct service-status queries, such as asking how many memory/reflection/reason/trace records exist, should call those service tools directly. These are operational tool queries; persona discussion before tool results tends to invent capability limits and adds noise.
 
 ## Tool Catalog

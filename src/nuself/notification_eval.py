@@ -18,6 +18,7 @@ from nuself.eval import EvalResult
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.notification.deep_link import DeepLink
 from nuself.reflection import ReflectionScheduler
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage import FileStorageBackend
 
 
@@ -60,7 +61,7 @@ def run_notification_eval(
                         fixture_name=name,
                         passed=False,
                         score=0.0,
-                        failures=(str(exc),),
+                        failures=(diagnostic_exception_message(exc),),
                     )
                 )
             else:

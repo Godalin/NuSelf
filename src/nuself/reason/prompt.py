@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.reason.errors import ReasonPromptError
+from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 class ReasonPromptOutput(BaseModel):
@@ -126,7 +127,8 @@ Do NOT include field type/format descriptions — only explain meaning.
         )
     except (RuntimeError, ValueError) as exc:
         raise ReasonPromptError(
-            f"Cannot generate reasoning prompt: {exc}"
+            "Cannot generate reasoning prompt: "
+            f"{diagnostic_exception_message(exc)}"
         ) from exc
     return output.prompt
 

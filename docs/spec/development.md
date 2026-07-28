@@ -178,6 +178,14 @@ middleware changes.
 Handlers and middleware, including constructor-provided middleware, must be
 callable and are rejected with `TypeError` at their composition boundary.
 
+Caught exceptions must never be rendered locally with `str(exception)` or
+f-string interpolation. Diagnostic output, fallback text, wrapping messages,
+tool results, and persisted fields use
+`diagnostic_exception_message(...)`. Control-flow classification that must
+inspect the original message uses `safe_exception_message(...)` and retains the
+original exception object. Existing string output such as subprocess stderr is
+sanitized with `redact_sensitive_text(...)` before diagnostic persistence.
+
 `resolve()` exposes the directly registered handler only before sealing for
 composition-time inspection. It raises `HandlerRegistrySealedError` after
 sealing; runtime callers use `dispatch()` so middleware cannot be bypassed.

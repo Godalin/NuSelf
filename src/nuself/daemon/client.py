@@ -156,7 +156,8 @@ def decode_response(
         return decoder(response.payload)
     except ProtocolError as exc:
         raise DaemonConnectionError(
-            f"daemon {operation} response is malformed: {exc}",
+            f"daemon {operation} response is malformed: "
+            f"{diagnostic_exception_message(exc)}",
             phase="payload_decode",
             request_id=response.request_id,
         ) from exc

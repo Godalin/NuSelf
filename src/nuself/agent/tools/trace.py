@@ -5,6 +5,7 @@ from __future__ import annotations
 from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.common import structured_tool_factory
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.trace.repository import TraceNotFound
 from nuself.trace.service import TraceQueryService
 from nuself.tui.trace import render_trace_detail, render_trace_row
@@ -55,7 +56,7 @@ def build_trace_tools(
         try:
             trace = service.show_trace(trace_id.strip())
         except TraceNotFound as exc:
-            return f"Error: {exc}"
+            return f"Error: {diagnostic_exception_message(exc)}"
         return render_trace_detail(trace, service.links_for(trace.id))
 
     def related_traces(artifact_ref: str, limit: int = 5) -> str:

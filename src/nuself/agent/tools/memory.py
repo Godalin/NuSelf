@@ -16,6 +16,7 @@ from nuself.memory.repository import (
     MemoryEntryNotFound,
     MemoryEntryRepository,
 )
+from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 @dataclass(frozen=True)
@@ -106,7 +107,10 @@ def build_memory_tool_set(
         try:
             entry = repository.get(entry_id)
         except MemoryEntryNotFound as exc:
-            return f"Error: could not find memory entry: {exc}"
+            return (
+                "Error: could not find memory entry: "
+                f"{diagnostic_exception_message(exc)}"
+            )
         updated = entry.with_updates(review_state="archived")
         repository.save(updated)
         repository.reindex()
@@ -128,7 +132,10 @@ def build_memory_tool_set(
         try:
             entry = repository.get(entry_id)
         except MemoryEntryNotFound as exc:
-            return f"Error: could not find memory entry: {exc}"
+            return (
+                "Error: could not find memory entry: "
+                f"{diagnostic_exception_message(exc)}"
+            )
         updated = entry.with_updates(importance=importance_float)
         repository.save(updated)
         repository.reindex()

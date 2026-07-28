@@ -8,6 +8,7 @@ from typing import cast, overload
 from nuself.daemon.protocol import JsonValue, ProtocolError
 from nuself.daemon.types import WorkerHealth
 from nuself.logs import LogEvent
+from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 @dataclass(frozen=True)
@@ -211,7 +212,8 @@ class HealthResponsePayload:
                 decoded.append(WorkerHealthPayload.from_wire(worker))
             except ProtocolError as exc:
                 raise ProtocolError(
-                    f"health response worker[{index}] is invalid: {exc}"
+                    f"health response worker[{index}] is invalid: "
+                    f"{diagnostic_exception_message(exc)}"
                 ) from exc
         return cls(tuple(decoded))
 
@@ -464,7 +466,8 @@ class ActivityEventsResponsePayload:
                 )
             except ValueError as exc:
                 raise ProtocolError(
-                    f"activity response event[{index}] is invalid: {exc}"
+                    f"activity response event[{index}] is invalid: "
+                    f"{diagnostic_exception_message(exc)}"
                 ) from exc
         return cls(tuple(decoded))
 

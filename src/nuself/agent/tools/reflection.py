@@ -9,6 +9,7 @@ from langchain_core.tools import BaseTool
 from nuself.agent.tools.common import structured_tool_factory
 from nuself.handles import VisibleHandleError, parse_visible_index
 from nuself.reflection.repository import ReflectionRepository
+from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 def build_reflection_tools(
@@ -53,7 +54,7 @@ def build_reflection_tools(
                 label="reflection",
             )
         except VisibleHandleError as exc:
-            return f"Error: {exc}"
+            return f"Error: {diagnostic_exception_message(exc)}"
         except (ValueError, TypeError):
             return "Error: index must be an integer"
         entry = entries[selected]
@@ -70,7 +71,7 @@ def build_reflection_tools(
                 label="reflection",
             )
         except VisibleHandleError as exc:
-            return f"Error: {exc}"
+            return f"Error: {diagnostic_exception_message(exc)}"
         except (ValueError, TypeError):
             return "Error: index must be an integer"
         entry = entries[selected]

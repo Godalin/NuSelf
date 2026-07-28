@@ -32,6 +32,7 @@ from nuself.persona.definition import (
     PersonaSynthesizerNode,
     PersonaTurnState,
 )
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.observability import report_observed_failure
 
 class PersonaGraphState(TypedDict):
@@ -319,7 +320,9 @@ class AgentBackedActivationPolicy:
                 trigger="agent_fallback",
                 selected_personas=(),
                 should_escalate=False,
-                escalation_reason=f"fallback: {exc}",
+                escalation_reason=(
+                    f"fallback: {diagnostic_exception_message(exc)}"
+                ),
             )
 
     def _activation_from_structured(self, output: PersonaActivationOutput) -> PersonaActivation:

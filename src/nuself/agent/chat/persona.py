@@ -23,7 +23,10 @@ from nuself.persona import (
     persona_graph_agents,
 )
 from nuself.runtime.context import current_runtime_context
-from nuself.runtime.diagnostics import diagnostic_exception_chain
+from nuself.runtime.diagnostics import (
+    diagnostic_exception_chain,
+    diagnostic_exception_message,
+)
 from nuself.runtime.observability import (
     write_observed_log_event,
 )
@@ -206,15 +209,16 @@ class ConversationPersonaOrchestrator:
         except Exception as exc:
             if not is_recoverable_agent_failure(exc):
                 raise
+            error = diagnostic_exception_message(exc)
             self._write_audit(
                 "persona_discussion_failure",
-                str(exc),
+                error,
                 thread_id=thread_id,
                 level="error",
-                error=str(exc),
+                error=error,
                 metadata={"original_error": diagnostic_exception_chain(exc)},
             )
-            return f"\nDiscussion failed: {exc}"
+            return f"\nDiscussion failed: {error}"
 
     def _default_personas(self) -> tuple[PersonaDefinition, ...]:
         preferred = ("analyst_self", "skeptic_self", "builder_self")

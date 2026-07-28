@@ -19,6 +19,10 @@ rather than calling `str(exception)` locally. The formatter cannot raise when
 exception rendering fails and sanitizes before returning text.
 CLI adapters use this formatter for every caught exception they render or
 project. Local command modules must not interpolate caught exceptions directly.
+The same rule applies to agent tools, domain fallbacks, exception wrappers,
+daemon payload adapters, background status, and configuration warnings.
+Control-flow classification may inspect `safe_exception_message(...)`, but it
+must not use a formatting failure as a new application failure.
 
 ## Error Classes
 

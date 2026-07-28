@@ -18,6 +18,10 @@ from nuself.clock import utc_now, utc_now_iso
 from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.service import ReasonService
+from nuself.runtime.diagnostics import (
+    diagnostic_exception_message,
+    redact_sensitive_text,
+)
 from nuself.runtime.jobs import JobMessage, JobSink
 from nuself.runtime.observability import (
     report_corrupt_record,
@@ -818,6 +822,19 @@ class ReasonOutputService:
             )
             return None
         except subprocess.CalledProcessError as exc:
+            process_error = next(
+                (
+                    value.strip()
+                    for value in (exc.stderr, exc.stdout)
+                    if isinstance(value, str) and value.strip()
+                ),
+                "",
+            )
+            error = (
+                redact_sensitive_text(process_error)
+                if process_error
+                else diagnostic_exception_message(exc)
+            )
             write_observed_log_event(
                 "reasoning",
                 "reason_output_pdf_failed",
@@ -825,7 +842,7 @@ class ReasonOutputService:
                 project_root=self._project_root,
                 level="warning",
                 status="error",
-                error=exc.stderr.strip() or exc.stdout.strip() or str(exc),
+                error=error,
                 metadata={"combined": str(paths.combined), "pdf": str(paths.pdf)},
             )
             return None

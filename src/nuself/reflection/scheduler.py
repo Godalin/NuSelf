@@ -20,6 +20,7 @@ from nuself.notification.deep_link import DeepLink
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.persona import PersonaCompetitionResult, SharedPersonaDiscussionService
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.observability import (
     report_observed_failure,
     write_observed_log_event,
@@ -521,11 +522,11 @@ class LLMRelevanceGate:
         try:
             return self._score_with_agent(candidate, cooldown_ok)
         except (RuntimeError, ValueError) as e:
-
+            error = diagnostic_exception_message(e)
             write_observed_log_event(
                 "reflection",
                 "relevance_gate_fallback",
-                f"Relevance agent failed, using fallback: {e}",
+                f"Relevance agent failed, using fallback: {error}",
                 project_root=self._project_root,
                 level="warning",
                 status="error",
@@ -707,6 +708,7 @@ class IdeaCandidateGenerator:
                 )
             return candidates
         except (RuntimeError, ValueError) as e:
+            error = diagnostic_exception_message(e)
             write_observed_log_event(
                 "reflection",
                 "candidate_generation_failed",
@@ -714,7 +716,7 @@ class IdeaCandidateGenerator:
                 project_root=self._project_root,
                 level="warning",
                 status="error",
-                error=str(e)
+                error=error,
             )
             return []
 

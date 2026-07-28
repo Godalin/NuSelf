@@ -15,6 +15,7 @@ from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.output import ReasonOutputService, SectionPlanner
 from nuself.reason.service import ReasonService
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.jobs import JobSink
 from nuself.runtime.observability import write_observed_log_event
 
@@ -83,7 +84,7 @@ def build_reason_tools(
         try:
             thread = service.show_thread(tid)
         except ReasonNotFound as exc:
-            return _json_error(str(exc))
+            return _json_error(diagnostic_exception_message(exc))
         return _json_result(
             _reason_show_payload(thread, service.list_steps(thread.id))
         )
@@ -102,7 +103,7 @@ def build_reason_tools(
             else:
                 thread = service.show_thread(tid)
         except ReasonNotFound as exc:
-            return _json_error(str(exc))
+            return _json_error(diagnostic_exception_message(exc))
         steps = service.list_steps(thread.id)
         return _json_result(
             {
@@ -129,7 +130,7 @@ def build_reason_tools(
             else:
                 thread = service.show_thread(tid)
         except ReasonNotFound as exc:
-            return _json_error(str(exc))
+            return _json_error(diagnostic_exception_message(exc))
         steps = service.list_steps(thread.id)
         if not steps:
             return _json_error(
@@ -146,7 +147,7 @@ def build_reason_tools(
                     label="reason step",
                 )
             except VisibleHandleError as exc:
-                return _json_error(str(exc))
+                return _json_error(diagnostic_exception_message(exc))
             selected = steps[index]
         else:
             matches = [
@@ -244,7 +245,7 @@ def build_reason_tools(
                 segment_size=int(segment_size),
             )
         except (RuntimeError, ValueError, TypeError) as exc:
-            return _json_error(str(exc))
+            return _json_error(diagnostic_exception_message(exc))
         paths = output_service.job_paths(tid, manifest.job_id)
         return _json_result(
             {

@@ -8,6 +8,7 @@ from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionEntryNotFound, ReflectionRepository
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.trace.service import TraceRecorder
 
 
@@ -56,7 +57,7 @@ class ReflectionService:
         try:
             entry = resolve_visible_item(id_or_index, entries, label="reflection")
         except VisibleHandleError as exc:
-            raise ValueError(str(exc)) from exc
+            raise ValueError(diagnostic_exception_message(exc)) from exc
         if entry is None:
             raise ValueError(f"invalid reflection index: {id_or_index}")
         return entry

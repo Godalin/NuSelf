@@ -14,6 +14,7 @@ from nuself.llm import (
     redact_llm_error,
 )
 from nuself.logs import LogComponent
+from nuself.runtime.diagnostics import safe_exception_message
 from nuself.runtime.observability import report_observed_failure
 
 
@@ -101,7 +102,7 @@ def invoke_agent_endpoint(
 
 
 def _is_availability_failure(exc: Exception) -> bool:
-    return is_endpoint_availability_error(str(exc))
+    return is_endpoint_availability_error(safe_exception_message(exc))
 
 
 def _report_endpoint_failure(

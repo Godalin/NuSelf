@@ -22,6 +22,7 @@ from nuself.runtime import (
     freeze_json_value,
     thaw_json_value,
 )
+from nuself.runtime.diagnostics import safe_exception_message
 from nuself.runtime.observability import report_corrupt_record
 from nuself.storage import (
     COLLECTION_LOG_COMPONENTS,
@@ -224,7 +225,8 @@ class SqliteCollection:
             except sqlite3.OperationalError as exc:
                 self._column_cache.pop(self._table, None)
                 if (
-                    "duplicate column name" not in str(exc).lower()
+                    "duplicate column name"
+                    not in safe_exception_message(exc).lower()
                     or k not in self._columns()
                 ):
                     raise

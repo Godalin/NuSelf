@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Agent tools, persona, reflection, reason, notification, daemon payload, and
+  configuration adapters now share safe caught-exception rendering; retry and
+  compatibility classification remain based on the original exception.
 - CLI chat, REPL, transcript, and command adapters now share safe exception
   presentation, preventing caught exceptions with credentials or broken string
   renderers from leaking or replacing the intended command result.
