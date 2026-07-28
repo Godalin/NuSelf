@@ -16,7 +16,10 @@ from nuself.agent.failover import invoke_agent_endpoint
 from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
 from nuself.agent.structured import require_structured_response
 
-from nuself.llm import LangChainLLMEndpoint
+from nuself.llm import (
+    LangChainLLMEndpoint,
+    configured_langchain_chat_models,
+)
 from nuself.reason.domain import (
     ReasoningStep,
     ReasoningThread,
@@ -437,3 +440,26 @@ class ReasonAdvancer:
             global_project_root=self._project_root,
             get_thread_workspace=_thread_workspace,
         )
+
+
+def default_reason_advancer(
+    *,
+    project_root: Path | None,
+    workspace_store: PrivateWorkspaceStore | None = None,
+    readonly_tools: Sequence[Any] | None = None,
+    langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
+) -> ReasonAdvancer:
+    """Compose the default reason capability from explicit or project inputs."""
+    return ReasonAdvancer(
+        project_root=project_root,
+        workspace_store=(
+            workspace_store
+            or PrivateWorkspaceStore(project_root, scope="reason")
+        ),
+        readonly_tools=readonly_tools,
+        langchain_models=(
+            configured_langchain_chat_models(project_root)
+            if langchain_models is None
+            else langchain_models
+        ),
+    )

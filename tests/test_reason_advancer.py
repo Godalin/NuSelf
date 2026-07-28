@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from threading import Lock
 import time
-from typing import Any, cast
+from typing import Any, Never, cast
 
 import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -26,11 +26,73 @@ from nuself.reason.advancer import (
     _current_reason_thread_id,
     build_advance_prompt,
     build_system_prompt,
+    default_reason_advancer,
 )
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.errors import ReasonAdvanceError
 from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
 from nuself.workspace import PrivateWorkspaceStore
+
+
+def test_default_reason_advancer_loads_project_endpoints_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    endpoint = LangChainLLMEndpoint(
+        index=0,
+        settings=LLMSettings(
+            base_url="https://reason.test/v1",
+            api_key="test",
+            model="reason-test",
+        ),
+        model=cast(BaseChatModel, object()),
+    )
+    calls: list[Path | None] = []
+
+    def configured(
+        project_root: Path | None,
+    ) -> tuple[LangChainLLMEndpoint, ...]:
+        calls.append(project_root)
+        return (endpoint,)
+
+    def create_agent(**kwargs: object) -> object:
+        return kwargs
+
+    monkeypatch.setattr(
+        "nuself.reason.advancer.configured_langchain_chat_models",
+        configured,
+    )
+    monkeypatch.setattr(
+        "nuself.reason.advancer._create_agent",
+        create_agent,
+    )
+
+    advancer = default_reason_advancer(project_root=tmp_path)
+
+    assert calls == [tmp_path]
+    assert advancer._langchain_models == (endpoint,)
+    assert advancer._workspace_store is not None
+
+
+def test_default_reason_advancer_preserves_explicit_empty_endpoints(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected(project_root: Path | None) -> Never:
+        del project_root
+        raise AssertionError("configured endpoints must not be loaded")
+
+    monkeypatch.setattr(
+        "nuself.reason.advancer.configured_langchain_chat_models",
+        unexpected,
+    )
+
+    advancer = default_reason_advancer(
+        project_root=tmp_path,
+        langchain_models=(),
+    )
+
+    assert advancer._langchain_models == ()
 
 
 class _RecordingAgent:

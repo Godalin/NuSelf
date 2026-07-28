@@ -1,6 +1,9 @@
 """Reason subsystem: long-run reasoning threads."""
 
-from nuself.reason.advancer import ReasonAdvancer
+from nuself.reason.advancer import (
+    ReasonAdvancer,
+    default_reason_advancer,
+)
 from nuself.reason.domain import (
     REASON_STATUSES,
     STEP_KINDS,
@@ -40,6 +43,7 @@ __all__ = [
     "ACTIVE_STATUSES",
     "REASON_STORAGE_VERSION",
     "ReasonAdvancer",
+    "default_reason_advancer",
     "ReasonAdvanceError",
     "ReasonError",
     "ReasonNotFound",

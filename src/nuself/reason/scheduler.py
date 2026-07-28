@@ -10,13 +10,15 @@ from typing import Any
 from nuself.clock import utc_now
 from nuself.llm import LangChainLLMEndpoint
 from nuself.logs import write_log_event
-from nuself.reason.advancer import ReasonAdvancer
+from nuself.reason.advancer import (
+    ReasonAdvancer,
+    default_reason_advancer,
+)
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.runtime.context import runtime_context
 from nuself.runtime.observability import report_observed_failure
-from nuself.workspace import PrivateWorkspaceStore
 
 
 class ReasonScheduler:
@@ -37,12 +39,10 @@ class ReasonScheduler:
         self._service = service or ReasonService(project_root)
         self._repository = ReasonRepository(project_root)
         self._interval_seconds = interval_seconds
-        self._workspace_store = PrivateWorkspaceStore(project_root, scope="reason")
 
         if advancer is None and project_root is not None:
-            self._advancer = ReasonAdvancer(
+            self._advancer = default_reason_advancer(
                 project_root=project_root,
-                workspace_store=self._workspace_store,
                 readonly_tools=readonly_tools,
                 langchain_models=langchain_models,
             )

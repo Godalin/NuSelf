@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- CLI, REPL, and background scheduling now use one reason-layer factory to
+  compose `ReasonAdvancer` workspace and model dependencies. A directly
+  constructed scheduler with a project root now loads configured endpoints
+  instead of silently creating an empty advancer; explicit injected endpoints
+  and tools remain authoritative.
 - Reason prompt generation no longer constructs configured models once for an
   availability preflight and again for the real structured agent. The shared
   agent invocation is now the sole availability boundary; no-model failures

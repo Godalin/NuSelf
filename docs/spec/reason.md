@@ -423,6 +423,14 @@ advance(thread)
 
 CLI, REPL, scheduler, and service-driven advance must converge on the same `ReasonAdvancer` path when a generated step is needed. Silent downgrade to a raw `ChatLLM.complete()` path, a placeholder step, or any other fake advance is not allowed. If no LangChain model is configured, or if the advancer fails to return a structured step, the operation fails clearly and no step is persisted.
 
+Default `ReasonAdvancer` composition is owned by one reason-layer factory. The
+factory creates the reason-scoped workspace store and uses configured
+LangChain endpoints when no endpoint tuple is explicitly injected. CLI, REPL,
+and scheduler call this factory rather than assembling the capability
+themselves. Explicit endpoint/tool/workspace arguments remain authoritative
+for daemon reuse and tests; an explicitly empty endpoint tuple means no model,
+not "load defaults".
+
 `ReasonAdvancer` builds one equivalent tool-enabled agent per configured
 endpoint and uses the shared agent endpoint-failover primitive only for
 availability failures that occur before any tool outcome. Successful endpoint

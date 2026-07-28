@@ -158,11 +158,11 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         return f"Started reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("advance "):
         thread_id = command.removeprefix("advance ").strip()
-        from nuself.llm import configured_langchain_chat_models
-        from nuself.reason.advancer import ReasonAdvancer
-        from nuself.workspace import PrivateWorkspaceStore
+        from nuself.reason.advancer import default_reason_advancer
 
-        advancer = ReasonAdvancer(project_root=project_root, workspace_store=PrivateWorkspaceStore(project_root, scope="reason"), langchain_models=configured_langchain_chat_models(project_root))
+        advancer = default_reason_advancer(
+            project_root=project_root,
+        )
         service = ReasonService(project_root, advancer=advancer)
         try:
             thread = service.advance_thread(thread_id)

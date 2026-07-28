@@ -83,18 +83,10 @@ def handle_reason_thread_action(args: argparse.Namespace) -> int:
     verb, method_name = REASON_VERBS[args.action]
     service = ReasonService(args.project_root)
     if args.action == "advance":
-        from nuself.llm import configured_langchain_chat_models
-        from nuself.reason.advancer import ReasonAdvancer
-        from nuself.workspace import PrivateWorkspaceStore
+        from nuself.reason.advancer import default_reason_advancer
 
-        advancer = ReasonAdvancer(
+        advancer = default_reason_advancer(
             project_root=args.project_root,
-            workspace_store=PrivateWorkspaceStore(
-                args.project_root, scope="reason"
-            ),
-            langchain_models=configured_langchain_chat_models(
-                args.project_root
-            ),
         )
         service = ReasonService(args.project_root, advancer=advancer)
     method = getattr(service, method_name)
