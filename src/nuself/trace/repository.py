@@ -7,6 +7,8 @@ import threading
 from typing import Literal, cast
 
 from nuself.handles import VisibleHandleError, resolve_visible_item
+from nuself.config import runtime_paths
+from nuself.derived import write_derived_index
 from nuself.storage import StorageBackend, auto_backend
 from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
 
@@ -33,6 +35,7 @@ class TraceRepository:
         self._traces = be.collection("trace_nodes")
         self._links = be.collection("trace_edges")
         self._lock = threading.RLock()
+        self._paths = runtime_paths(project_root)
 
     def save_trace(self, trace: ThoughtTrace) -> ThoughtTrace:
         with self._lock:
@@ -148,7 +151,15 @@ class TraceRepository:
         return sorted(links, key=lambda link: (link.created_at, link.id))
 
     def reindex(self) -> Path:
-        return Path("_reindexed_")
+        records: list[object] = [
+            {"_record_kind": "trace", **item.to_wire()}
+            for item in self.list_traces(visibility="all")
+        ]
+        for wire in self._links.list():
+            records.append({"_record_kind": "link", **wire})
+        return write_derived_index(
+            self._paths, "trace_index.json", records
+        )
 
 
 def _visible(visibility: TraceVisibility, visibility_filter: TraceVisibilityFilter) -> bool:

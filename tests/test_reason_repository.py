@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from nuself.reason.domain import ReasoningStep, ReasoningThread
@@ -112,5 +113,10 @@ def test_reindex(tmp_path: Path) -> None:
     repo.save_thread(t)
     s = ReasoningStep(thread_id=t.id, summary="Step")
     repo.save_step(s)
-    repo.reindex()
-    # reindex is a no-op with StorageBackend; index.json no longer written
+    path = repo.reindex()
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["version"] == 1
+    assert {item["_record_kind"] for item in payload["records"]} == {
+        "thread",
+        "step",
+    }

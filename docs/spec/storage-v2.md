@@ -188,14 +188,43 @@ Repository 内部纯数据逻辑不变（`to_wire()` / `from_wire()` 已就绪�
 ### 核心变更
 
 1. 实现 `SqliteStorageBackend` 适配同一 `StorageBackend` 接口
-2. 引入 schema version (via `PRAGMA user_version`) + migration system
+2. 引入 `_schema_version` 表 + migration system
 3. 支持事务化 trace/reason 操作（因果链批量提交）
 4. 引入 `workspace_entries` 表（reason scratch pad）
 
 ### 设计原则
 
-**structured fields + payload_json**: 每张表的 `data` 列存完整 `to_wire()` JSON，
-关键过滤/排序字段抽成独立列并建索引。Repo 不需要 parsed 字段时可跳过 `data` 列。
+当前 SQLite 适配器使用通用 collection 表：`id` 是主键，每个 wire
+字典的顶层字段对应一个动态 JSON 文本列。这个布局优先保持
+`StorageCollection` 与文件后端的通用 round-trip 语义；领域专用索引、FTS5
+和完整 payload 镜像仍是后续 schema 演进事项，不能描述成已经实现。
+
+`put(id, value)` 是完整对象替换，不是 partial patch。调用方必须传入完整
+wire 字典；SQLite 使用 conflict update 实现替换语义，不能依赖
+`INSERT OR REPLACE` 的隐式 delete+insert 行为。
+
+### Transaction contract
+
+- `StorageBackend.transaction()` 包围一个原子写入批次。
+- SQLite 后端必须在最外层 transaction 使用
+  `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK`；批次内 collection 写入不得自行
+  commit。
+- 同一线程允许嵌套 transaction；只有最外层上下文拥有数据库事务。
+- transaction 抛出异常时，本批次所有写入回滚。
+- 文件后端无法提供跨文件数据库事务；它至少序列化批次，并继续依赖单文件
+  atomic replace。调用方不得把它描述为跨文件原子提交。
+
+Reason 的 step + thread 更新必须使用 backend transaction，避免只写入 step
+但没有推进 thread 的半完成状态。
+
+### Schema migration safety
+
+- schema migration 必须在数据库事务中执行，任一步失败都不得提升版本号。
+- 破坏性 migration 前必须使用 SQLite backup API 创建同目录备份。
+- v1 `payload` 数据升级为动态列时，先解析每行完整 JSON object，将其展开并
+  验证 ID，再删除旧列；不允许直接 drop `payload`。
+- migration 测试必须从真实旧 schema fixture 开始，验证条数、ID 和完整 wire
+  数据在升级后保持一致，并验证失败时回滚。
 
 ### 核心表清单
 
@@ -220,7 +249,7 @@ profile_items        ← 画像条目
 metadata             ← schema 元数据 / 系统信息
 ```
 
-### 表结构模式
+### Future indexed table direction
 
 ```sql
 CREATE TABLE memory_entries (
@@ -247,7 +276,7 @@ CREATE INDEX idx_thread_status ON reason_threads(status);
 -- 同类模式扩展至全部核心表
 ```
 
-### 全文搜索
+### Future full-text search
 
 Memory search 当前的手写 tokenize+score 逻辑保留评估，v0.2.4 引入 FTS5
 作为可选搜索后端：

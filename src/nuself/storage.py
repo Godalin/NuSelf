@@ -7,6 +7,8 @@ SQLite backend added in v0.2.4.
 from __future__ import annotations
 
 import json
+from contextlib import AbstractContextManager, contextmanager
+from collections.abc import Generator
 from pathlib import Path
 import threading
 from typing import Protocol, cast, runtime_checkable
@@ -33,6 +35,7 @@ class StorageCollection(Protocol):
 class StorageBackend(Protocol):
     """Abstract storage backend."""
     def collection(self, name: str) -> StorageCollection: ...
+    def transaction(self) -> AbstractContextManager[None]: ...
 
 
 # ── Known collection names ──────────────────────────────────────────────
@@ -86,7 +89,7 @@ def _safe_read_json(path: Path) -> dict[str, object] | None:
     return None
 
 
-def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
+def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
     try:
@@ -118,7 +121,7 @@ class _FileCollection:
     def put(self, key: str, value: dict[str, object]) -> None:
         self._dir.mkdir(parents=True, exist_ok=True)
         path = self._dir / f"{key}.json"
-        _write_json_atomic(path, value)
+        write_json_atomic(path, value)
 
     def delete(self, key: str) -> None:
         path = self._dir / f"{key}.json"
@@ -157,12 +160,23 @@ class FileStorageBackend:
     ) -> None:
         self._root = root
         self._map = collection_map or COLLECTION_DIR_MAP
+        self._transaction_lock = threading.RLock()
 
     def collection(self, name: str) -> _FileCollection:
         relative = self._map.get(name)
         if relative is None:
             raise ValueError(f"unknown collection: {name!r}")
         return _FileCollection(self._root / relative)
+
+    @contextmanager
+    def transaction(self) -> Generator[None, None, None]:
+        """Serialize a file-backed batch.
+
+        Individual files remain atomic, but the filesystem backend cannot make
+        a multi-file batch crash-atomic.
+        """
+        with self._transaction_lock:
+            yield
 
 
 # ── Factory helpers ──────────────────────────────────────────────────────
@@ -194,30 +208,44 @@ def auto_backend(project_root: Path | None = None) -> StorageBackend:
     return create_file_backend(project_root=project_root)
 
 
-_default_backend: StorageBackend | None = None
+_default_backends: dict[Path, StorageBackend] = {}
 _DEFAULT_BACKEND_LOCK = threading.Lock()
 
 
 def get_default_backend(project_root: Path | None = None) -> StorageBackend:
-    """Return the process-global default storage backend (lazily created)."""
-    global _default_backend
-    if _default_backend is None:
-        with _DEFAULT_BACKEND_LOCK:
-            if _default_backend is None:
-                _default_backend = auto_backend(project_root)
-    return _default_backend
+    """Return a lazily-created default backend scoped to one project root."""
+    root = runtime_paths(project_root).project_root
+    with _DEFAULT_BACKEND_LOCK:
+        backend = _default_backends.get(root)
+        if backend is None:
+            backend = auto_backend(root)
+            _default_backends[root] = backend
+        return backend
 
 
-def set_default_backend(backend: StorageBackend) -> None:
+def set_default_backend(
+    backend: StorageBackend, project_root: Path | None = None
+) -> None:
     """Override the process-global default backend (for tests or v0.2.4 migration)."""
-    global _default_backend
-    _default_backend = backend
+    root = runtime_paths(project_root).project_root
+    with _DEFAULT_BACKEND_LOCK:
+        _default_backends[root] = backend
 
 
-def reset_default_backend() -> None:
-    """Reset the default backend so it is re-created on next access."""
-    global _default_backend
-    _default_backend = None
+def reset_default_backend(project_root: Path | None = None) -> None:
+    """Close and reset one default backend, or every backend when omitted."""
+    with _DEFAULT_BACKEND_LOCK:
+        if project_root is None:
+            backends = tuple(_default_backends.values())
+            _default_backends.clear()
+        else:
+            root = runtime_paths(project_root).project_root
+            backend = _default_backends.pop(root, None)
+            backends = (backend,) if backend is not None else ()
+    for backend in backends:
+        close = getattr(backend, "close", None)
+        if callable(close):
+            close()
 
 
 # ── Migration tools ──────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ from typing import cast
 from uuid import NAMESPACE_URL, uuid5
 
 from nuself.config import runtime_paths
+from nuself.derived import write_derived_index
 from nuself.domain.memory import MemoryCandidate, MemoryEvidence, PrivacyLevel, now_iso
 from nuself.domain.source import SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path
 from nuself.storage import StorageBackend, auto_backend
@@ -132,7 +133,17 @@ class SourceRepository:
         return sorted(matches, key=lambda match: (-match.score, match.chunk.source_ref))[:normalized_limit]
 
     def reindex(self) -> Path:
-        return Path("_reindexed_")
+        records: list[object] = [
+            {"_record_kind": "document", **item.to_wire()}
+            for item in self.list_documents()
+        ]
+        records.extend(
+            {"_record_kind": "chunk", **item.to_wire()}
+            for item in self.list_chunks()
+        )
+        return write_derived_index(
+            self._paths, "source_index.json", records
+        )
 
     def extract_candidates(self, source_id: str) -> list[MemoryCandidate]:
         document = self.get_document(source_id)

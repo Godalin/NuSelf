@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from nuself.config import runtime_paths
+from nuself.derived import write_derived_index
 from nuself.domain.memory import MemoryCandidate, merge_relations, now_iso
 from nuself.domain.profile import ProfileItem
 from nuself.storage import StorageBackend, auto_backend
@@ -110,7 +111,11 @@ class ProfileItemRepository:
         return item
 
     def reindex(self) -> Path:
-        return Path("_reindexed_")
+        return write_derived_index(
+            self._paths,
+            "profile_index.json",
+            [item.to_wire() for item in self.list()],
+        )
 
 
 def profile_stats(project_root: Path | None = None) -> ProfileStats:

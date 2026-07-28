@@ -8,6 +8,8 @@ from contextlib import contextmanager
 from typing import Generator
 
 from nuself.handles import VisibleHandleError, resolve_visible_item
+from nuself.config import runtime_paths
+from nuself.derived import write_derived_index
 from nuself.reason.domain import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
 from nuself.storage import StorageBackend, auto_backend
 
@@ -34,8 +36,10 @@ class ReasonRepository:
     ) -> None:
         self._project_root = project_root
         effective = backend if backend is not None else auto_backend(project_root)
+        self._backend = effective
         self._threads = effective.collection("reason_threads")
         self._steps = effective.collection("reason_steps")
+        self._paths = runtime_paths(project_root)
 
     @property
     def project_root(self) -> Path | None:
@@ -43,9 +47,10 @@ class ReasonRepository:
 
     @contextmanager
     def batch_write(self) -> Generator[None]:
-        """Context manager for atomic multi-file writes (e.g. step + thread)."""
+        """Commit a step + thread update as one backend transaction."""
         with _write_lock:
-            yield
+            with self._backend.transaction():
+                yield
 
     def ensure(self) -> None:
         pass  # collections create directories automatically
@@ -126,4 +131,12 @@ class ReasonRepository:
     # ── Index ──────────────────────────────────────────────────────
 
     def reindex(self) -> Path:
-        return Path("_reindexed_")
+        records: list[object] = [
+            {"_record_kind": "thread", **thread.to_wire()}
+            for thread in self.list_threads(status="all")
+        ]
+        for raw in self._steps.list():
+            records.append({"_record_kind": "step", **raw})
+        return write_derived_index(
+            self._paths, "reason_index.json", records
+        )

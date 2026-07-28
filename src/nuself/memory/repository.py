@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from dataclasses import asdict
 from pathlib import Path
 from typing import cast
 
 from nuself.config import runtime_paths
+from nuself.derived import write_derived_index
 from nuself.domain.memory import (
     MemoryCandidate,
     MemoryEntry,
@@ -230,13 +232,31 @@ class MemoryEntryRepository:
         self._col.delete(entry_id)
 
     def reindex(self) -> Path:
-        return Path("_reindexed_")
+        return write_derived_index(
+            self._paths,
+            "memory_index.json",
+            [entry.to_wire() for entry in self.list()],
+        )
 
     def reindex_relations(self) -> Path:
-        return Path("_reindexed_")
+        return write_derived_index(
+            self._paths,
+            "relation_index.json",
+            [asdict(record) for record in self._compute_relations()],
+        )
 
     def reindex_symbolic_graph(self) -> Path:
-        return Path("_reindexed_")
+        nodes, edges = self._compute_graph()
+        return write_derived_index(
+            self._paths,
+            "symbolic_graph.json",
+            [
+                {
+                    "nodes": [asdict(node) for node in nodes],
+                    "edges": [asdict(edge) for edge in edges],
+                }
+            ],
+        )
 
     def _compute_relations(self) -> list[MemoryRelationIndexRecord]:
         entries = self.list()
