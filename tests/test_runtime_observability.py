@@ -5,6 +5,7 @@ import pytest
 
 from nuself.logs import read_log_events
 from nuself.runtime.events import EventPublisher
+from nuself.runtime.event_definitions import UnknownEventDefinitionError
 from nuself.runtime.diagnostics import emit_runtime_warning
 from nuself.runtime.observability import (
     decode_observed_record,
@@ -59,7 +60,7 @@ def test_best_effort_returns_none_and_writes_structured_failure(
     assert event.metadata == {"memory_id": "m1"}
 
 
-def test_observed_event_reports_subscriber_failure_without_raising(
+def test_observed_event_reports_subscriber_failure_and_returns_envelope(
     tmp_path: Path,
 ) -> None:
     publisher = EventPublisher()
@@ -81,7 +82,8 @@ def test_observed_event_reports_subscriber_failure_without_raising(
         failure_metadata={"lifecycle_event": "turn.started"},
     )
 
-    assert result is None
+    assert result is not None
+    assert result.name == "turn.started"
     [event] = read_log_events(
         project_root=tmp_path,
         component="chat",
@@ -89,6 +91,46 @@ def test_observed_event_reports_subscriber_failure_without_raising(
     assert event.event == "turn_event_delivery_failed"
     assert event.error is not None
     assert "subscriber unavailable" in event.error
+
+
+def test_observed_event_producer_contract_failure_propagates(
+    tmp_path: Path,
+) -> None:
+    publisher = EventPublisher()
+
+    with pytest.raises(UnknownEventDefinitionError):
+        publish_observed_event(
+            publisher,
+            name="turn.started",
+            producer="daemon",
+            payload={"message": "invalid producer"},
+            project_root=tmp_path,
+            failure_component="chat",
+            failure_event="turn_event_delivery_failed",
+            failure_message="Could not deliver turn event",
+        )
+
+    assert read_log_events(project_root=tmp_path) == []
+
+
+def test_observed_event_payload_validation_failure_propagates(
+    tmp_path: Path,
+) -> None:
+    publisher = EventPublisher()
+
+    with pytest.raises(TypeError, match="not JSON-safe"):
+        publish_observed_event(
+            publisher,
+            name="turn.started",
+            producer="chat",
+            payload={"invalid": object()},
+            project_root=tmp_path,
+            failure_component="chat",
+            failure_event="turn_event_delivery_failed",
+            failure_message="Could not deliver turn event",
+        )
+
+    assert read_log_events(project_root=tmp_path) == []
 
 
 def test_best_effort_propagates_undeclared_exception(

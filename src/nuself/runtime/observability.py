@@ -8,7 +8,7 @@ from typing import TypeVar
 
 from nuself.logs import LogComponent, LogLevel, write_log_event
 from nuself.runtime.diagnostics import emit_runtime_warning
-from nuself.runtime.events import EventPublisher
+from nuself.runtime.events import EventDeliveryError, EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
 
 T = TypeVar("T")
@@ -74,21 +74,25 @@ def publish_observed_event(
     failure_event: str,
     failure_message: str,
     failure_metadata: dict[str, object] | None = None,
-) -> RuntimeEnvelope | None:
+) -> RuntimeEnvelope:
     """Publish an event without letting subscriber failure alter primary work."""
 
-    return run_observed_best_effort(
-        lambda: publisher.publish(
+    try:
+        return publisher.publish(
             name=name,
             producer=producer,
             payload=payload,
-        ),
-        component=failure_component,
-        event=failure_event,
-        message=failure_message,
-        project_root=project_root,
-        metadata=failure_metadata,
-    )
+        )
+    except EventDeliveryError as exc:
+        report_observed_failure(
+            exc,
+            component=failure_component,
+            event=failure_event,
+            message=failure_message,
+            project_root=project_root,
+            metadata=failure_metadata,
+        )
+        return exc.event
 
 
 def decode_observed_record(

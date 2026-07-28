@@ -183,6 +183,14 @@ Rules:
 - Chat service-tool logs should include the active `thread_id` and, when available, the logical top-level `turn_id` so a tool call can be tied back to one chat turn.
 - Approval-gated tool execution writes an `approval_prompted` event before waiting for confirmation. The live REPL treats it as user-relevant interactive activity so the visible prompt appears before input is read.
 
+Observed runtime-event publication treats only subscriber delivery failure as
+a best-effort projection failure. If one or more subscribers fail, all matching
+subscribers are still attempted, the structured delivery diagnostic is
+best-effort, and the already-created envelope remains the publication result.
+Event-definition, producer, envelope, and payload validation failures occur
+before delivery and propagate to the producer; they must not be mislabeled or
+suppressed as subscriber failures.
+
 ## Process-Local Observation
 
 `observe_log_events(observer)` adds a synchronous process-local projection for

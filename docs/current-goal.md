@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make `HandlerRegistry.seal()` the explicit boundary between mutable
-composition and immutable runtime dispatch.
+Make observed runtime-event publication degrade subscriber delivery failures
+without hiding producer contract errors or losing event identity.
 
 ## Active Branch
 
@@ -14,39 +14,39 @@ composition and immutable runtime dispatch.
 
 ## Ordered Work
 
-1. Audit CLI, REPL, daemon, and shared handler dispatch paths.
-2. Specify sealed-only runtime dispatch.
-3. Compile middleware chains once when the registry is sealed.
-4. Reject dispatch from a partially composed registry.
-5. Verify middleware order, exception identity, and immutable dispatch state.
+1. Audit publisher construction, subscription, publication, and log sinks.
+2. Separate producer contract failures from subscriber delivery failures.
+3. Return the created envelope after partial delivery failure.
+4. Preserve best-effort structured diagnostics for subscriber failures.
+5. Verify invalid definitions and payloads propagate without false diagnostics.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Preserve typed handler signatures and registration order.
-- Keep `resolve()` available to composition-time validation and inspection.
-- Do not fold argparse's parser-bound adapter into the keyed registry.
+- Keep synchronous ordered subscriber delivery.
+- Preserve independent delivery to later subscribers after one fails.
+- Do not make lifecycle event projection authoritative over domain work.
 
 ## Completion Evidence
 
-- `HandlerRegistry.seal()` compiles one immutable dispatch table from the
-  registered handlers and middleware stack.
-- `dispatch()` rejects unsealed registries with
-  `HandlerRegistryUnsealedError`, preventing runtime use of partial
-  composition state.
-- Sealing is idempotent, direct `resolve()` remains available for composition
-  inspection, and sealed registration/middleware mutation remains rejected.
-- Tests prove unsealed dispatch rejection, middleware order, original
-  exception identity, and that dispatch does not rebuild middleware chains.
-- Focused handler, daemon-request, and REPL-dispatch tests: `20 passed`.
-- `.venv/bin/pytest -q`: `1501 passed`.
+- `publish_observed_event()` catches only `EventDeliveryError`; unknown
+  definitions, producer mismatches, and invalid payloads propagate.
+- Partial subscriber delivery failure still reports a structured degraded
+  diagnostic and returns the `RuntimeEnvelope` retained by the delivery error.
+- The return contract is now always `RuntimeEnvelope`, so callers cannot
+  misinterpret partial delivery as an event that was never created.
+- Tests cover partial delivery identity, unknown producer propagation, invalid
+  payload propagation, and absence of false delivery diagnostics.
+- Focused runtime-event, observability, daemon-worker, and chat tests:
+  `89 passed`.
+- `.venv/bin/pytest -q`: `1503 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `e621657`.
+`dev/v0.3.x` is published through `83ba87d`.
 
 ## Next Review Batch
 
-Audit runtime event publication and log projection ownership.
+Audit event/log payload schema duplication and projection validation.

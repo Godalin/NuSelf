@@ -189,10 +189,17 @@ after a memory or persona update.
 - If the structured log sink itself fails, the boundary emits one warning
   through Python's standard warning channel. It must not recursively attempt
   structured logging.
+
 - Best-effort handling is not allowed for authoritative persistence,
   validation, approval, external delivery state, or retryable job transitions.
 - Expected parsing fallbacks and cleanup races should use their specific
   exception types and do not need best-effort failure events.
+
+Observed runtime-event publication catches only `EventDeliveryError`.
+Definition lookup and envelope/payload validation failures are producer
+contract errors and propagate unchanged. A delivery error retains the created
+envelope, so the best-effort wrapper returns that envelope after reporting the
+failed subscribers rather than claiming that publication never occurred.
 
 Reflection trace recording and organizer execution after a persisted
 reflection are secondary under this contract. Corrupt reflection schedule
