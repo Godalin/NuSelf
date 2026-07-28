@@ -1,81 +1,58 @@
 # Current Goal
 
-This file is the short-term execution guide for NuSelf. Keep it focused on the active stabilization target, immediate context, and the next few steps. Completed work belongs in [`docs/TODOs.md`](TODOs.md), not here.
+This is NuSelf's short-lived execution board. It contains only the active
+objective, the next ordered steps, explicit exclusions, and completion
+evidence. Update it when active work changes. Completed history belongs in Git
+and `CHANGELOG.md`; deferred work belongs in [`TODOs.md`](TODOs.md).
 
-## Focus
+## Objective
 
-The `v0.2.x` stabilization line is complete and merged into `main` (released at
-`v0.2.5`). The active line is now `v0.3`, focused on code-review-driven
-optimization: correctness/concurrency fixes, a caching layer over the post-v0.2.4
-"recompute derived data from `list()`" model, and CLI/subsystem deduplication.
+Simplify the documentation system without weakening authoritative behavioral
+specifications, and restore `current-goal.md` as the reliable entry point for
+active development progress.
 
-v0.3 optimization batches (do in order, each its own commit + tests):
+## Active Branch
 
-1. ☑ Batch A — correctness/concurrency bug fixes.
-2. ☑ Batch B — caching / N+1 performance.
-3. ☑ Batch C — dedup & dead-code cleanup.
+`dev/v0.3.x`
 
-`main` remains the stable, releasable branch. `dev/v0.3.x` is the active line;
-`feature/*` stays isolated for one feature or fix at a time.
+## Ordered Work
 
-## Immediate Context
+1. [x] Define and document the responsibilities of active documentation.
+2. [ ] Repair specification indexes, status labels, and internal links.
+3. [ ] Reduce `TODOs.md` to unresolved backlog and remove the completed
+   milestone plan from active documentation.
+4. [ ] Replace overlapping historical design documents with one concise
+   current architecture document.
+5. [ ] Update English/Chinese README and `AGENTS.md` navigation.
+6. [ ] Run link, anchor, spec-index, formatting, and repository validation.
+7. [ ] Commit in reviewable stages and push `dev/v0.3.x`.
 
-- We are working on `dev/v0.3.x` (branched from `main` at `v0.2.5` + CLAUDE.md).
-- `v0.2.5` is the current release; next target is `v0.3.0`.
-- `main` now tracks the merged `v0.2.x` line and is pushed to origin.
-- First v0.3 commit: interactive tool-approval prompt redesign (`render_approval_prompt`).
-- Specs remain the source of truth for behavior changes; the daemon error-response
-  and config-load changes in Batch A/B touch `errors.md` / `config.md`.
-- User-visible changes should keep README, specs, TODOs, and changelog synchronized.
+## Documentation Responsibilities
 
-## Next Steps
+- `AGENTS.md`: development constraints and high-value navigation.
+- `docs/current-goal.md`: the one active execution board.
+- `docs/TODOs.md`: unresolved medium/long-term backlog only.
+- `docs/architecture.md`: current high-level system boundaries and design
+  rationale; no behavioral contract duplication.
+- `docs/spec/`: authoritative current behavior and development policies.
+- `CHANGELOG.md`: user-visible completed changes by release.
+- Git history: completed internal work and superseded implementation plans.
+- `README.md` and `README.zh-CN.md`: synchronized user-facing overview and
+  entry points.
 
-### ✅ Done — interactive tool-approval prompt redesign
+## Out Of Scope
 
-(First v0.3 commit. `render_approval_prompt` replaces the duplicated
-`[approval_prompted]` / `Confirm execute ... ? (y/n):` lines.)
+- Changing runtime behavior while reorganizing documentation.
+- Removing detailed behavioral contracts merely to reduce line count.
+- Preserving superseded plans in an active archive; Git already retains them.
 
-### Batch A — correctness / concurrency bug fixes
+## Completion Evidence
 
-- [x] `daemon/server.py` `handle()`: catch non-`ProtocolError` exceptions and return `DaemonResponse.fail` (fixes `UnboundLocalError` that hangs the client).
-- [x] `daemon/server.py` `_export_timers`: guard with a lock; drop fired timers to stop unbounded growth.
-- [x] `persona/graph.py` `_complete_persona_structured`: mirror chat.py failover policy and log swallowed errors instead of silent `None`.
-- [x] `notification/macos.py`: add a `timeout=` to the `osascript` subprocess.
-- [x] `config.py`: narrow the broad `except Exception: pass` around config load so malformed config is not silently treated as "no config".
-
-### Batch B — caching / N+1 performance
-
-- [x] Memoize `ConfigSystem.load()` on `(config_path, mtime, size)`.
-- [x] Compute the symbolic graph / transitive closure once per `MemoryQueryService.search`.
-- [x] Share reason/trace/memory service instances in `agent/tools.py`.
-- [x] SQLite backend: cache column tuple and push `find()` into a `WHERE` clause.
-- [x] Fix remaining N+1 reads (reason `get_job` direct read, notification single scan, reflection single `last_reflection` read, batched reasoning step counts, wasted moderator synthesizer call).
-
-### ✅ Review follow-up — data safety and worker reliability
-
-- [x] Preserve v1 SQLite payloads during schema upgrade and create a pre-upgrade backup.
-- [x] Make reason step + thread batches real SQLite transactions with rollback.
-- [x] Scope cached default backends by project root and close them on reset.
-- [x] Keep background workers alive after unexpected iteration errors and expose `daemon health`.
-- [x] Declare directly imported runtime packages and use `README.md` as package metadata.
-
-### Batch C — dedup & dead-code cleanup
-
-- [x] `cli.py`: generic `_resolve_handle` helpers.
-- [x] Move one-shot command handlers into focused `nuself.cli.commands` modules,
-  with memory commands grouped under `nuself.cli.commands.memory`.
-- [x] Convert `nuself.cli` into a package containing parser, commands, and REPL
-  modules while preserving `nuself.cli:main`.
-- [x] Move REPL input, session state/control, subsystem commands, and transcript
-  rendering/export into focused `nuself.cli.repl` modules.
-- [x] Extract shared memory text/json/clamp helpers.
-- [x] Dedup `persona/tools.py` builders.
-- [x] Remove dead reflection event-trigger and `_handle_proposals_after_turn` paths.
-- [x] Replace `reindex()` no-ops with real rebuildable derived JSON projections.
-
-## Completion Criteria
-
-- Batches A → B → C land in order, each as its own commit with `pytest` + `pyright` green.
-- Specs are updated before code for each non-trivial behavioral change.
-- README, specs, TODOs, and CHANGELOG stay synchronized for user-visible changes.
-- Work stays on `dev/v0.3.x`; `v0.3.0` is tagged when the batches are complete.
+- No broken local Markdown file or heading links.
+- Every authoritative spec is listed in `docs/spec/README.md`.
+- No active spec describes an implemented subsystem as merely planned or
+  draft.
+- `TODOs.md` contains no completed checklist history.
+- Active navigation does not reference removed design or milestone documents.
+- `git diff --check`, the documentation audit, and the project test/type gates
+  pass.

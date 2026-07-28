@@ -11,7 +11,8 @@
 - Built wheel smoke tests must install the artifact into a clean environment
   and import the CLI/runtime boundary.
 - User-facing changes must update both `README.md` and `README.zh-CN.md`.
-- Track progress in [`docs/TODOs.md`](docs/TODOs.md); short-term focus in `docs/current-goal.md`.
+- Use [`../current-goal.md`](../current-goal.md) as the single active execution
+  board and [`../TODOs.md`](../TODOs.md) for unresolved backlog.
 
 ## Branch Strategy
 
@@ -23,9 +24,10 @@
 
 ## Commit And Push Policy
 
-- Separate commits:
-  1. **Functional commit**: code + tests.
-  2. **Progress commit**: `docs/current-goal.md`, README TODOs, and spec updates.
+- Keep commits separated by functional boundary. Governing specs, tests,
+  changelog entries, and progress-state updates belong in the same commit as
+  the behavior they describe; do not create a second documentation-only commit
+  that temporarily allows drift.
 - Before non-trivial work, check `docs/current-goal.md`. Mention conflicts before proceeding.
 - Push normal development commits only when the user asks to publish or sync the branch.
 - Before pushing, confirm the working tree is clean and the intended commits are on the current branch.
@@ -57,7 +59,13 @@ Do not tag unreleased feature commits directly. Tags mark release commits only.
 - Configuration shape changes must update `docs/spec/config.md`, `docs/nuself-config.schema.json`, `examples/private/config.yaml`, and relevant config tests in the same change.
 - Do not preserve obsolete CLI commands, protocols, schemas, or APIs unless a document explicitly requires them.
 - Refactors are welcome when they clarify architecture; always pair them with doc and test updates.
-- Keep `docs/current-goal.md` concise (active focus, next steps, out-of-scope, completion criteria). Move completed history to README TODOs.
+- Keep `docs/current-goal.md` concise: one active objective, ordered next steps,
+  out-of-scope boundaries, and completion evidence.
+- Keep `docs/TODOs.md` limited to unresolved medium/long-term backlog. Completed
+  user-visible work belongs in `CHANGELOG.md`; completed internal work remains
+  discoverable through Git history.
+- `docs/architecture.md` explains current system boundaries and rationale but
+  must not duplicate behavioral contracts from `docs/spec/`.
 - Keep scoped implementation constraints in local `AGENTS.md` files near the code, not the root README.
 
 ### Shared Time Boundary
