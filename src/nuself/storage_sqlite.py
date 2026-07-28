@@ -77,6 +77,19 @@ class SqliteTransactionRollbackOnlyError(SqliteTransactionError):
 class SqliteTransactionCleanupError(SqliteTransactionError):
     """Raised when rollback fails while preserving the primary cause."""
 
+    def __init__(
+        self,
+        *,
+        primary_error: BaseException,
+        rollback_error: BaseException,
+    ) -> None:
+        super().__init__(
+            "SQLite rollback failed after "
+            f"{type(primary_error).__name__}: {rollback_error}"
+        )
+        self.primary_error = primary_error
+        self.rollback_error = rollback_error
+
 
 class SqliteStorageLifecycleError(RuntimeError):
     """Base class for explicit SQLite backend lifecycle failures."""
@@ -563,8 +576,8 @@ class SqliteStorageBackend:
             self._column_cache.clear()
             self._reset_transaction_state()
             raise SqliteTransactionCleanupError(
-                "SQLite rollback failed after "
-                f"{type(primary_error).__name__}: {rollback_error}"
+                primary_error=primary_error,
+                rollback_error=rollback_error,
             ) from primary_error
         self._column_cache.clear()
         self._reset_transaction_state()

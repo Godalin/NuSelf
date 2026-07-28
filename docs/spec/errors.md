@@ -165,6 +165,12 @@ If that cleanup also fails, `AtomicWriteCleanupError` retains the original
 primary error is its explicit cause. Because both persistence and cleanup are
 authoritative, neither failure is degraded into a warning or retried.
 
+SQLite transaction rollback dual failure uses the existing
+`SqliteTransactionCleanupError`. It exposes both `primary_error` and
+`rollback_error` as `BaseException` values and uses `primary_error` as its
+explicit cause. This applies uniformly to transaction-body, interruption,
+commit, and rollback-only failures; message text is diagnostic, not a schema.
+
 ## Corrupt Record Isolation
 
 Collection listing and rebuild operations isolate malformed records so one bad

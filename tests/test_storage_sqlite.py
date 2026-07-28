@@ -747,10 +747,99 @@ def test_rollback_failure_retains_primary_commit_cause(
 
     assert isinstance(captured.value.__cause__, sqlite3.OperationalError)
     assert str(captured.value.__cause__) == "commit unavailable"
+    assert captured.value.primary_error is captured.value.__cause__
+    assert isinstance(
+        captured.value.rollback_error,
+        sqlite3.OperationalError,
+    )
+    assert str(captured.value.rollback_error) == "rollback unavailable"
     assert proxy.rollback_calls == 1
 
     setattr(backend, "_conn", original)
     original.rollback()
+
+
+@pytest.mark.parametrize(
+    "primary_error",
+    [
+        RuntimeError("body failed"),
+        KeyboardInterrupt(),
+    ],
+)
+def test_rollback_failure_retains_transaction_body_base_exception(
+    tmp_path: Path,
+    primary_error: BaseException,
+) -> None:
+    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    col = backend.collection("memory_entries")
+    original = cast(
+        sqlite3.Connection,
+        getattr(backend, "_conn"),
+    )
+    proxy = TransactionConnectionProxy(
+        original,
+        fail_rollback=True,
+    )
+    setattr(backend, "_conn", cast(sqlite3.Connection, proxy))
+
+    with pytest.raises(SqliteTransactionCleanupError) as captured:
+        with backend.transaction():
+            col.put("not-committed", {"id": "not-committed"})
+            raise primary_error
+
+    error = captured.value
+    assert error.primary_error is primary_error
+    assert error.__cause__ is primary_error
+    assert isinstance(error.rollback_error, sqlite3.OperationalError)
+    assert str(error.rollback_error) == "rollback unavailable"
+    assert proxy.rollback_calls == 1
+
+    setattr(backend, "_conn", original)
+    original.rollback()
+    with backend.transaction():
+        col.put("recovered", {"id": "recovered"})
+    assert col.get("recovered") is not None
+
+
+def test_rollback_failure_retains_rollback_only_error_and_resets_state(
+    tmp_path: Path,
+) -> None:
+    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    col = backend.collection("memory_entries")
+    original = cast(
+        sqlite3.Connection,
+        getattr(backend, "_conn"),
+    )
+    proxy = TransactionConnectionProxy(
+        original,
+        fail_rollback=True,
+    )
+    setattr(backend, "_conn", cast(sqlite3.Connection, proxy))
+
+    with pytest.raises(SqliteTransactionCleanupError) as captured:
+        with backend.transaction():
+            try:
+                with backend.transaction():
+                    col.put("inner", {"id": "inner"})
+                    raise RuntimeError("inner failed")
+            except RuntimeError:
+                pass
+
+    error = captured.value
+    assert isinstance(
+        error.primary_error,
+        SqliteTransactionRollbackOnlyError,
+    )
+    assert error.__cause__ is error.primary_error
+    assert isinstance(error.rollback_error, sqlite3.OperationalError)
+    assert str(error.rollback_error) == "rollback unavailable"
+    assert proxy.rollback_calls == 1
+
+    setattr(backend, "_conn", original)
+    original.rollback()
+    with backend.transaction():
+        col.put("recovered", {"id": "recovered"})
+    assert col.get("recovered") is not None
 
 
 def _create_v1_database(

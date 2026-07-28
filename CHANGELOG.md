@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- SQLite transaction cleanup errors now expose structured `primary_error` and
+  `rollback_error` fields for body, interruption, commit, and rollback-only
+  failures, while retaining the original operation as the explicit cause and
+  resetting transaction-local state.
 - Daemon instance-lock acquire and release now retain both flock/unlock failure
   and simultaneous file-handle close failure in a typed
   `DaemonInstanceLockCleanupError`, instead of allowing cleanup to mask lock

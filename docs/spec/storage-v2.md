@@ -280,7 +280,11 @@ dynamic-column `put()` 必须先编码完整 replacement，之后才能 `ALTER T
 - `KeyboardInterrupt`、`SystemExit`、commit 失败和 rollback 失败都必须恢复
   thread-local transaction depth/state。Commit 失败先尝试 rollback，再传播原始
   commit 错误；若 rollback 也失败，稳定的 transaction cleanup 错误必须以原始
-  操作错误为 cause，同时描述 rollback 失败。
+  操作错误为 cause，同时通过 `primary_error` 和 `rollback_error` 保留两个
+  `BaseException` 对象；不得要求调用方从 message 反向解析错误类型。
+- transaction body、`KeyboardInterrupt` / `SystemExit`、commit 以及
+  rollback-only 检查都遵守同一个双重失败契约。Rollback 无论成功或失败都复位
+  thread-local depth/rollback-only 状态并清空 column cache，不做隐式重试。
 - 事务内的动态 `ALTER TABLE` 也会被 SQLite rollback。每次 rollback（包括
   rollback 自身报错、数据库状态未知的情况）都必须清空共享 column cache，后续
   collection 操作重新读取真实 schema，不能使用已回滚的列集合。

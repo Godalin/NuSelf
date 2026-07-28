@@ -34,6 +34,9 @@ Persona graph 的 LLM 故障会保留确定性的贡献、汇总和激活 fallba
 Daemon instance lock 的获取和释放也会同时保留锁操作与句柄关闭错误，避免清理
 故障掩盖真实所有权状态。
 
+SQLite transaction cleanup error 会同时暴露失败的主操作和 rollback，并复位
+thread-local transaction 状态。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

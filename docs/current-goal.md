@@ -5,8 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Daemon instance locking preserves ownership failure provenance when
-flock/unlock and file-handle close fail together during acquire or release.
+Idle. SQLite transaction rollback dual failures are structurally inspectable
+while preserving the original body, commit, interruption, or rollback-only
+failure and restoring transaction-local state.
 
 ## Active Branch
 
@@ -23,20 +24,17 @@ code.
 
 ## Completion Evidence
 
-- Normal contention still raises `DaemonInstanceLockContended`, closes the
-  contender handle, and leaves the owner resources untouched.
-- A single system flock, unlock, or close failure retains its existing
-  exception; acquire/release marks `acquired` false only when ownership was not
-  obtained or was relinquished by the Python owner.
-- Simultaneous flock/unlock and close failures raise
-  `DaemonInstanceLockCleanupError` with operation, primary error, cleanup
-  error, and the primary lock failure as explicit cause.
-- Acquire cleanup also runs for `BaseException` lock failures, preventing a
-  process interruption from skipping handle close.
-- Contention exit/status/log behavior, cleanup order, and retry behavior are
-  unchanged.
-- Focused instance-lock, signal, and daemon-server tests: 43 passed.
-- Final full tests: 1305 passed.
+- `SqliteTransactionCleanupError` exposes the exact `primary_error` and
+  `rollback_error` objects and retains the primary operation as explicit cause.
+- Transaction-body `RuntimeError`, `KeyboardInterrupt`, commit failure, and
+  rollback-only failure use the same dual-failure contract.
+- Every rollback path clears the column cache and resets thread-local depth and
+  rollback-only state before propagating; a recovered connection can start and
+  commit a subsequent transaction.
+- Exception type, message compatibility, nested transaction policy, and retry
+  behavior are unchanged.
+- Focused SQLite, reason service, and reason advancer tests: 89 passed.
+- Final full tests: 1308 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -47,4 +45,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-daemon instance locking preserves acquire/release dual failure provenance.
+SQLite transaction rollback preserves structured dual failure provenance.

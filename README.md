@@ -40,6 +40,9 @@ Daemon instance-lock acquire and release likewise preserve simultaneous lock
 operation and handle-close failures, so ownership errors are not hidden by
 cleanup.
 
+SQLite transaction cleanup errors expose both the failed primary operation and
+failed rollback while resetting thread-local transaction state.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).
