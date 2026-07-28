@@ -68,8 +68,12 @@ parsing and LangChain remains responsible for agent tool dispatch.
 
 ## Runtime Envelope And Correlation Context
 
-The next infrastructure layer will introduce a versioned runtime envelope for
-events and jobs. It must contain:
+`nuself.runtime.context` owns `RuntimeContext`, `current_runtime_context()`,
+and the nestable `runtime_context(...)` scope. The compatibility logging names
+delegate to this neutral context; logging does not maintain a second context.
+
+`nuself.runtime.messages.RuntimeEnvelope` is the versioned transport-neutral
+envelope for events and jobs. It contains:
 
 - stable message/event id;
 - schema version;
@@ -79,6 +83,10 @@ events and jobs. It must contain:
 - correlation fields (`request_id`, `turn_id`, `thread_id`, `job_id`,
   `trace_id`);
 - JSON-safe typed payload.
+
+Payload mappings and nested collections are frozen on construction. Consumers
+receive immutable message data and `to_record()` returns a detached JSON-safe
+copy for persistence or transport.
 
 Correlation context is inherited through one neutral runtime context. Logging
 may project that context, but logging must not own it.

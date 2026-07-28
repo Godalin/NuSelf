@@ -25,7 +25,10 @@ Serialization (`to_record()`) omits `None`-valued optional fields.
 
 ## Log Context
 
-`LogEvent` is append-only evidence. `LogContext` is ephemeral runtime state.
+`LogEvent` is append-only evidence. The authoritative ephemeral correlation
+state is `nuself.runtime.context.RuntimeContext`. `LogContext`,
+`current_log_context()`, and `log_context(...)` remain compatibility names that
+delegate to the shared runtime context rather than owning separate state.
 
 Runtime code may establish a `log_context(...)` around a daemon request, chat turn, background job, or trace-producing operation. `write_log_event(...)` inherits unset ownership fields from the current context:
 

@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator, Iterable
-from contextlib import contextmanager
-from contextvars import ContextVar, Token
-from dataclasses import dataclass
 import json
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
 
 from nuself.clock import utc_now_iso
 from nuself.config import ensure_runtime_dirs, runtime_paths
+from nuself.runtime.context import (
+    RuntimeContext,
+    current_runtime_context,
+    runtime_context,
+)
 
 LogLevel = Literal["debug", "info", "warning", "error"]
 LogComponent = Literal["daemon", "chat", "memory", "persona", "outbox", "reflection", "reasoning"]
@@ -19,19 +22,7 @@ LogComponent = Literal["daemon", "chat", "memory", "persona", "outbox", "reflect
 LOG_COMPONENTS: tuple[LogComponent, ...] = ("daemon", "chat", "memory", "persona", "outbox", "reflection", "reasoning")
 
 
-@dataclass(frozen=True)
-class LogContext:
-    """Ephemeral runtime context inherited by log events."""
-
-    thread_id: str | None = None
-    request_id: str | None = None
-    turn_id: str | None = None
-    job_id: str | None = None
-    trace_id: str | None = None
-    source: str | None = None
-
-
-_CURRENT_LOG_CONTEXT: ContextVar[LogContext] = ContextVar("nuself_log_context", default=LogContext())
+LogContext = RuntimeContext
 
 
 @dataclass(frozen=True)
@@ -81,7 +72,7 @@ class LogEvent:
         return record
 
     @classmethod
-    def from_record(cls, record: dict[str, object]) -> "LogEvent":
+    def from_record(cls, record: dict[str, object]) -> LogEvent:
         component = record.get("component")
         level = record.get("level")
         event = record.get("event")
@@ -163,37 +154,12 @@ def write_log_event(
 
 
 def current_log_context() -> LogContext:
-    """Return the current runtime log context."""
+    """Return the shared runtime correlation context."""
 
-    return _CURRENT_LOG_CONTEXT.get()
+    return current_runtime_context()
 
 
-@contextmanager
-def log_context(
-    *,
-    thread_id: str | None = None,
-    request_id: str | None = None,
-    turn_id: str | None = None,
-    job_id: str | None = None,
-    trace_id: str | None = None,
-    source: str | None = None,
-) -> Generator[LogContext, None, None]:
-    """Temporarily extend the current runtime log context."""
-
-    previous = current_log_context()
-    merged = LogContext(
-        thread_id=thread_id if thread_id is not None else previous.thread_id,
-        request_id=request_id if request_id is not None else previous.request_id,
-        turn_id=turn_id if turn_id is not None else previous.turn_id,
-        job_id=job_id if job_id is not None else previous.job_id,
-        trace_id=trace_id if trace_id is not None else previous.trace_id,
-        source=source if source is not None else previous.source,
-    )
-    token: Token[LogContext] = _CURRENT_LOG_CONTEXT.set(merged)
-    try:
-        yield merged
-    finally:
-        _CURRENT_LOG_CONTEXT.reset(token)
+log_context = runtime_context
 
 
 def log_path(component: LogComponent, *, project_root: Path | None = None) -> Path:
