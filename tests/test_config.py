@@ -14,6 +14,10 @@ def test_runtime_paths_are_under_private_root(tmp_path: Path) -> None:
     assert paths.runtime_dir == tmp_path / "private" / "runtime"
     assert paths.logs_dir == tmp_path / "private" / "logs"
     assert paths.socket_path == tmp_path / "private" / "runtime" / "nuself.sock"
+    assert (
+        paths.daemon_process_log_path
+        == tmp_path / "private" / "logs" / "daemon-process.log"
+    )
 
     with pytest.raises(FrozenInstanceError):
         setattr(paths, "private_root", tmp_path)

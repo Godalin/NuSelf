@@ -42,7 +42,7 @@ Rules:
 <project_root>/
   private/
     runtime/          # PID, socket, cursors
-    logs/             # *.log files
+    logs/             # structured component logs plus daemon-process.log
     outbox/           # notification entries
     memory/
       entries/        # MemoryEntry JSON files
@@ -56,7 +56,9 @@ Rules:
   examples/private/   # sample data for tests/demos
 ```
 
-`runtime_paths(project_root)` resolves these. `ensure_runtime_dirs()` creates missing directories.
+`runtime_paths(project_root)` resolves these. `daemon_log_path` names the
+structured `daemon.log`; `daemon_process_log_path` separately owns raw daemon
+stdout/stderr. `ensure_runtime_dirs()` creates missing directories.
 
 ## Language Preference
 

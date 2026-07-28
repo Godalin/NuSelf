@@ -248,6 +248,13 @@ is written to disk.
 | `reasoning`  | `reasoning.log`  | Long-run reasoning threads                                           |
 | `storage`    | `storage.log`    | Shared persistence lifecycle and backend infrastructure              |
 
+Component log paths are reserved exclusively for canonical `LogEvent` JSONL.
+Subsystems must not append ad-hoc text, tracebacks, or process stdout/stderr to
+those files. Background daemon stdout/stderr uses the separate owner-only raw
+stream `private/logs/daemon-process.log`; it is crash diagnostic output, is not
+read by `read_log_events()`, and does not participate in component retention,
+observer delivery, or structured-log durability guarantees.
+
 Display name mapping: `persona` → `selves`.
 
 ## Write Contract

@@ -10,16 +10,36 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.config import ensure_runtime_dirs, runtime_paths
+from nuself.config import runtime_paths
 from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import looks_like_raw_transcript
-from nuself.private_fs import ensure_private_file
 from nuself.profile.repository import ProfileItemRepository
+from nuself.runtime.observability import write_observed_log_event
 
 MemoryOptimizeActionType: TypeAlias = Literal["update", "delete", "ignore"]
 OptimizeDecisionStatus: TypeAlias = Literal["ready", "deferred"]
+
+
+def _write_optimizer_audit_event(
+    event: str,
+    message: str,
+    *,
+    project_root: Path,
+    metadata: dict[str, object] | None = None,
+) -> None:
+    """Project optimizer activity without changing durable memory results."""
+
+    write_observed_log_event(
+        "memory",
+        event,
+        message,
+        project_root=project_root,
+        metadata=metadata,
+        failure_event="optimizer_audit_write_failed",
+        failure_message=f"Could not record optimizer audit event {event}",
+    )
 
 
 @dataclass(frozen=True)
@@ -140,7 +160,12 @@ class MemoryOptimizer:
 
         decision = self._decide_actions(entries)
         if decision.status == "deferred":
-            self._append_log(f"memory_optimizer_deferred reviewed=0 reason={decision.reason!r}")
+            _write_optimizer_audit_event(
+                "optimizer_deferred",
+                "Memory optimizer deferred",
+                project_root=self._paths.project_root,
+                metadata={"reviewed": 0},
+            )
             return MemoryOptimizerResult(
                 reviewed=0,
                 updated=0,
@@ -166,8 +191,16 @@ class MemoryOptimizer:
                     ignored += 1
             else:
                 ignored += 1
-        self._append_log(
-            f"memory_optimizer reviewed={len(entries)} updated={updated} deleted={deleted} ignored={ignored}"
+        _write_optimizer_audit_event(
+            "optimizer_completed",
+            "Memory optimizer completed",
+            project_root=self._paths.project_root,
+            metadata={
+                "reviewed": len(entries),
+                "updated": updated,
+                "deleted": deleted,
+                "ignored": ignored,
+            },
         )
         return MemoryOptimizerResult(
             reviewed=len(entries),
@@ -267,7 +300,16 @@ class MemoryOptimizer:
             relations=existing.relations,
         )
         self._candidate_repository.save(candidate)
-        self._append_log(f"optimized candidate={candidate.id} target={existing.id} title={candidate.title!r}")
+        _write_optimizer_audit_event(
+            "optimizer_candidate_staged",
+            "Memory optimizer staged a candidate",
+            project_root=self._paths.project_root,
+            metadata={
+                "action": "update",
+                "candidate_id": candidate.id,
+                "target_entry_id": existing.id,
+            },
+        )
         return True
 
     def _delete_candidate(self, action: MemoryOptimizeAction, source_ref: str) -> bool:
@@ -296,19 +338,20 @@ class MemoryOptimizer:
             relations=existing.relations,
         )
         self._candidate_repository.save(candidate)
-        self._append_log(f"deleted candidate={candidate.id} target={existing.id} reason={action.reason!r}")
+        _write_optimizer_audit_event(
+            "optimizer_candidate_staged",
+            "Memory optimizer staged a candidate",
+            project_root=self._paths.project_root,
+            metadata={
+                "action": "delete",
+                "candidate_id": candidate.id,
+                "target_entry_id": existing.id,
+            },
+        )
         return True
 
     def _memory_log_path(self) -> Path:
         return self._paths.logs_dir / "memory.log"
-
-    def _append_log(self, message: str) -> None:
-        ensure_runtime_dirs(self._paths)
-        path = self._memory_log_path()
-        ensure_private_file(path)
-        with path.open("a", encoding="utf-8") as log_file:
-            log_file.write(f"{utc_now_iso()} {message}\n")
-
 
 def _render_entries(entries: list[MemoryEntry]) -> str:
     lines: list[str] = []

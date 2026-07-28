@@ -224,6 +224,16 @@ errors are not degraded and continue to the daemon request backstop.
 
 Optimizer candidates remain `pending` for manual review.
 
+### Optimizer Audit Projection
+
+Optimizer deferred/completed/candidate-staged activity is written as structured
+`memory` component events through the shared best-effort observability
+boundary. It never appends raw text to `memory.log`. Candidate identifiers,
+target identifiers, actions, and aggregate counts belong in typed metadata;
+private candidate titles, bodies, and free-form reasons are not copied into
+the audit record. An audit failure cannot replace a deferred result or an
+already-persisted candidate.
+
 ## Candidate Review Queue
 
 ### States

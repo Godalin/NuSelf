@@ -6,8 +6,10 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import BaseMessage
 
+import nuself.runtime.observability as observability
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
+from nuself.logs import read_log_events
 from nuself.memory.optimizer import (
     MemoryOptimizer,
     MemoryOptimizerSettings,
@@ -87,7 +89,26 @@ def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) 
     assert update_candidate.tags == ("memory", "curation")
     assert update_candidate.target_entry_id == keeper.id
     assert update_candidate.source_refs[0].startswith("memory_optimize:")
-    assert "memory_optimizer reviewed=2 updated=1 deleted=1 ignored=0" in result.log_path.read_text(encoding="utf-8")
+    events = read_log_events(project_root=tmp_path, component="memory")
+    assert [event.event for event in events] == [
+        "optimizer_candidate_staged",
+        "optimizer_candidate_staged",
+        "optimizer_completed",
+    ]
+    assert events[-1].metadata == {
+        "reviewed": 2,
+        "updated": 1,
+        "deleted": 1,
+        "ignored": 0,
+    }
+    assert {
+        event.metadata["action"]
+        for event in events[:-1]
+        if event.metadata is not None
+    } == {"update", "delete"}
+    raw_log = result.log_path.read_text(encoding="utf-8")
+    assert "merged overlapping entries" not in raw_log
+    assert "fully merged into" not in raw_log
 
 
 def test_memory_optimizer_includes_profile_context_in_prompt(tmp_path: Path) -> None:
@@ -138,6 +159,45 @@ def test_memory_optimizer_defers_without_agent_decision(tmp_path: Path) -> None:
     assert result.updated == 0
     assert result.deleted == 0
     assert repo.get(entry.id).body == "The user wants concise memory entries."
+    [event] = read_log_events(project_root=tmp_path, component="memory")
+    assert event.event == "optimizer_deferred"
+    assert event.metadata == {"reviewed": 0}
+    assert "LLM unavailable" not in result.log_path.read_text(encoding="utf-8")
+
+
+def test_memory_optimizer_audit_failure_cannot_replace_persisted_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    entry = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Original",
+            body="Original durable memory.",
+        )
+    )
+    agent = _optimizer_agent(
+        '{"actions":[{"action":"update","entry_id":"'
+        + entry.id
+        + '","title":"Improved","body":"Improved durable memory.",'
+        '"reason":"clearer"}]}'
+    )
+    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
+
+    def fail_log_write(*args: object, **kwargs: object) -> object:
+        raise OSError("log unavailable")
+
+    monkeypatch.setattr(observability, "write_log_event", fail_log_write)
+
+    with pytest.warns(RuntimeWarning, match="structured logging failed"):
+        result = optimizer.run_once()
+
+    assert result.updated == 1
+    [candidate] = MemoryCandidateRepository(tmp_path).list()
+    assert candidate.action == "update"
+    assert candidate.target_entry_id == entry.id
+    assert read_log_events(project_root=tmp_path, component="memory") == []
 
 
 def test_memory_optimizer_rejects_raw_transcript_body(tmp_path: Path) -> None:

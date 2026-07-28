@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make each acknowledged structured-log append crash-durable.
+Eliminate mixed-protocol writers from structured component logs.
 
 ## Active Branch
 
@@ -13,46 +13,46 @@ Make each acknowledged structured-log append crash-durable.
 
 ## Ordered Work
 
-1. Audit append, synchronization, rollback, close, and observer ordering.
-2. Define acknowledgment only after the complete JSONL record is synced.
-3. Make rollback truncate and sync the prior durable boundary.
-4. Replace ambiguous persistence booleans with explicit outcome states.
-5. Deliver observers only after durable append and successful handle close.
-6. Verify write/sync and truncate/sync failures plus lifecycle provenance.
+1. Audit every producer and reader of `private/logs/*.log`.
+2. Reserve component log files exclusively for structured JSONL events.
+3. Move daemon stdout/stderr to a distinct owner-only raw process stream.
+4. Project optimizer activity through structured best-effort audit events.
+5. Ensure logging failure cannot replace persisted optimizer candidates.
+6. Verify paths, event schemas, parseability, and process-handle ownership.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- SQLite durability remains governed by SQLite journal and synchronous modes.
-- No asynchronous batching or resident flush queue is introduced; each event
-  remains an independent append transaction.
-- SQLite and non-log append streams retain their subsystem-specific durability
-  contracts.
+- The daemon raw process stream is not parsed as structured JSONL and has its
+  own best-effort append semantics.
+- Existing malformed legacy component lines remain isolated by readers.
+- Structured-log batching and throughput policy remains deferred until every
+  producer obeys one protocol.
 
 ## Completion Evidence
 
-- The logs directory is synchronized before every append, covering new active
-  names, post-rotation files, and retry after an earlier directory-sync failure.
-- Each complete JSONL record is written with short-write handling and `fsync`ed
-  before close and observer delivery.
-- Write or append-sync failure triggers `truncate` plus `fsync` back to the
-  captured durable boundary; successful rollback preserves the original error.
-- Rollback failure emits the existing content-safe warning and raises
-  `LogAppendLifecycleError` with `persistence_outcome="uncertain"`.
-- Close failure after successful append sync reports
-  `persistence_outcome="persisted"` and suppresses observer delivery.
-- The former ambiguous `record_may_have_persisted` boolean is removed from
-  implementation, tests, and specifications.
-- Focused logging and observability suites: `88 passed`.
-- Full test suite: `1665 passed`.
+- `RuntimePaths` now distinguishes structured `daemon_log_path` from raw
+  `daemon_process_log_path`.
+- Daemon stdout/stderr is appended only to owner-only
+  `private/logs/daemon-process.log`; the parent closes its handle immediately
+  after spawning, and structured readers never parse that stream.
+- Memory optimizer deferred, candidate-staged, and completed activity uses
+  canonical `LogEvent` JSONL through `write_observed_log_event(...)`.
+- Optimizer audit metadata contains identifiers/actions/counts but excludes
+  free-form candidate titles, bodies, reasons, and model failure text.
+- Structured audit failure cannot replace a deferred result or already-saved
+  optimizer candidate.
+- A source-wide writer audit finds no remaining raw component-log append path.
+- Focused optimizer, lifecycle, config, log, and CLI suites: `100 passed`.
+- Full test suite: `1667 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through implementation commit `e2b72ec`.
+`dev/v0.3.x` is published through `06f5c1b`.
 
 ## Next Review Batch
 
-Review structured-log batching and throughput policy after individual append
-transactions have a truthful crash-durable contract.
+Review structured-log batching and throughput policy after all component-log
+producers obey the structured event protocol.

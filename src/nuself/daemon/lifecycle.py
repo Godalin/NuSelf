@@ -41,21 +41,21 @@ def start(project_root: Path | None = None) -> DaemonStatus:
     current = status(paths.project_root)
     if current.running:
         return current
-    ensure_private_file(paths.daemon_log_path)
-    log_file = paths.daemon_log_path.open("ab")
-    subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "nuself.daemon.server",
-            "--project-root",
-            str(paths.project_root),
-        ],
-        cwd=paths.project_root,
-        stdout=log_file,
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
-    )
+    ensure_private_file(paths.daemon_process_log_path)
+    with paths.daemon_process_log_path.open("ab") as process_log:
+        subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "nuself.daemon.server",
+                "--project-root",
+                str(paths.project_root),
+            ],
+            cwd=paths.project_root,
+            stdout=process_log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
     for _ in range(40):
         time.sleep(0.05)
         current = status(paths.project_root)

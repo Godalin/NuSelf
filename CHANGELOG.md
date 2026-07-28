@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Memory optimizer activity now uses structured audit events, while daemon
+  stdout/stderr is isolated in `daemon-process.log`; component JSONL files no
+  longer have raw-text writers.
 - Structured-log appends now sync each complete record before acknowledgment,
   durably sync rollback truncation, and report persisted/not-persisted/uncertain
   lifecycle outcomes explicitly.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import BinaryIO, cast
 
 import pytest
 
@@ -28,6 +29,60 @@ def test_status_when_daemon_is_missing(tmp_path: Path) -> None:
     assert not status.running
     assert status.pid is None
     assert status.socket_path == paths.socket_path
+
+
+def test_start_isolates_raw_process_output_from_structured_daemon_log(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = runtime_paths(tmp_path)
+    missing = lifecycle.DaemonStatus(
+        running=False,
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    running = lifecycle.DaemonStatus(
+        running=True,
+        pid=42,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    status_calls = 0
+    process_logs: list[BinaryIO] = []
+
+    def fake_status(project_root: Path | None = None) -> lifecycle.DaemonStatus:
+        nonlocal status_calls
+        status_calls += 1
+        return missing if status_calls == 1 else running
+
+    def fake_popen(
+        args: object,
+        **kwargs: object,
+    ) -> object:
+        process_log = cast(BinaryIO, kwargs["stdout"])
+        assert process_log.closed is False
+        process_log.write(b"raw daemon stderr\n")
+        process_log.flush()
+        process_logs.append(process_log)
+        return object()
+
+    def no_sleep(seconds: float) -> None:
+        del seconds
+
+    monkeypatch.setattr(lifecycle, "status", fake_status)
+    monkeypatch.setattr(lifecycle.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(lifecycle.time, "sleep", no_sleep)
+
+    assert lifecycle.start(tmp_path) == running
+
+    assert process_logs[0].closed is True
+    assert (
+        paths.daemon_process_log_path.read_text(encoding="utf-8")
+        == "raw daemon stderr\n"
+    )
+    assert not paths.daemon_log_path.exists()
+    assert read_log_events(project_root=tmp_path, component="daemon") == []
 
 
 def test_read_pid_missing_file_returns_none(tmp_path: Path) -> None:
