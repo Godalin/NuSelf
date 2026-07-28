@@ -27,7 +27,12 @@ Code-review-driven. See [docs/current-goal.md](current-goal.md) for per-item det
 
 These are review-driven refactors that should not block local v0.2 testing. They are good candidates for v0.2.x if they stay mechanical, or v0.3.0 if they reshape subsystem boundaries.
 
-- [ ] Split `src/nuself/cli.py` into parser construction, command handlers, REPL session control, and render/export helpers.
+- [ ] Split `src/nuself/cli.py` into focused CLI layers:
+  - [x] Move one-shot command handlers into `nuself.commands`, grouped by
+    subsystem.
+  - [ ] Move parser construction out of the interactive composition module.
+  - [ ] Move REPL session control and its render/export helpers into focused
+    modules.
 - [ ] Split `ConversationGraphRuntime` into smaller collaborators for context preparation, persona orchestration, tool execution, response synthesis, and state persistence.
 - [ ] Move generic timestamp helpers out of the memory domain so memory, trace, reason, logs, and daemon code share a neutral time module.
 - [ ] Replace repeated REPL command string literals with a central command registry that can drive parsing, help text, and aliases.

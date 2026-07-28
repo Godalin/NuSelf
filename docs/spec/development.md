@@ -130,8 +130,7 @@ top-level application namespace stays focused on subsystem APIs.
 - Memory CLI commands live together under the `commands/memory/` package and
   are split by subdomain instead of collected in one oversized module.
   `commands/memory/profile.py` owns profile list/search/show/delete/reindex
-  handlers and their list ordering and handle resolution. Sibling modules own
-  source, candidate, entry, and graph operations as they are extracted.
+  handlers and their list ordering and handle resolution.
   `commands/memory/source.py` owns source ingest/list/show/delete/chunks/search/
   extract handlers and source-specific output formatting.
   `commands/memory/candidate.py` owns candidate review handlers, ordering, and
