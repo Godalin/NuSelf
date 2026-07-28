@@ -34,9 +34,9 @@ These are review-driven refactors that should not block local v0.2 testing. They
   - [x] Move REPL session control and its render/export helpers into focused
     modules.
 - [x] Split `ConversationGraphRuntime` into smaller collaborators for context preparation, persona orchestration, tool execution, response synthesis, and state persistence.
-- [ ] Move generic timestamp helpers out of the memory domain so memory, trace, reason, logs, and daemon code share a neutral time module.
+- [x] Move generic timestamp helpers out of the memory domain so memory, trace, reason, logs, and daemon code share a neutral time module.
 - [ ] Replace repeated REPL command string literals with a central command registry that can drive parsing, help text, and aliases.
-- [ ] Standardize local import policy for optional/heavy modules and make that policy explicit in the development spec.
+- [x] Standardize local import policy for optional/heavy modules and make that policy explicit in the development spec.
 - [ ] Replace rough eval fixture counts with structured fixture result parsing across all dev eval commands.
 
 ## Current Goal
