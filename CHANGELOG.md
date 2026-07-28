@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Approval prompts now treat only stdin EOF as a safe-default decline;
+  rendering, terminal-output, and unexpected input failures surface normally
+  instead of being mislabeled as a user rejection.
 - Chat no longer retries or silently replaces pre-tool assertion, attribute,
   or type errors with a local fallback response; after tool execution, the
   existing no-replay fallback remains authoritative.

@@ -583,6 +583,14 @@ exception, and structured approval result are primary effects. The
 `approval_prompted`, `service_tool_executed`, and `service_tool_approved`
 records are secondary observations and use shared best-effort observability:
 
+- prompt rendering and stdout failures propagate unchanged rather than being
+  represented as a user decline;
+- stdin EOF means no affirmative approval was received and therefore follows
+  the safe-default decline path;
+- unexpected input failures propagate unchanged; they are not user decisions;
+- every render, output, EOF, input-failure, and explicit-decline path leaves
+  the wrapped callable unexecuted;
+
 - audit persistence failure never skips the prompt, changes a decline, replaces
   an approved result, or masks the wrapped callable's exception;
 - each failed audit write emits a structured degraded diagnostic containing

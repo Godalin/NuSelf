@@ -176,6 +176,97 @@ def test_approval_prompt_audit_failure_does_not_change_decline(
     ]
 
 
+def test_approval_eof_uses_safe_default_without_executing_tool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def end_input() -> str:
+        raise EOFError("stdin closed")
+
+    monkeypatch.setattr("builtins.input", end_input)
+
+    @approval_required("chat")
+    def tool() -> str:
+        calls.append("called")
+        return "unexpected"
+
+    assert json.loads(tool()) == {
+        "approved": False,
+        "component": "chat",
+        "result": None,
+    }
+    assert calls == []
+
+
+def test_approval_render_failure_propagates_without_executing_tool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def fail_render(*args: object, **kwargs: object) -> str:
+        del args, kwargs
+        raise RuntimeError("approval renderer broken")
+
+    monkeypatch.setattr(
+        "nuself.tui.render.render_approval_prompt",
+        fail_render,
+    )
+
+    @approval_required("chat")
+    def tool() -> str:
+        calls.append("called")
+        return "unexpected"
+
+    with pytest.raises(RuntimeError, match="approval renderer broken"):
+        tool()
+
+    assert calls == []
+
+
+def test_approval_output_failure_propagates_without_executing_tool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def fail_print(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise OSError("approval terminal unavailable")
+
+    monkeypatch.setattr("builtins.print", fail_print)
+
+    @approval_required("chat")
+    def tool() -> str:
+        calls.append("called")
+        return "unexpected"
+
+    with pytest.raises(OSError, match="approval terminal unavailable"):
+        tool()
+
+    assert calls == []
+
+
+def test_approval_unexpected_input_failure_propagates_without_executing_tool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def fail_input() -> str:
+        raise RuntimeError("approval input broken")
+
+    monkeypatch.setattr("builtins.input", fail_input)
+
+    @approval_required("chat")
+    def tool() -> str:
+        calls.append("called")
+        return "unexpected"
+
+    with pytest.raises(RuntimeError, match="approval input broken"):
+        tool()
+
+    assert calls == []
+
+
 def test_approval_diagnostic_failure_warns_without_masking_tool_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

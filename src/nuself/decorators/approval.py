@@ -51,12 +51,20 @@ def approval_required(
             )
             from nuself.tui.render import render_approval_prompt
 
+            prompt = render_approval_prompt(
+                component,
+                summary,
+                tool=fn.__name__,
+            )
+            print(prompt, flush=True)
+            # Capital N signals the safe default: anything but an explicit yes
+            # cancels. EOF is the one input condition that represents an
+            # unavailable affirmative decision rather than an implementation
+            # failure.
+            print("approve? [y/N] ", end="", flush=True)
             try:
-                print(render_approval_prompt(component, summary, tool=fn.__name__), flush=True)
-                # Capital N signals the safe default: anything but an explicit yes cancels.
-                print("approve? [y/N] ", end="", flush=True)
                 resp = input()
-            except Exception:
+            except EOFError:
                 resp = "n"
             if resp.strip().lower() in {"y", "yes"}:
                 result = fn(*args, **kwargs)

@@ -201,6 +201,11 @@ after a memory or persona update.
 - Expected parsing fallbacks and cleanup races should use their specific
   exception types and do not need best-effort failure events.
 
+Approval prompt rendering, output, and input are authoritative interaction
+effects. Rendering, stdout, and unexpected input failures propagate unchanged;
+they must not be converted into a decline. Only `EOFError` means no affirmative
+decision can be read and follows the safe-default decline path.
+
 Observed runtime-event publication catches only `EventDeliveryError`.
 Definition lookup and envelope/payload validation failures are producer
 contract errors and propagate unchanged. A delivery error retains the created
