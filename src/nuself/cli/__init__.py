@@ -31,7 +31,22 @@ def _suppress_startup_warning(
 warnings.warn = _suppress_startup_warning
 try:
     from nuself import __version__
-    from nuself.agent.chat import ChatAgent, ThreadState, ThreadStore
+    from nuself.agent.chat import ThreadState, ThreadStore
+    from nuself.cli.chat import (
+        run_memory_curator as _run_memory_curator,
+    )
+    from nuself.cli.chat import (
+        send_daemon_chat as _send_daemon_chat,
+    )
+    from nuself.cli.chat import (
+        send_daemon_chat_interactive as _send_chat_interactive,
+    )
+    from nuself.cli.chat import (
+        send_one_shot_chat as _run_one_shot_chat,
+    )
+    from nuself.cli.chat import (
+        send_one_shot_chat_interactive as _send_one_shot_chat_interactive,
+    )
     from nuself.cli.commands.daemon import (
         format_status as _format_status,
     )
@@ -89,13 +104,8 @@ try:
         send_interactive_chat_turn as _run_interactive_chat_turn,
     )
     from nuself.cli.repl.types import InteractiveChatResult
-    from nuself.config import ConfigSystem
-    from nuself.daemon import client, lifecycle
-    from nuself.logs import (
-        write_log_event,
-    )
-    from nuself.memory.curator import MemoryCurator
-    from nuself.tui.render import TerminalTheme, render_session_header
+    from nuself.daemon import lifecycle
+    from nuself.tui.render import render_session_header
 finally:
     warnings.warn = _original_warn
 
@@ -110,9 +120,6 @@ CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
 DEFAULT_MEMORY_PREVIEW_LIMIT = 8
 INTERACTIVE_CHAT_ATTEMPTS = 2
 INTERACTIVE_LOG_POLL_INTERVAL_SECONDS = 0.1
-
-
-_theme = TerminalTheme()
 
 
 def _maybe_show_session_update(
@@ -283,72 +290,12 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
 def _send_chat(
     message: str, project_root: Path | None, thread_id: str = "default"
 ) -> int:
-    result = _send_chat_interactive(message, project_root, thread_id)
-    if result.reply is not None:
-        _print_assistant_reply(result.reply)
-    if result.memory_update is not None:
-        _print_ansi(f"{_theme.tag('[memory]', 'memory')} {result.memory_update}")
-    if result.error is not None:
-        print(result.error, file=sys.stderr)
-    return result.code
-
-
-def _send_chat_interactive(
-    message: str,
-    project_root: Path | None,
-    thread_id: str = "default",
-    *,
-    turn_id: str | None = None,
-) -> InteractiveChatResult:
-    timeout_seconds = _chat_request_timeout_seconds(project_root)
-    try:
-        response = client.chat(
-            message,
-            thread_id=thread_id,
-            turn_id=turn_id,
-            project_root=project_root,
-            timeout=timeout_seconds,
-        )
-    except client.DaemonConnectionError as exc:
-        error = f"daemon request failed: {exc}"
-        print(error, file=sys.stderr)
-        return InteractiveChatResult(code=1, retryable=True, error=error)
-    except client.DaemonApplicationError as exc:
-        error = str(exc)
-        write_log_event(
-            "chat",
-            "daemon_chat_failed",
-            "daemon chat request failed",
-            project_root=project_root,
-            level="error",
-            thread_id=thread_id,
-            turn_id=turn_id,
-            source="client",
-            status="error",
-            error=error,
-        )
-        return InteractiveChatResult(code=1, error=error)
-    write_log_event(
-        "chat",
-        "daemon_chat_completed",
-        "daemon chat request completed",
-        project_root=project_root,
-        thread_id=response.thread_id,
-        turn_id=turn_id,
-        source="client",
-        status="ok",
+    return _send_daemon_chat(
+        message,
+        project_root,
+        thread_id,
+        print_reply=_print_assistant_reply,
     )
-    return InteractiveChatResult(
-        code=0,
-        reply=response.reply,
-        memory_update=response.memory_update or None,
-    )
-
-
-def _chat_request_timeout_seconds(project_root: Path | None) -> float:
-    return ConfigSystem.load(
-        project_root=project_root
-    ).chat.request_timeout_seconds
 
 
 def _interactive_loop(
@@ -420,77 +367,12 @@ def _send_interactive_chat_turn(
 def _send_one_shot_chat(
     message: str, project_root: Path | None, thread_id: str = "default"
 ) -> int:
-    result = _send_one_shot_chat_interactive(message, project_root, thread_id)
-    if result.reply is not None:
-        _print_assistant_reply(result.reply)
-    return result.code
-
-
-def _send_one_shot_chat_interactive(
-    message: str,
-    project_root: Path | None,
-    thread_id: str = "default",
-    *,
-    turn_id: str | None = None,
-) -> InteractiveChatResult:
-    try:
-        reply = _one_shot_reply(message, project_root, thread_id, turn_id=turn_id)
-        write_log_event(
-            "chat",
-            "one_shot_chat_completed",
-            "one-shot chat turn completed",
-            project_root=project_root,
-            thread_id=thread_id,
-            turn_id=turn_id,
-            source="client",
-            status="ok",
-        )
-        _run_memory_curator(project_root)
-        return InteractiveChatResult(code=0, reply=reply)
-    except RuntimeError as exc:
-        write_log_event(
-            "chat",
-            "one_shot_chat_failed",
-            "one-shot chat turn failed",
-            project_root=project_root,
-            level="error",
-            thread_id=thread_id,
-            turn_id=turn_id,
-            source="client",
-            status="error",
-            error=str(exc),
-        )
-        print(str(exc), file=sys.stderr)
-        return InteractiveChatResult(code=1)
-
-
-def _run_memory_curator(project_root: Path | None) -> None:
-    try:
-        result = MemoryCurator(project_root).run_once()
-    except RuntimeError as exc:
-        write_log_event(
-            "memory",
-            "curator_failed",
-            "memory curator failed",
-            project_root=project_root,
-            level="error",
-            status="error",
-            error=str(exc),
-        )
-        _print_ansi(
-            f"{_theme.tag('[memory]', 'memory')} curator failed: {exc}", file=sys.stderr
-        )
-        return
-    if result.changed:
-        write_log_event(
-            "memory",
-            "curator_changed",
-            "memory curator changed durable memory",
-            project_root=project_root,
-            status="changed",
-            metadata={"summary": result.summary()},
-        )
-        _print_ansi(f"{_theme.tag('[memory]', 'memory')} {result.summary()}")
+    return _run_one_shot_chat(
+        message,
+        project_root,
+        thread_id,
+        print_reply=_print_assistant_reply,
+    )
 
 
 def _brand_banner() -> str:
@@ -503,20 +385,6 @@ def _brand_banner() -> str:
             "╰─┴─╯ │ ┌──┘ │ │└──╯ │ └┐ │ │   ",
             "  ╰───╯ └────┘ ╰───╯ └──┘ └─┘   ",
         ]
-    )
-
-
-def _one_shot_reply(
-    message: str,
-    project_root: Path | None,
-    thread_id: str = "default",
-    *,
-    turn_id: str | None = None,
-) -> str:
-    return (
-        ChatAgent(project_root)
-        .respond(message, thread_id=thread_id, turn_id=turn_id)
-        .reply
     )
 
 

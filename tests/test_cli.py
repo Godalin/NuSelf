@@ -90,7 +90,7 @@ def test_chat_uses_one_shot_when_daemon_is_missing(
 def test_one_shot_chat_runs_memory_curator_after_reply(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    monkeypatch.setattr("nuself.cli.MemoryCurator", FakeChangedCurator)
+    monkeypatch.setattr("nuself.cli.chat.MemoryCurator", FakeChangedCurator)
 
     result = main(
         [
@@ -515,15 +515,15 @@ def test_daemon_interactive_turn_uses_activity_transport_not_log_polling(
         pytest.fail("daemon live activity must not poll log files")
 
     monkeypatch.setattr(
-        "nuself.cli.client.open_activity",
+        "nuself.cli.repl.activity.client.open_activity",
         fake_open,
     )
     monkeypatch.setattr(
-        "nuself.cli.client.next_activity",
+        "nuself.cli.repl.activity.client.next_activity",
         fake_next,
     )
     monkeypatch.setattr(
-        "nuself.cli.client.close_activity",
+        "nuself.cli.repl.activity.client.close_activity",
         fake_close,
     )
     monkeypatch.setattr(
@@ -712,7 +712,7 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
 
     monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
     monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.client.request", fake_request)
+    monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
 
     result = main(["--project-root", str(tmp_path), "chat"])
     captured = capsys.readouterr()
@@ -768,7 +768,7 @@ def test_interactive_daemon_application_error_does_not_retry(
 
     monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
     monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.client.request", fake_request)
+    monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
 
     result = main(["--project-root", str(tmp_path), "chat"])
     captured = capsys.readouterr()
@@ -1198,7 +1198,7 @@ def test_daemon_chat_uses_long_timeout(
         return daemon_status
 
     monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.client.request", fake_request)
+    monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
 
     result = main(["--project-root", str(tmp_path), "attach", "--message", "hello"])
     captured = capsys.readouterr()
@@ -1250,7 +1250,7 @@ def test_daemon_chat_uses_configured_request_timeout(
         return daemon_status
 
     monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.client.request", fake_request)
+    monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
 
     result = main(["--project-root", str(tmp_path), "attach", "--message", "hello"])
     captured = capsys.readouterr()
@@ -1294,7 +1294,7 @@ def test_daemon_chat_prints_memory_update(
         return daemon_status
 
     monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.client.request", fake_request)
+    monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
 
     result = main(
         ["--project-root", str(tmp_path), "attach", "--message", "remember this"]
@@ -1329,7 +1329,7 @@ def test_daemon_chat_connection_error_is_reported(
         return daemon_status
 
     monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.client.request", fake_request)
+    monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
 
     result = main(["--project-root", str(tmp_path), "attach", "--message", "hello"])
     captured = capsys.readouterr()

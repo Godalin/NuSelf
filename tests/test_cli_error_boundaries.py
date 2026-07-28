@@ -4,6 +4,7 @@ import pytest
 
 from nuself import cli
 from nuself.agent.chat import ThreadStore
+from nuself.cli.chat import chat_request_timeout_seconds
 from nuself.cli.repl.commands import handle_interactive_history_command
 from nuself.config import ConfigSystem
 
@@ -20,9 +21,7 @@ def test_chat_timeout_uses_default_after_malformed_yaml(
     )
     ConfigSystem.clear_cache()
 
-    timeout = cli._chat_request_timeout_seconds(  # pyright: ignore[reportPrivateUsage]
-        tmp_path
-    )
+    timeout = chat_request_timeout_seconds(tmp_path)
 
     assert timeout == cli.CHAT_REQUEST_TIMEOUT_SECONDS
     assert "ignoring unreadable config" in capsys.readouterr().err
@@ -38,9 +37,7 @@ def test_chat_timeout_does_not_hide_unexpected_config_failure(
     monkeypatch.setattr(ConfigSystem, "load", fail_load)
 
     with pytest.raises(RuntimeError, match="config implementation failed"):
-        cli._chat_request_timeout_seconds(  # pyright: ignore[reportPrivateUsage]
-            tmp_path
-        )
+        chat_request_timeout_seconds(tmp_path)
 
 
 def test_history_reports_empty_missing_thread(tmp_path: Path) -> None:
