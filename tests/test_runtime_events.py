@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -219,6 +220,58 @@ def test_domain_event_definitions_extend_core_registry() -> None:
     )
 
     assert event.name == "entry.changed"
+
+
+def test_event_publish_validates_canonical_payload_exactly_once() -> None:
+    validated: list[Mapping[str, object]] = []
+    received: list[Mapping[str, object]] = []
+    definition = RuntimeEventDefinition(
+        producer="memory",
+        name="entry.changed",
+        description="A durable memory entry changed.",
+        payload_validator=validated.append,
+    )
+    publisher = EventPublisher(
+        build_event_definition_registry((definition,))
+    )
+    publisher.subscribe(lambda event: received.append(event.payload))
+    payload = {"entries": ["m1"]}
+
+    event = publisher.publish(
+        name="entry.changed",
+        producer="memory",
+        payload=payload,
+    )
+
+    assert validated == [event.payload]
+    assert received == [event.payload]
+    assert validated[0] is event.payload
+    assert received[0] is event.payload
+    assert event.payload["entries"] == ("m1",)
+
+
+def test_existing_event_envelope_is_validated_exactly_once() -> None:
+    validated: list[Mapping[str, object]] = []
+    definition = RuntimeEventDefinition(
+        producer="memory",
+        name="entry.changed",
+        description="A durable memory entry changed.",
+        payload_validator=validated.append,
+    )
+    publisher = EventPublisher(
+        build_event_definition_registry((definition,))
+    )
+    event = RuntimeEnvelope(
+        kind="event",
+        name="entry.changed",
+        producer="memory",
+        payload={"entry_id": "m1"},
+    )
+
+    publisher.publish_envelope(event)
+
+    assert validated == [event.payload]
+    assert validated[0] is event.payload
 
 
 def test_event_definition_registry_rejects_duplicates_and_late_changes() -> None:

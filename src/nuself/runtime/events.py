@@ -109,14 +109,14 @@ class EventPublisher:
         event_payload: Mapping[str, object] = (
             {} if payload is None else payload
         )
-        definition.validate_payload(event_payload)
         event = RuntimeEnvelope(
             kind="event",
             name=name,
             producer=producer,
             payload=event_payload,
         )
-        self.publish_envelope(event)
+        definition.validate_payload(event.payload)
+        self._deliver_validated_envelope(event)
         return event
 
     def publish_envelope(self, event: RuntimeEnvelope) -> None:
@@ -129,6 +129,14 @@ class EventPublisher:
             event.name,
         )
         definition.validate_payload(event.payload)
+        self._deliver_validated_envelope(event)
+
+    def _deliver_validated_envelope(
+        self,
+        event: RuntimeEnvelope,
+    ) -> None:
+        """Deliver one definition-validated immutable event."""
+
         with self._lock:
             subscribers = tuple(self._subscribers.items())
         failures: list[EventDeliveryFailure] = []

@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Runtime event payload validators now run exactly once against the immutable
+  envelope payload that subscribers receive, eliminating raw/frozen
+  double-validation drift.
 - Shared agent fallback classification now also surfaces import, lookup, memory
   exhaustion, name resolution, unimplemented-path, recursion, syntax, and
   interpreter-system errors instead of treating them as model degradation.

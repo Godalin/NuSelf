@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Prevent sealed handler registries from exposing raw handlers that bypass their
-compiled middleware chain.
+Validate each runtime event exactly once against the immutable payload that
+subscribers actually receive.
 
 ## Active Branch
 
@@ -14,38 +14,41 @@ compiled middleware chain.
 
 ## Ordered Work
 
-1. Audit registry mutation, seal, resolve, and dispatch ownership.
-2. Confirm runtime consumers use dispatch rather than raw resolution.
-3. Restrict raw resolution to composition time.
-4. Verify sealed registries cannot bypass middleware.
-5. Preserve unknown-key and dispatch exception behavior.
+1. Audit event definition resolution, envelope creation, and delivery.
+2. Identify duplicate validation across `publish` and `publish_envelope`.
+3. Validate the canonical frozen envelope payload once.
+4. Deliver through a private already-validated path.
+5. Verify validator count, payload identity, and direct-envelope validation.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- `resolve()` remains available before sealing for composition inspection.
-- `dispatch()` remains the only runtime invocation API.
-- Handler and middleware call semantics remain unchanged.
+- Unknown event definitions still fail before envelope delivery.
+- Existing envelopes remain validated before delivery.
+- Subscriber snapshot, order, isolation, and failure aggregation remain
+  unchanged.
 
 ## Completion Evidence
 
-- `resolve()` checks the one-way sealed state before exposing the raw handler.
-- A sealed registry raises `HandlerRegistrySealedError` for raw resolution,
-  while `dispatch()` still invokes the compiled middleware chain.
-- Production search found no runtime consumer relying on
-  `HandlerRegistry.resolve(...)`; daemon and REPL use `dispatch()`.
-- Duplicate, unknown, unsealed, middleware-order, and original-exception
-  behavior remains covered by the registry suite.
-- Focused registry, daemon-request, and REPL-dispatch tests: `21 passed`.
-- `.venv/bin/pytest -q`: `1613 passed` with no warnings.
+- `publish(...)` resolves the definition, constructs the immutable envelope,
+  validates `event.payload` once, then enters an already-validated delivery
+  method.
+- `publish_envelope(...)` validates its immutable payload once and uses the
+  same delivery method.
+- Tests prove validator and subscriber observe the exact same payload object,
+  including canonical tuple conversion for a caller-provided list.
+- Existing unknown-definition, invalid-payload, subscriber order/isolation,
+  lifetime handle, and failure aggregation behavior remains covered.
+- Focused runtime event, message, and observability tests: `73 passed`.
+- `.venv/bin/pytest -q`: `1615 passed` with no warnings.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `64563f9`.
+`dev/v0.3.x` is published through `1c9cd14`.
 
 ## Next Review Batch
 
-Continue reviewing handler and internal-message infrastructure after raw
-dispatch bypass is closed.
+Continue reviewing internal-message subscription and delivery lifecycle after
+canonical validation is unified.

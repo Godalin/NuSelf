@@ -467,6 +467,12 @@ registration, unknown names, and producer/name ownership mismatches fail before
 delivery. Runtime event names use dotted subject/action names such as
 `worker.started`; historical JSONL audit event slugs remain readable.
 
+Each publication validates exactly once against the recursively frozen payload
+stored in the `RuntimeEnvelope` and delivered to subscribers. The convenience
+`publish(...)` path must not validate the caller's mutable mapping and then
+validate the envelope again. `publish_envelope(...)` validates the supplied
+envelope once before entering the same already-validated delivery path.
+
 `runtime_event_log_sink(...)` is an optional subscriber. Its audit projection
 preserves the original envelope ID; attaching it never changes event delivery
 into log-driven control flow.
