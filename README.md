@@ -97,6 +97,10 @@ REPL exit runs transcript auto-save and memory curation exactly once each.
 Both cleanup steps are attempted, and named cleanup failures retain any
 existing main-loop exception as their explicit cause.
 
+Daemon and REPL lifecycle cleanup use one shared ordered runner that retains
+named `BaseException` failures; each domain still owns ordering, diagnostics,
+and primary-error propagation.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).

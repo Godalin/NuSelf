@@ -144,12 +144,13 @@ Signal restoration attempts every still-owned signal. Failures retain the
 signal number and remain retryable; a later lifecycle cleanup step still runs.
 The daemon must never leave one successfully restored signal marked as owned.
 
-Every ordinary `Exception` from a cleanup step is retained as a
-`DaemonCleanupFailure(step, error)` while later steps continue. When cleanup
-fails, `DaemonLifecycleError` exposes the complete ordered failure tuple. If
-bind, serve, or another primary operation also failed, that original exception
-is retained as `primary_error` and as the lifecycle error's explicit cause.
-A cleanup error must never silently replace or discard the primary failure.
+Every `BaseException` from a cleanup step is retained as a shared
+`CleanupFailure(step, error)` while later steps continue. When cleanup fails,
+`DaemonLifecycleError` exposes the complete ordered failure tuple. If bind,
+serve, or another primary operation also failed, that original exception is
+retained as `primary_error` and as the lifecycle error's explicit cause. A
+cleanup error, including `KeyboardInterrupt` or `SystemExit`, must never
+silently replace or discard the primary failure.
 
 Instance-lock acquire/release has the same provenance rule before lifecycle
 aggregation. `DaemonInstanceLockCleanupError` is raised only when flock or
@@ -283,7 +284,7 @@ drain is skipped so it cannot mask the control exception.
 REPL exit cleanup uses one lifecycle aggregation boundary. The ordered steps
 are `transcript.auto_save` and `memory.curator.run`. Both execute exactly once
 and all caught `BaseException` values are retained as named
-`InteractiveCleanupFailure` entries. When cleanup fails,
+shared `CleanupFailure` entries. When cleanup fails,
 `InteractiveLifecycleError` retains the tuple and the main-loop
 `primary_error`; the primary is its explicit cause when present. If cleanup
 succeeds, the original main-loop exception is re-raised with its traceback.

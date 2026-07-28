@@ -279,6 +279,9 @@ under the same package.
   application effects through `ReplCallbacks`. Transcript auto-save and memory
   curation execute once each through named cleanup aggregation that preserves
   any main-loop primary failure.
+- `runtime/cleanup.py` owns domain-neutral ordered cleanup execution and
+  `CleanupFailure`. Lifecycle owners retain step composition, diagnostics,
+  primary-error policy, and domain error types.
 
 Conversation runtime code lives under `agent/chat/`. `types.py` owns settings,
 structured response/result records, typed turn state, and graph error contracts;

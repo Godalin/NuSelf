@@ -1,5 +1,6 @@
 """Shared runtime infrastructure primitives."""
 
+from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 from nuself.runtime.context import (
     RuntimeContext,
     bind_runtime_context,
@@ -50,6 +51,7 @@ from nuself.runtime.workers import (
 __all__ = [
     "CORE_EVENT_DEFINITIONS",
     "RUNTIME_SCHEMA_VERSION",
+    "CleanupFailure",
     "DuplicateEventDefinitionError",
     "DuplicateHandlerError",
     "EventDefinitionRegistry",
@@ -81,6 +83,7 @@ __all__ = [
     "emit_runtime_warning",
     "freeze_json_value",
     "runtime_context",
+    "run_cleanup_steps",
     "thaw_json_value",
     "use_runtime_context",
 ]

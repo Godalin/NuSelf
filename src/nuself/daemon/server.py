@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable
 from pathlib import Path
 
 from nuself.config import (
@@ -24,16 +23,9 @@ from nuself.daemon.socket_server import (
     RequestHandler,
 )
 from nuself.daemon.state import DaemonState
+from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 from nuself.runtime.observability import report_observed_failure
 from nuself.storage import write_text_atomic
-
-
-@dataclass(frozen=True)
-class DaemonCleanupFailure:
-    """One named daemon cleanup step that failed."""
-
-    step: str
-    error: Exception
 
 
 class DaemonLifecycleError(RuntimeError):
@@ -41,7 +33,7 @@ class DaemonLifecycleError(RuntimeError):
 
     def __init__(
         self,
-        failures: tuple[DaemonCleanupFailure, ...],
+        failures: tuple[CleanupFailure, ...],
         *,
         primary_error: BaseException | None = None,
     ) -> None:
@@ -52,23 +44,11 @@ class DaemonLifecycleError(RuntimeError):
         self.primary_error = primary_error
 
 
-def _run_cleanup_steps(
-    steps: Sequence[tuple[str, Callable[[], object]]],
-) -> tuple[DaemonCleanupFailure, ...]:
-    failures: list[DaemonCleanupFailure] = []
-    for name, operation in steps:
-        try:
-            operation()
-        except Exception as exc:
-            failures.append(DaemonCleanupFailure(name, exc))
-    return tuple(failures)
-
-
 def _finish_daemon_lifecycle(
     *,
     project_root: Path,
     primary_error: BaseException | None,
-    cleanup_failures: tuple[DaemonCleanupFailure, ...],
+    cleanup_failures: tuple[CleanupFailure, ...],
 ) -> None:
     if cleanup_failures:
         lifecycle_error = DaemonLifecycleError(
@@ -121,7 +101,7 @@ def run_daemon(project_root: Path | None = None) -> int:
         result = _run_owned_daemon(paths)
     except BaseException as exc:
         primary_error = exc
-    cleanup_failures = _run_cleanup_steps(
+    cleanup_failures = run_cleanup_steps(
         (("instance_lock.release", instance_lock.release),)
     )
     _finish_daemon_lifecycle(
@@ -211,7 +191,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
             ("pid.unlink", lambda: paths.pid_path.unlink(missing_ok=True)),
         )
     )
-    cleanup_failures = _run_cleanup_steps(cleanup_steps)
+    cleanup_failures = run_cleanup_steps(cleanup_steps)
     if started and not cleanup_failures:
         write_lifecycle_audit(
             "stopped",

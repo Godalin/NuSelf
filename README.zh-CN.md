@@ -81,6 +81,9 @@ Live-chat send thread 会把意外的普通 callback failure 观测为不可重�
 REPL 退出时 transcript auto-save 与 memory curation 各执行一次；两个 cleanup
 都会被尝试，命名 cleanup failure 会保留已有 main-loop exception 作为显式 cause。
 
+Daemon 与 REPL lifecycle cleanup 共用一个有序 runner，保留具名
+`BaseException` failure；各领域仍自行拥有顺序、诊断与 primary-error 传播。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

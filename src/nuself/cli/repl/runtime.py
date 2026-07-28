@@ -10,6 +10,7 @@ from pathlib import Path
 from nuself.cli.repl.input import InteractiveInput
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
+from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 from nuself.runtime.observability import report_observed_failure
 
 SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
@@ -33,20 +34,12 @@ class ReplCallbacks:
     brand_banner: Callable[[], str]
 
 
-@dataclass(frozen=True)
-class InteractiveCleanupFailure:
-    """One named interactive-session cleanup step that failed."""
-
-    step: str
-    error: BaseException
-
-
 class InteractiveLifecycleError(RuntimeError):
     """Raised when interactive exit cleanup retains one or more failures."""
 
     def __init__(
         self,
-        failures: tuple[InteractiveCleanupFailure, ...],
+        failures: tuple[CleanupFailure, ...],
         *,
         primary_error: BaseException | None = None,
     ) -> None:
@@ -61,8 +54,7 @@ def _run_interactive_cleanup(
     callbacks: ReplCallbacks,
     project_root: Path | None,
     session: InteractiveSession,
-) -> tuple[InteractiveCleanupFailure, ...]:
-    failures: list[InteractiveCleanupFailure] = []
+) -> tuple[CleanupFailure, ...]:
     steps: tuple[tuple[str, Callable[[], None]], ...] = (
         (
             "transcript.auto_save",
@@ -73,19 +65,14 @@ def _run_interactive_cleanup(
             lambda: callbacks.run_curator(project_root),
         ),
     )
-    for step, operation in steps:
-        try:
-            operation()
-        except BaseException as exc:
-            failures.append(InteractiveCleanupFailure(step, exc))
-    return tuple(failures)
+    return run_cleanup_steps(steps)
 
 
 def _finish_interactive_lifecycle(
     *,
     project_root: Path | None,
     primary_error: BaseException | None,
-    cleanup_failures: tuple[InteractiveCleanupFailure, ...],
+    cleanup_failures: tuple[CleanupFailure, ...],
 ) -> None:
     if cleanup_failures:
         lifecycle_error = InteractiveLifecycleError(

@@ -448,9 +448,17 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     }
 
 
+@pytest.mark.parametrize(
+    "release_error",
+    [
+        OSError("lock release failed"),
+        KeyboardInterrupt("lock release interrupted"),
+    ],
+)
 def test_instance_lock_release_failure_retains_owned_daemon_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    release_error: BaseException,
 ) -> None:
     import nuself.daemon.server as server_module
 
@@ -462,7 +470,7 @@ def test_instance_lock_release_failure_retains_owned_daemon_failure(
             return None
 
         def release(self) -> None:
-            raise OSError("lock release failed")
+            raise release_error
 
     def fail_owned_daemon(paths: object) -> int:
         raise ValueError("serve failed")
@@ -486,7 +494,7 @@ def test_instance_lock_release_failure_retains_owned_daemon_failure(
     assert [failure.step for failure in captured.value.failures] == [
         "instance_lock.release"
     ]
-    assert isinstance(captured.value.failures[0].error, OSError)
+    assert captured.value.failures[0].error is release_error
 
 
 def test_stopped_event_is_written_after_owned_cleanup(

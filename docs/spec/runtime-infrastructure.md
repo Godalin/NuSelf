@@ -350,6 +350,19 @@ including the `turn_retry` marker and the send callback. The retry marker must
 not be written before entering that scope. All attempts reuse the same turn ID;
 attempt scoping changes correlation ownership, not retry count or idempotency.
 
+## Named Cleanup Execution
+
+`nuself.runtime.cleanup` owns the domain-neutral cleanup execution primitive.
+`run_cleanup_steps(...)` accepts an ordered sequence of `(step, operation)`
+pairs, attempts every operation exactly once, and returns an ordered tuple of
+`CleanupFailure(step, error)`. It catches `BaseException` so control failures
+cannot bypass later cleanup or silently replace an earlier primary failure.
+
+The primitive does not log, retry, raise, choose step order, or define a
+lifecycle result. Daemon and REPL owners compose their own steps and retain
+their domain-specific lifecycle error, diagnostic event, primary-cause, and
+success rules.
+
 ## Deferred Callback Context
 
 `bind_runtime_context(callback)` captures the current immutable

@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon and REPL lifecycle owners now share one ordered named-cleanup runner.
+  It retains `BaseException` failures while leaving domain-specific lifecycle
+  errors, diagnostics, ordering, and primary-error policy with each owner.
 - REPL exit now runs transcript auto-save and memory curation exactly once each
   and attempts both. Named cleanup failures are aggregated without losing an
   existing main-loop exception or allowing diagnostics to replace it.
