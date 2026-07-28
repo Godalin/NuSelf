@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The ReasonAdvancer runtime-context unification batch is complete.
+Idle. The process-local log-observer ownership batch is complete.
 
 ## Active Branch
 
@@ -22,14 +22,14 @@ code.
 
 ## Completion Evidence
 
-- No reason-specific ContextVar remains.
-- Workspace and persona tool providers resolve the active reason thread from
-  RuntimeContext.
-- Reason advance logs inherit the reason thread plus existing request, turn,
-  job, trace, and source identity.
-- Caller context is restored after successful and failed advances.
-- Focused tests: 40 passed.
-- Full tests: 1208 passed.
+- Nested observation scopes deliver to every active observer in outer-to-inner
+  order and restore the outer scope.
+- One observer failure does not suppress later observers or fail the audit
+  writer's caller.
+- New threads do not accidentally inherit request-scoped observers.
+- Observer failures emit a non-recursive best-effort diagnostic.
+- Focused tests: 29 passed.
+- Full tests: 1211 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -39,4 +39,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit log-observer ContextVar ownership and propagation boundaries.
+Audit mutable LogEvent payload ownership across audit and activity projections.

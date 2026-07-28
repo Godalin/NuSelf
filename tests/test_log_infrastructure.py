@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import cast
@@ -13,6 +14,7 @@ from nuself.logs import (
     LogEvent,
     LogRetentionPolicy,
     log_path,
+    observe_log_events,
     read_log_events,
     write_log_event,
 )
@@ -30,6 +32,83 @@ def test_new_log_events_have_stable_envelope_identity(tmp_path: Path) -> None:
 
     assert read.event_id == written.event_id
     assert read.schema_version == RUNTIME_SCHEMA_VERSION
+
+
+def test_nested_log_observers_compose_in_order_and_restore(
+    tmp_path: Path,
+) -> None:
+    deliveries: list[tuple[str, str]] = []
+
+    def outer(event: LogEvent) -> None:
+        deliveries.append(("outer", event.message))
+
+    def inner(event: LogEvent) -> None:
+        deliveries.append(("inner", event.message))
+
+    with observe_log_events(outer):
+        write_log_event("chat", "observer_test", "outer-1", project_root=tmp_path)
+        with observe_log_events(inner):
+            write_log_event(
+                "chat",
+                "observer_test",
+                "nested",
+                project_root=tmp_path,
+            )
+        write_log_event("chat", "observer_test", "outer-2", project_root=tmp_path)
+
+    write_log_event("chat", "observer_test", "outside", project_root=tmp_path)
+
+    assert deliveries == [
+        ("outer", "outer-1"),
+        ("outer", "nested"),
+        ("inner", "nested"),
+        ("outer", "outer-2"),
+    ]
+
+
+def test_log_observer_failure_is_isolated_from_later_observers(
+    tmp_path: Path,
+) -> None:
+    delivered: list[LogEvent] = []
+
+    def fail(_event: LogEvent) -> None:
+        raise RuntimeError("projection failed")
+
+    with observe_log_events(fail), observe_log_events(delivered.append):
+        written = write_log_event(
+            "chat",
+            "observer_test",
+            "persisted",
+            project_root=tmp_path,
+        )
+
+    assert delivered == [written]
+    assert read_log_events(project_root=tmp_path, component="chat") == [written]
+    [diagnostic] = read_log_events(
+        project_root=tmp_path,
+        component="daemon",
+    )
+    assert diagnostic.event == "log_observer_failed"
+    assert diagnostic.error == "projection failed"
+
+
+def test_log_observers_are_not_inherited_by_new_threads(tmp_path: Path) -> None:
+    delivered: list[LogEvent] = []
+
+    with observe_log_events(delivered.append):
+        worker = threading.Thread(
+            target=lambda: write_log_event(
+                "chat",
+                "observer_test",
+                "thread",
+                project_root=tmp_path,
+            )
+        )
+        worker.start()
+        worker.join()
+
+    assert delivered == []
+    assert len(read_log_events(project_root=tmp_path, component="chat")) == 1
 
 
 @pytest.mark.parametrize(

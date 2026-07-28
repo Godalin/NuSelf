@@ -333,6 +333,9 @@ context。交互聊天的发送线程使用这一边界，同时 transcript capt
 path，不会吸收并发后台子系统的 audit record。
 Reason advance 也通过这一共享 context 确定 workspace 与 thread-local persona
 tools 的活动持久 reason thread，同时保留 request/job correlation。
+进程内 live log observer 与 correlation identity 保持分离：嵌套 observer 会按
+顺序组合，projection failure 在 audit write 后被隔离，并且 observer 不会隐式进入
+新的 worker thread。
 
 ## 通知
 

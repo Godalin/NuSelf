@@ -119,6 +119,25 @@ Rules:
 - Chat service-tool logs should include the active `thread_id` and, when available, the logical top-level `turn_id` so a tool call can be tied back to one chat turn.
 - Approval-gated tool execution writes an `approval_prompted` event before waiting for confirmation. The live REPL treats it as user-relevant interactive activity so the visible prompt appears before input is read.
 
+## Process-Local Observation
+
+`observe_log_events(observer)` adds a synchronous process-local projection for
+the current execution context. It is separate from `RuntimeContext`: observers
+are callable delivery effects, not serializable correlation identity.
+
+- Nested scopes compose in outer-to-inner registration order and restore the
+  previous observer set on exit.
+- The audit record is written before observers run.
+- Each observer is best effort. One observer failure cannot suppress later
+  observers, undo the audit write, or fail the business operation that logged.
+- Observer failures produce a best-effort `daemon/log_observer_failed`
+  diagnostic with observation temporarily suspended. Diagnostic failure is
+  swallowed, so observer errors cannot recurse or escape into the business
+  operation.
+- Observers are not implicitly copied to new threads. A future deferred path
+  that genuinely continues the same live projection must bind that effect
+  explicitly; long-lived workers must establish their own ownership.
+
 ## Log Components
 
 | Component    | File             | Responsibility                                                       |

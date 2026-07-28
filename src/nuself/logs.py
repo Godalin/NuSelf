@@ -67,9 +67,9 @@ class LogRetentionPolicy:
 
 DEFAULT_LOG_RETENTION = LogRetentionPolicy()
 LogEventObserver = Callable[["LogEvent"], None]
-_CURRENT_LOG_EVENT_OBSERVER: ContextVar[LogEventObserver | None] = ContextVar(
-    "nuself_log_event_observer",
-    default=None,
+_CURRENT_LOG_EVENT_OBSERVERS: ContextVar[tuple[LogEventObserver, ...]] = ContextVar(
+    "nuself_log_event_observers",
+    default=(),
 )
 
 
@@ -339,10 +339,45 @@ def _append_log_event(
                 log_file.flush()
         finally:
             flock(lock_file.fileno(), LOCK_UN)
-    observer = _CURRENT_LOG_EVENT_OBSERVER.get()
-    if observer is not None:
-        observer(event_record)
+    for observer in _CURRENT_LOG_EVENT_OBSERVERS.get():
+        try:
+            observer(event_record)
+        except Exception as exc:
+            _report_log_observer_failure(
+                observer,
+                exc,
+                project_root=paths.project_root,
+            )
+            continue
     return event_record
+
+
+def _report_log_observer_failure(
+    observer: LogEventObserver,
+    exc: Exception,
+    *,
+    project_root: Path,
+) -> None:
+    token = _CURRENT_LOG_EVENT_OBSERVERS.set(())
+    try:
+        try:
+            write_log_event(
+                "daemon",
+                "log_observer_failed",
+                "process-local log observer failed",
+                project_root=project_root,
+                level="warning",
+                status="error",
+                error=str(exc),
+                metadata={
+                    "error_type": type(exc).__name__,
+                    "observer_type": type(observer).__name__,
+                },
+            )
+        except Exception:
+            pass
+    finally:
+        _CURRENT_LOG_EVENT_OBSERVERS.reset(token)
 
 
 def _rotate_log_if_needed(
@@ -383,13 +418,16 @@ log_context = runtime_context
 def observe_log_events(
     observer: LogEventObserver,
 ) -> Generator[None, None, None]:
-    """Project events written in this execution context to one live observer."""
+    """Add one best-effort projection in this execution context."""
 
-    token: Token[LogEventObserver | None] = _CURRENT_LOG_EVENT_OBSERVER.set(observer)
+    current = _CURRENT_LOG_EVENT_OBSERVERS.get()
+    token: Token[tuple[LogEventObserver, ...]] = (
+        _CURRENT_LOG_EVENT_OBSERVERS.set((*current, observer))
+    )
     try:
         yield
     finally:
-        _CURRENT_LOG_EVENT_OBSERVER.reset(token)
+        _CURRENT_LOG_EVENT_OBSERVERS.reset(token)
 
 
 def log_path(component: LogComponent, *, project_root: Path | None = None) -> Path:

@@ -331,6 +331,11 @@ They are display-only: receiving or replaying activity cannot execute a
 command. Direct/one-shot mode may continue using the local incremental cursor;
 daemon-attached REPL mode must not poll component log files for live activity.
 
+The request-scoped audit observer used for this projection is an additive,
+process-local effect rather than part of `RuntimeContext`. Nested observers
+compose, and projection failure is isolated after the audit record is written.
+Observers are not blanket-propagated into new threads or long-lived workers.
+
 ## Durable Jobs
 
 Retryable background work uses typed job records, not tuples:

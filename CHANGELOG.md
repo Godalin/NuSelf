@@ -67,6 +67,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   thread identity for workspace and thread-local persona tools. Manual and
   scheduled failure logs preserve their caller correlation and reason thread
   without a parallel reason-specific context.
+- Request-scoped live log observers now compose when middleware scopes are
+  nested. A failed activity projection no longer suppresses later observers or
+  turns an already-persisted audit event into a failed business operation;
+  failures emit a non-recursive best-effort diagnostic.
 - Daemon JSONL transport now uses a shared 1 MiB request/response frame limit,
   requires newline-complete UTF-8 JSON, times out stalled server reads, and
   rejects incomplete, extra, non-finite, or response-id-mismatched frames.
