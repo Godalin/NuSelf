@@ -260,6 +260,9 @@ Retries are scheduled via `threading.Timer` rather than a persistent `next_attem
   logs `export_job_state_persist_failed` and does not schedule an in-memory
   retry. Startup reconciliation must not be relied on to recover state that was
   never durably recorded.
+- Once retry state is durably persisted, audit storage failure cannot suppress
+  an otherwise eligible retry timer. Manifest writes and timer construction or
+  start remain authoritative failures; export audit records are projections.
 
 This is a purely in-memory retry schedule. On daemon crash, all in-flight retry timers are lost; the reconciliation step (see below) restores them.
 
@@ -282,6 +285,11 @@ When the daemon export worker starts, it must run a one-time reconciliation step
 
 1. **Re-enqueue incomplete jobs**: Scan `private/workspaces/reason/*/artifacts/export/jobs/*/manifest.json`. For each manifest with status other than `complete` or `failed`, construct a typed `JobMessage` and push it into the in-memory queue. This recovers any jobs that were in flight when the daemon last exited.
 2. **Clear stale locks**: Scan `private/workspaces/reason/*/artifacts/export/jobs/*/.lock`. Remove any `.lock` file found — these were held by crashed processes and are now stale.
+
+Invalid-manifest diagnostics are best effort. Failure to persist one
+`export_reconciliation_skip` record cannot abort the scan or prevent later
+valid incomplete jobs from being enqueued. The final reconciliation summary is
+also auxiliary to the completed scan.
 
 This ensures that no pending work is lost across daemon restarts without requiring a persistent queue. The number of pending jobs at any time is bounded by the number of reason threads, so the startup scan is fast.
 
@@ -365,6 +373,12 @@ timers, stores, services, or processor helpers.
 or later enqueue/retry callback is ignored because the already-persisted
 manifest remains authoritative and will be recovered by the next startup
 reconciliation; no in-memory work may appear after the drain.
+
+All export worker lifecycle and caught-failure audit writes use the shared
+observable best-effort boundary. Audit failure cannot change an already-made
+queue, manifest, retry, composition, reconciliation, or shutdown decision.
+Invalid optional progress remains degraded input: its diagnostic may fail, but
+composition still runs from the valid manifest.
 
 When the Markdown artifact is finished, the export pipeline should automatically invoke the PDF helper script so the thread can be shared as both Markdown and PDF.
 

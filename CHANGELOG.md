@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon reason-export lifecycle and failure audit writes now use the shared
+  observable boundary. Audit storage failure cannot suppress durable retries,
+  block composition on degraded progress, truncate reconciliation, or undo
+  shutdown drain state.
 - LLM endpoint preference and chat retry/failover/fallback/finalize diagnostics
   are now isolated from model control flow. Audit or derived-state persistence
   failures no longer discard valid responses or prevent configured fallback.

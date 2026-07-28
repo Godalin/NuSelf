@@ -168,6 +168,12 @@ projection are secondary. Failure of those projections or their diagnostics
 cannot discard a valid response, skip the next configured attempt, prevent
 local fallback, or replace a completed chat answer with an exception.
 
+Reason-export manifests, composition, retry timer creation/start, and worker
+lifecycle decisions are authoritative. Export lifecycle and caught-failure
+audit records are secondary: audit failure cannot suppress a retry after its
+state is durably persisted, block composition after optional progress
+degradation, truncate reconciliation, or undo queue drain/shutdown state.
+
 ## Atomic File Failure Provenance
 
 Shared atomic text/JSON persistence propagates an ordinary write or replace

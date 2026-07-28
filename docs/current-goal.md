@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. LLM endpoint preference persistence and chat response diagnostics cannot
-discard a valid model response, interrupt configured retry/failover/local
-fallback, or replace a completed answer with an audit failure.
+Idle. Daemon reason-export audit writes cannot change durable failure
+transitions, suppress an eligible retry/composition, interrupt startup
+reconciliation, or make worker shutdown fail after its state changed.
 
 ## Active Branch
 
@@ -24,16 +24,21 @@ code.
 
 ## Completion Evidence
 
-- A valid endpoint response is returned when last-successful endpoint
-  persistence and its structured diagnostic both fail.
-- Retry and local fallback retain their configured call counts and return the
-  local response when retry/exhaustion diagnostics cannot be stored.
-- Final-response audit and chat thought-trace projection failures use shared
-  observable boundaries and cannot replace an accepted response.
-- Endpoint order, availability classification, retry count, response parsing,
-  and thread persistence are unchanged; LLM error text remains redacted.
-- Focused LLM failover and chat tests: 98 passed.
-- Final full tests: 1319 passed.
+- Export lifecycle writes use one shared best-effort audit helper; caught
+  failures retain their original exception chain through shared reporting.
+- After a compose failure increments the durable manifest attempt, complete
+  audit-store failure cannot suppress creation/start of the eligible retry
+  timer.
+- Corrupt optional progress still reaches composition when both its diagnostic
+  and lifecycle audits fail.
+- A corrupt reconciliation manifest and unavailable audit sink do not prevent
+  a later valid incomplete job from being enqueued.
+- Queue drain and closed enqueue state survive failure of the shutdown audit.
+- Manifest/progress writes, composition, timer start, attempt/backoff policy,
+  queue ownership, and reconciliation scope remain authoritative and
+  unchanged.
+- Focused export recovery and daemon worker tests: 26 passed.
+- Final full tests: 1323 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -44,4 +49,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-LLM/chat auxiliary state and diagnostics preserve model control flow.
+daemon export audit projections preserve durable worker control flow.

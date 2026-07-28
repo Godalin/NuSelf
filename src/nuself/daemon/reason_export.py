@@ -14,7 +14,7 @@ from nuself.clock import utc_now_iso
 from nuself.config import ConfigSystem
 from nuself.daemon.workers import DaemonWorkerSupervisor
 from nuself.llm import ChatMessage, default_llm
-from nuself.logs import write_log_event
+from nuself.logs import LogLevel, write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.output import (
     ReasonOutputManifest,
@@ -24,7 +24,11 @@ from nuself.reason.output import (
 )
 from nuself.runtime.context import use_runtime_context
 from nuself.runtime.jobs import JobMessage
-from nuself.runtime.observability import format_exception_chain
+from nuself.runtime.observability import (
+    format_exception_chain,
+    report_observed_failure,
+    run_observed_best_effort,
+)
 from nuself.storage import write_json_atomic
 from nuself.workspace import PrivateWorkspaceStore
 
@@ -39,6 +43,35 @@ SectionPlanner = Callable[
     [ReasoningThread, Sequence[ReasoningStep], str],
     tuple[ReasonOutputSection, ...],
 ]
+
+
+def _write_export_audit_event(
+    event: str,
+    message: str,
+    *,
+    project_root: Path,
+    level: LogLevel = "info",
+    status: str | None = None,
+    metadata: dict[str, object] | None = None,
+) -> None:
+    """Project an export lifecycle event without changing worker control flow."""
+
+    run_observed_best_effort(
+        lambda: write_log_event(
+            "daemon",
+            event,
+            message,
+            project_root=project_root,
+            level=level,
+            status=status,
+            metadata=metadata,
+        ),
+        component="daemon",
+        event="export_audit_write_failed",
+        message=f"Could not record export audit event {event}",
+        project_root=project_root,
+        metadata={"audit_event": event},
+    )
 
 
 @dataclass(frozen=True)
@@ -248,8 +281,7 @@ class ReasonExportWorker:
                 except queue.Empty:
                     break
         if drained:
-            write_log_event(
-                "daemon",
+            _write_export_audit_event(
                 "export_queue_drained",
                 f"Drained {drained} unprocessed export jobs",
                 project_root=self._project_root,
@@ -274,14 +306,15 @@ class ReasonExportWorker:
             except queue.Empty:
                 continue
             except Exception as exc:
-                write_log_event(
-                    "daemon",
-                    "export_worker_get_error",
-                    f"export queue.get() error: {exc!s}",
+                report_observed_failure(
+                    exc,
+                    component="daemon",
+                    event="export_worker_get_error",
+                    message="Export queue read failed",
                     project_root=self._project_root,
                     level="warning",
                     status="error",
-                    error=str(exc),
+                    metadata=None,
                 )
                 continue
             if self._shutdown_requested.is_set():
@@ -297,8 +330,7 @@ class ReasonExportWorker:
 
     def _process(self, message: JobMessage) -> None:
         if message.envelope.name != EXPORT_JOB_NAME:
-            write_log_event(
-                "daemon",
+            _write_export_audit_event(
                 "export_job_type_ignored",
                 (
                     "Ignored unsupported export job type "
@@ -311,8 +343,7 @@ class ReasonExportWorker:
             return
         thread_id = message.resource_id
         job_id = message.job_id
-        write_log_event(
-            "daemon",
+        _write_export_audit_event(
             "export_job_dequeued",
             f"Processing export job {job_id} for thread {thread_id}",
             project_root=self._project_root,
@@ -340,32 +371,35 @@ class ReasonExportWorker:
             KeyError,
         ) as exc:
             self._supervisor.record_failure(EXPORT_WORKER_NAME, exc)
-            write_log_event(
-                "daemon",
-                "export_job_manifest_invalid",
-                f"Cannot process export job {job_id}: invalid manifest",
+            report_observed_failure(
+                exc,
+                component="daemon",
+                event="export_job_manifest_invalid",
+                message=(
+                    f"Cannot process export job {job_id}: invalid manifest"
+                ),
                 project_root=self._project_root,
                 level="error",
                 status="error",
-                error=format_exception_chain(exc),
                 metadata={"job_id": job_id, "thread_id": thread_id},
             )
             return
         if inspection.terminal:
             return
         if inspection.progress_error is not None:
-            write_log_event(
-                "daemon",
-                "export_job_progress_invalid",
-                f"Ignoring invalid progress for export job {job_id}",
+            report_observed_failure(
+                inspection.progress_error,
+                component="daemon",
+                event="export_job_progress_invalid",
+                message=(
+                    f"Ignoring invalid progress for export job {job_id}"
+                ),
                 project_root=self._project_root,
                 level="warning",
                 status="degraded",
-                error=format_exception_chain(inspection.progress_error),
                 metadata={"job_id": job_id, "thread_id": thread_id},
             )
-        write_log_event(
-            "daemon",
+        _write_export_audit_event(
             "export_job_composition_started",
             (
                 f"Composing {inspection.total_chunks} chunk(s) "
@@ -408,14 +442,16 @@ class ReasonExportWorker:
                 max_attempts=MAX_EXPORT_ATTEMPTS,
             )
         except Exception as state_error:
-            write_log_event(
-                "daemon",
-                "export_job_state_persist_failed",
-                f"Could not persist failure state for export job {job_id}",
+            report_observed_failure(
+                state_error,
+                component="daemon",
+                event="export_job_state_persist_failed",
+                message=(
+                    f"Could not persist failure state for export job {job_id}"
+                ),
                 project_root=self._project_root,
                 level="error",
                 status="error",
-                error=format_exception_chain(state_error),
                 metadata={
                     "job_id": job_id,
                     "thread_id": thread_id,
@@ -427,17 +463,17 @@ class ReasonExportWorker:
             return
         attempts = failed_manifest.attempts
         if attempts >= MAX_EXPORT_ATTEMPTS:
-            write_log_event(
-                "daemon",
-                "export_job_failed",
-                (
+            report_observed_failure(
+                operation_error,
+                component="daemon",
+                event="export_job_failed",
+                message=(
                     f"Export job {job_id} exhausted retries: "
                     f"{operation_error!s}"
                 ),
                 project_root=self._project_root,
                 level="error",
                 status="error",
-                error=format_exception_chain(operation_error),
                 metadata={
                     "job_id": job_id,
                     "thread_id": thread_id,
@@ -448,8 +484,7 @@ class ReasonExportWorker:
         if self._stopping.is_set() or self._shutdown_requested.is_set():
             return
         backoff = _next_backoff(attempts)
-        write_log_event(
-            "daemon",
+        _write_export_audit_event(
             "export_job_retry",
             (
                 f"Export job {job_id} will retry in {backoff}s "
@@ -515,17 +550,17 @@ class ReasonExportWorker:
                         EXPORT_WORKER_NAME,
                         exc,
                     )
-                    write_log_event(
-                        "daemon",
-                        "export_reconciliation_skip",
-                        (
+                    report_observed_failure(
+                        exc,
+                        component="daemon",
+                        event="export_reconciliation_skip",
+                        message=(
                             "Skipping invalid export manifest for "
                             f"{job_dir.name}"
                         ),
                         project_root=self._project_root,
                         level="warning",
                         status="error",
-                        error=format_exception_chain(exc),
                         metadata={
                             "thread_id": owner_id,
                             "job_id": job_dir.name,
@@ -543,8 +578,7 @@ class ReasonExportWorker:
                     )
                 )
                 reconciled += 1
-        write_log_event(
-            "daemon",
+        _write_export_audit_event(
             "export_queue_reconciled",
             (
                 "Export queue reconciled on startup; re-enqueued "

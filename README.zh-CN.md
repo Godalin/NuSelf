@@ -46,6 +46,9 @@ fail-closed block/cooldown 决策变成异常。
 LLM endpoint preference 和 chat response 诊断从属于已接受的模型输出，因此
 其存储失败不会丢弃响应，也不会中断既定的 retry、failover 和本地 fallback。
 
+Daemon reason-export 审计记录从属于 durable manifest、composition、retry、
+reconciliation 和 shutdown 决策；审计失败不会改变这些 worker 结果。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

@@ -1,3 +1,5 @@
+# pyright: reportPrivateUsage=false
+
 import json
 import threading
 from pathlib import Path
@@ -321,6 +323,239 @@ def test_worker_reports_invalid_progress_and_continues(
         "thread_id": "thread_1",
     }
     assert "secret progress" not in str(event.to_record())
+
+
+def test_worker_audit_failure_cannot_suppress_durable_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path, progress_path = _job_paths(tmp_path)
+    write_json_atomic(manifest_path, _manifest().to_wire())
+    write_json_atomic(progress_path, _progress().to_wire())
+    scheduled: list[JobMessage] = []
+
+    def compose(
+        self: ReasonOutputService,
+        thread_id: str,
+        job_id: str,
+        runner: object,
+    ) -> ReasonOutputManifest:
+        raise RuntimeError("compose failed")
+
+    class FakeTimer:
+        def __init__(
+            self,
+            interval: float,
+            function: object,
+            args: tuple[JobMessage, ...],
+        ) -> None:
+            del interval, function
+            scheduled.extend(args)
+
+        def start(self) -> None:
+            return None
+
+        def cancel(self) -> None:
+            return None
+
+        def is_alive(self) -> bool:
+            return False
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        ReasonOutputService,
+        "compose_with_runner",
+        compose,
+    )
+    monkeypatch.setattr(
+        "nuself.daemon.reason_export.threading.Timer",
+        FakeTimer,
+    )
+    monkeypatch.setattr(
+        "nuself.daemon.reason_export.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    state = DaemonState(tmp_path)
+    worker = state.reason_export_worker
+    worker.prepare()
+    message = JobMessage.create(
+        name="reason.output.export",
+        producer="test",
+        job_id="job_1",
+        resource_id="thread_1",
+    )
+
+    with pytest.warns(RuntimeWarning) as captured:
+        worker._process(message)
+
+    assert len(scheduled) == 1
+    assert scheduled[0].job_id == "job_1"
+    persisted = ReasonOutputManifest.from_wire(
+        json.loads(manifest_path.read_text(encoding="utf-8"))
+    )
+    assert persisted.attempts == 1
+    assert any(
+        "daemon/export_audit_write_failed" in str(warning.message)
+        for warning in captured
+    )
+    worker.stop()
+
+
+def test_progress_diagnostic_failure_cannot_block_composition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path, progress_path = _job_paths(tmp_path)
+    write_json_atomic(manifest_path, _manifest().to_wire())
+    progress_path.write_text("{", encoding="utf-8")
+    composed: list[str] = []
+
+    def compose(
+        self: ReasonOutputService,
+        thread_id: str,
+        job_id: str,
+        runner: object,
+    ) -> ReasonOutputManifest:
+        composed.append(job_id)
+        return _manifest(job_id=job_id, thread_id=thread_id)
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        ReasonOutputService,
+        "compose_with_runner",
+        compose,
+    )
+    monkeypatch.setattr(
+        "nuself.daemon.reason_export.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    state = DaemonState(tmp_path)
+    worker = state.reason_export_worker
+    worker.prepare()
+    message = JobMessage.create(
+        name="reason.output.export",
+        producer="test",
+        job_id="job_1",
+        resource_id="thread_1",
+    )
+
+    with pytest.warns(RuntimeWarning) as captured:
+        worker._process(message)
+
+    assert composed == ["job_1"]
+    assert any(
+        (
+            "daemon/export_job_progress_invalid: "
+            "Expecting property name enclosed in double quotes"
+        )
+        in str(warning.message)
+        for warning in captured
+    )
+
+
+def test_reconciliation_diagnostic_failure_does_not_truncate_scan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bad_manifest, _ = _job_paths(
+        tmp_path,
+        job_id="a_bad",
+        thread_id="thread_1",
+    )
+    bad_manifest.write_text("{", encoding="utf-8")
+    good_manifest, _ = _job_paths(
+        tmp_path,
+        job_id="b_good",
+        thread_id="thread_1",
+    )
+    write_json_atomic(
+        good_manifest,
+        _manifest(job_id="b_good").to_wire(),
+    )
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.daemon.reason_export.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    state = DaemonState(tmp_path)
+    worker = state.reason_export_worker
+    worker.prepare()
+    store = PrivateWorkspaceStore(tmp_path, scope="reason")
+
+    with pytest.warns(RuntimeWarning) as captured:
+        worker._reconcile(store)
+
+    queued = worker._queue.get_nowait()
+    assert queued.job_id == "b_good"
+    assert queued.resource_id == "thread_1"
+    assert any(
+        "daemon/export_reconciliation_skip" in str(warning.message)
+        for warning in captured
+    )
+
+
+def test_shutdown_audit_failure_cannot_undo_queue_drain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.daemon.reason_export.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    state = DaemonState(tmp_path)
+    worker = state.reason_export_worker
+    worker.enqueue(
+        JobMessage.create(
+            name="reason.output.export",
+            producer="test",
+            job_id="job_1",
+            resource_id="thread_1",
+        )
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="daemon/export_audit_write_failed",
+    ):
+        worker.stop()
+
+    assert worker._stopping.is_set()
+    assert worker._queue.empty()
+    worker.enqueue(
+        JobMessage.create(
+            name="reason.output.export",
+            producer="test",
+            job_id="job_2",
+            resource_id="thread_1",
+        )
+    )
+    assert worker._queue.empty()
 
 
 def test_worker_retry_message_inherits_job_correlation(

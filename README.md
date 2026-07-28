@@ -54,6 +54,10 @@ LLM endpoint preference and chat response diagnostics are auxiliary to accepted
 model output, so their storage failure cannot discard a response or interrupt
 configured retry, failover, and local fallback.
 
+Daemon reason-export audit records are auxiliary to durable manifest,
+composition, retry, reconciliation, and shutdown decisions; audit failure
+cannot alter those worker outcomes.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).
