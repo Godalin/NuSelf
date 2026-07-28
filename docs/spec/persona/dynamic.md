@@ -83,6 +83,13 @@ When a persona prompt is created via `persona_craft`, a `persona_prompt_created`
 trace is recorded. The trace includes `prompt_id` and `name` but not the full
 prompt text.
 
+CLI create, enable, and disable mutations record their corresponding lifecycle
+trace after the authoritative persona mutation succeeds. Trace recording is a
+secondary effect: a recoverable `RuntimeError` emits
+`persona/trace_recording_failed` with the persona ID and action, but does not
+turn the completed CLI mutation into a failure. Unknown lifecycle actions and
+undeclared implementation errors propagate rather than being broadly hidden.
+
 ## Chat Tool
 
 ### `persona_craft`
@@ -197,13 +204,18 @@ Post-V1, the moderator could optionally discover and invite dynamic personas.
 
 ```text
 nuself persona list
+nuself persona create <name> <prompt>
 nuself persona show <name_or_id>
 nuself persona delete <name_or_id>
+nuself persona enable <name_or_id>
+nuself persona disable <name_or_id>
 ```
 
 - `list` prints all prompts with id, name, created_at.
 - `show` prints the full prompt text.
 - `delete` removes the prompt file and index entry.
+- `create`, `enable`, and `disable` emit the observable lifecycle traces
+  described above.
 
 ## Origin Rule
 

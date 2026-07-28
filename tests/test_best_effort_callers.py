@@ -4,6 +4,7 @@ import pytest
 
 from nuself.agent.chat.persona import ConversationPersonaOrchestrator
 from nuself.cli.commands.memory.common import record_memory_trace
+from nuself.cli.commands.persona import _record_lifecycle  # pyright: ignore[reportPrivateUsage]
 from nuself.decorators.audit import audit_log
 from nuself.logs import read_log_events
 from nuself.persona import PersonaInput, PersonaTurnState
@@ -67,6 +68,59 @@ def test_persona_trace_failure_is_observed_without_failing_tool(
         "persona_prompt_id": "persona_1",
         "action": "create",
     }
+
+
+def test_cli_persona_trace_failure_is_observed_after_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fail(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("trace store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.trace.service.TraceRecorder.record_persona_prompt_created",
+        fail,
+    )
+    prompt = PersonaPrompt(
+        id="persona_cli",
+        name="Reviewer",
+        prompt="Review carefully.",
+        created_at="2026-01-01T00:00:00+00:00",
+        updated_at="2026-01-01T00:00:00+00:00",
+    )
+
+    _record_lifecycle(
+        tmp_path,
+        action="prompt_created",
+        persona=prompt,
+    )
+
+    event = read_log_events(project_root=tmp_path, component="persona")[-1]
+    assert event.event == "trace_recording_failed"
+    assert event.error == "trace store unavailable"
+    assert event.metadata == {
+        "persona_prompt_id": "persona_cli",
+        "action": "prompt_created",
+    }
+
+
+def test_cli_persona_unknown_trace_action_propagates(
+    tmp_path: Path,
+) -> None:
+    prompt = PersonaPrompt(
+        id="persona_cli",
+        name="Reviewer",
+        prompt="Review carefully.",
+        created_at="2026-01-01T00:00:00+00:00",
+        updated_at="2026-01-01T00:00:00+00:00",
+    )
+
+    with pytest.raises(AttributeError):
+        _record_lifecycle(
+            tmp_path,
+            action="unknown",
+            persona=prompt,
+        )
 
 
 def test_audit_failure_is_observed_without_failing_tool(

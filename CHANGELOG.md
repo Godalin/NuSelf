@@ -54,6 +54,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- CLI persona create/enable/disable trace failures now emit
+  `persona/trace_recording_failed` after the successful mutation instead of
+  being silently discarded.
 - Recoverable post-chat memory-curator failures now emit an inherited-context
   `memory/post_chat_curation_failed` event while preserving the completed chat
   reply. They no longer silently appear as an ordinary "no memory change".

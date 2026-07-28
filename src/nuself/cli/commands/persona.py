@@ -20,6 +20,7 @@ from nuself.persona.prompt_repo import (
     PersonaPromptRepository,
     create_persona_prompt,
 )
+from nuself.runtime.observability import run_observed_best_effort
 from nuself.storage import auto_backend
 from nuself.trace.service import TraceRecorder
 from nuself.tui.persona import render_persona_detail, render_persona_row
@@ -63,16 +64,27 @@ def _record_lifecycle(
     action: str,
     persona: PersonaPrompt,
 ) -> None:
-    try:
+    def record() -> object:
         recorder = TraceRecorder(project_root=project_root)
         method = getattr(recorder, f"record_persona_{action}")
-        method(
+        return method(
             persona_prompt_id=persona.id,
             name=persona.name,
             participants=["cli"],
         )
-    except RuntimeError:
-        pass
+
+    run_observed_best_effort(
+        record,
+        component="persona",
+        event="trace_recording_failed",
+        message="Could not record CLI persona lifecycle trace",
+        project_root=project_root,
+        metadata={
+            "persona_prompt_id": persona.id,
+            "action": action,
+        },
+        errors=(RuntimeError,),
+    )
 
 
 def handle_persona_list(args: argparse.Namespace) -> int:
