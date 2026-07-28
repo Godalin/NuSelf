@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import stat
 from typing import BinaryIO, cast
 
 import pytest
@@ -9,6 +10,10 @@ from nuself.config import runtime_paths
 from nuself.daemon import lifecycle
 from nuself.logs import read_log_events
 from nuself.private import ensure_private_root
+
+
+def _no_sleep(seconds: float) -> None:
+    del seconds
 
 
 def test_ensure_private_root_creates_runtime_dirs(tmp_path: Path) -> None:
@@ -67,12 +72,9 @@ def test_start_isolates_raw_process_output_from_structured_daemon_log(
         process_logs.append(process_log)
         return object()
 
-    def no_sleep(seconds: float) -> None:
-        del seconds
-
     monkeypatch.setattr(lifecycle, "status", fake_status)
     monkeypatch.setattr(lifecycle.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(lifecycle.time, "sleep", no_sleep)
+    monkeypatch.setattr(lifecycle.time, "sleep", _no_sleep)
 
     assert lifecycle.start(tmp_path) == running
 
@@ -83,6 +85,158 @@ def test_start_isolates_raw_process_output_from_structured_daemon_log(
     )
     assert not paths.daemon_log_path.exists()
     assert read_log_events(project_root=tmp_path, component="daemon") == []
+
+
+def test_start_rotates_bounded_raw_process_log_before_spawn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = runtime_paths(tmp_path)
+    paths.logs_dir.mkdir(parents=True)
+    for path, content in (
+        (paths.daemon_process_log_path, "active-old"),
+        (paths.daemon_process_log_path.with_name("daemon-process.log.1"), "one"),
+        (paths.daemon_process_log_path.with_name("daemon-process.log.2"), "two"),
+        (paths.daemon_process_log_path.with_name("daemon-process.log.3"), "three"),
+    ):
+        path.write_text(content, encoding="utf-8")
+        path.chmod(0o644)
+    missing = lifecycle.DaemonStatus(
+        running=False,
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    running = lifecycle.DaemonStatus(
+        running=True,
+        pid=42,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    status_calls = 0
+
+    def fake_status(project_root: Path | None = None) -> lifecycle.DaemonStatus:
+        nonlocal status_calls
+        status_calls += 1
+        return missing if status_calls == 1 else running
+
+    def fake_popen(args: object, **kwargs: object) -> object:
+        assert (
+            paths.daemon_process_log_path.with_name(
+                "daemon-process.log.1"
+            ).read_text(encoding="utf-8")
+            == "active-old"
+        )
+        process_log = cast(BinaryIO, kwargs["stdout"])
+        process_log.write(b"active-new")
+        process_log.flush()
+        return object()
+
+    monkeypatch.setattr(lifecycle, "status", fake_status)
+    monkeypatch.setattr(lifecycle.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(lifecycle.time, "sleep", _no_sleep)
+
+    lifecycle.start(
+        tmp_path,
+        process_log_retention=lifecycle.DaemonProcessLogRetentionPolicy(
+            max_bytes=1,
+            backup_count=3,
+        ),
+    )
+
+    assert paths.daemon_process_log_path.read_text(encoding="utf-8") == "active-new"
+    assert (
+        paths.daemon_process_log_path.with_name(
+            "daemon-process.log.1"
+        ).read_text(encoding="utf-8")
+        == "active-old"
+    )
+    assert (
+        paths.daemon_process_log_path.with_name(
+            "daemon-process.log.2"
+        ).read_text(encoding="utf-8")
+        == "one"
+    )
+    assert (
+        paths.daemon_process_log_path.with_name(
+            "daemon-process.log.3"
+        ).read_text(encoding="utf-8")
+        == "two"
+    )
+    for path in paths.logs_dir.glob("daemon-process.log*"):
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_process_log_rotation_failure_warns_safely_and_continues_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = runtime_paths(tmp_path)
+    missing = lifecycle.DaemonStatus(
+        running=False,
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    running = lifecycle.DaemonStatus(
+        running=True,
+        pid=42,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    status_calls = 0
+    spawned = False
+    private_path = tmp_path / "private rotation target"
+
+    def fake_status(project_root: Path | None = None) -> lifecycle.DaemonStatus:
+        nonlocal status_calls
+        status_calls += 1
+        return missing if status_calls == 1 else running
+
+    def fail_rotation(
+        path: Path,
+        policy: lifecycle.DaemonProcessLogRetentionPolicy,
+    ) -> None:
+        raise PermissionError(13, "private rotation failure", private_path)
+
+    def fake_popen(args: object, **kwargs: object) -> object:
+        nonlocal spawned
+        spawned = True
+        return object()
+
+    monkeypatch.setattr(lifecycle, "status", fake_status)
+    monkeypatch.setattr(
+        lifecycle,
+        "_rotate_daemon_process_log_if_needed",
+        fail_rotation,
+    )
+    monkeypatch.setattr(lifecycle.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(lifecycle.time, "sleep", _no_sleep)
+
+    with pytest.warns(RuntimeWarning) as captured:
+        assert lifecycle.start(tmp_path) == running
+
+    assert spawned is True
+    warning = str(captured[0].message)
+    assert "process_log_rotation_failed" in warning
+    assert "error_type=PermissionError" in warning
+    assert "private rotation failure" not in warning
+    assert str(private_path) not in warning
+
+
+@pytest.mark.parametrize(
+    ("max_bytes", "backup_count"),
+    [(0, 1), (1, 0)],
+)
+def test_process_log_retention_policy_rejects_unbounded_values(
+    max_bytes: int,
+    backup_count: int,
+) -> None:
+    with pytest.raises(ValueError):
+        lifecycle.DaemonProcessLogRetentionPolicy(
+            max_bytes=max_bytes,
+            backup_count=backup_count,
+        )
 
 
 def test_read_pid_missing_file_returns_none(tmp_path: Path) -> None:

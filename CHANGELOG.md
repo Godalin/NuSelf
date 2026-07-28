@@ -14,6 +14,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon raw stdout/stderr now rotates before startup at 5 MiB with three
+  owner-only backups; retention failure warns safely without blocking startup.
 - Structured logs now avoid redundant directory synchronization for repeated
   appends to the same active inode through a bounded process-local cache,
   without batching or weakening per-record data-file durability.

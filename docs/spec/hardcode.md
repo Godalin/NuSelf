@@ -72,6 +72,7 @@ behavior, grouped by subsystem. Configurable defaults live in
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
 | retention days | `notification/__init__.py:263` | 7 | Dismissed outbox entries cleaned after 7 days |
+| daemon raw log size/backups | `daemon/lifecycle.py` | 5 MiB / 3 | Startup-time retention for inherited stdout/stderr |
 | `timeout=30` | `notification/email.py:81` | 30 s | SMTP connection timeout |
 
 ## CLI

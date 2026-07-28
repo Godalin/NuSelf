@@ -13,7 +13,25 @@ import time
 from nuself.config import RuntimePaths, ensure_runtime_dirs, runtime_paths
 from nuself.daemon import client
 from nuself.private_fs import ensure_private_file
+from nuself.runtime.diagnostics import emit_runtime_warning
 from nuself.runtime.observability import report_corrupt_record
+
+
+@dataclass(frozen=True)
+class DaemonProcessLogRetentionPolicy:
+    """Startup-time retention for the inherited raw daemon stream."""
+
+    max_bytes: int = 5 * 1024 * 1024
+    backup_count: int = 3
+
+    def __post_init__(self) -> None:
+        if self.max_bytes < 1:
+            raise ValueError("daemon process log max_bytes must be positive")
+        if self.backup_count < 1:
+            raise ValueError("daemon process log backup_count must be positive")
+
+
+DEFAULT_DAEMON_PROCESS_LOG_RETENTION = DaemonProcessLogRetentionPolicy()
 
 
 @dataclass(frozen=True)
@@ -35,12 +53,29 @@ def status(project_root: Path | None = None) -> DaemonStatus:
     )
 
 
-def start(project_root: Path | None = None) -> DaemonStatus:
+def start(
+    project_root: Path | None = None,
+    *,
+    process_log_retention: DaemonProcessLogRetentionPolicy = (
+        DEFAULT_DAEMON_PROCESS_LOG_RETENTION
+    ),
+) -> DaemonStatus:
     paths = runtime_paths(project_root)
     ensure_runtime_dirs(paths)
     current = status(paths.project_root)
     if current.running:
         return current
+    try:
+        _rotate_daemon_process_log_if_needed(
+            paths.daemon_process_log_path,
+            process_log_retention,
+        )
+    except OSError as exc:
+        emit_runtime_warning(
+            "daemon/process_log_rotation_failed: "
+            f"error_type={type(exc).__name__}; continuing startup",
+            stacklevel=2,
+        )
     ensure_private_file(paths.daemon_process_log_path)
     with paths.daemon_process_log_path.open("ab") as process_log:
         subprocess.Popen(
@@ -62,6 +97,30 @@ def start(project_root: Path | None = None) -> DaemonStatus:
         if current.running:
             return current
     return status(paths.project_root)
+
+
+def _rotate_daemon_process_log_if_needed(
+    path: Path,
+    policy: DaemonProcessLogRetentionPolicy,
+) -> None:
+    if not path.exists() or path.stat().st_size < policy.max_bytes:
+        return
+    ensure_private_file(path)
+    for index in range(1, policy.backup_count + 1):
+        backup = _daemon_process_log_backup(path, index)
+        if backup.exists():
+            ensure_private_file(backup)
+    oldest = _daemon_process_log_backup(path, policy.backup_count)
+    oldest.unlink(missing_ok=True)
+    for index in range(policy.backup_count - 1, 0, -1):
+        source = _daemon_process_log_backup(path, index)
+        if source.exists():
+            source.replace(_daemon_process_log_backup(path, index + 1))
+    path.replace(_daemon_process_log_backup(path, 1))
+
+
+def _daemon_process_log_backup(path: Path, index: int) -> Path:
+    return path.with_name(f"{path.name}.{index}")
 
 
 def stop(project_root: Path | None = None) -> DaemonStatus:
