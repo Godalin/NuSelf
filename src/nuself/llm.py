@@ -14,8 +14,11 @@ from langchain_openai import ChatOpenAI
 
 from nuself.config import ConfigSystem
 from nuself.config import runtime_paths
-from nuself.logs import write_log_event
-from nuself.runtime.observability import report_corrupt_record
+from nuself.runtime.observability import (
+    report_corrupt_record,
+    report_observed_failure,
+    run_observed_best_effort,
+)
 from nuself.storage import write_json_atomic
 
 ChatRole: TypeAlias = Literal["system", "user", "assistant"]
@@ -149,7 +152,10 @@ class _LangChainFailoverLLM:
                     raise
                 self._log_failover(exc, endpoint)
                 continue
-            _save_llm_state(self._project_root, endpoint.index)
+            record_llm_endpoint_success(
+                self._project_root,
+                endpoint.index,
+            )
             return result
         if last_error is not None:
             raise RuntimeError(f"all configured LLM endpoints failed: {redact_llm_error(str(last_error))}") from last_error
@@ -178,13 +184,14 @@ class _LangChainFailoverLLM:
         }
         if remaining:
             metadata["next_endpoint_index"] = remaining[0].index
-        write_log_event(
-            "chat",
-            event,
-            message,
+        report_observed_failure(
+            RuntimeError(redact_llm_error(str(exc))),
+            component="chat",
+            event=event,
+            message=message,
             project_root=self._project_root,
+            level="warning",
             status=status,
-            error=redact_llm_error(str(exc)),
             metadata=metadata,
         )
 
@@ -277,7 +284,14 @@ def _endpoint_langchain_chat_model(settings: LLMSettings) -> BaseChatModel:
 
 def record_llm_endpoint_success(project_root: Path | None, endpoint_index: int) -> None:
     """Remember the last successful configured LLM endpoint."""
-    _save_llm_state(project_root, endpoint_index)
+    run_observed_best_effort(
+        lambda: _save_llm_state(project_root, endpoint_index),
+        component="chat",
+        event="llm_endpoint_state_write_failed",
+        message="Could not persist the last successful LLM endpoint",
+        project_root=project_root,
+        metadata={"endpoint_index": endpoint_index},
+    )
 
 
 HTTP_AVAILABILITY_STATUS_RE = __import__("re").compile(r"\bhttp\s+(401|402|403|429)\b", __import__("re").IGNORECASE)

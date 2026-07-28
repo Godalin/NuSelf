@@ -34,7 +34,7 @@ from nuself.llm import (
     configured_langchain_chat_models,
     default_llm,
 )
-from nuself.logs import runtime_event_log_sink, write_log_event
+from nuself.logs import runtime_event_log_sink
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
@@ -46,6 +46,7 @@ from nuself.runtime.jobs import JobSink
 from nuself.runtime.observability import (
     format_exception_chain,
     publish_observed_event,
+    run_observed_best_effort,
 )
 from nuself.trace.service import TraceRecorder
 
@@ -339,8 +340,8 @@ class ConversationGraphRuntime:
         if not final_response.evidence_references:
             return None
         evidence_refs = list(final_response.evidence_references)
-        try:
-            trace = self._trace_recorder.record_chat_turn(
+        trace = run_observed_best_effort(
+            lambda: self._trace_recorder.record_chat_turn(
                 title=f"Chat turn cited {evidence_refs[0]}",
                 summary="Assistant reply used retrieved context cited by the final response.",
                 user_input=trace_summary(user_message),
@@ -350,19 +351,14 @@ class ConversationGraphRuntime:
                 participants=["chat_agent"],
                 decision_points=["Recorded because the final response cited evidence references."],
                 metadata={"node_trace": list(node_trace), "epistemic_status": final_response.epistemic_status},
-            )
-            return trace.id
-        except Exception as exc:
-            write_log_event(
-                "memory",
-                "trace_write_failed",
-                "chat trace write failed",
-                project_root=self._project_root,
-                thread_id=thread_id,
-                status="error",
-                metadata={"error": str(exc)},
-            )
-        return None
+            ),
+            component="memory",
+            event="trace_write_failed",
+            message="Chat trace write failed",
+            project_root=self._project_root,
+            metadata={"thread_id": thread_id},
+        )
+        return trace.id if trace is not None else None
 
     # ------------------------------------------------------------------
     # LangGraph node wrappers

@@ -106,6 +106,16 @@ Rules:
 - The renderer (`_render_service_tool_called`) reads `metadata.service_component` directly. It must NOT re-derive the service from the tool name.
 - No subsystem stores a separate tool-call cache on domain objects. The log event is the record of a tool invocation. Any code that needs to display a past tool call queries the log system.
 
+## LLM Response Diagnostics
+
+Endpoint retry, failover, exhaustion/local-fallback, and final-response events
+are observable projections of model control flow. A structured-log failure
+uses the shared terminal-warning fallback and cannot change endpoint order,
+consume or skip an attempt, prevent local fallback, or invalidate an accepted
+response. Persisting the last successful endpoint is also a derived preference:
+its failure is reported as `llm_endpoint_state_write_failed` without discarding
+the response.
+
 ## Chat Turn Logs
 
 Every chat turn publishes registered lifecycle events from the chat component;

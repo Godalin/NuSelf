@@ -133,6 +133,54 @@ def test_failover_llm_starts_from_remembered_success(
     assert calls == ["1"]
 
 
+def test_endpoint_preference_diagnostics_cannot_discard_valid_response(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_invoke(model: object, messages: list[ChatMessage]) -> str:
+        return "valid response"
+
+    def fail_state(*args: object, **kwargs: object) -> None:
+        raise OSError("state store unavailable")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.llm._invoke_langchain_model",
+        fake_invoke,
+    )
+    monkeypatch.setattr("nuself.llm._save_llm_state", fail_state)
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    from nuself.llm import _LangChainFailoverLLM  # pyright: ignore[reportPrivateUsage]
+
+    endpoints = (
+        LangChainLLMEndpoint(
+            index=0,
+            settings=_endpoint_cfg("primary"),
+            model=cast(Any, 0),
+        ),
+    )
+    llm = _LangChainFailoverLLM(endpoints, project_root=tmp_path)
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "chat/llm_endpoint_state_write_failed: "
+            "state store unavailable; structured logging failed: "
+            "audit store unavailable"
+        ),
+    ):
+        result = llm.complete(
+            [ChatMessage(role="user", content="hello")]
+        )
+
+    assert result == "valid response"
+
+
 def test_failover_llm_re_raises_non_availability_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

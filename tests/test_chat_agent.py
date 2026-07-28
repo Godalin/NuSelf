@@ -11,6 +11,7 @@ from langchain_core.tools import BaseTool
 from nuself.agent.chat import (
     ChatAgent,
     ChatAgentSettings,
+    ChatStructuredOutput,
     ConversationGraphRuntime,
     ConversationTurnState,
     ThreadMessage,
@@ -29,6 +30,7 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
 from nuself.trace.repository import TraceRepository
+from nuself.trace.service import TraceRecorder
 
 
 def _chat_tool(
@@ -1446,6 +1448,55 @@ def test_trace_show_tool(tmp_path: Path) -> None:
 
     assert "[trace] Trace detail target" in result
     assert "A detailed provenance item." in result
+
+
+def test_chat_trace_diagnostics_cannot_replace_completed_answer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_trace(*args: object, **kwargs: object) -> None:
+        raise OSError("trace store unavailable")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        TraceRecorder,
+        "record_chat_turn",
+        fail_trace,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    runtime = ConversationGraphRuntime.__new__(
+        ConversationGraphRuntime
+    )
+    runtime._project_root = tmp_path  # pyright: ignore[reportPrivateUsage]
+    runtime._trace_recorder = TraceRecorder(  # pyright: ignore[reportPrivateUsage]
+        tmp_path
+    )
+    response = ChatStructuredOutput(
+        answer="completed answer",
+        evidence_references=["memory-1"],
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "memory/trace_write_failed: trace store unavailable; "
+            "structured logging failed: audit store unavailable"
+        ),
+    ):
+        trace_id = runtime._record_chat_turn_trace(  # pyright: ignore[reportPrivateUsage]
+            user_message="hello",
+            final_response=response,
+            thread_id="thread-1",
+            node_trace=("prepare_context", "respond"),
+        )
+
+    assert trace_id is None
+    assert response.answer == "completed answer"
 
 
 def test_chat_agent_includes_memory_tools_in_system_prompt(tmp_path: Path) -> None:

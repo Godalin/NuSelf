@@ -27,6 +27,10 @@ from nuself.llm import (
     redact_llm_error,
 )
 from nuself.logs import write_log_event
+from nuself.runtime.observability import (
+    report_observed_failure,
+    run_observed_best_effort,
+)
 
 
 class ConversationResponseSynthesizer:
@@ -62,14 +66,23 @@ class ConversationResponseSynthesizer:
         state: ConversationTurnState,
         draft: ChatStructuredOutput,
     ) -> ChatStructuredOutput:
-        write_log_event(
-            "chat",
-            "final_response_completed",
-            "final response accepted from chat supervisor",
+        run_observed_best_effort(
+            lambda: write_log_event(
+                "chat",
+                "final_response_completed",
+                "final response accepted from chat supervisor",
+                project_root=self._project_root,
+                thread_id=state.thread_id,
+                status="completed",
+                metadata={
+                    "epistemic_status": draft.epistemic_status
+                },
+            ),
+            component="chat",
+            event="final_response_log_failed",
+            message="Could not record accepted final response",
             project_root=self._project_root,
-            thread_id=state.thread_id,
-            status="completed",
-            metadata={"epistemic_status": draft.epistemic_status},
+            metadata={"thread_id": state.thread_id},
         )
         return draft
 
@@ -114,13 +127,17 @@ class ConversationResponseSynthesizer:
                     )
                     return response
         if last_error is not None:
-            write_log_event(
-                "chat",
-                "llm_endpoints_exhausted",
-                "all LLM endpoints failed; falling back to local LLM",
+            report_observed_failure(
+                RuntimeError(redact_llm_error(str(last_error))),
+                component="chat",
+                event="llm_endpoints_exhausted",
+                message=(
+                    "All LLM endpoints failed; falling back to local LLM"
+                ),
                 project_root=self._project_root,
+                level="warning",
                 status="fallback",
-                error=redact_llm_error(str(last_error)),
+                metadata=None,
             )
         return self.parse_output(self._llm.complete(prompt))
 
@@ -129,13 +146,14 @@ class ConversationResponseSynthesizer:
         endpoint: LangChainLLMEndpoint,
         error: Exception,
     ) -> None:
-        write_log_event(
-            "chat",
-            "llm_endpoint_retry",
-            "LLM endpoint error; retrying",
+        report_observed_failure(
+            RuntimeError(redact_llm_error(str(error))),
+            component="chat",
+            event="llm_endpoint_retry",
+            message="LLM endpoint error; retrying",
             project_root=self._project_root,
+            level="warning",
             status="retry",
-            error=redact_llm_error(str(error)),
             metadata=_endpoint_metadata(endpoint),
         )
 
@@ -147,17 +165,20 @@ class ConversationResponseSynthesizer:
         error: Exception,
     ) -> None:
         unavailable = is_endpoint_availability_error(str(error))
-        write_log_event(
-            "chat",
-            (
+        report_observed_failure(
+            RuntimeError(redact_llm_error(str(error))),
+            component="chat",
+            event=(
                 "llm_endpoint_failed_over"
                 if unavailable
                 else "llm_endpoint_error"
             ),
-            "LLM endpoint failed; trying next configured endpoint",
+            message=(
+                "LLM endpoint failed; trying next configured endpoint"
+            ),
             project_root=self._project_root,
+            level="warning",
             status="failed_over" if unavailable else "error",
-            error=redact_llm_error(str(error)),
             metadata={
                 **_endpoint_metadata(endpoint),
                 "next_endpoint_index": next_endpoint.index,

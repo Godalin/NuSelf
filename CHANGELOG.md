@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- LLM endpoint preference and chat retry/failover/fallback/finalize diagnostics
+  are now isolated from model control flow. Audit or derived-state persistence
+  failures no longer discard valid responses or prevent configured fallback.
 - Reflection trace/organizer failure and corrupt schedule-state diagnostics now
   use shared observable reporting. Diagnostic storage failure cannot interrupt
   an already-persisted cycle or change fail-closed scheduler/cooldown behavior.

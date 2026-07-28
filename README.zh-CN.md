@@ -43,6 +43,9 @@ Reason 执行失败日志不会覆盖 advancer、scheduler 或 output runner 的
 Reflection 辅助诊断不会中断已持久化的 cycle，也不会让损坏 schedule 的
 fail-closed block/cooldown 决策变成异常。
 
+LLM endpoint preference 和 chat response 诊断从属于已接受的模型输出，因此
+其存储失败不会丢弃响应，也不会中断既定的 retry、failover 和本地 fallback。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

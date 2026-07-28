@@ -50,6 +50,10 @@ is unavailable.
 Reflection auxiliary diagnostics cannot interrupt a persisted cycle or turn a
 corrupt schedule's fail-closed block/cooldown decision into an exception.
 
+LLM endpoint preference and chat response diagnostics are auxiliary to accepted
+model output, so their storage failure cannot discard a response or interrupt
+configured retry, failover, and local fallback.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).

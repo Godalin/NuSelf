@@ -161,6 +161,13 @@ reflection are secondary under this contract. Corrupt reflection schedule
 diagnostics are also secondary to the authoritative fail-closed block/cooldown
 decision. Their logging failure cannot turn those outcomes into exceptions.
 
+An accepted LLM response and configured retry, endpoint failover, and local
+fallback decisions are authoritative. The last-successful endpoint preference,
+retry/failover/fallback/finalize audit records, and chat thought-trace
+projection are secondary. Failure of those projections or their diagnostics
+cannot discard a valid response, skip the next configured attempt, prevent
+local fallback, or replace a completed chat answer with an exception.
+
 ## Atomic File Failure Provenance
 
 Shared atomic text/JSON persistence propagates an ordinary write or replace

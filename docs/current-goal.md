@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Reflection trace, organizer, and corrupt-schedule diagnostics cannot
-interrupt an already-persisted cycle or change fail-closed scheduling and
-cooldown decisions.
+Idle. LLM endpoint preference persistence and chat response diagnostics cannot
+discard a valid model response, interrupt configured retry/failover/local
+fallback, or replace a completed answer with an audit failure.
 
 ## Active Branch
 
@@ -24,17 +24,16 @@ code.
 
 ## Completion Evidence
 
-- Trace failure after reflection persistence uses shared reporting; diagnostic
-  storage failure emits a terminal warning while the cycle completes and
-  schedule state advances.
-- Organizer failure remains best effort even when its diagnostic cannot be
-  persisted.
-- Corrupt scheduler state still blocks reflection, and corrupt relevance-gate
-  state still keeps cooldown active, when structured logging fails.
-- Repository, schedule-state write, outbox, candidate generation, relevance,
-  and discussion behavior remain unchanged.
-- Focused reflection and observability tests: 58 passed.
-- Final full tests: 1315 passed.
+- A valid endpoint response is returned when last-successful endpoint
+  persistence and its structured diagnostic both fail.
+- Retry and local fallback retain their configured call counts and return the
+  local response when retry/exhaustion diagnostics cannot be stored.
+- Final-response audit and chat thought-trace projection failures use shared
+  observable boundaries and cannot replace an accepted response.
+- Endpoint order, availability classification, retry count, response parsing,
+  and thread persistence are unchanged; LLM error text remains redacted.
+- Focused LLM failover and chat tests: 98 passed.
+- Final full tests: 1319 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -45,4 +44,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-reflection auxiliary diagnostics preserve cycle and fail-closed outcomes.
+LLM/chat auxiliary state and diagnostics preserve model control flow.
