@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reason export body composition now uses an injected shared `TextAgent` with
+  LangChain messages and non-empty output validation. Direct
+  `default_llm().complete()` and its hidden local configuration-warning output
+  were removed; unavailable or empty generation enters the durable export
+  retry/failure state machine.
 - Reason export chapter planning now accepts only an exact
   `ReasonSectionPlanOutput` through the shared structured-agent runner.
   Prompted JSON, text parsing, field coercion/defaulting, and partial sibling

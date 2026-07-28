@@ -208,6 +208,19 @@ unavailability remains an export failure. The planner does not request JSON,
 parse generated text, call `str()` or `int()` on generated fields, supply
 generated defaults, or partially accept valid siblings.
 
+Reason export body composition is natural-language generation and therefore
+uses the shared `TextAgent`, not a one-field structured schema. The daemon
+worker receives one text capability at construction and invokes it with
+LangChain system and human messages for every section chunk. The handler does
+not construct `default_llm`, call `ChatLLM.complete()`, or use the deterministic
+local chat response as export content.
+
+`TextAgent` guarantees a stripped, non-empty result. Endpoint exhaustion,
+empty output, or invocation failure is a composition failure and enters the
+existing durable export attempt/backoff/final-failure state machine; it must
+not produce a successful chunk containing a configuration warning or empty
+body.
+
 ### State Transitions
 
 | From                           | Action    | To         |

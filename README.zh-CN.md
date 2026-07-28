@@ -376,6 +376,9 @@ state 持久化失败会写入 daemon 日志。Progress 缺失属于正常状态
 模型生成的 reason export 章节计划同样使用严格 structured-agent schema；所有范围
 必须按顺序、连续且完整覆盖 source steps。malformed 或不完整计划会整体回退到
 确定性章节规划，不会修补生成字段或部分接受相邻条目。
+导出正文 composition 使用共享自由文本 agent capability；endpoint 缺失、调用错误
+或空文本会让本次 composition 失败并进入持久 retry 状态机，不会生成包含本地配置
+警告的“成功”产物。
 
 检查系统健康：
 

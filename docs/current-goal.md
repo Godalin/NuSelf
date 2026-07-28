@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The reason-export section-plan migration is complete.
+Idle. The reason-export free-text agent migration is complete.
 
 ## Active Branch
 
@@ -21,23 +21,20 @@ None while idle.
 
 ## Completion Evidence
 
-- `ReasonSectionPlanOutput` and `ReasonSectionOutput` require exact,
-  non-coercive fields with bounded section counts and ordered ranges.
-- Generated ranges must form one contiguous, non-overlapping partition of all
-  source steps.
-- Prompted JSON, response parsing, coercion/defaulting, and partial sibling
-  acceptance are removed.
-- Malformed plans use the deterministic planner as one complete fallback;
-  endpoint exhaustion remains an export failure.
-- `.venv/bin/pytest -q`: `1471 passed`.
+- `ReasonExportWorker` receives one `TextAgent` at construction and invokes it
+  with LangChain system and human messages.
+- Direct `default_llm().complete()` is removed from export composition.
+- Non-empty generation is enforced by the shared capability; endpoint or
+  invocation failure propagates into durable export retry/failure handling.
+- No local configuration-warning response can become a successful artifact.
+- `.venv/bin/pytest -q`: `1473 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `62a208b`.
+`dev/v0.3.x` is published through `f3db72e`.
 
 ## Next Review Batch
 
-Migrate free-text reason export composition or chat compression onto
-`TextAgent`, keeping each as a separate functional commit.
+Migrate chat compression onto `TextAgent` as a separate functional commit.

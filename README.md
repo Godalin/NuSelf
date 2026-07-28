@@ -413,6 +413,10 @@ Generated reason-export chapter plans also use an exact structured-agent
 schema. Their ranges must form one ordered, contiguous partition of all source
 steps; malformed or partial plans fall back as a whole to deterministic
 section planning rather than repairing generated fields or accepting siblings.
+Export body composition uses the shared free-text agent capability. Missing
+endpoints, invocation errors, or empty text fail the composition attempt and
+enter the durable retry state machine instead of producing a successful
+artifact containing a local configuration warning.
 
 Check system health:
 

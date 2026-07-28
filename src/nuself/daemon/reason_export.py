@@ -20,10 +20,10 @@ from pydantic import (
 )
 
 from nuself.agent.structured import StructuredAgent, default_structured_agent
+from nuself.agent.text import TextAgent, default_text_agent
 from nuself.clock import utc_now_iso
 from nuself.config import ConfigSystem
 from nuself.daemon.workers import DaemonWorkerSupervisor
-from nuself.llm import ChatMessage, default_llm
 from nuself.logs import LogLevel, write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.output import (
@@ -280,10 +280,20 @@ class ReasonExportWorker:
         project_root: Path,
         shutdown_requested: threading.Event,
         supervisor: DaemonWorkerSupervisor,
+        *,
+        text_agent: TextAgent | None = None,
     ) -> None:
         self._project_root = project_root
         self._shutdown_requested = shutdown_requested
         self._supervisor = supervisor
+        self._text_agent = (
+            text_agent
+            if text_agent is not None
+            else default_text_agent(
+                project_root=project_root,
+                component="reasoning",
+            )
+        )
         self._queue: queue.SimpleQueue[JobMessage] = queue.SimpleQueue()
         self._stopping = threading.Event()
         self._lifecycle_lock = threading.Lock()
@@ -680,10 +690,10 @@ class ReasonExportWorker:
             if step.evidence_refs:
                 body_lines.append("Evidence:")
                 body_lines.extend(f"- {ref}" for ref in step.evidence_refs)
-        return default_llm(self._project_root).complete(
+        return self._text_agent.invoke(
             [
-                ChatMessage(role="system", content=system),
-                ChatMessage(role="user", content="\n".join(body_lines)),
+                SystemMessage(content=system),
+                HumanMessage(content="\n".join(body_lines)),
             ]
         )
 

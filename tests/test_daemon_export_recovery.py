@@ -11,23 +11,27 @@ from langchain_core.messages import BaseMessage
 from pydantic import ValidationError
 
 from nuself.daemon.reason_export import (
+    ReasonExportWorker,
     ReasonSectionOutput,
     ReasonSectionPlanOutput,
     build_reason_export_section_planner,
     inspect_export_job,
     persist_export_failure,
 )
+from nuself.daemon.workers import DaemonWorkerSupervisor
 from nuself.daemon.state import DaemonState
 from nuself.logs import LogEvent, read_log_events
 from nuself.reason.output import (
     ReasonOutputManifest,
     ReasonOutputProgress,
+    ReasonOutputSection,
     ReasonOutputService,
 )
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.storage import write_json_atomic
 from nuself.runtime.jobs import JobMessage
 from nuself.runtime.context import runtime_context
+from nuself.runtime.events import EventPublisher
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -96,6 +100,16 @@ class _SectionAgent:
     ) -> ReasonSectionPlanOutput:
         self.calls.append(messages)
         return self.output
+
+
+class _TextAgent:
+    def __init__(self, result: str = "Composed section body.") -> None:
+        self.result = result
+        self.calls: list[Sequence[BaseMessage]] = []
+
+    def invoke(self, messages: Sequence[BaseMessage]) -> str:
+        self.calls.append(messages)
+        return self.result
 
 
 def _reason_steps() -> tuple[ReasoningStep, ...]:
@@ -236,6 +250,94 @@ def test_reason_export_section_planner_rejects_partial_range_plan(
         for section in sections
         for step_id in section.step_ids
     ) == ("step-0", "step-1", "step-2")
+
+
+def test_reason_export_worker_composes_with_injected_text_agent(
+    tmp_path: Path,
+) -> None:
+    shutdown = threading.Event()
+    agent = _TextAgent()
+    worker = ReasonExportWorker(
+        tmp_path,
+        shutdown,
+        DaemonWorkerSupervisor(
+            tmp_path,
+            shutdown,
+            EventPublisher(),
+        ),
+        text_agent=agent,
+    )
+    steps = _reason_steps()
+    section = ReasonOutputSection(
+        index=0,
+        title="Complete section",
+        focus="Cover all steps",
+        step_ids=tuple(step.id for step in steps),
+        source_start_index=0,
+        source_end_index=2,
+        summary="Complete section",
+    )
+
+    result = worker._llm_runner(
+        ReasoningThread(id="thread-1", topic="Text export"),
+        _manifest(thread_id="thread-1"),
+        steps,
+        section=section,
+        section_plan=(section,),
+        index=0,
+        total=1,
+    )
+
+    assert result == "Composed section body."
+    assert len(agent.calls) == 1
+    assert "writing assistant" in agent.calls[0][0].text
+    assert "Current section: Complete section" in agent.calls[0][1].text
+    assert "First step" in agent.calls[0][1].text
+
+
+def test_reason_export_worker_propagates_text_agent_failure(
+    tmp_path: Path,
+) -> None:
+    class _FailingTextAgent:
+        def invoke(self, messages: Sequence[BaseMessage]) -> str:
+            del messages
+            raise RuntimeError("all configured LLM endpoints failed")
+
+    shutdown = threading.Event()
+    worker = ReasonExportWorker(
+        tmp_path,
+        shutdown,
+        DaemonWorkerSupervisor(
+            tmp_path,
+            shutdown,
+            EventPublisher(),
+        ),
+        text_agent=_FailingTextAgent(),
+    )
+    steps = _reason_steps()
+    section = ReasonOutputSection(
+        index=0,
+        title="Failure section",
+        focus="Must retry",
+        step_ids=tuple(step.id for step in steps),
+        source_start_index=0,
+        source_end_index=2,
+        summary="Failure section",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="all configured LLM endpoints failed",
+    ):
+        worker._llm_runner(
+            ReasoningThread(id="thread-1", topic="Failing export"),
+            _manifest(thread_id="thread-1"),
+            steps,
+            section=section,
+            section_plan=(section,),
+            index=0,
+            total=1,
+        )
 
 
 def _wait_for_event(root: Path, event_name: str) -> LogEvent:
