@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import threading
 
 import pytest
 
@@ -75,4 +76,33 @@ def test_write_text_atomic_failure_preserves_destination_and_cleans_temp(
         write_text_atomic(path, "new")
 
     assert path.read_text(encoding="utf-8") == "old"
+    assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_write_text_atomic_concurrent_writers_do_not_share_temp_path(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "runtime" / "state.txt"
+    values = [f"value-{index}-" + ("x" * 10_000) for index in range(8)]
+    barrier = threading.Barrier(len(values))
+    errors: list[BaseException] = []
+
+    def write_value(value: str) -> None:
+        try:
+            barrier.wait()
+            write_text_atomic(path, value)
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=write_value, args=(value,))
+        for value in values
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert path.read_text(encoding="utf-8") in values
     assert list(path.parent.glob("*.tmp")) == []

@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Reason export state and artifacts, chat threads, and persona prompt records
+  now use one shared unique-temp atomic writer. Fixed-name temporary-file
+  collisions and subsystem-specific failure cleanup can no longer expose
+  partial runtime state.
 - Daemon PID metadata is now atomically published and strictly decoded.
   Malformed, empty, zero, or negative PID files emit a payload-safe diagnostic
   instead of silently looking identical to a missing PID file.

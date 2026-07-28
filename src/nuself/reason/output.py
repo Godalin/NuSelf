@@ -20,6 +20,7 @@ from nuself.reason.repository import ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.runtime.jobs import JobMessage, JobSink
 from nuself.runtime.observability import run_observed_best_effort
+from nuself.storage import write_json_atomic, write_text_atomic
 from nuself.workspace import PrivateWorkspaceStore
 
 REASON_OUTPUT_STORAGE_VERSION = "NuSelfReasonOutput/v1"
@@ -522,7 +523,8 @@ class ReasonOutputService:
                 raise
 
             # persist chunk
-            chunk_path.write_text(
+            write_text_atomic(
+                chunk_path,
                 _render_chunk_document(
                     thread,
                     manifest,
@@ -530,7 +532,6 @@ class ReasonOutputService:
                     section_plan=section_plan,
                     body=composed_text,
                 ),
-                encoding="utf-8",
             )
 
             # Emit chunk completed event
@@ -578,7 +579,7 @@ class ReasonOutputService:
         section_plan: Sequence[ReasonOutputSection],
     ) -> ReasonOutputManifest:
         combined_text = _combine_chunks(thread, manifest, paths, chunks, section_plan=section_plan)
-        paths.combined.write_text(combined_text, encoding="utf-8")
+        write_text_atomic(paths.combined, combined_text)
         updated = manifest.with_updates(status="complete", chunks=tuple(chunks), sections=tuple(section_plan))
         self._write_manifest(paths.manifest, updated)
         self._write_progress(
@@ -936,14 +937,6 @@ def _export_job_id(
     ).encode("utf-8")
     digest = hashlib.sha256(payload).hexdigest()[:16]
     return f"reason-output-{digest}"
-
-
-def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
-    """Atomically write a JSON payload to a file using a temp-file + replace strategy."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(f"{path.suffix}.tmp")
-    tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8")
-    tmp_path.replace(path)
 
 
 def _clear_job_artifacts(paths: ReasonOutputPaths) -> None:

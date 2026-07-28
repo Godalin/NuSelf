@@ -82,6 +82,18 @@ Do not tag unreleased feature commits directly. Tags mark release commits only.
   producer for persisted ISO-8601 timestamps. Domains may keep specialized ID
   or scheduling helpers, but must compose them from the neutral clock.
 
+### Shared Atomic File Boundary
+
+Runtime JSON and text state uses `nuself.storage.write_json_atomic()` or
+`write_text_atomic()`. The shared writer creates a unique sibling temporary
+file, atomically replaces the destination, and removes the temporary file on
+failure while preserving any prior destination.
+
+Subsystems must not define parallel atomic writer helpers or use a fixed
+`.tmp` path. Direct `Path.write_text()` remains appropriate only for an
+explicit user-selected artifact whose partial-write behavior is documented, or
+inside the shared writer itself.
+
 ### Import Placement Policy
 
 Module-level imports are the default for domain models, repositories, services,

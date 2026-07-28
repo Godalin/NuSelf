@@ -42,13 +42,12 @@ from nuself.reason.output import (
     ReasonOutputProgress,
     ReasonOutputSection,
     ReasonOutputService,
-    write_json_atomic,
 )
 from nuself.reflection import ReflectionScheduler
 from nuself.runtime.jobs import JobMessage
 from nuself.runtime.observability import format_exception_chain
 from nuself.runtime.workers import OwnedWorker
-from nuself.storage import write_text_atomic
+from nuself.storage import write_json_atomic, write_text_atomic
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
 

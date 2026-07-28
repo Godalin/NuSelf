@@ -15,7 +15,7 @@ from nuself.runtime.observability import (
     decode_observed_record,
     report_corrupt_record,
 )
-from nuself.storage import StorageBackend, auto_backend
+from nuself.storage import StorageBackend, auto_backend, write_json_atomic
 
 _REPO_LOCKS_LOCK = threading.Lock()
 _REPO_LOCKS: dict[Path, threading.RLock] = {}
@@ -178,7 +178,7 @@ class PersonaPromptRepository:
 
     def _legacy_save(self, prompt: PersonaPrompt) -> None:
         self._root.mkdir(parents=True, exist_ok=True)
-        _write_json_atomic(self._root / f"{prompt.id}.json", prompt.to_wire())
+        write_json_atomic(self._root / f"{prompt.id}.json", prompt.to_wire())
         self._legacy_rebuild_name_index()
 
     def _legacy_get(self, prompt_id: str) -> PersonaPrompt | None:
@@ -229,7 +229,7 @@ class PersonaPromptRepository:
         path = self._root / "name_index.json"
         if not path.exists():
             if self._root.exists():
-                _write_json_atomic(
+                write_json_atomic(
                     path,
                     cast("dict[str, object]", dict(projected)),
                 )
@@ -261,7 +261,7 @@ class PersonaPromptRepository:
                 record_id="name_index",
                 project_root=self._project_root,
             )
-            _write_json_atomic(
+            write_json_atomic(
                 path,
                 cast("dict[str, object]", dict(projected)),
             )
@@ -287,7 +287,7 @@ class PersonaPromptRepository:
     def _legacy_rebuild_name_index(self) -> dict[str, str]:
         index = self._legacy_project_name_index()
         if self._root.exists():
-            _write_json_atomic(
+            write_json_atomic(
                 self._root / "name_index.json",
                 cast("dict[str, object]", dict(index)),
             )
@@ -302,23 +302,6 @@ def _read_legacy_prompt_file(path: Path) -> PersonaPrompt:
     if not isinstance(raw, dict):
         raise ValueError("persona prompt record must be an object")
     return PersonaPrompt.from_wire(cast("dict[str, object]", raw))
-
-
-def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
-    try:
-        tmp_path.write_text(
-            json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n",
-            encoding="utf-8",
-        )
-        tmp_path.replace(path)
-    except Exception:
-        try:
-            tmp_path.unlink()
-        except FileNotFoundError:
-            pass
-        raise
 
 
 def _lock_for_root(root: Path) -> threading.RLock:

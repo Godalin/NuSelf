@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Literal, TypeVar, cast
 
 from nuself.config import runtime_paths
+from nuself.storage import write_json_atomic
 
 ThreadRole = Literal["user", "assistant"]
 UpdateResult = TypeVar("UpdateResult")
@@ -152,9 +153,7 @@ class ThreadStore:
     def _save_unlocked(self, state: ThreadState) -> None:
         self._threads_dir.mkdir(parents=True, exist_ok=True)
         path = self._path_for(state.thread_id)
-        tmp_path = path.with_suffix(f"{path.suffix}.tmp")
-        tmp_path.write_text(json.dumps(state.to_wire(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        tmp_path.replace(path)
+        write_json_atomic(path, state.to_wire())
 
     def _path_for(self, thread_id: str) -> Path:
         if thread_id == "" or "/" in thread_id or thread_id in {".", ".."}:

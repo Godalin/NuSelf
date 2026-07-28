@@ -14,8 +14,8 @@ from nuself.reason.output import (
     ReasonOutputManifest,
     ReasonOutputProgress,
     ReasonOutputService,
-    write_json_atomic,
 )
+from nuself.storage import write_json_atomic
 from nuself.runtime.jobs import JobMessage
 from nuself.workspace import PrivateWorkspaceStore
 
