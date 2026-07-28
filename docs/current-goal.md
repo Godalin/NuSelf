@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Give workspace SQLite initialization and batches one explicit connection,
-transaction, and failure-provenance boundary.
+Make `HandlerRegistry.seal()` the explicit boundary between mutable
+composition and immutable runtime dispatch.
 
 ## Active Branch
 
@@ -14,39 +14,39 @@ transaction, and failure-provenance boundary.
 
 ## Ordered Work
 
-1. Audit every `SqliteStore` connection, transaction, and cleanup path.
-2. Specify initialization and batch ownership contracts.
-3. Extract shared connection cleanup and transactional execution boundaries.
-4. Preserve primary failures across rollback and close failures.
-5. Verify commit, rollback, and close behavior under dual failures.
+1. Audit CLI, REPL, daemon, and shared handler dispatch paths.
+2. Specify sealed-only runtime dispatch.
+3. Compile middleware chains once when the registry is sealed.
+4. Reject dispatch from a partially composed registry.
+5. Verify middleware order, exception identity, and immutable dispatch state.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep LangGraph `BaseStore` sync and async behavior unchanged.
-- Preserve one fresh SQLite connection per batch.
-- Do not merge workspace storage into the long-lived storage backend.
+- Preserve typed handler signatures and registration order.
+- Keep `resolve()` available to composition-time validation and inspection.
+- Do not fold argparse's parser-bound adapter into the keyed registry.
 
 ## Completion Evidence
 
-- `_run_transaction()` is the sole workspace SQLite connection owner for
-  schema initialization and LangGraph store batches.
-- The boundary opens and closes exactly once, commits successful operations,
-  and rolls back operation or commit failures.
-- `SqliteStoreLifecycleError` retains the primary, rollback, and close errors;
-  the primary error remains the explicit cause when cleanup also fails.
-- Tests cover strict-JSON operation failure combined with rollback and close
-  failures, commit failure with successful cleanup, and close failure after a
-  committed batch.
-- Focused workspace/store tests: `22 passed`.
-- `.venv/bin/pytest -q`: `1499 passed`.
+- `HandlerRegistry.seal()` compiles one immutable dispatch table from the
+  registered handlers and middleware stack.
+- `dispatch()` rejects unsealed registries with
+  `HandlerRegistryUnsealedError`, preventing runtime use of partial
+  composition state.
+- Sealing is idempotent, direct `resolve()` remains available for composition
+  inspection, and sealed registration/middleware mutation remains rejected.
+- Tests prove unsealed dispatch rejection, middleware order, original
+  exception identity, and that dispatch does not rebuild middleware chains.
+- Focused handler, daemon-request, and REPL-dispatch tests: `20 passed`.
+- `.venv/bin/pytest -q`: `1501 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `d991255`.
+`dev/v0.3.x` is published through `e621657`.
 
 ## Next Review Batch
 
-Audit the remaining internal handler and error-propagation boundaries.
+Audit runtime event publication and log projection ownership.

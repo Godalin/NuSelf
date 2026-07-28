@@ -8,6 +8,7 @@ from nuself.runtime.handlers import (
     DuplicateHandlerError,
     HandlerRegistry,
     HandlerRegistrySealedError,
+    HandlerRegistryUnsealedError,
     UnknownHandlerError,
 )
 
@@ -32,7 +33,16 @@ def test_handler_registry_decorator_returns_original_handler() -> None:
         return value
 
     assert registry.resolve("echo") is echo
+    registry.seal()
     assert registry.dispatch("echo", "hello") == "hello"
+
+
+def test_handler_registry_rejects_dispatch_before_seal() -> None:
+    registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
+    registry.register("echo", lambda value: value)
+
+    with pytest.raises(HandlerRegistryUnsealedError):
+        registry.dispatch("echo", "hello")
 
 
 def test_handler_registry_rejects_duplicate_registration() -> None:
@@ -99,6 +109,34 @@ def test_handler_middleware_wraps_in_registration_order() -> None:
         "inner-after",
         "outer-after",
     ]
+
+
+def test_handler_registry_compiles_middleware_only_when_sealed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.runtime import handlers
+
+    registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
+
+    def passthrough(
+        key: str,
+        next_handler: Callable[[str], str],
+        value: str,
+    ) -> str:
+        del key
+        return next_handler(value)
+
+    registry.use(passthrough)
+    registry.register("echo", lambda value: value)
+    registry.seal()
+
+    def reject_runtime_compilation(*args: object) -> object:
+        del args
+        raise AssertionError("middleware chain rebuilt during dispatch")
+
+    monkeypatch.setattr(handlers, "_wrap_handler", reject_runtime_compilation)
+
+    assert registry.dispatch("echo", "stable") == "stable"
 
 
 def test_handler_middleware_preserves_handler_exception() -> None:

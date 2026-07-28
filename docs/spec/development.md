@@ -165,6 +165,22 @@ Rules:
 - Agent skills must be explicit about when tool use is expected, when it is optional, and what claims are invalid without a tool result.
 - Shared renderers should be reused so CLI, REPL, transcripts, and logs stay consistent.
 
+## Handler Composition
+
+`runtime.handlers.HandlerRegistry` is the shared keyed synchronous dispatch
+primitive. Registration and middleware composition are mutable build-time
+operations. `seal()` is the one-way transition to runtime use: it compiles
+every middleware chain once into a stable dispatch table. `dispatch()` rejects
+an unsealed registry, so callers cannot observe a partially composed handler
+set or middleware stack. Sealed registries reject all later registration and
+middleware changes.
+
+`resolve()` exposes the directly registered handler for composition-time
+inspection; runtime callers use `dispatch()` so middleware cannot be bypassed.
+Middleware order is outer-to-inner registration order, and wrappers must
+preserve the original handler exception identity unless the middleware's
+documented policy explicitly translates it.
+
 ## CLI Module Boundaries
 
 `nuself.cli` is a package whose `__init__.py` remains the composition root and

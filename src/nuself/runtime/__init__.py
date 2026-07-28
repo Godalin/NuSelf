@@ -30,6 +30,7 @@ from nuself.runtime.handlers import (
     HandlerMiddleware,
     HandlerRegistry,
     HandlerRegistrySealedError,
+    HandlerRegistryUnsealedError,
     UnknownHandlerError,
 )
 from nuself.runtime.jobs import JobMessage, JobSink
@@ -64,6 +65,7 @@ __all__ = [
     "HandlerRegistry",
     "HandlerMiddleware",
     "HandlerRegistrySealedError",
+    "HandlerRegistryUnsealedError",
     "JobMessage",
     "JobSink",
     "MessageKind",
