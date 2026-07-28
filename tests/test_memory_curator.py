@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+import pytest
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.domain.memory import (
@@ -11,6 +14,7 @@ from nuself.domain.memory import (
 )
 from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
+from nuself.logs import read_log_events
 from nuself.memory.curator import MemoryCurator, MemoryCuratorSettings
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
@@ -63,6 +67,83 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
     assert candidates[0].evidence[0].observed_at == candidates[0].observed_at
     assert candidates[0].evidence[0].summary == "important memory model decision"
     assert "candidate=" in result.log_path.read_text(encoding="utf-8")
+    cursor_path = (
+        tmp_path
+        / "private"
+        / "memory"
+        / "cursors"
+        / "default.json"
+    )
+    assert json.loads(cursor_path.read_text(encoding="utf-8")) == {
+        "thread_id": "default",
+        "processed_message_count": 2,
+    }
+    assert list(cursor_path.parent.glob("default.json.*.tmp")) == []
+
+
+@pytest.mark.parametrize(
+    "cursor_text",
+    [
+        "{",
+        "[]",
+        '{"thread_id":"other","processed_message_count":0}',
+        '{"thread_id":"default","processed_message_count":true}',
+        '{"thread_id":"default","processed_message_count":-1}',
+    ],
+)
+def test_memory_curator_rejects_corrupt_cursor_without_replay(
+    tmp_path: Path,
+    cursor_text: str,
+) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "We decided that malformed cursor state must never "
+                        "replay already processed durable conversation history."
+                    ),
+                )
+            ],
+        )
+    )
+    cursor_path = (
+        tmp_path
+        / "private"
+        / "memory"
+        / "cursors"
+        / "default.json"
+    )
+    cursor_path.parent.mkdir(parents=True)
+    cursor_path.write_text(cursor_text, encoding="utf-8")
+    llm = FakeCuratorLLM('{"actions":[]}')
+    curator = MemoryCurator(
+        tmp_path,
+        llm=llm,
+        thread_store=thread_store,
+        settings=MemoryCuratorSettings(auto_accept=False),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="invalid memory curator cursor",
+    ):
+        curator.run_once()
+
+    assert llm.calls == []
+    assert MemoryCandidateRepository(tmp_path).list() == []
+    event = read_log_events(
+        project_root=tmp_path,
+        component="memory",
+    )[-1]
+    assert event.event == "record_decode_failed"
+    assert event.metadata == {
+        "collection": "memory_curator_cursors",
+        "record_id": "default",
+    }
 
 
 def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None:

@@ -65,6 +65,15 @@ Rules:
 ### Per-Thread Cursor
 
 - Load cursor from `private/memory/cursors/{thread_id}.json`.
+- A missing cursor means the thread has not been processed and starts at zero.
+- A present cursor is an authoritative typed record containing the same
+  `thread_id` as its filename/request and a non-negative integer
+  `processed_message_count`.
+- Invalid JSON, non-object shape, mismatched identity, boolean/non-integer
+  counts, and negative counts are corrupt state. The curator reports a
+  payload-safe `record_decode_failed` event and aborts that run; it must not
+  reinterpret corruption as cursor zero and replay old messages.
+- Cursor updates use atomic same-directory replacement.
 - If `cursor >= next_message_index`, no-op (idempotent).
 - If thread was compressed (`cursor < message_start_index`), log gap and start from `visible_start`.
 - Advance cursor to `visible_end` after processing.

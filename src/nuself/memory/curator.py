@@ -17,6 +17,8 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import clamp_unit, extract_json_object, looks_like_raw_transcript
+from nuself.runtime.observability import report_corrupt_record
+from nuself.storage import write_json_atomic
 from nuself.trace.service import TraceRecorder
 
 MemoryActionType: TypeAlias = Literal["create", "update", "ignore"]
@@ -30,6 +32,51 @@ class MemoryCuratorSettings:
     min_quality_chars: int = 120
     existing_memory_limit: int = 12
     auto_accept: bool = True
+
+
+@dataclass(frozen=True)
+class MemoryCuratorCursor:
+    """Authoritative absolute position for one curated thread."""
+
+    thread_id: str
+    processed_message_count: int
+
+    @classmethod
+    def from_wire(
+        cls,
+        data: dict[str, object],
+        *,
+        expected_thread_id: str,
+    ) -> MemoryCuratorCursor:
+        thread_id = data.get("thread_id")
+        if not isinstance(thread_id, str):
+            raise ValueError("cursor field 'thread_id' must be a string")
+        if thread_id != expected_thread_id:
+            raise ValueError(
+                "cursor thread identity mismatch: "
+                f"expected {expected_thread_id!r}, got {thread_id!r}"
+            )
+        count = data.get("processed_message_count")
+        if isinstance(count, bool) or not isinstance(count, int):
+            raise ValueError(
+                "cursor field 'processed_message_count' "
+                "must be an integer"
+            )
+        if count < 0:
+            raise ValueError(
+                "cursor field 'processed_message_count' "
+                "must be non-negative"
+            )
+        return cls(
+            thread_id=thread_id,
+            processed_message_count=count,
+        )
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            "thread_id": self.thread_id,
+            "processed_message_count": self.processed_message_count,
+        }
 
 
 @dataclass(frozen=True)
@@ -405,22 +452,34 @@ class MemoryCurator:
         path = self._cursor_path(thread_id)
         try:
             raw: object = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raise ValueError("cursor record must be a JSON object")
+            cursor = MemoryCuratorCursor.from_wire(
+                cast(dict[str, object], raw),
+                expected_thread_id=thread_id,
+            )
         except FileNotFoundError:
             return 0
-        if not isinstance(raw, dict):
-            return 0
-        value = cast(dict[str, object], raw).get("processed_message_count")
-        if isinstance(value, int) and value >= 0:
-            return value
-        return 0
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+            report_corrupt_record(
+                exc,
+                component="memory",
+                collection="memory_curator_cursors",
+                record_id=thread_id,
+                project_root=self._paths.project_root,
+            )
+            raise ValueError(
+                f"invalid memory curator cursor for thread {thread_id!r}"
+            ) from exc
+        return cursor.processed_message_count
 
     def _save_cursor(self, thread_id: str, processed_message_count: int) -> None:
         path = self._cursor_path(thread_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps({"thread_id": thread_id, "processed_message_count": processed_message_count}, indent=2) + "\n",
-            encoding="utf-8",
+        cursor = MemoryCuratorCursor(
+            thread_id=thread_id,
+            processed_message_count=processed_message_count,
         )
+        write_json_atomic(path, cursor.to_wire())
 
     def _cursor_path(self, thread_id: str) -> Path:
         if thread_id == "" or "/" in thread_id or thread_id in {".", ".."}:

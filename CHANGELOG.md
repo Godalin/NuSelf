@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Memory-curator cursors are now strictly validated and written atomically.
+  Corrupt shape, thread identity, or message counts stop the curation run with
+  a payload-safe diagnostic instead of silently resetting to zero and
+  replaying already processed conversation history.
 - REPL dynamic completion and input-history persistence failures are now
   observable degraded events; they no longer fail silently or discard a line
   already accepted through the builtin input fallback.
