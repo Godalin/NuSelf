@@ -371,3 +371,52 @@ def test_stopped_event_is_written_after_owned_cleanup(
 
     assert server_module._run_owned_daemon(paths) == 0
     assert stopped_observed is True
+
+
+def test_signal_restore_failure_joins_daemon_cleanup_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import nuself.daemon.server as server_module
+
+    paths = runtime_paths(tmp_path)
+    paths.runtime_dir.mkdir(parents=True)
+
+    class FailingSignalOwner:
+        def __init__(self, shutdown_requested: threading.Event) -> None:
+            self.shutdown_requested = shutdown_requested
+
+        def install(self) -> bool:
+            return True
+
+        def restore(self) -> bool:
+            raise OSError("signal restore failed")
+
+    def make_state(project_root: Path) -> _UnstartedDaemonState:
+        return _UnstartedDaemonState(project_root)
+
+    def fail_bind(
+        socket_path: str,
+        handler: object,
+        state: object,
+    ) -> object:
+        raise OSError("bind failed")
+
+    monkeypatch.setattr(server_module, "DaemonState", make_state)
+    monkeypatch.setattr(
+        server_module,
+        "DaemonSignalOwner",
+        FailingSignalOwner,
+    )
+    monkeypatch.setattr(server_module, "NuSelfUnixServer", fail_bind)
+
+    with pytest.raises(server_module.DaemonLifecycleError) as captured:
+        server_module._run_owned_daemon(paths)
+
+    assert isinstance(captured.value.__cause__, OSError)
+    assert str(captured.value.__cause__) == "bind failed"
+    assert [failure.step for failure in captured.value.failures] == [
+        "signal_handlers.restore"
+    ]
+    assert isinstance(captured.value.failures[0].error, OSError)
+    assert not paths.pid_path.exists()

@@ -289,7 +289,8 @@ Daemon health 会同时反映定时迭代失败和 worker target 的意外退出
 诊断带有 `daemon.worker.<name>` source；即使结构化诊断写入失败，也只会回退为
 runtime warning，不会终止仍可恢复的定时循环。Shutdown 会尝试每一个 owned
 cleanup step 并保留同时发生的故障；只有 worker、当前项目 storage、socket 和 PID
-都清理成功后，才会写入 `daemon/stopped`。
+都清理成功后，才会写入 `daemon/stopped`。SIGINT/SIGTERM handler 只由 daemon
+临时借用，退出时会精确恢复 host process 原有的 handler。
 
 快速状态概览：
 

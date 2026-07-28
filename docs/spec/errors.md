@@ -90,6 +90,17 @@ shutdown, attempts each worker stop independently, resets only the current
 project's default storage backend, removes the socket and PID independently,
 and releases the instance lock last.
 
+SIGINT and SIGTERM handlers are process-global borrowed state. The daemon
+captures and installs both before binding, keeps them while workers stop, then
+restores the exact prior handlers in reverse order as a named cleanup step.
+Partial installation immediately attempts to restore every signal already
+changed. Installation remains a main-thread requirement; Python's failure
+outside the main thread is surfaced rather than silently disabling shutdown.
+
+Signal restoration attempts every still-owned signal. Failures retain the
+signal number and remain retryable; a later lifecycle cleanup step still runs.
+The daemon must never leave one successfully restored signal marked as owned.
+
 Every ordinary `Exception` from a cleanup step is retained as a
 `DaemonCleanupFailure(step, error)` while later steps continue. When cleanup
 fails, `DaemonLifecycleError` exposes the complete ordered failure tuple. If

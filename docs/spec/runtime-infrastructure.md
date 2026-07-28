@@ -294,6 +294,12 @@ shutdown are complete. Only that owner may:
 - publish `nuself.pid`;
 - remove the socket and PID during cleanup.
 
+While holding that ownership, the daemon temporarily owns the process SIGINT
+and SIGTERM handlers through `DaemonSignalOwner`. It restores pre-existing
+handlers before project storage/socket/PID cleanup completes and before the
+instance lock is released. Handler installation and restoration are explicit
+lifecycle operations, not permanent module-level side effects.
+
 If the lock is already held, the contender writes
 `daemon/instance_lock_contended`, returns a non-zero exit status, and must not
 construct daemon state or modify socket/PID resources. Unix-server binding must

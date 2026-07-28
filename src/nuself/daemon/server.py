@@ -28,6 +28,7 @@ from nuself.daemon.instance import (
 )
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, ProtocolError
 from nuself.daemon.request_handlers import handle_request
+from nuself.daemon.signals import DaemonSignalOwner
 from nuself.daemon.types import WorkerHealth
 from nuself.llm import ChatMessage, default_llm
 from nuself.logs import write_log_event
@@ -1037,22 +1038,15 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
     """Run the daemon while the caller holds project instance ownership."""
 
     state: DaemonState | None = None
+    signal_owner: DaemonSignalOwner | None = None
     started = False
     primary_error: BaseException | None = None
     try:
         paths.socket_path.unlink(missing_ok=True)
         write_text_atomic(paths.pid_path, f"{os.getpid()}\n")
         state = DaemonState(paths.project_root)
-
-        import signal as _signal
-        _signal.signal(
-            _signal.SIGTERM,
-            lambda signum, frame: state.shutdown_requested.set(),
-        )
-        _signal.signal(
-            _signal.SIGINT,
-            lambda signum, frame: state.shutdown_requested.set(),
-        )
+        signal_owner = DaemonSignalOwner(state.shutdown_requested)
+        signal_owner.install()
 
         with NuSelfUnixServer(str(paths.socket_path), RequestHandler, state) as server:
             write_log_event(
@@ -1099,6 +1093,10 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
                     state.stop_background_notification_delivery,
                 ),
             )
+        )
+    if signal_owner is not None:
+        cleanup_steps.append(
+            ("signal_handlers.restore", signal_owner.restore)
         )
     from nuself.storage import reset_default_backend
 

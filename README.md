@@ -303,7 +303,9 @@ target exits. Worker diagnostics carry a `daemon.worker.<name>` source; failure
 to write that diagnostic falls back to a runtime warning without terminating
 the scheduled loop. Shutdown attempts every owned cleanup step and retains
 simultaneous failures; `daemon/stopped` is emitted only after workers,
-project-scoped storage, socket, and PID cleanup all succeed.
+project-scoped storage, socket, and PID cleanup all succeed. SIGINT/SIGTERM
+handlers are temporary daemon ownership and the host process's exact previous
+handlers are restored on exit.
 
 Quick status overview:
 

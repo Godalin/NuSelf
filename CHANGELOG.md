@@ -58,6 +58,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Daemon execution now borrows SIGINT/SIGTERM handlers explicitly and restores
+  the exact previous process handlers on every exit path. Partial installation
+  rolls back already-changed signals, and restoration failures remain
+  retryable and participate in lifecycle cleanup aggregation.
 - Daemon shutdown now attempts every worker, project-scoped backend, socket,
   PID, and instance-lock cleanup step even when earlier steps fail. Named
   cleanup failures are retained together with any bind/serve error, worker join

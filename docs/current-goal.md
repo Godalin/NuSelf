@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The daemon shutdown cleanup aggregation and ownership stage is complete;
+Idle. The daemon signal-handler ownership and restoration stage is complete;
 no implementation change is currently active.
 
 ## Active Branch
@@ -31,4 +31,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit daemon startup signal-handler ownership and restoration.
+Audit request transport read/write timeout and disconnect semantics.
