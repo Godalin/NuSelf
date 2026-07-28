@@ -25,6 +25,9 @@ LangGraph 现已支撑 conversation runtime。聊天 agent 可在对话中调用
 Persona graph 的 LLM 故障会保留确定性的贡献、汇总和激活 fallback，同时记录
 结构化降级信息；诊断存储不可用也不会中断 endpoint failover。
 
+竞争式 persona discussion 对评分、参与者选择和 moderator 判断使用相同边界，
+诊断归属调用项目，而不是隐式进程状态。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

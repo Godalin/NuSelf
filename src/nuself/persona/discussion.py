@@ -23,6 +23,7 @@ from nuself.persona.graph import (
     LLMBackedSynthesizerNode,
     PersonaGraphDriver,
 )
+from nuself.runtime.observability import report_observed_failure
 
 DiscussionTraceSink = Callable[[str], None]
 
@@ -73,9 +74,16 @@ class PersonaCompetitionResult:
 class LLMBackedScoringPersonaNode:
     """LLM-driven persona node that generates both a note and a 0-1 score."""
 
-    def __init__(self, llm: ChatLLM, *, language_preference: str = "en") -> None:
+    def __init__(
+        self,
+        llm: ChatLLM,
+        *,
+        language_preference: str = "en",
+        project_root: Path | None = None,
+    ) -> None:
         self._llm = llm
         self._language_preference = language_preference
+        self._project_root = project_root
 
     def __call__(self, persona: PersonaDefinition, persona_input: PersonaInput) -> PersonaContribution:
         prior = persona_input.memory_context.strip()
@@ -105,7 +113,18 @@ class LLMBackedScoringPersonaNode:
         try:
             raw = self._llm.complete(messages).strip()
             note, score = self._parse_response(raw)
-        except (RuntimeError, ValueError, KeyError):
+        except (RuntimeError, ValueError, KeyError) as exc:
+            report_observed_failure(
+                exc,
+                component="persona",
+                event="persona_discussion_degraded",
+                message=f"persona discussion scoring fallback used for {persona.id}",
+                project_root=self._project_root,
+                metadata={
+                    "stage": "scoring",
+                    "persona_id": persona.id,
+                },
+            )
             note = f"{persona.id} considered the topic."
             score = 0.5
 
@@ -138,6 +157,7 @@ class ProactivePersonaDiscussion:
         config: ReflectionSettings | None = None,
         llm: ChatLLM | None = None,
         language_preference: str = "en",
+        project_root: Path | None = None,
     ) -> None:
         if config is not None:
             max_turns = config.moderator.max_discussion_rounds
@@ -158,11 +178,20 @@ class ProactivePersonaDiscussion:
         self._consensus_spread_threshold = consensus_spread_threshold
         self._llm = llm
         self._language_preference = language_preference
+        self._project_root = project_root
 
         if llm is not None:
             self._driver = PersonaGraphDriver(
-                persona_node=LLMBackedScoringPersonaNode(llm, language_preference=language_preference),
-                synthesizer_node=LLMBackedSynthesizerNode(llm, language_preference=language_preference),
+                persona_node=LLMBackedScoringPersonaNode(
+                    llm,
+                    language_preference=language_preference,
+                    project_root=project_root,
+                ),
+                synthesizer_node=LLMBackedSynthesizerNode(
+                    llm,
+                    language_preference=language_preference,
+                    project_root=project_root,
+                ),
             )
         else:
             self._driver = PersonaGraphDriver()
@@ -315,7 +344,18 @@ class ProactivePersonaDiscussion:
         try:
             raw = self._llm.complete(messages).strip()
             selected_ids = self._parse_selected_personas(raw)
-        except (RuntimeError, ValueError, KeyError):
+        except (RuntimeError, ValueError, KeyError) as exc:
+            report_observed_failure(
+                exc,
+                component="persona",
+                event="persona_discussion_degraded",
+                message="persona discussion selection fallback used",
+                project_root=self._project_root,
+                metadata={
+                    "stage": "selection",
+                    "candidate_id": candidate.id,
+                },
+            )
             selected_ids = []
 
         selected: list[PersonaDefinition] = []
@@ -432,7 +472,18 @@ class ProactivePersonaDiscussion:
         try:
             raw = self._llm.complete(messages).strip()
             return self._parse_moderator_judgment(raw)
-        except (RuntimeError, ValueError, KeyError):
+        except (RuntimeError, ValueError, KeyError) as exc:
+            report_observed_failure(
+                exc,
+                component="persona",
+                event="persona_discussion_degraded",
+                message="persona discussion moderator fallback used",
+                project_root=self._project_root,
+                metadata={
+                    "stage": "moderator",
+                    "turn_number": turn_number,
+                },
+            )
             return {"converged": False, "emergent_persona": "none", "reason": "fallback"}
 
     def _parse_moderator_judgment(self, raw: str) -> dict[str, object]:
@@ -482,7 +533,12 @@ class SharedPersonaDiscussionService:
             config = system_config.reflection
         if language_preference is None:
             language_preference = system_config.chat.language_preference
-        self._discussion = ProactivePersonaDiscussion(config=config, llm=llm, language_preference=language_preference)
+        self._discussion = ProactivePersonaDiscussion(
+            config=config,
+            llm=llm,
+            language_preference=language_preference,
+            project_root=project_root,
+        )
 
     def discuss(
         self,

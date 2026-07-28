@@ -72,6 +72,16 @@ Malformed output keeps the existing caller-owned safety behavior:
 - moderator judgment remains non-converged, selects no emergent persona, and
   allows the bounded discussion loop to continue.
 
+LLM and schema failures for all three stages write
+`persona/persona_discussion_degraded` through shared best-effort observability.
+Metadata identifies `scoring`, `selection`, or `moderator`; scoring also names
+the persona, selection names the candidate, and moderator names the turn.
+`SharedPersonaDiscussionService` passes its project root into the discussion
+engine and its LLM-backed graph nodes so these records use the same project
+storage as the calling chat or reflection runtime. Diagnostic persistence
+failure cannot replace the documented fallback, stop the bounded discussion,
+or trigger a hidden LLM/diagnostic retry.
+
 ## Parameters
 
 | Parameter | Default | Description |

@@ -18,6 +18,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   endpoint failover, contribution generation, synthesis, and activation.
   Diagnostic storage failure cannot stop failover or replace the existing
   deterministic fallback result.
+- Competitive persona discussion now records scoring, participant-selection,
+  and moderator-judgment degradation under the caller's project runtime.
+  Diagnostic failure cannot replace its existing neutral or deterministic
+  fallbacks.
 - Process-local log observer failures now fall back to a contextual
   `RuntimeWarning` when their structured `log_observer_failed` diagnostic
   cannot be persisted, instead of becoming completely invisible. Observer

@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Every LLM degradation in the standard persona graph is observable, and
-diagnostic persistence failure cannot stop endpoint failover or replace the
-existing deterministic contribution, synthesis, or activation fallback.
+Idle. Competitive persona discussion records every LLM/schema degradation
+under the calling project without allowing diagnostic failure to replace its
+scoring, selection, or moderator fallback.
 
 ## Active Branch
 
@@ -24,18 +24,17 @@ code.
 
 ## Completion Evidence
 
-- Structured endpoint failures use `persona_structured_failed`; diagnostic
-  failure emits a terminal warning and the next endpoint is still attempted.
-- Contribution and synthesis completion failures use
-  `persona_completion_failed` with stage and persona identity metadata before
-  returning their unchanged deterministic fallbacks.
-- Activation failure uses `persona_activation_failed` before returning its
-  unchanged `llm_fallback` result.
-- Diagnostic storage failure cannot replace contribution fallback output.
-- Prompts, schemas, confidence values, fallback text, activation decisions,
-  and retry behavior are unchanged.
-- Focused persona graph, discussion, and observability tests: 50 passed.
-- Final full tests: 1294 passed.
+- Scoring, participant selection, and moderator judgment failures use
+  `persona_discussion_degraded` with stage-specific safe metadata.
+- The shared service passes its project root to the discussion engine, scoring
+  node, and synthesizer; diagnostics no longer depend on implicit CWD state.
+- Diagnostic storage failure emits a terminal warning without replacing the
+  neutral score or generic contribution fallback.
+- Neutral score, deterministic participant pool, non-converged moderator
+  result, prompts, schemas, discussion bounds, and retry behavior are
+  unchanged.
+- Focused discussion, shared-service, and persona graph tests: 41 passed.
+- Final full tests: 1296 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -46,4 +45,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-the standard persona graph has no silent LLM degradation.
+competitive persona discussion has no silent LLM/schema degradation.

@@ -254,6 +254,11 @@ synthesis completion, and activation failures are recorded through shared
 best-effort observability. These diagnostics never replace the fallback or
 prevent another configured structured endpoint from being tried.
 
+Competitive persona discussion uses the same observability boundary for
+scoring, participant-selection, and moderator-judgment failures. Its neutral
+score, deterministic participant pool, and non-converged moderator fallbacks
+remain authoritative when diagnostic persistence fails.
+
 #### 3. Moderator Judgment (`_moderator_judgment`)
 
 Replaces both `_round_has_consensus()` and `_maybe_spawn_emergent_persona()`. After each scoring round, the moderator LLM receives the current scores and discussion trace, then returns:

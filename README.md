@@ -28,6 +28,10 @@ Persona graph LLM failures retain deterministic contribution, synthesis, and
 activation fallbacks while recording structured degradation; unavailable
 diagnostics cannot interrupt endpoint failover.
 
+Competitive persona discussions apply the same boundary to scoring,
+participant selection, and moderator judgment, with diagnostics stored under
+the calling project rather than implicit process state.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).

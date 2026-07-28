@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatMessage
+from nuself.logs import read_log_events
 from nuself.persona import (
     PersonaCompetitionResult,
     ProactivePersonaDiscussion,
@@ -201,25 +203,44 @@ def test_llm_backed_scoring_persona_node_parses_note_and_score() -> None:
     assert result.confidence == 0.85
 
 
-def test_llm_backed_scoring_persona_node_fallback_on_bad_json() -> None:
+def test_llm_backed_scoring_persona_node_fallback_on_bad_json(
+    tmp_path: Path,
+) -> None:
     class _BadJsonLLM:
         def complete(self, messages: list[ChatMessage]) -> str:
             return "not json"
 
-    node = LLMBackedScoringPersonaNode(_BadJsonLLM())
+    node = LLMBackedScoringPersonaNode(
+        _BadJsonLLM(),
+        project_root=tmp_path,
+    )
     persona = PersonaDefinition(id="analyst_self", description="Decomposes questions.")
     result = node(persona, PersonaInput(user_message="Test"))
 
     assert result.notes == ("analyst_self considered the topic.",)
     assert result.confidence == 0.5
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="persona",
+    )
+    assert event.event == "persona_discussion_degraded"
+    assert event.metadata == {
+        "stage": "scoring",
+        "persona_id": "analyst_self",
+    }
 
 
-def test_llm_backed_scoring_persona_node_rejects_numeric_string() -> None:
+def test_llm_backed_scoring_persona_node_rejects_numeric_string(
+    tmp_path: Path,
+) -> None:
     class _StringScoreLLM:
         def complete(self, messages: list[ChatMessage]) -> str:
             return '{"note": "Looks strong.", "score": "0.85"}'
 
-    node = LLMBackedScoringPersonaNode(_StringScoreLLM())
+    node = LLMBackedScoringPersonaNode(
+        _StringScoreLLM(),
+        project_root=tmp_path,
+    )
     persona = PersonaDefinition(id="analyst_self", description="Decomposes questions.")
     result = node(persona, PersonaInput(user_message="Test"))
 
@@ -255,7 +276,9 @@ def test_select_personas_with_llm_uses_llm_response() -> None:
     assert selected[1].id == "skeptic_self"
 
 
-def test_select_personas_with_llm_rejects_partially_malformed_selection() -> None:
+def test_select_personas_with_llm_rejects_partially_malformed_selection(
+    tmp_path: Path,
+) -> None:
     llm = _FakeLLM({
         "select": '{"selected_persona_ids": ["builder_self", 7], "reason": "mixed"}',
     })
@@ -264,11 +287,21 @@ def test_select_personas_with_llm_rejects_partially_malformed_selection() -> Non
         llm=llm,
         min_participants=2,
         max_participants=2,
+        project_root=tmp_path,
     )
 
     selected = discussion._select_personas_with_llm(_make_candidate())
 
     assert selected == (ANALYST_PERSONA, SKEPTIC_PERSONA)
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="persona",
+    )
+    assert event.event == "persona_discussion_degraded"
+    assert event.metadata == {
+        "stage": "selection",
+        "candidate_id": "c1",
+    }
 
 
 def test_moderator_judgment_detects_convergence() -> None:
@@ -283,11 +316,16 @@ def test_moderator_judgment_detects_convergence() -> None:
     assert judgment["emergent_persona"] == "none"
 
 
-def test_moderator_judgment_rejects_string_boolean() -> None:
+def test_moderator_judgment_rejects_string_boolean(
+    tmp_path: Path,
+) -> None:
     llm = _FakeLLM({
         "moderator": '{"converged": "true", "emergent_persona": "bridge_self", "reason": "invalid"}',
     })
-    discussion = ProactivePersonaDiscussion(llm=llm)
+    discussion = ProactivePersonaDiscussion(
+        llm=llm,
+        project_root=tmp_path,
+    )
 
     judgment = discussion._moderator_judgment(
         {"analyst_self": 0.8, "builder_self": 0.75},
@@ -300,6 +338,51 @@ def test_moderator_judgment_rejects_string_boolean() -> None:
         "emergent_persona": "none",
         "reason": "fallback",
     }
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="persona",
+    )
+    assert event.event == "persona_discussion_degraded"
+    assert event.metadata == {
+        "stage": "moderator",
+        "turn_number": 2,
+    }
+
+
+def test_discussion_diagnostic_failure_does_not_replace_scoring_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class _BrokenLLM:
+        def complete(self, messages: list[ChatMessage]) -> str:
+            raise RuntimeError("scoring unavailable")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("diagnostic store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    node = LLMBackedScoringPersonaNode(
+        _BrokenLLM(),
+        project_root=tmp_path,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "persona/persona_discussion_degraded: scoring unavailable; "
+            "structured logging failed: diagnostic store unavailable"
+        ),
+    ):
+        result = node(
+            ANALYST_PERSONA,
+            PersonaInput(user_message="Review this"),
+        )
+
+    assert result.notes == ("analyst_self considered the topic.",)
+    assert result.confidence == 0.5
 
 
 def test_moderator_judgment_spawns_emergent_persona() -> None:

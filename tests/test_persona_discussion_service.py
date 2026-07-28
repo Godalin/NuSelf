@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from nuself.domain.proactive import IdeaCandidate
 from nuself.persona import SharedPersonaDiscussionService
 
@@ -57,3 +59,24 @@ def test_shared_persona_discussion_service_delegates_to_engine(tmp_path: Path) -
     assert result.approved is True
     assert result.reason == "delegated"
     assert result.winner_persona_ids == ("analyst_self",)
+
+
+def test_shared_persona_discussion_service_passes_project_root_to_engine(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+    fake = _FakeDiscussion()
+
+    def build_discussion(**kwargs: object) -> _FakeDiscussion:
+        captured.update(kwargs)
+        return fake
+
+    monkeypatch.setattr(
+        "nuself.persona.discussion.ProactivePersonaDiscussion",
+        build_discussion,
+    )
+
+    SharedPersonaDiscussionService(project_root=tmp_path)
+
+    assert captured["project_root"] == tmp_path
