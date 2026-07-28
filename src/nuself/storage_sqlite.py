@@ -26,6 +26,8 @@ from nuself.storage import (
     COLLECTION_NAMES,
 )
 
+_SQLITE_INITIALIZATION_LOCK = threading.Lock()
+
 
 def _json(v: object) -> str:
     return encode_json_value(v, ensure_ascii=True)
@@ -382,9 +384,11 @@ class SqliteStorageBackend:
         # dynamic ALTER by one collection is visible to the others.
         self._column_cache: dict[str, tuple[str, ...]] = {}
         try:
-            self._conn.execute("PRAGMA journal_mode=WAL")
-            self._conn.execute("PRAGMA synchronous=NORMAL")
-            self._init_schema()
+            self._conn.execute("PRAGMA busy_timeout=5000")
+            with _SQLITE_INITIALIZATION_LOCK:
+                self._conn.execute("PRAGMA journal_mode=WAL")
+                self._conn.execute("PRAGMA synchronous=NORMAL")
+                self._init_schema()
         except BaseException as init_error:
             try:
                 self._conn.close()

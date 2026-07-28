@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import sqlite3
 from typing import cast
@@ -327,6 +328,24 @@ def test_initialization_cleanup_preserves_both_failures(
     assert str(captured.value.cleanup_error) == "close unavailable"
     proxy.fail_close = False
     proxy.close()
+
+
+def test_concurrent_backend_initialization_waits_for_wal_setup(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+
+    def open_backend(_: int) -> SqliteStorageBackend:
+        return SqliteStorageBackend(db_path)
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        backends = tuple(
+            executor.map(open_backend, range(16))
+        )
+
+    assert all(backend.collection("memory_entries").list() == () for backend in backends)
+    for backend in backends:
+        backend.close()
 
 
 @pytest.mark.parametrize("name", COLLECTION_NAMES)

@@ -204,6 +204,12 @@ fails, it raises a stable initialization-cleanup error whose cause is the
 original initialization failure and whose secondary diagnostic retains the
 close failure.
 
+Concurrent process-local backend construction is serialized through one
+initialization lock before WAL and schema setup. Connections also configure a
+finite SQLite busy timeout before initialization so a competing process can
+finish its transaction instead of causing an immediate `database is locked`
+failure. Non-lock initialization errors retain the lifecycle behavior above.
+
 Resetting default backends removes their registry ownership before closing
 them, attempts every selected backend even when an earlier close fails, and
 then raises one cleanup error containing all close failures. It never leaves a
@@ -387,6 +393,8 @@ def _init_schema(self):
 
 - `PRAGMA journal_mode=WAL`
 - `PRAGMA synchronous=NORMAL`
+- `PRAGMA busy_timeout=5000`
+- 同一进程内的 WAL 与 schema 初始化通过共享 lock 串行化
 - 写操作通过 `threading.Lock` 串行化（当前每个 repo 已有 RLock）
 - WAL 模式读写互不阻塞
 
