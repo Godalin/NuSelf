@@ -201,6 +201,25 @@ daemon/chat composition root into the owning service. Domain modules must not
 install process-global callback setters whose value can leak across projects,
 tests, or concurrent runtimes.
 
+## Owned Worker Lifecycle
+
+`nuself.runtime.workers.OwnedWorker` owns one daemon thread and its lifecycle
+state.
+
+- Lifecycle states are `new`, `running`, `stopped`, and `timed_out`.
+- `start()` is duplicate-safe and creates at most one thread for the owner's
+  lifetime. A naturally exited or stopped worker is not implicitly restarted.
+- The target wrapper records `stopped` in `finally`, including unexpected
+  target exit.
+- `join(timeout)` returns a typed snapshot. A live thread after the timeout is
+  `timed_out`; later target exit transitions it to `stopped`.
+- The primitive does not own domain intervals, retries, queues, timers, or the
+  daemon-wide shutdown event.
+- Daemon health reads liveness from owned workers rather than parallel thread
+  fields. Domain success/error counters remain separate health data.
+- Export queue/timer cancellation remains an explicit export-worker cleanup
+  performed before join.
+
 ## Migration Order
 
 1. Add and test the shared handler registry; migrate daemon request dispatch.

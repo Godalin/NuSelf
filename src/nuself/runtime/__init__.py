@@ -33,6 +33,11 @@ from nuself.runtime.messages import (
     MessageKind,
     RuntimeEnvelope,
 )
+from nuself.runtime.workers import (
+    OwnedWorker,
+    WorkerLifecycleSnapshot,
+    WorkerLifecycleState,
+)
 
 __all__ = [
     "CORE_EVENT_DEFINITIONS",
@@ -51,11 +56,14 @@ __all__ = [
     "JobMessage",
     "JobSink",
     "MessageKind",
+    "OwnedWorker",
     "RuntimeContext",
     "RuntimeEnvelope",
     "RuntimeEventDefinition",
     "UnknownEventDefinitionError",
     "UnknownHandlerError",
+    "WorkerLifecycleSnapshot",
+    "WorkerLifecycleState",
     "build_event_definition_registry",
     "current_runtime_context",
     "runtime_context",

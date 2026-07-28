@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from nuself.daemon.server import DaemonState, handle_request
 from nuself.llm import ChatMessage
 from nuself.memory.curator import MemoryCuratorResult
 from nuself.notification import NotificationOutbox, OutboxEntry
+from nuself.runtime.workers import OwnedWorker
 
 
 class StructuredFakeLLM:
@@ -189,6 +191,61 @@ def test_memory_curator_worker_survives_unexpected_error(
     assert health.last_error == "bad curator data"
     state.shutdown_requested.set()
     state.stop_background_memory_curator()
+
+
+def test_daemon_worker_join_timeout_is_logged_and_remains_live(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.daemon import server as server_mod
+
+    state = DaemonState(tmp_path)
+    release = threading.Event()
+
+    def wait_for_release() -> None:
+        release.wait()
+
+    state._workers["memory_curator"] = OwnedWorker(  # pyright: ignore[reportPrivateUsage]
+        name="memory_curator",
+        thread_name="test-memory-curator",
+        target=wait_for_release,
+    )
+    logged: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    def capture_log(*args: object, **kwargs: object) -> None:
+        logged.append((args, kwargs))
+
+    monkeypatch.setattr(server_mod, "write_log_event", capture_log)
+
+    state.start_background_memory_curator()
+    state._join_worker(  # pyright: ignore[reportPrivateUsage]
+        "memory_curator",
+        timeout=0,
+    )
+
+    health = next(
+        item for item in state.worker_health() if item.name == "memory_curator"
+    )
+    assert health.alive is True
+    assert len(logged) == 1
+    assert logged[0][0][1] == "thread_timeout"
+    assert logged[0][1]["project_root"] == tmp_path
+    assert logged[0][1]["status"] == "timed_out"
+    assert logged[0][1]["metadata"] == {
+        "worker": "memory_curator",
+        "timeout_seconds": 0,
+        "lifecycle_state": "timed_out",
+    }
+
+    release.set()
+    state._join_worker(  # pyright: ignore[reportPrivateUsage]
+        "memory_curator",
+        timeout=1,
+    )
+    health = next(
+        item for item in state.worker_health() if item.name == "memory_curator"
+    )
+    assert health.alive is False
 
 
 def test_daemon_echo_returns_payload(tmp_path: Path) -> None:

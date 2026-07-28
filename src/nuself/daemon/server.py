@@ -38,6 +38,7 @@ from nuself.reason.output import (
 from nuself.reflection import ReflectionScheduler
 from nuself.runtime.jobs import JobMessage
 from nuself.runtime.observability import format_exception_chain
+from nuself.runtime.workers import OwnedWorker
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
 
@@ -206,11 +207,9 @@ class DaemonState:
         
         self.memory_curator = MemoryCurator(project_root)
         self.memory_curator_interval_seconds: float = config.daemon.memory_curator.interval_seconds
-        self._memory_curator_thread: threading.Thread | None = None
         
         self.reflection_scheduler = ReflectionScheduler(project_root)
         self.reflection_check_interval_seconds: float = config.daemon.reflection_scheduler.check_interval_seconds
-        self._reflection_scheduler_thread: threading.Thread | None = None
         
         adapters: list[NotificationAdapter] = []
         if config.email.enabled:
@@ -222,14 +221,12 @@ class DaemonState:
             adapters=adapters if adapters else None,
         )
         self.notification_delivery_interval_seconds = config.daemon.notification_delivery.interval_seconds
-        self._notification_delivery_thread: threading.Thread | None = None
 
         self.reason_scheduler: ReasonScheduler | None = None
         self.reason_scheduler_interval_seconds = config.daemon.reason_scheduler.interval_seconds
-        self._reason_scheduler_thread: threading.Thread | None = None
+        self._reason_scheduler_start_lock = threading.Lock()
         self._export_timers: list[threading.Timer] = []
         self._export_timers_lock = threading.Lock()
-        self._export_worker_thread: threading.Thread | None = None
         self._worker_health_lock = threading.Lock()
         self._worker_health: dict[str, WorkerHealth] = {
             name: WorkerHealth(name=name)
@@ -241,24 +238,44 @@ class DaemonState:
                 "notification_delivery",
             )
         }
+        self._workers: dict[str, OwnedWorker] = {
+            "memory_curator": OwnedWorker(
+                name="memory_curator",
+                thread_name="nuself-memory-curator",
+                target=self._run_background_memory_curator,
+            ),
+            "reflection_scheduler": OwnedWorker(
+                name="reflection_scheduler",
+                thread_name="nuself-reflection-scheduler",
+                target=self._run_background_reflection_scheduler,
+            ),
+            "reason_scheduler": OwnedWorker(
+                name="reason_scheduler",
+                thread_name="nuself-reason-scheduler",
+                target=self._run_background_reason_scheduler,
+            ),
+            "export_worker": OwnedWorker(
+                name="export_worker",
+                thread_name="nuself-export-worker",
+                target=self._run_background_export_worker,
+            ),
+            "notification_delivery": OwnedWorker(
+                name="notification_delivery",
+                thread_name="nuself-notification-delivery",
+                target=self._run_background_notification_delivery,
+            ),
+        }
 
     def worker_health(self) -> tuple[WorkerHealth, ...]:
         """Return a stable snapshot of daemon worker health."""
         with self._worker_health_lock:
             snapshots: list[WorkerHealth] = []
-            threads = {
-                "memory_curator": self._memory_curator_thread,
-                "reflection_scheduler": self._reflection_scheduler_thread,
-                "reason_scheduler": self._reason_scheduler_thread,
-                "export_worker": self._export_worker_thread,
-                "notification_delivery": self._notification_delivery_thread,
-            }
             for name, health in self._worker_health.items():
-                thread = threads[name]
+                lifecycle = self._workers[name].snapshot
                 snapshots.append(
                     WorkerHealth(
                         name=name,
-                        alive=thread.is_alive() if thread is not None else False,
+                        alive=lifecycle.alive,
                         last_success_at=health.last_success_at,
                         last_error=health.last_error,
                         consecutive_failures=health.consecutive_failures,
@@ -288,25 +305,27 @@ class DaemonState:
         return chain
 
     def start_background_memory_curator(self) -> None:
-        if self._memory_curator_thread is not None:
-            return
-        self._memory_curator_thread = threading.Thread(
-            target=self._run_background_memory_curator,
-            name="nuself-memory-curator",
-            daemon=True,
-        )
-        self._memory_curator_thread.start()
+        self._workers["memory_curator"].start()
 
-    @staticmethod
-    def _join_thread(thread: threading.Thread | None, name: str, timeout: float = 5.0) -> None:
-        if thread is None:
-            return
-        thread.join(timeout=timeout)
-        if thread.is_alive():
-            write_log_event("daemon", "thread_timeout", f"{name} did not stop within {timeout}s", level="warning")
+    def _join_worker(self, name: str, timeout: float = 5.0) -> None:
+        snapshot = self._workers[name].join(timeout=timeout)
+        if snapshot.state == "timed_out":
+            write_log_event(
+                "daemon",
+                "thread_timeout",
+                f"{name} did not stop within {timeout}s",
+                project_root=self.project_root,
+                level="warning",
+                status="timed_out",
+                metadata={
+                    "worker": name,
+                    "timeout_seconds": timeout,
+                    "lifecycle_state": snapshot.state,
+                },
+            )
 
     def stop_background_memory_curator(self) -> None:
-        self._join_thread(self._memory_curator_thread, "memory_curator")
+        self._join_worker("memory_curator")
 
     def _run_background_memory_curator(self) -> None:
         write_log_event(
@@ -336,17 +355,10 @@ class DaemonState:
                 continue
 
     def start_background_reflection_scheduler(self) -> None:
-        if self._reflection_scheduler_thread is not None:
-            return
-        self._reflection_scheduler_thread = threading.Thread(
-            target=self._run_background_reflection_scheduler,
-            name="nuself-reflection-scheduler",
-            daemon=True,
-        )
-        self._reflection_scheduler_thread.start()
+        self._workers["reflection_scheduler"].start()
 
     def stop_background_reflection_scheduler(self) -> None:
-        self._join_thread(self._reflection_scheduler_thread, "reflection_scheduler")
+        self._join_worker("reflection_scheduler")
 
     def _run_background_reflection_scheduler(self) -> None:
         write_log_event(
@@ -380,36 +392,26 @@ class DaemonState:
                 continue
 
     def start_background_reason_scheduler(self) -> None:
-        if self._reason_scheduler_thread is not None:
-            return
-        tools_dict = getattr(self.chat_agent, "_tools", None)
-        readonly_tools = (
-            [t for t in tools_dict.values() if "readonly" in (t.tags or [])]
-            if tools_dict else None
-        )
-        lc_models = getattr(self.chat_agent, "_langchain_models", None)
-        self.reason_scheduler = ReasonScheduler(
-            self.project_root,
-            interval_seconds=self.reason_scheduler_interval_seconds,
-            readonly_tools=readonly_tools,
-            langchain_models=lc_models,
-        )
-        self._reason_scheduler_thread = threading.Thread(
-            target=self._run_background_reason_scheduler,
-            name="nuself-reason-scheduler",
-            daemon=True,
-        )
-        self._reason_scheduler_thread.start()
+        with self._reason_scheduler_start_lock:
+            worker = self._workers["reason_scheduler"]
+            if worker.snapshot.state != "new":
+                return
+            tools_dict = getattr(self.chat_agent, "_tools", None)
+            readonly_tools = (
+                [t for t in tools_dict.values() if "readonly" in (t.tags or [])]
+                if tools_dict else None
+            )
+            lc_models = getattr(self.chat_agent, "_langchain_models", None)
+            self.reason_scheduler = ReasonScheduler(
+                self.project_root,
+                interval_seconds=self.reason_scheduler_interval_seconds,
+                readonly_tools=readonly_tools,
+                langchain_models=lc_models,
+            )
+            worker.start()
 
     def start_background_export_worker(self) -> None:
-        if self._export_worker_thread is not None:
-            return
-        self._export_worker_thread = threading.Thread(
-            target=self._run_background_export_worker,
-            name="nuself-export-worker",
-            daemon=True,
-        )
-        self._export_worker_thread.start()
+        self._workers["export_worker"].start()
 
     def stop_background_export_worker(self) -> None:
         with self._export_timers_lock:
@@ -432,7 +434,7 @@ class DaemonState:
                 project_root=self.project_root,
                 level="warning",
             )
-        self._join_thread(self._export_worker_thread, "export_worker")
+        self._join_worker("export_worker")
 
     def _run_background_export_worker(self) -> None:
         from nuself.workspace import PrivateWorkspaceStore
@@ -717,7 +719,7 @@ class DaemonState:
                         t.start()
 
     def stop_background_reason_scheduler(self) -> None:
-        self._join_thread(self._reason_scheduler_thread, "reason_scheduler")
+        self._join_worker("reason_scheduler")
 
     def _run_background_reason_scheduler(self) -> None:
         write_log_event(
@@ -748,17 +750,10 @@ class DaemonState:
                 continue
 
     def start_background_notification_delivery(self) -> None:
-        if self._notification_delivery_thread is not None:
-            return
-        self._notification_delivery_thread = threading.Thread(
-            target=self._run_background_notification_delivery,
-            name="nuself-notification-delivery",
-            daemon=True,
-        )
-        self._notification_delivery_thread.start()
+        self._workers["notification_delivery"].start()
 
     def stop_background_notification_delivery(self) -> None:
-        self._join_thread(self._notification_delivery_thread, "notification_delivery")
+        self._join_worker("notification_delivery")
 
     def _run_background_notification_delivery(self) -> None:
         write_log_event(

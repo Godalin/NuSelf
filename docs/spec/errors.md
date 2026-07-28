@@ -70,6 +70,9 @@ unexpected per-iteration exception unless shutdown has been requested.
 - A retryable worker operation must persist its retry/attempt transition before
   scheduling another execution. If that durable transition fails, log the
   state-persistence failure separately and do not enqueue an untracked retry.
+- Worker join timeouts produce a daemon warning with worker identity and
+  timeout. The worker remains reported alive/timed-out until its target exits;
+  shutdown must not claim a successful join.
 
 ## Best-Effort Side Effects
 
