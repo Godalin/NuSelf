@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import argparse
-import shutil
 import sys
 from pathlib import Path
 
 from nuself.config import runtime_paths
 from nuself.storage import get_default_backend
-from nuself.storage_sqlite import SqliteStorageBackend
+from nuself.storage_sqlite import (
+    SqliteStorageBackend,
+    ThoughtPackValidationError,
+    import_sqlite_thought_pack,
+)
 
 
 def handle_pack_export(args: argparse.Namespace) -> int:
@@ -58,7 +61,11 @@ def handle_pack_import(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    shutil.copy2(source, destination)
+    try:
+        import_sqlite_thought_pack(source, destination)
+    except ThoughtPackValidationError as exc:
+        print(f"Invalid thought pack: {exc}", file=sys.stderr)
+        return 1
     print(f"Imported to {destination}")
     return 0
 

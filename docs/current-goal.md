@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make thought-pack export produce a consistent SQLite snapshot under WAL and
-concurrent writers instead of copying only the main database file.
+Validate external thought packs read-only before import and reject corrupt,
+foreign, or future-schema databases without mutating the source.
 
 ## Active Branch
 
@@ -14,40 +14,42 @@ concurrent writers instead of copying only the main database file.
 
 ## Ordered Work
 
-1. Audit remaining low-level backend and SQLite construction.
-2. Specify online snapshot and destination ownership.
-3. Add a locked SQLite `backup_to` boundary.
-4. Migrate `pack export` from file copy to the project default backend.
-5. Verify uncheckpointed WAL data and destination connection closure.
+1. Audit schema identity, version handling, and current import behavior.
+2. Specify read-only integrity and compatibility validation.
+3. Share one schema-version constant with runtime initialization.
+4. Validate and backup from the same read-only source connection.
+5. Verify corrupt, foreign, future, legacy, WAL, and valid inputs.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep pack import as an inert file copy into the imports directory.
-- Keep pack inspect's temporary backend explicitly closed.
-- Preserve existing export paths and command output.
+- Do not migrate or otherwise modify the external source file.
+- Keep imported packs inert under `private/imports`.
+- Do not accept partial NuSelf schemas.
 
 ## Completion Evidence
 
-- `SqliteStorageBackend.backup_to()` runs SQLite online backup while holding
-  the source lock and rejects a source-equal destination.
-- The backup operation owns and closes each destination connection; dual
-  backup/cleanup failure retains the backup error as the cause.
-- `pack export` resolves the shared project SQLite backend and no longer calls
-  `shutil.copy2` for the live database.
-- Tests prove committed uncheckpointed WAL data is exported, repeated export
-  updates an existing destination, and every destination connection closes
-  once.
-- A command-level test reopens the exported pack and reads data written through
-  the live default backend.
-- `.venv/bin/pytest -q`: `1485 passed`.
+- Import opens the source through SQLite `mode=ro`; it never constructs a
+  mutable backend for the external file.
+- Validation requires `quick_check=ok`, a supported non-empty schema version,
+  all known collection tables, and an `id` primary key on every table.
+- Validation and online backup share one source connection; destination writes
+  use a unique temporary database and atomic rename.
+- Validation failure creates no imported file, while cleanup always attempts
+  removal of the temporary database.
+- Tests reject corrupt bytes, foreign SQLite, partial schemas, and future
+  versions; supported v1 sources and copies remain v1 and live WAL data is
+  preserved.
+- Ordinary `SqliteStorageBackend` initialization also rejects future versions.
+- `.venv/bin/pytest -q`: `1491 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `e48cbd6`.
+`dev/v0.3.x` is published through `a1880da`.
 
 ## Next Review Batch
 
-Audit thought-pack import validation before accepting an external database.
+Make thought-pack inspect use the same read-only validator instead of opening a
+mutable backend.

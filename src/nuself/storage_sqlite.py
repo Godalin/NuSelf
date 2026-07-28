@@ -12,6 +12,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Protocol, cast
+from uuid import uuid4
 
 from nuself.logs import LogComponent
 from nuself.runtime import (
@@ -27,6 +28,7 @@ from nuself.storage import (
 )
 
 _SQLITE_INITIALIZATION_LOCK = threading.Lock()
+SQLITE_SCHEMA_VERSION = 2
 
 
 def _json(v: object) -> str:
@@ -144,6 +146,16 @@ class SqliteStorageBackupCleanupError(SqliteStorageLifecycleError):
         )
         self.backup_error = backup_error
         self.cleanup_error = cleanup_error
+
+
+class SqliteStorageUnsupportedVersionError(
+    SqliteStorageLifecycleError
+):
+    """Raised when a database is newer than this runtime."""
+
+
+class ThoughtPackValidationError(ValueError):
+    """Raised when an external SQLite file is not a compatible thought pack."""
 
 
 class _SqliteWalCheckpointBusyError(RuntimeError):
@@ -487,6 +499,16 @@ class SqliteStorageBackend:
         (current_version,) = self._conn.execute(
             "SELECT COALESCE(MAX(version), 0) FROM _schema_version"
         ).fetchone()
+        if type(current_version) is not int or current_version < 0:
+            raise SqliteStorageUnsupportedVersionError(
+                "SQLite schema version is invalid"
+            )
+        if current_version > SQLITE_SCHEMA_VERSION:
+            raise SqliteStorageUnsupportedVersionError(
+                "SQLite schema version "
+                f"{current_version} is newer than supported version "
+                f"{SQLITE_SCHEMA_VERSION}"
+            )
         if current_version < 1:
             self._apply_v1()
             self._conn.execute("INSERT INTO _schema_version (version) VALUES (1)")
@@ -496,7 +518,8 @@ class SqliteStorageBackend:
             with self.transaction():
                 self._apply_v2()
                 self._conn.execute(
-                    "INSERT INTO _schema_version (version) VALUES (2)"
+                    "INSERT INTO _schema_version (version) VALUES (?)",
+                    (SQLITE_SCHEMA_VERSION,),
                 )
 
     def _apply_v1(self) -> None:
@@ -692,3 +715,106 @@ def _row_record_id(
     except (ValueError, IndexError):
         return "<unknown>"
     return value if isinstance(value, str) and value else "<unknown>"
+
+
+def import_sqlite_thought_pack(
+    source: Path,
+    destination: Path,
+) -> int:
+    """Validate and atomically import one external thought-pack snapshot."""
+    source_uri = f"{source.resolve().as_uri()}?mode=ro"
+    try:
+        source_connection = sqlite3.connect(source_uri, uri=True)
+    except sqlite3.DatabaseError as exc:
+        raise ThoughtPackValidationError(
+            "thought pack is not a readable SQLite database"
+        ) from exc
+    temporary = destination.with_name(
+        f".{destination.name}.{uuid4().hex}.tmp"
+    )
+    try:
+        version = _validate_thought_pack_connection(source_connection)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        backup = sqlite3.connect(str(temporary))
+        try:
+            source_connection.backup(backup)
+        except BaseException as backup_error:
+            try:
+                backup.close()
+            except Exception as cleanup_error:
+                raise SqliteStorageBackupCleanupError(
+                    backup_error=backup_error,
+                    cleanup_error=cleanup_error,
+                ) from backup_error
+            raise
+        backup.close()
+        temporary.replace(destination)
+        return version
+    finally:
+        try:
+            source_connection.close()
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def _validate_thought_pack_connection(
+    connection: sqlite3.Connection,
+) -> int:
+    try:
+        check_rows = connection.execute("PRAGMA quick_check").fetchall()
+        if not check_rows or any(
+            len(row) != 1 or row[0] != "ok"
+            for row in check_rows
+        ):
+            raise ThoughtPackValidationError(
+                "thought pack failed SQLite quick_check"
+            )
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+            if len(row) == 1 and isinstance(row[0], str)
+        }
+        if "_schema_version" not in tables:
+            raise ThoughtPackValidationError(
+                "thought pack is missing NuSelf schema metadata"
+            )
+        row = connection.execute(
+            "SELECT MAX(version) FROM _schema_version"
+        ).fetchone()
+        version = row[0] if row is not None and len(row) == 1 else None
+        if type(version) is not int or version < 1:
+            raise ThoughtPackValidationError(
+                "thought pack has an invalid schema version"
+            )
+        if version > SQLITE_SCHEMA_VERSION:
+            raise ThoughtPackValidationError(
+                f"thought pack schema version {version} is newer than "
+                f"supported version {SQLITE_SCHEMA_VERSION}"
+            )
+        for collection_name in COLLECTION_NAMES:
+            table = _collection_table(collection_name)
+            if table not in tables:
+                raise ThoughtPackValidationError(
+                    f"thought pack is missing collection table {table}"
+                )
+            table_info = connection.execute(
+                f"PRAGMA table_info({_identifier(table)})"
+            ).fetchall()
+            if not any(
+                len(column) >= 6
+                and column[1] == "id"
+                and column[5] == 1
+                for column in table_info
+            ):
+                raise ThoughtPackValidationError(
+                    f"thought pack collection {table} has no id primary key"
+                )
+        return version
+    except ThoughtPackValidationError:
+        raise
+    except sqlite3.DatabaseError as exc:
+        raise ThoughtPackValidationError(
+            "thought pack is not a valid SQLite database"
+        ) from exc

@@ -36,6 +36,7 @@ from nuself.storage_sqlite import (
     SqliteStorageCheckpointError,
     SqliteStorageCloseError,
     SqliteStorageInitializationCleanupError,
+    SqliteStorageUnsupportedVersionError,
     SqliteTransactionCleanupError,
     SqliteTransactionRollbackOnlyError,
 )
@@ -372,6 +373,29 @@ def test_online_backup_includes_wal_data_and_closes_destination(
         }
     finally:
         snapshot.close()
+
+
+def test_backend_rejects_future_schema_version(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "future.sqlite"
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute(
+            "CREATE TABLE _schema_version (version INTEGER NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO _schema_version VALUES (99)"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(
+        SqliteStorageUnsupportedVersionError,
+        match="newer than supported version",
+    ):
+        SqliteStorageBackend(database)
 
 
 def test_checkpoint_failure_is_raised_after_connection_closes(

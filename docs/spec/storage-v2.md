@@ -441,7 +441,7 @@ private/
 
 ```
 nuself pack export <name>         → SQLite online backup → exports/<name>.sqlite
-nuself pack import <path>         → cp <path> → imports/<filename>.sqlite
+nuself pack import <path>         → validate + SQLite backup → imports/<filename>.sqlite
 nuself pack inspect [<path>]      → 展示 <path> 或主库的表统计
                                    (默认展示主库)
 ```
@@ -457,6 +457,21 @@ nuself pack inspect [<path>]      → 展示 <path> 或主库的表统计
 - **不包含本地配置**（config.yaml — 不在库里）
 - **保持 identity 来源信息**（出处可追溯）
 - 导出的 `.sqlite` 可用 `SqliteStorageBackend` 直接打开
+
+### 导入约束
+
+- Import opens the external source in SQLite read-only mode and never runs
+  schema initialization or migration against it.
+- Before creating the destination it requires `PRAGMA quick_check` success, a
+  non-empty `_schema_version` within NuSelf's supported range, every known
+  collection table, and an `id` primary key on each collection table.
+- A future schema version is rejected by both import validation and ordinary
+  runtime backend initialization. Legacy supported versions may be imported
+  without modifying the source and migrate only if a later owned runtime opens
+  the imported copy.
+- Validation and copy use the same source connection. Copy uses SQLite online
+  backup so committed source WAL data is included. Validation failure leaves
+  no destination file.
 
 ### 未来方向
 

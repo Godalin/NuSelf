@@ -3,10 +3,31 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sqlite3
 
 from nuself.cli import main
 from nuself.storage import set_default_backend
-from nuself.storage_sqlite import SqliteStorageBackend
+from nuself.storage_sqlite import COLLECTION_NAMES, SqliteStorageBackend
+
+
+def _create_pack_schema(path: Path, *, version: int) -> None:
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            "CREATE TABLE _schema_version (version INTEGER NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO _schema_version VALUES (?)",
+            (version,),
+        )
+        for name in COLLECTION_NAMES:
+            connection.execute(
+                f'CREATE TABLE "col_{name}" '
+                "(id TEXT PRIMARY KEY)"
+            )
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def test_pack_export_creates_sqlite(tmp_path: Path) -> None:
@@ -95,6 +116,119 @@ def test_pack_import_rejects_non_sqlite(tmp_path: Path) -> None:
     f.write_text("not a database")
     result = main(["--project-root", str(tmp_path), "pack", "import", str(f)])
     assert result != 0
+
+
+def test_pack_import_rejects_corrupt_sqlite_without_destination(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "corrupt.sqlite"
+    source.write_bytes(b"not a sqlite database")
+
+    result = main(
+        ["--project-root", str(tmp_path), "pack", "import", str(source)]
+    )
+
+    assert result == 1
+    assert not (
+        tmp_path / "private" / "imports" / source.name
+    ).exists()
+
+
+def test_pack_import_rejects_foreign_and_partial_schemas(
+    tmp_path: Path,
+) -> None:
+    foreign = tmp_path / "foreign.sqlite"
+    connection = sqlite3.connect(foreign)
+    connection.execute("CREATE TABLE notes (id TEXT PRIMARY KEY)")
+    connection.commit()
+    connection.close()
+    partial = tmp_path / "partial.sqlite"
+    _create_pack_schema(partial, version=2)
+    connection = sqlite3.connect(partial)
+    connection.execute("DROP TABLE col_memory_entries")
+    connection.commit()
+    connection.close()
+
+    assert main(
+        ["--project-root", str(tmp_path), "pack", "import", str(foreign)]
+    ) == 1
+    assert main(
+        ["--project-root", str(tmp_path), "pack", "import", str(partial)]
+    ) == 1
+
+
+def test_pack_import_rejects_future_schema_without_mutating_source(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "future.sqlite"
+    _create_pack_schema(source, version=99)
+
+    assert main(
+        ["--project-root", str(tmp_path), "pack", "import", str(source)]
+    ) == 1
+
+    connection = sqlite3.connect(source)
+    try:
+        assert connection.execute(
+            "SELECT MAX(version) FROM _schema_version"
+        ).fetchone() == (99,)
+    finally:
+        connection.close()
+
+
+def test_pack_import_accepts_legacy_schema_without_mutating_source(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "legacy.sqlite"
+    _create_pack_schema(source, version=1)
+
+    assert main(
+        ["--project-root", str(tmp_path), "pack", "import", str(source)]
+    ) == 0
+
+    imported = tmp_path / "private" / "imports" / source.name
+    for path in (source, imported):
+        connection = sqlite3.connect(path)
+        try:
+            assert connection.execute(
+                "SELECT MAX(version) FROM _schema_version"
+            ).fetchone() == (1,)
+        finally:
+            connection.close()
+
+
+def test_pack_import_includes_source_wal_data(tmp_path: Path) -> None:
+    source = tmp_path / "live.sqlite"
+    backend = SqliteStorageBackend(source)
+    backend.collection("memory_entries").put(
+        "wal-import",
+        {"id": "wal-import", "title": "Live import"},
+    )
+    try:
+        assert main(
+            [
+                "--project-root",
+                str(tmp_path),
+                "pack",
+                "import",
+                str(source),
+            ]
+        ) == 0
+    finally:
+        backend.close()
+
+    imported = SqliteStorageBackend(
+        tmp_path / "private" / "imports" / source.name
+    )
+    try:
+        assert imported.collection("memory_entries").get(
+            "wal-import"
+        ) == {
+            "id": "wal-import",
+            "title": "Live import",
+        }
+    finally:
+        imported.close()
 
 
 def test_pack_inspect_shows_summary(tmp_path: Path) -> None:
