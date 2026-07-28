@@ -95,6 +95,16 @@ use `getattr` against `_tools` or `_langchain_models`, silently treat missing
 private fields as empty capabilities, or repeat tag filtering outside the
 conversation runtime.
 
+The snapshot-to-scheduler-to-advancer tool pipeline is typed as LangChain
+`BaseTool` throughout. Reason workspace and persona tool builders also return
+`BaseTool` tuples. `ReasonAdvancer` does not accept arbitrary objects or probe
+for a `metadata` attribute dynamically.
+
+Tool log routing may read the optional `metadata["service_component"]` value.
+Only a string value enters the internal tool-to-service map; missing or
+non-string metadata leaves the tool valid and uses the reason default
+component. Tool objects are transferred by identity.
+
 Prompt text may summarize loaded tools for models that still use NuSelf's JSON response envelope, but prompt text is not the source of truth. The registered LangChain tool objects and their schemas are the source of truth.
 
 ### Agent Skills

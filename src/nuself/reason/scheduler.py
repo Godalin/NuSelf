@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+
+from langchain_core.tools import BaseTool
 
 from nuself.clock import utc_now
 from nuself.llm import LangChainLLMEndpoint
@@ -31,7 +32,7 @@ class ReasonScheduler:
         service: ReasonService | None = None,
         interval_seconds: int = 600,
         *,
-        readonly_tools: Sequence[Any] | None = None,
+        readonly_tools: Sequence[BaseTool] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
         self._project_root = project_root

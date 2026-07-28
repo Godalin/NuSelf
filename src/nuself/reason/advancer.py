@@ -10,6 +10,7 @@ from typing import Any, cast
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.tools import BaseTool
 from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.failover import invoke_agent_endpoint
@@ -221,7 +222,7 @@ class ReasonAdvancer:
         *,
         project_root: Path | None = None,
         workspace_store: PrivateWorkspaceStore | None = None,
-        readonly_tools: Sequence[Any] | None = None,
+        readonly_tools: Sequence[BaseTool] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
         self._project_root = project_root
@@ -245,8 +246,10 @@ class ReasonAdvancer:
         create_agent = cast(Any, _create_agent)
         self._tool_service_map: dict[str, str] = {}
         for tool in all_tools:
-            if hasattr(tool, "metadata") and tool.metadata and "service_component" in tool.metadata:
-                self._tool_service_map[tool.name] = tool.metadata["service_component"]
+            metadata = tool.metadata or {}
+            service_component = metadata.get("service_component")
+            if isinstance(service_component, str):
+                self._tool_service_map[tool.name] = service_component
         return tuple(
             (
                 endpoint,
@@ -400,7 +403,7 @@ class ReasonAdvancer:
             )
         return tuple(snapshots)
 
-    def _build_workspace_tools(self) -> tuple[Any, ...]:
+    def _build_workspace_tools(self) -> tuple[BaseTool, ...]:
         """Build workspace tools once that resolve the active reason thread."""
         ws_store = self._workspace_store
         if ws_store is None:
@@ -419,7 +422,7 @@ class ReasonAdvancer:
 
         return _build_workspace_tools_from_provider(_resolve)
 
-    def _build_persona_tools(self) -> tuple[Any, ...]:
+    def _build_persona_tools(self) -> tuple[BaseTool, ...]:
         """Build thread-scoped persona tools that resolve the current thread."""
         if self._workspace_store is None:
             return ()
@@ -446,7 +449,7 @@ def default_reason_advancer(
     *,
     project_root: Path | None,
     workspace_store: PrivateWorkspaceStore | None = None,
-    readonly_tools: Sequence[Any] | None = None,
+    readonly_tools: Sequence[BaseTool] | None = None,
     langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
 ) -> ReasonAdvancer:
     """Compose the default reason capability from explicit or project inputs."""

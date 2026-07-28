@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Replace daemon reads of private chat runtime fields with an immutable,
-explicit agent capability snapshot.
+Make the reason tool pipeline framework-typed end to end and remove dynamic
+metadata probing from `ReasonAdvancer`.
 
 ## Active Branch
 
@@ -14,40 +14,39 @@ explicit agent capability snapshot.
 
 ## Ordered Work
 
-1. Specify snapshot ownership and immutability.
-2. Add a shared capability value for endpoints and readonly tools.
-3. Expose a public snapshot method on the conversation runtime.
-4. Migrate daemon scheduler startup off `_tools` and `_langchain_models`.
-5. Verify registry mutation cannot change an existing snapshot.
+1. Specify `BaseTool` and metadata transfer contracts.
+2. Replace `Sequence[Any]` and tool tuples of `Any`.
+3. Remove `hasattr` metadata probing.
+4. Validate `service_component` before internal log transfer.
+5. Verify explicit tools retain identity and valid metadata.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep tool/model objects shared by identity; copy only the containing
-  collections.
-- Keep chat's internal mutable registry private.
+- Keep compiled LangGraph agent objects typed as `Any` at the untyped framework
+  boundary.
+- Keep tools without service metadata valid.
 
 ## Completion Evidence
 
-- `AgentCapabilitySnapshot` is a frozen value containing endpoint and readonly
-  tool tuples.
-- `ConversationGraphRuntime.capability_snapshot()` owns readonly-tag
-  filtering and copies collection membership.
-- Clearing the runtime tool registry after snapshot creation does not alter
-  the issued snapshot.
-- Daemon reason scheduler startup consumes only the public snapshot and works
-  with a runtime exposing no private tool/model fields.
-- Production search finds no daemon access to `_tools` or
-  `_langchain_models`.
+- The capability snapshot, scheduler, factory, advancer, workspace builders,
+  and persona builders now carry `BaseTool` values end to end.
+- The reason tool path no longer uses `Sequence[Any]`, tool tuples of `Any`, or
+  dynamic `hasattr(..., "metadata")` probing.
+- Explicitly injected tools retain object identity through
+  `default_reason_advancer`.
+- Only string-valued `metadata["service_component"]` entries enter the
+  advancer's internal service route map; missing and invalid metadata remain
+  valid and fall back to the default component.
 - `.venv/bin/pytest -q`: `1468 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `a55d750`.
+`dev/v0.3.x` is published through `f3ce385`.
 
 ## Next Review Batch
 
-Audit remaining `getattr`/private-field composition across daemon worker
-startup.
+Move `service_component` extraction into shared tool metadata infrastructure
+instead of repeating dictionary interpretation.

@@ -13,6 +13,7 @@ from typing import Any, Never, cast
 
 import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.tools import StructuredTool
 from pydantic import ValidationError
 
 from nuself.agent.middleware import ToolOutcome
@@ -58,6 +59,21 @@ def test_default_reason_advancer_loads_project_endpoints_once(
     def create_agent(**kwargs: object) -> object:
         return kwargs
 
+    def lookup(query: str) -> str:
+        """Look up test context."""
+        return query
+
+    readonly_tool = StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
+        lookup,
+        name="test_lookup",
+        metadata={"service_component": "memory"},
+    )
+    invalid_metadata_tool = StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
+        lookup,
+        name="invalid_metadata",
+        metadata={"service_component": 3},
+    )
+
     monkeypatch.setattr(
         "nuself.reason.advancer.configured_langchain_chat_models",
         configured,
@@ -67,11 +83,20 @@ def test_default_reason_advancer_loads_project_endpoints_once(
         create_agent,
     )
 
-    advancer = default_reason_advancer(project_root=tmp_path)
+    advancer = default_reason_advancer(
+        project_root=tmp_path,
+        readonly_tools=(readonly_tool, invalid_metadata_tool),
+    )
 
     assert calls == [tmp_path]
     assert advancer._langchain_models == (endpoint,)
     assert advancer._workspace_store is not None
+    assert advancer._readonly_tools == (
+        readonly_tool,
+        invalid_metadata_tool,
+    )
+    assert advancer._tool_service_map["test_lookup"] == "memory"
+    assert "invalid_metadata" not in advancer._tool_service_map
 
 
 def test_default_reason_advancer_preserves_explicit_empty_endpoints(

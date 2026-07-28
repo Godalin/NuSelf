@@ -436,6 +436,11 @@ and readonly tools, it receives them through the runtime's immutable public
 capability snapshot. Daemon code does not inspect chat runtime private fields
 or reproduce the readonly-tag selection rule.
 
+Readonly, workspace, and persona tools reach `ReasonAdvancer` as framework
+`BaseTool` values. The advancer validates optional service-component metadata
+instead of using dynamic attribute detection or accepting arbitrary tool
+objects.
+
 `ReasonAdvancer` builds one equivalent tool-enabled agent per configured
 endpoint and uses the shared agent endpoint-failover primitive only for
 availability failures that occur before any tool outcome. Successful endpoint
