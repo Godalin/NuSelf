@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from threading import RLock
 
+from nuself.runtime.definitions import (
+    DefinitionRegistry,
+    DefinitionRegistrySealedError,
+    DuplicateDefinitionError,
+    UnknownDefinitionError,
+)
 from nuself.runtime.event_payloads import (
     validate_runtime_log_event_payload,
 )
@@ -56,45 +61,48 @@ class EventDefinitionRegistry:
     """Duplicate-safe event definition registry sealed after composition."""
 
     def __init__(self) -> None:
-        self._definitions: dict[tuple[str, str], RuntimeEventDefinition] = {}
-        self._sealed = False
-        self._lock = RLock()
+        self._registry = DefinitionRegistry[
+            tuple[str, str],
+            RuntimeEventDefinition,
+        ](
+            lambda definition: (
+                definition.producer,
+                definition.name,
+            ),
+            namespace="runtime event",
+        )
 
     def register(
         self,
         definition: RuntimeEventDefinition,
     ) -> EventDefinitionRegistry:
-        key = (definition.producer, definition.name)
-        with self._lock:
-            if self._sealed:
-                raise EventDefinitionRegistrySealedError(
-                    "event definition registry is sealed"
-                )
-            if key in self._definitions:
-                raise DuplicateEventDefinitionError(
-                    f"event definition already registered: {key!r}"
-                )
-            self._definitions[key] = definition
+        try:
+            self._registry.register(definition)
+        except DefinitionRegistrySealedError as exc:
+            raise EventDefinitionRegistrySealedError(
+                "event definition registry is sealed"
+            ) from exc
+        except DuplicateDefinitionError as exc:
+            raise DuplicateEventDefinitionError(
+                f"event definition already registered: {exc.key!r}"
+            ) from exc
         return self
 
     def resolve(self, producer: str, name: str) -> RuntimeEventDefinition:
-        with self._lock:
-            definition = self._definitions.get((producer, name))
-        if definition is None:
+        try:
+            return self._registry.resolve((producer, name))
+        except UnknownDefinitionError as exc:
             raise UnknownEventDefinitionError(
                 f"runtime event is not registered: {(producer, name)!r}"
-            )
-        return definition
+            ) from exc
 
     def seal(self) -> EventDefinitionRegistry:
-        with self._lock:
-            self._sealed = True
+        self._registry.seal()
         return self
 
     @property
     def definitions(self) -> tuple[RuntimeEventDefinition, ...]:
-        with self._lock:
-            return tuple(self._definitions.values())
+        return self._registry.definitions
 
 
 CORE_EVENT_DEFINITIONS: tuple[RuntimeEventDefinition, ...] = (

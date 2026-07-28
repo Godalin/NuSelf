@@ -7,6 +7,7 @@ import pytest
 
 from nuself.daemon import audit
 from nuself.logs import read_log_events
+from nuself.runtime.definitions import DefinitionRegistrySealedError
 
 
 def _start_completed_metadata() -> dict[str, object]:
@@ -21,7 +22,10 @@ def _start_completed_metadata() -> dict[str, object]:
 
 
 def test_lifecycle_audit_registry_is_closed_and_immutable() -> None:
-    assert set(audit.DAEMON_LIFECYCLE_AUDIT_DEFINITIONS) == {
+    assert {
+        definition.event
+        for definition in audit.DAEMON_LIFECYCLE_AUDIT_REGISTRY.definitions
+    } == {
         "instance_lock_contended",
         "started",
         "stopped",
@@ -37,12 +41,12 @@ def test_lifecycle_audit_registry_is_closed_and_immutable() -> None:
         "restart_failed",
     }
 
-    with pytest.raises(TypeError):
-        audit.DAEMON_LIFECYCLE_AUDIT_DEFINITIONS["started"] = (  # type: ignore[index]
+    with pytest.raises(DefinitionRegistrySealedError):
+        audit.DAEMON_LIFECYCLE_AUDIT_REGISTRY.register(
             audit.DaemonLifecycleAuditDefinition(
                 event="started",
                 message="replacement",
-            )
+            ),
         )
 
 

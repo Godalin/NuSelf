@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make daemon lifecycle audit events closed, typed, and schema-validated.
+Share one sealed definition registry without conflating event transports.
 
 ## Active Branch
 
@@ -13,44 +13,43 @@ Make daemon lifecycle audit events closed, typed, and schema-validated.
 
 ## Ordered Work
 
-1. Inventory every server and CLI lifecycle audit event and payload.
-2. Define one immutable event registry with projection defaults.
-3. Validate exact metadata fields and value types per event.
-4. Model restart failure's start/stop schemas as explicit branches.
-5. Migrate producers away from free-form message/level/status arguments.
-6. Prove schema errors fail before the best-effort persistence boundary.
+1. Compare runtime event and persisted audit ownership/failure semantics.
+2. Extract generic duplicate-safe, resolvable, sealable registry mechanics.
+3. Rebuild `EventDefinitionRegistry` as a semantic adapter over that primitive.
+4. Move lifecycle audit definitions from a mapping proxy to the same primitive.
+5. Preserve separate definition types, extension policy, and delivery paths.
+6. Verify duplicates, unknown keys, late registration, ordering, and isolation.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Persisted event names and valid payload meanings remain unchanged.
-- Lifecycle transition behavior and CLI output remain unchanged.
-- Sink failures remain observable and secondary to lifecycle decisions.
+- Runtime events remain synchronous immutable envelope delivery.
+- Lifecycle audits remain direct best-effort persisted projections.
+- No audit replay, implicit event publication, or shared extension namespace.
 
 ## Completion Evidence
 
-- Inventory identified 13 persisted lifecycle events across daemon ownership,
-  server readiness/recovery, and CLI start/stop/restart orchestration.
-- `daemon.audit` now owns an immutable registry whose definitions fix each
-  event's message, level, status, error policy, and metadata validator.
-- `write_lifecycle_audit()` accepts only the closed event literal plus error,
-  metadata, and project root; producers cannot override projection defaults.
-- Exact validators reject missing, extra, non-string, incorrectly typed, or
-  semantically inconsistent metadata fields.
-- Start/stop completion validation couples outcome to `changed` and enforces
-  the operation's final phase; restart completion validates both phases.
-- `restart_failed` selects one strict schema from its explicit `start` or
-  `stop` stage and rejects mixed or unknown variants.
-- Required/forbidden error policies are validated alongside event metadata.
-- Unknown events and schema violations raise before the best-effort sink, while
-  valid-record persistence failure keeps the existing secondary semantics.
-- Every server and CLI lifecycle producer now supplies only registered event
-  data; local message, level, and status arguments were removed.
-- Direct tests prove registry immutability, unknown-event rejection, exact
-  fields and types, semantic outcome checks, error policy, restart variants,
-  pre-sink failure ordering, and registered projection defaults.
-- Focused daemon lifecycle/audit and CLI suites: `402 passed`.
-- Full test suite: `1742 passed`.
+- The review established that runtime events and lifecycle audits have distinct
+  delivery, extension, failure, and replay semantics and must not be merged.
+- `runtime.definitions.DefinitionRegistry` now owns ordered registration,
+  duplicate rejection, lookup, explicit sealing, and immutable snapshots.
+- The generic registry accepts any hashable key and definition value, including
+  `None`; unknown lookup does not rely on a sentinel definition value.
+- `EventDefinitionRegistry` is now a semantic adapter over the shared primitive
+  and preserves its public producer/name API and event-specific exceptions.
+- Core plus domain runtime-event composition still rejects duplicates and late
+  mutation and validates unknown events before synchronous delivery.
+- The daemon lifecycle audit registry now uses the same primitive with
+  event-slug keys while retaining its closed definition type and exact schemas.
+- Audit registration remains sealed at module composition; runtime event
+  domains retain their explicit extension path.
+- No audit write publishes an envelope, no runtime publication implicitly
+  writes a lifecycle audit, and persisted records remain non-replayable.
+- Direct tests cover generic ordering, lookup, snapshots, duplicates, sealing,
+  unknown keys, invalid composition, nullable definitions, event adapters, and
+  audit registry immutability.
+- Focused definition/event/observability/audit suites: `65 passed`.
+- Full test suite: `1750 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
@@ -60,5 +59,5 @@ Make daemon lifecycle audit events closed, typed, and schema-validated.
 
 ## Next Review Batch
 
-Review the relationship between persisted audits and in-process runtime event
-definitions after lifecycle audit schemas are authoritative.
+Review runtime event and audit naming/versioning policy after registry mechanics
+have one owner.

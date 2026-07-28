@@ -5,10 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from types import MappingProxyType
 from typing import Literal, cast
 
 from nuself.logs import LogLevel
+from nuself.runtime.definitions import (
+    DefinitionRegistry,
+    UnknownDefinitionError,
+)
 from nuself.runtime.observability import write_observed_log_event
 
 DaemonLifecycleAuditEvent = Literal[
@@ -364,26 +367,27 @@ def _require_optional_pid(
     return value
 
 
-def _seal_definitions(
-    definitions: dict[
-        DaemonLifecycleAuditEvent,
-        DaemonLifecycleAuditDefinition,
-    ],
-) -> Mapping[
+def _build_definition_registry(
+    definitions: tuple[DaemonLifecycleAuditDefinition, ...],
+) -> DefinitionRegistry[
     DaemonLifecycleAuditEvent,
     DaemonLifecycleAuditDefinition,
 ]:
-    for event, definition in definitions.items():
-        if definition.event != event:
-            raise ValueError(
-                "lifecycle audit definition key does not match its event"
-            )
-    return MappingProxyType(dict(definitions))
+    registry = DefinitionRegistry[
+        DaemonLifecycleAuditEvent,
+        DaemonLifecycleAuditDefinition,
+    ](
+        lambda definition: definition.event,
+        namespace="daemon lifecycle audit",
+    )
+    for definition in definitions:
+        registry.register(definition)
+    return registry.seal()
 
 
-DAEMON_LIFECYCLE_AUDIT_DEFINITIONS = _seal_definitions(
-    {
-        "instance_lock_contended": DaemonLifecycleAuditDefinition(
+DAEMON_LIFECYCLE_AUDIT_REGISTRY = _build_definition_registry(
+    (
+        DaemonLifecycleAuditDefinition(
             event="instance_lock_contended",
             message=(
                 "daemon start rejected because this project already has an owner"
@@ -392,31 +396,31 @@ DAEMON_LIFECYCLE_AUDIT_DEFINITIONS = _seal_definitions(
             status="skipped",
             error_policy="required",
         ),
-        "started": DaemonLifecycleAuditDefinition(
+        DaemonLifecycleAuditDefinition(
             event="started",
             message="daemon started",
         ),
-        "stopped": DaemonLifecycleAuditDefinition(
+        DaemonLifecycleAuditDefinition(
             event="stopped",
             message="daemon stopped",
         ),
-        "runtime_metadata_recovered": DaemonLifecycleAuditDefinition(
+        DaemonLifecycleAuditDefinition(
             event="runtime_metadata_recovered",
             message="stale daemon runtime metadata recovered",
             status="recovered",
             metadata_validator=_validate_recovered_metadata,
         ),
-        "start_requested": DaemonLifecycleAuditDefinition(
+        DaemonLifecycleAuditDefinition(
             event="start_requested",
             message="daemon start requested",
         ),
-        "start_completed": DaemonLifecycleAuditDefinition(
+        DaemonLifecycleAuditDefinition(
             event="start_completed",
             message="daemon start completed",
             status="ready",
             metadata_validator=_validate_start_completed_metadata,
         ),
-        "start_failed": DaemonLifecycleAuditDefinition(
+        DaemonLifecycleAuditDefinition(
             event="start_failed",
             message="daemon start failed",
             level="error",
@@ -424,17 +428,17 @@ DAEMON_LIFECYCLE_AUDIT_DEFINITIONS = _seal_definitions(
             error_policy="required",
             metadata_validator=_validate_start_failed_metadata,
         ),
-        "stop_requested": DaemonLifecycleAuditDefinition(
+        DaemonLifecycleAuditDefinition(
             event="stop_requested",
             message="daemon stop requested",
         ),
-        "stop_completed": DaemonLifecycleAuditDefinition(
+        DaemonLifecycleAuditDefinition(
             event="stop_completed",
             message="daemon stop completed",
             status="stopped",
             metadata_validator=_validate_stop_completed_metadata,
         ),
-        "stop_failed": DaemonLifecycleAuditDefinition(
+        DaemonLifecycleAuditDefinition(
             event="stop_failed",
             message="daemon stop failed",
             level="error",
@@ -442,17 +446,17 @@ DAEMON_LIFECYCLE_AUDIT_DEFINITIONS = _seal_definitions(
             error_policy="required",
             metadata_validator=_validate_stop_failed_metadata,
         ),
-        "restart_requested": DaemonLifecycleAuditDefinition(
+        DaemonLifecycleAuditDefinition(
             event="restart_requested",
             message="daemon restart requested",
         ),
-        "restart_completed": DaemonLifecycleAuditDefinition(
+        DaemonLifecycleAuditDefinition(
             event="restart_completed",
             message="daemon restart completed",
             status="ready",
             metadata_validator=_validate_restart_completed_metadata,
         ),
-        "restart_failed": DaemonLifecycleAuditDefinition(
+        DaemonLifecycleAuditDefinition(
             event="restart_failed",
             message="daemon restart failed",
             level="error",
@@ -460,7 +464,7 @@ DAEMON_LIFECYCLE_AUDIT_DEFINITIONS = _seal_definitions(
             error_policy="required",
             metadata_validator=_validate_restart_failed_metadata,
         ),
-    }
+    )
 )
 
 
@@ -473,11 +477,12 @@ def write_lifecycle_audit(
 ) -> None:
     """Validate and project one non-authoritative lifecycle decision."""
 
-    definition = DAEMON_LIFECYCLE_AUDIT_DEFINITIONS.get(event)
-    if definition is None:
+    try:
+        definition = DAEMON_LIFECYCLE_AUDIT_REGISTRY.resolve(event)
+    except UnknownDefinitionError as exc:
         raise DaemonLifecycleAuditSchemaError(
             f"unknown daemon lifecycle audit event: {event!r}"
-        )
+        ) from exc
     if metadata is not None and not isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
         metadata,
         Mapping,

@@ -9,6 +9,12 @@ from nuself.runtime.context import (
     use_runtime_context,
 )
 from nuself.runtime.diagnostics import emit_runtime_warning
+from nuself.runtime.definitions import (
+    DefinitionRegistry,
+    DefinitionRegistrySealedError,
+    DuplicateDefinitionError,
+    UnknownDefinitionError,
+)
 from nuself.runtime.event_definitions import (
     CORE_EVENT_DEFINITIONS,
     DuplicateEventDefinitionError,
@@ -58,6 +64,9 @@ __all__ = [
     "CORE_EVENT_DEFINITIONS",
     "RUNTIME_SCHEMA_VERSION",
     "CleanupFailure",
+    "DefinitionRegistry",
+    "DefinitionRegistrySealedError",
+    "DuplicateDefinitionError",
     "DuplicateEventDefinitionError",
     "DuplicateHandlerError",
     "EventDefinitionRegistry",
@@ -82,6 +91,7 @@ __all__ = [
     "RuntimeEventDefinition",
     "RuntimeLogEventPayload",
     "RuntimeLogLevel",
+    "UnknownDefinitionError",
     "UnknownEventDefinitionError",
     "UnknownHandlerError",
     "WorkerLifecycleSnapshot",

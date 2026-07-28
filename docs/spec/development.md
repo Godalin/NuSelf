@@ -242,6 +242,9 @@ under the same package.
   shutdown flag.
 - `daemon/audit.py` owns the immutable lifecycle event definition registry,
   exact per-event schema validation, and best-effort audit sink boundary.
+- `runtime/definitions.py` owns generic sealed definition-registry mechanics.
+  Runtime event and daemon audit registries adapt it without sharing semantic
+  definition types or transport policy.
   `cli/daemon_lifecycle.py` owns shared observable start/stop/restart
   orchestration and typed transition projection for one-shot, launch, and REPL
   surfaces.

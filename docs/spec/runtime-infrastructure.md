@@ -493,6 +493,21 @@ registration, unknown names, and producer/name ownership mismatches fail before
 delivery. Runtime event names use dotted subject/action names such as
 `worker.started`; historical JSONL audit event slugs remain readable.
 
+Definition storage mechanics have one owner:
+`runtime.definitions.DefinitionRegistry`. It provides ordered registration,
+duplicate rejection, explicit sealing, lookup, and immutable definition
+snapshots for any hashable key. `EventDefinitionRegistry` is a semantic adapter
+using `(producer, name)` keys; persisted lifecycle audits use event-slug keys.
+The shared primitive does not merge their definition types, namespaces,
+extension rules, or delivery behavior.
+
+Runtime events and persisted audits remain distinct boundaries. Runtime events
+are synchronous immutable-envelope publication to subscribers; lifecycle
+audits are direct best-effort log projections with fixed presentation defaults.
+Writing an audit never publishes an in-process event, publishing an event never
+implicitly creates a lifecycle audit except through an explicitly attached log
+subscriber, and replaying persisted records never invokes subscribers.
+
 Each publication validates exactly once against the recursively frozen payload
 stored in the `RuntimeEnvelope` and delivered to subscribers. The convenience
 `publish(...)` path must not validate the caller's mutable mapping and then
