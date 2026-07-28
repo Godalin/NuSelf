@@ -4,26 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import os
 import queue
 import socketserver
 import threading
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import cast, override
 
 from nuself.agent.chat import ChatAgent
 from nuself.clock import utc_now_iso
-from nuself.reason.domain import ReasoningStep, ReasoningThread
-from nuself.reason.output import (
-    ReasonOutputManifest,
-    ReasonOutputSection,
-    ReasonOutputService,
-    set_section_planner,
-    write_json_atomic,
-)
-from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.config import ConfigSystem
+from nuself.config import ConfigSystem, ensure_runtime_dirs, runtime_paths
+from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, ProtocolError
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.types import WorkerHealth
@@ -34,9 +26,16 @@ from nuself.notification import NotificationAdapter, NotificationDeliveryLoop
 from nuself.notification.email import EmailNotificationAdapter
 from nuself.notification.macos import MacOSNotificationAdapter
 from nuself.reason import ReasonScheduler
+from nuself.reason.domain import ReasoningStep, ReasoningThread
+from nuself.reason.output import (
+    ReasonOutputManifest,
+    ReasonOutputSection,
+    ReasonOutputService,
+    set_section_planner,
+    write_json_atomic,
+)
 from nuself.reflection import ReflectionScheduler
 from nuself.runtime.jobs import JobMessage
-
 
 DEFAULT_MEMORY_CURATOR_INTERVAL_SECONDS = 300
 
@@ -133,6 +132,7 @@ class DaemonState:
     def __init__(self, project_root: Path) -> None:
         self.project_root = project_root
         self.shutdown_requested = threading.Event()
+        self.activity_broker = ActivityBroker()
         self._export_queue: queue.SimpleQueue[JobMessage] = queue.SimpleQueue()
         self.chat_agent = ChatAgent(project_root, job_sink=self._export_queue.put)
         
@@ -494,7 +494,7 @@ class DaemonState:
                 write_log_event(
                     "daemon",
                     "export_worker_get_error",
-                    f"export queue.get() error: {str(exc)}",
+                    f"export queue.get() error: {exc!s}",
                     project_root=self.project_root,
                     level="warning",
                     status="error",
@@ -584,7 +584,7 @@ class DaemonState:
                     write_log_event(
                         "daemon",
                         "export_job_failed",
-                        f"Export job {job_id} exhausted retries: {str(exc)}",
+                        f"Export job {job_id} exhausted retries: {exc!s}",
                         project_root=self.project_root,
                         level="error",
                         status="error",

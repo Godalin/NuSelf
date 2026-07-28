@@ -17,6 +17,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Structured component logs now rotate at 10 MiB with three retained backups,
   using cross-process-safe sidecar locking; diagnostics read retained backups
   and live cursors follow file replacement without dropping unseen events.
+- Daemon-attached interactive chat now receives turn-scoped live activity over
+  a bounded subscription transport instead of polling shared log files; local
+  one-shot sessions retain the incremental file cursor.
 - Redesigned the interactive tool-approval prompt to match the REPL theme. It now
   shows a single colored `[component] approval required  tool=<name>` banner with
   the pending action indented below and an `approve? [y/N]` question, replacing the

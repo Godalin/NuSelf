@@ -136,6 +136,22 @@ Events that can trigger durable or destructive state changes require a
 request/job path with idempotency and explicit user approval. Replaying an
 audit log must never repeat the action.
 
+## Cross-Process Activity
+
+Interactive daemon activity uses an explicit subscription transport over the
+daemon JSONL request protocol:
+
+1. the client opens a turn-scoped subscription before sending chat;
+2. daemon request execution projects newly written `LogEvent` values to the
+   request-scoped activity broker as well as the audit sink;
+3. the client long-polls bounded batches while chat is running;
+4. the client drains and closes the subscription after completion.
+
+Subscriptions are bounded, expire when abandoned, and filter by `turn_id`.
+They are display-only: receiving or replaying activity cannot execute a
+command. Direct/one-shot mode may continue using the local incremental cursor;
+daemon-attached REPL mode must not poll component log files for live activity.
+
 ## Durable Jobs
 
 Retryable background work uses typed job records, not tuples:

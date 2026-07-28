@@ -57,7 +57,7 @@ These are review-driven refactors that should not block local v0.2 testing. They
 - [x] Register core runtime event definitions and require explicit domain
   extensions before publication.
 - [ ] Add a bounded structured-log retention and rotation policy.
-- [ ] Replace cross-process REPL activity polling with an explicit live event
+- [x] Replace cross-process REPL activity polling with an explicit live event
   transport while retaining log-based diagnostics.
 
 ## Current Goal

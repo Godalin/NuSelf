@@ -123,6 +123,13 @@ During each chat turn, before printing the assistant reply, the REPL polls for n
 
 Interactive activity logs are user-relevant events from the current chat path: direct chat service/tool calls, approval prompts for gated tool execution, persona/self discussion progress, and chat/daemon failure or failover events. Background subsystem logs from reason, reflection, memory, trace, notification, or other autonomous services must not appear in the live REPL output only because they were written while a chat turn was waiting. They remain available through `nuself dev logs`, subsystem commands, and `:export all`.
 
+When attached to the daemon, the REPL opens a turn-scoped activity
+subscription and long-polls bounded event batches while the chat request runs.
+It closes the subscription after draining the final batch. Local one-shot mode
+uses the incremental file cursor because producer and consumer share one
+process. Daemon-attached live output must not discover events by polling log
+files.
+
 All human-readable logs use one metadata style: `[component] event key=value ...`. Standard event fields and displayable metadata fields must use this same `key=value` style; they must not mix colon labels, raw JSON blocks, or ad hoc Markdown fields. If a log has body text, render that text starting on the next indented line instead of mixing it into the key/value header.
 
 When a log records one subsystem calling another subsystem's service/tool boundary, it renders two leading tags: `[caller] [service] event key=value ...`. For example, chat calling a memory tool renders `[chat] [memory] service_tool_called ...`. The second tag comes from `metadata.service_component`; it is not repeated as `service_component=...` in the key/value header.

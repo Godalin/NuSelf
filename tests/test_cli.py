@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from pathlib import Path
+# pyright: reportPrivateUsage=false
+
 import subprocess
 import sys
 import threading
 import tomllib
+from collections.abc import Callable
+from pathlib import Path
 from typing import Protocol, cast
 
 import pytest
@@ -14,8 +16,8 @@ from nuself import cli
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.cli import build_parser, main
 from nuself.daemon.client import DaemonConnectionError
-from nuself.daemon.protocol import DaemonResponse
 from nuself.daemon.lifecycle import DaemonStatus
+from nuself.daemon.protocol import DaemonResponse
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.llm import ChatMessage
 
@@ -24,12 +26,14 @@ def _mock_status(project_root: Path) -> DaemonStatus:
     return DaemonStatus(
         running=True, pid=123, socket_path=Path("/dev/null"), pid_path=Path("/dev/null")
     )
+
+
 from nuself.domain.profile import ProfileItem
+from nuself.logs import LogEvent, log_context, read_log_events, write_log_event
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
-from nuself.logs import LogEvent, log_context, read_log_events, write_log_event
-from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.reason.service import ReasonService
+from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.trace.service import TraceQueryService
 
 
@@ -63,7 +67,9 @@ class FakeChangedCurator:
         return FakeChangedCuratorResult()
 
 
-def test_chat_uses_one_shot_when_daemon_is_missing(tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture) -> None:
+def test_chat_uses_one_shot_when_daemon_is_missing(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "chat", "--message", "hello"])
     captured = capsys.readouterr()
 
@@ -78,7 +84,15 @@ def test_one_shot_chat_runs_memory_curator_after_reply(
 ) -> None:
     monkeypatch.setattr("nuself.cli.MemoryCurator", FakeChangedCurator)
 
-    result = main(["--project-root", str(tmp_path), "chat", "--message", "remember this preference"])
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "chat",
+            "--message",
+            "remember this preference",
+        ]
+    )
     captured = capsys.readouterr()
 
     assert result == 0
@@ -90,7 +104,10 @@ def test_assistant_reply_prints_plain_text_when_stdout_is_not_tty(
     capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
-    print_assistant_reply = cast(Callable[[str], None], getattr(cli, "_print_assistant_reply"))
+    print_assistant_reply = cast(
+        Callable[[str], None],
+        cli._print_assistant_reply,  # pyright: ignore[reportPrivateUsage]
+    )
 
     print_assistant_reply("**hello**")
 
@@ -98,11 +115,16 @@ def test_assistant_reply_prints_plain_text_when_stdout_is_not_tty(
     assert captured.out == "**hello**\n"
 
 
-def test_assistant_reply_uses_rich_renderer_when_stdout_is_tty(monkeypatch: MonkeyPatchFixture) -> None:
+def test_assistant_reply_uses_rich_renderer_when_stdout_is_tty(
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
     rendered: list[str] = []
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
     monkeypatch.setattr("nuself.cli._render_assistant_reply_rich", rendered.append)
-    print_assistant_reply = cast(Callable[[str], None], getattr(cli, "_print_assistant_reply"))
+    print_assistant_reply = cast(
+        Callable[[str], None],
+        cli._print_assistant_reply,  # pyright: ignore[reportPrivateUsage]
+    )
 
     print_assistant_reply("**hello**")
 
@@ -206,7 +228,13 @@ def test_interactive_memory_show_uses_readable_detail(
             title="Readable detail",
             body="Detail views can show the full memory body.",
             tags=["display"],
-            evidence=[MemoryEvidence(source_type="thread", source_ref="thread:default:1-2", summary="chat")],
+            evidence=[
+                MemoryEvidence(
+                    source_type="thread",
+                    source_ref="thread:default:1-2",
+                    summary="chat",
+                )
+            ],
         )
     )
     monkeypatch.setattr("sys.stdin", _TextInput(f":mem show {entry.id}\n:q\n"))
@@ -225,14 +253,34 @@ def test_interactive_memory_candidates_profile_and_sources(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     MemoryCandidateRepository(tmp_path).save(
-        MemoryCandidate(type="belief", title="Candidate display", body="Candidate body.", reason="inspect")
+        MemoryCandidate(
+            type="belief",
+            title="Candidate display",
+            body="Candidate body.",
+            reason="inspect",
+        )
     )
     ProfileItemRepository(tmp_path).save(
-        ProfileItem(type="profile_fact", title="Profile display", body="Prefers readable output.")
+        ProfileItem(
+            type="profile_fact",
+            title="Profile display",
+            body="Prefers readable output.",
+        )
     )
     source_path = tmp_path / "source.md"
-    source_path.write_text("# Source Display\n\nA readable source paragraph.", encoding="utf-8")
-    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    source_path.write_text(
+        "# Source Display\n\nA readable source paragraph.", encoding="utf-8"
+    )
+    main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "source",
+            "ingest",
+            str(source_path),
+        ]
+    )
     capsys.readouterr()
     monkeypatch.setattr(
         "sys.stdin",
@@ -268,7 +316,9 @@ def test_interactive_status_command_shows_daemon_status(
 def test_interactive_logs_command_shows_recent_activity(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    write_log_event("chat", "turn_completed", "chat turn completed", project_root=tmp_path)
+    write_log_event(
+        "chat", "turn_completed", "chat turn completed", project_root=tmp_path
+    )
     monkeypatch.setattr("sys.stdin", _TextInput(":dev logs\n:q\n"))
 
     result = main(["--project-root", str(tmp_path), "chat"])
@@ -293,8 +343,14 @@ def test_interactive_turn_prints_activity_events(
     assert "\nNuSelf:\n\nLLM API is not configured yet." in captured.out
     assert "[chat] one_shot_chat_completed" not in captured.out
     assert "LLM API is not configured yet" in captured.out
-    assert "Last message: hello\n[daemon] session status=one-shot thread=default" in captured.out
-    assert "Last message: hello\n\n[daemon] session status=one-shot thread=default" not in captured.out
+    assert (
+        "Last message: hello\n[daemon] session status=one-shot thread=default"
+        in captured.out
+    )
+    assert (
+        "Last message: hello\n\n[daemon] session status=one-shot thread=default"
+        not in captured.out
+    )
 
 
 def test_interactive_turn_prints_activity_events_while_waiting(
@@ -302,13 +358,18 @@ def test_interactive_turn_prints_activity_events_while_waiting(
 ) -> None:
     ThreadStore(tmp_path).save(ThreadState.empty("default"))
     printed = threading.Event()
-    original_print_events = cast(Callable[[list[LogEvent]], None], getattr(cli, "_print_interactive_activity_events"))
+    original_print_events = cast(
+        Callable[[list[LogEvent]], None],
+        cli._print_interactive_activity_events,  # pyright: ignore[reportPrivateUsage]
+    )
 
     def fake_print_events(events: list[LogEvent]) -> None:
         printed.set()
         original_print_events(events)
 
-    def fake_send(message: str, thread_id: str, turn_id: str | None) -> cli.InteractiveChatResult:
+    def fake_send(
+        message: str, thread_id: str, turn_id: str | None
+    ) -> cli.InteractiveChatResult:
         assert turn_id is not None
         write_log_event(
             "reasoning",
@@ -317,7 +378,10 @@ def test_interactive_turn_prints_activity_events_while_waiting(
             project_root=tmp_path,
             thread_id=thread_id,
             turn_id=turn_id,
-            metadata={"tool": "reason_propose", "summary": "reason_propose(topic=demo)"},
+            metadata={
+                "tool": "reason_propose",
+                "summary": "reason_propose(topic=demo)",
+            },
         )
         write_log_event(
             "chat",
@@ -327,17 +391,27 @@ def test_interactive_turn_prints_activity_events_while_waiting(
             thread_id=thread_id,
             turn_id=turn_id,
             status="completed",
-            metadata={"service_component": "memory", "tool": "memory_search", "args": {}, "result": "live progress before reply"},
+            metadata={
+                "service_component": "memory",
+                "tool": "memory_search",
+                "args": {},
+                "result": "live progress before reply",
+            },
         )
         if not printed.wait(1.0):
             return cli.InteractiveChatResult(code=1, reply="log was not printed live")
         return cli.InteractiveChatResult(code=0, reply="final reply")
 
-    monkeypatch.setattr("nuself.cli._print_interactive_activity_events", fake_print_events)
+    monkeypatch.setattr(
+        "nuself.cli._print_interactive_activity_events", fake_print_events
+    )
     monkeypatch.setattr("nuself.cli.INTERACTIVE_LOG_POLL_INTERVAL_SECONDS", 0.01)
 
     session = cli.InteractiveSession(connected_at=cli.datetime.now(cli.UTC))
-    send_turn = cast(Callable[..., int], getattr(cli, "_send_interactive_chat_turn"))
+    send_turn = cast(
+        Callable[..., int],
+        cli._send_interactive_chat_turn,  # pyright: ignore[reportPrivateUsage]
+    )
     result = send_turn(
         fake_send,
         tmp_path,
@@ -352,14 +426,120 @@ def test_interactive_turn_prints_activity_events_while_waiting(
     assert "Logs:" in captured.out
     assert "[chat] [memory] service_tool_called" in captured.out
     assert "NuSelf:\n\nfinal reply" in captured.out
-    assert captured.out.index("[reasoning] approval_prompted") < captured.out.index("NuSelf:\n\nfinal reply")
-    assert captured.out.index("[reasoning] approval_prompted") < captured.out.index("[chat] [memory] service_tool_called")
-    assert captured.out.index("[chat] [memory] service_tool_called") < captured.out.index("NuSelf:\n\nfinal reply")
-
+    assert captured.out.index("[reasoning] approval_prompted") < captured.out.index(
+        "NuSelf:\n\nfinal reply"
+    )
+    assert captured.out.index("[reasoning] approval_prompted") < captured.out.index(
+        "[chat] [memory] service_tool_called"
+    )
+    assert captured.out.index(
+        "[chat] [memory] service_tool_called"
+    ) < captured.out.index("NuSelf:\n\nfinal reply")
 
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""
+
+
+def test_daemon_interactive_turn_uses_activity_transport_not_log_polling(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("default"))
+    pending: list[LogEvent] = []
+    printed = threading.Event()
+
+    def fake_send(
+        message: str,
+        thread_id: str,
+        turn_id: str | None,
+    ) -> cli.InteractiveChatResult:
+        del message
+        assert turn_id is not None
+        pending.append(
+            LogEvent(
+                time="2026-01-01T00:00:00Z",
+                level="info",
+                component="chat",
+                event="service_tool_called",
+                message="live",
+                thread_id=thread_id,
+                turn_id=turn_id,
+                metadata={
+                    "service_component": "memory",
+                    "tool": "memory_search",
+                },
+            )
+        )
+        assert printed.wait(1.0)
+        return cli.InteractiveChatResult(code=0, reply="done")
+
+    def fake_next(*args: object, **kwargs: object) -> tuple[LogEvent, ...]:
+        del args, kwargs
+        if not pending:
+            return ()
+        events = tuple(pending)
+        pending.clear()
+        printed.set()
+        return events
+
+    def fake_open(
+        turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del turn_id, project_root
+        return "sub-1"
+
+    def fake_close(
+        subscription_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> bool:
+        del subscription_id, project_root
+        return True
+
+    def fail_log_poll(
+        project_root: Path | None,
+        log_cursor: cli.InteractiveLogCursor,
+        *,
+        turn_id: str | None = None,
+    ) -> list[LogEvent]:
+        del project_root, log_cursor, turn_id
+        pytest.fail("daemon live activity must not poll log files")
+
+    monkeypatch.setattr(
+        "nuself.cli.client.open_activity",
+        fake_open,
+    )
+    monkeypatch.setattr(
+        "nuself.cli.client.next_activity",
+        fake_next,
+    )
+    monkeypatch.setattr(
+        "nuself.cli.client.close_activity",
+        fake_close,
+    )
+    monkeypatch.setattr(
+        "nuself.cli._interactive_activity_events",
+        fail_log_poll,
+    )
+
+    session = cli.InteractiveSession(connected_at=cli.datetime.now(cli.UTC))
+    send_turn = cast(
+        Callable[..., int],
+        cli._send_interactive_chat_turn,  # pyright: ignore[reportPrivateUsage]
+    )
+    result = send_turn(
+        fake_send,
+        tmp_path,
+        "default",
+        "hello",
+        session,
+        daemon_activity=True,
+    )
+
+    assert result == 0
 
 
 def test_interactive_turn_hides_background_activity_events(
@@ -367,7 +547,9 @@ def test_interactive_turn_hides_background_activity_events(
 ) -> None:
     ThreadStore(tmp_path).save(ThreadState.empty("default"))
 
-    def fake_send(message: str, thread_id: str, turn_id: str | None) -> cli.InteractiveChatResult:
+    def fake_send(
+        message: str, thread_id: str, turn_id: str | None
+    ) -> cli.InteractiveChatResult:
         assert turn_id is not None
         write_log_event(
             "reflection",
@@ -393,12 +575,17 @@ def test_interactive_turn_hides_background_activity_events(
             thread_id=thread_id,
             turn_id=turn_id,
             status="completed",
-            metadata={"service_component": "memory", "tool": "memory_search", "args": {}, "result": "visible service result"},
+            metadata={
+                "service_component": "memory",
+                "tool": "memory_search",
+                "args": {},
+                "result": "visible service result",
+            },
         )
         return cli.InteractiveChatResult(code=0, reply="final reply")
 
     session = cli.InteractiveSession(connected_at=cli.datetime.now(cli.UTC))
-    send_turn = cast(Callable[..., int], getattr(cli, "_send_interactive_chat_turn"))
+    send_turn = cast(Callable[..., int], cli._send_interactive_chat_turn)
     result = send_turn(
         fake_send,
         tmp_path,
@@ -441,6 +628,8 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
         timeout: float = 2.0,
     ) -> DaemonResponse:
         nonlocal calls
+        if request_type == "activity_open":
+            raise DaemonConnectionError("activity transport unavailable")
         calls += 1
         payload_dict = cast(dict[str, object], payload)
         turn_id = payload_dict.get("turn_id")
@@ -456,7 +645,9 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
                 status="retryable timeout",
             )
             raise DaemonConnectionError("timed out")
-        return DaemonResponse(request_id="r1", status="ok", payload={"reply": "daemon reply"})
+        return DaemonResponse(
+            request_id="r1", status="ok", payload={"reply": "daemon reply"}
+        )
 
     monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
     monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
@@ -494,6 +685,8 @@ def test_interactive_daemon_application_error_does_not_retry(
         timeout: float = 2.0,
     ) -> DaemonResponse:
         nonlocal calls
+        if request_type == "activity_open":
+            raise DaemonConnectionError("activity transport unavailable")
         calls += 1
         payload_dict = cast(dict[str, object], payload)
         turn_id = payload_dict.get("turn_id")
@@ -522,7 +715,7 @@ def test_interactive_daemon_application_error_does_not_retry(
     assert result == 0
     assert calls == 1
     assert "graph failed <- root cause" not in captured.err
-    assert "error=\"graph failed <- root cause\"" in captured.out
+    assert 'error="graph failed <- root cause"' in captured.out
     assert "Retrying message after failed attempt" not in captured.out
     assert "Message failed after retry" not in captured.err
     assert captured.out.count("[chat] turn_failed") == 1
@@ -537,7 +730,9 @@ def test_interactive_export_saves_connection_transcript(
         copied.append(text)
         return True, ""
 
-    monkeypatch.setattr("sys.stdin", _TextInput("first message\n:export\nsecond message\n:export\n:q\n"))
+    monkeypatch.setattr(
+        "sys.stdin", _TextInput("first message\n:export\nsecond message\n:export\n:q\n")
+    )
     monkeypatch.setattr("nuself.cli._copy_text_to_clipboard", fake_copy)
 
     result = main(["--project-root", str(tmp_path), "chat"])
@@ -605,7 +800,10 @@ def test_interactive_export_noclip_skips_clipboard(
 def test_interactive_export_all_includes_all_logs(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    monkeypatch.setattr("sys.stdin", _TextInput("include logs\n:e all noclip\nsecond turn\n:e all noclip\n:q\n"))
+    monkeypatch.setattr(
+        "sys.stdin",
+        _TextInput("include logs\n:e all noclip\nsecond turn\n:e all noclip\n:q\n"),
+    )
 
     result = main(["--project-root", str(tmp_path), "chat"])
     capsys.readouterr()
@@ -616,7 +814,10 @@ def test_interactive_export_all_includes_all_logs(
     content = exports[-1].read_text(encoding="utf-8")
     assert "- Logs: all" in content
     assert "### Logs" in content
-    assert "> [chat] one_shot_chat_completed status=ok thread=default turn=turn-" in content
+    assert (
+        "> [chat] one_shot_chat_completed status=ok thread=default turn=turn-"
+        in content
+    )
     assert ">   one-shot chat turn completed" in content
     assert "```json" not in content
     assert "```text" not in content
@@ -627,7 +828,7 @@ def test_interactive_export_all_includes_all_logs(
 
 
 def test_render_transcript_share_includes_service_tool_logs() -> None:
-    render_transcript = cast(Callable[..., str], getattr(cli, "_render_chat_transcript"))
+    render_transcript = cast(Callable[..., str], cli._render_chat_transcript)
     service_log = LogEvent(
         time="2026-05-19T10:00:00Z",
         level="info",
@@ -654,7 +855,10 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
         include_all_logs=False,
     )
 
-    assert "> [chat] [reflection] service_tool_called tool=reflection_list_pending status=completed thread=default" in content
+    assert (
+        "> [chat] [reflection] service_tool_called tool=reflection_list_pending status=completed thread=default"
+        in content
+    )
     assert ">   args: {" in content
     assert '>     "limit": 3' in content
     assert ">   result:" in content
@@ -662,12 +866,15 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
 
 
 def test_interactive_export_normalizes_markdown_body_fences() -> None:
-    render_transcript = cast(Callable[..., str], getattr(cli, "_render_chat_transcript"))
+    render_transcript = cast(Callable[..., str], cli._render_chat_transcript)
     content = render_transcript(
         thread_id="default",
         connected_at=cli.datetime.now(cli.UTC),
         exported_at=cli.datetime.now(cli.UTC),
-        messages=[(0, "user", "show fence"), (1, "assistant", "```python\nprint('ok')\n```")],
+        messages=[
+            (0, "user", "show fence"),
+            (1, "assistant", "```python\nprint('ok')\n```"),
+        ],
         log_events=[],
         log_events_by_message={},
         include_all_logs=False,
@@ -733,7 +940,9 @@ def test_interactive_keyboard_interrupt_cancels_turn_and_stays_open(
 def test_interactive_quit_auto_saves_all_threads(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    monkeypatch.setattr("sys.stdin", _TextInput("first thread\n:thread beta\nsecond thread\n:q\n"))
+    monkeypatch.setattr(
+        "sys.stdin", _TextInput("first thread\n:thread beta\nsecond thread\n:q\n")
+    )
 
     result = main(["--project-root", str(tmp_path), "chat"])
     captured = capsys.readouterr()
@@ -763,7 +972,9 @@ def test_interactive_history_skips_consecutive_duplicates(
     assert content.count("+same") == 1
 
 
-def test_daemon_status_reports_missing_daemon(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_daemon_status_reports_missing_daemon(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "daemon", "status"])
     captured = capsys.readouterr()
 
@@ -771,7 +982,9 @@ def test_daemon_status_reports_missing_daemon(tmp_path: Path, capsys: CaptureFix
     assert "daemon stopped" in captured.out
 
 
-def test_incomplete_daemon_command_shows_subcommand_help(capsys: CaptureFixture) -> None:
+def test_incomplete_daemon_command_shows_subcommand_help(
+    capsys: CaptureFixture,
+) -> None:
     result = main(["daemon"])
     captured = capsys.readouterr()
 
@@ -833,7 +1046,9 @@ def test_default_entrypoint_interactive_omits_redundant_startup_preamble(
     assert result == 0
     assert "Using current daemon:" not in captured.out
     assert "Tip:" not in captured.out
-    assert "νSelf interactive mode. Type :help for commands, :q to quit." in captured.out
+    assert (
+        "νSelf interactive mode. Type :help for commands, :q to quit." in captured.out
+    )
     assert "[daemon] session status=running thread=default" in captured.out
 
 
@@ -995,7 +1210,9 @@ def test_daemon_chat_prints_memory_update(
     monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
     monkeypatch.setattr("nuself.cli.client.request", fake_request)
 
-    result = main(["--project-root", str(tmp_path), "attach", "--message", "remember this"])
+    result = main(
+        ["--project-root", str(tmp_path), "attach", "--message", "remember this"]
+    )
     captured = capsys.readouterr()
 
     assert result == 0
@@ -1035,7 +1252,9 @@ def test_daemon_chat_connection_error_is_reported(
     assert "daemon request failed: timed out" in captured.err
 
 
-def test_daemon_list_reports_local_daemon(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_daemon_list_reports_local_daemon(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "daemon", "list"])
     captured = capsys.readouterr()
 
@@ -1044,7 +1263,9 @@ def test_daemon_list_reports_local_daemon(tmp_path: Path, capsys: CaptureFixture
     assert "local stopped -" in captured.out
 
 
-def test_logs_command_renders_structured_events(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_logs_command_renders_structured_events(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     write_log_event(
         "chat",
         "turn_completed",
@@ -1053,9 +1274,26 @@ def test_logs_command_renders_structured_events(tmp_path: Path, capsys: CaptureF
         thread_id="default",
         status="ok",
     )
-    write_log_event("memory", "curator_changed", "memory curator changed durable memory", project_root=tmp_path)
+    write_log_event(
+        "memory",
+        "curator_changed",
+        "memory curator changed durable memory",
+        project_root=tmp_path,
+    )
 
-    result = main(["--project-root", str(tmp_path), "dev", "logs", "--component", "chat", "--tail", "5", "--no-color"])
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "dev",
+            "logs",
+            "--component",
+            "chat",
+            "--tail",
+            "5",
+            "--no-color",
+        ]
+    )
     captured = capsys.readouterr()
 
     assert result == 0
@@ -1068,7 +1306,17 @@ def test_logs_command_renders_structured_events(tmp_path: Path, capsys: CaptureF
 def test_logs_command_can_render_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     write_log_event("daemon", "started", "daemon started", project_root=tmp_path)
 
-    result = main(["--project-root", str(tmp_path), "dev", "logs", "--component", "daemon", "--json"])
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "dev",
+            "logs",
+            "--component",
+            "daemon",
+            "--json",
+        ]
+    )
     captured = capsys.readouterr()
 
     assert result == 0
@@ -1077,9 +1325,15 @@ def test_logs_command_can_render_json(tmp_path: Path, capsys: CaptureFixture) ->
 
 
 def test_log_context_applies_runtime_ownership_fields(tmp_path: Path) -> None:
-    with log_context(thread_id="default", request_id="req-1", turn_id="turn-1", source="test"):
-        event = write_log_event("chat", "turn_started", "chat turn started", project_root=tmp_path)
-        nested = write_log_event("chat", "tool", "tool ran", project_root=tmp_path, turn_id="turn-2")
+    with log_context(
+        thread_id="default", request_id="req-1", turn_id="turn-1", source="test"
+    ):
+        event = write_log_event(
+            "chat", "turn_started", "chat turn started", project_root=tmp_path
+        )
+        nested = write_log_event(
+            "chat", "tool", "tool ran", project_root=tmp_path, turn_id="turn-2"
+        )
 
     events = read_log_events(project_root=tmp_path, component="chat")
 
@@ -1094,15 +1348,21 @@ def test_log_context_applies_runtime_ownership_fields(tmp_path: Path) -> None:
     assert events[-1].turn_id == "turn-2"
 
 
-def test_interactive_activity_cursor_does_not_replay_seen_events(tmp_path: Path) -> None:
+def test_interactive_activity_cursor_does_not_replay_seen_events(
+    tmp_path: Path,
+) -> None:
     write_log_event("chat", "turn_started", "old turn", project_root=tmp_path)
     from nuself.logs import InteractiveLogCursor
 
     cursor = InteractiveLogCursor.from_project(tmp_path)
 
-    write_log_event("chat", "turn_completed", "new turn", project_root=tmp_path, turn_id="turn-new")
+    write_log_event(
+        "chat", "turn_completed", "new turn", project_root=tmp_path, turn_id="turn-new"
+    )
 
-    from nuself.cli import _interactive_activity_events  # pyright: ignore[reportPrivateUsage]
+    from nuself.cli import (
+        _interactive_activity_events,  # pyright: ignore[reportPrivateUsage]
+    )
 
     first_read = _interactive_activity_events(tmp_path, cursor, turn_id="turn-new")
     second_read = _interactive_activity_events(tmp_path, cursor)
@@ -1123,15 +1383,21 @@ def test_read_log_events_tolerates_legacy_daemon_lines(tmp_path: Path) -> None:
     assert events[0].message == "plain daemon output"
 
 
-def test_daemon_attach_requires_running_daemon(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "daemon", "attach", "--message", "hello"])
+def test_daemon_attach_requires_running_daemon(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
+    result = main(
+        ["--project-root", str(tmp_path), "daemon", "attach", "--message", "hello"]
+    )
     captured = capsys.readouterr()
 
     assert result == 1
     assert "NuSelf daemon is not running." in captured.err
 
 
-def test_incomplete_memory_command_shows_subcommand_help(capsys: CaptureFixture) -> None:
+def test_incomplete_memory_command_shows_subcommand_help(
+    capsys: CaptureFixture,
+) -> None:
     result = main(["memory"])
     captured = capsys.readouterr()
 
@@ -1270,7 +1536,9 @@ def test_memory_preview_limits_entries(tmp_path: Path, capsys: CaptureFixture) -
         )
         capsys.readouterr()
 
-    result = main(["--project-root", str(tmp_path), "memory", "preview", "--limit", "1"])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "preview", "--limit", "1"]
+    )
     captured = capsys.readouterr()
 
     assert result == 0
@@ -1278,7 +1546,9 @@ def test_memory_preview_limits_entries(tmp_path: Path, capsys: CaptureFixture) -
     assert "to see more." in captured.out
 
 
-def test_memory_preview_uses_list_record_style_without_indexes(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_preview_uses_list_record_style_without_indexes(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     MemoryEntryRepository(tmp_path).save(
         MemoryEntry(
             type="belief",
@@ -1297,16 +1567,26 @@ def test_memory_preview_uses_list_record_style_without_indexes(tmp_path: Path, c
     assert "[memory] state=reviewed type=belief" in captured.out
     assert "[memory] [0]" not in captured.out
     assert "  Preview style" in captured.out
-    assert "  Memory preview should use the same record body style as list." in captured.out
+    assert (
+        "  Memory preview should use the same record body style as list."
+        in captured.out
+    )
 
 
-def test_memory_update_defers_without_agent_decision(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_update_defers_without_agent_decision(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     ThreadStore(tmp_path).save(
         ThreadState(
             thread_id="default",
             messages=[
-                ThreadMessage(role="user", content="We need automatic memory curation."),
-                ThreadMessage(role="assistant", content="I will summarize conversations into memory."),
+                ThreadMessage(
+                    role="user", content="We need automatic memory curation."
+                ),
+                ThreadMessage(
+                    role="assistant",
+                    content="I will summarize conversations into memory.",
+                ),
             ],
         )
     )
@@ -1319,7 +1599,9 @@ def test_memory_update_defers_without_agent_decision(tmp_path: Path, capsys: Cap
     assert main_memory_preview(tmp_path) == ""
 
 
-def test_memory_optimize_defers_without_agent_decision(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_optimize_defers_without_agent_decision(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     MemoryEntryRepository(tmp_path).save(
         MemoryEntry(
             type="belief",
@@ -1411,7 +1693,9 @@ def test_memory_add_infers_type_without_manual_type(
     assert entry.body == "I prefer terse CLI summaries with concrete next steps."
 
 
-def test_memory_add_supports_goal_and_concept_types(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_add_supports_goal_and_concept_types(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     goal_result = main(
         [
             "--project-root",
@@ -1451,7 +1735,9 @@ def test_memory_add_supports_goal_and_concept_types(tmp_path: Path, capsys: Capt
     assert types == {"goal", "concept"}
 
 
-def test_memory_candidate_review_flow_accepts_temporal_candidate(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_candidate_review_flow_accepts_temporal_candidate(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     candidate = MemoryCandidateRepository(tmp_path).save(
         MemoryCandidate(
             type="belief",
@@ -1472,9 +1758,13 @@ def test_memory_candidate_review_flow_accepts_temporal_candidate(tmp_path: Path,
 
     list_result = main(["--project-root", str(tmp_path), "memory", "review", "list"])
     list_output = capsys.readouterr().out
-    show_result = main(["--project-root", str(tmp_path), "memory", "review", "show", "0"])
+    show_result = main(
+        ["--project-root", str(tmp_path), "memory", "review", "show", "0"]
+    )
     show_output = capsys.readouterr().out
-    accept_result = main(["--project-root", str(tmp_path), "memory", "review", "accept", "0"])
+    accept_result = main(
+        ["--project-root", str(tmp_path), "memory", "review", "accept", "0"]
+    )
     accept_output = capsys.readouterr().out
 
     entries = MemoryEntryRepository(tmp_path).list()
@@ -1492,16 +1782,22 @@ def test_memory_candidate_review_flow_accepts_temporal_candidate(tmp_path: Path,
     assert entries[0].temporal_note == "The user asked for visible thought evolution."
 
 
-def test_memory_candidate_accepts_batch_index_selection(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_candidate_accepts_batch_index_selection(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     repo = MemoryCandidateRepository(tmp_path)
     created = [
-        repo.save(MemoryCandidate(type="belief", title=f"Candidate {i}", body=f"Body {i}."))
+        repo.save(
+            MemoryCandidate(type="belief", title=f"Candidate {i}", body=f"Body {i}.")
+        )
         for i in range(5)
     ]
     listed = repo.list()
     expected_ids = {listed[1].id, listed[3].id, listed[4].id}
 
-    result = main(["--project-root", str(tmp_path), "memory", "review", "accept", "1,3-4"])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "review", "accept", "1,3-4"]
+    )
     output = capsys.readouterr().out
 
     accepted_ids = {entry.id for entry in MemoryEntryRepository(tmp_path).list()}
@@ -1513,17 +1809,23 @@ def test_memory_candidate_accepts_batch_index_selection(tmp_path: Path, capsys: 
     assert {candidate.id for candidate in created}.issuperset(expected_ids)
 
 
-def test_memory_candidate_rejects_batch_index_selection(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_candidate_rejects_batch_index_selection(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     repo = MemoryCandidateRepository(tmp_path)
     created = [
-        repo.save(MemoryCandidate(type="belief", title=f"Candidate {i}", body=f"Body {i}."))
+        repo.save(
+            MemoryCandidate(type="belief", title=f"Candidate {i}", body=f"Body {i}.")
+        )
         for i in range(4)
     ]
     listed = repo.list()
     rejected_ids = {listed[0].id, listed[2].id, listed[3].id}
     pending_id = listed[1].id
 
-    result = main(["--project-root", str(tmp_path), "memory", "review", "reject", "0,2-3"])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "review", "reject", "0,2-3"]
+    )
     output = capsys.readouterr().out
 
     assert result == 0
@@ -1540,16 +1842,22 @@ def test_memory_candidate_batch_index_selection_rejects_whitespace(
     repo = MemoryCandidateRepository(tmp_path)
     repo.save(MemoryCandidate(type="belief", title="Candidate", body="Body."))
 
-    result = main(["--project-root", str(tmp_path), "memory", "review", "accept", "0, 1"])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "review", "accept", "0, 1"]
+    )
     output = capsys.readouterr().err
 
     assert result == 1
     assert "Invalid memory candidate index selection" in output
 
 
-def test_memory_candidate_edit_merge_and_reject(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_candidate_edit_merge_and_reject(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     entry = MemoryEntryRepository(tmp_path).save(
-        MemoryEntry(type="belief", title="Old timing idea", body="Memory has timestamps.")
+        MemoryEntry(
+            type="belief", title="Old timing idea", body="Memory has timestamps."
+        )
     )
     candidate_repo = MemoryCandidateRepository(tmp_path)
     merge_candidate = candidate_repo.save(
@@ -1581,11 +1889,26 @@ def test_memory_candidate_edit_merge_and_reject(tmp_path: Path, capsys: CaptureF
     )
     edit_output = capsys.readouterr().out
     merge_result = main(
-        ["--project-root", str(tmp_path), "memory", "review", "merge", merge_candidate.id, entry.id]
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "review",
+            "merge",
+            merge_candidate.id,
+            entry.id,
+        ]
     )
     merge_output = capsys.readouterr().out
     reject_result = main(
-        ["--project-root", str(tmp_path), "memory", "review", "reject", reject_candidate.id]
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "review",
+            "reject",
+            reject_candidate.id,
+        ]
     )
     reject_output = capsys.readouterr().out
 
@@ -1602,7 +1925,9 @@ def test_memory_candidate_edit_merge_and_reject(tmp_path: Path, capsys: CaptureF
     assert candidate_repo.get(reject_candidate.id).review_state == "rejected"
 
 
-def test_memory_stats_and_filtered_search(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_stats_and_filtered_search(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     MemoryEntryRepository(tmp_path).save(
         MemoryEntry(
             type="belief",
@@ -1658,10 +1983,18 @@ def test_memory_stats_and_filtered_search(tmp_path: Path, capsys: CaptureFixture
     assert "Unrelated episode" not in search_output
 
 
-def test_memory_relations_lists_and_filters_derived_index(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_relations_lists_and_filters_derived_index(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     repo = MemoryEntryRepository(tmp_path)
-    old = repo.save(MemoryEntry(type="belief", title="Old model", body="Closed categories."))
-    related = repo.save(MemoryEntry(type="concept", title="Graph retrieval", body="Relations expand recall."))
+    old = repo.save(
+        MemoryEntry(type="belief", title="Old model", body="Closed categories.")
+    )
+    related = repo.save(
+        MemoryEntry(
+            type="concept", title="Graph retrieval", body="Relations expand recall."
+        )
+    )
     current = repo.save(
         MemoryEntry(
             type="belief",
@@ -1695,9 +2028,13 @@ def test_memory_relations_lists_and_filters_derived_index(tmp_path: Path, capsys
     assert "Old model" not in filter_output
 
 
-def test_memory_graph_lists_nodes_and_edges(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_graph_lists_nodes_and_edges(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     repo = MemoryEntryRepository(tmp_path)
-    target = repo.save(MemoryEntry(type="concept", title="Graph node", body="A graph target."))
+    target = repo.save(
+        MemoryEntry(type="concept", title="Graph node", body="A graph target.")
+    )
     source = repo.save(
         MemoryEntry(
             type="belief",
@@ -1707,7 +2044,17 @@ def test_memory_graph_lists_nodes_and_edges(tmp_path: Path, capsys: CaptureFixtu
         )
     )
 
-    nodes_result = main(["--project-root", str(tmp_path), "memory", "graph", "nodes", "--type", "concept"])
+    nodes_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "graph",
+            "nodes",
+            "--type",
+            "concept",
+        ]
+    )
     nodes_output = capsys.readouterr().out
     edges_result = main(
         [
@@ -1723,7 +2070,9 @@ def test_memory_graph_lists_nodes_and_edges(tmp_path: Path, capsys: CaptureFixtu
         ]
     )
     edges_output = capsys.readouterr().out
-    search_result = main(["--project-root", str(tmp_path), "memory", "graph", "search", "target"])
+    search_result = main(
+        ["--project-root", str(tmp_path), "memory", "graph", "search", "target"]
+    )
     search_output = capsys.readouterr().out
 
     assert nodes_result == 0
@@ -1740,7 +2089,9 @@ def test_memory_graph_lists_nodes_and_edges(tmp_path: Path, capsys: CaptureFixtu
     assert f"{source.id}:related_to:{target.id}" in search_output
 
 
-def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_source_ingest_list_show_and_chunks(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     source_path = tmp_path / "essay.md"
     source_path.write_text(
         "\n".join(
@@ -1777,9 +2128,13 @@ def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: Captu
     list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
     list_output = capsys.readouterr().out
     source_id = list_output.split()[2].removeprefix("id=")
-    show_result = main(["--project-root", str(tmp_path), "memory", "source", "show", "0"])
+    show_result = main(
+        ["--project-root", str(tmp_path), "memory", "source", "show", "0"]
+    )
     show_output = capsys.readouterr().out
-    chunks_result = main(["--project-root", str(tmp_path), "memory", "source", "chunks", "0"])
+    chunks_result = main(
+        ["--project-root", str(tmp_path), "memory", "source", "chunks", "0"]
+    )
     chunks_output = capsys.readouterr().out
 
     assert ingest_result == 0
@@ -1797,7 +2152,9 @@ def test_memory_source_ingest_list_show_and_chunks(tmp_path: Path, capsys: Captu
     assert "A durable source paragraph." in chunks_output
 
 
-def test_memory_source_search_and_reindex(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_source_search_and_reindex(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     source_path = tmp_path / "searchable.md"
     source_path.write_text(
         "\n".join(
@@ -1811,11 +2168,29 @@ def test_memory_source_search_and_reindex(tmp_path: Path, capsys: CaptureFixture
         ),
         encoding="utf-8",
     )
-    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "source",
+            "ingest",
+            str(source_path),
+        ]
+    )
     capsys.readouterr()
 
     search_result = main(
-        ["--project-root", str(tmp_path), "memory", "source", "search", "durable citation", "--limit", "3"]
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "source",
+            "search",
+            "durable citation",
+            "--limit",
+            "3",
+        ]
     )
     search_output = capsys.readouterr().out
     reindex_result = main(["--project-root", str(tmp_path), "memory", "reindex"])
@@ -1849,15 +2224,28 @@ def test_memory_source_extract_creates_reviewable_profile_candidate(
         ),
         encoding="utf-8",
     )
-    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "source",
+            "ingest",
+            str(source_path),
+        ]
+    )
     capsys.readouterr()
 
     list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
     capsys.readouterr()
 
-    extract_result = main(["--project-root", str(tmp_path), "memory", "source", "extract", "0"])
+    extract_result = main(
+        ["--project-root", str(tmp_path), "memory", "source", "extract", "0"]
+    )
     extract_output = capsys.readouterr().out
-    candidate_list_result = main(["--project-root", str(tmp_path), "memory", "review", "list"])
+    candidate_list_result = main(
+        ["--project-root", str(tmp_path), "memory", "review", "list"]
+    )
     candidate_list_output = capsys.readouterr().out
 
     assert list_result == 0
@@ -1867,7 +2255,9 @@ def test_memory_source_extract_creates_reviewable_profile_candidate(
     assert "profile_fact" in candidate_list_output
 
 
-def test_memory_source_delete_cascades_profile_items(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_source_delete_cascades_profile_items(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     source_path = tmp_path / "profile-source.md"
     source_path.write_text(
         "\n".join(
@@ -1881,7 +2271,16 @@ def test_memory_source_delete_cascades_profile_items(tmp_path: Path, capsys: Cap
         ),
         encoding="utf-8",
     )
-    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "source",
+            "ingest",
+            str(source_path),
+        ]
+    )
     capsys.readouterr()
     list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
     list_output = capsys.readouterr().out
@@ -1889,9 +2288,13 @@ def test_memory_source_delete_cascades_profile_items(tmp_path: Path, capsys: Cap
     main(["--project-root", str(tmp_path), "memory", "source", "extract", source_id])
     capsys.readouterr()
 
-    delete_result = main(["--project-root", str(tmp_path), "memory", "source", "delete", "0"])
+    delete_result = main(
+        ["--project-root", str(tmp_path), "memory", "source", "delete", "0"]
+    )
     delete_output = capsys.readouterr().out
-    profile_list_result = main(["--project-root", str(tmp_path), "memory", "profile", "list"])
+    profile_list_result = main(
+        ["--project-root", str(tmp_path), "memory", "profile", "list"]
+    )
     profile_list_output = capsys.readouterr().out
 
     assert list_result == 0
@@ -1901,7 +2304,9 @@ def test_memory_source_delete_cascades_profile_items(tmp_path: Path, capsys: Cap
     assert "No profile items." in profile_list_output
 
 
-def test_memory_profile_delete_removes_item_and_reindexes(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_profile_delete_removes_item_and_reindexes(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     source_path = tmp_path / "profile-source.md"
     source_path.write_text(
         "\n".join(
@@ -1915,7 +2320,16 @@ def test_memory_profile_delete_removes_item_and_reindexes(tmp_path: Path, capsys
         ),
         encoding="utf-8",
     )
-    main(["--project-root", str(tmp_path), "memory", "source", "ingest", str(source_path)])
+    main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "source",
+            "ingest",
+            str(source_path),
+        ]
+    )
     capsys.readouterr()
     list_result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
     list_output = capsys.readouterr().out
@@ -1929,9 +2343,13 @@ def test_memory_profile_delete_removes_item_and_reindexes(tmp_path: Path, capsys
     profile_repo = ProfileItemRepository(tmp_path)
     assert profile_repo.list()
 
-    delete_result = main(["--project-root", str(tmp_path), "memory", "profile", "delete", "0"])
+    delete_result = main(
+        ["--project-root", str(tmp_path), "memory", "profile", "delete", "0"]
+    )
     delete_output = capsys.readouterr().out
-    profile_list_result = main(["--project-root", str(tmp_path), "memory", "profile", "list"])
+    profile_list_result = main(
+        ["--project-root", str(tmp_path), "memory", "profile", "list"]
+    )
     profile_list_output = capsys.readouterr().out
 
     assert list_result == 0
@@ -1941,7 +2359,9 @@ def test_memory_profile_delete_removes_item_and_reindexes(tmp_path: Path, capsys
     assert "No profile items." in profile_list_output
 
 
-def test_memory_profile_search_filters_and_query(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_profile_search_filters_and_query(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     repo = ProfileItemRepository(tmp_path)
     repo.save(
         ProfileItem(
@@ -2003,8 +2423,9 @@ class _TextInput:
 def main_memory_preview(project_root: Path) -> str:
     from nuself.memory.repository import MemoryEntryRepository
 
-    return "\n".join(entry.title for entry in MemoryEntryRepository(project_root).list())
-
+    return "\n".join(
+        entry.title for entry in MemoryEntryRepository(project_root).list()
+    )
 
 
 def test_thread_list_shows_thread_ids(tmp_path: Path, capsys: CaptureFixture) -> None:
@@ -2025,10 +2446,14 @@ def test_thread_create_makes_new_thread(tmp_path: Path, capsys: CaptureFixture) 
 
     assert result == 0
     assert "Created thread: new-thread" in captured.out
-    assert "new-thread.json" in [p.name for p in (tmp_path / "private" / "threads").glob("*.json")]
+    assert "new-thread.json" in [
+        p.name for p in (tmp_path / "private" / "threads").glob("*.json")
+    ]
 
 
-def test_thread_create_fails_when_thread_exists(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_thread_create_fails_when_thread_exists(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     ThreadStore(tmp_path).save(ThreadState.empty("existing"))
 
     result = main(["--project-root", str(tmp_path), "thread", "new", "existing"])
@@ -2049,7 +2474,9 @@ def test_thread_rename_moves_thread(tmp_path: Path, capsys: CaptureFixture) -> N
     assert ThreadStore(tmp_path).list() == ["new"]
 
 
-def test_thread_rename_fails_when_target_exists(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_thread_rename_fails_when_target_exists(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     ThreadStore(tmp_path).save(ThreadState.empty("a"))
     ThreadStore(tmp_path).save(ThreadState.empty("b"))
 
@@ -2075,7 +2502,9 @@ def test_thread_branch_copies_messages(tmp_path: Path, capsys: CaptureFixture) -
         )
     )
 
-    result = main(["--project-root", str(tmp_path), "thread", "branch", "source", "fork"])
+    result = main(
+        ["--project-root", str(tmp_path), "thread", "branch", "source", "fork"]
+    )
     captured = capsys.readouterr()
 
     assert result == 0
@@ -2100,7 +2529,18 @@ def test_thread_branch_at_index(tmp_path: Path, capsys: CaptureFixture) -> None:
         )
     )
 
-    result = main(["--project-root", str(tmp_path), "thread", "branch", "source", "fork", "--index", "2"])
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "thread",
+            "branch",
+            "source",
+            "fork",
+            "--index",
+            "2",
+        ]
+    )
 
     assert result == 0
     fork = store.load("fork")
@@ -2133,7 +2573,9 @@ def test_thread_delete_removes_thread(tmp_path: Path, capsys: CaptureFixture) ->
     assert not (tmp_path / "private" / "threads" / "gone.json").exists()
 
 
-def test_thread_delete_fails_when_missing(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_thread_delete_fails_when_missing(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "thread", "delete", "missing"])
     captured = capsys.readouterr()
 
@@ -2141,7 +2583,9 @@ def test_thread_delete_fails_when_missing(tmp_path: Path, capsys: CaptureFixture
     assert "Error: thread not found: missing" in captured.err
 
 
-def test_thread_unarchive_restores_thread(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_thread_unarchive_restores_thread(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     store = ThreadStore(tmp_path)
     store.save(ThreadState.empty("old"))
     store.archive("old")
@@ -2155,7 +2599,9 @@ def test_thread_unarchive_restores_thread(tmp_path: Path, capsys: CaptureFixture
     assert not (tmp_path / "private" / "threads" / "archived" / "old.json").exists()
 
 
-def test_thread_unarchive_fails_when_missing(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_thread_unarchive_fails_when_missing(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "thread", "unarchive", "missing"])
     captured = capsys.readouterr()
 
@@ -2163,7 +2609,9 @@ def test_thread_unarchive_fails_when_missing(tmp_path: Path, capsys: CaptureFixt
     assert "Error: archived thread not found: missing" in captured.err
 
 
-def test_thread_archived_lists_archived_threads(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_thread_archived_lists_archived_threads(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     store = ThreadStore(tmp_path)
     store.save(ThreadState.empty("alpha"))
     store.save(ThreadState.empty("beta"))
@@ -2177,7 +2625,9 @@ def test_thread_archived_lists_archived_threads(tmp_path: Path, capsys: CaptureF
     assert "beta" not in captured.out
 
 
-def test_thread_archived_shows_none_when_empty(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_thread_archived_shows_none_when_empty(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "thread", "archived"])
     captured = capsys.readouterr()
 
@@ -2211,13 +2661,17 @@ def test_open_create_makes_thread_and_enters_repl(
 ) -> None:
     monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
 
-    result = main(["--project-root", str(tmp_path), "thread", "open", "new-thread", "--create"])
+    result = main(
+        ["--project-root", str(tmp_path), "thread", "open", "new-thread", "--create"]
+    )
     captured = capsys.readouterr()
 
     assert result == 0
     assert "Created thread: new-thread" in captured.out
     assert "thread=new-thread" in captured.out
-    assert "new-thread.json" in [p.name for p in (tmp_path / "private" / "threads").glob("*.json")]
+    assert "new-thread.json" in [
+        p.name for p in (tmp_path / "private" / "threads").glob("*.json")
+    ]
 
 
 def test_open_with_message_sends_then_enters_repl(
@@ -2226,7 +2680,17 @@ def test_open_with_message_sends_then_enters_repl(
     ThreadStore(tmp_path).save(ThreadState.empty("focus"))
     monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
 
-    result = main(["--project-root", str(tmp_path), "thread", "open", "focus", "--message", "hello"])
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "thread",
+            "open",
+            "focus",
+            "--message",
+            "hello",
+        ]
+    )
     captured = capsys.readouterr()
 
     assert result == 0
@@ -2251,13 +2715,19 @@ def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -
     list_result = main(["--project-root", str(tmp_path), "inbox", "notify", "list"])
     list_output = capsys.readouterr().out
 
-    show_result = main(["--project-root", str(tmp_path), "inbox", "notify", "show", entry.id])
+    show_result = main(
+        ["--project-root", str(tmp_path), "inbox", "notify", "show", entry.id]
+    )
     show_output = capsys.readouterr().out
 
-    send_result = main(["--project-root", str(tmp_path), "inbox", "notify", "send", entry.id])
+    send_result = main(
+        ["--project-root", str(tmp_path), "inbox", "notify", "send", entry.id]
+    )
     send_output = capsys.readouterr().out
 
-    dismiss_result = main(["--project-root", str(tmp_path), "inbox", "notify", "dismiss", entry.id])
+    dismiss_result = main(
+        ["--project-root", str(tmp_path), "inbox", "notify", "dismiss", entry.id]
+    )
     dismiss_output = capsys.readouterr().out
 
     assert list_result == 0
@@ -2274,21 +2744,27 @@ def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -
 
 
 def test_notify_show_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "inbox", "notify", "show", "missing-id"])
+    result = main(
+        ["--project-root", str(tmp_path), "inbox", "notify", "show", "missing-id"]
+    )
     output = capsys.readouterr().err
     assert result == 1
     assert "not found" in output
 
 
 def test_notify_send_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "inbox", "notify", "send", "missing-id"])
+    result = main(
+        ["--project-root", str(tmp_path), "inbox", "notify", "send", "missing-id"]
+    )
     output = capsys.readouterr().err
     assert result == 1
     assert "not found" in output
 
 
 def test_notify_dismiss_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "inbox", "notify", "dismiss", "missing-id"])
+    result = main(
+        ["--project-root", str(tmp_path), "inbox", "notify", "dismiss", "missing-id"]
+    )
     output = capsys.readouterr().err
     assert result == 1
     assert "not found" in output
@@ -2298,8 +2774,16 @@ def test_notify_show_by_numeric_handle(tmp_path: Path, capsys: CaptureFixture) -
     from nuself.notification import NotificationOutbox, OutboxEntry
 
     outbox = NotificationOutbox(tmp_path)
-    outbox.add(OutboxEntry(id="e1", title="First", body="B1", status="pending", idempotency_key="k1"))
-    outbox.add(OutboxEntry(id="e2", title="Second", body="B2", status="pending", idempotency_key="k2"))
+    outbox.add(
+        OutboxEntry(
+            id="e1", title="First", body="B1", status="pending", idempotency_key="k1"
+        )
+    )
+    outbox.add(
+        OutboxEntry(
+            id="e2", title="Second", body="B2", status="pending", idempotency_key="k2"
+        )
+    )
 
     result = main(["--project-root", str(tmp_path), "inbox", "notify", "show", "1"])
     output = capsys.readouterr().out
@@ -2307,12 +2791,22 @@ def test_notify_show_by_numeric_handle(tmp_path: Path, capsys: CaptureFixture) -
     assert "Second" in output
 
 
-def test_notify_dismiss_by_numeric_handle(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_notify_dismiss_by_numeric_handle(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.notification import NotificationOutbox, OutboxEntry
 
     outbox = NotificationOutbox(tmp_path)
-    outbox.add(OutboxEntry(id="e1", title="First", body="B1", status="pending", idempotency_key="k1"))
-    outbox.add(OutboxEntry(id="e2", title="Second", body="B2", status="pending", idempotency_key="k2"))
+    outbox.add(
+        OutboxEntry(
+            id="e1", title="First", body="B1", status="pending", idempotency_key="k1"
+        )
+    )
+    outbox.add(
+        OutboxEntry(
+            id="e2", title="Second", body="B2", status="pending", idempotency_key="k2"
+        )
+    )
 
     result = main(["--project-root", str(tmp_path), "inbox", "notify", "dismiss", "0"])
     output = capsys.readouterr().out
@@ -2320,11 +2814,17 @@ def test_notify_dismiss_by_numeric_handle(tmp_path: Path, capsys: CaptureFixture
     assert "Dismissed: e1" in output
 
 
-def test_notify_numeric_handle_out_of_range(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_notify_numeric_handle_out_of_range(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.notification import NotificationOutbox, OutboxEntry
 
     outbox = NotificationOutbox(tmp_path)
-    outbox.add(OutboxEntry(id="e1", title="First", body="B1", status="pending", idempotency_key="k1"))
+    outbox.add(
+        OutboxEntry(
+            id="e1", title="First", body="B1", status="pending", idempotency_key="k1"
+        )
+    )
 
     result = main(["--project-root", str(tmp_path), "inbox", "notify", "show", "5"])
     output = capsys.readouterr().err
@@ -2343,11 +2843,33 @@ def test_notify_list_filters_by_status(tmp_path: Path, capsys: CaptureFixture) -
     from nuself.notification import NotificationOutbox, OutboxEntry
 
     outbox = NotificationOutbox(tmp_path)
-    outbox.add(OutboxEntry(id="e1", title="Pending", body="B", status="pending", idempotency_key="k1"))
-    outbox.add(OutboxEntry(id="e2", title="Sent", body="B", status="sent", idempotency_key="k2"))
-    outbox.add(OutboxEntry(id="e3", title="Failed", body="B", status="failed", idempotency_key="k3"))
+    outbox.add(
+        OutboxEntry(
+            id="e1", title="Pending", body="B", status="pending", idempotency_key="k1"
+        )
+    )
+    outbox.add(
+        OutboxEntry(
+            id="e2", title="Sent", body="B", status="sent", idempotency_key="k2"
+        )
+    )
+    outbox.add(
+        OutboxEntry(
+            id="e3", title="Failed", body="B", status="failed", idempotency_key="k3"
+        )
+    )
 
-    result = main(["--project-root", str(tmp_path), "inbox", "notify", "list", "--status", "pending"])
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "inbox",
+            "notify",
+            "list",
+            "--status",
+            "pending",
+        ]
+    )
     output = capsys.readouterr().out
     assert result == 0
     assert "Pending" in output
@@ -2383,10 +2905,20 @@ def test_notify_stats_counts(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.notification import NotificationOutbox, OutboxEntry
 
     outbox = NotificationOutbox(tmp_path)
-    outbox.add(OutboxEntry(id="e1", title="A", body="B", status="pending", idempotency_key="k1"))
-    outbox.add(OutboxEntry(id="e2", title="A", body="B", status="sent", idempotency_key="k2"))
-    outbox.add(OutboxEntry(id="e3", title="A", body="B", status="sent", idempotency_key="k3"))
-    outbox.add(OutboxEntry(id="e4", title="A", body="B", status="failed", idempotency_key="k4"))
+    outbox.add(
+        OutboxEntry(
+            id="e1", title="A", body="B", status="pending", idempotency_key="k1"
+        )
+    )
+    outbox.add(
+        OutboxEntry(id="e2", title="A", body="B", status="sent", idempotency_key="k2")
+    )
+    outbox.add(
+        OutboxEntry(id="e3", title="A", body="B", status="sent", idempotency_key="k3")
+    )
+    outbox.add(
+        OutboxEntry(id="e4", title="A", body="B", status="failed", idempotency_key="k4")
+    )
 
     result = main(["--project-root", str(tmp_path), "inbox", "notify", "stats"])
     output = capsys.readouterr().out
@@ -2398,12 +2930,22 @@ def test_notify_stats_counts(tmp_path: Path, capsys: CaptureFixture) -> None:
     assert "Dismissed:  0" in output
 
 
-def test_repl_notify_list_shows_all(tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture) -> None:
+def test_repl_notify_list_shows_all(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
     from nuself.notification import NotificationOutbox, OutboxEntry
 
     outbox = NotificationOutbox(tmp_path)
-    outbox.add(OutboxEntry(id="e1", title="Pending", body="B", status="pending", idempotency_key="k1"))
-    outbox.add(OutboxEntry(id="e2", title="Sent", body="B", status="sent", idempotency_key="k2"))
+    outbox.add(
+        OutboxEntry(
+            id="e1", title="Pending", body="B", status="pending", idempotency_key="k1"
+        )
+    )
+    outbox.add(
+        OutboxEntry(
+            id="e2", title="Sent", body="B", status="sent", idempotency_key="k2"
+        )
+    )
 
     monkeypatch.setattr("sys.stdin", _TextInput(":inbox notify list\n:q\n"))
     result = main(["--project-root", str(tmp_path), "chat"])
@@ -2414,11 +2956,17 @@ def test_repl_notify_list_shows_all(tmp_path: Path, capsys: CaptureFixture, monk
     assert "Sent" in output
 
 
-def test_repl_notify_show_detail(tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture) -> None:
+def test_repl_notify_show_detail(
+    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
+) -> None:
     from nuself.notification import NotificationOutbox, OutboxEntry
 
     outbox = NotificationOutbox(tmp_path)
-    outbox.add(OutboxEntry(id="e1", title="Test", body="Body", status="pending", idempotency_key="k1"))
+    outbox.add(
+        OutboxEntry(
+            id="e1", title="Test", body="Body", status="pending", idempotency_key="k1"
+        )
+    )
 
     monkeypatch.setattr("sys.stdin", _TextInput(":inbox notify show e1\n:q\n"))
     result = main(["--project-root", str(tmp_path), "chat"])
@@ -2428,9 +2976,18 @@ def test_repl_notify_show_detail(tmp_path: Path, capsys: CaptureFixture, monkeyp
     assert "Body" in output
 
 
-def test_open_with_deep_link_parses_thread_id(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_open_with_deep_link_parses_thread_id(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(
-        ["--project-root", str(tmp_path), "thread", "open", "--deep-link", "nuself://thread/my-thread"]
+        [
+            "--project-root",
+            str(tmp_path),
+            "thread",
+            "open",
+            "--deep-link",
+            "nuself://thread/my-thread",
+        ]
     )
     captured = capsys.readouterr()
     assert result == 1
@@ -2459,7 +3016,14 @@ def test_open_with_deep_link_and_message(
 
 def test_open_with_invalid_deep_link(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(
-        ["--project-root", str(tmp_path), "thread", "open", "--deep-link", "https://example.com"]
+        [
+            "--project-root",
+            str(tmp_path),
+            "thread",
+            "open",
+            "--deep-link",
+            "https://example.com",
+        ]
     )
     captured = capsys.readouterr()
     assert result == 1
@@ -2485,7 +3049,9 @@ def test_open_with_new_thread_deep_link(
     assert "Created thread: proactive-thread" in captured.out
 
 
-def test_status_command_shows_daemon_threads_and_notifications(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_status_command_shows_daemon_threads_and_notifications(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "dev", "status"])
     captured = capsys.readouterr()
     assert result == 0
@@ -2497,11 +3063,13 @@ def test_status_command_shows_daemon_threads_and_notifications(tmp_path: Path, c
 def test_interactive_whoami_shows_profile_items(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.profile.repository import ProfileItemRepository
     from nuself.domain.profile import ProfileItem
+    from nuself.profile.repository import ProfileItemRepository
 
     repo = ProfileItemRepository(tmp_path)
-    repo.save(ProfileItem(type="preference", title="Style", body="I prefer concise answers."))
+    repo.save(
+        ProfileItem(type="preference", title="Style", body="I prefer concise answers.")
+    )
     repo.save(ProfileItem(type="fact", title="Work", body="I work in software."))
 
     monkeypatch.setattr("sys.stdin", _TextInput(":whoami\n:q\n"))
@@ -2598,7 +3166,9 @@ def test_interactive_unknown_command_no_hints_for_unrelated(
     assert "Did you mean:" not in captured.out
 
 
-def test_eval_command_runs_conversation_fixtures(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_eval_command_runs_conversation_fixtures(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(
         [
             "--project-root",
@@ -2621,12 +3191,14 @@ def test_eval_command_runs_conversation_fixtures(tmp_path: Path, capsys: Capture
 def test_interactive_history_shows_recent_messages(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
+    from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 
     store = ThreadStore(tmp_path)
     state = ThreadState.empty("default")
     state.messages.append(ThreadMessage(role="user", content="Hello there"))
-    state.messages.append(ThreadMessage(role="assistant", content="Hi! How can I help?"))
+    state.messages.append(
+        ThreadMessage(role="assistant", content="Hi! How can I help?")
+    )
     store.save(state)
 
     monkeypatch.setattr("sys.stdin", _TextInput(":history\n:q\n"))
@@ -2653,7 +3225,9 @@ def test_interactive_archive_unarchive_delete_and_archived(
 
     monkeypatch.setattr(
         "sys.stdin",
-        _TextInput(":archive\n:archived\n:unarchive alpha\n:archived\n:thread beta\n:delete\n:q\n"),
+        _TextInput(
+            ":archive\n:archived\n:unarchive alpha\n:archived\n:thread beta\n:delete\n:q\n"
+        ),
     )
     monkeypatch.setattr("nuself.cli.lifecycle.status", _mock_status)
     result = main(["--project-root", str(tmp_path), "thread", "open", "alpha"])
@@ -2668,7 +3242,7 @@ def test_interactive_archive_unarchive_delete_and_archived(
 
 
 def test_thread_show_displays_messages(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
+    from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 
     store = ThreadStore(tmp_path)
     state = ThreadState.empty("focus")
@@ -2815,11 +3389,13 @@ def test_daemon_stop_with_mocked_lifecycle(
 def test_interactive_sources_lists_documents(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.memory.source_repository import SourceRepository
     from nuself.domain.source import SourceDocument
+    from nuself.memory.source_repository import SourceRepository
 
     repo = SourceRepository(tmp_path)
-    repo.save_document(SourceDocument(id="doc-001", title="Notes", path="notes.txt", kind="text"))
+    repo.save_document(
+        SourceDocument(id="doc-001", title="Notes", path="notes.txt", kind="text")
+    )
 
     monkeypatch.setattr("sys.stdin", _TextInput(":mem sources\n:q\n"))
     monkeypatch.setattr(
@@ -2838,7 +3414,11 @@ def test_notify_clear_removes_dismissed(tmp_path: Path, capsys: CaptureFixture) 
     from nuself.notification import NotificationOutbox, OutboxEntry
 
     outbox = NotificationOutbox(tmp_path)
-    outbox.add(OutboxEntry(id="c-001", title="A", body="a", status="pending", idempotency_key="k1"))
+    outbox.add(
+        OutboxEntry(
+            id="c-001", title="A", body="a", status="pending", idempotency_key="k1"
+        )
+    )
     outbox.dismiss("c-001")
 
     result = main(["--project-root", str(tmp_path), "inbox", "notify", "clear"])
@@ -2861,11 +3441,15 @@ def test_health_command_reports_missing_config(
 def test_interactive_search_finds_memory(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
+    from nuself.memory.repository import MemoryEntryRepository
 
     repo = MemoryEntryRepository(tmp_path)
-    repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work requires long blocks."))
+    repo.save(
+        MemoryEntry(
+            type="belief", title="Focus", body="Deep work requires long blocks."
+        )
+    )
     repo.reindex()
 
     monkeypatch.setattr("sys.stdin", _TextInput(":mem search deep work\n:q\n"))
@@ -2892,8 +3476,8 @@ def test_config_command_shows_paths(tmp_path: Path, capsys: CaptureFixture) -> N
 
 
 def test_memory_list_shows_entries(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
+    from nuself.memory.repository import MemoryEntryRepository
 
     repo = MemoryEntryRepository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work."))
@@ -2905,22 +3489,34 @@ def test_memory_list_shows_entries(tmp_path: Path, capsys: CaptureFixture) -> No
     assert "Focus" in captured.out
 
 
-def test_memory_list_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_list_empty_shows_message(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "list"])
     captured = capsys.readouterr()
     assert result == 0
     assert "No memory entries." in captured.out
 
 
-def test_memory_list_sorts_by_importance(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryEntryRepository
+def test_memory_list_sorts_by_importance(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.memory import MemoryEntry
+    from nuself.memory.repository import MemoryEntryRepository
 
     repo = MemoryEntryRepository(tmp_path)
-    low = repo.save(MemoryEntry(type="belief", title="Low", body="Low importance.", importance=0.2))
-    high = repo.save(MemoryEntry(type="belief", title="High", body="High importance.", importance=0.9))
+    low = repo.save(
+        MemoryEntry(type="belief", title="Low", body="Low importance.", importance=0.2)
+    )
+    high = repo.save(
+        MemoryEntry(
+            type="belief", title="High", body="High importance.", importance=0.9
+        )
+    )
 
-    result = main(["--project-root", str(tmp_path), "memory", "list", "--sort-by", "importance"])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "list", "--sort-by", "importance"]
+    )
     captured = capsys.readouterr()
     assert result == 0
     high_pos = captured.out.index("High")
@@ -2930,15 +3526,33 @@ def test_memory_list_sorts_by_importance(tmp_path: Path, capsys: CaptureFixture)
     assert high.id in captured.out
 
 
-def test_memory_list_filters_by_review_state(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryEntryRepository
+def test_memory_list_filters_by_review_state(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.memory import MemoryEntry
+    from nuself.memory.repository import MemoryEntryRepository
 
     repo = MemoryEntryRepository(tmp_path)
     draft = repo.save(MemoryEntry(type="belief", title="Draft", body="Draft entry."))
-    reviewed = repo.save(MemoryEntry(type="belief", title="Reviewed", body="Reviewed entry.", review_state="reviewed"))
+    reviewed = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Reviewed",
+            body="Reviewed entry.",
+            review_state="reviewed",
+        )
+    )
 
-    result = main(["--project-root", str(tmp_path), "memory", "list", "--review-state", "reviewed"])
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "list",
+            "--review-state",
+            "reviewed",
+        ]
+    )
     captured = capsys.readouterr()
     assert result == 0
     assert "Reviewed" in captured.out
@@ -2948,8 +3562,8 @@ def test_memory_list_filters_by_review_state(tmp_path: Path, capsys: CaptureFixt
 
 
 def test_memory_show_displays_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
+    from nuself.memory.repository import MemoryEntryRepository
 
     repo = MemoryEntryRepository(tmp_path)
     entry = MemoryEntry(type="belief", title="Focus", body="Deep work.")
@@ -2970,8 +3584,8 @@ def test_memory_show_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> No
 
 
 def test_memory_search_finds_match(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
+    from nuself.memory.repository import MemoryEntryRepository
 
     repo = MemoryEntryRepository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work."))
@@ -2984,19 +3598,27 @@ def test_memory_search_finds_match(tmp_path: Path, capsys: CaptureFixture) -> No
     assert "Relax" not in captured.out
 
 
-def test_memory_search_no_match_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_search_no_match_shows_message(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "search", "xyz"])
     captured = capsys.readouterr()
     assert result == 0
     assert "No matching memory entries." in captured.out
 
 
-def test_memory_source_list_shows_documents(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.source_repository import SourceRepository
+def test_memory_source_list_shows_documents(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.source import SourceDocument
+    from nuself.memory.source_repository import SourceRepository
 
     repo = SourceRepository(tmp_path)
-    repo.save_document(SourceDocument(id="src-001", path="/tmp/test.txt", title="Test Source", kind="text"))
+    repo.save_document(
+        SourceDocument(
+            id="src-001", path="/tmp/test.txt", title="Test Source", kind="text"
+        )
+    )
 
     result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
     captured = capsys.readouterr()
@@ -3005,19 +3627,25 @@ def test_memory_source_list_shows_documents(tmp_path: Path, capsys: CaptureFixtu
     assert "Test Source" in captured.out
 
 
-def test_memory_source_list_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_source_list_empty_shows_message(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "source", "list"])
     captured = capsys.readouterr()
     assert result == 0
     assert "No source documents." in captured.out
 
 
-def test_memory_source_show_displays_document(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.source_repository import SourceRepository
+def test_memory_source_show_displays_document(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.source import SourceDocument
+    from nuself.memory.source_repository import SourceRepository
 
     repo = SourceRepository(tmp_path)
-    doc = SourceDocument(id="src-002", path="/tmp/test.txt", title="Test Source", kind="text")
+    doc = SourceDocument(
+        id="src-002", path="/tmp/test.txt", title="Test Source", kind="text"
+    )
     repo.save_document(doc)
 
     result = main(["--project-root", str(tmp_path), "memory", "source", "show", doc.id])
@@ -3026,42 +3654,64 @@ def test_memory_source_show_displays_document(tmp_path: Path, capsys: CaptureFix
     assert "Test Source" in captured.out
 
 
-def test_memory_source_show_missing_document(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "memory", "source", "show", "missing-id"])
+def test_memory_source_show_missing_document(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "source", "show", "missing-id"]
+    )
     captured = capsys.readouterr()
     assert result == 1
     assert "Source document not found: missing-id" in captured.err
 
 
-def test_memory_source_delete_removes_document(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.source_repository import SourceRepository
+def test_memory_source_delete_removes_document(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.source import SourceDocument
+    from nuself.memory.source_repository import SourceRepository
 
     repo = SourceRepository(tmp_path)
-    doc = SourceDocument(id="src-003", path="/tmp/test.txt", title="Test Source", kind="text")
+    doc = SourceDocument(
+        id="src-003", path="/tmp/test.txt", title="Test Source", kind="text"
+    )
     repo.save_document(doc)
 
-    result = main(["--project-root", str(tmp_path), "memory", "source", "delete", doc.id])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "source", "delete", doc.id]
+    )
     assert result == 0
     assert len(repo.list_documents()) == 0
 
 
-def test_memory_source_chunks_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "memory", "source", "chunks", "some-id"])
+def test_memory_source_chunks_empty_shows_message(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "source", "chunks", "some-id"]
+    )
     captured = capsys.readouterr()
     assert result == 0
     assert "No source chunks." in captured.out
 
 
-def test_memory_source_search_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "memory", "source", "search", "xyz"])
+def test_memory_source_search_empty_shows_message(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "source", "search", "xyz"]
+    )
     captured = capsys.readouterr()
     assert result == 0
     assert "No matching source chunks." in captured.out
 
 
-def test_memory_source_extract_missing_document(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "memory", "source", "extract", "missing-id"])
+def test_memory_source_extract_missing_document(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "source", "extract", "missing-id"]
+    )
     captured = capsys.readouterr()
     assert result == 1
     assert "Source document not found: missing-id" in captured.err
@@ -3074,10 +3724,19 @@ def test_memory_stats_shows_empty_state(tmp_path: Path, capsys: CaptureFixture) 
     assert "entries_total: 0" in captured.out
 
 
-def test_memory_unquarantine_restores_draft(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_unquarantine_restores_draft(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.memory import MemoryEntryType
+
     repo = MemoryEntryRepository(tmp_path)
-    entry = repo.save(MemoryEntry(type=cast(MemoryEntryType, "truly_unknown_type"), title="Quarantined", body="Body"))
+    entry = repo.save(
+        MemoryEntry(
+            type=cast(MemoryEntryType, "truly_unknown_type"),
+            title="Quarantined",
+            body="Body",
+        )
+    )
     assert entry.review_state == "quarantined"
 
     result = main(["--project-root", str(tmp_path), "memory", "unquarantine", entry.id])
@@ -3087,9 +3746,11 @@ def test_memory_unquarantine_restores_draft(tmp_path: Path, capsys: CaptureFixtu
     assert repo.get(entry.id).review_state == "draft"
 
 
-def test_memory_profile_list_shows_items(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.profile.repository import ProfileItemRepository
+def test_memory_profile_list_shows_items(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.profile import ProfileItem
+    from nuself.profile.repository import ProfileItemRepository
 
     repo = ProfileItemRepository(tmp_path)
     repo.save(ProfileItem(type="preference", title="Style", body="Concise."))
@@ -3101,22 +3762,44 @@ def test_memory_profile_list_shows_items(tmp_path: Path, capsys: CaptureFixture)
     assert "Style" in captured.out
 
 
-def test_memory_profile_list_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_profile_list_empty_shows_message(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "profile", "list"])
     captured = capsys.readouterr()
     assert result == 0
     assert "No profile items." in captured.out
 
 
-def test_memory_profile_list_sorts_by_importance(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.profile.repository import ProfileItemRepository
+def test_memory_profile_list_sorts_by_importance(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.profile import ProfileItem
+    from nuself.profile.repository import ProfileItemRepository
 
     repo = ProfileItemRepository(tmp_path)
-    low = repo.save(ProfileItem(type="preference", title="Low", body="Low importance.", importance=0.2))
-    high = repo.save(ProfileItem(type="preference", title="High", body="High importance.", importance=0.9))
+    low = repo.save(
+        ProfileItem(
+            type="preference", title="Low", body="Low importance.", importance=0.2
+        )
+    )
+    high = repo.save(
+        ProfileItem(
+            type="preference", title="High", body="High importance.", importance=0.9
+        )
+    )
 
-    result = main(["--project-root", str(tmp_path), "memory", "profile", "list", "--sort-by", "importance"])
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "profile",
+            "list",
+            "--sort-by",
+            "importance",
+        ]
+    )
     captured = capsys.readouterr()
     assert result == 0
     high_pos = captured.out.index("High")
@@ -3126,92 +3809,122 @@ def test_memory_profile_list_sorts_by_importance(tmp_path: Path, capsys: Capture
     assert high.id in captured.out
 
 
-def test_memory_profile_show_displays_item(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.profile.repository import ProfileItemRepository
+def test_memory_profile_show_displays_item(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.profile import ProfileItem
+    from nuself.profile.repository import ProfileItemRepository
 
     repo = ProfileItemRepository(tmp_path)
     item = ProfileItem(type="preference", title="Style", body="Concise.")
     repo.save(item)
 
-    result = main(["--project-root", str(tmp_path), "memory", "profile", "show", item.id])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "profile", "show", item.id]
+    )
     captured = capsys.readouterr()
     assert result == 0
     assert "Style" in captured.out
     assert "Concise." in captured.out
 
 
-def test_memory_profile_show_missing_item(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "memory", "profile", "show", "missing-id"])
+def test_memory_profile_show_missing_item(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "profile", "show", "missing-id"]
+    )
     captured = capsys.readouterr()
     assert result == 1
     assert "Profile item not found: missing-id" in captured.err
 
 
-def test_memory_profile_search_finds_match(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.profile.repository import ProfileItemRepository
+def test_memory_profile_search_finds_match(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.profile import ProfileItem
+    from nuself.profile.repository import ProfileItemRepository
 
     repo = ProfileItemRepository(tmp_path)
     repo.save(ProfileItem(type="preference", title="Style", body="Concise."))
     repo.save(ProfileItem(type="fact", title="Work", body="Software."))
 
-    result = main(["--project-root", str(tmp_path), "memory", "profile", "search", "concise"])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "profile", "search", "concise"]
+    )
     captured = capsys.readouterr()
     assert result == 0
     assert "Style" in captured.out
     assert "Work" not in captured.out
 
 
-def test_memory_profile_delete_removes_item(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.profile.repository import ProfileItemRepository
+def test_memory_profile_delete_removes_item(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.profile import ProfileItem
+    from nuself.profile.repository import ProfileItemRepository
 
     repo = ProfileItemRepository(tmp_path)
     item = ProfileItem(type="preference", title="Style", body="Concise.")
     repo.save(item)
 
-    result = main(["--project-root", str(tmp_path), "memory", "profile", "delete", item.id])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "profile", "delete", item.id]
+    )
     assert result == 0
     assert len(repo.list()) == 0
 
 
-def test_memory_profile_reindex_rebuilds_index(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_profile_reindex_rebuilds_index(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "profile", "reindex"])
     captured = capsys.readouterr()
     assert result == 0
     assert "Rebuilt profile index:" in captured.out
 
 
-def test_memory_relations_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_relations_empty_shows_message(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "relations"])
     captured = capsys.readouterr()
     assert result == 0
     assert "No memory relations." in captured.out
 
 
-def test_memory_graph_nodes_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_graph_nodes_empty_shows_message(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "graph", "nodes"])
     captured = capsys.readouterr()
     assert result == 0
     assert "No symbolic graph nodes." in captured.out
 
 
-def test_memory_graph_edges_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_graph_edges_empty_shows_message(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "graph", "edges"])
     captured = capsys.readouterr()
     assert result == 0
     assert "No symbolic graph edges." in captured.out
 
 
-def test_memory_graph_search_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "memory", "graph", "search", "test"])
+def test_memory_graph_search_empty_shows_message(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "graph", "search", "test"]
+    )
     captured = capsys.readouterr()
     assert result == 0
     assert "No symbolic graph matches." in captured.out
 
 
-def test_memory_graph_path_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_graph_path_empty_shows_message(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(
         ["--project-root", str(tmp_path), "memory", "graph", "path", "a", "b"]
     )
@@ -3220,31 +3933,55 @@ def test_memory_graph_path_empty_shows_message(tmp_path: Path, capsys: CaptureFi
     assert "No path found." in captured.out
 
 
-def test_memory_graph_closure_missing_relation(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(
-        ["--project-root", str(tmp_path), "memory", "graph", "closure", "a"]
-    )
+def test_memory_graph_closure_missing_relation(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
+    result = main(["--project-root", str(tmp_path), "memory", "graph", "closure", "a"])
     captured = capsys.readouterr()
     assert result == 1
     assert "--relation is required" in captured.out
 
 
-def test_memory_candidate_list_empty_shows_message(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_candidate_list_empty_shows_message(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "review", "list"])
     captured = capsys.readouterr()
     assert result == 0
     assert "No memory candidates." in captured.out
 
 
-def test_memory_candidate_list_filters_by_review_state(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryCandidateRepository
+def test_memory_candidate_list_filters_by_review_state(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.memory import MemoryCandidate
+    from nuself.memory.repository import MemoryCandidateRepository
 
     repo = MemoryCandidateRepository(tmp_path)
-    pending = repo.save(MemoryCandidate(type="belief", title="Pending", body="Pending candidate."))
-    accepted = repo.save(MemoryCandidate(type="belief", title="Accepted", body="Accepted candidate.", review_state="accepted"))
+    pending = repo.save(
+        MemoryCandidate(type="belief", title="Pending", body="Pending candidate.")
+    )
+    accepted = repo.save(
+        MemoryCandidate(
+            type="belief",
+            title="Accepted",
+            body="Accepted candidate.",
+            review_state="accepted",
+        )
+    )
 
-    result = main(["--project-root", str(tmp_path), "memory", "review", "list", "--review-state", "accepted", "--all"])
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "review",
+            "list",
+            "--review-state",
+            "accepted",
+            "--all",
+        ]
+    )
     captured = capsys.readouterr()
     assert result == 0
     assert "[candidate] [0]" in captured.out
@@ -3254,15 +3991,35 @@ def test_memory_candidate_list_filters_by_review_state(tmp_path: Path, capsys: C
     assert pending.id not in captured.out
 
 
-def test_memory_candidate_list_sorts_by_importance(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryCandidateRepository
+def test_memory_candidate_list_sorts_by_importance(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.memory import MemoryCandidate
+    from nuself.memory.repository import MemoryCandidateRepository
 
     repo = MemoryCandidateRepository(tmp_path)
-    low = repo.save(MemoryCandidate(type="belief", title="Low", body="Low importance.", importance=0.2))
-    high = repo.save(MemoryCandidate(type="belief", title="High", body="High importance.", importance=0.9))
+    low = repo.save(
+        MemoryCandidate(
+            type="belief", title="Low", body="Low importance.", importance=0.2
+        )
+    )
+    high = repo.save(
+        MemoryCandidate(
+            type="belief", title="High", body="High importance.", importance=0.9
+        )
+    )
 
-    result = main(["--project-root", str(tmp_path), "memory", "review", "list", "--sort-by", "importance"])
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "review",
+            "list",
+            "--sort-by",
+            "importance",
+        ]
+    )
     captured = capsys.readouterr()
     assert result == 0
     high_pos = captured.out.index("High")
@@ -3272,15 +4029,21 @@ def test_memory_candidate_list_sorts_by_importance(tmp_path: Path, capsys: Captu
     assert high.id in captured.out
 
 
-def test_memory_candidate_show_displays_candidate(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryCandidateRepository
+def test_memory_candidate_show_displays_candidate(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.memory import MemoryCandidate
+    from nuself.memory.repository import MemoryCandidateRepository
 
     repo = MemoryCandidateRepository(tmp_path)
-    candidate = MemoryCandidate(action="create", type="belief", title="Focus", body="Deep work.")
+    candidate = MemoryCandidate(
+        action="create", type="belief", title="Focus", body="Deep work."
+    )
     repo.save(candidate)
 
-    result = main(["--project-root", str(tmp_path), "memory", "review", "show", candidate.id])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "review", "show", candidate.id]
+    )
     captured = capsys.readouterr()
     assert result == 0
     assert "Focus" in captured.out
@@ -3288,18 +4051,24 @@ def test_memory_candidate_show_displays_candidate(tmp_path: Path, capsys: Captur
 
 
 def test_memory_candidate_show_missing(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--project-root", str(tmp_path), "memory", "review", "show", "missing-id"])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "review", "show", "missing-id"]
+    )
     captured = capsys.readouterr()
     assert result == 1
     assert "Memory candidate not found: missing-id" in captured.err
 
 
-def test_memory_candidate_accept_creates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryCandidateRepository
+def test_memory_candidate_accept_creates_entry(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.memory import MemoryCandidate
+    from nuself.memory.repository import MemoryCandidateRepository
 
     repo = MemoryCandidateRepository(tmp_path)
-    candidate = MemoryCandidate(action="create", type="belief", title="Focus", body="Deep work.")
+    candidate = MemoryCandidate(
+        action="create", type="belief", title="Focus", body="Deep work."
+    )
     repo.save(candidate)
 
     result = main(
@@ -3310,12 +4079,16 @@ def test_memory_candidate_accept_creates_entry(tmp_path: Path, capsys: CaptureFi
     assert "Accepted memory candidate:" in captured.out
 
 
-def test_memory_candidate_reject_pending(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryCandidateRepository
+def test_memory_candidate_reject_pending(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.memory import MemoryCandidate
+    from nuself.memory.repository import MemoryCandidateRepository
 
     repo = MemoryCandidateRepository(tmp_path)
-    candidate = MemoryCandidate(action="create", type="belief", title="Focus", body="Deep work.")
+    candidate = MemoryCandidate(
+        action="create", type="belief", title="Focus", body="Deep work."
+    )
     repo.save(candidate)
 
     result = main(
@@ -3326,12 +4099,16 @@ def test_memory_candidate_reject_pending(tmp_path: Path, capsys: CaptureFixture)
     assert "Rejected memory candidate:" in captured.out
 
 
-def test_memory_candidate_edit_updates_fields(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryCandidateRepository
+def test_memory_candidate_edit_updates_fields(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.memory import MemoryCandidate
+    from nuself.memory.repository import MemoryCandidateRepository
 
     repo = MemoryCandidateRepository(tmp_path)
-    candidate = MemoryCandidate(action="create", type="belief", title="Focus", body="Deep work.")
+    candidate = MemoryCandidate(
+        action="create", type="belief", title="Focus", body="Deep work."
+    )
     repo.save(candidate)
 
     result = main(
@@ -3354,9 +4131,14 @@ def test_memory_candidate_edit_updates_fields(tmp_path: Path, capsys: CaptureFix
     assert updated.body == "Focus deeply."
 
 
-def test_memory_candidate_merge_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
+def test_memory_candidate_merge_updates_entry(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.memory import MemoryCandidate, MemoryEntry
+    from nuself.memory.repository import (
+        MemoryCandidateRepository,
+        MemoryEntryRepository,
+    )
 
     entry_repo = MemoryEntryRepository(tmp_path)
     entry = MemoryEntry(type="belief", title="Focus", body="Deep work.")
@@ -3364,12 +4146,24 @@ def test_memory_candidate_merge_updates_entry(tmp_path: Path, capsys: CaptureFix
 
     cand_repo = MemoryCandidateRepository(tmp_path)
     candidate = MemoryCandidate(
-        action="update", type="belief", title="Focus", body="Focus deeply.", target_entry_id=entry.id
+        action="update",
+        type="belief",
+        title="Focus",
+        body="Focus deeply.",
+        target_entry_id=entry.id,
     )
     cand_repo.save(candidate)
 
     result = main(
-        ["--project-root", str(tmp_path), "memory", "review", "merge", candidate.id, entry.id]
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "review",
+            "merge",
+            candidate.id,
+            entry.id,
+        ]
     )
     captured = capsys.readouterr()
     assert result == 0
@@ -3400,8 +4194,8 @@ def test_memory_add_creates_entry(tmp_path: Path, capsys: CaptureFixture) -> Non
 
 
 def test_memory_delete_removes_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
+    from nuself.memory.repository import MemoryEntryRepository
 
     repo = MemoryEntryRepository(tmp_path)
     entry = MemoryEntry(type="belief", title="Focus", body="Deep work.")
@@ -3412,9 +4206,11 @@ def test_memory_delete_removes_entry(tmp_path: Path, capsys: CaptureFixture) -> 
     assert len(repo.list()) == 0
 
 
-def test_memory_delete_accepts_batch_index_selection(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryEntryRepository
+def test_memory_delete_accepts_batch_index_selection(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.domain.memory import MemoryEntry
+    from nuself.memory.repository import MemoryEntryRepository
 
     repo = MemoryEntryRepository(tmp_path)
     for i in range(4):
@@ -3433,8 +4229,8 @@ def test_memory_delete_accepts_batch_index_selection(tmp_path: Path, capsys: Cap
 
 
 def test_memory_edit_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
+    from nuself.memory.repository import MemoryEntryRepository
 
     repo = MemoryEntryRepository(tmp_path)
     entry = MemoryEntry(type="belief", title="Focus", body="Deep work.")
@@ -3461,7 +4257,9 @@ def test_memory_edit_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> No
     assert updated.body == "Focus deeply."
 
 
-def test_memory_reindex_rebuilds_indexes(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_reindex_rebuilds_indexes(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "reindex"])
     captured = capsys.readouterr()
     assert result == 0
@@ -3471,7 +4269,9 @@ def test_memory_reindex_rebuilds_indexes(tmp_path: Path, capsys: CaptureFixture)
     assert "Rebuilt source index:" in captured.out
 
 
-def test_memory_types_lists_registered_types(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_memory_types_lists_registered_types(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     result = main(["--project-root", str(tmp_path), "memory", "types"])
     captured = capsys.readouterr()
     assert result == 0
@@ -3502,14 +4302,16 @@ def test_daemon_logs_shows_empty(tmp_path: Path, capsys: CaptureFixture) -> None
 
 
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
+    from nuself.memory.repository import MemoryEntryRepository
 
     repo = MemoryEntryRepository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work."))
     output = tmp_path / "export.json"
 
-    result = main(["--project-root", str(tmp_path), "memory", "export", "-o", str(output)])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "export", "-o", str(output)]
+    )
     captured = capsys.readouterr()
     assert result == 0
     assert "Exported 1 memory entries" in captured.out
@@ -3524,8 +4326,8 @@ def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> No
 def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     import json
 
-    from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
+    from nuself.memory.repository import MemoryEntryRepository
 
     # Export first
     repo = MemoryEntryRepository(tmp_path)
@@ -3533,7 +4335,9 @@ def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> Non
     export_path = tmp_path / "export.json"
     entries = repo.list()
     data = [entry.to_wire() for entry in entries]
-    export_path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    export_path.write_text(
+        json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
     # Clear and import
     for entry in MemoryEntryRepository(tmp_path).list():
@@ -3541,13 +4345,13 @@ def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> Non
     repo.reindex()
     assert len(MemoryEntryRepository(tmp_path).list()) == 0
 
-    result = main(["--project-root", str(tmp_path), "memory", "import", str(export_path)])
+    result = main(
+        ["--project-root", str(tmp_path), "memory", "import", str(export_path)]
+    )
     captured = capsys.readouterr()
     assert result == 0
     assert "Imported 1 memory entries" in captured.out
     assert len(MemoryEntryRepository(tmp_path).list()) == 1
-
-
 
 
 @pytest.mark.parametrize(
@@ -3590,9 +4394,19 @@ def test_top_level_help_describes_commands(capsys: CaptureFixture) -> None:
 def test_reason_cli_start_list_show_and_advance(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    monkeypatch.setattr("nuself.reason.service.generate_reasoning_prompt", _test_reason_prompt_generator)
+    monkeypatch.setattr(
+        "nuself.reason.service.generate_reasoning_prompt", _test_reason_prompt_generator
+    )
 
-    start_result = main(["--project-root", str(tmp_path), "reason", "start", "How should I keep thinking?"])
+    start_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "reason",
+            "start",
+            "How should I keep thinking?",
+        ]
+    )
     start_output = capsys.readouterr().out
     assert start_result == 0
     assert "Started reasoning thread:" in start_output
@@ -3617,7 +4431,9 @@ def test_reason_cli_start_list_show_and_advance(
 def test_reflection_cli_promote_creates_reason_and_trace(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    monkeypatch.setattr("nuself.reason.service.generate_reasoning_prompt", _test_reason_prompt_generator)
+    monkeypatch.setattr(
+        "nuself.reason.service.generate_reasoning_prompt", _test_reason_prompt_generator
+    )
 
     entry = ReflectionEntry(
         id="reflection-cli",
@@ -3638,7 +4454,9 @@ def test_reflection_cli_promote_creates_reason_and_trace(
     )
     ReflectionRepository(tmp_path).add(entry)
 
-    result = main(["--project-root", str(tmp_path), "inbox", "reflection", "promote", entry.id])
+    result = main(
+        ["--project-root", str(tmp_path), "inbox", "reflection", "promote", entry.id]
+    )
     output = capsys.readouterr().out
 
     assert result == 0
@@ -3670,7 +4488,9 @@ def test_interactive_reason_list_shows_threads(
     def fake_status(project_root: Path | None) -> DaemonStatus:
         return _mock_status(tmp_path)
 
-    ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator).start_thread("Track this reasoning thread")
+    ReasonService(
+        tmp_path, prompt_generator=_test_reason_prompt_generator
+    ).start_thread("Track this reasoning thread")
     monkeypatch.setattr("sys.stdin", _TextInput(":reason list\n:q\n"))
     monkeypatch.setattr("nuself.cli.lifecycle.status", fake_status)
 
@@ -3684,7 +4504,6 @@ def test_interactive_reason_list_shows_threads(
 
 def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
     return "Test-generated reasoning prompt."
-
 
 
 @pytest.mark.parametrize(
@@ -3804,7 +4623,6 @@ def test_cli_version_matches_project_metadata(capsys: CaptureFixture) -> None:
     assert captured.err == ""
 
 
-
 @pytest.mark.parametrize(
     "argv",
     [
@@ -3846,7 +4664,11 @@ def test_notify_watch_detects_new_entries(
     from nuself.notification import NotificationOutbox, OutboxEntry
 
     outbox = NotificationOutbox(tmp_path)
-    outbox.add(OutboxEntry(id="e1", title="First", body="B", status="pending", idempotency_key="k1"))
+    outbox.add(
+        OutboxEntry(
+            id="e1", title="First", body="B", status="pending", idempotency_key="k1"
+        )
+    )
 
     sleep_calls: list[int] = []
 
@@ -3855,13 +4677,21 @@ def test_notify_watch_detects_new_entries(
         # Inject after first poll; exit after second poll prints it
         if len(sleep_calls) == 1:
             outbox.add(
-                OutboxEntry(id="e2", title="Second", body="B", status="pending", idempotency_key="k2")
+                OutboxEntry(
+                    id="e2",
+                    title="Second",
+                    body="B",
+                    status="pending",
+                    idempotency_key="k2",
+                )
             )
         if len(sleep_calls) >= 2:
             raise KeyboardInterrupt
 
     monkeypatch.setattr("time.sleep", _fake_sleep)
-    result = main(["--project-root", str(tmp_path), "inbox", "notify", "watch", "--interval", "1"])
+    result = main(
+        ["--project-root", str(tmp_path), "inbox", "notify", "watch", "--interval", "1"]
+    )
     output = capsys.readouterr().out
 
     assert result == 0
@@ -3894,7 +4724,11 @@ def test_repl_watch_detects_new_entries(
     from nuself.notification import NotificationOutbox, OutboxEntry
 
     outbox = NotificationOutbox(tmp_path)
-    outbox.add(OutboxEntry(id="e1", title="First", body="B", status="pending", idempotency_key="k1"))
+    outbox.add(
+        OutboxEntry(
+            id="e1", title="First", body="B", status="pending", idempotency_key="k1"
+        )
+    )
 
     sleep_calls: list[int] = []
 
@@ -3902,7 +4736,13 @@ def test_repl_watch_detects_new_entries(
         sleep_calls.append(int(seconds))
         if len(sleep_calls) == 1:
             outbox.add(
-                OutboxEntry(id="e2", title="Second", body="B", status="pending", idempotency_key="k2")
+                OutboxEntry(
+                    id="e2",
+                    title="Second",
+                    body="B",
+                    status="pending",
+                    idempotency_key="k2",
+                )
             )
         if len(sleep_calls) >= 2:
             raise KeyboardInterrupt
@@ -3929,7 +4769,11 @@ def test_repl_notify_watch_subcommand(
     from nuself.notification import NotificationOutbox, OutboxEntry
 
     outbox = NotificationOutbox(tmp_path)
-    outbox.add(OutboxEntry(id="e1", title="First", body="B", status="pending", idempotency_key="k1"))
+    outbox.add(
+        OutboxEntry(
+            id="e1", title="First", body="B", status="pending", idempotency_key="k1"
+        )
+    )
 
     sleep_calls: list[int] = []
 
@@ -3937,7 +4781,13 @@ def test_repl_notify_watch_subcommand(
         sleep_calls.append(int(seconds))
         if len(sleep_calls) == 1:
             outbox.add(
-                OutboxEntry(id="e2", title="Second", body="B", status="pending", idempotency_key="k2")
+                OutboxEntry(
+                    id="e2",
+                    title="Second",
+                    body="B",
+                    status="pending",
+                    idempotency_key="k2",
+                )
             )
         if len(sleep_calls) >= 2:
             raise KeyboardInterrupt
@@ -3957,7 +4807,9 @@ def test_repl_notify_watch_subcommand(
     assert "Stopped watching" in captured.out
 
 
-def test_trace_cli_lists_shows_and_searches_records(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_trace_cli_lists_shows_and_searches_records(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.trace import ThoughtTrace, TraceRepository
 
     trace = TraceRepository(tmp_path).save_trace(
@@ -3976,7 +4828,9 @@ def test_trace_cli_lists_shows_and_searches_records(tmp_path: Path, capsys: Capt
     list_output = capsys.readouterr().out
     show_result = main(["--project-root", str(tmp_path), "trace", "show", "0"])
     show_output = capsys.readouterr().out
-    search_result = main(["--project-root", str(tmp_path), "trace", "search", "observed_at"])
+    search_result = main(
+        ["--project-root", str(tmp_path), "trace", "search", "observed_at"]
+    )
     search_output = capsys.readouterr().out
 
     assert list_result == 0
@@ -3989,7 +4843,9 @@ def test_trace_cli_lists_shows_and_searches_records(tmp_path: Path, capsys: Capt
     assert "Temporal memory answer" in search_output
 
 
-def test_trace_cli_lists_records_related_to_artifact(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_trace_cli_lists_records_related_to_artifact(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.trace import TraceRecorder
 
     recorder = TraceRecorder(tmp_path)
@@ -3999,9 +4855,16 @@ def test_trace_cli_lists_records_related_to_artifact(tmp_path: Path, capsys: Cap
         summary="Created a memory entry.",
         outputs=["memory:mem_123"],
     )
-    recorder.link("memory:mem_123", "reason:thread_1", "supports", "Memory supported a reason thread.")
+    recorder.link(
+        "memory:mem_123",
+        "reason:thread_1",
+        "supports",
+        "Memory supported a reason thread.",
+    )
 
-    result = main(["--project-root", str(tmp_path), "trace", "related", "memory:mem_123"])
+    result = main(
+        ["--project-root", str(tmp_path), "trace", "related", "memory:mem_123"]
+    )
     output = capsys.readouterr().out
 
     assert result == 0
@@ -4011,13 +4874,22 @@ def test_trace_cli_lists_records_related_to_artifact(tmp_path: Path, capsys: Cap
     assert "memory:mem_123 -> reason:thread_1" in output
 
 
-def test_trace_cli_hides_internal_records_by_default(tmp_path: Path, capsys: CaptureFixture) -> None:
+def test_trace_cli_hides_internal_records_by_default(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
     from nuself.trace import ThoughtTrace, TraceRepository
 
     repo = TraceRepository(tmp_path)
-    repo.save_trace(ThoughtTrace(kind="decision", title="Visible trace", summary="Visible."))
     repo.save_trace(
-        ThoughtTrace(kind="decision", title="Internal trace", summary="Hidden.", visibility="internal")
+        ThoughtTrace(kind="decision", title="Visible trace", summary="Visible.")
+    )
+    repo.save_trace(
+        ThoughtTrace(
+            kind="decision",
+            title="Internal trace",
+            summary="Hidden.",
+            visibility="internal",
+        )
     )
 
     main(["--project-root", str(tmp_path), "trace", "list"])
@@ -4036,7 +4908,11 @@ def test_repl_trace_lists_records(
     from nuself.trace import ThoughtTrace, TraceRepository
 
     TraceRepository(tmp_path).save_trace(
-        ThoughtTrace(kind="decision", title="REPL trace", summary="Shown from interactive trace command.")
+        ThoughtTrace(
+            kind="decision",
+            title="REPL trace",
+            summary="Shown from interactive trace command.",
+        )
     )
 
     monkeypatch.setattr("sys.stdin", _TextInput(":trace\n:q\n"))

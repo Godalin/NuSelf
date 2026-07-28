@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable, Sequence
-from datetime import UTC, datetime
-from pathlib import Path
-
 import sys
 import threading
 import time
-from uuid import uuid4
 import warnings
+from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import uuid4
 
 _original_warn = warnings.warn
 
@@ -25,7 +24,9 @@ def _suppress_startup_warning(
     stacklevel: int = 1,
     source: object | None = None,
 ) -> None:
-    if "The default value of `allowed_objects` will change in a future version." in str(message):
+    if "The default value of `allowed_objects` will change in a future version." in str(
+        message
+    ):
         return
     _original_warn(message, category=category, stacklevel=stacklevel, source=source)
 
@@ -33,38 +34,96 @@ def _suppress_startup_warning(
 warnings.warn = _suppress_startup_warning
 try:
     from nuself import __version__
-    from nuself.cli.parser import (
-        InteractiveHandlers,
-        build_parser as _build_parser,
+    from nuself.agent.chat import ChatAgent, ThreadState, ThreadStore
+    from nuself.cli.commands.daemon import (
+        format_status as _format_status,
+    )
+    from nuself.cli.commands.memory.entries import (
+        format_memory_preview as _format_memory_preview,
+    )
+    from nuself.cli.commands.output import (
+        print_ansi as _print_ansi,
+    )
+    from nuself.cli.commands.reflections import (
+        handle_reflection_archive as handle_reflection_archive,
+    )
+    from nuself.cli.commands.reflections import (
+        handle_reflection_dismiss as handle_reflection_dismiss,
+    )
+    from nuself.cli.commands.reflections import (
+        handle_reflection_list as handle_reflection_list,
+    )
+    from nuself.cli.commands.reflections import (
+        handle_reflection_show as handle_reflection_show,
     )
     from nuself.cli.handlers import dispatch_cli
-    from nuself.cli.repl.types import InteractiveChatResult
-    from nuself.cli.repl.session import (
-        InteractiveSession as InteractiveSession,
+    from nuself.cli.parser import (
+        InteractiveHandlers,
+    )
+    from nuself.cli.parser import (
+        build_parser as _build_parser,
     )
     from nuself.cli.repl.commands import (
         handle_interactive_history_command as _handle_interactive_history_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_inbox_command as _handle_interactive_inbox_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_memory_command as _handle_interactive_memory_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_notify_command as _handle_interactive_notify_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_notify_list_command as _handle_interactive_notify_list_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_notify_show_command as _handle_interactive_notify_show_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_notify_subcommand as _handle_interactive_notify_subcommand,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_persona_command as _handle_interactive_persona_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_reason_command as _handle_interactive_reason_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_reason_watch as _handle_interactive_reason_watch,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_reflection_command as _handle_interactive_reflection_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_reflection_list_command as _handle_interactive_reflection_list_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_reflection_show_command as _handle_interactive_reflection_show_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_reflection_subcommand as _handle_interactive_reflection_subcommand,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_restart_command as _handle_interactive_restart_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_threads_command as _handle_interactive_threads_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_trace_command as _handle_interactive_trace_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_watch_command as _handle_interactive_watch_command,
+    )
+    from nuself.cli.repl.commands import (
         handle_interactive_whoami_command as _handle_interactive_whoami_command,
     )
     from nuself.cli.repl.input import (
         InteractiveCompleter as _InteractiveCompleter,
+    )
+    from nuself.cli.repl.input import (
         interactive_help as _interactive_help,
     )
     from nuself.cli.repl.registry import command_body, command_matches
@@ -72,37 +131,29 @@ try:
         ReplCallbacks,
         run_interactive_loop,
     )
+    from nuself.cli.repl.session import (
+        InteractiveSession as InteractiveSession,
+    )
     from nuself.cli.repl.transcript import (
         copy_text_to_clipboard as _copy_text_to_clipboard,
+    )
+    from nuself.cli.repl.transcript import (
         export_interactive_transcript as _export_interactive_transcript,
+    )
+    from nuself.cli.repl.transcript import (
         render_chat_transcript as _render_chat_transcript,
     )
-    from nuself.agent.chat import ChatAgent, ThreadState, ThreadStore
+    from nuself.cli.repl.types import InteractiveChatResult
+    from nuself.config import ConfigSystem
     from nuself.daemon import client, lifecycle
     from nuself.daemon.protocol import JsonValue
-    from nuself.cli.commands.daemon import (
-        format_status as _format_status,
-    )
-    from nuself.cli.commands.output import (
-        print_ansi as _print_ansi,
-    )
-    from nuself.cli.commands.reflections import (
-        handle_reflection_archive as handle_reflection_archive,
-        handle_reflection_dismiss as handle_reflection_dismiss,
-        handle_reflection_list as handle_reflection_list,
-        handle_reflection_show as handle_reflection_show,
-    )
-    from nuself.cli.commands.memory.entries import (
-        format_memory_preview as _format_memory_preview,
-    )
-    from nuself.memory.curator import MemoryCurator
     from nuself.logs import (
         InteractiveLogCursor,
         LogEvent,
         read_log_events,
         write_log_event,
     )
-    from nuself.config import ConfigSystem
+    from nuself.memory.curator import MemoryCurator
     from nuself.tui.render import TerminalTheme, render_log_event, render_session_header
 finally:
     warnings.warn = _original_warn
@@ -120,7 +171,6 @@ INTERACTIVE_CHAT_ATTEMPTS = 2
 INTERACTIVE_LOG_POLL_INTERVAL_SECONDS = 0.1
 
 
-
 _theme = TerminalTheme()
 _last_header_thread: str = ""
 _last_header_status: str = ""
@@ -133,10 +183,6 @@ def _maybe_show_session_update(project_root: Path | None, thread_id: str) -> Non
         _print_ansi(render_session_header(daemon_status=status, thread_id=thread_id))
     _last_header_thread = thread_id
     _last_header_status = status
-
-
-
-
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -176,6 +222,7 @@ def handle_default_entrypoint(args: argparse.Namespace) -> int:
             message, args.project_root, thread_id, turn_id=turn_id
         ),
         args.project_root,
+        daemon_activity=True,
     )
 
 
@@ -188,6 +235,7 @@ def handle_chat(args: argparse.Namespace) -> int:
                 message, args.project_root, thread_id, turn_id=turn_id
             ),
             args.project_root,
+            daemon_activity=True,
         )
     if args.require_daemon:
         print("NuSelf daemon is not running.", file=sys.stderr)
@@ -213,6 +261,7 @@ def handle_attach(args: argparse.Namespace) -> int:
             message, args.project_root, thread_id, turn_id=turn_id
         ),
         args.project_root,
+        daemon_activity=True,
     )
 
 
@@ -256,9 +305,12 @@ def handle_open(args: argparse.Namespace) -> int:
             if result != 0:
                 return result
         return _interactive_loop(
-            lambda message, tid, turn_id: _send_chat_interactive(message, args.project_root, tid, turn_id=turn_id),
+            lambda message, tid, turn_id: _send_chat_interactive(
+                message, args.project_root, tid, turn_id=turn_id
+            ),
             args.project_root,
             initial_thread_id=thread_id,
+            daemon_activity=True,
         )
     if args.message is not None:
         result = _send_one_shot_chat(args.message, args.project_root, thread_id)
@@ -285,7 +337,9 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
     return 0
 
 
-def _send_chat(message: str, project_root: Path | None, thread_id: str = "default") -> int:
+def _send_chat(
+    message: str, project_root: Path | None, thread_id: str = "default"
+) -> int:
     result = _send_chat_interactive(message, project_root, thread_id)
     if result.reply is not None:
         _print_assistant_reply(result.reply)
@@ -331,7 +385,9 @@ def _send_chat_interactive(
             status="error",
             error=response.error or "daemon returned an error",
         )
-        return InteractiveChatResult(code=1, error=response.error or "daemon returned an error")
+        return InteractiveChatResult(
+            code=1, error=response.error or "daemon returned an error"
+        )
     reply = response.payload.get("reply")
     if isinstance(reply, str):
         memory_update = response.payload.get("memory_update")
@@ -348,7 +404,9 @@ def _send_chat_interactive(
         return InteractiveChatResult(
             code=0,
             reply=reply,
-            memory_update=memory_update if isinstance(memory_update, str) and memory_update != "" else None,
+            memory_update=memory_update
+            if isinstance(memory_update, str) and memory_update != ""
+            else None,
         )
     print("daemon response did not include a reply", file=sys.stderr)
     return InteractiveChatResult(code=1)
@@ -366,13 +424,33 @@ def _interactive_loop(
     project_root: Path | None,
     *,
     initial_thread_id: str = "default",
+    daemon_activity: bool = False,
 ) -> int:
+    def send_turn(
+        turn_sender: Callable[
+            [str, str, str | None],
+            InteractiveChatResult,
+        ],
+        turn_project_root: Path | None,
+        thread_id: str,
+        message: str,
+        session: InteractiveSession,
+    ) -> int:
+        return _send_interactive_chat_turn(
+            turn_sender,
+            turn_project_root,
+            thread_id,
+            message,
+            session,
+            daemon_activity=daemon_activity,
+        )
+
     return run_interactive_loop(
         send_message,
         project_root,
         ReplCallbacks(
             handle_command=_handle_interactive_command,
-            send_turn=_send_interactive_chat_turn,
+            send_turn=send_turn,
             auto_save=_auto_save_interactive_transcripts,
             run_curator=_run_memory_curator,
             show_session_update=_maybe_show_session_update,
@@ -389,6 +467,8 @@ def _send_interactive_chat_turn(
     thread_id: str,
     message: str,
     session: InteractiveSession,
+    *,
+    daemon_activity: bool = False,
 ) -> int:
     log_cursor = InteractiveLogCursor.from_project(project_root)
     result = InteractiveChatResult(code=1)
@@ -412,7 +492,9 @@ def _send_interactive_chat_turn(
                 },
             )
             print()
-            print(f"Retrying message after failed attempt ({attempt}/{INTERACTIVE_CHAT_ATTEMPTS})...")
+            print(
+                f"Retrying message after failed attempt ({attempt}/{INTERACTIVE_CHAT_ATTEMPTS})..."
+            )
         result, events, printed_logs = _run_interactive_send_with_live_logs(
             send_message,
             message,
@@ -421,13 +503,18 @@ def _send_interactive_chat_turn(
             project_root,
             log_cursor,
             printed_logs=printed_logs,
+            daemon_activity=daemon_activity,
         )
         previous_next_index = session.captured_next_indexes.get(
             thread_id, session.start_index_for(project_root, thread_id)
         )
         session.capture_new_messages(project_root, thread_id)
-        current_next_index = session.captured_next_indexes.get(thread_id, previous_next_index)
-        message_index = current_next_index - 1 if current_next_index > previous_next_index else None
+        current_next_index = session.captured_next_indexes.get(
+            thread_id, previous_next_index
+        )
+        message_index = (
+            current_next_index - 1 if current_next_index > previous_next_index else None
+        )
         session.capture_log_events(thread_id, events, message_index=message_index)
         if result.memory_update is not None:
             if not printed_logs:
@@ -443,7 +530,9 @@ def _send_interactive_chat_turn(
         if result.code == 0:
             return 0
         if not result.retryable:
-            if result.error is not None and not _events_include_error(events, result.error):
+            if result.error is not None and not _events_include_error(
+                events, result.error
+            ):
                 print(result.error, file=sys.stderr)
             break
     if result.retryable:
@@ -460,7 +549,17 @@ def _run_interactive_send_with_live_logs(
     log_cursor: InteractiveLogCursor,
     *,
     printed_logs: bool,
+    daemon_activity: bool = False,
 ) -> tuple[InteractiveChatResult, list[LogEvent], bool]:
+    subscription_id: str | None = None
+    if daemon_activity and turn_id is not None:
+        try:
+            subscription_id = client.open_activity(
+                turn_id,
+                project_root=project_root,
+            )
+        except client.DaemonConnectionError:
+            subscription_id = None
     result_box: list[InteractiveChatResult] = []
     error_box: list[BaseException] = []
 
@@ -475,33 +574,111 @@ def _run_interactive_send_with_live_logs(
     captured_events: list[LogEvent] = []
     try:
         while send_thread.is_alive():
-            time.sleep(INTERACTIVE_LOG_POLL_INTERVAL_SECONDS)
-            new_events = _interactive_activity_events(project_root, log_cursor, turn_id=turn_id)
+            if subscription_id is not None:
+                try:
+                    new_events = list(
+                        client.next_activity(
+                            subscription_id,
+                            project_root=project_root,
+                            timeout_ms=int(
+                                INTERACTIVE_LOG_POLL_INTERVAL_SECONDS * 1000
+                            ),
+                        )
+                    )
+                except client.DaemonConnectionError:
+                    _close_activity_subscription(
+                        subscription_id,
+                        project_root,
+                    )
+                    subscription_id = None
+                    new_events = []
+            else:
+                time.sleep(INTERACTIVE_LOG_POLL_INTERVAL_SECONDS)
+                new_events = _interactive_activity_events(
+                    project_root,
+                    log_cursor,
+                    turn_id=turn_id,
+                )
             if new_events:
                 captured_events.extend(new_events)
-                printed_logs = _print_visible_interactive_activity_events(new_events, printed_logs=printed_logs)
+                printed_logs = _print_visible_interactive_activity_events(
+                    new_events, printed_logs=printed_logs
+                )
         send_thread.join()
     except KeyboardInterrupt:
+        if subscription_id is not None:
+            _close_activity_subscription(
+                subscription_id,
+                project_root,
+            )
         send_thread.join(timeout=0.5)
         raise
-    new_events = _interactive_activity_events(project_root, log_cursor, turn_id=turn_id)
+    if subscription_id is not None:
+        try:
+            try:
+                new_events = list(
+                    client.next_activity(
+                        subscription_id,
+                        project_root=project_root,
+                        timeout_ms=0,
+                        limit=256,
+                    )
+                )
+            except client.DaemonConnectionError:
+                new_events = []
+        finally:
+            _close_activity_subscription(
+                subscription_id,
+                project_root,
+            )
+    else:
+        new_events = _interactive_activity_events(
+            project_root,
+            log_cursor,
+            turn_id=turn_id,
+        )
     if new_events:
         captured_events.extend(new_events)
-        printed_logs = _print_visible_interactive_activity_events(new_events, printed_logs=printed_logs)
+        printed_logs = _print_visible_interactive_activity_events(
+            new_events, printed_logs=printed_logs
+        )
     if error_box:
         print(f"chat turn failed: {error_box[0]}", file=sys.stderr)
         return InteractiveChatResult(code=1), captured_events, printed_logs
-    return result_box[0] if result_box else InteractiveChatResult(code=1), captured_events, printed_logs
+    return (
+        result_box[0] if result_box else InteractiveChatResult(code=1),
+        captured_events,
+        printed_logs,
+    )
 
 
-def _print_visible_interactive_activity_events(events: list[LogEvent], *, printed_logs: bool) -> bool:
+def _close_activity_subscription(
+    subscription_id: str,
+    project_root: Path | None,
+) -> None:
+    try:
+        client.close_activity(
+            subscription_id,
+            project_root=project_root,
+        )
+    except client.DaemonConnectionError:
+        pass
+
+
+def _print_visible_interactive_activity_events(
+    events: list[LogEvent], *, printed_logs: bool
+) -> bool:
     visible_events = _visible_interactive_activity_events(events)
     if not visible_events:
         return printed_logs
-    return _print_live_interactive_activity_events(visible_events, printed_logs=printed_logs)
+    return _print_live_interactive_activity_events(
+        visible_events, printed_logs=printed_logs
+    )
 
 
-def _print_live_interactive_activity_events(events: list[LogEvent], *, printed_logs: bool) -> bool:
+def _print_live_interactive_activity_events(
+    events: list[LogEvent], *, printed_logs: bool
+) -> bool:
     if not printed_logs:
         print()
         _print_ansi(_theme.paint("Logs:", "93"))
@@ -514,9 +691,9 @@ def _events_include_error(events: list[LogEvent], error: str) -> bool:
     return any(event.error == error for event in events)
 
 
-
-
-def _send_one_shot_chat(message: str, project_root: Path | None, thread_id: str = "default") -> int:
+def _send_one_shot_chat(
+    message: str, project_root: Path | None, thread_id: str = "default"
+) -> int:
     result = _send_one_shot_chat_interactive(message, project_root, thread_id)
     if result.reply is not None:
         _print_assistant_reply(result.reply)
@@ -574,7 +751,9 @@ def _run_memory_curator(project_root: Path | None) -> None:
             status="error",
             error=str(exc),
         )
-        _print_ansi(f"{_theme.tag('[memory]', 'memory')} curator failed: {exc}", file=sys.stderr)
+        _print_ansi(
+            f"{_theme.tag('[memory]', 'memory')} curator failed: {exc}", file=sys.stderr
+        )
         return
     if result.changed:
         write_log_event(
@@ -612,7 +791,9 @@ def _handle_interactive_command(
         return ("exit", current_thread_id)
     if command_matches(command, "history"):
         print()
-        _print_ansi(_handle_interactive_history_command(project_root, current_thread_id))
+        _print_ansi(
+            _handle_interactive_history_command(project_root, current_thread_id)
+        )
         return ("", current_thread_id)
     if command_matches(command, "whoami"):
         print()
@@ -630,9 +811,15 @@ def _handle_interactive_command(
             if parts[0] == "list":
                 _print_ansi(_handle_interactive_reflection_list_command(project_root))
             elif parts[0] == "show" and len(parts) == 2:
-                _print_ansi(_handle_interactive_reflection_show_command(project_root, parts[1]))
+                _print_ansi(
+                    _handle_interactive_reflection_show_command(project_root, parts[1])
+                )
             elif len(parts) == 2:
-                _print_ansi(_handle_interactive_reflection_subcommand(project_root, parts[0], parts[1]))
+                _print_ansi(
+                    _handle_interactive_reflection_subcommand(
+                        project_root, parts[0], parts[1]
+                    )
+                )
             else:
                 print(_interactive_help(":inbox reflection"))
         elif inbox_body == "notify":
@@ -642,11 +829,17 @@ def _handle_interactive_command(
             if parts[0] == "list":
                 _print_ansi(_handle_interactive_notify_list_command(project_root))
             elif parts[0] == "show" and len(parts) == 2:
-                _print_ansi(_handle_interactive_notify_show_command(project_root, parts[1]))
+                _print_ansi(
+                    _handle_interactive_notify_show_command(project_root, parts[1])
+                )
             elif parts[0] == "watch":
                 _handle_interactive_watch_command(project_root)
             elif len(parts) == 2:
-                _print_ansi(_handle_interactive_notify_subcommand(project_root, parts[0], parts[1]))
+                _print_ansi(
+                    _handle_interactive_notify_subcommand(
+                        project_root, parts[0], parts[1]
+                    )
+                )
             else:
                 print(_interactive_help(":inbox notify"))
         else:
@@ -671,7 +864,11 @@ def _handle_interactive_command(
         return ("", current_thread_id)
     if command_body(command, "export") is not None:
         print()
-        _print_ansi(_handle_interactive_export_command(command, project_root, current_thread_id, session))
+        _print_ansi(
+            _handle_interactive_export_command(
+                command, project_root, current_thread_id, session
+            )
+        )
         return ("", current_thread_id)
     memory_body = command_body(command, "mem")
     if memory_body is not None:
@@ -717,7 +914,9 @@ def _handle_interactive_command(
     persona_body = command_body(command, "persona")
     if persona_body is not None:
         print()
-        _print_ansi(_handle_interactive_persona_command(persona_body or "list", project_root))
+        _print_ansi(
+            _handle_interactive_persona_command(persona_body or "list", project_root)
+        )
         return ("", current_thread_id)
     if command_matches(command, "restart"):
         print()
@@ -801,8 +1000,6 @@ def _handle_interactive_command(
     return ("", current_thread_id)
 
 
-
-
 def _one_shot_reply(
     message: str,
     project_root: Path | None,
@@ -810,7 +1007,11 @@ def _one_shot_reply(
     *,
     turn_id: str | None = None,
 ) -> str:
-    return ChatAgent(project_root).respond(message, thread_id=thread_id, turn_id=turn_id).reply
+    return (
+        ChatAgent(project_root)
+        .respond(message, thread_id=thread_id, turn_id=turn_id)
+        .reply
+    )
 
 
 def _print_assistant_reply(text: str) -> None:
@@ -961,7 +1162,9 @@ def _handle_interactive_export_command(
     )
 
 
-def _auto_save_interactive_transcripts(project_root: Path | None, session: InteractiveSession) -> None:
+def _auto_save_interactive_transcripts(
+    project_root: Path | None, session: InteractiveSession
+) -> None:
     thread_ids = session.thread_ids_with_unexported_messages(project_root)
     if not thread_ids:
         return
@@ -998,8 +1201,12 @@ def _save_interactive_transcript(
             connected_at=session.connected_at,
             exported_at=exported_at,
             messages=session.transcript_messages(project_root, thread_id),
-            log_events=session.transcript_log_events(thread_id, include_all=include_all_logs),
-            log_events_by_message=session.transcript_log_events_by_message(thread_id, include_all=include_all_logs),
+            log_events=session.transcript_log_events(
+                thread_id, include_all=include_all_logs
+            ),
+            log_events_by_message=session.transcript_log_events_by_message(
+                thread_id, include_all=include_all_logs
+            ),
             include_all_logs=include_all_logs,
         )
     except ValueError as exc:
@@ -1014,13 +1221,6 @@ def _save_interactive_transcript(
         else:
             lines.append(f"Clipboard copy failed: {reason}")
     return "\n".join(lines)
-
-
-
-
-
-
-
 
 
 if __name__ == "__main__":

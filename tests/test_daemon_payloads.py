@@ -3,6 +3,8 @@ from __future__ import annotations
 import pytest
 
 from nuself.daemon.payloads import (
+    ActivityNextRequestPayload,
+    ActivityOpenRequestPayload,
     ChatRequestPayload,
     ChatResponsePayload,
     HealthResponsePayload,
@@ -70,3 +72,28 @@ def test_health_response_payload_projects_worker_model() -> None:
         ]
     }
     assert MessagePayload("pong").to_wire() == {"message": "pong"}
+
+
+def test_activity_payloads_validate_bounds() -> None:
+    assert (
+        ActivityOpenRequestPayload.from_wire({"turn_id": "turn-1"}).turn_id == "turn-1"
+    )
+    assert ActivityNextRequestPayload.from_wire(
+        {
+            "subscription_id": "sub-1",
+            "timeout_ms": 100,
+            "limit": 25,
+        }
+    ) == ActivityNextRequestPayload(
+        subscription_id="sub-1",
+        timeout_ms=100,
+        limit=25,
+    )
+
+    with pytest.raises(ProtocolError, match="timeout_ms"):
+        ActivityNextRequestPayload.from_wire(
+            {
+                "subscription_id": "sub-1",
+                "timeout_ms": 5_001,
+            }
+        )

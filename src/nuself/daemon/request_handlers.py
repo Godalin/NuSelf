@@ -8,7 +8,17 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.agent.chat import ChatAgent
+from nuself.daemon.activity import (
+    ActivityBroker,
+    ActivitySubscriptionNotFound,
+)
 from nuself.daemon.payloads import (
+    ActivityCloseRequestPayload,
+    ActivityCloseResponsePayload,
+    ActivityEventsResponsePayload,
+    ActivityNextRequestPayload,
+    ActivityOpenRequestPayload,
+    ActivityOpenResponsePayload,
     ChatRequestPayload,
     ChatResponsePayload,
     HealthResponsePayload,
@@ -23,7 +33,11 @@ from nuself.daemon.protocol import (
     RequestType,
 )
 from nuself.daemon.types import WorkerHealth
-from nuself.logs import log_context, write_log_event
+from nuself.logs import (
+    log_context,
+    observe_log_events,
+    write_log_event,
+)
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.runtime.handlers import HandlerRegistry, UnknownHandlerError
 
@@ -33,6 +47,7 @@ class DaemonRequestState(Protocol):
     chat_agent: ChatAgent
     memory_curator: MemoryCurator
     shutdown_requested: threading.Event
+    activity_broker: ActivityBroker
 
     def worker_health(self) -> tuple[WorkerHealth, ...]: ...
 
@@ -51,6 +66,9 @@ def build_daemon_request_registry() -> DaemonRequestRegistry:
     registry.register("echo", _handle_echo)
     registry.register("chat", _handle_chat)
     registry.register("shutdown", _handle_shutdown)
+    registry.register("activity_open", _handle_activity_open)
+    registry.register("activity_next", _handle_activity_next)
+    registry.register("activity_close", _handle_activity_close)
     if set(registry.registered_keys) != set(REQUEST_TYPES):
         missing = set(REQUEST_TYPES) - set(registry.registered_keys)
         extra = set(registry.registered_keys) - set(REQUEST_TYPES)
@@ -67,11 +85,12 @@ def handle_request(
 ) -> DaemonResponse:
     """Dispatch a validated daemon request through the sealed registry."""
     try:
-        return DAEMON_REQUEST_HANDLERS.dispatch(
-            request.type,
-            request,
-            state,
-        )
+        with observe_log_events(state.activity_broker.publish):
+            return DAEMON_REQUEST_HANDLERS.dispatch(
+                request.type,
+                request,
+                state,
+            )
     except UnknownHandlerError:
         return DaemonResponse.fail(
             request.request_id,
@@ -211,6 +230,56 @@ def _handle_shutdown(
     return DaemonResponse.ok(
         request,
         MessagePayload("shutdown requested").to_wire(),
+    )
+
+
+def _handle_activity_open(
+    request: DaemonRequest,
+    state: DaemonRequestState,
+) -> DaemonResponse:
+    try:
+        payload = ActivityOpenRequestPayload.from_wire(request.payload)
+    except ProtocolError as exc:
+        return DaemonResponse.fail(request.request_id, str(exc))
+    subscription_id = state.activity_broker.open(payload.turn_id)
+    return DaemonResponse.ok(
+        request,
+        ActivityOpenResponsePayload(subscription_id).to_wire(),
+    )
+
+
+def _handle_activity_next(
+    request: DaemonRequest,
+    state: DaemonRequestState,
+) -> DaemonResponse:
+    try:
+        payload = ActivityNextRequestPayload.from_wire(request.payload)
+        events = state.activity_broker.next_events(
+            payload.subscription_id,
+            timeout_seconds=payload.timeout_ms / 1000,
+            limit=payload.limit,
+        )
+    except (ProtocolError, ActivitySubscriptionNotFound) as exc:
+        return DaemonResponse.fail(request.request_id, str(exc))
+    return DaemonResponse.ok(
+        request,
+        ActivityEventsResponsePayload(events).to_wire(),
+    )
+
+
+def _handle_activity_close(
+    request: DaemonRequest,
+    state: DaemonRequestState,
+) -> DaemonResponse:
+    try:
+        payload = ActivityCloseRequestPayload.from_wire(request.payload)
+    except ProtocolError as exc:
+        return DaemonResponse.fail(request.request_id, str(exc))
+    return DaemonResponse.ok(
+        request,
+        ActivityCloseResponsePayload(
+            state.activity_broker.close(payload.subscription_id)
+        ).to_wire(),
     )
 
 

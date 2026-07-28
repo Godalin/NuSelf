@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Generator, Iterable, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
@@ -52,6 +54,11 @@ class LogRetentionPolicy:
 
 
 DEFAULT_LOG_RETENTION = LogRetentionPolicy()
+LogEventObserver = Callable[["LogEvent"], None]
+_CURRENT_LOG_EVENT_OBSERVER: ContextVar[LogEventObserver | None] = ContextVar(
+    "nuself_log_event_observer",
+    default=None,
+)
 
 
 LogContext = RuntimeContext
@@ -315,6 +322,9 @@ def _append_log_event(
                 log_file.flush()
         finally:
             flock(lock_file.fileno(), LOCK_UN)
+    observer = _CURRENT_LOG_EVENT_OBSERVER.get()
+    if observer is not None:
+        observer(event_record)
     return event_record
 
 
@@ -350,6 +360,19 @@ def current_log_context() -> LogContext:
 
 
 log_context = runtime_context
+
+
+@contextmanager
+def observe_log_events(
+    observer: LogEventObserver,
+) -> Generator[None, None, None]:
+    """Project events written in this execution context to one live observer."""
+
+    token: Token[LogEventObserver | None] = _CURRENT_LOG_EVENT_OBSERVER.set(observer)
+    try:
+        yield
+    finally:
+        _CURRENT_LOG_EVENT_OBSERVER.reset(token)
 
 
 def log_path(component: LogComponent, *, project_root: Path | None = None) -> Path:

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import cast
 
 from nuself.daemon.protocol import JsonValue, ProtocolError
 from nuself.daemon.types import WorkerHealth
+from nuself.logs import LogEvent
 
 
 @dataclass(frozen=True)
@@ -105,3 +108,117 @@ class ChatResponsePayload:
         if self.memory_update is not None:
             payload["memory_update"] = self.memory_update
         return payload
+
+
+@dataclass(frozen=True)
+class ActivityOpenRequestPayload:
+    turn_id: str
+
+    @classmethod
+    def from_wire(
+        cls,
+        payload: dict[str, JsonValue],
+    ) -> ActivityOpenRequestPayload:
+        return cls(turn_id=_required_string(payload, "turn_id"))
+
+
+@dataclass(frozen=True)
+class ActivityNextRequestPayload:
+    subscription_id: str
+    timeout_ms: int = 200
+    limit: int = 50
+
+    @classmethod
+    def from_wire(
+        cls,
+        payload: dict[str, JsonValue],
+    ) -> ActivityNextRequestPayload:
+        timeout_ms = _optional_integer(payload, "timeout_ms", default=200)
+        limit = _optional_integer(payload, "limit", default=50)
+        if not 0 <= timeout_ms <= 5_000:
+            raise ProtocolError("activity timeout_ms must be between 0 and 5000")
+        if not 1 <= limit <= 256:
+            raise ProtocolError("activity limit must be between 1 and 256")
+        return cls(
+            subscription_id=_required_string(
+                payload,
+                "subscription_id",
+            ),
+            timeout_ms=timeout_ms,
+            limit=limit,
+        )
+
+
+@dataclass(frozen=True)
+class ActivityCloseRequestPayload:
+    subscription_id: str
+
+    @classmethod
+    def from_wire(
+        cls,
+        payload: dict[str, JsonValue],
+    ) -> ActivityCloseRequestPayload:
+        return cls(
+            subscription_id=_required_string(
+                payload,
+                "subscription_id",
+            )
+        )
+
+
+@dataclass(frozen=True)
+class ActivityOpenResponsePayload:
+    subscription_id: str
+
+    def to_wire(self) -> dict[str, JsonValue]:
+        return {"subscription_id": self.subscription_id}
+
+
+@dataclass(frozen=True)
+class ActivityEventsResponsePayload:
+    events: tuple[LogEvent, ...]
+
+    def to_wire(self) -> dict[str, JsonValue]:
+        return {"events": [_json_value(event.to_record()) for event in self.events]}
+
+
+@dataclass(frozen=True)
+class ActivityCloseResponsePayload:
+    closed: bool
+
+    def to_wire(self) -> dict[str, JsonValue]:
+        return {"closed": self.closed}
+
+
+def _required_string(
+    payload: dict[str, JsonValue],
+    field_name: str,
+) -> str:
+    value = payload.get(field_name)
+    if not isinstance(value, str) or not value:
+        raise ProtocolError(f"activity field '{field_name}' must be a non-empty string")
+    return value
+
+
+def _optional_integer(
+    payload: dict[str, JsonValue],
+    field_name: str,
+    *,
+    default: int,
+) -> int:
+    value = payload.get(field_name, default)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ProtocolError(f"activity field '{field_name}' must be an integer")
+    return value
+
+
+def _json_value(value: object) -> JsonValue:
+    if value is None or isinstance(value, str | bool | int | float):
+        return value
+    if isinstance(value, list | tuple):
+        sequence = cast(Iterable[object], value)
+        return [_json_value(item) for item in sequence]
+    if isinstance(value, Mapping):
+        mapping = cast(Mapping[object, object], value)
+        return {str(key): _json_value(item) for key, item in mapping.items()}
+    raise TypeError(f"activity event contains non-JSON value: {type(value).__name__}")

@@ -2,15 +2,26 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import json
+from dataclasses import dataclass, field
 from typing import Any, Literal, TypeAlias, cast
 from uuid import uuid4
 
 PROTOCOL_VERSION = 1
 
-JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
-RequestType: TypeAlias = Literal["ping", "health", "echo", "chat", "shutdown"]
+JsonValue: TypeAlias = (
+    None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+)
+RequestType: TypeAlias = Literal[
+    "ping",
+    "health",
+    "echo",
+    "chat",
+    "shutdown",
+    "activity_open",
+    "activity_next",
+    "activity_close",
+]
 ResponseStatus: TypeAlias = Literal["ok", "error"]
 REQUEST_TYPES: tuple[RequestType, ...] = (
     "ping",
@@ -18,6 +29,9 @@ REQUEST_TYPES: tuple[RequestType, ...] = (
     "echo",
     "chat",
     "shutdown",
+    "activity_open",
+    "activity_next",
+    "activity_close",
 )
 
 
@@ -43,7 +57,9 @@ class DaemonRequest:
     version: int = PROTOCOL_VERSION
 
     def to_json_line(self) -> bytes:
-        return (json.dumps(self.to_wire(), separators=(",", ":")) + "\n").encode("utf-8")
+        return (json.dumps(self.to_wire(), separators=(",", ":")) + "\n").encode(
+            "utf-8"
+        )
 
     def to_wire(self) -> dict[str, JsonValue]:
         return {
@@ -54,7 +70,7 @@ class DaemonRequest:
         }
 
     @classmethod
-    def from_json_line(cls, line: bytes) -> "DaemonRequest":
+    def from_json_line(cls, line: bytes) -> DaemonRequest:
         raw = _decode_json_object(line)
         version = _expect_int(raw, "version")
         if version != PROTOCOL_VERSION:
@@ -62,7 +78,9 @@ class DaemonRequest:
         request_type = _expect_request_type(raw, "type")
         payload = _expect_object(raw, "payload")
         request_id = _expect_str(raw, "request_id")
-        return cls(type=request_type, payload=payload, request_id=request_id, version=version)
+        return cls(
+            type=request_type, payload=payload, request_id=request_id, version=version
+        )
 
 
 @dataclass(frozen=True)
@@ -76,7 +94,9 @@ class DaemonResponse:
     version: int = PROTOCOL_VERSION
 
     def to_json_line(self) -> bytes:
-        return (json.dumps(self.to_wire(), separators=(",", ":")) + "\n").encode("utf-8")
+        return (json.dumps(self.to_wire(), separators=(",", ":")) + "\n").encode(
+            "utf-8"
+        )
 
     def to_wire(self) -> dict[str, JsonValue]:
         wire: dict[str, JsonValue] = {
@@ -90,15 +110,17 @@ class DaemonResponse:
         return wire
 
     @classmethod
-    def ok(cls, request: DaemonRequest, payload: dict[str, JsonValue] | None = None) -> "DaemonResponse":
+    def ok(
+        cls, request: DaemonRequest, payload: dict[str, JsonValue] | None = None
+    ) -> DaemonResponse:
         return cls(request_id=request.request_id, status="ok", payload=payload or {})
 
     @classmethod
-    def fail(cls, request_id: str, error: str) -> "DaemonResponse":
+    def fail(cls, request_id: str, error: str) -> DaemonResponse:
         return cls(request_id=request_id, status="error", error=error)
 
     @classmethod
-    def from_json_line(cls, line: bytes) -> "DaemonResponse":
+    def from_json_line(cls, line: bytes) -> DaemonResponse:
         raw = _decode_json_object(line)
         version = _expect_int(raw, "version")
         if version != PROTOCOL_VERSION:
