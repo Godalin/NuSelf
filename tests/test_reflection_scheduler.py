@@ -3,19 +3,26 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Never
 
 import pytest
+from langchain_core.messages import BaseMessage
+from pydantic import BaseModel
 
 from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
-from nuself.llm import ChatMessage
 from nuself.logs import read_log_events
 from nuself.reflection import IdeaCandidateGenerator, ReflectionScheduler
 from nuself.reflection.repository import ReflectionEntry
-from nuself.reflection.scheduler import ReflectionScheduleStateError
+from nuself.reflection.scheduler import (
+    CandidateListOutput,
+    ReflectionScheduleStateError,
+    RelevanceScoreOutput,
+)
 
 
 def _local_datetime(year: int, month: int, day: int, hour: int, minute: int = 0) -> datetime:
@@ -57,26 +64,51 @@ def _reflection_settings(
     )
 
 
-class _FakeLLM:
-    """Deterministic LLM that handles both candidate generation and relevance scoring."""
+_DEFAULT_CANDIDATES: list[dict[str, object]] = [
+    {
+        "title": "Proactive insight about memory patterns",
+        "body": (
+            "Your recent memories suggest a recurring interest in systems "
+            "thinking. Consider exploring how this connects to your current "
+            "projects."
+        ),
+        "candidate_type": "connection",
+        "confidence": 0.8,
+        "novelty": 0.9,
+        "urgency": 0.3,
+        "interruption_cost": 0.1,
+    }
+]
 
+
+class _CandidateAgent:
     def __init__(
         self,
         candidates: list[dict[str, object]] | None = None,
-        relevance_response: dict[str, object] | None = None,
     ) -> None:
-        self._candidates = candidates or [
-            {
-                "title": "Proactive insight about memory patterns",
-                "body": "Your recent memories suggest a recurring interest in systems thinking. Consider exploring how this connects to your current projects.",
-                "candidate_type": "connection",
-                "confidence": 0.8,
-                "novelty": 0.9,
-                "urgency": 0.3,
-                "interruption_cost": 0.1,
-            }
-        ]
-        self._relevance_response = relevance_response or {
+        self._candidates = (
+            _DEFAULT_CANDIDATES
+            if candidates is None
+            else candidates
+        )
+        self.messages: list[Sequence[BaseMessage]] = []
+
+    def invoke(
+        self,
+        messages: Sequence[BaseMessage],
+    ) -> CandidateListOutput:
+        self.messages.append(messages)
+        return CandidateListOutput.model_validate(
+            {"candidates": self._candidates}
+        )
+
+
+class _RelevanceAgent:
+    def __init__(
+        self,
+        response: dict[str, object] | None = None,
+    ) -> None:
+        self._response = response or {
             "novelty": 0.9,
             "confidence": 0.8,
             "urgency": 0.3,
@@ -85,17 +117,32 @@ class _FakeLLM:
             "passes": True,
             "reason": "good idea",
         }
+        self.messages: list[Sequence[BaseMessage]] = []
 
-    def complete(self, messages: list[ChatMessage]) -> str:
-        system_prompt = messages[0].content if messages else ""
-        if "Relevance Gate" in system_prompt:
-            return json.dumps(self._relevance_response)
-        return json.dumps({"candidates": self._candidates})
+    def invoke(
+        self,
+        messages: Sequence[BaseMessage],
+    ) -> RelevanceScoreOutput:
+        self.messages.append(messages)
+        return RelevanceScoreOutput.model_validate(self._response)
 
 
-class _BrokenLLM:
-    def complete(self, messages: object) -> str:
+class _BrokenAgent:
+    def invoke(self, messages: Sequence[BaseMessage]) -> Never:
         raise RuntimeError("simulated LLM failure")
+
+
+def _fake_structured_agent(
+    schema: type[BaseModel],
+    *,
+    project_root: Path | None = None,
+    component: str,
+) -> object:
+    if schema is CandidateListOutput:
+        return _CandidateAgent()
+    if schema is RelevanceScoreOutput:
+        return _RelevanceAgent()
+    raise AssertionError(f"unexpected schema: {schema.__name__}")
 
 
 def _seed_memory(tmp_path: Path) -> None:
@@ -138,9 +185,9 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
     (tmp_path / "private" / "runtime").mkdir(parents=True)
     (tmp_path / "private" / "logs").mkdir(parents=True)
     (tmp_path / "private" / "outbox").mkdir(parents=True)
-    # Monkeypatch default_llm so IdeaCandidateGenerator gets a fake LLM
-    monkeypatch.setattr(  # type: ignore[reportUnknownArgumentType]
-        "nuself.llm.default_llm", lambda root: _FakeLLM()  # type: ignore[reportUnknownLambdaType]
+    monkeypatch.setattr(
+        "nuself.reflection.scheduler.default_structured_agent",
+        _fake_structured_agent,
     )
     # Seed data so generator has context
     _seed_memory(tmp_path)
@@ -574,20 +621,16 @@ def test_quiet_hours_non_wrapping_range() -> None:
 
 def test_generator_returns_empty_with_no_data(tmp_path: Path) -> None:
     """No threads, no memory, no sources → no candidates."""
-    gen = IdeaCandidateGenerator(tmp_path, llm=_FakeLLM())
+    gen = IdeaCandidateGenerator(tmp_path, agent=_CandidateAgent())
     candidates = gen.generate()
     assert candidates == []
 
 
-def test_generator_produces_ideas_from_memory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generator_produces_ideas_from_memory(tmp_path: Path) -> None:
     """Memory entries alone should be enough to generate ideas."""
-    # Monkeypatch default_llm so IdeaCandidateGenerator gets a fake LLM
-    monkeypatch.setattr(  # type: ignore[reportUnknownArgumentType]
-        "nuself.llm.default_llm", lambda root: _FakeLLM()  # type: ignore[reportUnknownLambdaType]
-    )
     _seed_memory(tmp_path)
 
-    gen = IdeaCandidateGenerator(tmp_path, llm=_FakeLLM())
+    gen = IdeaCandidateGenerator(tmp_path, agent=_CandidateAgent())
     candidates = gen.generate()
     assert len(candidates) == 1
     assert candidates[0].title == "Proactive insight about memory patterns"
@@ -602,7 +645,7 @@ def test_generator_produces_ideas_from_threads(tmp_path: Path) -> None:
     state.messages.append(ThreadMessage(role="user", content="What is consciousness?"))
     store.save(state)
 
-    gen = IdeaCandidateGenerator(tmp_path, llm=_FakeLLM())
+    gen = IdeaCandidateGenerator(tmp_path, agent=_CandidateAgent())
     candidates = gen.generate()
     assert len(candidates) == 1
 
@@ -611,20 +654,27 @@ def test_generator_llm_error_returns_empty(tmp_path: Path) -> None:
     """LLM failure → returns empty list (no broken fallback)."""
     _seed_memory(tmp_path)
 
-    gen = IdeaCandidateGenerator(tmp_path, llm=_BrokenLLM())  # type: ignore[arg-type]
+    gen = IdeaCandidateGenerator(tmp_path, agent=_BrokenAgent())  # type: ignore[arg-type]
     candidates = gen.generate()
     assert candidates == []
 
 
-def test_generator_llm_bad_json_returns_empty(tmp_path: Path) -> None:
-    """LLM returns non-JSON → returns empty list."""
-    class _BadJSONLLM:
-        def complete(self, messages: object) -> str:
-            return "I think you should consider..."
+def test_generator_invalid_structured_output_returns_empty(
+    tmp_path: Path,
+) -> None:
+    class _InvalidCandidateAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> CandidateListOutput:
+            raise ValueError("invalid structured output")
 
     _seed_memory(tmp_path)
 
-    gen = IdeaCandidateGenerator(tmp_path, llm=_BadJSONLLM())  # type: ignore[arg-type]
+    gen = IdeaCandidateGenerator(
+        tmp_path,
+        agent=_InvalidCandidateAgent(),
+    )
     candidates = gen.generate()
     assert candidates == []
 
@@ -657,8 +707,8 @@ def test_generator_rejects_entire_malformed_candidate_batch(
     candidates: list[dict[str, object]],
 ) -> None:
     _seed_memory(tmp_path)
-    llm = _FakeLLM(candidates=candidates)
-    gen = IdeaCandidateGenerator(tmp_path, llm=llm)
+    llm = _CandidateAgent(candidates=candidates)
+    gen = IdeaCandidateGenerator(tmp_path, agent=llm)
 
     assert gen.generate() == []
     event = read_log_events(
@@ -668,16 +718,15 @@ def test_generator_rejects_entire_malformed_candidate_batch(
     assert event.event == "candidate_generation_failed"
 
 
-def test_generator_parses_multiple_candidates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generator_parses_multiple_candidates(tmp_path: Path) -> None:
     """LLM returning multiple candidates → all parsed."""
-    multi_llm = _FakeLLM(candidates=[
+    multi_agent = _CandidateAgent(candidates=[
         {"title": "Idea A", "body": "First idea", "candidate_type": "question", "confidence": 0.8, "novelty": 0.9, "urgency": 0.3, "interruption_cost": 0.1},
         {"title": "Idea B", "body": "Second idea", "candidate_type": "connection", "confidence": 0.7, "novelty": 0.8, "urgency": 0.5, "interruption_cost": 0.2},
     ])
-    monkeypatch.setattr("nuself.llm.default_llm", lambda root: multi_llm)  # type: ignore[reportUnknownArgumentType,reportUnknownLambdaType]
     _seed_memory(tmp_path)
 
-    gen = IdeaCandidateGenerator(tmp_path, llm=multi_llm)
+    gen = IdeaCandidateGenerator(tmp_path, agent=multi_agent)
     candidates = gen.generate()
     assert len(candidates) == 2
     assert candidates[0].title == "Idea A"
@@ -694,19 +743,11 @@ def test_generator_injects_language_instruction(tmp_path: Path) -> None:
     )
     _seed_memory(tmp_path)
 
-    class _RecordingLLM:
-        def __init__(self) -> None:
-            self.messages: list[list[ChatMessage]] = []
-
-        def complete(self, messages: list[ChatMessage]) -> str:
-            self.messages.append(messages)
-            return json.dumps({"candidates": []})
-
-    llm = _RecordingLLM()
-    gen = IdeaCandidateGenerator(tmp_path, llm=llm)  # type: ignore[arg-type]
+    agent = _CandidateAgent(candidates=[])
+    gen = IdeaCandidateGenerator(tmp_path, agent=agent)
     gen.generate()
-    assert len(llm.messages) == 1
-    system_prompt = llm.messages[0][0].content
+    assert len(agent.messages) == 1
+    system_prompt = agent.messages[0][0].text
     assert "Respond in zh-CN" in system_prompt
 
 
@@ -739,7 +780,7 @@ def _make_candidate(
 def test_relevance_gate_allows_passing_candidate(tmp_path: Path) -> None:
     from nuself.reflection import LLMRelevanceGate
 
-    gate = LLMRelevanceGate(tmp_path, llm=_FakeLLM())
+    gate = LLMRelevanceGate(tmp_path, agent=_RelevanceAgent())
     score = gate.score(_make_candidate("New insight about X"))
     assert score.passes is True
     assert score.composite == 0.8
@@ -750,7 +791,7 @@ def test_relevance_gate_rejects_failing_candidate(tmp_path: Path) -> None:
 
     gate = LLMRelevanceGate(
         tmp_path,
-        llm=_FakeLLM(relevance_response={
+        agent=_RelevanceAgent(response={
             "novelty": 0.1, "confidence": 0.1, "urgency": 0.1,
             "interruption_cost": 0.9, "composite": 0.1, "passes": False,
             "reason": "not relevant",
@@ -767,7 +808,7 @@ def test_relevance_gate_uses_llm_judgment_not_formula(tmp_path: Path) -> None:
     # LLM says passes=True even if scores look low — judgment overrides formula
     gate = LLMRelevanceGate(
         tmp_path,
-        llm=_FakeLLM(relevance_response={
+        agent=_RelevanceAgent(response={
             "novelty": 0.2, "confidence": 0.2, "urgency": 0.2,
             "interruption_cost": 0.2, "composite": 0.3, "passes": True,
             "reason": "contextually important",
@@ -778,27 +819,29 @@ def test_relevance_gate_uses_llm_judgment_not_formula(tmp_path: Path) -> None:
     assert score.reasons == ("contextually important",)
 
 
-def test_relevance_gate_clamps_floats(tmp_path: Path) -> None:
+def test_relevance_gate_rejects_out_of_range_scores(
+    tmp_path: Path,
+) -> None:
     from nuself.reflection import LLMRelevanceGate
 
     gate = LLMRelevanceGate(
         tmp_path,
-        llm=_FakeLLM(relevance_response={
+        agent=_RelevanceAgent(response={
             "novelty": 1.5, "confidence": -0.3, "urgency": 0.5,
             "interruption_cost": 0.5, "composite": 2.0, "passes": True,
             "reason": "clamped",
         }),
     )
     score = gate.score(_make_candidate("Overflow"))
-    assert score.novelty == 1.0
-    assert score.confidence == 0.0
-    assert score.composite == 1.0
+    assert score.passes is False
+    assert score.composite == 0.0
+    assert score.reasons == ("llm_fallback",)
 
 
 def test_relevance_gate_fallback_on_llm_failure(tmp_path: Path) -> None:
     from nuself.reflection import LLMRelevanceGate
 
-    gate = LLMRelevanceGate(tmp_path, llm=_BrokenLLM())  # type: ignore[arg-type]
+    gate = LLMRelevanceGate(tmp_path, agent=_BrokenAgent())  # type: ignore[arg-type]
     candidate = _make_candidate("Will fail")
     score = gate.score(candidate)
     assert score.passes is False
@@ -807,14 +850,22 @@ def test_relevance_gate_fallback_on_llm_failure(tmp_path: Path) -> None:
     assert score.novelty == candidate.novelty
 
 
-def test_relevance_gate_fallback_on_bad_json(tmp_path: Path) -> None:
+def test_relevance_gate_fallback_on_invalid_structured_output(
+    tmp_path: Path,
+) -> None:
     from nuself.reflection import LLMRelevanceGate
 
-    class _BadJSONLLM:
-        def complete(self, messages: object) -> str:
-            return "not json"
+    class _InvalidRelevanceAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> RelevanceScoreOutput:
+            raise ValueError("invalid structured output")
 
-    gate = LLMRelevanceGate(tmp_path, llm=_BadJSONLLM())  # type: ignore[arg-type]
+    gate = LLMRelevanceGate(
+        tmp_path,
+        agent=_InvalidRelevanceAgent(),
+    )
     score = gate.score(_make_candidate("Bad json"))
     assert score.passes is False
     assert score.reasons == ("llm_fallback",)
@@ -823,11 +874,10 @@ def test_relevance_gate_fallback_on_bad_json(tmp_path: Path) -> None:
 def test_relevance_gate_fallback_on_missing_field(tmp_path: Path) -> None:
     from nuself.reflection import LLMRelevanceGate
 
-    class _MissingFieldLLM:
-        def complete(self, messages: object) -> str:
-            return json.dumps({"novelty": 0.5})  # missing passes, composite, etc.
-
-    gate = LLMRelevanceGate(tmp_path, llm=_MissingFieldLLM())  # type: ignore[arg-type]
+    gate = LLMRelevanceGate(
+        tmp_path,
+        agent=_RelevanceAgent(response={"novelty": 0.5}),
+    )
     score = gate.score(_make_candidate("Missing field"))
     assert score.passes is False
     assert score.reasons == ("llm_fallback",)
@@ -836,15 +886,18 @@ def test_relevance_gate_fallback_on_missing_field(tmp_path: Path) -> None:
 def test_relevance_gate_rejects_passes_from_string(tmp_path: Path) -> None:
     from nuself.reflection import LLMRelevanceGate
 
-    class _StringPassesLLM:
-        def complete(self, messages: object) -> str:
-            return json.dumps({
-                "novelty": 0.5, "confidence": 0.5, "urgency": 0.5,
-                "interruption_cost": 0.5, "composite": 0.5, "passes": "true",
-                "reason": "string true",
-            })
-
-    gate = LLMRelevanceGate(tmp_path, llm=_StringPassesLLM())  # type: ignore[arg-type]
+    gate = LLMRelevanceGate(
+        tmp_path,
+        agent=_RelevanceAgent(response={
+            "novelty": 0.5,
+            "confidence": 0.5,
+            "urgency": 0.5,
+            "interruption_cost": 0.5,
+            "composite": 0.5,
+            "passes": "true",
+            "reason": "string true",
+        }),
+    )
     score = gate.score(_make_candidate("String true"))
     assert score.passes is False
     assert score.composite == 0.0
@@ -874,7 +927,7 @@ def test_relevance_gate_corrupt_state_keeps_cooldown_active(
 ) -> None:
     from nuself.reflection import LLMRelevanceGate
 
-    gate = LLMRelevanceGate(tmp_path, llm=_FakeLLM())
+    gate = LLMRelevanceGate(tmp_path, agent=_RelevanceAgent())
     last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
     last_path.parent.mkdir(parents=True, exist_ok=True)
     last_path.write_text('{"timestamp":"not-a-date"}', encoding="utf-8")
@@ -894,7 +947,7 @@ def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
-    gate = LLMRelevanceGate(tmp_path, llm=_FakeLLM())
+    gate = LLMRelevanceGate(tmp_path, agent=_RelevanceAgent())
     last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
     last_path.parent.mkdir(parents=True, exist_ok=True)
     last_path.write_text('{"timestamp":"not-a-date"}', encoding="utf-8")
@@ -919,5 +972,5 @@ def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
 def test_relevance_gate_no_cooldown_when_no_last_reflection(tmp_path: Path) -> None:
     from nuself.reflection import LLMRelevanceGate
 
-    gate = LLMRelevanceGate(tmp_path, llm=_FakeLLM())
+    gate = LLMRelevanceGate(tmp_path, agent=_RelevanceAgent())
     assert gate._cooldown_ok() is True

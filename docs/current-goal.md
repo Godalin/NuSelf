@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Memory curator, optimizer, and intake all use the shared
-framework-native structured-agent boundary with no text response protocol.
+Idle. Reflection candidate generation and relevance scoring use the shared
+structured-agent boundary and reject invalid scores instead of clamping them.
 
 ## Active Branch
 
@@ -23,15 +23,17 @@ code.
 
 ## Completion Evidence
 
-- Curator and optimizer inject `StructuredAgent` with their exact output
-  schema and use LangChain `SystemMessage`/`HumanMessage` prompts.
-- Both accept only typed action batches from the shared runner before domain
-  conversion and candidate dispatch.
-- JSON instructions, fenced-text extraction, `model_validate_json`, parser
-  helpers, `ChatLLM`, and `llm=` injection are removed from production paths.
-- Existing strict schema, complete-batch rejection, cursor, auto-accept, and
-  pending optimizer candidate semantics remain covered.
-- Focused curator and optimizer tests: 44 passed.
+- Candidate generation and relevance scoring inject exact-schema
+  `StructuredAgent` capabilities and use framework message objects.
+- Both output models are strict and extra-forbid. Candidate fields are
+  required, titles are bounded, candidate batches contain at most three items,
+  and every generated score is constrained from zero through one.
+- Prompted/fenced JSON parsing, generated defaults, score clamping, text LLM
+  injection, and parser helpers are removed from both generated-output paths.
+- Relevance failures still return the deterministic fail-closed score, and
+  candidate failures still return an empty batch with an audit event.
+- Strict persisted schedule-state JSON decoding remains intentionally intact.
+- Focused reflection scheduler tests: 46 passed.
 - Final full tests: 1453 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
@@ -43,4 +45,4 @@ their validated commit.
 
 ## Next Review Batch
 
-Audit reflection scheduler generated-output boundaries.
+Audit persona discussion generated-output boundaries.

@@ -82,29 +82,32 @@ Trace fields:
 
 ## LLMRelevanceGate Scoring
 
-The gate is LLM-driven (L2 judgment). The LLM receives the candidate, recent reflection history, and cooldown state, then returns a structured JSON judgment:
+The gate is LLM-driven (L2 judgment). The agent receives the candidate, recent
+reflection history, and cooldown state, then returns an actual typed
+`RelevanceScoreOutput` through the shared framework-native
+`structured_response` boundary.
 
-```json
-{
-  "novelty": 0.0-1.0,
-  "confidence": 0.0-1.0,
-  "urgency": 0.0-1.0,
-  "interruption_cost": 0.0-1.0,
-  "composite": 0.0-1.0,
-  "passes": true|false,
-  "reason": "explanation of the judgment"
-}
-```
-
-- All floats are clamped to `[0, 1]`.
+- The model is strict and forbids extra fields. It requires `novelty`,
+  `confidence`, `urgency`, `interruption_cost`, and `composite` floats in
+  `[0, 1]`, a JSON boolean `passes`, and a non-empty `reason`.
+- Out-of-range or coercive values are rejected rather than clamped.
 - `passes` is the LLM's holistic judgment, not a derived formula.
-- The Pydantic response models are the authoritative parse boundary. Boolean
-  fields must be JSON booleans, candidate types must be declared
-  `IdeaCandidateType` values, and a malformed item invalidates its complete
-  candidate-generation batch. A handwritten dict parser must not coerce or
-  partially accept output after schema validation fails.
-- On any LLM/JSON/parsing failure, fallback to `passes=false`, `composite=0.0`, `reason="llm_fallback"`.
+- Missing or invalid structured output falls back to `passes=false`,
+  `composite=0.0`, and `reason="llm_fallback"`. Response text is not reparsed.
 - `cooldown_ok` remains L1 deterministic: checked before the LLM call using `config.scheduler.cooldown_seconds`.
+
+## Candidate Generation Contract
+
+The proactive candidate agent returns an actual typed `CandidateListOutput`
+through the same shared boundary. The response and every candidate forbid
+extra fields. Each item requires a non-empty title of at most 80 characters,
+a non-empty body, a declared `IdeaCandidateType`, and explicit confidence,
+novelty, urgency, and interruption-cost floats in `[0, 1]`. The complete list
+contains at most three items.
+
+A malformed item rejects the complete generated batch and produces the
+existing empty result plus `candidate_generation_failed`. Candidate text is
+not parsed, missing fields are not defaulted, and scores are not clamped.
 
 ## Gate Thresholds
 

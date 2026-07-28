@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reflection candidate generation and relevance scoring now use the shared
+  LangChain structured-agent boundary. Generated defaults, prompted/fenced
+  JSON parsing, extra fields, score clamping, and legacy `llm=` injection were
+  removed; malformed typed output keeps the existing fail-closed behavior.
 - Memory curator and optimizer now use the shared LangChain structured-agent
   boundary and accept only typed action batches. Their prompted-JSON,
   fenced-text extraction, parser helpers, and legacy `llm=` injection paths

@@ -310,7 +310,7 @@ caller request/job/trace identity, and restore the caller context afterward.
 
 Thread-scoped dynamic persona prompt files are authoritative; their derived name index is validated and atomically rebuilt when missing, malformed, or stale, so damaged lookup metadata does not hide healthy personas or retain old names after a rename.
 
-Reflection relevance and candidate generation use strict typed response schemas. Malformed batches, string booleans, and unknown candidate types take the existing safe fallback instead of being coerced or partially accepted.
+Reflection relevance and candidate generation use the shared LangChain structured-agent boundary with strict typed response schemas. Missing fields, extra fields, out-of-range scores, malformed batches, string booleans, and unknown candidate types take the existing safe fallback instead of being defaulted, clamped, coerced, or partially accepted.
 
 Persona activation and competitive discussion use the same strict typed-output
 rule. Malformed activation, scoring, participant-selection, or moderator JSON
