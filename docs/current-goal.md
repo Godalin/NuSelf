@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make audit envelopes self-contained and project audit/event envelopes through
-one typed log boundary.
+Distinguish missing legacy `LogEvent` fields from present-but-corrupt fields
+without silently coercing evidence to `None`.
 
 ## Active Branch
 
@@ -14,41 +14,40 @@ one typed log boundary.
 
 ## Ordered Work
 
-1. Audit direct log writes and runtime-event log projection.
-2. Specify complete audit content inside the envelope payload.
-3. Add explicit audit-envelope construction and write boundaries.
-4. Share one envelope-to-`LogEvent` projector across audit and event kinds.
-5. Verify audit envelope round trips retain every projected field.
+1. Audit local construction, record decoding, and reader skip behavior.
+2. Specify legacy absence versus malformed presence.
+3. Validate all required and optional fields in `LogEvent`.
+4. Require new envelope identity fields to appear as a consistent pair.
+5. Verify corrupt records are skipped without hiding healthy or legacy lines.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Preserve `write_log_event()` as the domain-facing convenience API.
-- Keep direct audit names governed by domain specs rather than the runtime
-  event-definition registry.
-- Preserve append, observer, retention, and legacy-read behavior.
+- Preserve readable pre-envelope records with both identity fields absent.
+- Preserve plain non-JSON legacy line wrapping.
+- Keep the reader's record-isolation policy: one corrupt line does not hide
+  healthy lines.
 
 ## Completion Evidence
 
-- `create_audit_envelope()` puts the complete `RuntimeLogEventPayload` and
-  resolved runtime context into one immutable `kind="audit"` envelope.
-- `write_audit_envelope()` and `write_runtime_event()` delegate to one strict
-  envelope-to-`LogEvent` projector with explicit kind ownership.
-- `write_log_event()` is now only the domain-facing composition of audit
-  envelope creation and persistence; it no longer constructs a parallel
-  `LogEvent`.
-- Tests prove a serialized/decoded audit envelope preserves every identity,
-  context, payload, and metadata field, while wrong-kind and empty audit
-  envelopes are rejected before append.
-- Focused log, runtime-event, observability, and CLI tests: `352 passed`.
-- `.venv/bin/pytest -q`: `1521 passed`.
+- `LogEvent.__post_init__()` now validates required identity, level/component,
+  paired envelope identity, optional scalar types, non-negative duration, and
+  strict metadata for both local and decoded construction.
+- `LogEvent.from_record()` uses field-aware strict decoders; invalid present
+  values no longer collapse to `None`, and booleans are rejected as integers.
+- Records are legacy only when both `event_id` and `schema_version` are absent
+  or null; partial or unsupported identity is corrupt.
+- Tests cover every formerly coerced optional field, partial envelope identity,
+  genuine legacy decoding, and reader isolation of corrupt lines.
+- Focused log, CLI, TUI, and REPL activity tests: `365 passed`.
+- `.venv/bin/pytest -q`: `1532 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `0c46c4e`.
+`dev/v0.3.x` is published through `dd0e288`.
 
 ## Next Review Batch
 
-Audit LogEvent construction and decode validation for remaining silent coercion.
+Audit log-reader diagnostics for isolated corrupt structured records.

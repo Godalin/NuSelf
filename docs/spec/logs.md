@@ -278,6 +278,15 @@ Display name mapping: `persona` → `selves`.
 - Invalid JSON lines skipped.
 - Records predating the envelope fields remain readable with `event_id=None`
   and `schema_version=None`.
+- Legacy absence means both `event_id` and `schema_version` are missing or
+  null. If either identity field is present, both must be present and valid:
+  `event_id` is non-blank and `schema_version` is exactly the supported integer
+  version, excluding booleans. A partial identity pair is corrupt, not legacy.
+- Every present optional scalar retains its declared type; invalid context,
+  node, duration, status, error, or metadata values invalidate that record
+  rather than being silently coerced to `None`. Duration is a non-negative
+  integer and metadata remains strict JSON. The reader isolates the invalid
+  line and continues with healthy and genuinely legacy records.
 - `InteractiveLogCursor` starts at the current byte length of each component
   file, reads only newly appended complete lines, and retains an incomplete
   trailing line for the next read. Stable event IDs provide deduplication;

@@ -109,6 +109,51 @@ class LogEvent:
     metadata: Mapping[str, object] | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.time, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError("log time must be a string")
+        if self.level not in {"debug", "info", "warning", "error"}:
+            raise ValueError("log level is invalid")
+        if self.component not in LOG_COMPONENTS:
+            raise ValueError("log component is invalid")
+        for field_name in ("event", "message"):
+            if not isinstance(getattr(self, field_name), str):
+                raise TypeError(f"log {field_name} must be a string")
+        if (self.event_id is None) != (self.schema_version is None):
+            raise ValueError(
+                "log event_id and schema_version must both be present or absent"
+            )
+        if self.event_id is not None and (
+            not isinstance(self.event_id, str)  # pyright: ignore[reportUnnecessaryIsInstance]
+            or not self.event_id.strip()
+        ):
+            raise ValueError("log event_id must not be blank")
+        if self.schema_version is not None and (
+            type(self.schema_version) is not int
+            or self.schema_version != RUNTIME_SCHEMA_VERSION
+        ):
+            raise ValueError("log schema_version is unsupported")
+        for field_name in (
+            "thread_id",
+            "request_id",
+            "turn_id",
+            "job_id",
+            "trace_id",
+            "source",
+            "node",
+            "status",
+            "error",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and not isinstance(value, str):
+                raise TypeError(f"log {field_name} must be a string")
+        if self.duration_ms is not None and (
+            type(self.duration_ms) is not int or self.duration_ms < 0
+        ):
+            raise TypeError(
+                "log duration_ms must be a non-negative integer"
+            )
+        if self.schema_version is not None:
+            _require_log_identity(self.component, self.event)
         if self.metadata is None:
             return
         if not isinstance(self.metadata, Mapping):  # pyright: ignore[reportUnnecessaryIsInstance]
@@ -166,30 +211,28 @@ class LogEvent:
             or not isinstance(timestamp, str)
         ):
             raise ValueError("log event fields are invalid")
-        metadata = record.get("metadata")
-        event_id = record.get("event_id")
-        schema_version = record.get("schema_version")
         return cls(
             time=timestamp,
             level=cast(LogLevel, level),
             component=component,
             event=event,
             message=message,
-            event_id=event_id if isinstance(event_id, str) else None,
-            schema_version=schema_version if isinstance(schema_version, int) else None,
-            thread_id=_optional_str(record.get("thread_id")),
-            request_id=_optional_str(record.get("request_id")),
-            turn_id=_optional_str(record.get("turn_id")),
-            job_id=_optional_str(record.get("job_id")),
-            trace_id=_optional_str(record.get("trace_id")),
-            source=_optional_str(record.get("source")),
-            node=_optional_str(record.get("node")),
-            duration_ms=_optional_int(record.get("duration_ms")),
-            status=_optional_str(record.get("status")),
-            error=_optional_str(record.get("error")),
-            metadata=cast(dict[str, object], metadata)
-            if isinstance(metadata, dict)
-            else None,
+            event_id=_record_optional_str(record, "event_id"),
+            schema_version=_record_optional_int(
+                record,
+                "schema_version",
+            ),
+            thread_id=_record_optional_str(record, "thread_id"),
+            request_id=_record_optional_str(record, "request_id"),
+            turn_id=_record_optional_str(record, "turn_id"),
+            job_id=_record_optional_str(record, "job_id"),
+            trace_id=_record_optional_str(record, "trace_id"),
+            source=_record_optional_str(record, "source"),
+            node=_record_optional_str(record, "node"),
+            duration_ms=_record_optional_int(record, "duration_ms"),
+            status=_record_optional_str(record, "status"),
+            error=_record_optional_str(record, "error"),
+            metadata=_record_optional_mapping(record, "metadata"),
         )
 
 
@@ -585,12 +628,40 @@ def _parse_log_line(line: str, component: LogComponent) -> LogEvent | None:
         return None
 
 
-def _optional_str(value: object) -> str | None:
-    return value if isinstance(value, str) else None
+def _record_optional_str(
+    record: Mapping[str, object],
+    field_name: str,
+) -> str | None:
+    value = record.get(field_name)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"log {field_name} must be a string")
+    return value
 
 
-def _optional_int(value: object) -> int | None:
-    return value if isinstance(value, int) else None
+def _record_optional_int(
+    record: Mapping[str, object],
+    field_name: str,
+) -> int | None:
+    value = record.get(field_name)
+    if value is None:
+        return None
+    if type(value) is not int:
+        raise TypeError(f"log {field_name} must be an integer")
+    return value
+
+
+def _record_optional_mapping(
+    record: Mapping[str, object],
+    field_name: str,
+) -> Mapping[str, object] | None:
+    value = record.get(field_name)
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise TypeError(f"log {field_name} must be a mapping")
+    return cast(Mapping[str, object], value)
 
 
 # ============================================================================

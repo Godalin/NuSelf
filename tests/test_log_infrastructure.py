@@ -355,6 +355,92 @@ def test_legacy_log_records_remain_readable_without_identity() -> None:
     assert event.schema_version is None
 
 
+@pytest.mark.parametrize(
+    ("field_name", "value", "error_type"),
+    [
+        ("event_id", 42, TypeError),
+        ("event_id", " ", ValueError),
+        ("schema_version", True, TypeError),
+        ("schema_version", 2, ValueError),
+        ("thread_id", 42, TypeError),
+        ("duration_ms", True, TypeError),
+        ("duration_ms", -1, TypeError),
+        ("metadata", [], TypeError),
+    ],
+)
+def test_log_event_rejects_present_corrupt_optional_fields(
+    field_name: str,
+    value: object,
+    error_type: type[Exception],
+) -> None:
+    record = LogEvent(
+        time="2026-01-01T00:00:00Z",
+        level="info",
+        component="chat",
+        event="healthy_event",
+        message="healthy",
+    ).to_record()
+    record[field_name] = value
+
+    with pytest.raises(error_type):
+        LogEvent.from_record(record)
+
+
+@pytest.mark.parametrize("missing_field", ("event_id", "schema_version"))
+def test_log_event_rejects_partial_envelope_identity(
+    missing_field: str,
+) -> None:
+    record = LogEvent(
+        time="2026-01-01T00:00:00Z",
+        level="info",
+        component="chat",
+        event="healthy_event",
+        message="healthy",
+    ).to_record()
+    del record[missing_field]
+
+    with pytest.raises(ValueError, match="both be present or absent"):
+        LogEvent.from_record(record)
+
+
+def test_log_reader_isolates_corrupt_record_without_hiding_legacy(
+    tmp_path: Path,
+) -> None:
+    path = log_path("chat", project_root=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    healthy = LogEvent(
+        time="2026-01-01T00:00:02Z",
+        level="info",
+        component="chat",
+        event="healthy_event",
+        message="healthy",
+    ).to_record()
+    legacy = {
+        "time": "2026-01-01T00:00:01Z",
+        "level": "info",
+        "component": "chat",
+        "event": "Legacy event with old syntax",
+        "message": "legacy",
+    }
+    corrupt = dict(healthy)
+    corrupt["time"] = "2026-01-01T00:00:00Z"
+    corrupt["duration_ms"] = True
+    path.write_text(
+        "\n".join(
+            json.dumps(record)
+            for record in (corrupt, legacy, healthy)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    events = read_log_events(project_root=tmp_path, component="chat")
+
+    assert [event.message for event in events] == ["legacy", "healthy"]
+    assert events[0].event_id is None
+    assert events[1].event_id == healthy["event_id"]
+
+
 def test_log_writes_are_complete_under_thread_contention(tmp_path: Path) -> None:
     def write(index: int) -> None:
         write_log_event(
