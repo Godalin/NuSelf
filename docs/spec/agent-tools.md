@@ -99,6 +99,13 @@ Chat tool invocation must follow LangChain's current tool-calling contract:
 create_agent(model, tools=tools, response_format=...) → LangChain-managed tool loop → structured_response
 ```
 
+When agent state contains `structured_response`, that field is authoritative:
+NuSelf validates it as `ChatStructuredOutput` and rejects malformed values or
+visible tool-protocol text. It must not silently reinterpret the final ordinary
+message after an authoritative structured value fails validation; the endpoint
+retry/failover boundary handles that failure. Reading the final message remains
+a compatibility path only when `structured_response` is absent.
+
 NuSelf must not ask the model to print a private tool protocol in the assistant message body. In particular:
 
 - no visible `[Tool call: ...]` markers;

@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Route runtime secondary logging and durable-job wake-up failures through the
-shared observable best-effort boundary.
+Make LangChain structured-response state authoritative when present, without
+removing the compatibility path for runtimes that omit it.
 
 ## Active Branch
 
@@ -14,29 +14,29 @@ shared observable best-effort boundary.
 
 ## Ordered Work
 
-1. [x] Classify remaining silent and broad exception handlers.
-2. [x] Specify best-effort behavior for persona audit and job wake-up failures.
-3. [x] Migrate chat persona secondary logs to shared observability.
-4. [x] Preserve export wake-up exception chains without losing durable jobs.
-5. [x] Add focused failure-path tests.
+1. [x] Trace structured-response parsing and endpoint failover behavior.
+2. [x] Specify authoritative and compatibility state paths.
+3. [x] Reject malformed or protocol-like structured responses explicitly.
+4. [x] Preserve message fallback only when structured state is absent.
+5. [x] Add focused parser and endpoint-boundary tests.
 6. [x] Run full tests, type checking, and formatting checks.
 7. [x] Commit this stage as one functional change.
 
 ## Out Of Scope
 
-- Changing persona consultation or competitive discussion policy.
-- Making audit logging authoritative for a successful persona operation.
-- Replacing the durable export manifest or in-memory wake-up transport.
-- Mechanically removing intentional not-found, cleanup, or decode isolation.
+- Changing `ChatStructuredOutput` fields or user-visible response payloads.
+- Removing local-LLM fallback after all configured LangChain endpoints fail.
+- Changing tool definitions, middleware, or conversation graph nodes.
+- Auditing CLI configuration and history fallbacks in the same commit.
 
 ## Completion Evidence
 
-- Persona results survive audit sink failure while the failure remains visible.
-- Discussion failures still degrade to a result if their failure log also fails.
-- Export manifests remain durable and non-terminal when queue wake-up fails,
-  and the compact exception chain is observable.
-- No local broad logging wrapper remains in the migrated paths.
-- Focused failure tests, full pytest, Pyright, and `git diff --check` pass.
+- Valid framework structured output is accepted.
+- Present-but-invalid structured output raises into retry/failover rather than
+  being reinterpreted from ordinary messages.
+- Missing structured state can still parse the final message for compatibility.
+- Protocol-like tool-call text is rejected in either path.
+- Focused parser tests, full pytest, Pyright, and `git diff --check` pass.
 
 ## Publication
 
@@ -44,5 +44,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Continue the classified exception audit with agent structured-output fallback
-and CLI configuration/history boundaries.
+Continue the classified exception audit with CLI configuration and history
+boundaries.
