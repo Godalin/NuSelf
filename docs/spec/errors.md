@@ -180,6 +180,12 @@ their failure or diagnostic failure cannot replace a committed start, advance,
 status transition, or deletion result. Delete success is not projected before
 the authoritative delete finishes.
 
+Memory curator candidate/entry/cursor writes and reflection organizer
+repository mutations are authoritative. Curator audits, memory-update traces,
+and organizer completion audits are secondary projections; failure of a
+projection or its structured diagnostic cannot replace or replay committed
+domain results.
+
 ## Atomic File Failure Provenance
 
 Shared atomic text/JSON persistence propagates an ordinary write or replace

@@ -106,6 +106,12 @@ errors are not degraded and continue to the daemon request backstop.
 - If `cursor >= next_message_index`, no-op (idempotent).
 - If thread was compressed (`cursor < message_start_index`), log gap and start from `visible_start`.
 - Advance cursor to `visible_end` after processing.
+- Gap, deferred, candidate, and completion observations are structured
+  `memory` log events. The curator never appends raw text to `memory.log`;
+  that file remains JSONL under the shared log contract.
+- Curator audit persistence is auxiliary. Failure to write one audit or its
+  diagnostic cannot replace a saved candidate/entry, prevent an authoritative
+  cursor update, or make a completed run eligible for replay.
 
 ### Quality Gate (`_has_memory_worthy_signal`)
 
@@ -139,6 +145,10 @@ errors are not degraded and continue to the daemon request backstop.
   - Undeclared storage or implementation failures propagate and prevent cursor
     advance; auto-accept must not broadly suppress a potentially partial write.
 - When `auto_accept=False`, candidates remain `pending`.
+- A successful auto-accept memory-update trace records the candidate's actual
+  `create` or `update` action. Trace recording is best effort through shared
+  observability; trace and diagnostic-store failure cannot replace the saved
+  reviewed entry.
 
 ## Optimization Flow (`MemoryOptimizer`)
 

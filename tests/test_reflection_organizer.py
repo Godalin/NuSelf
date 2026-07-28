@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from nuself.logs import read_log_events
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
@@ -88,3 +90,54 @@ def test_reflection_organizer_leaves_distinct_entries_pending(tmp_path: Path) ->
     assert result.merged_groups == 0
     assert result.archived_entries == 0
     assert len(repo.list(status="pending")) == 2
+
+
+def test_organizer_audit_failure_cannot_replace_merged_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = ReflectionRepository(tmp_path)
+    weaker = repo.add(
+        _entry(
+            "reflection-a",
+            title="Memory trace design",
+            body="Think about memory trace design and provenance links.",
+            score=0.5,
+            created_at="2026-05-18T10:00:00+00:00",
+        )
+    )
+    stronger = repo.add(
+        _entry(
+            "reflection-b",
+            title="Memory trace provenance design",
+            body="Explore memory trace design and provenance links in NuSelf.",
+            score=0.9,
+            created_at="2026-05-18T10:01:00+00:00",
+        )
+    )
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.reflection.organizer.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="reflection/organizer_audit_write_failed",
+    ):
+        result = ReflectionOrganizer(
+            tmp_path,
+            repository=repo,
+        ).organize_pending()
+
+    assert result.merged_groups == 1
+    assert result.archived_entries == 1
+    assert repo.get(stronger.id).status == "pending"
+    assert repo.get(weaker.id).status == "archived"

@@ -62,6 +62,10 @@ ReasonService lifecycle audits and provenance traces are auxiliary to committed
 thread, step, status, and deletion state, preventing projection failures from
 turning successful operations into apparent failures.
 
+Memory curator activity now remains structured in `memory.log`; curator trace
+and audit failures, plus organizer completion audit failures, cannot replace
+already-persisted memory or reflection results.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).

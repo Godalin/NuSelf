@@ -66,7 +66,20 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
     assert candidates[0].evidence[0].source_ref == "thread:default:0-2"
     assert candidates[0].evidence[0].observed_at == candidates[0].observed_at
     assert candidates[0].evidence[0].summary == "important memory model decision"
-    assert "candidate=" in result.log_path.read_text(encoding="utf-8")
+    events = read_log_events(
+        project_root=tmp_path,
+        component="memory",
+    )
+    assert [event.event for event in events[-2:]] == [
+        "candidate_created",
+        "curator_completed",
+    ]
+    assert events[-2].metadata is not None
+    assert events[-2].metadata["candidate_id"] == candidates[0].id
+    for line in result.log_path.read_text(
+        encoding="utf-8"
+    ).splitlines():
+        assert isinstance(json.loads(line), dict)
     cursor_path = (
         tmp_path
         / "private"
@@ -593,6 +606,190 @@ def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
     candidates = MemoryCandidateRepository(tmp_path).list(include_reviewed=True)
     assert len(candidates) == 1
     assert candidates[0].review_state == "accepted"
+
+
+def test_curator_audit_failure_cannot_replay_committed_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "Remember that curator audit storage is auxiliary "
+                        "after candidate and cursor persistence."
+                    ),
+                )
+            ],
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"create","type":"episode",'
+        '"title":"Curator audit boundary",'
+        '"body":"Curator audit writes are auxiliary.",'
+        '"tags":["memory"],"confidence":0.8,'
+        '"reason":"explicit durability requirement"}]}'
+    )
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.memory.curator.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    curator = MemoryCurator(
+        tmp_path,
+        llm=llm,
+        thread_store=thread_store,
+        settings=MemoryCuratorSettings(auto_accept=False),
+    )
+
+    with pytest.warns(RuntimeWarning) as captured:
+        result = curator.run_once()
+
+    assert result.created == 1
+    assert len(MemoryCandidateRepository(tmp_path).list()) == 1
+    assert curator.run_once().processed_messages == 0
+    assert len(llm.calls) == 1
+    assert any(
+        "memory/curator_audit_write_failed" in str(warning.message)
+        for warning in captured
+    )
+
+
+def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.trace.service import TraceRecorder
+
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "Remember that trace persistence is auxiliary after "
+                        "a reviewed memory entry is saved."
+                    ),
+                )
+            ],
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"create","type":"episode",'
+        '"title":"Trace boundary","body":"Trace writes are auxiliary.",'
+        '"tags":["trace"],"confidence":0.8,'
+        '"reason":"explicit provenance requirement"}]}'
+    )
+
+    def fail_trace(*args: object, **kwargs: object) -> None:
+        raise OSError("trace store unavailable")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        TraceRecorder,
+        "record_memory_update",
+        fail_trace,
+    )
+    monkeypatch.setattr(
+        "nuself.memory.curator.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    repository = MemoryEntryRepository(tmp_path)
+    curator = MemoryCurator(
+        tmp_path,
+        llm=llm,
+        thread_store=thread_store,
+        repository=repository,
+        trace_recorder=TraceRecorder(tmp_path),
+    )
+
+    with pytest.warns(RuntimeWarning) as captured:
+        result = curator.run_once()
+
+    assert result.created == 1
+    [entry] = repository.list()
+    assert entry.review_state == "reviewed"
+    assert curator.run_once().processed_messages == 0
+    messages = [str(warning.message) for warning in captured]
+    assert any(
+        "memory/trace_recording_failed: trace store unavailable"
+        in message
+        for message in messages
+    )
+
+
+def test_auto_accept_update_trace_retains_update_action(
+    tmp_path: Path,
+) -> None:
+    from nuself.trace.service import TraceQueryService, TraceRecorder
+
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "Remember that I updated the durable memory policy: "
+                        "curator traces must retain whether an existing "
+                        "entry was updated."
+                    ),
+                )
+            ],
+        )
+    )
+    repository = MemoryEntryRepository(tmp_path)
+    existing = repository.save(
+        MemoryEntry(
+            type="episode",
+            title="Curator trace policy",
+            body="Curator traces record memory changes.",
+            review_state="reviewed",
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"update","entry_id":"'
+        + existing.id
+        + '","type":"episode","title":"Curator trace policy",'
+        '"body":"Curator traces retain create and update actions.",'
+        '"tags":["trace"],"confidence":0.9,'
+        '"reason":"explicit policy update"}]}'
+    )
+    curator = MemoryCurator(
+        tmp_path,
+        llm=llm,
+        thread_store=thread_store,
+        repository=repository,
+        trace_recorder=TraceRecorder(tmp_path),
+    )
+
+    result = curator.run_once()
+
+    assert result.updated == 1
+    [trace] = TraceQueryService(tmp_path).list_traces(
+        kind="memory_update"
+    )
+    assert trace.metadata["action"] == "update"
 
 
 def test_memory_curator_reports_recoverable_auto_accept_failure(

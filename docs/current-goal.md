@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. ReasonService lifecycle audits and post-persistence traces cannot block
-valid operations or make committed thread/step/status state appear to have
-failed and become eligible for accidental duplicate execution.
+Idle. Memory curator activity uses structured best-effort audit events, and
+curator trace/audit or reflection organizer completion logs cannot replace
+already-persisted domain results.
 
 ## Active Branch
 
@@ -24,20 +24,20 @@ code.
 
 ## Completion Evidence
 
-- Start and advance commit their thread/step state exactly once when trace
-  writes and both structured diagnostic/audit sinks fail.
-- Start, advance, terminal recommendation, transition, and delete lifecycle
-  events use one shared best-effort reason audit boundary.
-- A transition returns and retains its persisted status when its audit and
-  terminal diagnostic both fail.
-- Successful deletion remains successful when its audit cannot be stored;
-  authoritative repository deletion failure emits no `thread_deleted` success
-  event.
-- Repository/workspace/batch writes and deletion errors remain authoritative;
-  prompt generation, advance semantics, transition rules, and trace contents
-  are unchanged.
-- Focused reason service, advancer, and scheduler tests: 49 passed.
-- Final full tests: 1328 passed.
+- Curator gap, deferred, candidate create/update/merge, and completion activity
+  is written as structured `LogEvent` JSONL; raw `_append_log` no longer exists.
+- Failure of curator audit plus its structured diagnostic cannot replace a
+  saved candidate/cursor or replay the processed source range.
+- Memory-update trace plus diagnostic failure cannot replace the reviewed
+  entry or rewind the cursor.
+- Auto-accepted update candidates now write `memory_update` trace metadata with
+  `action="update"` instead of the previous incorrect `create`.
+- Organizer completion audit plus diagnostic failure preserves its returned
+  merge counts and persisted pending/archive states.
+- Candidate/entry/cursor and reflection repository failures remain
+  authoritative; curator policy and organizer similarity rules are unchanged.
+- Focused curator, organizer, and reflection scheduler tests: 73 passed.
+- Final full tests: 1332 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -48,4 +48,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-ReasonService projections preserve committed domain operations.
+curator and organizer post-persistence projections preserve domain results.

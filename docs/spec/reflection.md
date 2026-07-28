@@ -176,6 +176,10 @@ later schedule-state/outbox/cycle completion work, or introduce a hidden
 retry. Repository, schedule-state write, and outbox failures remain
 authoritative.
 
+Within `ReflectionOrganizer`, `organizer_completed` is an auxiliary projection
+written only after merged/archived repository state. Its audit or diagnostic
+failure cannot replace the returned organization result or undo those writes.
+
 ## Optional Notify Bridge
 
 If `reflection.auto_notify` is `true`, a brief `OutboxEntry` is created **pointing to** the reflection:

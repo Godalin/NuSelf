@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Memory curator activity now uses structured best-effort audit events instead
+  of raw `memory.log` appends, and curator trace/organizer completion
+  projections cannot replace committed candidate, cursor, entry, or reflection
+  results. Update traces retain the actual curator action.
 - ReasonService lifecycle audits and post-persistence traces now use shared
   observable boundaries. Projection failure cannot replace committed thread,
   step, transition, or deletion results, and delete success is logged only
