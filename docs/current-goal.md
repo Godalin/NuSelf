@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Recoverable local `:persona` and `:history` failures now retain concise
-interactive results while writing privacy-bounded structured diagnostics.
+Idle. Daemon diagnostic project-root lookup now degrades only for an unowned
+server adapter and no longer hides failures in owned request state.
 
 ## Active Branch
 
@@ -23,18 +23,15 @@ code.
 
 ## Completion Evidence
 
-- `:persona` writes `persona/interactive_command_failed` with only the command
-  action; prompt text and other command arguments are excluded.
-- `:history` writes `chat/interactive_history_load_failed` with the requested
-  thread ID and compact exception chain.
-- Both diagnostics use error severity while preserving the existing rendered
-  command result and interactive-session behavior.
-- Structured logging failure falls back to `RuntimeWarning` without replacing
-  the original command error.
-- `KeyboardInterrupt` remains the same propagated object and produces no
-  command-failure diagnostic.
-- Focused local REPL error-boundary tests: 8 passed.
-- Final full tests: 1376 passed.
+- `_request_project_root()` uses an explicit `NuSelfUnixServer` ownership
+  check instead of calling the strict state accessor under `except Exception`.
+- Owned server state supplies the diagnostic project root directly.
+- An unowned server adapter returns `None` without reading structurally
+  unrelated state.
+- Unexpected owned-state access failure propagates instead of being silently
+  erased.
+- Focused daemon transport tests: 37 passed.
+- Final full tests: 1379 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -44,5 +41,6 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit daemon diagnostic-context lookup and remaining REPL/CLI broad exception
-boundaries without adding blanket command catches.
+Audit remaining CLI/REPL and daemon broad exception boundaries, prioritizing
+places that conflate expected domain failures with unexpected implementation
+or infrastructure errors.

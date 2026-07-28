@@ -256,6 +256,13 @@ peer disconnect returns without a response. The daemon process runner owns
 socket path creation, server-loop timing, state construction, signals, workers,
 and cleanup; none of those responsibilities belong to the socket adapter.
 
+Observed transport failures may attach the server state's project root as
+non-authoritative diagnostic context. The handler resolves that hint through
+an explicit `NuSelfUnixServer` ownership check: an unowned server adapter
+returns no hint, while failures reading an owned structural state propagate
+instead of being hidden by a broad exception catch. Authoritative request
+dispatch continues to use the strict typed state accessor.
+
 ## Runtime Envelope And Correlation Context
 
 `nuself.runtime.context` owns `RuntimeContext`, `current_runtime_context()`,

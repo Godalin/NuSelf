@@ -165,10 +165,10 @@ class RequestHandler(socketserver.StreamRequestHandler):
             )
 
     def _request_project_root(self) -> Path | None:
-        try:
-            return self._daemon_state().project_root
-        except Exception:
+        server = self.server
+        if not isinstance(server, NuSelfUnixServer):
             return None
+        return server.state.project_root
 
     def _daemon_state(self) -> DaemonRequestState:
         server = self.server
