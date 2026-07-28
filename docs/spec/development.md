@@ -171,8 +171,8 @@ Rules:
 public entrypoint. Parser, command, and REPL implementations live beside it
 under the same package.
 
-- `cli/parser.py` owns top-level parser construction and accepts the small set
-  of interactive callbacks through `InteractiveHandlers`; it never imports
+- `cli/parser.py` owns top-level parser construction and accepts only dynamic
+  chat launch-policy callbacks through `EntrypointHandlers`; it never imports
   `nuself.cli`.
 - `cli/handlers.py` owns typed argparse handler binding, help-only group
   binding, and exit-status validation at the single CLI dispatch boundary.
@@ -216,7 +216,7 @@ under the same package.
 - `cli/commands/pack.py` owns thought-pack export/import/list/inspect behavior,
   including pack path resolution and human-readable archive sizes.
 - `cli/commands/eval.py` owns conversation and notification fixture evaluation
-  orchestration for both the canonical and compatibility CLI routes. Every
+  orchestration for the canonical `dev eval` route. Every
   evaluator returns one typed `EvalResult` per scenario; the command derives
   totals and exit status from those results and must not infer fixture counts
   from pytest output, hard-coded constants, or process return codes.
@@ -272,8 +272,8 @@ under the same package.
   rendering. It also owns the bound send thread and daemon activity
   subscription lifecycle, including log-poll fallback, final drain, and
   best-effort close. The composition root supplies polling configuration and
-  compatibility callbacks but does not implement thread or transport control
-  flow.
+  injected reader/presenter effects but does not implement thread or transport
+  control flow.
 - `cli/repl/turns.py` owns one logical interactive chat turn: stable turn id,
   bounded transport retry, exact runtime context, live activity coordination,
   session message/log association, memory/reply presentation order, and error

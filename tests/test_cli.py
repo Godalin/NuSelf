@@ -154,6 +154,39 @@ def test_assistant_reply_uses_rich_renderer_when_stdout_is_tty(
     assert rendered == ["**hello**"]
 
 
+def test_reason_watch_dispatches_directly_to_repl_command_owner(
+    tmp_path: Path, monkeypatch: MonkeyPatchFixture
+) -> None:
+    calls: list[tuple[Path | None, int, str | None]] = []
+
+    def watch(
+        project_root: Path | None,
+        interval: int = 2,
+        thread_ref: str | None = None,
+    ) -> None:
+        calls.append((project_root, interval, thread_ref))
+
+    monkeypatch.setattr(
+        "nuself.cli.repl.commands.handle_interactive_reason_watch",
+        watch,
+    )
+
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "reason",
+            "watch",
+            "planning",
+            "--interval",
+            "7",
+        ]
+    )
+
+    assert result == 0
+    assert calls == [(tmp_path, 7, "planning")]
+
+
 def test_chat_without_message_enters_one_shot_interactive_mode(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:

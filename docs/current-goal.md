@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Chat now has one framework-native typed response protocol plus one
-strictly plain-text deterministic local fallback.
+Idle. The CLI parser now injects only dynamic chat entrypoint policy; reason
+watch is owned and bound directly by the REPL command subsystem.
 
 ## Active Branch
 
@@ -23,18 +23,17 @@ code.
 
 ## Completion Evidence
 
-- LangChain agent state must contain `structured_response`; message content is
-  never reparsed.
-- The no-model fallback wraps plain text with default structured metadata and
-  rejects response-shaped JSON, fenced JSON, and visible tool-call markers.
-- Prompted/fenced chat JSON parsers, the generic LLM JSON helper, and obsolete
-  runtime parser methods are deleted.
-- `ConversationResponseService` is the typed injection boundary for tests and
-  alternate composition roots.
-- Conversation evaluation fixtures store a structured `response` object and
-  inject it directly; the old `llm_response` string field is removed.
-- Focused chat, daemon, synthesis, response, and evaluation tests: 116 passed.
-- Final full tests: 1377 passed.
+- The argparse reason-watch adapter lives with the REPL reason-watch command.
+- The parser binds reason watch directly without routing it through the CLI
+  composition root.
+- `EntrypointHandlers` now contains only default/chat/attach/open callbacks
+  backed by the configured `EntrypointController`.
+- Activity reader/presenter effects remain explicit testable dependencies and
+  are no longer described as compatibility callbacks.
+- A parser-dispatch regression test verifies project root, interval, and thread
+  selection reach the REPL command owner.
+- Focused reason-watch test: 1 passed.
+- Final full tests: 1378 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -44,6 +43,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit compatibility callbacks in CLI composition and then explicit legacy
-persisted-data fallbacks, removing only those without a current migration
-contract.
+Audit explicit legacy persisted-data fallbacks, removing only those without a
+current migration contract.

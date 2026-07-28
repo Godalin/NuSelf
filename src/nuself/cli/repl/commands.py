@@ -279,6 +279,17 @@ def handle_interactive_reason_watch(project_root: Path | None, interval: int = 2
         print("\nStopped watching.")
 
 
+def handle_reason_watch(args: argparse.Namespace) -> int:
+    """Run the one-shot argparse adapter for the interactive watch loop."""
+
+    handle_interactive_reason_watch(
+        args.project_root,
+        interval=getattr(args, "interval", 5),
+        thread_ref=getattr(args, "thread_id", None) or None,
+    )
+    return 0
+
+
 def handle_interactive_trace_command(command: str, project_root: Path | None) -> str:
     service = TraceQueryService(project_root)
     if command in {"", "list"}:

@@ -86,17 +86,17 @@ from nuself.cli.commands.trace import (
     handle_trace_show,
 )
 from nuself.cli.handlers import CliHandler, bind_handler, bind_help
+from nuself.cli.repl.commands import handle_reason_watch
 from nuself.logs import LOG_COMPONENTS
 from nuself.trace.domain import TRACE_KINDS
 
 
 @dataclass(frozen=True)
-class InteractiveHandlers:
+class EntrypointHandlers:
     default_entrypoint: CliHandler
     chat: CliHandler
     attach: CliHandler
     open_thread: CliHandler
-    reason_watch: CliHandler
 
 
 def _add_log_arguments(parser: argparse.ArgumentParser) -> None:
@@ -108,7 +108,7 @@ def _add_log_arguments(parser: argparse.ArgumentParser) -> None:
     bind_handler(parser, handle_logs)
 
 
-def build_parser(handlers: InteractiveHandlers) -> argparse.ArgumentParser:
+def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nuself")
     parser.add_argument("--version", action="version", version=f"nuself {__version__}")
     parser.add_argument("--project-root", type=Path, default=None)
@@ -422,7 +422,7 @@ def build_parser(handlers: InteractiveHandlers) -> argparse.ArgumentParser:
     reason_watch_parser.add_argument(
         "--interval", type=int, default=5, help="Poll interval in seconds"
     )
-    bind_handler(reason_watch_parser, handlers.reason_watch)
+    bind_handler(reason_watch_parser, handle_reason_watch)
     trace_parser = subparsers.add_parser(
         "trace",
         help="Inspect thought provenance records.",

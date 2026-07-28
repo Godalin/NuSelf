@@ -70,13 +70,10 @@ try:
     )
     from nuself.cli.handlers import dispatch_cli
     from nuself.cli.parser import (
-        InteractiveHandlers,
+        EntrypointHandlers,
     )
     from nuself.cli.parser import (
         build_parser as _build_parser,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_reason_watch as _handle_interactive_reason_watch,
     )
     from nuself.cli.repl.dispatcher import (
         ReplCommandDispatcher,
@@ -136,26 +133,13 @@ def build_parser() -> argparse.ArgumentParser:
         )
     )
     return _build_parser(
-        InteractiveHandlers(
+        EntrypointHandlers(
             default_entrypoint=entrypoints.handle_default,
             chat=entrypoints.handle_chat,
             attach=entrypoints.handle_attach,
             open_thread=entrypoints.handle_open,
-            reason_watch=handle_reason_watch,
         )
     )
-
-
-# ── Reason handlers ───────────────────────────────────────────────────
-
-
-def handle_reason_watch(args: argparse.Namespace) -> int:
-    _handle_interactive_reason_watch(
-        args.project_root,
-        interval=getattr(args, "interval", 5),
-        thread_ref=getattr(args, "thread_id", None) or None,
-    )
-    return 0
 
 
 def _send_chat(
