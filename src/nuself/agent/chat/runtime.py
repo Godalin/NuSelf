@@ -29,10 +29,10 @@ from nuself.agent.chat.response import (
 from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.chat.tool_runtime import ConversationToolRuntime
 from nuself.agent.chat.thread import ThreadMessage, ThreadState, ThreadStore
+from nuself.agent.messages import ChatMessage
 from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.config import ConfigSystem
 from nuself.llm import (
-    ChatMessage,
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
 )

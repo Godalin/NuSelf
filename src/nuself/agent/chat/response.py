@@ -15,9 +15,9 @@ from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
+from nuself.agent.messages import ChatMessage
 from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
 from nuself.llm import (
-    ChatMessage,
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
     record_llm_endpoint_success,

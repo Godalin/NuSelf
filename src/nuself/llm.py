@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Any, Literal, TypeAlias, cast
+from typing import Any, Literal, cast
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_anthropic import ChatAnthropic
@@ -18,21 +18,6 @@ from nuself.runtime.observability import (
     run_observed_best_effort,
 )
 from nuself.storage import write_json_atomic
-
-ChatRole: TypeAlias = Literal["system", "user", "assistant"]
-JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
-
-
-@dataclass(frozen=True)
-class ChatMessage:
-    """One chat message sent to or returned by an LLM."""
-
-    role: ChatRole
-    content: str
-
-    def to_wire(self) -> dict[str, JsonValue]:
-        return {"role": self.role, "content": self.content}
-
 
 @dataclass(frozen=True)
 class LLMSettings:

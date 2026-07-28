@@ -12,7 +12,8 @@ from nuself.agent.chat import (
     ConversationTurnState,
     ThreadState,
 )
-from nuself.llm import ChatMessage, LangChainLLMEndpoint
+from nuself.agent.messages import ChatMessage
+from nuself.llm import LangChainLLMEndpoint
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.persona import PersonaGraphAgents

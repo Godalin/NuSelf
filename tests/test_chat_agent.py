@@ -19,9 +19,10 @@ from nuself.agent.chat import (
     ThreadStore,
 )
 from nuself.agent.chat import ConversationGraphRuntimeError
+from nuself.agent.messages import ChatMessage
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
-from nuself.llm import ChatMessage, LangChainLLMEndpoint
+from nuself.llm import LangChainLLMEndpoint
 from nuself.logs import read_log_events, runtime_event_log_sink
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.llm import ChatMessage, LLMSettings
+from nuself.agent.messages import ChatMessage
+from nuself.llm import LLMSettings
 from nuself.memory.langmem_adapter import LangMemCurator, _memory_type_from_content, _title_from_body, _to_langmem_messages  # type: ignore[reportPrivateUsage]
 
 

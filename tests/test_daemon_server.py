@@ -11,6 +11,7 @@ from nuself.agent.chat import (
     ConversationGraphRuntime,
     ConversationTurnState,
 )
+from nuself.agent.messages import ChatMessage
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState
@@ -18,7 +19,6 @@ from nuself.daemon.workers import (
     DaemonWorkerJoinTimeoutError,
     DaemonWorkerSupervisor,
 )
-from nuself.llm import ChatMessage
 from nuself.logs import read_log_events, runtime_event_log_sink
 from nuself.memory.curator import MemoryCuratorResult
 from nuself.notification import NotificationOutbox, OutboxEntry

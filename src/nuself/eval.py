@@ -13,8 +13,8 @@ from nuself.agent.chat import (
     ConversationGraphRuntime,
     ConversationTurnState,
 )
+from nuself.agent.messages import ChatMessage
 from nuself.domain.memory import MemoryEntry
-from nuself.llm import ChatMessage
 
 
 @dataclass(frozen=True)

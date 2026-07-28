@@ -6,8 +6,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
+from nuself.agent.messages import ChatMessage
 from nuself.domain.memory import MemoryCandidate, MemoryEvidence, MemoryEntryType
-from nuself.llm import ChatMessage, LLMSettings
+from nuself.llm import LLMSettings
 def _title_from_body(body: str) -> str:
     compact = " ".join(body.split())
     if len(compact) <= 48:

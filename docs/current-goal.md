@@ -5,9 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Delete the dead text-completion adapter stack from `nuself.llm` so the module
-only owns framework model endpoints, endpoint preference, and shared error
-classification.
+Move the shared prompt-message DTO out of `nuself.llm` so endpoint
+infrastructure no longer owns agent-domain messages.
 
 ## Active Branch
 
@@ -15,36 +14,37 @@ classification.
 
 ## Ordered Work
 
-1. Specify the remaining responsibilities of `nuself.llm`.
-2. Remove `ChatLLM`, `LocalFallbackLLM`, and `default_llm`.
-3. Remove the private text failover adapter and raw LangChain text invocation.
-4. Delete adapter-only tests while retaining endpoint state and classification
-   coverage.
-5. Verify no production caller depends on the deleted protocol.
+1. Specify ownership for shared agent prompt messages.
+2. Add `nuself.agent.messages` without coupling memory services to chat.
+3. Migrate production and test imports from `nuself.llm`.
+4. Remove dead message serialization and related endpoint-module types.
+5. Verify `nuself.llm` contains endpoint infrastructure only.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep `ChatMessage` as a temporary domain prompt DTO until its separate
-  LangChain-message migration.
+- Keep the temporary `ChatMessage` DTO until callers migrate directly to
+  framework message objects.
 - Keep endpoint construction, preference persistence, redaction, and
   availability classification in `nuself.llm`.
 
 ## Completion Evidence
 
-- Production code has no references to `ChatLLM`, `LocalFallbackLLM`,
-  `default_llm`, `_LangChainFailoverLLM`, or `_invoke_langchain_model`.
-- `nuself.llm` retains only endpoint construction, endpoint preference state,
-  shared availability classification/redaction, and the temporary prompt DTO.
-- Adapter-only tests were deleted while endpoint state coverage remains.
+- `ChatMessage` now lives in `nuself.agent.messages`; chat, evaluation, and
+  memory extraction import it from the shared agent domain.
+- Memory does not depend on the chat subpackage.
+- The unused `ChatMessage.to_wire()` method and its endpoint-module JSON types
+  were removed.
+- `nuself.llm` has no prompt-message declarations or imports.
 - `.venv/bin/pytest -q`: `1466 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `d4cace5`.
+`dev/v0.3.x` is published through `11643c7`.
 
 ## Next Review Batch
 
-Move the remaining `ChatMessage` DTO out of the endpoint infrastructure module.
+Audit the remaining custom prompt DTO and migrate compatible agent boundaries
+to framework-native messages.

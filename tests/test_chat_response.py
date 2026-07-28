@@ -16,8 +16,8 @@ from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
+from nuself.agent.messages import ChatMessage
 from nuself.llm import (
-    ChatMessage,
     LLMSettings,
     LangChainLLMEndpoint,
 )
