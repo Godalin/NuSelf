@@ -106,6 +106,70 @@ def test_event_subscription_is_bound_to_one_publisher_lifetime() -> None:
     assert current_publisher.unsubscribe(current_subscription) is True
 
 
+def test_subscription_mutations_do_not_change_active_delivery_snapshot() -> None:
+    publisher = EventPublisher()
+    received: list[str] = []
+
+    def mutate_subscriptions(event: RuntimeEnvelope) -> None:
+        received.append(f"mutator:{event.name}")
+        if event.name != "worker.started":
+            return
+        assert publisher.unsubscribe(removed_subscription) is True
+        publisher.subscribe(
+            lambda later_event: received.append(f"added:{later_event.name}")
+        )
+
+    publisher.subscribe(mutate_subscriptions)
+    removed_subscription = publisher.subscribe(
+        lambda event: received.append(f"removed:{event.name}")
+    )
+
+    publisher.publish(name="worker.started", producer="daemon")
+
+    assert received == [
+        "mutator:worker.started",
+        "removed:worker.started",
+    ]
+
+    publisher.publish(name="worker.stopped", producer="daemon")
+
+    assert received == [
+        "mutator:worker.started",
+        "removed:worker.started",
+        "mutator:worker.stopped",
+        "added:worker.stopped",
+    ]
+
+
+def test_subscription_mutations_are_visible_to_nested_publication() -> None:
+    publisher = EventPublisher()
+    received: list[str] = []
+
+    def publish_nested(event: RuntimeEnvelope) -> None:
+        received.append(f"publisher:{event.name}")
+        if event.name != "worker.started":
+            return
+        assert publisher.unsubscribe(removed_subscription) is True
+        publisher.subscribe(
+            lambda nested_event: received.append(f"added:{nested_event.name}")
+        )
+        publisher.publish(name="worker.stopped", producer="daemon")
+
+    publisher.subscribe(publish_nested)
+    removed_subscription = publisher.subscribe(
+        lambda event: received.append(f"removed:{event.name}")
+    )
+
+    publisher.publish(name="worker.started", producer="daemon")
+
+    assert received == [
+        "publisher:worker.started",
+        "publisher:worker.stopped",
+        "added:worker.stopped",
+        "removed:worker.started",
+    ]
+
+
 def test_runtime_event_log_sink_preserves_event_identity(tmp_path: Path) -> None:
     publisher = EventPublisher()
     publisher.subscribe(runtime_event_log_sink(tmp_path))

@@ -462,6 +462,14 @@ registration. Its compact message includes each subscriber exception type and
 non-empty message so best-effort observability does not discard the actionable
 failure cause.
 
+Each publication captures one ordered subscription snapshot under the
+publisher lock, then invokes callbacks without holding that lock. Subscribing
+or unsubscribing from a callback never changes the active snapshot: a removed
+subscriber still receives the current event if it was present at publication
+start, and a newly added subscriber starts with the next publication.
+Mutations are visible to a nested publication started after the mutation.
+Callbacks may therefore publish recursively without deadlocking the publisher.
+
 Subscribers and optional event-definition payload validators must be callable
 at composition time. Invalid subscribers fail in `subscribe(...)`; invalid
 validators fail while constructing the definition. They must not survive until

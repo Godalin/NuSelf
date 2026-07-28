@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Reject non-callable handler and event components at composition time.
+Make event subscription changes during delivery deterministic and reentrant.
 
 ## Active Branch
 
@@ -13,37 +13,40 @@ Reject non-callable handler and event components at composition time.
 
 ## Ordered Work
 
-1. Audit handler, middleware, subscriber, and validator registration.
-2. Define fail-fast runtime callable contracts.
-3. Validate constructor and incremental composition paths.
-4. Preserve sealed/duplicate/name behavior and valid callable objects.
-5. Verify invalid components fail before seal, dispatch, or publish.
+1. Audit subscription snapshots, cancellation, and callback reentrancy.
+2. Define publication-boundary snapshot semantics.
+3. Verify subscribe and unsubscribe mutations do not alter the active delivery.
+4. Verify callbacks may publish recursively without holding the registry lock.
+5. Preserve registration order, filtering, isolation, and failure aggregation.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Static typing remains the primary developer interface.
-- Callable instances and bound methods remain valid components.
-- Delivery-time subscriber exceptions remain independently aggregated.
+- Event delivery remains synchronous and in-process.
+- Subscription mutations affect later and nested publications, not the active
+  snapshot.
+- Cross-process subscriptions continue to use the explicit activity transport.
 
 ## Completion Evidence
 
-- `HandlerRegistry` rejects non-callable handlers and middleware during both
-  construction and incremental composition, before sealing or dispatch.
-- `EventPublisher` and `RuntimeEventDefinition` reject non-callable subscribers
-  and payload validators before publication.
-- Invalid handlers are not registered; existing duplicate, sealed, valid
-  callable, and delivery-time failure behavior remains covered.
-- Focused runtime composition suite: `44 passed`.
-- Full test suite: `1620 passed`.
+- The runtime specification defines one ordered subscription snapshot per
+  publication and lock-free callback invocation.
+- Tests prove cancellation cannot remove a subscriber from the active snapshot
+  and subscription cannot add one to it.
+- Tests prove a nested publication observes preceding subscription mutations
+  and completes without publisher-lock deadlock.
+- Existing registration order, name filtering, and publisher-lifetime behavior
+  remains covered.
+- Focused runtime event suite: `22 passed`.
+- Full test suite: `1622 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `cd8da8c`.
+`dev/v0.3.x` is published through `e1c577a`.
 
 ## Next Review Batch
 
-Continue reviewing internal-message subscription and delivery lifecycle after
-composition contracts fail fast.
+Continue reviewing event-delivery ownership and failure boundaries after
+subscription snapshot semantics are explicit.
