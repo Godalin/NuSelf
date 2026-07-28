@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import threading
 import time
+from pathlib import Path
 from typing import Protocol
 
 from nuself.agent.chat import ChatAgent
+from nuself.daemon.payloads import (
+    ChatRequestPayload,
+    ChatResponsePayload,
+    HealthResponsePayload,
+    MessagePayload,
+    WorkerHealthPayload,
+)
 from nuself.daemon.protocol import (
     REQUEST_TYPES,
     DaemonRequest,
     DaemonResponse,
-    JsonValue,
+    ProtocolError,
     RequestType,
 )
 from nuself.daemon.types import WorkerHealth
@@ -77,24 +84,20 @@ def _handle_ping(
     state: DaemonRequestState,
 ) -> DaemonResponse:
     del state
-    return DaemonResponse.ok(request, {"message": "pong"})
+    return DaemonResponse.ok(
+        request,
+        MessagePayload("pong").to_wire(),
+    )
 
 
 def _handle_health(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    workers: list[JsonValue] = [
-        {
-            "name": item.name,
-            "alive": item.alive,
-            "last_success_at": item.last_success_at,
-            "last_error": item.last_error,
-            "consecutive_failures": item.consecutive_failures,
-        }
-        for item in state.worker_health()
-    ]
-    return DaemonResponse.ok(request, {"workers": workers})
+    payload = HealthResponsePayload(
+        tuple(WorkerHealthPayload.from_health(item) for item in state.worker_health())
+    )
+    return DaemonResponse.ok(request, payload.to_wire())
 
 
 def _handle_echo(
@@ -109,9 +112,10 @@ def _handle_chat(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    message = request.payload.get("message")
-    if not isinstance(message, str):
-        error = "chat request requires string payload field 'message'"
+    try:
+        chat_request = ChatRequestPayload.from_wire(request.payload)
+    except ProtocolError as exc:
+        error = str(exc)
         write_log_event(
             "daemon",
             "request_failed",
@@ -123,28 +127,18 @@ def _handle_chat(
             error=error,
         )
         return DaemonResponse.fail(request.request_id, error)
-    thread_id_raw = request.payload.get("thread_id")
-    thread_id = (
-        thread_id_raw
-        if isinstance(thread_id_raw, str)
-        else "default"
-    )
-    turn_id_raw = request.payload.get("turn_id")
-    turn_id = (
-        turn_id_raw if isinstance(turn_id_raw, str) else None
-    )
     started_at = time.monotonic()
     with log_context(
         request_id=request.request_id,
-        thread_id=thread_id,
-        turn_id=turn_id,
+        thread_id=chat_request.thread_id,
+        turn_id=chat_request.turn_id,
         source="daemon",
     ):
         try:
             result = state.chat_agent.respond(
-                message,
-                thread_id=thread_id,
-                turn_id=turn_id,
+                chat_request.message,
+                thread_id=chat_request.thread_id,
+                turn_id=chat_request.turn_id,
             )
             memory_update = _run_memory_curator_once(
                 state.memory_curator,
@@ -166,21 +160,23 @@ def _handle_chat(
                 error_detail,
             )
     duration_ms = int((time.monotonic() - started_at) * 1000)
-    payload: dict[str, JsonValue] = {
-        "answer": result.answer,
-        "reply": result.reply,
-        "thread_id": result.thread_id,
-        "evidence_references": list(result.evidence_references),
-        "epistemic_status": result.epistemic_status,
-    }
-    if result.confidence is not None:
-        payload["confidence"] = result.confidence
-    if memory_update is not None and memory_update.changed:
-        payload["memory_update"] = memory_update.summary()
+    payload = ChatResponsePayload(
+        answer=result.answer,
+        reply=result.reply,
+        thread_id=result.thread_id,
+        evidence_references=result.evidence_references,
+        epistemic_status=result.epistemic_status,
+        confidence=result.confidence,
+        memory_update=(
+            memory_update.summary()
+            if memory_update is not None and memory_update.changed
+            else None
+        ),
+    )
     with log_context(
         request_id=request.request_id,
         thread_id=result.thread_id,
-        turn_id=turn_id,
+        turn_id=chat_request.turn_id,
         source="daemon",
     ):
         write_log_event(
@@ -191,17 +187,13 @@ def _handle_chat(
             duration_ms=duration_ms,
             status="ok",
             metadata={
-                "evidence_references": len(
-                    result.evidence_references
-                ),
+                "evidence_references": len(result.evidence_references),
                 "memory_changed": (
-                    memory_update.changed
-                    if memory_update is not None
-                    else False
+                    memory_update.changed if memory_update is not None else False
                 ),
             },
         )
-    return DaemonResponse.ok(request, payload)
+    return DaemonResponse.ok(request, payload.to_wire())
 
 
 def _handle_shutdown(
@@ -218,7 +210,7 @@ def _handle_shutdown(
     state.shutdown_requested.set()
     return DaemonResponse.ok(
         request,
-        {"message": "shutdown requested"},
+        MessagePayload("shutdown requested").to_wire(),
     )
 
 
@@ -228,9 +220,7 @@ def _run_memory_curator_once(
     source_trace_id: str | None = None,
 ) -> MemoryCuratorResult | None:
     try:
-        return memory_curator.run_once(
-            source_trace_id=source_trace_id
-        )
+        return memory_curator.run_once(source_trace_id=source_trace_id)
     except RuntimeError:
         return None
 
@@ -243,11 +233,7 @@ def _format_exception_chain(exc: BaseException) -> str:
         if message:
             messages.append(message)
         current = current.__cause__ or current.__context__
-    return (
-        " <- ".join(messages)
-        if messages
-        else exc.__class__.__name__
-    )
+    return " <- ".join(messages) if messages else exc.__class__.__name__
 
 
 DAEMON_REQUEST_HANDLERS = build_daemon_request_registry()

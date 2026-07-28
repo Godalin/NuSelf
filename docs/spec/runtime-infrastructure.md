@@ -66,6 +66,18 @@ The daemon request registry must be complete for every declared
 primitive improves ownership; argparse remains responsible for argument
 parsing and LangChain remains responsible for agent tool dispatch.
 
+## Daemon Payload Contracts
+
+The JSONL transport retains `DaemonRequest` and `DaemonResponse` dictionaries
+on the wire for protocol-version compatibility. Request handlers must decode
+those dictionaries into request-specific frozen payload dataclasses before
+using them, and construct response dictionaries through typed response payload
+objects. Validation and defaulting belong to these codecs, not to handler
+branches.
+
+`echo` is the deliberate exception: its contract is an arbitrary JSON object,
+so passing its payload through unchanged is the typed behavior of that request.
+
 ## Runtime Envelope And Correlation Context
 
 `nuself.runtime.context` owns `RuntimeContext`, `current_runtime_context()`,
