@@ -235,6 +235,13 @@ projection are secondary. Failure of those projections or their diagnostics
 cannot discard a valid response, skip the next configured attempt, prevent
 local fallback, or replace a completed chat answer with an exception.
 
+Chat's local response policy is not an exception sink for implementation
+defects. Before any tool executes, `AssertionError`, `AttributeError`, and
+`TypeError` propagate unchanged and are ineligible for retry, endpoint
+failover, or local fallback. After a tool outcome exists, the non-replay
+contract takes precedence and any ordinary invocation exception enters local
+fallback without another model call.
+
 Reason-export manifests, composition, retry timer creation/start, and worker
 lifecycle decisions are authoritative. Export lifecycle and caught-failure
 audit records are secondary: audit failure cannot suppress a retry after its

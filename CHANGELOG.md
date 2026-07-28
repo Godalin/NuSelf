@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Chat no longer retries or silently replaces pre-tool assertion, attribute,
+  or type errors with a local fallback response; after tool execution, the
+  existing no-replay fallback remains authoritative.
 - Memory mutation tools now report only genuinely absent entries as
   “not found”; repository, decoding, persistence, and programming failures
   remain real tool failures instead of being mislabeled as user input errors.

@@ -187,6 +187,15 @@ agent run, but it is not authority to replay a completed tool in a new agent
 run. Before any tool executes, the existing bounded same-endpoint retry and
 endpoint failover behavior remains unchanged.
 
+Before any tool executes, clear implementation failures (`AssertionError`,
+`AttributeError`, and `TypeError`) are not model degradation. They propagate
+unchanged without retry, endpoint failover, or local response fallback.
+Protocol and structured-response validation failures remain recoverable under
+the bounded retry/local-fallback policy. Once any tool outcome exists, replay
+safety takes precedence: every ordinary invocation `Exception`, including an
+implementation failure raised after tool execution, suppresses retry/failover
+and enters the no-tool local fallback.
+
 All agent capabilities use the shared endpoint runner. The runner may perform
 a caller-configured bounded retry on the same endpoint, but only an endpoint
 availability failure may advance to another configured endpoint. Chat retries

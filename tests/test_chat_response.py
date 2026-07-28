@@ -185,6 +185,72 @@ def test_protocol_failure_retries_same_endpoint_without_failover(
     assert result.answer.endswith("Last message: hello")
 
 
+@pytest.mark.parametrize(
+    "error",
+    [
+        AssertionError("broken chat invariant"),
+        AttributeError("missing chat dependency"),
+        TypeError("invalid internal chat call"),
+    ],
+    ids=["assertion", "attribute", "type"],
+)
+def test_pre_tool_implementation_errors_propagate_without_retry_or_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    error: Exception,
+) -> None:
+    endpoint_calls = 0
+    diagnostics: list[str] = []
+
+    def fail_endpoint(
+        self: _LangChainChatSupervisor,
+        prompt: list[BaseMessage],
+    ) -> None:
+        del self, prompt
+        nonlocal endpoint_calls
+        endpoint_calls += 1
+        raise error
+
+    def capture_diagnostic(
+        failure: BaseException,
+        **kwargs: object,
+    ) -> None:
+        del failure
+        diagnostics.append(str(kwargs["event"]))
+
+    monkeypatch.setattr(
+        _LangChainChatSupervisor,
+        "complete",
+        fail_endpoint,
+    )
+    monkeypatch.setattr(
+        "nuself.agent.chat.response.report_observed_failure",
+        capture_diagnostic,
+    )
+    endpoint = LangChainLLMEndpoint(
+        index=0,
+        settings=LLMSettings(
+            base_url="https://example.invalid",
+            api_key="test",
+            model="test-model",
+        ),
+        model=cast(Any, object()),
+    )
+    synthesizer = ConversationResponseSynthesizer(
+        project_root=tmp_path,
+        langchain_models=(endpoint,),
+        tools=(),
+        log_tool_outcome=_ignore_tool_outcome,
+    )
+
+    with pytest.raises(type(error)) as caught:
+        synthesizer.complete([HumanMessage(content="hello")])
+
+    assert caught.value is error
+    assert endpoint_calls == 1
+    assert diagnostics == []
+
+
 def test_availability_failure_uses_shared_endpoint_failover(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -233,7 +299,7 @@ def test_availability_failure_uses_shared_endpoint_failover(
     assert result.answer == "backup response"
 
 
-def test_tool_outcome_suppresses_retry_and_endpoint_failover(
+def test_tool_outcome_suppresses_retry_even_for_implementation_error(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -247,7 +313,7 @@ def test_tool_outcome_suppresses_retry_and_endpoint_failover(
         del self, prompt
         nonlocal endpoint_calls
         endpoint_calls += 1
-        raise RuntimeError("provider failed after tool execution")
+        raise AssertionError("implementation failed after tool execution")
 
     def report_failure(
         error: BaseException,
