@@ -222,7 +222,10 @@ under the same package.
   and transcript/session/command modules depend on those contracts rather than
   importing the CLI composition root.
 - `cli/repl/transcript.py` owns transcript projection, Markdown normalization,
-  persistence naming, shareable-log filtering, and clipboard integration.
+  persistence naming, shareable-log filtering, clipboard integration, export
+  command parsing, explicit save coordination, and connection-exit autosave.
+  It consumes session behavior through a structural protocol and never imports
+  `cli/repl/session.py`.
 - `cli/repl/session.py` owns per-connection message/log capture and export
   progress state.
 - `cli/repl/commands.py` owns subsystem REPL commands and their focused help

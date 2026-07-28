@@ -7,11 +7,158 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Protocol
 
 from nuself.agent.chat import ThreadState, ThreadStore
+from nuself.cli.repl.input import interactive_help
+from nuself.cli.repl.registry import command_body
 from nuself.config import runtime_paths
 from nuself.logs import LogEvent
 from nuself.tui.render import format_display_timestamp, render_log_event
+
+
+class TranscriptSession(Protocol):
+    """Session capabilities required by transcript export orchestration."""
+
+    connected_at: datetime
+
+    def start_index_for(
+        self,
+        project_root: Path | None,
+        thread_id: str,
+    ) -> int: ...
+
+    def transcript_messages(
+        self,
+        project_root: Path | None,
+        thread_id: str,
+    ) -> list[tuple[int, str, str]]: ...
+
+    def transcript_log_events(
+        self,
+        thread_id: str,
+        *,
+        include_all: bool,
+    ) -> list[LogEvent]: ...
+
+    def transcript_log_events_by_message(
+        self,
+        thread_id: str,
+        *,
+        include_all: bool,
+    ) -> dict[int, list[LogEvent]]: ...
+
+    def mark_transcript_exported(
+        self,
+        project_root: Path | None,
+        thread_id: str,
+    ) -> None: ...
+
+    def thread_ids_with_unexported_messages(
+        self,
+        project_root: Path | None,
+    ) -> list[str]: ...
+
+
+def handle_interactive_export_command(
+    command: str,
+    project_root: Path | None,
+    thread_id: str,
+    session: TranscriptSession,
+) -> str:
+    """Parse one REPL export command and save the requested transcript."""
+
+    body = command_body(command, "export")
+    if body is None:
+        return interactive_help(":export")
+    copy_requested = True
+    include_all_logs = False
+    for arg in body.split():
+        if arg == "all":
+            include_all_logs = True
+        elif arg == "noclip":
+            copy_requested = False
+        elif arg in {"--copy", "copy"}:
+            copy_requested = True
+        else:
+            return interactive_help(":export")
+
+    return save_interactive_transcript(
+        project_root,
+        thread_id,
+        session,
+        include_all_logs=include_all_logs,
+        copy_requested=copy_requested,
+        exported_at=datetime.now(UTC),
+    )
+
+
+def auto_save_interactive_transcripts(
+    project_root: Path | None,
+    session: TranscriptSession,
+) -> None:
+    """Save every thread with unexported messages on connection exit."""
+
+    thread_ids = session.thread_ids_with_unexported_messages(project_root)
+    if not thread_ids:
+        return
+    print()
+    exported_at = datetime.now(UTC)
+    for thread_id in thread_ids:
+        print(
+            save_interactive_transcript(
+                project_root,
+                thread_id,
+                session,
+                include_all_logs=False,
+                copy_requested=False,
+                exported_at=exported_at,
+            )
+        )
+
+
+def save_interactive_transcript(
+    project_root: Path | None,
+    thread_id: str,
+    session: TranscriptSession,
+    *,
+    include_all_logs: bool,
+    copy_requested: bool,
+    exported_at: datetime,
+) -> str:
+    """Persist one session transcript and optionally copy its contents."""
+
+    try:
+        start_index = session.start_index_for(project_root, thread_id)
+        path, content = export_interactive_transcript(
+            project_root,
+            thread_id=thread_id,
+            start_index=start_index,
+            connected_at=session.connected_at,
+            exported_at=exported_at,
+            messages=session.transcript_messages(project_root, thread_id),
+            log_events=session.transcript_log_events(
+                thread_id,
+                include_all=include_all_logs,
+            ),
+            log_events_by_message=session.transcript_log_events_by_message(
+                thread_id,
+                include_all=include_all_logs,
+            ),
+            include_all_logs=include_all_logs,
+        )
+    except ValueError as exc:
+        return f"Error: {exc}"
+
+    session.mark_transcript_exported(project_root, thread_id)
+    lines = [f"Saved transcript: {path}"]
+    if copy_requested:
+        copied, reason = copy_text_to_clipboard(content)
+        if copied:
+            lines.append("Copied transcript to clipboard.")
+        else:
+            lines.append(f"Clipboard copy failed: {reason}")
+    return "\n".join(lines)
 
 
 def export_interactive_transcript(

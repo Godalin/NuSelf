@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The live REPL activity transport extraction is complete.
+Idle. The REPL transcript orchestration consolidation is complete.
 
 ## Active Branch
 
@@ -22,14 +22,15 @@ code.
 
 ## Completion Evidence
 
-- `cli/repl/activity.py` owns the context-bound send thread and daemon activity
-  subscription open, poll, fallback, final drain, and close lifecycle.
-- The CLI composition root supplies polling configuration and its compatibility
-  read/presentation callbacks through one thin adapter.
-- Subscription cleanup runs after normal completion, daemon delivery failure,
-  keyboard interruption, and unexpected poll/presentation failure.
-- Focused CLI and REPL activity tests: 301 passed.
-- Full tests: 1254 passed.
+- `cli/repl/transcript.py` owns export option parsing, save coordination,
+  export progress, clipboard results, and connection-exit autosave.
+- Transcript orchestration consumes `TranscriptSession`; the module does not
+  import the concrete session implementation or the CLI composition root.
+- Explicit export, invalid options, incremental progress, all-log export,
+  clipboard/no-clipboard behavior, quit/EOF autosave, and multi-thread autosave
+  remain covered.
+- Focused transcript, session, and CLI tests: 306 passed.
+- Full tests: 1256 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -39,5 +40,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Extract the next complete CLI composition responsibility after live activity
-ownership is isolated.
+Extract the next complete CLI composition responsibility after transcript
+ownership is consolidated.

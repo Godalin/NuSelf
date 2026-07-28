@@ -7,6 +7,7 @@ import sys
 import threading
 import tomllib
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol, cast
 
@@ -406,7 +407,7 @@ def test_interactive_turn_prints_activity_events_while_waiting(
     )
     monkeypatch.setattr("nuself.cli.INTERACTIVE_LOG_POLL_INTERVAL_SECONDS", 0.01)
 
-    session = cli.InteractiveSession(connected_at=cli.datetime.now(cli.UTC))
+    session = cli.InteractiveSession(connected_at=datetime.now(UTC))
     send_turn = cast(
         Callable[..., int],
         cli._send_interactive_chat_turn,  # pyright: ignore[reportPrivateUsage]
@@ -524,7 +525,7 @@ def test_daemon_interactive_turn_uses_activity_transport_not_log_polling(
         fail_log_poll,
     )
 
-    session = cli.InteractiveSession(connected_at=cli.datetime.now(cli.UTC))
+    session = cli.InteractiveSession(connected_at=datetime.now(UTC))
     send_turn = cast(
         Callable[..., int],
         cli._send_interactive_chat_turn,  # pyright: ignore[reportPrivateUsage]
@@ -583,7 +584,7 @@ def test_interactive_turn_hides_background_activity_events(
         )
         return cli.InteractiveChatResult(code=0, reply="final reply")
 
-    session = cli.InteractiveSession(connected_at=cli.datetime.now(cli.UTC))
+    session = cli.InteractiveSession(connected_at=datetime.now(UTC))
     send_turn = cast(Callable[..., int], cli._send_interactive_chat_turn)
     result = send_turn(
         fake_send,
@@ -619,7 +620,7 @@ def test_interactive_turn_binds_exact_context_to_send_thread(
         observed.append(current_runtime_context())
         return cli.InteractiveChatResult(code=0, reply="final reply")
 
-    session = cli.InteractiveSession(connected_at=cli.datetime.now(cli.UTC))
+    session = cli.InteractiveSession(connected_at=datetime.now(UTC))
     send_turn = cast(Callable[..., int], cli._send_interactive_chat_turn)
     with runtime_context(
         request_id="stale-request",
@@ -787,7 +788,10 @@ def test_interactive_export_saves_connection_transcript(
     monkeypatch.setattr(
         "sys.stdin", _TextInput("first message\n:export\nsecond message\n:export\n:q\n")
     )
-    monkeypatch.setattr("nuself.cli._copy_text_to_clipboard", fake_copy)
+    monkeypatch.setattr(
+        "nuself.cli.repl.transcript.copy_text_to_clipboard",
+        fake_copy,
+    )
 
     result = main(["--project-root", str(tmp_path), "chat"])
     captured = capsys.readouterr()
@@ -817,7 +821,10 @@ def test_interactive_export_copy_copies_saved_transcript(
         return True, ""
 
     monkeypatch.setattr("sys.stdin", _TextInput("share this\n:export\n:q\n"))
-    monkeypatch.setattr("nuself.cli._copy_text_to_clipboard", fake_copy)
+    monkeypatch.setattr(
+        "nuself.cli.repl.transcript.copy_text_to_clipboard",
+        fake_copy,
+    )
 
     result = main(["--project-root", str(tmp_path), "chat"])
     captured = capsys.readouterr()
@@ -840,7 +847,10 @@ def test_interactive_export_noclip_skips_clipboard(
         return True, ""
 
     monkeypatch.setattr("sys.stdin", _TextInput("do not copy\n:e noclip\n:q\n"))
-    monkeypatch.setattr("nuself.cli._copy_text_to_clipboard", fake_copy)
+    monkeypatch.setattr(
+        "nuself.cli.repl.transcript.copy_text_to_clipboard",
+        fake_copy,
+    )
 
     result = main(["--project-root", str(tmp_path), "chat"])
     captured = capsys.readouterr()
@@ -901,8 +911,8 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
 
     content = render_transcript(
         thread_id="default",
-        connected_at=cli.datetime.now(cli.UTC),
-        exported_at=cli.datetime.now(cli.UTC),
+        connected_at=datetime.now(UTC),
+        exported_at=datetime.now(UTC),
         messages=[(0, "user", "any reflections?"), (1, "assistant", "One idea.")],
         log_events=[],
         log_events_by_message={1: [service_log]},
@@ -923,8 +933,8 @@ def test_interactive_export_normalizes_markdown_body_fences() -> None:
     render_transcript = cast(Callable[..., str], cli._render_chat_transcript)
     content = render_transcript(
         thread_id="default",
-        connected_at=cli.datetime.now(cli.UTC),
-        exported_at=cli.datetime.now(cli.UTC),
+        connected_at=datetime.now(UTC),
+        exported_at=datetime.now(UTC),
         messages=[
             (0, "user", "show fence"),
             (1, "assistant", "```python\nprint('ok')\n```"),

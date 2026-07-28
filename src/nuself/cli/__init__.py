@@ -7,7 +7,6 @@ import sys
 import time
 import warnings
 from collections.abc import Callable, Sequence
-from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -146,10 +145,10 @@ try:
         InteractiveSession as InteractiveSession,
     )
     from nuself.cli.repl.transcript import (
-        copy_text_to_clipboard as _copy_text_to_clipboard,
+        auto_save_interactive_transcripts as _auto_save_interactive_transcripts,
     )
     from nuself.cli.repl.transcript import (
-        export_interactive_transcript as _export_interactive_transcript,
+        handle_interactive_export_command as _handle_interactive_export_command,
     )
     from nuself.cli.repl.transcript import (
         render_chat_transcript as _render_chat_transcript,
@@ -971,101 +970,6 @@ def _print_recent_logs(project_root: Path | None, *, limit: int) -> None:
         return
     for event in events:
         _print_ansi(render_log_event(event))
-
-
-def _handle_interactive_export_command(
-    command: str,
-    project_root: Path | None,
-    thread_id: str,
-    session: InteractiveSession,
-) -> str:
-    body = command_body(command, "export")
-    if body is None:
-        return _interactive_help(":export")
-    args = body.split()
-    copy_requested = True
-    include_all_logs = False
-    if args:
-        for arg in args:
-            if arg == "all":
-                include_all_logs = True
-            elif arg == "noclip":
-                copy_requested = False
-            elif arg in {"--copy", "copy"}:
-                copy_requested = True
-            else:
-                return _interactive_help(":export")
-
-    exported_at = datetime.now(UTC)
-    return _save_interactive_transcript(
-        project_root,
-        thread_id,
-        session,
-        include_all_logs=include_all_logs,
-        copy_requested=copy_requested,
-        exported_at=exported_at,
-    )
-
-
-def _auto_save_interactive_transcripts(
-    project_root: Path | None, session: InteractiveSession
-) -> None:
-    thread_ids = session.thread_ids_with_unexported_messages(project_root)
-    if not thread_ids:
-        return
-    print()
-    exported_at = datetime.now(UTC)
-    for thread_id in thread_ids:
-        print(
-            _save_interactive_transcript(
-                project_root,
-                thread_id,
-                session,
-                include_all_logs=False,
-                copy_requested=False,
-                exported_at=exported_at,
-            )
-        )
-
-
-def _save_interactive_transcript(
-    project_root: Path | None,
-    thread_id: str,
-    session: InteractiveSession,
-    *,
-    include_all_logs: bool,
-    copy_requested: bool,
-    exported_at: datetime,
-) -> str:
-    try:
-        start_index = session.start_index_for(project_root, thread_id)
-        path, content = _export_interactive_transcript(
-            project_root,
-            thread_id=thread_id,
-            start_index=start_index,
-            connected_at=session.connected_at,
-            exported_at=exported_at,
-            messages=session.transcript_messages(project_root, thread_id),
-            log_events=session.transcript_log_events(
-                thread_id, include_all=include_all_logs
-            ),
-            log_events_by_message=session.transcript_log_events_by_message(
-                thread_id, include_all=include_all_logs
-            ),
-            include_all_logs=include_all_logs,
-        )
-    except ValueError as exc:
-        return f"Error: {exc}"
-
-    session.mark_transcript_exported(project_root, thread_id)
-    lines = [f"Saved transcript: {path}"]
-    if copy_requested:
-        copied, reason = _copy_text_to_clipboard(content)
-        if copied:
-            lines.append("Copied transcript to clipboard.")
-        else:
-            lines.append(f"Clipboard copy failed: {reason}")
-    return "\n".join(lines)
 
 
 if __name__ == "__main__":
