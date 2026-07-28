@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Memory curator activity uses structured best-effort audit events, and
-curator trace/audit or reflection organizer completion logs cannot replace
-already-persisted domain results.
+Idle. Email/macOS adapter failure diagnostics cannot replace a definitive
+`False` delivery result or leave the outbox entry pending for unintended repeat
+delivery.
 
 ## Active Branch
 
@@ -24,20 +24,18 @@ code.
 
 ## Completion Evidence
 
-- Curator gap, deferred, candidate create/update/merge, and completion activity
-  is written as structured `LogEvent` JSONL; raw `_append_log` no longer exists.
-- Failure of curator audit plus its structured diagnostic cannot replace a
-  saved candidate/cursor or replay the processed source range.
-- Memory-update trace plus diagnostic failure cannot replace the reviewed
-  entry or rewind the cursor.
-- Auto-accepted update candidates now write `memory_update` trace metadata with
-  `action="update"` instead of the previous incorrect `create`.
-- Organizer completion audit plus diagnostic failure preserves its returned
-  merge counts and persisted pending/archive states.
-- Candidate/entry/cursor and reflection repository failures remain
-  authoritative; curator policy and organizer similarity rules are unchanged.
-- Focused curator, organizer, and reflection scheduler tests: 73 passed.
-- Final full tests: 1332 passed.
+- Missing email configuration, SMTP failure, osascript timeout, and non-zero
+  exit diagnostics use shared observable reporting and retain `False` when
+  structured logging also fails.
+- The delivery loop persists `status="failed"` and increments attempts to one
+  under complete failure-diagnostic storage loss; no pending entry remains for
+  implicit next-tick delivery.
+- Log-only delivery, explicit dry runs, and macOS-unavailable fallback keep
+  their log writes authoritative because those writes are the delivery effect.
+- External send, `mark_sent`, `mark_failed`, retention, adapter ordering, and
+  short-circuit behavior remain authoritative and unchanged.
+- Focused email, macOS, delivery-loop, and outbox tests: 56 passed.
+- Final full tests: 1337 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -48,4 +46,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-curator and organizer post-persistence projections preserve domain results.
+notification adapter failure diagnostics preserve durable delivery outcomes.

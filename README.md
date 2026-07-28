@@ -66,6 +66,9 @@ Memory curator activity now remains structured in `memory.log`; curator trace
 and audit failures, plus organizer completion audit failures, cannot replace
 already-persisted memory or reflection results.
 
+Email and macOS delivery-failure diagnostics cannot replace a definitive
+adapter failure or prevent the outbox from persisting the failed attempt.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).

@@ -17,6 +17,7 @@ from nuself.notification import (
     NotificationOutbox,
     OutboxEntry,
 )
+from nuself.notification.email import EmailNotificationAdapter
 from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
@@ -241,6 +242,47 @@ def test_delivery_loop_marks_failed_on_adapter_failure(tmp_path: Path) -> None:
     failed = outbox.list(status="failed")
     assert len(failed) == 1
     assert failed[0].attempts == 1
+
+
+def test_failure_diagnostic_store_cannot_prevent_failed_transition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="email-no-config",
+            title="T",
+            body="B",
+            status="pending",
+            idempotency_key="email-no-config",
+        )
+    )
+    loop = NotificationDeliveryLoop(
+        tmp_path,
+        adapters=[
+            EmailNotificationAdapter(tmp_path, dry_run=False)
+        ],
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="outbox/email_no_config",
+    ):
+        delivered = loop.run_once()
+
+    assert delivered == 0
+    [failed] = outbox.list(status="failed")
+    assert failed.id == "email-no-config"
+    assert failed.attempts == 1
+    assert outbox.list(status="pending") == []
 
 
 def test_delivery_loop_skips_non_pending(tmp_path: Path) -> None:

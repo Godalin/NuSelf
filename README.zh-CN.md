@@ -55,6 +55,9 @@ status 与 deletion 状态，避免投影失败把成功操作伪装成失败。
 Memory curator 活动现在以结构化事件写入 `memory.log`；curator trace/audit 和
 organizer completion audit 失败不会覆盖已持久化的 memory 或 reflection 结果。
 
+Email 与 macOS delivery failure 诊断不会覆盖明确的 adapter 失败结果，也不会
+阻止 outbox 持久化失败 attempt。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

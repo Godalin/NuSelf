@@ -186,6 +186,12 @@ and organizer completion audits are secondary projections; failure of a
 projection or its structured diagnostic cannot replace or replay committed
 domain results.
 
+Notification adapter `False` outcomes for missing email configuration, SMTP
+failure, and osascript failure are authoritative. Their failure diagnostics
+are secondary and cannot leave an entry pending by raising before
+`mark_failed`. Log-only, dry-run, external send, and outbox state writes remain
+authoritative effects.
+
 ## Atomic File Failure Provenance
 
 Shared atomic text/JSON persistence propagates an ordinary write or replace

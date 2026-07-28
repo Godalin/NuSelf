@@ -60,6 +60,38 @@ def test_send_osascript_failure_returns_false(tmp_path: Path, entry: OutboxEntry
         assert adapter.send(entry) is False
 
 
+def test_osascript_failure_diagnostic_preserves_false(
+    tmp_path: Path,
+    entry: OutboxEntry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
+    adapter.has_osascript = True
+
+    with patch("nuself.notification.macos.subprocess.run") as run:
+        run.return_value = MagicMock(
+            returncode=1,
+            stderr="execution error",
+        )
+        with pytest.warns(
+            RuntimeWarning,
+            match=(
+                "outbox/macos_failed: execution error; "
+                "structured logging failed: audit store unavailable"
+            ),
+        ):
+            result = adapter.send(entry)
+
+    assert result is False
+
+
 def test_send_osascript_timeout_returns_false(tmp_path: Path, entry: OutboxEntry) -> None:
     import subprocess
 
@@ -69,6 +101,40 @@ def test_send_osascript_timeout_returns_false(tmp_path: Path, entry: OutboxEntry
     with patch("nuself.notification.macos.subprocess.run") as mock_run:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="osascript", timeout=10)
         assert adapter.send(entry) is False
+
+
+def test_osascript_timeout_diagnostic_preserves_false(
+    tmp_path: Path,
+    entry: OutboxEntry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import subprocess
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
+    adapter.has_osascript = True
+
+    with patch("nuself.notification.macos.subprocess.run") as run:
+        run.side_effect = subprocess.TimeoutExpired(
+            cmd="osascript",
+            timeout=10,
+        )
+        with pytest.warns(
+            RuntimeWarning,
+            match=(
+                "outbox/macos_failed: osascript timed out; "
+                "structured logging failed: audit store unavailable"
+            ),
+        ):
+            result = adapter.send(entry)
+
+    assert result is False
 
 
 def test_escape_quotes() -> None:

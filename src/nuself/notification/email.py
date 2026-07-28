@@ -9,7 +9,10 @@ from pathlib import Path
 from typing import cast
 
 from nuself.notification import OutboxEntry
-from nuself.runtime.observability import run_observed_best_effort
+from nuself.runtime.observability import (
+    report_observed_failure,
+    run_observed_best_effort,
+)
 
 EmailConfig = dict[str, str | int | bool]
 
@@ -63,11 +66,14 @@ class EmailNotificationAdapter:
             return True
 
         if not self._config:
-            self._write_log(
-                "outbox",
-                "email_no_config",
-                "Email config not found; skipping delivery.",
+            report_observed_failure(
+                RuntimeError("email configuration is not available"),
+                component="outbox",
+                event="email_no_config",
+                message="Email config not found; skipping delivery",
                 project_root=self._project_root,
+                level="warning",
+                status="failed",
                 metadata={"entry_id": entry.id},
             )
             return False
@@ -96,11 +102,14 @@ class EmailNotificationAdapter:
                     server.login(user, password)
                 server.send_message(msg)
         except (OSError, smtplib.SMTPException) as exc:
-            self._write_log(
-                "outbox",
-                "email_failed",
-                str(exc),
+            report_observed_failure(
+                exc,
+                component="outbox",
+                event="email_failed",
+                message="Email delivery failed",
                 project_root=self._project_root,
+                level="warning",
+                status="failed",
                 metadata={"entry_id": entry.id},
             )
             return False

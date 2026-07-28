@@ -44,6 +44,33 @@ def test_no_config_returns_false(tmp_path: Path, entry: OutboxEntry) -> None:
     assert adapter.send(entry) is False
 
 
+def test_no_config_diagnostic_failure_preserves_false(
+    tmp_path: Path,
+    entry: OutboxEntry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    adapter = EmailNotificationAdapter(tmp_path, dry_run=False)
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "outbox/email_no_config: "
+            "email configuration is not available; "
+            "structured logging failed: audit store unavailable"
+        ),
+    ):
+        result = adapter.send(entry)
+
+    assert result is False
+
+
 def test_send_with_config(tmp_path: Path, entry: OutboxEntry) -> None:
     _write_config(tmp_path)
     adapter = EmailNotificationAdapter(tmp_path, dry_run=False)
@@ -74,6 +101,36 @@ def test_send_failure_returns_false(tmp_path: Path, entry: OutboxEntry) -> None:
     with patch("nuself.notification.email.smtplib.SMTP") as mock_smtp_cls:
         mock_smtp_cls.side_effect = OSError("network error")
         assert adapter.send(entry) is False
+
+
+def test_smtp_diagnostic_failure_preserves_false(
+    tmp_path: Path,
+    entry: OutboxEntry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_config(tmp_path)
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    adapter = EmailNotificationAdapter(tmp_path, dry_run=False)
+
+    with patch("nuself.notification.email.smtplib.SMTP") as smtp:
+        smtp.side_effect = OSError("network error")
+        with pytest.warns(
+            RuntimeWarning,
+            match=(
+                "outbox/email_failed: network error; "
+                "structured logging failed: audit store unavailable"
+            ),
+        ):
+            result = adapter.send(entry)
+
+    assert result is False
 
 
 def test_send_without_auth(tmp_path: Path, entry: OutboxEntry) -> None:

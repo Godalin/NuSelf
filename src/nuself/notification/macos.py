@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 from nuself.notification import OutboxEntry
+from nuself.runtime.observability import report_observed_failure
 
 
 class MacOSNotificationAdapter:
@@ -50,20 +51,28 @@ class MacOSNotificationAdapter:
             )
         except subprocess.TimeoutExpired:
             # A hung osascript must not block the notification-delivery thread.
-            self._write_log(
-                "outbox",
-                "macos_failed",
-                "osascript timed out",
+            report_observed_failure(
+                TimeoutError("osascript timed out"),
+                component="outbox",
+                event="macos_failed",
+                message="macOS notification delivery failed",
                 project_root=self._project_root,
+                level="warning",
+                status="failed",
                 metadata={"entry_id": entry.id},
             )
             return False
         if result.returncode != 0:
-            self._write_log(
-                "outbox",
-                "macos_failed",
-                result.stderr.strip() or "osascript failed",
+            report_observed_failure(
+                RuntimeError(
+                    result.stderr.strip() or "osascript failed"
+                ),
+                component="outbox",
+                event="macos_failed",
+                message="macOS notification delivery failed",
                 project_root=self._project_root,
+                level="warning",
+                status="failed",
                 metadata={"entry_id": entry.id},
             )
             return False

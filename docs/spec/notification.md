@@ -123,6 +123,15 @@ Read failures, malformed TOML, and schema failures emit one payload-safe
 leave the adapter disabled. Undeclared implementation failures propagate.
 | `MacOSNotificationAdapter` | `osascript` on `$PATH` | `dry_run=True` logs intent | Missing `osascript` → returns `True` (graceful degradation); subprocess non-zero → `False` + `macos_failed` |
 
+For real delivery failures, the adapter's `False` result is authoritative and
+the associated `email_no_config`, `email_failed`, or `macos_failed` record is
+an auxiliary diagnostic. Diagnostic and structured-log failure cannot replace
+`False`; the delivery loop must still persist `failed` and increment attempts.
+
+Log-only delivery, explicit dry runs, and the macOS-unavailable logging
+fallback are different: their log write is the delivery effect itself, so its
+failure remains authoritative and propagates.
+
 ## Deep Links
 
 ### Supported URL Formats

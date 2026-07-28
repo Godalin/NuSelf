@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Email and macOS real-delivery failure diagnostics now use shared observable
+  reporting. Diagnostic storage failure no longer replaces the adapter's
+  `False` result or prevents the outbox from persisting a failed attempt.
 - Memory curator activity now uses structured best-effort audit events instead
   of raw `memory.log` appends, and curator trace/organizer completion
   projections cannot replace committed candidate, cursor, entry, or reflection
