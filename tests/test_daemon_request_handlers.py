@@ -8,11 +8,13 @@ from nuself.daemon.protocol import (
     REQUEST_TYPES,
     DaemonRequest,
     DaemonResponse,
+    RequestType,
 )
 from nuself.daemon.request_handlers import (
     DAEMON_REQUEST_HANDLERS,
     DaemonRequestState,
     build_daemon_request_registry,
+    handle_request,
 )
 from nuself.logs import LogEvent, write_log_event
 from nuself.runtime.context import RuntimeContext, current_runtime_context
@@ -87,3 +89,52 @@ def test_daemon_middleware_applies_context_and_activity_observation(
     assert len(state.activity_broker.events) == 1
     assert state.activity_broker.events[0].request_id == "middleware-request"
     assert current_runtime_context().request_id is None
+
+
+@pytest.mark.parametrize(
+    "request_type",
+    ["ping", "health", "shutdown"],
+)
+def test_control_handlers_reject_non_empty_payload_at_dispatch_boundary(
+    tmp_path: Path,
+    request_type: str,
+) -> None:
+    state = MiddlewareState(tmp_path)
+    request = DaemonRequest(
+        type=cast(RequestType, request_type),
+        payload={"unexpected": True},
+        request_id=f"{request_type}-invalid",
+    )
+
+    response = handle_request(
+        request,
+        cast(DaemonRequestState, state),
+    )
+
+    assert response.status == "error"
+    assert response.error == "unknown payload field(s): unexpected"
+
+
+def test_payload_rejection_survives_logging_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = MiddlewareState(tmp_path)
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise OSError("log unavailable")
+
+    monkeypatch.setattr(request_handlers, "write_log_event", fail_log)
+
+    response = handle_request(
+        DaemonRequest(
+            type="ping",
+            payload={"unexpected": True},
+            request_id="rejection-log-failure",
+        ),
+        cast(DaemonRequestState, state),
+    )
+
+    assert response.status == "error"
+    assert response.error == "unknown payload field(s): unexpected"

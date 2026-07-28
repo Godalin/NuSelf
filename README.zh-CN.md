@@ -314,6 +314,8 @@ request id 不匹配的 response 都会作为 transport error 返回，不会占
 thread 或被当成部分 JSON 接受。envelope 字段在收发两端都严格校验；重复或未知
 字段、空 request id、非有限 payload 数值以及与 status 不一致的 error 状态都会被
 拒绝。
+每种 request type 还会校验自身的精确 payload 字段；类型错误的可选值不会再被静默
+替换为默认值，`echo` 则保留为明确的任意 object 例外。
 
 ## 通知
 

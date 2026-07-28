@@ -91,6 +91,23 @@ using them, and construct response dictionaries through typed response payload
 objects. Validation and defaulting belong to these codecs, not to handler
 branches.
 
+Request payload field sets are exact:
+
+- `ping`, `health`, and `shutdown` accept only an empty object;
+- `chat` requires string `message`, accepts optional non-blank string
+  `thread_id` (default `default`) and optional non-blank string `turn_id`;
+- `activity_open` requires non-blank string `turn_id`;
+- `activity_next` requires non-blank string `subscription_id` and accepts
+  optional integer `timeout_ms` (default 200, range 0..5000) and `limit`
+  (default 50, range 1..256);
+- `activity_close` requires non-blank string `subscription_id`.
+
+Unknown payload fields are protocol errors. An omitted optional field receives
+its documented default; a present field with the wrong type is never treated
+as omitted. Payload codec `ProtocolError` values cross one daemon handler
+boundary as failed responses rather than escaping dispatch. Rejection logging
+is best effort and cannot replace that failed response.
+
 `echo` is the deliberate exception: its contract is an arbitrary JSON object,
 so passing its payload through unchanged is the typed behavior of that request.
 

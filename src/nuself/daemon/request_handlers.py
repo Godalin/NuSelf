@@ -22,6 +22,7 @@ from nuself.daemon.payloads import (
     ActivityOpenResponsePayload,
     ChatRequestPayload,
     ChatResponsePayload,
+    EmptyRequestPayload,
     HealthResponsePayload,
     MessagePayload,
     WorkerHealthPayload,
@@ -115,6 +116,33 @@ def handle_request(
             request.request_id,
             f"unsupported request type: {request.type}",
         )
+    except ProtocolError as exc:
+        error = str(exc)
+        run_observed_best_effort(
+            lambda: write_log_event(
+                "daemon",
+                "request_rejected",
+                "daemon request payload rejected",
+                project_root=state.project_root,
+                level="warning",
+                request_id=request.request_id,
+                status="error",
+                error=error,
+                metadata={"request_type": request.type},
+            ),
+            component="daemon",
+            event="request_rejection_log_failed",
+            message="daemon request rejection log failed",
+            project_root=state.project_root,
+            metadata={
+                "request_id": request.request_id,
+                "request_type": request.type,
+            },
+        )
+        return DaemonResponse.fail(
+            request.request_id,
+            error,
+        )
 
 
 def _handle_ping(
@@ -122,6 +150,7 @@ def _handle_ping(
     state: DaemonRequestState,
 ) -> DaemonResponse:
     del state
+    EmptyRequestPayload.from_wire(request.payload)
     return DaemonResponse.ok(
         request,
         MessagePayload("pong").to_wire(),
@@ -132,6 +161,7 @@ def _handle_health(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
+    EmptyRequestPayload.from_wire(request.payload)
     payload = HealthResponsePayload(
         tuple(WorkerHealthPayload.from_health(item) for item in state.worker_health())
     )
@@ -150,21 +180,7 @@ def _handle_chat(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    try:
-        chat_request = ChatRequestPayload.from_wire(request.payload)
-    except ProtocolError as exc:
-        error = str(exc)
-        write_log_event(
-            "daemon",
-            "request_failed",
-            "chat request rejected",
-            project_root=state.project_root,
-            level="warning",
-            request_id=request.request_id,
-            status="error",
-            error=error,
-        )
-        return DaemonResponse.fail(request.request_id, error)
+    chat_request = ChatRequestPayload.from_wire(request.payload)
     started_at = time.monotonic()
     with runtime_context(
         thread_id=chat_request.thread_id,
@@ -235,6 +251,7 @@ def _handle_shutdown(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
+    EmptyRequestPayload.from_wire(request.payload)
     write_log_event(
         "daemon",
         "shutdown_requested",
@@ -253,10 +270,7 @@ def _handle_activity_open(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    try:
-        payload = ActivityOpenRequestPayload.from_wire(request.payload)
-    except ProtocolError as exc:
-        return DaemonResponse.fail(request.request_id, str(exc))
+    payload = ActivityOpenRequestPayload.from_wire(request.payload)
     subscription_id = state.activity_broker.open(payload.turn_id)
     return DaemonResponse.ok(
         request,
@@ -268,14 +282,14 @@ def _handle_activity_next(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
+    payload = ActivityNextRequestPayload.from_wire(request.payload)
     try:
-        payload = ActivityNextRequestPayload.from_wire(request.payload)
         events = state.activity_broker.next_events(
             payload.subscription_id,
             timeout_seconds=payload.timeout_ms / 1000,
             limit=payload.limit,
         )
-    except (ProtocolError, ActivitySubscriptionNotFound) as exc:
+    except ActivitySubscriptionNotFound as exc:
         return DaemonResponse.fail(request.request_id, str(exc))
     return DaemonResponse.ok(
         request,
@@ -287,10 +301,7 @@ def _handle_activity_close(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    try:
-        payload = ActivityCloseRequestPayload.from_wire(request.payload)
-    except ProtocolError as exc:
-        return DaemonResponse.fail(request.request_id, str(exc))
+    payload = ActivityCloseRequestPayload.from_wire(request.payload)
     return DaemonResponse.ok(
         request,
         ActivityCloseResponsePayload(

@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The strict daemon request/response envelope stage is complete; no
+Idle. The strict request-specific daemon payload stage is complete; no
 implementation change is currently active.
 
 ## Active Branch
@@ -31,4 +31,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit request-specific daemon payload strictness and defaulting.
+Audit daemon response payload decoding at client call sites.

@@ -4,11 +4,24 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import cast
+from typing import cast, overload
 
 from nuself.daemon.protocol import JsonValue, ProtocolError
 from nuself.daemon.types import WorkerHealth
 from nuself.logs import LogEvent
+
+
+@dataclass(frozen=True)
+class EmptyRequestPayload:
+    """Validated empty payload for control requests."""
+
+    @classmethod
+    def from_wire(
+        cls,
+        payload: dict[str, JsonValue],
+    ) -> EmptyRequestPayload:
+        _expect_fields(payload)
+        return cls()
 
 
 @dataclass(frozen=True)
@@ -31,15 +44,30 @@ class ChatRequestPayload:
 
     @classmethod
     def from_wire(cls, payload: dict[str, JsonValue]) -> ChatRequestPayload:
-        message = payload.get("message")
-        if not isinstance(message, str):
-            raise ProtocolError("chat request requires string payload field 'message'")
-        thread_id_raw = payload.get("thread_id")
-        turn_id_raw = payload.get("turn_id")
+        _expect_fields(
+            payload,
+            required=frozenset({"message"}),
+            optional=frozenset({"thread_id", "turn_id"}),
+        )
         return cls(
-            message=message,
-            thread_id=(thread_id_raw if isinstance(thread_id_raw, str) else "default"),
-            turn_id=turn_id_raw if isinstance(turn_id_raw, str) else None,
+            message=_required_string(
+                payload,
+                "message",
+                context="chat request",
+                allow_blank=True,
+            ),
+            thread_id=_optional_non_blank_string(
+                payload,
+                "thread_id",
+                default="default",
+                context="chat request",
+            ),
+            turn_id=_optional_non_blank_string(
+                payload,
+                "turn_id",
+                default=None,
+                context="chat request",
+            ),
         )
 
 
@@ -119,7 +147,17 @@ class ActivityOpenRequestPayload:
         cls,
         payload: dict[str, JsonValue],
     ) -> ActivityOpenRequestPayload:
-        return cls(turn_id=_required_string(payload, "turn_id"))
+        _expect_fields(
+            payload,
+            required=frozenset({"turn_id"}),
+        )
+        return cls(
+            turn_id=_required_string(
+                payload,
+                "turn_id",
+                context="activity",
+            )
+        )
 
 
 @dataclass(frozen=True)
@@ -133,6 +171,11 @@ class ActivityNextRequestPayload:
         cls,
         payload: dict[str, JsonValue],
     ) -> ActivityNextRequestPayload:
+        _expect_fields(
+            payload,
+            required=frozenset({"subscription_id"}),
+            optional=frozenset({"timeout_ms", "limit"}),
+        )
         timeout_ms = _optional_integer(payload, "timeout_ms", default=200)
         limit = _optional_integer(payload, "limit", default=50)
         if not 0 <= timeout_ms <= 5_000:
@@ -143,6 +186,7 @@ class ActivityNextRequestPayload:
             subscription_id=_required_string(
                 payload,
                 "subscription_id",
+                context="activity",
             ),
             timeout_ms=timeout_ms,
             limit=limit,
@@ -158,10 +202,15 @@ class ActivityCloseRequestPayload:
         cls,
         payload: dict[str, JsonValue],
     ) -> ActivityCloseRequestPayload:
+        _expect_fields(
+            payload,
+            required=frozenset({"subscription_id"}),
+        )
         return cls(
             subscription_id=_required_string(
                 payload,
                 "subscription_id",
+                context="activity",
             )
         )
 
@@ -193,11 +242,56 @@ class ActivityCloseResponsePayload:
 def _required_string(
     payload: dict[str, JsonValue],
     field_name: str,
+    *,
+    context: str,
+    allow_blank: bool = False,
 ) -> str:
     value = payload.get(field_name)
-    if not isinstance(value, str) or not value:
-        raise ProtocolError(f"activity field '{field_name}' must be a non-empty string")
+    if not isinstance(value, str):
+        raise ProtocolError(
+            f"{context} field '{field_name}' must be a string"
+        )
+    if not allow_blank and not value.strip():
+        raise ProtocolError(
+            f"{context} field '{field_name}' must be a non-blank string"
+        )
     return value
+
+
+@overload
+def _optional_non_blank_string(
+    payload: dict[str, JsonValue],
+    field_name: str,
+    *,
+    default: str,
+    context: str,
+) -> str: ...
+
+
+@overload
+def _optional_non_blank_string(
+    payload: dict[str, JsonValue],
+    field_name: str,
+    *,
+    default: None,
+    context: str,
+) -> str | None: ...
+
+
+def _optional_non_blank_string(
+    payload: dict[str, JsonValue],
+    field_name: str,
+    *,
+    default: str | None,
+    context: str,
+) -> str | None:
+    if field_name not in payload:
+        return default
+    return _required_string(
+        payload,
+        field_name,
+        context=context,
+    )
 
 
 def _optional_integer(
@@ -210,6 +304,18 @@ def _optional_integer(
     if isinstance(value, bool) or not isinstance(value, int):
         raise ProtocolError(f"activity field '{field_name}' must be an integer")
     return value
+
+
+def _expect_fields(
+    payload: dict[str, JsonValue],
+    *,
+    required: frozenset[str] = frozenset(),
+    optional: frozenset[str] = frozenset(),
+) -> None:
+    unknown = payload.keys() - required - optional
+    if unknown:
+        names = ", ".join(sorted(unknown))
+        raise ProtocolError(f"unknown payload field(s): {names}")
 
 
 def _json_value(value: object) -> JsonValue:

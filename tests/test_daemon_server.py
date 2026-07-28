@@ -465,7 +465,7 @@ def test_daemon_chat_rejects_non_string_message(tmp_path: Path) -> None:
 
     assert response.status == "error"
     assert response.error is not None
-    assert "requires string payload field 'message'" in response.error
+    assert "field 'message' must be a string" in response.error
 
 
 def test_daemon_handle_backstops_unexpected_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

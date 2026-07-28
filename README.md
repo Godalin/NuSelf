@@ -329,6 +329,9 @@ responses fail as transport errors instead of retaining a server thread or
 being accepted as partial JSON. Envelope fields are exact and validated in
 both directions: duplicate or unknown fields, empty request ids, non-finite
 payload numbers, and inconsistent response error states are rejected.
+Each request type also validates its exact payload fields; invalid optional
+values are not silently replaced by defaults, with `echo` retained as the
+explicit arbitrary-object exception.
 
 ## Notifications
 
