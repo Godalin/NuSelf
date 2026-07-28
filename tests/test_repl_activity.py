@@ -78,6 +78,17 @@ def test_daemon_failures_are_visible_without_capturing_other_domains() -> None:
     assert captured_interactive_activity_events(events) == [daemon_failure]
 
 
+def test_registered_chat_lifecycle_events_are_visible() -> None:
+    events = [
+        _event("chat", "turn.started", status="started"),
+        _event("chat", "turn.completed", status="completed"),
+        _event("chat", "turn.reused", status="completed"),
+        _event("chat", "turn.failed", status="error"),
+    ]
+
+    assert visible_interactive_activity_events(events) == events
+
+
 def test_live_send_drains_and_closes_daemon_subscription(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,

@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Chat lifecycle now publishes registered `turn.started`, `turn.completed`,
+  `turn.failed`, and `turn.reused` runtime events. The completed event is
+  emitted only after the thread update is durably saved; event subscriber
+  failures cannot replace a completed response or mask the original chat
+  failure.
 - Daemon worker lifecycle activity now flows through the registered runtime
   event publisher as `worker.started`, `worker.failed`, and `worker.stopped`,
   with structured audit logs attached as a subscriber. Subscriber failure no

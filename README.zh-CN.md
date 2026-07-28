@@ -195,6 +195,12 @@ envelope。看起来属于内部协议的输出会被严格解码；损坏的协
 
 当前聊天使用一个基于 LangGraph 的 conversation runtime。它会检索 memory entries、derived profile items 和 imported source chunks，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。Agent 还可以在对话中调用工具：`search_memory` 进行定向检索，`list_pending_reflections` / `dismiss_reflection` 检视和管理主动想法，`archive_memory` / `update_memory_importance` 整理长期记忆，`list_active_reasoning_threads` / `show_reasoning_thread` 查看长期 reason 状态，`search_trace` / `show_trace` 查看 thought provenance。当前记忆检索是确定性的词法检索，带有 descriptor-aware 类型提示、type/tag filters、基于现有 memory links 的 relation expansion 和排序原因；向量索引和图索引会作为后续派生检索层加入。
 
+Chat 生命周期统一发布为已注册的 `turn.started`、`turn.completed`、
+`turn.failed` 和 `turn.reused` event。只有 thread update 持久化成功后才会发布
+completed event。结构化 audit 和 daemon live activity projection 保留相同的
+event identity 与 correlation；subscriber 失败不会替换成功 reply，也不会遮蔽
+原始 chat failure。
+
 thread-scoped dynamic persona prompt 文件是权威数据；其派生 name index 会在缺失、损坏或陈旧时被校验并原子重建，因此损坏的 lookup metadata 不会隐藏健康 persona，改名后也不会残留旧名称。
 
 reflection relevance 和 candidate generation 使用严格的 typed response schema。malformed batch、字符串布尔值和未知 candidate type 会进入既有安全 fallback，而不会被强制转换或部分接受。

@@ -34,14 +34,19 @@ from nuself.llm import (
     configured_langchain_chat_models,
     default_llm,
 )
-from nuself.logs import write_log_event
+from nuself.logs import runtime_event_log_sink, write_log_event
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.output import SectionPlanner
 from nuself.runtime.context import runtime_context
+from nuself.runtime.events import EventPublisher
 from nuself.runtime.jobs import JobSink
+from nuself.runtime.observability import (
+    format_exception_chain,
+    publish_observed_event,
+)
 from nuself.trace.service import TraceRecorder
 
 LOGGER = logging.getLogger(__name__)
@@ -86,6 +91,7 @@ class ConversationGraphRuntime:
         thread_store: ThreadStore | None = None,
         job_sink: JobSink | None = None,
         section_planner: SectionPlanner | None = None,
+        event_publisher: EventPublisher | None = None,
     ) -> None:
         self._llm = llm or default_llm(project_root)
         self._langchain_models: tuple[LangChainLLMEndpoint, ...] = (
@@ -95,6 +101,11 @@ class ConversationGraphRuntime:
         )
         self._settings = settings or ChatAgentSettings.from_project(project_root)
         self._project_root = project_root
+        self._event_publisher = (
+            event_publisher
+            if event_publisher is not None
+            else self._build_event_publisher(project_root)
+        )
         self._thread_store = thread_store or ThreadStore(project_root)
         system_config = ConfigSystem.load(project_root=project_root)
         self._language_preference = system_config.chat.language_preference
@@ -146,25 +157,117 @@ class ConversationGraphRuntime:
         graph.add_edge("compression", END)
         self._graph = graph.compile()
 
-    def respond(self, message: str, thread_id: str = "default", *, turn_id: str | None = None) -> ChatResult:
+    @staticmethod
+    def _build_event_publisher(
+        project_root: Path | None,
+    ) -> EventPublisher:
+        publisher = EventPublisher()
+        publisher.subscribe(runtime_event_log_sink(project_root))
+        return publisher
+
+    def respond(
+        self,
+        message: str,
+        thread_id: str = "default",
+        *,
+        turn_id: str | None = None,
+    ) -> ChatResult:
+        started_at = time.monotonic()
+        reused = False
+        node_trace: tuple[ConversationNodeName, ...] = ()
+
         def update(state: ThreadState) -> tuple[ThreadState, ChatResult]:
-            completed = _completed_turn_result(state, message=message, thread_id=thread_id, turn_id=turn_id)
+            nonlocal reused, node_trace
+            completed = _completed_turn_result(
+                state,
+                message=message,
+                thread_id=thread_id,
+                turn_id=turn_id,
+            )
             if completed is not None:
-                write_log_event(
-                    "chat",
-                    "turn_reused",
-                    "chat turn reused existing completed result",
-                    project_root=self._project_root,
-                    thread_id=thread_id,
-                    turn_id=turn_id,
-                    source="chat_runtime",
-                    status="completed",
-                )
+                reused = True
                 return state, completed
-            state, result, _ = self.run_turn(state, message, thread_id, turn_id=turn_id)
+            self._publish_turn_event(
+                event="turn.started",
+                message="chat turn started",
+                status="started",
+            )
+            state, result, node_trace = self.run_turn(
+                state,
+                message,
+                thread_id,
+                turn_id=turn_id,
+            )
             return state, result
 
-        return self._thread_store.update(thread_id, update)
+        with runtime_context(
+            thread_id=thread_id,
+            turn_id=turn_id,
+            source="chat_runtime",
+        ):
+            try:
+                result = self._thread_store.update(thread_id, update)
+            except Exception as exc:
+                self._publish_turn_event(
+                    event="turn.failed",
+                    message="chat turn failed",
+                    status="error",
+                    level="error",
+                    error=format_exception_chain(exc),
+                    metadata={"error_type": type(exc).__name__},
+                )
+                raise
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            if reused:
+                self._publish_turn_event(
+                    event="turn.reused",
+                    message="chat turn reused existing completed result",
+                    status="completed",
+                    duration_ms=duration_ms,
+                )
+            else:
+                self._publish_turn_event(
+                    event="turn.completed",
+                    message="chat turn completed",
+                    status="completed",
+                    duration_ms=duration_ms,
+                    metadata={"node_trace": list(node_trace)},
+                )
+            return result
+
+    def _publish_turn_event(
+        self,
+        *,
+        event: str,
+        message: str,
+        status: str,
+        level: str = "info",
+        duration_ms: int | None = None,
+        error: str | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
+        payload: dict[str, object] = {
+            "message": message,
+            "status": status,
+            "level": level,
+        }
+        if duration_ms is not None:
+            payload["duration_ms"] = duration_ms
+        if error is not None:
+            payload["error"] = error
+        if metadata is not None:
+            payload["metadata"] = metadata
+        publish_observed_event(
+            self._event_publisher,
+            name=event,
+            producer="chat",
+            payload=payload,
+            project_root=self._project_root,
+            failure_component="chat",
+            failure_event="turn_event_delivery_failed",
+            failure_message=f"Could not deliver {event} event",
+            failure_metadata={"lifecycle_event": event},
+        )
 
     def run_turn(
         self,
@@ -174,48 +277,41 @@ class ConversationGraphRuntime:
         *,
         turn_id: str | None = None,
     ) -> tuple[ThreadState, ChatResult, tuple[ConversationNodeName, ...]]:
-        started_at = time.monotonic()
         with runtime_context(
             thread_id=thread_id,
             turn_id=turn_id,
             source="chat_runtime",
         ):
-            write_log_event(
-                "chat",
-                "turn_started",
-                "chat turn started",
-                project_root=self._project_root,
-                status="started",
+            return self._execute_turn(
+                state,
+                message,
+                thread_id,
+                turn_id=turn_id,
             )
-            try:
-                output: object = self._graph.invoke({"turn_state": ConversationTurnState.start(state, message, thread_id, turn_id=turn_id)})
-            except ConversationGraphRuntimeError:
-                raise
-            except Exception as exc:
-                raise ConversationGraphRuntimeError(
-                    f"conversation graph failed while handling thread '{thread_id}'",
-                    node_trace=(),
-                ) from exc
-            if not isinstance(output, dict):
-                raise ConversationGraphRuntimeError("conversation graph returned invalid state", node_trace=())
-            graph_state = cast(_ConversationGraphState, output)
-            turn_state = graph_state["turn_state"]
+
+    def _execute_turn(
+        self,
+        state: ThreadState,
+        message: str,
+        thread_id: str,
+        *,
+        turn_id: str | None,
+    ) -> tuple[ThreadState, ChatResult, tuple[ConversationNodeName, ...]]:
+        try:
+            output: object = self._graph.invoke({"turn_state": ConversationTurnState.start(state, message, thread_id, turn_id=turn_id)})
+        except ConversationGraphRuntimeError:
+            raise
+        except Exception as exc:
+            raise ConversationGraphRuntimeError(
+                f"conversation graph failed while handling thread '{thread_id}'",
+                node_trace=(),
+            ) from exc
+        if not isinstance(output, dict):
+            raise ConversationGraphRuntimeError("conversation graph returned invalid state", node_trace=())
+        graph_state = cast(_ConversationGraphState, output)
+        turn_state = graph_state["turn_state"]
         updated = _require_thread_state(turn_state.updated_thread_state)
         final_response = _require_final_response(turn_state.final_response)
-        duration_ms = int((time.monotonic() - started_at) * 1000)
-        with runtime_context(
-            thread_id=thread_id,
-            turn_id=turn_id,
-            source="chat_runtime",
-        ):
-            write_log_event(
-                "chat",
-                "turn_completed",
-                "chat turn completed",
-                project_root=self._project_root,
-                duration_ms=duration_ms,
-                status="completed",
-            )
         trace_id = self._record_chat_turn_trace(
             user_message=message,
             final_response=final_response,

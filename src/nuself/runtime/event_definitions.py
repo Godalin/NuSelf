@@ -110,6 +110,11 @@ CORE_EVENT_DEFINITIONS: tuple[RuntimeEventDefinition, ...] = (
     ),
     RuntimeEventDefinition(
         producer="chat",
+        name="turn.reused",
+        description="A completed logical chat turn was returned idempotently.",
+    ),
+    RuntimeEventDefinition(
+        producer="chat",
         name="tool.activity",
         description="An agent tool emitted live activity.",
     ),

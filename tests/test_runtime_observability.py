@@ -3,9 +3,11 @@ from pathlib import Path
 import pytest
 
 from nuself.logs import read_log_events
+from nuself.runtime.events import EventPublisher
 from nuself.runtime.observability import (
     decode_observed_record,
     format_exception_chain,
+    publish_observed_event,
     report_observed_failure,
     run_observed_best_effort,
 )
@@ -53,6 +55,38 @@ def test_best_effort_returns_none_and_writes_structured_failure(
     assert event.status == "degraded"
     assert event.error == "trace unavailable"
     assert event.metadata == {"memory_id": "m1"}
+
+
+def test_observed_event_reports_subscriber_failure_without_raising(
+    tmp_path: Path,
+) -> None:
+    publisher = EventPublisher()
+
+    def fail_subscriber(_event: object) -> None:
+        raise RuntimeError("subscriber unavailable")
+
+    publisher.subscribe(fail_subscriber)
+
+    result = publish_observed_event(
+        publisher,
+        name="turn.started",
+        producer="chat",
+        payload={"message": "started"},
+        project_root=tmp_path,
+        failure_component="chat",
+        failure_event="turn_event_delivery_failed",
+        failure_message="Could not deliver turn event",
+        failure_metadata={"lifecycle_event": "turn.started"},
+    )
+
+    assert result is None
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="chat",
+    )
+    assert event.event == "turn_event_delivery_failed"
+    assert event.error is not None
+    assert "subscriber unavailable" in event.error
 
 
 def test_best_effort_propagates_undeclared_exception(

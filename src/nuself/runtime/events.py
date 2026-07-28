@@ -40,8 +40,16 @@ class EventDeliveryError(RuntimeError):
         event: RuntimeEnvelope,
         failures: tuple[EventDeliveryFailure, ...],
     ) -> None:
+        details = "; ".join(
+            (
+                f"{type(failure.error).__name__}: "
+                f"{str(failure.error).strip() or '<no message>'}"
+            )
+            for failure in failures
+        )
         super().__init__(
-            f"{len(failures)} subscriber(s) failed for runtime event {event.name!r}"
+            f"{len(failures)} subscriber(s) failed for runtime event "
+            f"{event.name!r}: {details}"
         )
         self.event = event
         self.failures = failures

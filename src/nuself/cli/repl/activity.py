@@ -280,6 +280,9 @@ def is_interactive_activity_log(event: LogEvent) -> bool:
         if event.event == "service_tool_called":
             return True
         if event.event in {
+            "turn.started",
+            "turn.completed",
+            "turn.reused",
             "turn_started",
             "turn_completed",
             "turn_reused",
@@ -305,5 +308,6 @@ def is_failure_activity_log(event: LogEvent) -> bool:
         "final_response_failed",
         "llm_endpoint_failed_over",
         "llm_endpoint_unavailable",
+        "turn.failed",
         "turn_failed",
     }

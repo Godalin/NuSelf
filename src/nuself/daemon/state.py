@@ -54,6 +54,7 @@ class DaemonState:
             section_planner=build_reason_export_section_planner(
                 project_root
             ),
+            event_publisher=self.event_publisher,
         )
 
         config = ConfigSystem.load(project_root=project_root)

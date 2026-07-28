@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Daemon worker lifecycle is now a production-owned `EventPublisher`
-boundary with audit logs as an explicit subscriber.
+Idle. Chat-turn lifecycle is now a production `EventPublisher` boundary whose
+completed event proves the thread update was durably saved.
 
 ## Active Branch
 
@@ -23,21 +23,22 @@ code.
 
 ## Completion Evidence
 
-- `DaemonState` owns one `EventPublisher`, attaches
-  `runtime_event_log_sink(...)`, and injects it into the worker supervisor.
-- Every worker target publishes registered `worker.started` and
-  `worker.stopped` envelopes; scheduled and escaping failures publish
-  `worker.failed` with the domain operation event retained in metadata.
-- Successful audit projections retain the event envelope ID and worker/job
-  runtime context.
-- A production-composition regression subscribes to `DaemonState`'s publisher
-  and proves the start/stop audit records retain those exact envelope IDs.
-- A regression test proves another subscriber may fail on both start and stop
-  without skipping the target or stopped-event audit projection.
-- Worker health, scheduled retry intervals, registration, export initialization,
-  and join-timeout behavior remain unchanged.
-- Focused runtime-event/worker/daemon/export tests: 66 passed.
-- Final full tests: 1275 passed.
+- `ChatAgent` accepts an instance-scoped publisher; `DaemonState` injects its
+  shared publisher and standalone agents compose an audit-backed publisher.
+- New turns publish `turn.started`; `turn.completed` is emitted only after
+  `ThreadStore.update()` saves; graph/load/persistence failures emit
+  `turn.failed` and re-raise the original exception; idempotent retries emit
+  only `turn.reused`.
+- A synchronous completed-event subscriber successfully reads the saved
+  assistant message, while a forced save failure proves completed is absent.
+- Event, audit, and daemon live-activity projections retain the same message ID
+  plus request/thread/turn correlation.
+- Subscriber failures neither replace a completed response nor mask the
+  original graph failure.
+- Worker and chat lifecycle owners share `publish_observed_event(...)`;
+  aggregate delivery diagnostics retain subscriber exception details.
+- Focused chat/daemon/runtime/log/REPL tests: 436 passed.
+- Final full tests: 1283 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -47,4 +48,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit chat lifecycle event adoption after daemon worker lifecycle is real.
+Audit remaining direct correlation overrides after chat lifecycle is unified.

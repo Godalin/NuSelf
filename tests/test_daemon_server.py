@@ -116,6 +116,69 @@ def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
     assert (tmp_path / "private" / "threads" / "default.json").is_file()
 
 
+def test_daemon_chat_uses_state_event_publisher(
+    tmp_path: Path,
+) -> None:
+    state = DaemonState(tmp_path)
+    state.chat_agent = ChatAgent(
+        tmp_path,
+        llm=StructuredFakeLLM(),
+        event_publisher=state.event_publisher,
+    )
+    received: list[RuntimeEnvelope] = []
+
+    def collect_chat_event(event: RuntimeEnvelope) -> None:
+        if event.producer == "chat":
+            received.append(event)
+
+    state.event_publisher.subscribe(collect_chat_event)
+    subscription_id = state.activity_broker.open("turn-1")
+
+    response = handle_request(
+        DaemonRequest(
+            type="chat",
+            payload={
+                "message": "hello",
+                "thread_id": "shared-events",
+                "turn_id": "turn-1",
+            },
+            request_id="chat-events",
+        ),
+        state,
+    )
+
+    assert response.status == "ok"
+    assert [event.name for event in received] == [
+        "turn.started",
+        "turn.completed",
+    ]
+    audit = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="chat",
+        )
+        if event.event.startswith("turn.")
+    ]
+    assert [event.event_id for event in audit] == [
+        event.message_id for event in received
+    ]
+    assert all(event.request_id == "chat-events" for event in audit)
+    activity = state.activity_broker.next_events(
+        subscription_id,
+        timeout_seconds=0,
+        limit=10,
+    )
+    activity_lifecycle = [
+        event
+        for event in activity
+        if event.event.startswith("turn.")
+    ]
+    assert [event.event_id for event in activity_lifecycle] == [
+        event.message_id for event in received
+    ]
+
+
 def test_daemon_chat_uses_explicit_thread_id(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     state.chat_agent = ChatAgent(tmp_path, llm=StructuredFakeLLM())

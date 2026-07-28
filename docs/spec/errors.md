@@ -38,7 +38,8 @@ NuSelf should fail in a way that preserves root-cause information, avoids repeat
 
 When daemon chat handling fails:
 
-- The chat runtime writes `chat/turn_failed` when the failure occurs inside the chat graph.
+- The chat runtime publishes `chat/turn.failed` when load, graph execution,
+  validation, or persistence fails.
 - The daemon request layer writes `daemon/chat_turn_failed` with:
   - `level=error`
   - `status=error`
@@ -209,7 +210,7 @@ For non-retryable failures, the REPL must:
 Human-readable error logs follow the shared log style from [`cli.md`](cli.md):
 
 ```text
-[chat] turn_failed status=error thread=default request=<id> error="outer <- root"
+[chat] turn.failed status=error thread=default request=<id> error="outer <- root"
   chat turn failed
 ```
 

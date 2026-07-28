@@ -382,7 +382,9 @@ cannot remove a current subscription, even if process memory addresses are
 reused. Delivery continues across subscriber failures and raises one
 `EventDeliveryError` containing every failure after all matching subscribers
 have run; each failure carries the same lifetime-bound handle as the failed
-registration.
+registration. Its compact message includes each subscriber exception type and
+non-empty message so best-effort observability does not discard the actionable
+failure cause.
 
 Every published event resolves through a sealed
 `EventDefinitionRegistry`. Core lifecycle definitions ship with the runtime;
@@ -419,6 +421,34 @@ the publisher into `DaemonWorkerSupervisor`.
   prevent the stopped event attempt.
 - Join timeout remains the direct `daemon/thread_timeout` audit record because
   a timed-out worker is still alive and has not emitted a stopped transition.
+
+Chat-turn lifecycle is the second production event boundary. `ChatAgent`
+accepts an instance-scoped publisher; `DaemonState` injects its existing
+publisher, while a standalone agent composes a private publisher with an audit
+subscriber.
+
+- A new logical turn publishes `chat/turn.started` immediately before graph
+  execution.
+- `chat/turn.completed` is published only after `ThreadStore.update()` has
+  atomically saved the assistant result. Its payload includes duration and
+  node-trace metadata.
+- A completed `turn_id` publishes `chat/turn.reused` after the locked update
+  returns, without publishing started or rerunning graph/tool work.
+- Any exception escaping load, graph execution, validation, or persistence
+  publishes `chat/turn.failed` with the compact exception chain, then re-raises
+  the original exception unchanged. A failure never publishes completed.
+- All lifecycle envelopes run under one
+  `source="chat_runtime"` context containing the thread and optional turn ID.
+  Their audit and daemon live-activity projections retain the envelope ID and
+  correlation.
+- Event publication is secondary. Subscriber failure cannot prevent graph
+  execution, replace a completed response, mask the original failure, or alter
+  thread persistence.
+
+`publish_observed_event(...)` is the shared best-effort event-publication
+boundary used by worker and chat lifecycle owners. It delegates delivery to
+`EventPublisher`, reports delivery failure through structured observability,
+and returns the published envelope only when every subscriber succeeds.
 
 ## Cross-Process Activity
 

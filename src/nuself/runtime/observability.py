@@ -8,6 +8,8 @@ from typing import TypeVar
 import warnings
 
 from nuself.logs import LogComponent, LogLevel, write_log_event
+from nuself.runtime.events import EventPublisher
+from nuself.runtime.messages import RuntimeEnvelope
 
 T = TypeVar("T")
 DEFAULT_DECODE_ERRORS: tuple[type[Exception], ...] = (
@@ -59,6 +61,34 @@ def run_observed_best_effort(
             metadata=metadata,
         )
         return None
+
+
+def publish_observed_event(
+    publisher: EventPublisher,
+    *,
+    name: str,
+    producer: str,
+    payload: Mapping[str, object] | None,
+    project_root: Path | None,
+    failure_component: LogComponent,
+    failure_event: str,
+    failure_message: str,
+    failure_metadata: dict[str, object] | None = None,
+) -> RuntimeEnvelope | None:
+    """Publish an event without letting subscriber failure alter primary work."""
+
+    return run_observed_best_effort(
+        lambda: publisher.publish(
+            name=name,
+            producer=producer,
+            payload=payload,
+        ),
+        component=failure_component,
+        event=failure_event,
+        message=failure_message,
+        project_root=project_root,
+        metadata=failure_metadata,
+    )
 
 
 def decode_observed_record(

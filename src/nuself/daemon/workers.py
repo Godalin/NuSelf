@@ -17,8 +17,8 @@ from nuself.runtime.context import (
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.observability import (
     format_exception_chain,
+    publish_observed_event,
     report_observed_failure,
-    run_observed_best_effort,
 )
 from nuself.runtime.workers import (
     OwnedWorker,
@@ -284,17 +284,19 @@ class DaemonWorkerSupervisor:
         }
         if error is not None:
             payload["error"] = error
-        run_observed_best_effort(
-            lambda: self._event_publisher.publish(
-                name=event,
-                producer="daemon",
-                payload=payload,
-            ),
-            component="daemon",
-            event="worker_event_delivery_failed",
-            message=f"Could not deliver {name} {event} event",
+        publish_observed_event(
+            self._event_publisher,
+            name=event,
+            producer="daemon",
+            payload=payload,
             project_root=self._project_root,
-            metadata={"worker": name, "lifecycle_event": event},
+            failure_component="daemon",
+            failure_event="worker_event_delivery_failed",
+            failure_message=f"Could not deliver {name} {event} event",
+            failure_metadata={
+                "worker": name,
+                "lifecycle_event": event,
+            },
         )
 
     def _worker(self, name: str) -> OwnedWorker:

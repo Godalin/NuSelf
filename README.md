@@ -196,6 +196,13 @@ protocol JSON and invalid response fields are never displayed as raw answers.
 
 Current chat uses a LangGraph-backed conversation runtime that searches memory entries, derived profile items, and imported source chunks, appends turns to `private/threads/default.json`, and compresses older context into a thread summary once the conversation grows. The agent can also invoke tools during conversation: `search_memory` for targeted retrieval, `list_pending_reflections` / `dismiss_reflection` to inspect and manage proactive ideas, `archive_memory` / `update_memory_importance` to curate durable memory, `list_active_reasoning_threads` / `show_reasoning_thread` to inspect durable reasoning state, and `search_trace` / `show_trace` to inspect thought provenance. The memory search is deterministic lexical retrieval with descriptor-aware type hints, type/tag filters, relation expansion over existing memory links, and ranked match reasons; vector and graph indexes are planned as derived retrieval layers.
 
+Chat lifecycle activity is published as registered `turn.started`,
+`turn.completed`, `turn.failed`, and `turn.reused` events. A completed event is
+emitted only after the thread update is durably saved. Structured audit and
+daemon live-activity projections retain the same event identity and
+correlation, while a failed subscriber cannot replace the reply or mask the
+original chat failure.
+
 Thread-scoped dynamic persona prompt files are authoritative; their derived name index is validated and atomically rebuilt when missing, malformed, or stale, so damaged lookup metadata does not hide healthy personas or retain old names after a rename.
 
 Reflection relevance and candidate generation use strict typed response schemas. Malformed batches, string booleans, and unknown candidate types take the existing safe fallback instead of being coerced or partially accepted.

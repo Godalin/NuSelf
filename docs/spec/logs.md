@@ -108,22 +108,23 @@ Rules:
 
 ## Chat Turn Logs
 
-Every chat turn writes lifecycle logs from the chat component:
+Every chat turn publishes registered lifecycle events from the chat component;
+the audit subscriber writes their log projections:
 
 | Event            | Status      | Meaning                                                                                      |
 | ---------------- | ----------- | -------------------------------------------------------------------------------------------- |
-| `turn_started`   | `started`   | Chat runtime accepted a logical user turn                                                    |
-| `turn_completed` | `completed` | Chat runtime produced and saved a final response                                             |
-| `turn_reused`    | `completed` | A repeated `turn_id` returned an already-saved assistant response                            |
-| `turn_failed`    | `error`     | Chat runtime failed before producing a final response                                        |
+| `turn.started`   | `started`   | Chat runtime accepted a logical user turn                                                    |
+| `turn.completed` | `completed` | Chat runtime produced and saved a final response                                             |
+| `turn.reused`    | `completed` | A repeated `turn_id` returned an already-saved assistant response                            |
+| `turn.failed`    | `error`     | Chat runtime failed before producing a final response                                        |
 | `turn_retry`     | `retry`     | The interactive client is retrying the same logical turn after a retryable transport failure |
 
 Rules:
 
-- `turn_started` and `turn_completed` use the same `thread_id` and, when available, the same top-level `turn_id`.
-- `turn_completed` includes `duration_ms` and compact metadata such as `node_trace` and `tool_call_count`.
+- `turn.started` and `turn.completed` use the same `thread_id` and, when available, the same top-level `turn_id`.
+- `turn.completed` includes `duration_ms` and compact metadata such as `node_trace` and `tool_call_count`.
 - `turn_retry` is a client-side transport retry marker. It must reuse the same `turn_id` and does not mean the daemon should persist a second user message.
-- `turn_reused` confirms idempotency: the retry returned an existing completed result instead of rerunning chat/tools.
+- `turn.reused` confirms idempotency: the retry returned an existing completed result instead of rerunning chat/tools.
 - Final response boundary retries use `final_response_retry`; they are model-output retries inside one chat turn, not transport retries.
 - Interactive logs should show chat lifecycle and retry events so users can distinguish normal multi-tool execution from retry-driven repeated work.
 - Interactive log streaming must track already-seen event identities, not offsets into the timestamp-sorted global event list. Delayed daemon writes or concurrent background logs must not replay old turn events into the current REPL output.

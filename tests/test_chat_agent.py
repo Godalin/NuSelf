@@ -21,11 +21,13 @@ from nuself.agent.chat import ConversationGraphRuntimeError
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
-from nuself.logs import read_log_events
+from nuself.logs import read_log_events, runtime_event_log_sink
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
+from nuself.runtime.events import EventPublisher
+from nuself.runtime.messages import RuntimeEnvelope
 from nuself.trace.repository import TraceRepository
 
 
@@ -505,6 +507,194 @@ def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Pat
     state = thread_store.load("default")
     assert state.messages == [ThreadMessage(role="user", content="existing message")]
     assert state.next_message_index == 1
+    lifecycle = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="chat",
+        )
+        if event.event.startswith("turn.")
+    ]
+    assert [event.event for event in lifecycle] == [
+        "turn.started",
+        "turn.failed",
+    ]
+    assert lifecycle[-1].error is not None
+    assert "conversation graph node 'respond' failed" in lifecycle[-1].error
+    assert lifecycle[-1].thread_id == "default"
+    assert lifecycle[-1].source == "chat_runtime"
+
+
+def test_chat_completed_event_is_published_after_thread_persistence(
+    tmp_path: Path,
+) -> None:
+    thread_store = ThreadStore(tmp_path)
+    publisher = EventPublisher()
+    publisher.subscribe(runtime_event_log_sink(tmp_path))
+    observed: list[RuntimeEnvelope] = []
+
+    def inspect_persisted_state(event: RuntimeEnvelope) -> None:
+        if event.name == "turn.completed":
+            state = thread_store.load("thread-a")
+            assert state.messages[-1] == ThreadMessage(
+                role="assistant",
+                content="agent reply",
+                turn_id="turn-1",
+            )
+        observed.append(event)
+
+    publisher.subscribe(inspect_persisted_state)
+    agent = ChatAgent(
+        tmp_path,
+        llm=FakeLLM(),
+        thread_store=thread_store,
+        event_publisher=publisher,
+    )
+
+    result = agent.respond(
+        "persist this",
+        thread_id="thread-a",
+        turn_id="turn-1",
+    )
+
+    assert result.reply == "agent reply"
+    assert [event.name for event in observed] == [
+        "turn.started",
+        "turn.completed",
+    ]
+    audit = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="chat",
+        )
+        if event.event.startswith("turn.")
+    ]
+    assert [event.event_id for event in audit] == [
+        event.message_id for event in observed
+    ]
+    assert all(event.thread_id == "thread-a" for event in audit)
+    assert all(event.turn_id == "turn-1" for event in audit)
+
+
+def test_chat_persistence_failure_publishes_failed_not_completed(
+    tmp_path: Path,
+) -> None:
+    class FailingSaveThreadStore(ThreadStore):
+        def _save_unlocked(self, state: ThreadState) -> None:
+            del state
+            raise OSError("thread storage unavailable")
+
+    agent = ChatAgent(
+        tmp_path,
+        llm=FakeLLM(),
+        thread_store=FailingSaveThreadStore(tmp_path),
+    )
+
+    with pytest.raises(OSError, match="thread storage unavailable"):
+        agent.respond("cannot persist", turn_id="turn-1")
+
+    lifecycle = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="chat",
+        )
+        if event.event.startswith("turn.")
+    ]
+    assert [event.event for event in lifecycle] == [
+        "turn.started",
+        "turn.failed",
+    ]
+    assert lifecycle[-1].error == "thread storage unavailable"
+
+
+def test_chat_reused_event_does_not_rerun_graph(
+    tmp_path: Path,
+) -> None:
+    llm = FakeLLM()
+    publisher = EventPublisher()
+    observed: list[RuntimeEnvelope] = []
+    publisher.subscribe(observed.append)
+    agent = ChatAgent(
+        tmp_path,
+        llm=llm,
+        event_publisher=publisher,
+    )
+    agent.respond("same turn", turn_id="turn-1")
+    observed.clear()
+
+    result = agent.respond("same turn", turn_id="turn-1")
+
+    assert result.reply == "agent reply"
+    assert len(llm.calls) == 1
+    assert [event.name for event in observed] == ["turn.reused"]
+
+
+def test_chat_event_subscriber_failure_does_not_replace_original_failure(
+    tmp_path: Path,
+) -> None:
+    publisher = EventPublisher()
+    publisher.subscribe(runtime_event_log_sink(tmp_path))
+
+    def fail_subscriber(_event: RuntimeEnvelope) -> None:
+        raise RuntimeError("subscriber unavailable")
+
+    publisher.subscribe(fail_subscriber)
+    agent = ChatAgent(
+        tmp_path,
+        llm=FailingLLM(),
+        event_publisher=publisher,
+    )
+
+    with pytest.raises(
+        ConversationGraphRuntimeError,
+        match="conversation graph node 'respond' failed",
+    ):
+        agent.respond("fail without masking")
+
+    lifecycle = [
+        event.event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="chat",
+        )
+        if event.event.startswith("turn.")
+    ]
+    assert lifecycle == ["turn.started", "turn.failed"]
+
+
+def test_chat_event_subscriber_failure_does_not_replace_completed_turn(
+    tmp_path: Path,
+) -> None:
+    publisher = EventPublisher()
+    publisher.subscribe(runtime_event_log_sink(tmp_path))
+
+    def fail_subscriber(_event: RuntimeEnvelope) -> None:
+        raise RuntimeError("subscriber unavailable")
+
+    publisher.subscribe(fail_subscriber)
+    agent = ChatAgent(
+        tmp_path,
+        llm=FakeLLM(),
+        event_publisher=publisher,
+    )
+
+    result = agent.respond("complete despite subscriber")
+
+    assert result.reply == "agent reply"
+    assert ThreadStore(tmp_path).load("default").messages[-1].content == (
+        "agent reply"
+    )
+    lifecycle = [
+        event.event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="chat",
+        )
+        if event.event.startswith("turn.")
+    ]
+    assert lifecycle == ["turn.started", "turn.completed"]
 
 
 def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) -> None:
