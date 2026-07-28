@@ -1,6 +1,6 @@
 # Storage v2 — Unified Storage Layer → SQLite → Thought Packs
 
-Status: active design, implementation in v0.2.3–v0.2.5.
+Status: implemented current storage and migration contract.
 
 ## Goal
 

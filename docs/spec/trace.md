@@ -1,6 +1,6 @@
 # Trace Spec
 
-Status: ready for first v0.2.0 implementation.
+Status: implemented current contract.
 
 ## Purpose
 

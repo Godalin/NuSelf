@@ -1,6 +1,6 @@
 # Persona Management Spec
 
-Status: planned for v0.2.3
+Status: implemented current contract.
 
 ## Purpose
 

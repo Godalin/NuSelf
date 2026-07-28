@@ -1,6 +1,6 @@
 # Reason Output Composition Spec
 
-Status: DRAFT — reason-scoped long-form export and composition contract for v0.2.x.
+Status: implemented current contract.
 
 ## Purpose
 

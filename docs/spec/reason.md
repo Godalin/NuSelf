@@ -1,6 +1,6 @@
 # Long-Run Reasoning Spec
 
-Status: CURRENT — v0.2.0 RC contract for generalized reasoning, explicit tool logs, complete rendering, and structured step output.
+Status: implemented current contract.
 
 ## Purpose
 
@@ -420,7 +420,8 @@ The chat agent is the actor. The system prompt must instruct the agent to:
 
 ### Turn-Confirmation Protocol
 
-Reason uses the shared [Turn-Confirmation Protocol](cli.md#turn-confirmation-protocol) for thread creation.
+Reason uses the synchronous
+[approval boundary](cli.md#approval-and-event-boundaries) for thread creation.
 
 It produces `proposal_created` domain events with `component="reasoning"` and the following metadata:
 
@@ -440,11 +441,16 @@ write_log_event(
 )
 ```
 
-The CLI may still surface `proposal_created` as an audit event, but reasoning no longer uses the post-turn CLI confirmation path. See [cli.md](cli.md#turn-confirmation-protocol) for the legacy/future proposal dispatch lifecycle and extension guide.
+The CLI may still surface `proposal_created` as an audit event, but reasoning
+does not use post-turn log dispatch for confirmation. See
+[cli.md](cli.md#approval-and-event-boundaries) for the current approval and
+event separation.
 
 ### Chat Tool Contract
 
-Reason tools let the chat agent inspect, propose, and manage reasoning threads. Tools that create a thread (propose) use the turn-confirmation protocol; tools that change a thread's status act directly after the agent reports the action.
+Reason tools let the chat agent inspect, propose, and manage reasoning threads.
+Tools that create a thread use the approval-gated tool wrapper; tools that
+change a thread's status act directly after the agent reports the action.
 
 Agent-facing reason read tools return JSON strings. They expose reasoning state
 and step content, not tool-call audit records. `ReasoningStep.tool_logs` remain
@@ -522,7 +528,11 @@ Each returns a one-line confirmation string.
 
 #### Write Tool (Reserved): `reason_advance`
 
-Reserved for future implementation — not yet registered as a chat tool. The background scheduler handles automatic advances; manual advance from chat would require the turn-confirmation protocol because it invokes an LLM and may change state unpredictably.
+Reserved for future implementation — not yet registered as a chat tool. The
+background scheduler handles automatic advances; manual advance from chat
+would require a synchronous approval-gated request because it invokes an LLM
+and may change state unpredictably. See
+[cli.md](cli.md#approval-and-event-boundaries).
 
 #### Confirmation Rule
 

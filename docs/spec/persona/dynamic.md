@@ -1,6 +1,6 @@
 # Dynamic Persona Prompt Spec
 
-Status: design proposal for first v0.2.0 implementation.
+Status: implemented current contract.
 
 ## Purpose
 
