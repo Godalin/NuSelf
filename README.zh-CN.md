@@ -262,9 +262,11 @@ uv run nuself dev logs
 uv run nuself dev logs --component chat --tail 20
 uv run nuself dev logs --component memory --json
 uv run nuself dev logs --component reflection --tail 10
+uv run nuself dev logs --component storage --tail 10
 ```
 
 次要的审计或 thought trace 记录失败会显示为结构化的 `*_failed` 警告，但不会改变主操作的结果。
+共享 backend 的生命周期故障会写入 `storage` component。
 读取集合时会隔离损坏的存储记录，并通过不包含正文的 `record_decode_failed` 警告报告。
 Reason thread 的调度时间戳必须包含时区，因此损坏的 cooldown 状态不会再静默地让线程
 进入后台推进。

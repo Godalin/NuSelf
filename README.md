@@ -270,10 +270,12 @@ uv run nuself dev logs
 uv run nuself dev logs --component chat --tail 20
 uv run nuself dev logs --component memory --json
 uv run nuself dev logs --component reflection --tail 10
+uv run nuself dev logs --component storage --tail 10
 ```
 
 Failures in secondary audit or thought-trace recording appear as structured
 `*_failed` warnings without changing the result of the primary operation.
+Shared backend lifecycle failures are written under the `storage` component.
 Malformed stored records are isolated during collection reads and reported as
 payload-safe `record_decode_failed` warnings. Reason-thread scheduling
 timestamps must include a timezone, so corrupt cooldown state cannot silently

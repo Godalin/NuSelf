@@ -218,8 +218,10 @@ Structured logs are an append-only sink and read model.
 
 - `LogEvent` will become a projection of the shared runtime envelope.
 - Every newly written event has a stable id and schema version.
-- Component and event names come from registered definitions for core runtime
-  events; domain extensions may register their own definitions.
+- Ephemeral runtime events and their producer ownership come from registered
+  definitions. Their audit projections retain that registered dotted name.
+  Direct domain audit writes use stable validated slugs governed by the
+  owning domain spec rather than a process-global definition registry.
 - Metadata must be JSON-safe before it reaches the sink.
 - File writes are serialized per project/component.
 - Readers use stable event ids and incremental cursors; complete-record hashing

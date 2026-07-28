@@ -50,7 +50,7 @@ def run_observed_best_effort(
     try:
         return operation()
     except errors as exc:
-        _report_observed_failure(
+        report_observed_failure(
             exc,
             component=component,
             event=event,
@@ -98,7 +98,7 @@ def report_corrupt_record(
 ) -> None:
     """Report one isolated corrupt record without exposing its payload."""
 
-    _report_observed_failure(
+    report_observed_failure(
         exc,
         component=component,
         event="record_decode_failed",
@@ -108,7 +108,7 @@ def report_corrupt_record(
     )
 
 
-def _report_observed_failure(
+def report_observed_failure(
     exc: Exception,
     *,
     component: LogComponent,
@@ -117,6 +117,8 @@ def _report_observed_failure(
     project_root: Path | None,
     metadata: dict[str, object] | None,
 ) -> None:
+    """Report an already-caught failure without replacing that failure."""
+
     error = format_exception_chain(exc)
     try:
         write_log_event(

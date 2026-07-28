@@ -364,6 +364,11 @@ The logging decorator is responsible for operational audit. The approval decorat
 
 Approval decorators are intended for tools that change durable state or trigger expensive, user-visible actions. Read-only tools should remain undecorated except for shared logging.
 
+Logging and approval decorators accept a declared `LogComponent`, not an
+arbitrary string. Composition must assign each decorated tool to an existing
+domain or shared-infrastructure component; casts must not manufacture unknown
+log files.
+
 Reasoning thread creation is the first migration target for this pattern. The old post-turn confirmation flow remains documented below for compatibility, but the implementation goal is to move approval into the tool composition layer so the agent lifecycle does not depend on a separate after-turn replay step.
 
 ### Behavioral Guidelines for Reason Awareness (Prompt-Level)

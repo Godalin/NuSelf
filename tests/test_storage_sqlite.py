@@ -184,6 +184,14 @@ def test_reset_default_backend_attempts_every_owned_close(
     assert failed.close_calls == 1
     assert healthy.close_calls == 1
     assert captured.value.failures == (failed.error,)
+    [event] = read_log_events(
+        project_root=tmp_path / "first",
+        component="storage",
+    )
+    assert event.event == "backend_close_failed"
+    assert event.status == "degraded"
+    assert event.error == "first close failed"
+    assert event.metadata == {"backend_type": "CloseBackend"}
 
 
 def test_close_is_idempotent_after_connection_closes(

@@ -1322,6 +1322,34 @@ def test_logs_command_can_render_json(tmp_path: Path, capsys: CaptureFixture) ->
     assert '"event": "started"' in captured.out
 
 
+def test_logs_command_accepts_storage_component(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+) -> None:
+    write_log_event(
+        "storage",
+        "backend_close_failed",
+        "backend close failed",
+        project_root=tmp_path,
+    )
+
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "dev",
+            "logs",
+            "--component",
+            "storage",
+            "--no-color",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "[storage] backend_close_failed" in captured.out
+
+
 def test_log_context_applies_runtime_ownership_fields(tmp_path: Path) -> None:
     with log_context(
         thread_id="default", request_id="req-1", turn_id="turn-1", source="test"

@@ -22,10 +22,10 @@ class ApprovalManager:
             cls._instance = ApprovalManager()
         return cls._instance
 
-    def create_proposal(self, component: str, summary: str, *, callable: Callable[..., str], args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
+    def create_proposal(self, component: LogComponent, summary: str, *, callable: Callable[..., str], args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
         pid = uuid4().hex[:12]
         self._pending[pid] = {"component": component, "summary": summary, "callable": callable, "args": args, "kwargs": kwargs}
-        write_log_event(cast(LogComponent, component), "proposal_created", summary, metadata={"proposal_id": pid, "summary": summary})
+        write_log_event(component, "proposal_created", summary, metadata={"proposal_id": pid, "summary": summary})
         return pid
 
     def list_pending(self) -> List[Dict[str, Any]]:
@@ -69,7 +69,7 @@ class ApprovalManager:
 
 
 def approval_required(
-    component: str,
+    component: LogComponent,
     summary_builder: Callable[[tuple[Any, ...], dict[str, Any]], str] | None = None,
 ) -> Callable[[Callable[..., str]], Callable[..., str]]:
     def decorator(fn: Callable[..., str]) -> Callable[..., str]:
@@ -83,7 +83,7 @@ def approval_required(
             # Record the event first, then render a theme-consistent banner so
             # interactive users see the pending action before the question.
             write_log_event(
-                cast(LogComponent, component),
+                component,
                 "approval_prompted",
                 summary,
                 metadata={"tool": fn.__name__, "summary": summary},
@@ -99,10 +99,10 @@ def approval_required(
                 resp = "n"
             if resp.strip().lower() in {"y", "yes"}:
                 result = fn(*args, **kwargs)
-                write_log_event(cast(LogComponent, component), "service_tool_executed", f"Tool executed interactively: {fn.__name__}", metadata={"tool": fn.__name__})
+                write_log_event(component, "service_tool_executed", f"Tool executed interactively: {fn.__name__}", metadata={"tool": fn.__name__})
                 # Also log an explicit approval record with the approver identity.
                 approver = getpass.getuser()
-                write_log_event(cast(LogComponent, component), "service_tool_approved", f"{component} approved by {approver}", metadata={"tool": fn.__name__, "approver": approver})
+                write_log_event(component, "service_tool_approved", f"{component} approved by {approver}", metadata={"tool": fn.__name__, "approver": approver})
                 # Return a structured JSON string that preserves the underlying result
                 return json.dumps({"approved": True, "component": component, "approver": approver, "result": result})
             # Cancellation also returns a structured JSON string indicating no approval

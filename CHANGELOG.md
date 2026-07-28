@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Structured audit writes now reject unknown components and malformed event
+  names before filesystem access. Shared backend lifecycle diagnostics use the
+  new `storage` log component, available through `nuself dev logs --component
+  storage`.
 - Structured component logs now rotate at 10 MiB with three retained backups,
   using cross-process-safe sidecar locking; diagnostics read retained backups
   and live cursors follow file replacement without dropping unseen events.

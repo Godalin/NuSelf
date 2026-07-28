@@ -16,7 +16,10 @@ from uuid import uuid4
 
 from nuself.config import runtime_paths
 from nuself.logs import LogComponent
-from nuself.runtime.observability import report_corrupt_record
+from nuself.runtime.observability import (
+    report_corrupt_record,
+    report_observed_failure,
+)
 
 
 # ── Protocols ─────────────────────────────────────────────────────────────
@@ -326,20 +329,30 @@ def reset_default_backend(project_root: Path | None = None) -> None:
     """Close and reset one default backend, or every backend when omitted."""
     with _DEFAULT_BACKEND_LOCK:
         if project_root is None:
-            backends = tuple(_default_backends.values())
+            backends = tuple(_default_backends.items())
             _default_backends.clear()
         else:
             root = runtime_paths(project_root).project_root
             backend = _default_backends.pop(root, None)
-            backends = (backend,) if backend is not None else ()
+            backends = ((root, backend),) if backend is not None else ()
     failures: list[Exception] = []
-    for backend in backends:
+    for root, backend in backends:
         close = getattr(backend, "close", None)
         if callable(close):
             try:
                 close()
             except Exception as exc:
                 failures.append(exc)
+                report_observed_failure(
+                    exc,
+                    component="storage",
+                    event="backend_close_failed",
+                    message="Default storage backend could not be closed",
+                    project_root=root,
+                    metadata={
+                        "backend_type": type(backend).__name__,
+                    },
+                )
     if failures:
         raise DefaultBackendResetError(tuple(failures))
 

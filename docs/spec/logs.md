@@ -124,11 +124,21 @@ Rules:
 | `outbox`     | `outbox.log`     | Notification delivery attempts                                       |
 | `reflection` | `reflection.log` | Reflection scheduling                                                |
 | `reasoning`  | `reasoning.log`  | Long-run reasoning threads                                           |
+| `storage`    | `storage.log`    | Shared persistence lifecycle and backend infrastructure              |
 
 Display name mapping: `persona` → `selves`.
 
 ## Write Contract
 
+- Every new write validates its component against `LOG_COMPONENTS`.
+- Direct audit event names are stable lowercase slugs. Each segment starts
+  with a letter and contains lowercase letters, digits, or underscores;
+  registered runtime-event projections may join such segments with dots.
+- Ephemeral runtime event names and producer ownership remain governed by
+  `EventDefinitionRegistry` before publication. Direct append-only domain
+  audit slugs are not forced into one process-global registry: their semantics
+  remain governed by the owning domain specification and the shared lexical
+  contract.
 - JSON Lines format (`sort_keys=True`, `ensure_ascii=True`).
 - Append mode (`"a"`, `encoding="utf-8"`).
 - Directory creation before open.

@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from nuself.logs import (
     InteractiveLogCursor,
+    LogComponent,
     LogEvent,
     LogRetentionPolicy,
     log_path,
@@ -30,13 +32,57 @@ def test_new_log_events_have_stable_envelope_identity(tmp_path: Path) -> None:
     assert read.schema_version == RUNTIME_SCHEMA_VERSION
 
 
+@pytest.mark.parametrize(
+    "event",
+    ("", "TurnStarted", "turn-started", "turn..started", "1turn"),
+)
+def test_new_log_writes_reject_invalid_event_names(
+    tmp_path: Path,
+    event: str,
+) -> None:
+    with pytest.raises(ValueError, match="event name"):
+        write_log_event(
+            "chat",
+            event,
+            "invalid event",
+            project_root=tmp_path,
+        )
+
+
+def test_new_log_writes_reject_invalid_components(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="component"):
+        write_log_event(
+            cast(LogComponent, "../escaped"),
+            "turn_started",
+            "invalid component",
+            project_root=tmp_path,
+        )
+
+    assert not (tmp_path / "escaped.log").exists()
+
+
+def test_storage_component_is_read_with_all_logs(tmp_path: Path) -> None:
+    written = write_log_event(
+        "storage",
+        "backend_close_failed",
+        "backend close failed",
+        project_root=tmp_path,
+    )
+
+    assert read_log_events(
+        project_root=tmp_path,
+        component="storage",
+    ) == [written]
+    assert written in read_log_events(project_root=tmp_path)
+
+
 def test_legacy_log_records_remain_readable_without_identity() -> None:
     event = LogEvent.from_record(
         {
             "time": "2026-01-01T00:00:00Z",
             "level": "info",
             "component": "chat",
-            "event": "legacy_event",
+            "event": "Legacy event with old syntax",
             "message": "legacy",
         }
     )

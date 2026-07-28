@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Generator, Iterable, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
@@ -23,7 +24,14 @@ from nuself.runtime.messages import RUNTIME_SCHEMA_VERSION, RuntimeEnvelope
 
 LogLevel = Literal["debug", "info", "warning", "error"]
 LogComponent = Literal[
-    "daemon", "chat", "memory", "persona", "outbox", "reflection", "reasoning"
+    "daemon",
+    "chat",
+    "memory",
+    "persona",
+    "outbox",
+    "reflection",
+    "reasoning",
+    "storage",
 ]
 
 LOG_COMPONENTS: tuple[LogComponent, ...] = (
@@ -34,6 +42,10 @@ LOG_COMPONENTS: tuple[LogComponent, ...] = (
     "outbox",
     "reflection",
     "reasoning",
+    "storage",
+)
+_AUDIT_EVENT_NAME = re.compile(
+    r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$"
 )
 _LOG_LOCKS_GUARD = Lock()
 _LOG_WRITE_LOCKS: dict[Path, RLock] = {}
@@ -186,6 +198,7 @@ def write_log_event(
 ) -> LogEvent:
     """Append a structured log event and return it."""
 
+    _require_log_identity(component, event)
     context = current_log_context()
     envelope = RuntimeEnvelope(
         kind="audit",
@@ -239,6 +252,10 @@ def write_runtime_event(
         raise ValueError("log event sink requires an event envelope")
     if envelope.producer not in LOG_COMPONENTS:
         raise ValueError("runtime event producer is not a log component")
+    _require_log_identity(
+        envelope.producer,
+        envelope.name,
+    )
     payload = envelope.payload
     level = payload.get("level", "info")
     if level not in {"debug", "info", "warning", "error"}:
@@ -384,6 +401,16 @@ def log_path(component: LogComponent, *, project_root: Path | None = None) -> Pa
     if component == "outbox":
         return paths.outbox_log_path
     return paths.logs_dir / f"{component}.log"
+
+
+def _require_log_identity(
+    component: object,
+    event: object,
+) -> None:
+    if component not in LOG_COMPONENTS:
+        raise ValueError("log component is invalid")
+    if not isinstance(event, str) or _AUDIT_EVENT_NAME.fullmatch(event) is None:
+        raise ValueError("log event name is invalid")
 
 
 def read_log_events(
