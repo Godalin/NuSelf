@@ -427,6 +427,9 @@ Reason advance 也通过这一共享 context 确定 workspace 与 thread-local p
 tools 的活动持久 reason thread，同时保留 request/job correlation。
 Reason 命令会区分已声明的 not-found、prompt、advance 与 transition 结果和意外
 实现故障，因此只有已知领域错误会转换为简洁的 CLI 或 REPL 消息。
+面向具体主题的 reason prompt 通过共享 structured-agent 边界生成严格的
+`ReasonPromptOutput`；模型缺失、调用失败或输出不合规时，thread 创建会在写入任何
+部分状态前停止。
 进程内 live log observer 与 correlation identity 保持分离：嵌套 observer 会按
 顺序组合，projection failure 在 audit write 后被隔离，并且 observer 不会隐式进入
 新的 worker thread。

@@ -3,11 +3,26 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import StructuredTool
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from nuself.llm import ChatMessage, configured_langchain_chat_models, default_llm
+from nuself.agent.structured import StructuredAgent, default_structured_agent
+from nuself.llm import configured_langchain_chat_models
 from nuself.reason.errors import ReasonPromptError
+
+
+class ReasonPromptOutput(BaseModel):
+    """Exact generated output for a topic-specific reasoning prompt."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    prompt: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1),
+    ]
 
 
 def generate_reasoning_prompt(
@@ -16,13 +31,14 @@ def generate_reasoning_prompt(
     mandates: tuple[str, ...] = (),
     active_items: tuple[dict[str, object], ...] = (),
     project_root: Path | None = None,
+    agent: StructuredAgent[ReasonPromptOutput] | None = None,
 ) -> str:
     """Generate a custom reasoning system prompt for a thread topic."""
     if project_root is None:
         raise ReasonPromptError(
             "Cannot generate reasoning prompt: project root is not configured"
         )
-    if not configured_langchain_chat_models(project_root):
+    if agent is None and not configured_langchain_chat_models(project_root):
         raise ReasonPromptError(
             "Cannot generate reasoning prompt: no LangChain chat model is configured"
         )
@@ -92,19 +108,32 @@ Do NOT include field type/format descriptions — only explain meaning.
 """
     )
     prompt = "\n".join(parts)
+    prompt_agent = (
+        agent
+        if agent is not None
+        else default_structured_agent(
+            ReasonPromptOutput,
+            project_root=project_root,
+            component="reasoning",
+        )
+    )
     try:
-        llm = default_llm(project_root)
-        raw = llm.complete([ChatMessage(role="user", content=prompt)])
-    except RuntimeError as exc:
+        output = prompt_agent.invoke(
+            [
+                SystemMessage(
+                    content=(
+                        "Generate the topic-specific system prompt requested "
+                        "by the user. Return the exact structured output."
+                    )
+                ),
+                HumanMessage(content=prompt),
+            ]
+        )
+    except (RuntimeError, ValueError) as exc:
         raise ReasonPromptError(
             f"Cannot generate reasoning prompt: {exc}"
         ) from exc
-    rendered = raw.strip()
-    if not rendered:
-        raise ReasonPromptError(
-            "Cannot generate reasoning prompt: model returned an empty prompt"
-        )
-    return rendered
+    return output.prompt
 
 
 def build_reasoning_prompt_tools(project_root: Path | None) -> tuple[StructuredTool, ...]:

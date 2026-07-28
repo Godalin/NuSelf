@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 import sqlite3
-from typing import Any
+from typing import Any, Never
 
 import pytest
+from langchain_core.messages import BaseMessage
+from pydantic import ValidationError
 
 from nuself.logs import read_log_events
 from nuself.reason.domain import ReasoningStep
@@ -55,66 +58,50 @@ def test_prompt_generation_requires_project_root_with_domain_error() -> None:
 
 def test_prompt_generation_wraps_declared_llm_runtime_failure(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nuself.reason.prompt import generate_reasoning_prompt
+    from nuself.reason.prompt import (
+        ReasonPromptOutput,
+        generate_reasoning_prompt,
+    )
 
     provider_error = RuntimeError("provider unavailable")
 
-    class FailingLLM:
-        def complete(self, messages: object) -> str:
+    class FailingAgent:
+        def invoke(
+            self,
+            messages: object,
+        ) -> ReasonPromptOutput:
+            del messages
             raise provider_error
 
-    def configured_models(project_root: Path | None) -> tuple[object, ...]:
-        return (object(),)
-
-    def failing_llm(project_root: Path | None) -> FailingLLM:
-        return FailingLLM()
-
-    monkeypatch.setattr(
-        "nuself.reason.prompt.configured_langchain_chat_models",
-        configured_models,
-    )
-    monkeypatch.setattr(
-        "nuself.reason.prompt.default_llm",
-        failing_llm,
-    )
-
     with pytest.raises(ReasonPromptError) as caught:
-        generate_reasoning_prompt("Provider failure", project_root=tmp_path)
+        generate_reasoning_prompt(
+            "Provider failure",
+            project_root=tmp_path,
+            agent=FailingAgent(),
+        )
 
     assert caught.value.__cause__ is provider_error
 
 
 def test_prompt_generation_preserves_unexpected_llm_implementation_error(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from nuself.reason.prompt import generate_reasoning_prompt
 
     unexpected = TypeError("LLM adapter implementation failed")
 
-    class BrokenLLM:
-        def complete(self, messages: object) -> str:
+    class BrokenAgent:
+        def invoke(self, messages: object) -> Never:
+            del messages
             raise unexpected
 
-    def configured_models(project_root: Path | None) -> tuple[object, ...]:
-        return (object(),)
-
-    def broken_llm(project_root: Path | None) -> BrokenLLM:
-        return BrokenLLM()
-
-    monkeypatch.setattr(
-        "nuself.reason.prompt.configured_langchain_chat_models",
-        configured_models,
-    )
-    monkeypatch.setattr(
-        "nuself.reason.prompt.default_llm",
-        broken_llm,
-    )
-
     with pytest.raises(TypeError) as caught:
-        generate_reasoning_prompt("Broken adapter", project_root=tmp_path)
+        generate_reasoning_prompt(
+            "Broken adapter",
+            project_root=tmp_path,
+            agent=BrokenAgent(),
+        )
 
     assert caught.value is unexpected
 
@@ -153,27 +140,29 @@ def test_start_thread_resolves_project_root_for_prompt_generator(tmp_path: Path,
     assert seen_project_roots == [tmp_path]
 
 
-def test_generated_prompt_request_defines_bounded_round_pacing(tmp_path: Path, monkeypatch: Any) -> None:
+def test_generated_prompt_request_defines_bounded_round_pacing(
+    tmp_path: Path,
+) -> None:
+    from nuself.reason.prompt import (
+        ReasonPromptOutput,
+        generate_reasoning_prompt,
+    )
+
     captured_prompt: dict[str, str] = {}
 
-    class FakeLLM:
-        def complete(self, messages: object) -> str:
-            message = messages[0]  # type: ignore[index]
-            captured_prompt["value"] = message.content  # type: ignore[attr-defined]
-            return "Generated prompt."
+    class FakeAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> ReasonPromptOutput:
+            captured_prompt["value"] = messages[1].text
+            return ReasonPromptOutput(prompt="Generated prompt.")
 
-    def fake_configured_models(project_root: Path | None) -> tuple[object, ...]:
-        return (object(),)
-
-    def fake_default_llm(project_root: Path | None) -> FakeLLM:
-        return FakeLLM()
-
-    monkeypatch.setattr("nuself.reason.prompt.configured_langchain_chat_models", fake_configured_models)
-    monkeypatch.setattr("nuself.reason.prompt.default_llm", fake_default_llm)
-
-    from nuself.reason.prompt import generate_reasoning_prompt
-
-    result = generate_reasoning_prompt("Round-based debate", project_root=tmp_path)
+    result = generate_reasoning_prompt(
+        "Round-based debate",
+        project_root=tmp_path,
+        agent=FakeAgent(),
+    )
 
     assert result == "Generated prompt."
     assert "one step must mean at" in captured_prompt["value"]
@@ -185,6 +174,24 @@ def test_generated_prompt_request_defines_bounded_round_pacing(tmp_path: Path, m
     assert "terminal_status=continue" in captured_prompt["value"]
     assert "suggest_resolved" in captured_prompt["value"]
     assert "suggest_paused" in captured_prompt["value"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"prompt": ""},
+        {"prompt": "   "},
+        {"prompt": 3},
+        {"prompt": "valid", "extra": True},
+    ],
+)
+def test_reason_prompt_output_is_exact(
+    payload: dict[str, object],
+) -> None:
+    from nuself.reason.prompt import ReasonPromptOutput
+
+    with pytest.raises(ValidationError):
+        ReasonPromptOutput.model_validate(payload)
 
 
 def test_start_thread(tmp_path: Path) -> None:

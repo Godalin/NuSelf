@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The persona graph structured-agent migration is complete.
+Idle. The reason prompt structured-agent migration is complete.
 
 ## Active Branch
 
@@ -21,21 +21,22 @@ None while idle.
 
 ## Completion Evidence
 
-- Activation, contribution, and synthesis use exact schemas through
-  `PersonaGraphAgents` and the shared structured-agent runner.
-- The persona graph no longer owns endpoint iteration, direct structured-output
-  binding, prompted JSON, response-text parsing, or old LLM-backed aliases.
-- Chat, proactive discussion, and reflection compose the same synthesis
-  capability while retaining deterministic no-agent and failure fallbacks.
-- `.venv/bin/pytest -q`: `1456 passed`.
+- `ReasonPromptOutput` is strict, extra-forbid, and requires a non-blank
+  generated prompt.
+- Prompt generation uses LangChain messages through the shared
+  `StructuredAgent` runner and consumes only the typed output.
+- Direct `default_llm().complete()`, raw response trimming, and the parallel
+  text-model protocol are removed from reason prompt generation.
+- Failure still raises `ReasonPromptError` before any thread is persisted.
+- `.venv/bin/pytest -q`: `1460 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `a72436f`; this completed batch is pending
-commit and push.
+`dev/v0.3.x` is published through `62081ca`.
 
 ## Next Review Batch
 
-Audit remaining persona tools and reason-export generated-output boundaries.
+Design a shared free-text agent capability, then migrate both global and
+thread-scoped `persona_think` without weakening its natural-language contract.

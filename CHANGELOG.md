@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reason thread prompt generation now uses exact `ReasonPromptOutput` through
+  the shared structured-agent runner. Direct `default_llm().complete()`, raw
+  response trimming, and the parallel text-model protocol were removed;
+  unavailable or malformed generation still fails thread creation without
+  persisting a partial thread.
 - Persona graph activation, contribution, and synthesis now share
   `PersonaGraphAgents` and the common exact-schema LangChain runner. The graph's
   private endpoint loop, direct structured-output binding, prompted JSON/text

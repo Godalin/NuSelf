@@ -472,6 +472,10 @@ active durable reason thread.
 Reason commands distinguish declared not-found, prompt, advance, and
 transition outcomes from unexpected implementation failures, so only known
 domain errors are converted into concise CLI or REPL messages.
+Topic-specific reason prompts are generated as exact `ReasonPromptOutput`
+models through the shared structured-agent boundary. Missing models,
+invocation failures, or malformed prompt output stop thread creation before
+any partial thread is persisted.
 Process-local live log observers remain separate from correlation identity:
 nested observers compose in order, projection failures are isolated after the
 audit write, and observers are not implicitly carried into new worker threads.
