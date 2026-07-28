@@ -118,9 +118,11 @@ top-level application namespace stays focused on subsystem APIs.
 - `commands/persona.py` owns dynamic persona list/create/show/delete/enable/
   disable handlers and visible-handle resolution shared with persona REPL
   shortcuts.
-- Memory CLI commands are split by domain boundary instead of collected in one
-  oversized module. `commands/memory_profile.py` owns profile list/search/show/
-  delete/reindex handlers and their list ordering and handle resolution.
+- Memory CLI commands live together under the `commands/memory/` package and
+  are split by subdomain instead of collected in one oversized module.
+  `commands/memory/profile.py` owns profile list/search/show/delete/reindex
+  handlers and their list ordering and handle resolution. Sibling modules own
+  source, candidate, entry, and graph operations as they are extracted.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
   repository APIs.

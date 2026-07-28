@@ -114,7 +114,7 @@ try:
         handle_persona_show,
         resolve_persona_id as _resolve_persona_id,
     )
-    from nuself.commands.memory_profile import (
+    from nuself.commands.memory.profile import (
         handle_memory_profile_delete,
         handle_memory_profile_list,
         handle_memory_profile_reindex,
