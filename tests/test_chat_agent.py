@@ -1380,6 +1380,36 @@ def test_memory_update_importance_tool_not_found(tmp_path: Path) -> None:
     assert "Error" in result
 
 
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        ("memory_archive", {"entry_id": "m1"}),
+        (
+            "memory_update_importance",
+            {"entry_id": "m1", "importance": 0.5},
+        ),
+    ],
+)
+def test_memory_mutation_tools_propagate_repository_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tool_name: str,
+    arguments: dict[str, object],
+) -> None:
+    def fail_get(
+        repository: MemoryEntryRepository,
+        entry_id: str,
+    ) -> MemoryEntry:
+        del repository, entry_id
+        raise RuntimeError("memory repository unavailable")
+
+    monkeypatch.setattr(MemoryEntryRepository, "get", fail_get)
+    tool = _chat_tool(tmp_path, tool_name)
+
+    with pytest.raises(RuntimeError, match="memory repository unavailable"):
+        _invoke_chat_tool(tool, arguments)
+
+
 def test_memory_count_tool_empty(tmp_path: Path) -> None:
     tool = _chat_tool(tmp_path, "memory_count")
     result = _invoke_chat_tool(tool)

@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Memory mutation tools now report only genuinely absent entries as
+  “not found”; repository, decoding, persistence, and programming failures
+  remain real tool failures instead of being mislabeled as user input errors.
 - Auxiliary structured-log projections now use one typed observability
   boundary, and their failure diagnostics consistently identify the original
   `audit_event`.

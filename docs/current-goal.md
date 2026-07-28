@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Remove parallel auxiliary-log wrappers so every non-authoritative structured
-log uses the shared typed observed-log projection boundary.
+Prevent memory agent tools from misclassifying repository and programming
+failures as user-visible missing-entry results.
 
 ## Active Branch
 
@@ -14,40 +14,40 @@ log uses the shared typed observed-log projection boundary.
 
 ## Ordered Work
 
-1. Inventory `run_observed_best_effort(lambda: write_log_event(...))` callers.
-2. Confirm which callers are log projections and which are other side effects.
-3. Route every auxiliary structured log through `write_observed_log_event`.
-4. Preserve domain-specific failure event names and diagnostic metadata.
-5. Add an architecture guard against reintroducing the parallel composition.
+1. Classify broad domain catches by control-boundary ownership.
+2. Confirm the repository's typed missing-entry contract.
+3. Catch only `MemoryEntryNotFound` in memory mutation tools.
+4. Let storage, decode, invariant, and programming failures reach middleware.
+5. Verify both missing-entry rendering and unexpected-error propagation.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- `run_observed_best_effort` remains the boundary for non-log secondary effects.
-- Authoritative log persistence continues to use `write_log_event` directly.
-- Existing event names, correlation fields, and degradation behavior remain
-  unchanged; shared failure metadata consistently includes `audit_event`.
+- Tool argument validation remains a concise returned error.
+- A genuinely absent memory entry remains a concise returned error.
+- Repository save/reindex failures remain authoritative and continue to
+  propagate.
 
 ## Completion Evidence
 
-- Domain lifecycle, request, approval, curator, reflection, chat/persona, and
-  reason-tool audit paths call `write_observed_log_event(...)` directly.
-- `run_observed_best_effort(...)` remains in use for non-log effects such as
-  trace recording, job enqueue, configuration decoding, and callback capture.
-- Failure event names and correlation fields are preserved; the shared writer
-  now consistently adds the source `audit_event` to diagnostic metadata.
-- An AST architecture test rejects direct domain reconstruction via
-  `run_observed_best_effort(lambda: write_log_event(...))`.
-- Focused observability and affected-domain regression tests: `453 passed`.
-- `.venv/bin/pytest -q`: `1565 passed` with no warnings.
+- `memory_archive` and `memory_update_importance` catch only the repository's
+  typed `MemoryEntryNotFound`.
+- Missing entries retain their concise tool result, while injected repository
+  `RuntimeError` failures propagate unchanged for both mutation tools.
+- Save and reindex remain outside the missing-entry catch and therefore cannot
+  be mislabeled.
+- A repository-get/broad-catch source search found no equivalent remaining
+  pattern.
+- Focused chat-agent and middleware tests: `79 passed`.
+- `.venv/bin/pytest -q`: `1567 passed` with no warnings.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `78a8e74`.
+`dev/v0.3.x` is published through `a3b88f7`.
 
 ## Next Review Batch
 
-Audit remaining domain-owned broad exception boundaries after auxiliary log
-projection is structurally unified.
+Continue classifying broad domain catches, prioritizing non-boundary code that
+can hide storage, invariant, or programming failures.

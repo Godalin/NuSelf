@@ -12,7 +12,10 @@ from nuself.agent.tools.common import (
     structured_tool_factory,
 )
 from nuself.memory.query import MemoryQuery, MemoryQueryService
-from nuself.memory.repository import MemoryEntryRepository
+from nuself.memory.repository import (
+    MemoryEntryNotFound,
+    MemoryEntryRepository,
+)
 
 
 @dataclass(frozen=True)
@@ -102,7 +105,7 @@ def build_memory_tool_set(
             return "Error: project root is not configured"
         try:
             entry = repository.get(entry_id)
-        except Exception as exc:
+        except MemoryEntryNotFound as exc:
             return f"Error: could not find memory entry: {exc}"
         updated = entry.with_updates(review_state="archived")
         repository.save(updated)
@@ -124,7 +127,7 @@ def build_memory_tool_set(
             return "Error: importance must be between 0.0 and 1.0"
         try:
             entry = repository.get(entry_id)
-        except Exception as exc:
+        except MemoryEntryNotFound as exc:
             return f"Error: could not find memory entry: {exc}"
         updated = entry.with_updates(importance=importance_float)
         repository.save(updated)
