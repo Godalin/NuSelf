@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Daemon startup now holds a per-project cross-process instance lock before
+  touching socket or PID resources. Concurrent starts no longer risk deleting
+  a live daemon's socket; the contender exits visibly without modifying the
+  current owner's files.
 - The derived LLM endpoint preference is now versioned, strictly validated, and
   atomically written. Corrupt, invalid, or stale state emits a payload-safe
   diagnostic and safely returns to configured endpoint order instead of

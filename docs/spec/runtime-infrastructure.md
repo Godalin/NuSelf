@@ -236,6 +236,27 @@ state.
 - Export queue/timer cancellation remains an explicit export-worker cleanup
   performed before join.
 
+## Daemon Instance Ownership
+
+Each project root has at most one daemon owner. Before reading, deleting,
+creating, or binding daemon socket/PID resources, `run_daemon()` must acquire a
+non-blocking exclusive process lock on
+`private/runtime/nuself.lock`. The lock file is a stable coordination inode and
+is not deleted during normal cleanup.
+
+The owner holds the lock until request serving and all background-worker
+shutdown are complete. Only that owner may:
+
+- remove a stale `nuself.sock` before binding;
+- publish `nuself.pid`;
+- remove the socket and PID during cleanup.
+
+If the lock is already held, the contender writes
+`daemon/instance_lock_contended`, returns a non-zero exit status, and must not
+construct daemon state or modify socket/PID resources. Unix-server binding must
+complete before background workers start. Any bind or partial-start failure
+still runs owner cleanup before the lock is released.
+
 ## Migration Order
 
 1. Add and test the shared handler registry; migrate daemon request dispatch.

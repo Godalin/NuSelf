@@ -15,8 +15,17 @@ from typing import cast, override
 
 from nuself.agent.chat import ChatAgent
 from nuself.clock import utc_now_iso
-from nuself.config import ConfigSystem, ensure_runtime_dirs, runtime_paths
+from nuself.config import (
+    ConfigSystem,
+    RuntimePaths,
+    ensure_runtime_dirs,
+    runtime_paths,
+)
 from nuself.daemon.activity import ActivityBroker
+from nuself.daemon.instance import (
+    DaemonInstanceLock,
+    DaemonInstanceLockContended,
+)
 from nuself.daemon.protocol import DaemonRequest, DaemonResponse, ProtocolError
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.types import WorkerHealth
@@ -844,34 +853,81 @@ def run_daemon(project_root: Path | None = None) -> int:
 
     paths = runtime_paths(project_root)
     ensure_runtime_dirs(paths)
+    instance_lock = DaemonInstanceLock(
+        paths.runtime_dir / "nuself.lock"
+    )
+    try:
+        instance_lock.acquire()
+    except DaemonInstanceLockContended as exc:
+        write_log_event(
+            "daemon",
+            "instance_lock_contended",
+            "daemon start rejected because this project already has an owner",
+            project_root=paths.project_root,
+            level="warning",
+            status="skipped",
+            error=str(exc),
+        )
+        return 1
+    try:
+        return _run_owned_daemon(paths)
+    finally:
+        instance_lock.release()
+
+
+def _run_owned_daemon(paths: RuntimePaths) -> int:
+    """Run the daemon while the caller holds project instance ownership."""
+
     if paths.socket_path.exists():
         paths.socket_path.unlink()
     paths.pid_path.write_text(f"{os.getpid()}\n", encoding="utf-8")
 
-    state = DaemonState(paths.project_root)
-
-    import signal as _signal
-    _signal.signal(_signal.SIGTERM, lambda signum, frame: state.shutdown_requested.set())
-    _signal.signal(_signal.SIGINT, lambda signum, frame: state.shutdown_requested.set())
-
+    state: DaemonState | None = None
+    started = False
     try:
-        write_log_event("daemon", "started", "daemon started", project_root=paths.project_root)
-        state.start_background_memory_curator()
-        state.start_background_reflection_scheduler()
-        state.start_background_reason_scheduler()
-        state.start_background_export_worker()
-        state.start_background_notification_delivery()
+        state = DaemonState(paths.project_root)
+
+        import signal as _signal
+        _signal.signal(
+            _signal.SIGTERM,
+            lambda signum, frame: state.shutdown_requested.set(),
+        )
+        _signal.signal(
+            _signal.SIGINT,
+            lambda signum, frame: state.shutdown_requested.set(),
+        )
+
         with NuSelfUnixServer(str(paths.socket_path), RequestHandler, state) as server:
+            write_log_event(
+                "daemon",
+                "started",
+                "daemon started",
+                project_root=paths.project_root,
+            )
+            started = True
+            state.start_background_memory_curator()
+            state.start_background_reflection_scheduler()
+            state.start_background_reason_scheduler()
+            state.start_background_export_worker()
+            state.start_background_notification_delivery()
             server.timeout = 0.2
             while not state.shutdown_requested.is_set():
                 server.handle_request()
     finally:
-        write_log_event("daemon", "stopped", "daemon stopped", project_root=paths.project_root)
-        state.stop_background_memory_curator()
-        state.stop_background_reflection_scheduler()
-        state.stop_background_reason_scheduler()
-        state.stop_background_export_worker()
-        state.stop_background_notification_delivery()
+        if state is not None:
+            if started:
+                write_log_event(
+                    "daemon",
+                    "stopped",
+                    "daemon stopped",
+                    project_root=paths.project_root,
+                )
+            state.shutdown_requested.set()
+            state.stop_background_memory_curator()
+            state.stop_background_reflection_scheduler()
+            state.stop_background_reason_scheduler()
+            state.stop_background_export_worker()
+            state.stop_background_notification_delivery()
         from nuself.storage import reset_default_backend
         reset_default_backend()
         if paths.socket_path.exists():
