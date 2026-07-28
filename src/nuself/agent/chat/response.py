@@ -104,17 +104,23 @@ class ConversationResponseSynthesizer:
         prompt: list[ChatMessage],
     ) -> ChatStructuredOutput:
         last_error: Exception | None = None
+        retry_suppressed = False
         for position, endpoint in enumerate(self._langchain_models):
             for attempt in range(2):
+                supervisor = _LangChainChatSupervisor(
+                    endpoint=endpoint,
+                    tools=self._tools,
+                    log_tool_call=self._log_tool_call,
+                    report_tool_log_failure=self._report_tool_log_failure,
+                )
                 try:
-                    response = _LangChainChatSupervisor(
-                        endpoint=endpoint,
-                        tools=self._tools,
-                        log_tool_call=self._log_tool_call,
-                        report_tool_log_failure=self._report_tool_log_failure,
-                    ).complete(prompt)
+                    response = supervisor.complete(prompt)
                 except Exception as exc:
                     last_error = exc
+                    if supervisor.has_tool_outcomes:
+                        retry_suppressed = True
+                        self._log_retry_suppressed(endpoint, exc)
+                        break
                     if (
                         attempt == 0
                         and not is_endpoint_availability_error(str(exc))
@@ -135,7 +141,9 @@ class ConversationResponseSynthesizer:
                         endpoint.index,
                     )
                     return response
-        if last_error is not None:
+            if retry_suppressed:
+                break
+        if last_error is not None and not retry_suppressed:
             report_observed_failure(
                 RuntimeError(redact_llm_error(str(last_error))),
                 component="chat",
@@ -149,6 +157,25 @@ class ConversationResponseSynthesizer:
                 metadata=None,
             )
         return _plain_fallback_output(self._llm.complete(prompt))
+
+    def _log_retry_suppressed(
+        self,
+        endpoint: LangChainLLMEndpoint,
+        error: Exception,
+    ) -> None:
+        report_observed_failure(
+            RuntimeError(redact_llm_error(str(error))),
+            component="chat",
+            event="llm_retry_suppressed_after_tool_call",
+            message=(
+                "LLM retry and endpoint failover suppressed after tool "
+                "execution"
+            ),
+            project_root=self._project_root,
+            level="warning",
+            status="fallback",
+            metadata=_endpoint_metadata(endpoint),
+        )
 
     def _log_retry(
         self,
@@ -210,6 +237,13 @@ class _LangChainChatSupervisor:
         self._tools = tuple(tools)
         self._log_tool_call = log_tool_call
         self._report_tool_log_failure = report_tool_log_failure
+        self._tool_outcomes: list[
+            tuple[str, dict[str, object], str | None]
+        ] = []
+
+    @property
+    def has_tool_outcomes(self) -> bool:
+        return bool(self._tool_outcomes)
 
     def complete(
         self,
@@ -219,6 +253,7 @@ class _LangChainChatSupervisor:
         middleware = ToolCaptureMiddleware(
             log_callback=self._log_tool_call,
             log_error_callback=self._report_tool_log_failure,
+            captured=self._tool_outcomes,
             cache={},
         )
         create_agent = cast(Any, _create_agent)

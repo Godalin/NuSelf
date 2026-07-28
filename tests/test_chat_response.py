@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage
 
 from nuself.agent.chat.response import (
     ConversationResponseSynthesizer,
+    _LangChainChatSupervisor,
     _plain_fallback_output,  # pyright: ignore[reportPrivateUsage]
     _structured_output_from_state,  # pyright: ignore[reportPrivateUsage]
 )
@@ -176,6 +177,86 @@ def test_endpoint_state_failure_retries_then_uses_local_fallback(
     assert endpoint_calls == 2
     assert local_llm.calls == 1
     assert result.answer == "Local fallback"
+
+
+def test_tool_outcome_suppresses_retry_and_endpoint_failover(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    endpoint_calls = 0
+    events: list[str] = []
+
+    def fail_after_tool(
+        self: object,
+        prompt: list[ChatMessage],
+    ) -> None:
+        del self, prompt
+        nonlocal endpoint_calls
+        endpoint_calls += 1
+        raise RuntimeError("provider failed after tool execution")
+
+    def report_failure(
+        error: BaseException,
+        **kwargs: object,
+    ) -> None:
+        del error
+        events.append(str(kwargs["event"]))
+
+    def has_tool_outcomes(self: object) -> bool:
+        del self
+        return True
+
+    monkeypatch.setattr(
+        _LangChainChatSupervisor,
+        "complete",
+        fail_after_tool,
+    )
+    monkeypatch.setattr(
+        _LangChainChatSupervisor,
+        "has_tool_outcomes",
+        property(has_tool_outcomes),
+    )
+    monkeypatch.setattr(
+        "nuself.agent.chat.response.report_observed_failure",
+        report_failure,
+    )
+
+    class LocalLLM:
+        calls = 0
+
+        def complete(self, messages: list[ChatMessage]) -> str:
+            self.calls += 1
+            return "Safe local fallback"
+
+    local_llm = LocalLLM()
+    endpoints = tuple(
+        LangChainLLMEndpoint(
+            index=index,
+            settings=LLMSettings(
+                base_url=f"https://endpoint-{index}.invalid",
+                api_key="test",
+                model=f"model-{index}",
+            ),
+            model=cast(Any, object()),
+        )
+        for index in range(2)
+    )
+    synthesizer = ConversationResponseSynthesizer(
+        project_root=tmp_path,
+        llm=local_llm,
+        langchain_models=endpoints,
+        tools=(),
+        log_tool_call=lambda *args, **kwargs: None,
+    )
+
+    result = synthesizer.complete(
+        [ChatMessage(role="user", content="mutate once")]
+    )
+
+    assert endpoint_calls == 1
+    assert local_llm.calls == 1
+    assert result.answer == "Safe local fallback"
+    assert events == ["llm_retry_suppressed_after_tool_call"]
 
 
 def test_diagnostic_failure_preserves_retry_and_local_fallback(

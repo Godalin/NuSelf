@@ -369,6 +369,10 @@ Its compression node uses the shared free-text agent capability when a
 LangChain model is available. If that capability is absent, fails, or returns
 empty text, the node retains a bounded deterministic transcript-tail summary
 so context persistence still completes without inventing content.
+Chat endpoint retry is also tool-safe: once an agent invocation has produced
+any tool outcome, a later model failure cannot start a fresh agent run or
+switch endpoints and replay that tool. Failures before the first tool retain
+the bounded retry and failover policy.
 
 ## Daemon
 

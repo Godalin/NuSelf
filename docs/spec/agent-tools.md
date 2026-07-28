@@ -130,6 +130,22 @@ NuSelf must not ask the model to print a private tool protocol in the assistant 
 - no NuSelf-only `"tool"` / `"tool_args"` JSON envelope as the primary path;
 - no hidden parallel registry outside LangChain `BaseTool` objects.
 
+### Tool-Safe Model Retry
+
+Chat model retry and endpoint failover are allowed only before an agent
+invocation executes its first tool. Once middleware records any successful or
+failed tool outcome, the current turn must not retry the model or switch
+endpoints: NuSelf cannot prove that a tool was read-only, idempotent, or
+uncommitted from its visible result.
+
+An agent failure after tool execution writes
+`chat/llm_retry_suppressed_after_tool_call` and enters the existing no-tool
+local response fallback. The fallback may explain failure but cannot replay
+tools. Invocation-local deduplication remains useful within one LangGraph
+agent run, but it is not authority to replay a completed tool in a new agent
+run. Before any tool executes, the existing bounded same-endpoint retry and
+endpoint failover behavior remains unchanged.
+
 `ConversationGraphRuntime` runs a small LangGraph workflow with four nodes:
 
 1. **prepare_context** — assemble durable context (memory, thread state, skills)

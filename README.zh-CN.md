@@ -337,6 +337,9 @@ memory curator 会在 daemon 后台定时运行，也会在交互式聊天退出
 compression node 在 LangChain model 可用时使用共享自由文本 agent capability；
 该 capability 缺失、失败或返回空文本时，会保留有界且确定性的 transcript-tail
 summary，使 context persistence 仍能完成且不会编造内容。
+chat endpoint retry 也遵循工具副作用安全边界：当前 agent invocation 一旦产生任意
+tool outcome，后续模型失败就不能启动新的 agent run 或切换 endpoint 来重放该工具；
+首个工具执行前的失败仍保留有界 retry 与 failover。
 
 ## 守护进程
 

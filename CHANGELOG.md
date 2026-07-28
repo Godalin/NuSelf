@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Chat model retry and endpoint failover are now suppressed after the current
+  agent invocation records any tool outcome. Provider or structured-output
+  failure can no longer replay a mutation through a fresh agent run; failures
+  before the first tool retain existing bounded retry and failover.
 - Conversation compression now uses an optional shared `TextAgent` with
   LangChain messages instead of `ChatLLM.complete()`. Missing, failed, or empty
   model-backed compression retains the bounded deterministic local summary as

@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The chat compression text-agent migration is complete.
+Idle. The chat tool-safe retry boundary is complete.
 
 ## Active Branch
 
@@ -21,21 +21,20 @@ None while idle.
 
 ## Completion Evidence
 
-- `ConversationStateManager` accepts an optional `TextAgent` and uses
-  LangChain system and human messages for model-backed compression.
-- `ChatLLM` and `ChatMessage` are removed from the compression collaborator.
-- Runtime composition reuses configured LangChain endpoints through
-  `LangChainTextAgent`.
-- Missing, failed, or empty model output uses the bounded deterministic local
-  summary and cannot block conversation persistence.
-- `.venv/bin/pytest -q`: `1473 passed`.
+- Chat supervisor middleware exposes invocation-local tool outcomes.
+- Any successful or failed tool outcome suppresses same-endpoint retry and
+  cross-endpoint failover for that turn.
+- Suppression writes `chat/llm_retry_suppressed_after_tool_call` and uses the
+  existing no-tool fallback without replaying tools.
+- Failures before the first tool preserve bounded retry and failover.
+- `.venv/bin/pytest -q`: `1474 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `75b32d2`.
+`dev/v0.3.x` is published through `a3dc758`.
 
 ## Next Review Batch
 
-Audit chat response and reason advancer agent orchestration after compression.
+Audit reason advancer endpoint availability without permitting tool replay.
