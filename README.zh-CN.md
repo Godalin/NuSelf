@@ -71,6 +71,10 @@ Daemon client 错误保留 transport phase 与 request identity。REPL 基于结
 信息决定是否重试：瞬时传输或 frame 失败可复用稳定 turn，request 编码和 typed
 payload schema 失败则不重试。
 
+REPL daemon-activity transport 是辅助投影：open、poll、final-drain 与 close
+失败会携带结构化 client context 被观测，不会改变 chat 结果，并在可行时通过
+scoped cursor 恢复已持久化的 turn events。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

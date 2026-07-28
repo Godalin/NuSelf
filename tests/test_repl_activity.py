@@ -16,7 +16,13 @@ from nuself.cli.repl.activity import (
     visible_interactive_activity_events,
 )
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.logs import InteractiveLogCursor, LogComponent, LogEvent
+from nuself.logs import (
+    InteractiveLogCursor,
+    LogComponent,
+    LogEvent,
+    read_log_events,
+    write_log_event,
+)
 
 
 def _event(
@@ -180,7 +186,11 @@ def test_live_send_falls_back_when_activity_open_fails(
         project_root: Path | None = None,
     ) -> str:
         del turn_id, project_root
-        raise activity.client.DaemonConnectionError("activity unavailable")
+        raise activity.client.DaemonConnectionError(
+            "activity unavailable",
+            phase="connect",
+            request_id="activity-open-1",
+        )
 
     def read_events(
         project_root: Path | None,
@@ -211,6 +221,323 @@ def test_live_send_falls_back_when_activity_open_fails(
 
     assert result.code == 0
     assert captured == [event]
+    degraded = read_log_events(
+        project_root=tmp_path,
+        component="chat",
+    )[-1]
+    assert degraded.event == "activity_transport_degraded"
+    assert degraded.error == "activity unavailable"
+    assert degraded.metadata == {
+        "stage": "open",
+        "error_kind": "connection",
+        "failure_phase": "connect",
+        "request_id": "activity-open-1",
+        "retryable": True,
+        "request_may_have_completed": False,
+    }
+
+
+def test_live_send_observes_poll_failure_and_uses_file_fallback(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    release = threading.Event()
+    cursor = InteractiveLogCursor.from_project(tmp_path)
+    delivered = write_log_event(
+        "chat",
+        "service_tool_called",
+        "tool called",
+        project_root=tmp_path,
+        turn_id="turn-poll",
+    )
+    recovered = write_log_event(
+        "chat",
+        "turn_completed",
+        "turn completed",
+        project_root=tmp_path,
+        turn_id="turn-poll",
+    )
+    polls = 0
+    closed: list[str] = []
+
+    def wait_send(
+        _message: str,
+        _thread_id: str,
+        _turn_id: str | None,
+    ) -> InteractiveChatResult:
+        release.wait(1)
+        return InteractiveChatResult(code=0, reply="done")
+
+    def open_activity(
+        turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del turn_id, project_root
+        return "sub-poll"
+
+    def fail_poll(
+        *args: object,
+        **kwargs: object,
+    ) -> tuple[LogEvent, ...]:
+        nonlocal polls
+        del args, kwargs
+        polls += 1
+        if polls == 1:
+            return (delivered,)
+        release.set()
+        raise activity.client.DaemonConnectionError(
+            "poll timed out",
+            phase="receive",
+            request_id="activity-poll-1",
+        )
+
+    def close_activity(
+        subscription_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> bool:
+        del project_root
+        closed.append(subscription_id)
+        return True
+
+    monkeypatch.setattr(activity.client, "open_activity", open_activity)
+    monkeypatch.setattr(activity.client, "next_activity", fail_poll)
+    monkeypatch.setattr(activity.client, "close_activity", close_activity)
+
+    result, captured, _printed = run_live_activity_send(
+        wait_send,
+        "hello",
+        "default",
+        "turn-poll",
+        tmp_path,
+        cursor,
+        printed_logs=False,
+        daemon_activity=True,
+        poll_interval_seconds=0,
+        read_events=read_interactive_activity_events,
+        present_events=_mark_presented,
+    )
+
+    assert result.reply == "done"
+    assert captured == [delivered, recovered]
+    assert captured.count(delivered) == 1
+    assert closed == ["sub-poll"]
+    degraded = read_log_events(
+        project_root=tmp_path,
+        component="chat",
+    )[-1]
+    assert degraded.event == "activity_transport_degraded"
+    assert degraded.metadata == {
+        "stage": "poll",
+        "error_kind": "connection",
+        "subscription_id": "sub-poll",
+        "failure_phase": "receive",
+        "request_id": "activity-poll-1",
+        "retryable": True,
+        "request_may_have_completed": True,
+    }
+
+
+def test_live_send_recovers_file_events_when_final_drain_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    event = _event("chat", "turn_completed")
+    closed: list[str] = []
+
+    def open_activity(
+        turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del turn_id, project_root
+        return "sub-drain"
+
+    def fail_drain(
+        *args: object,
+        **kwargs: object,
+    ) -> tuple[LogEvent, ...]:
+        del args
+        if kwargs.get("limit") != 256:
+            return ()
+        raise activity.client.DaemonApplicationError(
+            "subscription expired"
+        )
+
+    def close_activity(
+        subscription_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> bool:
+        del project_root
+        closed.append(subscription_id)
+        return True
+
+    def read_events(
+        project_root: Path | None,
+        log_cursor: InteractiveLogCursor,
+        *,
+        turn_id: str | None = None,
+    ) -> list[LogEvent]:
+        del project_root, log_cursor, turn_id
+        return [event]
+
+    monkeypatch.setattr(activity.client, "open_activity", open_activity)
+    monkeypatch.setattr(activity.client, "next_activity", fail_drain)
+    monkeypatch.setattr(activity.client, "close_activity", close_activity)
+
+    result, captured, _printed = run_live_activity_send(
+        _successful_send,
+        "hello",
+        "default",
+        "turn-drain",
+        tmp_path,
+        InteractiveLogCursor.from_project(tmp_path),
+        printed_logs=False,
+        daemon_activity=True,
+        poll_interval_seconds=0,
+        read_events=read_events,
+        present_events=_mark_presented,
+    )
+
+    assert result.reply == "done"
+    assert captured == [event]
+    assert closed == ["sub-drain"]
+    degraded = read_log_events(
+        project_root=tmp_path,
+        component="chat",
+    )[-1]
+    assert degraded.event == "activity_transport_degraded"
+    assert degraded.metadata == {
+        "stage": "drain",
+        "error_kind": "application",
+        "subscription_id": "sub-drain",
+    }
+
+
+def test_live_send_observes_close_failure_without_changing_result(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def open_activity(
+        turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del turn_id, project_root
+        return "sub-close"
+
+    def next_activity(
+        *args: object,
+        **kwargs: object,
+    ) -> tuple[LogEvent, ...]:
+        del args, kwargs
+        return ()
+
+    def fail_close(
+        subscription_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> bool:
+        del subscription_id, project_root
+        raise activity.client.DaemonConnectionError(
+            "close disconnected",
+            phase="send",
+            request_id="activity-close-1",
+        )
+
+    monkeypatch.setattr(activity.client, "open_activity", open_activity)
+    monkeypatch.setattr(activity.client, "next_activity", next_activity)
+    monkeypatch.setattr(activity.client, "close_activity", fail_close)
+
+    result, captured, printed = run_live_activity_send(
+        _successful_send,
+        "hello",
+        "default",
+        "turn-close",
+        tmp_path,
+        InteractiveLogCursor.from_project(tmp_path),
+        printed_logs=False,
+        daemon_activity=True,
+        poll_interval_seconds=0,
+        read_events=read_interactive_activity_events,
+        present_events=_mark_presented,
+    )
+
+    assert result.reply == "done"
+    assert captured == []
+    assert printed is False
+    degraded = read_log_events(
+        project_root=tmp_path,
+        component="chat",
+    )[-1]
+    assert degraded.event == "activity_transport_degraded"
+    assert degraded.metadata == {
+        "stage": "close",
+        "error_kind": "connection",
+        "subscription_id": "sub-close",
+        "failure_phase": "send",
+        "request_id": "activity-close-1",
+        "retryable": True,
+        "request_may_have_completed": True,
+    }
+
+
+def test_activity_degradation_diagnostic_failure_cannot_block_chat(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fail_open(
+        turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del turn_id, project_root
+        raise activity.client.DaemonConnectionError(
+            "activity unavailable",
+            phase="connect",
+        )
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("diagnostic store unavailable")
+
+    def read_nothing(
+        project_root: Path | None,
+        log_cursor: InteractiveLogCursor,
+        *,
+        turn_id: str | None = None,
+    ) -> list[LogEvent]:
+        del project_root, log_cursor, turn_id
+        return []
+
+    monkeypatch.setattr(activity.client, "open_activity", fail_open)
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="chat/activity_transport_degraded",
+    ):
+        result, captured, printed = run_live_activity_send(
+            _successful_send,
+            "hello",
+            "default",
+            "turn-open-warning",
+            tmp_path,
+            InteractiveLogCursor.from_project(tmp_path),
+            printed_logs=False,
+            daemon_activity=True,
+            poll_interval_seconds=0,
+            read_events=read_nothing,
+            present_events=_mark_presented,
+        )
+
+    assert result.reply == "done"
+    assert captured == []
+    assert printed is False
 
 
 def test_live_send_reports_callback_exception_without_escaping(

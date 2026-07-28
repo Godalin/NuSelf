@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Daemon client failures carry structured transport phases so REPL chat
-retries only failures that can plausibly benefit from retry, while retaining
-request identity and whether the daemon may already have executed the request.
+Idle. REPL daemon-activity open, poll, final-drain, and close degradation is
+observable without allowing auxiliary live-log transport to alter the chat
+result; turn-scoped fallback recovers events without replaying delivered ones.
 
 ## Active Branch
 
@@ -24,21 +24,22 @@ code.
 
 ## Completion Evidence
 
-- `DaemonConnectionError` exposes connect, request-encode, send, receive,
-  response-decode, response-identity, payload-decode, and legacy unknown
-  phases while preserving concise text and the original cause.
-- Every real client request failure retains its generated request id;
-  retryability and possible daemon completion are derived from phase.
-- Missing socket and request-encoding failures are known to precede daemon
-  execution; send and later failures conservatively allow for completion.
-- REPL chat retries transient transport/framing failures with the same stable
-  turn id, but does not retry local request encoding or malformed typed
-  success-payload schemas.
-- Interactive results retain phase, daemon request id, and possible-completion
-  state; `turn_retry` projects the same fields as structured metadata.
-- Shutdown acknowledgement validation retains the response request id.
-- Focused daemon transport, CLI chat, and CLI integration tests: 335 passed.
-- Final full tests: 1358 passed.
+- Open, poll, final-drain, and close connection/application failures emit
+  `chat/activity_transport_degraded` with stage, error kind, subscription id,
+  and structured daemon-client context when available.
+- Failure of the degradation diagnostic itself falls back to a runtime warning
+  and cannot replace or retry a successful chat result.
+- Open, poll, and final-drain degradation reads the existing turn-scoped
+  incremental cursor; close failure remains diagnostic only.
+- Subscription-delivered event identities are registered through
+  `InteractiveLogCursor.mark_seen()` before presentation.
+- Poll fallback recovers a later persisted event while presenting an earlier
+  subscription-delivered event exactly once.
+- Healthy daemon activity remains subscription-only; unexpected poll and
+  renderer failures retain their authoritative propagation and cleanup.
+- Focused REPL activity, log infrastructure, CLI, and CLI chat tests:
+  336 passed.
+- Final full tests: 1362 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -49,4 +50,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-daemon client failures carry structured phase and retry semantics.
+REPL activity transport degradation is observable and recoverable.

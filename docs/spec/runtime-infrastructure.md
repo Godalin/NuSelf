@@ -495,6 +495,17 @@ They are display-only: receiving or replaying activity cannot execute a
 command. Direct/one-shot mode may continue using the local incremental cursor;
 daemon-attached REPL mode must not poll component log files for live activity.
 
+Activity delivery is auxiliary to the chat result. Open, poll, final-drain, and
+close failures emit `chat/activity_transport_degraded` through shared
+observability with `stage`, subscription id when allocated, and structured
+daemon-client failure fields when available. Open, poll, and final-drain
+failure switch to the existing turn-scoped incremental cursor so persisted
+events remain recoverable. Subscription-delivered event identities are marked
+seen on that cursor before presentation, so fallback does not replay them.
+Healthy daemon-attached activity never polls files. Close failure is diagnostic
+only. Failure of the degradation diagnostic cannot fail, retry, or replace the
+chat result.
+
 The request-scoped audit observer used for this projection is an additive,
 process-local effect rather than part of `RuntimeContext`. Nested observers
 compose, and projection failure is isolated after the audit record is written.

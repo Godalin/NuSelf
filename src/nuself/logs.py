@@ -581,6 +581,12 @@ class InteractiveLogCursor:
                 identities[component] = None
         return cls(offsets=offsets, identities=identities)
 
+    def mark_seen(self, events: Iterable[LogEvent]) -> None:
+        """Register events delivered through a non-file transport."""
+
+        for event in events:
+            self.seen_event_keys.add(log_event_key(event))
+
     def read_new_events(self, project_root: Path | None) -> list[LogEvent]:
         events: list[LogEvent] = []
         for component in LOG_COMPONENTS:

@@ -173,6 +173,12 @@ uses the incremental file cursor because producer and consumer share one
 process. Daemon-attached live output must not discover events by polling log
 files.
 
+If daemon activity open, poll, or final drain fails, the REPL reports one
+structured degradation event and switches to the same turn-scoped incremental
+cursor used by local mode. Subscription close failure is also observed but
+does not alter chat success. These failures never trigger a chat retry by
+themselves.
+
 All human-readable logs use one metadata style: `[component] event key=value ...`. Standard event fields and displayable metadata fields must use this same `key=value` style; they must not mix colon labels, raw JSON blocks, or ad hoc Markdown fields. If a log has body text, render that text starting on the next indented line instead of mixing it into the key/value header.
 
 When a log records one subsystem calling another subsystem's service/tool boundary, it renders two leading tags: `[caller] [service] event key=value ...`. For example, chat calling a memory tool renders `[chat] [memory] service_tool_called ...`. The second tag comes from `metadata.service_component`; it is not repeated as `service_component=...` in the key/value header.

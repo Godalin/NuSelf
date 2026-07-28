@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- REPL daemon-activity open, poll, drain, and close failures are now observable
+  with structured stage and client context. Live-log transport degradation
+  cannot alter chat results, and persisted turn events are recovered through
+  the incremental cursor when possible.
 - Daemon client connection errors now retain their transport phase, request
   identity, retryability, and possible-completion state. REPL chat no longer
   retries local request-encoding or typed response-payload schema failures.

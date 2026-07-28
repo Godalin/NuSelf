@@ -144,10 +144,18 @@ Rules:
 - `turn_retry` metadata retains the previous client failure phase, daemon
   request id when allocated, whether that request may already have completed,
   the next attempt number, and the maximum attempt count.
+- `activity_transport_degraded` records `stage=open|poll|drain|close`,
+  `subscription_id` when allocated, exception kind, and for
+  `DaemonConnectionError` its phase, request id, retryability, and
+  possible-completion state.
 - `turn.reused` confirms idempotency: the retry returned an existing completed result instead of rerunning chat/tools.
 - Final response boundary retries use `final_response_retry`; they are model-output retries inside one chat turn, not transport retries.
 - Interactive logs should show chat lifecycle and retry events so users can distinguish normal multi-tool execution from retry-driven repeated work.
 - Interactive log streaming must track already-seen event identities, not offsets into the timestamp-sorted global event list. Delayed daemon writes or concurrent background logs must not replay old turn events into the current REPL output.
+- `InteractiveLogCursor.mark_seen(...)` lets a non-file transport register
+  delivered identities. Daemon activity subscription batches use it before
+  presentation so a later file fallback returns only events not already
+  delivered.
 - Chat service-tool logs should include the active `thread_id` and, when available, the logical top-level `turn_id` so a tool call can be tied back to one chat turn.
 - Approval-gated tool execution writes an `approval_prompted` event before waiting for confirmation. The live REPL treats it as user-relevant interactive activity so the visible prompt appears before input is read.
 

@@ -7,16 +7,18 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 from nuself.cli.commands.output import print_ansi
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import client
 from nuself.logs import InteractiveLogCursor, LogEvent
 from nuself.runtime.context import bind_runtime_context
+from nuself.runtime.observability import report_observed_failure
 from nuself.tui.render import render_log_event
 
 SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
+ActivityTransportStage = Literal["open", "poll", "drain", "close"]
 
 
 class ActivityReader(Protocol):
@@ -40,6 +42,45 @@ class ActivityPresenter(Protocol):
         *,
         printed_logs: bool,
     ) -> bool: ...
+
+
+def _report_activity_transport_degraded(
+    exc: client.DaemonConnectionError | client.DaemonApplicationError,
+    *,
+    stage: ActivityTransportStage,
+    project_root: Path | None,
+    subscription_id: str | None,
+) -> None:
+    metadata: dict[str, object] = {
+        "stage": stage,
+        "error_kind": (
+            "connection"
+            if isinstance(exc, client.DaemonConnectionError)
+            else "application"
+        ),
+    }
+    if subscription_id is not None:
+        metadata["subscription_id"] = subscription_id
+    if isinstance(exc, client.DaemonConnectionError):
+        metadata.update(
+            {
+                "failure_phase": exc.phase,
+                "retryable": exc.retryable,
+                "request_may_have_completed": (
+                    exc.request_may_have_completed
+                ),
+            }
+        )
+        if exc.request_id is not None:
+            metadata["request_id"] = exc.request_id
+    report_observed_failure(
+        exc,
+        component="chat",
+        event="activity_transport_degraded",
+        message=f"Daemon activity transport {stage} failed",
+        project_root=project_root,
+        metadata=metadata,
+    )
 
 
 def run_live_activity_send(
@@ -93,13 +134,23 @@ def run_live_activity_send(
                     except (
                         client.DaemonConnectionError,
                         client.DaemonApplicationError,
-                    ):
+                    ) as exc:
+                        _report_activity_transport_degraded(
+                            exc,
+                            stage="poll",
+                            project_root=project_root,
+                            subscription_id=subscription_id,
+                        )
                         close_activity_subscription(
                             subscription_id,
                             project_root,
                         )
                         subscription_id = None
-                        new_events = []
+                        new_events = read_events(
+                            project_root,
+                            log_cursor,
+                            turn_id=turn_id,
+                        )
                 else:
                     time.sleep(poll_interval_seconds)
                     new_events = read_events(
@@ -108,6 +159,7 @@ def run_live_activity_send(
                         turn_id=turn_id,
                     )
                 if new_events:
+                    log_cursor.mark_seen(new_events)
                     captured_events.extend(
                         captured_interactive_activity_events(new_events)
                     )
@@ -127,6 +179,7 @@ def run_live_activity_send(
             turn_id=turn_id,
             read_events=read_events,
         )
+        log_cursor.mark_seen(new_events)
     finally:
         if subscription_id is not None:
             close_activity_subscription(
@@ -166,7 +219,13 @@ def _open_activity_subscription(
     except (
         client.DaemonConnectionError,
         client.DaemonApplicationError,
-    ):
+    ) as exc:
+        _report_activity_transport_degraded(
+            exc,
+            stage="open",
+            project_root=project_root,
+            subscription_id=None,
+        )
         return None
 
 
@@ -196,8 +255,18 @@ def _drain_final_activity(
     except (
         client.DaemonConnectionError,
         client.DaemonApplicationError,
-    ):
-        return []
+    ) as exc:
+        _report_activity_transport_degraded(
+            exc,
+            stage="drain",
+            project_root=project_root,
+            subscription_id=subscription_id,
+        )
+        return read_events(
+            project_root,
+            log_cursor,
+            turn_id=turn_id,
+        )
 
 
 def close_activity_subscription(
@@ -214,8 +283,13 @@ def close_activity_subscription(
     except (
         client.DaemonConnectionError,
         client.DaemonApplicationError,
-    ):
-        pass
+    ) as exc:
+        _report_activity_transport_degraded(
+            exc,
+            stage="close",
+            project_root=project_root,
+            subscription_id=subscription_id,
+        )
 
 
 def read_interactive_activity_events(

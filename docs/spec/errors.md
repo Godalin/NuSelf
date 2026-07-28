@@ -266,6 +266,12 @@ record does not hide healthy neighbors.
 
 Interactive chat may retry exactly once only when the send result is explicitly marked retryable.
 
+Daemon activity subscription transport is not the chat send result. Its
+open/poll/drain/close failures are observed as auxiliary degradation and never
+trigger or suppress a chat retry. Open, poll, and drain failure may recover
+persisted turn events through the incremental cursor; close failure only
+affects subscription cleanup.
+
 Retryable:
 
 - daemon connection timeout

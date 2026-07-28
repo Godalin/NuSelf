@@ -84,6 +84,11 @@ retry decisions are structural: transient transport/frame failures may retry
 the same stable turn, while local request encoding and typed payload schema
 failures do not.
 
+REPL daemon-activity transport is auxiliary: open, poll, final-drain, and close
+failures are observed with structured client context, cannot alter chat
+results, and recover persisted turn events through the scoped cursor when
+possible.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).
