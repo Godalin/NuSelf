@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from dataclasses import asdict
 from pathlib import Path
@@ -25,6 +25,7 @@ from nuself.domain.memory import (
 from nuself.domain.profile import ProfileItem
 from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime.observability import decode_observed_record
+from nuself.runtime import freeze_json_value
 from nuself.storage import StorageBackend, auto_backend
 
 
@@ -55,15 +56,31 @@ class MemoryStats:
 
     entries_total: int
     candidates_total: int
-    entries_by_type: dict[str, int] = field(default_factory=empty_str_counts)
-    entries_by_review_state: dict[str, int] = field(default_factory=empty_str_counts)
-    candidates_by_review_state: dict[str, int] = field(default_factory=empty_str_counts)
+    entries_by_type: Mapping[str, int] = field(default_factory=empty_str_counts)
+    entries_by_review_state: Mapping[str, int] = field(default_factory=empty_str_counts)
+    candidates_by_review_state: Mapping[str, int] = field(default_factory=empty_str_counts)
     entries_with_observed_at: int = 0
     entries_with_evidence: int = 0
     pending_candidates: int = 0
     avg_importance: float = 0.0
     max_importance: float = 0.0
-    avg_importance_by_type: dict[str, float] = field(default_factory=empty_str_floats)
+    avg_importance_by_type: Mapping[str, float] = field(default_factory=empty_str_floats)
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "entries_by_type",
+            "entries_by_review_state",
+            "candidates_by_review_state",
+            "avg_importance_by_type",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                _freeze_stats_mapping(
+                    getattr(self, field_name),
+                    field_name=field_name,
+                ),
+            )
 
 
 @dataclass(frozen=True)
@@ -145,6 +162,20 @@ class SymbolicGraphSearchResult:
 
 
 GraphAdjacency = dict[str, list[tuple[str, SymbolicGraphEdge]]]
+
+
+def _freeze_stats_mapping(
+    value: object,
+    *,
+    field_name: str,
+) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise TypeError(f"field '{field_name}' must be a mapping")
+    mapping = cast(Mapping[object, object], value)
+    frozen = freeze_json_value(mapping)
+    if not isinstance(frozen, Mapping):
+        raise TypeError(f"field '{field_name}' must be a mapping")
+    return cast(Mapping[str, object], frozen)
 
 
 class MemoryEntryNotFound(KeyError):

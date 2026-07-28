@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The persisted Profile and Source read-model ownership batch is complete.
+Idle. The repository statistics ownership batch is complete.
 
 ## Active Branch
 
@@ -22,13 +22,11 @@ code.
 
 ## Completion Evidence
 
-- `ProfileItem` detaches and freezes tags, source refs, relations, and evidence
-  membership.
-- `SourceDocument` detaches and freezes tags.
-- Both models preserve existing JSON list/dict wire fields and return detached
-  containers.
-- Focused Profile, Source, and integration tests: 47 passed.
-- Full tests: 1237 passed.
+- `MemoryStats` and `ProfileStats` detach and freeze all mapping fields.
+- Statistics formulas and CLI text remain unchanged while formatting accepts
+  abstract mappings.
+- Focused repository and CLI tests: 336 passed.
+- Full tests: 1239 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -38,4 +36,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit remaining repository summary/index read models.
+Resume the shared infrastructure adoption audit beyond collection ownership.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping
 import json
 import sys
 from pathlib import Path
@@ -115,7 +116,7 @@ def format_memory_preview(
     return "\n".join(lines)
 
 
-def _format_counts(counts: dict[str, int]) -> str:
+def _format_counts(counts: Mapping[str, int]) -> str:
     if not counts:
         return "-"
     return ", ".join(
@@ -123,7 +124,7 @@ def _format_counts(counts: dict[str, int]) -> str:
     )
 
 
-def _format_float_counts(counts: dict[str, float]) -> str:
+def _format_float_counts(counts: Mapping[str, float]) -> str:
     if not counts:
         return "-"
     return ", ".join(

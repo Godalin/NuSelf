@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
+
+import pytest
 
 from nuself.domain.memory import MemoryEvidence
 from nuself.domain.profile import ProfileItem
-from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository, ProfileSearchFilters
+from nuself.profile.repository import (
+    ProfileItemNotFound,
+    ProfileItemRepository,
+    ProfileSearchFilters,
+    ProfileStats,
+    profile_stats,
+)
 
 
 def test_profile_repository_crud(tmp_path: Path) -> None:
@@ -159,3 +168,23 @@ def test_profile_item_with_updates_importance(tmp_path: Path) -> None:
 
     loaded = repo.get(original.id)
     assert loaded.importance == 0.95
+
+
+def test_profile_stats_detaches_and_freezes_mapping_inputs(
+    tmp_path: Path,
+) -> None:
+    counts = {"profile_fact": 1}
+    snapshot = ProfileStats(items_total=1, items_by_type=counts)
+
+    counts["preference"] = 1
+
+    assert snapshot.items_by_type == {"profile_fact": 1}
+    with pytest.raises(TypeError):
+        cast(dict[str, int], snapshot.items_by_type)["goal"] = 1
+
+    repo = ProfileItemRepository(tmp_path)
+    repo.save(
+        ProfileItem(type="profile_fact", title="Style", body="Concise.")
+    )
+    produced = profile_stats(tmp_path)
+    assert produced.items_by_type == {"profile_fact": 1}

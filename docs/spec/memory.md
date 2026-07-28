@@ -47,6 +47,12 @@ validation, merge, conversion, retrieval, and relation traversal must accept
 the immutable in-memory `Mapping` and `Sequence` forms without weakening their
 existing wire-shape validation.
 
+Repository statistics results follow the same read-ownership principle.
+`MemoryStats` and `ProfileStats` detach and freeze their mapping fields during
+construction. A caller may retain or inspect a statistics snapshot but cannot
+mutate an apparently frozen result or alter the dictionaries supplied by the
+repository while composing that snapshot.
+
 ### Source Ingestion (`source ingest`)
 
 1. Accept single `.md`/`.txt` files or recurse into directories.

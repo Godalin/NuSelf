@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from nuself.clock import utc_now_iso
@@ -11,6 +11,7 @@ from nuself.derived import write_derived_index
 from nuself.domain.memory import MemoryCandidate, merge_relations
 from nuself.domain.profile import ProfileItem
 from nuself.runtime.observability import decode_observed_record
+from nuself.runtime import freeze_json_value
 from nuself.storage import StorageBackend, auto_backend
 
 
@@ -23,8 +24,14 @@ class ProfileStats:
     """Compact summary of derived profile state."""
 
     items_total: int
-    items_by_type: dict[str, int] = field(default_factory=empty_str_counts)
+    items_by_type: Mapping[str, int] = field(default_factory=empty_str_counts)
     items_with_evidence: int = 0
+
+    def __post_init__(self) -> None:
+        frozen = freeze_json_value(self.items_by_type)
+        if not isinstance(frozen, Mapping):
+            raise TypeError("field 'items_by_type' must be a mapping")
+        object.__setattr__(self, "items_by_type", frozen)
 
 
 @dataclass(frozen=True)

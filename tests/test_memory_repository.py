@@ -13,7 +13,7 @@ from nuself.domain.memory import (
     default_relation_descriptor_registry,
 )
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository, MemoryRelationFilters
-from nuself.memory.repository import MemorySearchFilters, memory_stats
+from nuself.memory.repository import MemorySearchFilters, MemoryStats, memory_stats
 from nuself.logs import read_log_events
 from nuself.storage import FileStorageBackend
 
@@ -413,6 +413,25 @@ def test_memory_repository_search_filters_and_stats(tmp_path: Path) -> None:
     assert stats.entries_by_type == {"belief": 1, "episode": 1}
     assert stats.entries_by_review_state["reviewed"] == 1
     assert stats.entries_with_observed_at == 1
+
+
+def test_memory_stats_detaches_and_freezes_mapping_inputs() -> None:
+    entries_by_type = {"belief": 1}
+    averages = {"belief": 0.75}
+    stats = MemoryStats(
+        entries_total=1,
+        candidates_total=0,
+        entries_by_type=entries_by_type,
+        avg_importance_by_type=averages,
+    )
+
+    entries_by_type["episode"] = 1
+    averages["belief"] = 0.1
+
+    assert stats.entries_by_type == {"belief": 1}
+    assert stats.avg_importance_by_type == {"belief": 0.75}
+    with pytest.raises(TypeError):
+        cast(dict[str, int], stats.entries_by_type)["goal"] = 1
 
 
 def test_registry_merge_prefers_incoming_payload_and_preserves_metadata() -> None:
