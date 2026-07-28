@@ -111,6 +111,12 @@ command implementations must move into focused modules as they are touched.
   later extractions should not introduce imports from subsystem command modules
   back into `nuself.cli`.
 
+Conversation runtime types follow the same rule: `agent/chat_types.py` owns
+settings, structured response/result records, typed turn state, and graph error
+contracts. `agent/chat.py` owns orchestration and may re-export those names
+during the internal module split so existing callers do not need a flag-day
+import migration.
+
 ## Memory Architecture Direction
 
 - Prefer open typed memory (`MemoryObject + MemoryTypeDescriptor`) over closed enums.
