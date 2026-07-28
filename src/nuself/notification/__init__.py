@@ -10,6 +10,7 @@ from typing import Literal, Protocol, cast
 
 from nuself.clock import utc_now, utc_now_iso
 from nuself.config import runtime_paths
+from nuself.notification.audit import write_notification_audit
 from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
@@ -94,19 +95,12 @@ class LogOnlyNotificationAdapter:
         self._project_root = paths.project_root
 
     def send(self, entry: OutboxEntry) -> bool:
-        from nuself.logs import write_log_event
-
-        write_log_event(
-            "outbox",
+        write_notification_audit(
             "outbox_delivered",
-            f"{entry.title}: {entry.body}",
             project_root=self._project_root,
-            status=entry.status,
             metadata={
                 "entry_id": entry.id,
-                "idempotency_key": entry.idempotency_key,
-                "deep_link": entry.deep_link,
-                "attempts": entry.attempts,
+                "attempt": entry.attempts,
             },
         )
         return True

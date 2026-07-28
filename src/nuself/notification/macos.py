@@ -7,7 +7,10 @@ import subprocess
 from pathlib import Path
 
 from nuself.notification import OutboxEntry
-from nuself.runtime.observability import report_observed_failure
+from nuself.notification.audit import (
+    report_notification_failure,
+    write_notification_audit,
+)
 
 
 class MacOSNotificationAdapter:
@@ -18,24 +21,20 @@ class MacOSNotificationAdapter:
 
     def __init__(self, project_root: Path | None = None, *, dry_run: bool = False) -> None:
         from nuself.config import runtime_paths
-        from nuself.logs import write_log_event
 
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
         self._dry_run = dry_run
-        self._write_log = write_log_event
         self.has_osascript = shutil.which("osascript") is not None
 
     def send(self, entry: OutboxEntry) -> bool:
         if self._dry_run or not self.has_osascript:
-            self._write_log(
-                "outbox",
+            write_notification_audit(
                 "macos_dry_run" if self._dry_run else "macos_unavailable",
-                f"{entry.title}: {entry.body}",
                 project_root=self._project_root,
                 metadata={
                     "entry_id": entry.id,
-                    "idempotency_key": entry.idempotency_key,
+                    "attempt": entry.attempts,
                 },
             )
             return True
@@ -51,29 +50,27 @@ class MacOSNotificationAdapter:
             )
         except subprocess.TimeoutExpired:
             # A hung osascript must not block the notification-delivery thread.
-            report_observed_failure(
+            report_notification_failure(
                 TimeoutError("osascript timed out"),
-                component="outbox",
                 event="macos_failed",
-                message="macOS notification delivery failed",
                 project_root=self._project_root,
-                level="warning",
-                status="failed",
-                metadata={"entry_id": entry.id},
+                metadata={
+                    "entry_id": entry.id,
+                    "attempt": entry.attempts,
+                },
             )
             return False
         if result.returncode != 0:
-            report_observed_failure(
+            report_notification_failure(
                 RuntimeError(
                     result.stderr.strip() or "osascript failed"
                 ),
-                component="outbox",
                 event="macos_failed",
-                message="macOS notification delivery failed",
                 project_root=self._project_root,
-                level="warning",
-                status="failed",
-                metadata={"entry_id": entry.id},
+                metadata={
+                    "entry_id": entry.id,
+                    "attempt": entry.attempts,
+                },
             )
             return False
         return True

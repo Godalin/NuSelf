@@ -113,7 +113,11 @@ def test_log_only_adapter_sends(tmp_path: Path) -> None:
     log_path = tmp_path / "private" / "logs" / "outbox.log"
     assert log_path.exists()
     content = log_path.read_text(encoding="utf-8")
-    assert "T: B" in content
+    assert '"event": "outbox_delivered"' in content
+    assert '"entry_id": "e1"' in content
+    assert '"status": "delivered"' in content
+    assert "T: B" not in content
+    assert '"idempotency_key"' not in content
     assert "e1" in content
 
 

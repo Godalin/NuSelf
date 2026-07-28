@@ -196,6 +196,9 @@ def test_delivery_log_projects_origin_correlation(
     assert event.request_id == "notification-request"
     assert event.thread_id == "notification-thread"
     assert event.source == "daemon.worker.notification_delivery"
+    assert event.status == "delivered"
+    assert event.metadata == {"entry_id": "logged", "attempt": 0}
+    assert event.message == "Outbox notification delivered"
 
 
 def test_delivery_restores_context_when_adapter_raises(

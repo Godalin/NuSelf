@@ -105,6 +105,7 @@ request/thread/turn/trace fields plus the delivery-owned source.
 |---|---|---|---|
 | `LogOnlyNotificationAdapter` | None | N/A | Always returns `True`; writes to `outbox.log` |
 | `EmailNotificationAdapter` | `private/email.toml` with `[smtp]` and `[notification]` sections | `dry_run=True` logs intent | Missing config → `False` + `email_no_config`; invalid config → `email_config_invalid`, then delivery returns `False` + `email_no_config`; SMTP error → `False` + `email_failed` |
+| `MacOSNotificationAdapter` | `osascript` on `$PATH` | `dry_run=True` logs intent | Missing `osascript` → returns `True` (graceful degradation); subprocess non-zero → `False` + `macos_failed` |
 
 ### Email Configuration
 
@@ -121,7 +122,6 @@ configuration diagnostic. When the file exists, decoding is strict:
 Read failures, malformed TOML, and schema failures emit one payload-safe
 `outbox/email_config_invalid` warning without raw values or credentials, then
 leave the adapter disabled. Undeclared implementation failures propagate.
-| `MacOSNotificationAdapter` | `osascript` on `$PATH` | `dry_run=True` logs intent | Missing `osascript` → returns `True` (graceful degradation); subprocess non-zero → `False` + `macos_failed` |
 
 For real delivery failures, the adapter's `False` result is authoritative and
 the associated `email_no_config`, `email_failed`, or `macos_failed` record is
@@ -131,6 +131,30 @@ an auxiliary diagnostic. Diagnostic and structured-log failure cannot replace
 Log-only delivery, explicit dry runs, and the macOS-unavailable logging
 fallback are different: their log write is the delivery effect itself, so its
 failure remains authoritative and propagates.
+
+### Delivery Audit Contract
+
+Notification owns every direct `component=outbox` delivery audit. Adapters use
+Notification-domain projection functions and do not choose raw event names,
+levels, statuses, or metadata shapes.
+
+| Event | Level | Status | Metadata |
+|---|---|---|---|
+| `outbox_delivered` | `info` | `delivered` | non-empty `entry_id`, non-negative `attempt` |
+| `email_dry_run` | `debug` | `simulated` | non-empty `entry_id`, non-negative `attempt` |
+| `email_no_config` | `warning` | `failed` | required error, non-empty `entry_id`, non-negative `attempt` |
+| `email_failed` | `warning` | `failed` | required error, non-empty `entry_id`, non-negative `attempt` |
+| `email_config_invalid` | `warning` | `degraded` | required error, fixed config record name |
+| `macos_dry_run` | `debug` | `simulated` | non-empty `entry_id`, non-negative `attempt` |
+| `macos_unavailable` | `info` | `unavailable` | non-empty `entry_id`, non-negative `attempt` |
+| `macos_failed` | `warning` | `failed` | required error, non-empty `entry_id`, non-negative `attempt` |
+
+The outbox entry is the authoritative private notification record. Delivery
+audits must not duplicate its title, body, deep link, idempotency key, runtime
+context, recipient, or SMTP configuration. Messages are fixed operational
+descriptions. The sanitized structured error is the only failure detail.
+Unknown identities or schema violations fail before the sink; generic
+corrupt-record diagnostics remain owned by shared observability.
 
 ## Deep Links
 

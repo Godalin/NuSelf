@@ -36,6 +36,16 @@ def _write_config(tmp_path: Path) -> None:
 def test_dry_run_returns_true_and_logs(tmp_path: Path, entry: OutboxEntry) -> None:
     adapter = EmailNotificationAdapter(tmp_path, dry_run=True)
     assert adapter.send(entry) is True
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="outbox",
+    )
+    assert event.event == "email_dry_run"
+    assert event.status == "simulated"
+    assert event.metadata == {"entry_id": "test-001", "attempt": 0}
+    assert "Test Title" not in event.message
+    assert "Test body." not in event.message
+    assert "key-001" not in str(event.metadata)
 
 
 def test_no_config_returns_false(tmp_path: Path, entry: OutboxEntry) -> None:

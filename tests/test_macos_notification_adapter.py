@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from nuself.logs import read_log_events
 from nuself.notification import OutboxEntry
 from nuself.notification.macos import MacOSNotificationAdapter
 
@@ -29,6 +30,16 @@ def entry() -> OutboxEntry:
 
 def test_dry_run_returns_true_and_logs(adapter: MacOSNotificationAdapter, entry: OutboxEntry) -> None:
     assert adapter.send(entry) is True
+    [event] = read_log_events(
+        project_root=adapter._project_root,  # pyright: ignore[reportPrivateUsage]
+        component="outbox",
+    )
+    assert event.event == "macos_dry_run"
+    assert event.status == "simulated"
+    assert event.metadata == {"entry_id": "test-001", "attempt": 0}
+    assert "Test Title" not in event.message
+    assert "Test body." not in event.message
+    assert "key-001" not in str(event.metadata)
 
 
 def test_unavailable_osascript_returns_true_and_logs(tmp_path: Path, entry: OutboxEntry) -> None:

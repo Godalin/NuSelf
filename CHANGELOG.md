@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Notification delivery audits now use one closed Notification-owned schema;
+  log-only, dry-run, unavailable, configuration, and delivery-failure records
+  no longer duplicate notification content, deep links, idempotency keys,
+  recipients, or SMTP configuration.
 - Persona consultation, discussion, fallback, lifecycle-trace, and interactive
   command audits now use one closed Persona-owned schema; audit records retain
   only stable ids, stages, decisions, and counts instead of duplicating user

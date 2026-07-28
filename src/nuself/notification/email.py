@@ -9,9 +9,10 @@ from pathlib import Path
 from typing import cast
 
 from nuself.notification import OutboxEntry
-from nuself.runtime.observability import (
-    report_observed_failure,
-    run_observed_best_effort,
+from nuself.notification.audit import (
+    report_notification_failure,
+    run_notification_observed,
+    write_notification_audit,
 )
 
 EmailConfig = dict[str, str | int | bool]
@@ -42,39 +43,33 @@ class EmailNotificationAdapter:
 
     def __init__(self, project_root: Path | None = None, *, dry_run: bool = False) -> None:
         from nuself.config import runtime_paths
-        from nuself.logs import write_log_event
 
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
         self._dry_run = dry_run
-        self._write_log = write_log_event
         self._config = self._load_config()
 
     def send(self, entry: OutboxEntry) -> bool:
         if self._dry_run:
-            self._write_log(
-                "outbox",
+            write_notification_audit(
                 "email_dry_run",
-                f"{entry.title}: {entry.body}",
                 project_root=self._project_root,
                 metadata={
                     "entry_id": entry.id,
-                    "idempotency_key": entry.idempotency_key,
-                    "to": self._config.get("to") if self._config else None,
+                    "attempt": entry.attempts,
                 },
             )
             return True
 
         if not self._config:
-            report_observed_failure(
+            report_notification_failure(
                 RuntimeError("email configuration is not available"),
-                component="outbox",
                 event="email_no_config",
-                message="Email config not found; skipping delivery",
                 project_root=self._project_root,
-                level="warning",
-                status="failed",
-                metadata={"entry_id": entry.id},
+                metadata={
+                    "entry_id": entry.id,
+                    "attempt": entry.attempts,
+                },
             )
             return False
 
@@ -102,15 +97,14 @@ class EmailNotificationAdapter:
                     server.login(user, password)
                 server.send_message(msg)
         except (OSError, smtplib.SMTPException) as exc:
-            report_observed_failure(
+            report_notification_failure(
                 exc,
-                component="outbox",
                 event="email_failed",
-                message="Email delivery failed",
                 project_root=self._project_root,
-                level="warning",
-                status="failed",
-                metadata={"entry_id": entry.id},
+                metadata={
+                    "entry_id": entry.id,
+                    "attempt": entry.attempts,
+                },
             )
             return False
 
@@ -121,11 +115,9 @@ class EmailNotificationAdapter:
         if not config_path.exists():
             return None
 
-        return run_observed_best_effort(
+        return run_notification_observed(
             lambda: _decode_email_config(config_path),
-            component="outbox",
             event="email_config_invalid",
-            message="Email configuration is invalid; delivery is disabled",
             project_root=self._project_root,
             metadata={"record": config_path.name},
             errors=(EmailConfigError,),
