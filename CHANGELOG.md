@@ -76,6 +76,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Reason export workers now activate each queued job's saved runtime context.
   Export and retry logs preserve top-level request, turn, trace, job, thread,
   and worker-source correlation instead of relying only on repeated metadata.
+- Notification outbox entries now persist their originating runtime context,
+  preserve it through state transitions, and restore it per delivery. Adapter
+  logs retain origin correlation under the notification worker source; legacy
+  entries without context remain readable with an empty context.
 - Daemon execution now borrows SIGINT/SIGTERM handlers explicitly and restores
   the exact previous process handlers on every exit path. Partial installation
   rolls back already-changed signals, and restoration failures remain

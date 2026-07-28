@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Mapping
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Literal, Protocol, cast
 
 from nuself.clock import utc_now, utc_now_iso
 from nuself.config import runtime_paths
+from nuself.runtime.context import (
+    RuntimeContext,
+    current_runtime_context,
+    use_runtime_context,
+)
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend
 
@@ -28,6 +34,9 @@ class OutboxEntry:
     created_at: str = field(default_factory=utc_now_iso)
     sent_at: str | None = None
     attempts: int = 0
+    context: RuntimeContext = field(
+        default_factory=current_runtime_context
+    )
 
     def __post_init__(self) -> None:
         _parse_aware_iso(self.created_at, field_name="created_at")
@@ -43,6 +52,7 @@ class OutboxEntry:
             "idempotency_key": self.idempotency_key,
             "created_at": self.created_at,
             "attempts": self.attempts,
+            "context": self.context.to_record(),
         }
         if self.deep_link is not None:
             wire["deep_link"] = self.deep_link
@@ -62,6 +72,7 @@ class OutboxEntry:
             created_at=_expect_str(data, "created_at"),
             sent_at=_optional_timestamp(data, "sent_at"),
             attempts=_expect_int(data, "attempts"),
+            context=_decode_context(data),
         )
 
 
@@ -161,6 +172,7 @@ class NotificationOutbox:
             created_at=entry.created_at,
             sent_at=utc_now_iso(),
             attempts=entry.attempts + 1,
+            context=entry.context,
         )
         self._write_entry(updated)
         return updated
@@ -177,6 +189,7 @@ class NotificationOutbox:
             created_at=entry.created_at,
             sent_at=entry.sent_at,
             attempts=entry.attempts + 1,
+            context=entry.context,
         )
         self._write_entry(updated)
         return updated
@@ -193,6 +206,7 @@ class NotificationOutbox:
             created_at=entry.created_at,
             sent_at=entry.sent_at,
             attempts=entry.attempts,
+            context=entry.context,
         )
         self._write_entry(updated)
         return updated
@@ -241,21 +255,37 @@ class NotificationDeliveryLoop:
         """Deliver all pending entries. Return count delivered."""
         delivered = 0
         for entry in self._outbox.list(status="pending"):
-            success = False
-            for adapter in self._adapters:
-                if adapter.send(entry):
-                    success = True
+            delivery_context = replace(
+                entry.context,
+                source="daemon.worker.notification_delivery",
+            )
+            with use_runtime_context(delivery_context):
+                success = False
+                for adapter in self._adapters:
+                    if adapter.send(entry):
+                        success = True
+                    else:
+                        success = False
+                        break
+                if success:
+                    self._outbox.mark_sent(entry.id)
+                    delivered += 1
                 else:
-                    success = False
-                    break
-            if success:
-                self._outbox.mark_sent(entry.id)
-                delivered += 1
-            else:
-                self._outbox.mark_failed(entry.id)
+                    self._outbox.mark_failed(entry.id)
         # Clean up old dismissed entries so the outbox does not grow forever.
         self._outbox.clear_dismissed_older_than(days=7)
         return delivered
+
+
+def _decode_context(data: dict[str, object]) -> RuntimeContext:
+    if "context" not in data:
+        return RuntimeContext()
+    value = data["context"]
+    if not isinstance(value, Mapping):
+        raise TypeError("field 'context' must be an object")
+    return RuntimeContext.from_record(
+        cast(Mapping[str, object], value)
+    )
 
 
 class OutboxEntryNotFound(ValueError):

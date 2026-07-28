@@ -322,6 +322,9 @@ activity 嵌套记录也不会被静默跳过。
 排队的 reason export 会把不可变 runtime context 带入 worker 执行和重试，因此日志
 能保留顶层 request、turn、trace、job 与 thread 关联，同时用消费它的 worker 标记
 source。
+持久化 notification intent 也会把来源 runtime context 直接保存在 outbox record
+上；每条 adapter chain 会在 notification worker source 下恢复该 context，旧的无
+context 记录仍可读取。
 
 ## 通知
 

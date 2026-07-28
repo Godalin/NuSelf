@@ -226,6 +226,12 @@ All logs emitted while inspecting, composing, failing, or retrying that job
 therefore receive top-level correlation fields without relying on duplicated
 metadata.
 
+Durable domain queues may embed `RuntimeContext` directly when the durable
+record itself is the authoritative intent. The notification outbox follows
+this pattern and deliberately does not add a redundant `RuntimeEnvelope`.
+Delivery installs the saved entry context per record under the notification
+worker source, using the same exact replacement/restoration semantics.
+
 ## Event Delivery
 
 Ephemeral events use an in-process publisher/subscriber interface:

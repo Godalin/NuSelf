@@ -46,6 +46,13 @@ any     ──► deleted   [clear(status)]  triggered by: CLI notify clear
 - `created_at` and present `sent_at` values are non-empty, timezone-aware
   ISO-8601 strings. Naive timestamps are invalid because retention decisions
   must not depend on the host timezone.
+- Each new entry stores the strict `RuntimeContext` active when the notification
+  intent is created. State transitions preserve that context unchanged. This
+  is domain-owned correlation on the durable outbox record, not a second
+  `RuntimeEnvelope` around the entry.
+- Records written before the context field existed decode with an empty
+  `RuntimeContext`; the next state transition writes the current schema.
+  Present context records remain strict and never guess malformed fields.
 - `list()` isolates records with malformed fields through one payload-safe
   `outbox/record_decode_failed` diagnostic. It does not repair or delete them.
   `get()` is strict and propagates schema failures for the requested record.
@@ -68,12 +75,19 @@ pending entries.
 ### `NotificationDeliveryLoop.run_once()`
 
 1. Lists only entries with `status="pending"`.
-2. For each pending entry, iterates adapters in order.
-3. **"All adapters must succeed" semantics**:
+2. For each pending entry, exactly installs its saved correlation context and
+   replaces `source` with `daemon.worker.notification_delivery` for the
+   complete adapter/state-transition operation.
+3. Iterates adapters in order.
+4. **"All adapters must succeed" semantics**:
    - Each adapter's `send(entry)` must return `True`.
    - If any adapter returns `False`, the loop sets `success = False` and **breaks immediately** (subsequent adapters are not tried).
-4. If `success` → `mark_sent()`.
-5. If `!success` → `mark_failed()`.
+5. If `success` → `mark_sent()`.
+6. If `!success` → `mark_failed()`.
+
+The prior ambient context is restored after each entry even when an adapter
+raises. Delivery logs therefore project the notification's originating
+request/thread/turn/trace fields plus the delivery-owned source.
 
 ### Retry Behavior
 

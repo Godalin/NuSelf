@@ -339,6 +339,10 @@ are never silently skipped.
 Queued reason exports carry their immutable runtime context into worker
 execution and retries, so logs retain top-level request, turn, trace, job, and
 thread correlation while identifying the consuming worker as their source.
+Durable notification intents likewise store their originating runtime context
+directly on the outbox record. Each adapter chain restores that context under
+the notification worker source, while older context-free records remain
+readable.
 
 ## Notifications
 

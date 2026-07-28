@@ -12,9 +12,15 @@ import pytest
 import nuself.notification as notification_module
 from nuself.logs import read_log_events
 from nuself.notification import (
+    LogOnlyNotificationAdapter,
     NotificationDeliveryLoop,
     NotificationOutbox,
     OutboxEntry,
+)
+from nuself.runtime.context import (
+    RuntimeContext,
+    current_runtime_context,
+    runtime_context,
 )
 from nuself.storage import (
     FileStorageBackend,
@@ -29,9 +35,11 @@ class FakeAdapter:
     def __init__(self, succeed: bool = True) -> None:
         self.succeed = succeed
         self.sent_entries: list[OutboxEntry] = []
+        self.contexts: list[RuntimeContext] = []
 
     def send(self, entry: OutboxEntry) -> bool:
         self.sent_entries.append(entry)
+        self.contexts.append(current_runtime_context())
         return self.succeed
 
 
@@ -84,6 +92,140 @@ def test_delivery_loop_sends_pending_entries(tmp_path: Path) -> None:
     assert delivered == 2
     assert len(adapter.sent_entries) == 2
     assert len(outbox.list(status="sent")) == 2
+
+
+def test_outbox_context_round_trip_and_legacy_decode(
+    tmp_path: Path,
+) -> None:
+    with runtime_context(
+        request_id="request-1",
+        thread_id="thread-1",
+        turn_id="turn-1",
+        trace_id="trace-1",
+        source="reflection",
+    ):
+        entry = OutboxEntry(
+            id="context",
+            title="Context",
+            body="Body",
+            status="pending",
+            idempotency_key="context",
+        )
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(entry)
+    stored = outbox.get(entry.id)
+
+    assert stored.context == entry.context
+    assert outbox.mark_sent(entry.id).context == entry.context
+    assert outbox.dismiss(entry.id).context == entry.context
+
+    legacy = entry.to_wire()
+    legacy.pop("context")
+    assert OutboxEntry.from_wire(legacy).context == RuntimeContext()
+
+
+def test_delivery_activates_entry_context_and_restores_ambient(
+    tmp_path: Path,
+) -> None:
+    with runtime_context(
+        request_id="origin-request",
+        thread_id="origin-thread",
+        turn_id="origin-turn",
+        trace_id="origin-trace",
+        source="reflection",
+    ):
+        entry = OutboxEntry(
+            id="correlated",
+            title="T",
+            body="B",
+            status="pending",
+            idempotency_key="correlated",
+        )
+    NotificationOutbox(tmp_path).add(entry)
+    adapter = FakeAdapter()
+    loop = NotificationDeliveryLoop(tmp_path, adapters=[adapter])
+
+    with runtime_context(
+        request_id="ambient-request",
+        source="test",
+    ):
+        assert loop.run_once() == 1
+        assert current_runtime_context() == RuntimeContext(
+            request_id="ambient-request",
+            source="test",
+        )
+
+    assert adapter.contexts == [
+        RuntimeContext(
+            request_id="origin-request",
+            thread_id="origin-thread",
+            turn_id="origin-turn",
+            trace_id="origin-trace",
+            source="daemon.worker.notification_delivery",
+        )
+    ]
+
+
+def test_delivery_log_projects_origin_correlation(
+    tmp_path: Path,
+) -> None:
+    with runtime_context(
+        request_id="notification-request",
+        thread_id="notification-thread",
+    ):
+        entry = OutboxEntry(
+            id="logged",
+            title="T",
+            body="B",
+            status="pending",
+            idempotency_key="logged",
+        )
+    NotificationOutbox(tmp_path).add(entry)
+
+    NotificationDeliveryLoop(
+        tmp_path,
+        adapters=[LogOnlyNotificationAdapter(tmp_path)],
+    ).run_once()
+
+    event = read_log_events(
+        project_root=tmp_path,
+        component="outbox",
+    )[-1]
+    assert event.request_id == "notification-request"
+    assert event.thread_id == "notification-thread"
+    assert event.source == "daemon.worker.notification_delivery"
+
+
+def test_delivery_restores_context_when_adapter_raises(
+    tmp_path: Path,
+) -> None:
+    class RaisingAdapter:
+        def send(self, entry: OutboxEntry) -> bool:
+            del entry
+            raise RuntimeError("adapter crashed")
+
+    NotificationOutbox(tmp_path).add(
+        OutboxEntry(
+            id="raising",
+            title="T",
+            body="B",
+            status="pending",
+            idempotency_key="raising",
+            context=RuntimeContext(request_id="origin"),
+        )
+    )
+    loop = NotificationDeliveryLoop(
+        tmp_path,
+        adapters=[RaisingAdapter()],
+    )
+
+    with runtime_context(request_id="ambient"):
+        with pytest.raises(RuntimeError, match="adapter crashed"):
+            loop.run_once()
+        assert current_runtime_context() == RuntimeContext(
+            request_id="ambient"
+        )
 
 
 def test_delivery_loop_marks_failed_on_adapter_failure(tmp_path: Path) -> None:
@@ -193,6 +335,29 @@ def test_outbox_list_isolates_invalid_persisted_timestamps(
     assert "Private body" not in str(event.to_record())
     with pytest.raises(ValueError):
         outbox.get("corrupt-time")
+
+
+def test_outbox_list_isolates_invalid_present_context(
+    tmp_path: Path,
+) -> None:
+    backend = FileStorageBackend(tmp_path / "private")
+    wire = OutboxEntry(
+        id="corrupt-context",
+        title="Private title",
+        body="Private body",
+        status="pending",
+        idempotency_key="corrupt-context",
+    ).to_wire()
+    wire["context"] = {"unknown": "value"}
+    backend.collection("notification_outbox").put(
+        "corrupt-context",
+        wire,
+    )
+    outbox = NotificationOutbox(tmp_path, backend=backend)
+
+    assert outbox.list() == []
+    with pytest.raises(ValueError, match="unknown fields"):
+        outbox.get("corrupt-context")
 
 
 @pytest.mark.parametrize("days", (-1, True, 1.5))

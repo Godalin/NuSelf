@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The reason export RuntimeEnvelope correlation stage is complete; no
-implementation change is currently active.
+Idle. The notification outbox correlation stage is complete; no implementation
+change is currently active.
 
 ## Active Branch
 
@@ -31,4 +31,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit notification delivery correlation and runtime-envelope adoption.
+Audit scheduler tick context isolation and correlation ownership.
