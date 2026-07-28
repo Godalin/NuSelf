@@ -1,38 +1,35 @@
 # Current Goal
 
-This is NuSelf's short-lived execution board. It contains only the active
-objective, ordered work, explicit exclusions, and completion evidence.
-Completed history belongs in Git and `CHANGELOG.md`; deferred work belongs in
-[`TODOs.md`](TODOs.md).
+NuSelf's short-lived execution board. Completed history belongs in Git and
+`CHANGELOG.md`; deferred work belongs in [`TODOs.md`](TODOs.md).
 
-## Status
+## Objective
 
-Idle — no implementation objective is currently active.
+Consolidate `AGENTS.md` into a concise repository-level development workflow
+and a non-duplicative documentation map.
 
-## Next Action
+## Active Branch
 
-Before starting non-trivial work:
+`dev/v0.3.x`
 
-1. Select and remove one outcome from [`TODOs.md`](TODOs.md), or define a newly
-   requested outcome.
-2. Replace this idle state with the objective, active branch, ordered steps,
-   exclusions, and objective completion evidence.
-3. Update the governing specification before implementation when behavior
-   changes.
-4. Update progress as soon as a step completes or scope changes, and include
-   that update in the same functional commit.
-5. On completion, move only unresolved follow-ups to `TODOs.md`, preserve
-   completed history in Git or `CHANGELOG.md`, and restore this idle state.
+## Ordered Work
 
-## Documentation Responsibilities
+1. [x] Audit duplicated guidance and documentation links.
+2. [x] Consolidate mandatory development constraints and progress handling.
+3. [x] Replace the selective spec link list with authoritative entry points.
+4. [x] Verify links, responsibilities, formatting, and repository state.
+5. [ ] Commit and push the reviewed change.
 
-- `AGENTS.md`: mandatory development constraints and high-value navigation.
-- `docs/current-goal.md`: the one active execution board, or this explicit idle
-  state.
-- `docs/TODOs.md`: unresolved medium/long-term backlog only.
-- `docs/architecture.md`: current high-level boundaries and rationale.
-- `docs/spec/`: authoritative current behavior and development policies.
-- `CHANGELOG.md`: completed user-visible changes by release.
-- Git history: completed internal work and superseded implementation plans.
-- `README.md` and `README.zh-CN.md`: synchronized user-facing overview and
-  entry points.
+## Out Of Scope
+
+- Changing runtime behavior or subsystem contracts.
+- Duplicating detailed policies already governed by `docs/spec/development.md`.
+- Maintaining a hand-picked list of subsystem specs in `AGENTS.md`.
+
+## Completion Evidence
+
+- `AGENTS.md` states the full mandatory workflow without repeating detailed
+  subsystem policy.
+- Documentation links resolve and point to authoritative indexes.
+- `docs/current-goal.md` returns to an explicit idle state after completion.
+- `git diff --check` passes and the remote branch matches local `HEAD`.
