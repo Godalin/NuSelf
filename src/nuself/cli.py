@@ -136,7 +136,6 @@ try:
         handle_memory_candidate_reject,
         handle_memory_candidate_show,
     )
-    from nuself.commands.memory.common import record_memory_trace
     from nuself.commands.memory.graph import (
         handle_memory_graph_closure,
         handle_memory_graph_edges,
@@ -160,12 +159,16 @@ try:
         handle_memory_unquarantine,
         memory_type_choices as _memory_type_choices,
     )
+    from nuself.commands.memory.maintenance import (
+        handle_memory_export,
+        handle_memory_import,
+        handle_memory_optimize,
+        handle_memory_update,
+    )
     from nuself.domain.memory import (
-        MemoryEntry,
         default_relation_descriptor_registry,
     )
     from nuself.memory.curator import MemoryCurator
-    from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
     from nuself.memory.repository import (
         MemoryCandidateNotFound,
         MemoryCandidateRepository,
@@ -1314,58 +1317,6 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
         interval=getattr(args, "interval", 5),
         thread_ref=getattr(args, "thread_id", None) or None,
     )
-    return 0
-
-
-def handle_memory_update(args: argparse.Namespace) -> int:
-    result = MemoryCurator(args.project_root).run_once()
-    print(f"Memory curator: {result.summary()} log={result.log_path}")
-    return 0
-
-
-def handle_memory_optimize(args: argparse.Namespace) -> int:
-    settings = MemoryOptimizerSettings(memory_limit=args.limit)
-    result = MemoryOptimizer(args.project_root, settings=settings).run_once()
-    print(f"Memory optimizer: {result.summary()} log={result.log_path}")
-    return 0
-
-
-def handle_memory_export(args: argparse.Namespace) -> int:
-    import json
-
-    repo = MemoryEntryRepository(args.project_root)
-    entries = repo.list()
-    data = [entry.to_wire() for entry in entries]
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"Exported {len(data)} memory entries to {args.output}")
-    return 0
-
-
-def handle_memory_import(args: argparse.Namespace) -> int:
-    import json
-
-    if not args.path.exists():
-        print(f"Import file not found: {args.path}", file=sys.stderr)
-        return 1
-    raw: object = json.loads(args.path.read_text(encoding="utf-8"))
-    if not isinstance(raw, list):
-        print("Import file must contain a JSON array of memory entries.", file=sys.stderr)
-        return 1
-    repo = MemoryEntryRepository(args.project_root)
-    from typing import cast
-
-    data = cast(list[object], raw)
-    imported = 0
-    for item in data:
-        if not isinstance(item, dict):
-            continue
-        entry = MemoryEntry.from_wire(cast(dict[str, object], item))
-        repo.save(entry)
-        record_memory_trace(args.project_root, entry, "import")
-        imported += 1
-    repo.reindex()
-    print(f"Imported {imported} memory entries from {args.path}")
     return 0
 
 

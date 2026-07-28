@@ -133,6 +133,8 @@ top-level application namespace stays focused on subsystem APIs.
   `commands/memory/entries.py` owns durable entry CRUD/search/preview/stats/
   relations/types/reindex/unquarantine handlers. It also exposes parser type
   choices and REPL preview rendering as explicit shared CLI interfaces.
+  `commands/memory/maintenance.py` owns explicit curator/optimizer runs and
+  durable entry import/export commands.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
   repository APIs.
