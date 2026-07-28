@@ -83,6 +83,16 @@ Client-side socket failures and invalid response frames share
 as the explicit cause. A response with another request's id is invalid even if
 its status and payload otherwise decode successfully.
 
+`DaemonConnectionError` carries a stable phase, request id when one was
+allocated, derived `retryable`, and derived `request_may_have_completed`.
+Phases are `connect`, `request_encode`, `send`, `receive`, `response_decode`,
+`response_identity`, `payload_decode`, and `unknown`. Connect, send, receive,
+response-decode, response-identity, and legacy unknown failures are retryable
+for the REPL's idempotent chat turn. Request encoding and typed success-payload
+decoding are not retryable. Send and every later phase mean the request may
+already have completed; connect and request encoding do not. The exception
+message remains concise and the original cause remains chained.
+
 ## Background Worker Boundary
 
 Every daemon-owned background worker must keep its loop alive after an
@@ -260,11 +270,14 @@ Retryable:
 
 - daemon connection timeout
 - daemon connection failure before a response is received
-- other transport-layer errors represented by the daemon client
+- send/receive failure where the stable chat `turn_id` makes replay safe
+- malformed, incomplete, or mismatched daemon response frames
 
 Not retryable:
 
 - daemon response with `status=error`
+- locally unencodable daemon request
+- malformed typed payload inside a successfully decoded response envelope
 - conversation graph node failure
 - LLM output/schema/protocol failure
 - memory/profile/source validation failure

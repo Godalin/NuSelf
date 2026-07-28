@@ -73,8 +73,13 @@ def send_daemon_chat_interactive(
             print(error, file=sys.stderr)
             return InteractiveChatResult(
                 code=1,
-                retryable=True,
+                retryable=exc.retryable,
                 error=error,
+                failure_phase=exc.phase,
+                request_id=exc.request_id,
+                request_may_have_completed=(
+                    exc.request_may_have_completed
+                ),
             )
         except client.DaemonApplicationError as exc:
             error = str(exc)

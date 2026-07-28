@@ -77,6 +77,11 @@ def send_interactive_chat_turn(
                         "attempt": attempt,
                         "max_attempts": max_attempts,
                         "previous_error": result.error,
+                        "failure_phase": result.failure_phase,
+                        "request_id": result.request_id,
+                        "request_may_have_completed": (
+                            result.request_may_have_completed
+                        ),
                     },
                 )
                 print()

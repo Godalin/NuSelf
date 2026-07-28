@@ -67,6 +67,10 @@ Daemon server、CLI 与交互式 restart 的生命周期审计共用一个可观
 Daemon response 在 socket 交付前完成编码。无效或超限的 handler response 会被
 单独观测，并在仍可交付时回退为保持相同 request identity 的有界错误帧。
 
+Daemon client 错误保留 transport phase 与 request identity。REPL 基于结构化
+信息决定是否重试：瞬时传输或 frame 失败可复用稳定 turn，request 编码和 typed
+payload schema 失败则不重试。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

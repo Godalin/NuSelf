@@ -6,7 +6,7 @@ import socket
 from collections.abc import Callable
 from math import isfinite
 from pathlib import Path
-from typing import TypeVar
+from typing import Literal, TypeAlias, TypeVar
 
 from nuself.config import runtime_paths
 from nuself.daemon.payloads import (
@@ -29,10 +29,54 @@ from nuself.daemon.transport import read_socket_frame
 from nuself.logs import LogEvent
 
 PayloadT = TypeVar("PayloadT")
+DaemonConnectionPhase: TypeAlias = Literal[
+    "connect",
+    "request_encode",
+    "send",
+    "receive",
+    "response_decode",
+    "response_identity",
+    "payload_decode",
+    "unknown",
+]
+_NON_RETRYABLE_PHASES = frozenset({"request_encode", "payload_decode"})
+_MAY_HAVE_COMPLETED_PHASES = frozenset(
+    {
+        "send",
+        "receive",
+        "response_decode",
+        "response_identity",
+        "payload_decode",
+        "unknown",
+    }
+)
 
 
 class DaemonConnectionError(ConnectionError):
-    """Raised when the daemon socket cannot be reached."""
+    """One structurally classified daemon transport/protocol failure."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        phase: DaemonConnectionPhase = "unknown",
+        request_id: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.phase = phase
+        self.request_id = request_id
+
+    @property
+    def retryable(self) -> bool:
+        """Return whether an idempotent chat turn may benefit from retry."""
+
+        return self.phase not in _NON_RETRYABLE_PHASES
+
+    @property
+    def request_may_have_completed(self) -> bool:
+        """Return whether the daemon may already have executed the request."""
+
+        return self.phase in _MAY_HAVE_COMPLETED_PHASES
 
 
 class DaemonApplicationError(RuntimeError):
@@ -58,16 +102,29 @@ def request(
     paths = runtime_paths(project_root)
     if not paths.socket_path.exists():
         raise DaemonConnectionError(
-            f"daemon socket does not exist: {paths.socket_path}"
+            f"daemon socket does not exist: {paths.socket_path}",
+            phase="connect",
+            request_id=req.request_id,
         )
 
+    phase: DaemonConnectionPhase = "connect"
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.settimeout(timeout)
             sock.connect(str(paths.socket_path))
-            sock.sendall(req.to_json_line())
-            response_line = read_socket_frame(sock)
+            phase = "request_encode"
+            request_frame = req.to_json_line()
+            phase = "send"
+            sock.sendall(request_frame)
+            phase = "receive"
+            try:
+                response_line = read_socket_frame(sock)
+            except ProtocolError:
+                phase = "response_decode"
+                raise
+        phase = "response_decode"
         response = DaemonResponse.from_json_line(response_line)
+        phase = "response_identity"
         if response.request_id != req.request_id:
             raise ProtocolError(
                 "daemon response request_id does not match request"
@@ -75,7 +132,11 @@ def request(
         return response
     except (OSError, ProtocolError) as exc:
         detail = str(exc).strip() or exc.__class__.__name__
-        raise DaemonConnectionError(detail) from exc
+        raise DaemonConnectionError(
+            detail,
+            phase=phase,
+            request_id=req.request_id,
+        ) from exc
 
 
 def decode_response(
@@ -94,7 +155,9 @@ def decode_response(
         return decoder(response.payload)
     except ProtocolError as exc:
         raise DaemonConnectionError(
-            f"daemon {operation} response is malformed: {exc}"
+            f"daemon {operation} response is malformed: {exc}",
+            phase="payload_decode",
+            request_id=response.request_id,
         ) from exc
 
 
@@ -163,14 +226,17 @@ def shutdown(
 ) -> None:
     """Request shutdown and validate the acknowledgement payload."""
 
+    response = request("shutdown", project_root=project_root)
     payload = decode_response(
-        request("shutdown", project_root=project_root),
+        response,
         MessagePayload.from_wire,
         operation="shutdown",
     )
     if payload.message != "shutdown requested":
         raise DaemonConnectionError(
-            "daemon shutdown response is malformed: unexpected message"
+            "daemon shutdown response is malformed: unexpected message",
+            phase="payload_decode",
+            request_id=response.request_id,
         )
 
 

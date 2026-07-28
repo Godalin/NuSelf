@@ -55,6 +55,9 @@ def test_daemon_connection_failure_is_retryable(
     assert result.retryable is True
     assert result.error == "daemon request failed: timed out"
     assert result.reply is None
+    assert result.failure_phase == "unknown"
+    assert result.request_id is None
+    assert result.request_may_have_completed is True
     assert result.error in capsys.readouterr().err
     assert observed == [
         RuntimeContext(
@@ -66,6 +69,37 @@ def test_daemon_connection_failure_is_retryable(
             source="client",
         )
     ]
+
+
+def test_daemon_payload_decode_failure_is_not_retryable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_chat(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise DaemonConnectionError(
+            "daemon chat response is malformed",
+            phase="payload_decode",
+            request_id="request-1",
+        )
+
+    monkeypatch.setattr(chat.client, "chat", fail_chat)
+
+    result = chat.send_daemon_chat_interactive(
+        "hello",
+        tmp_path,
+        "thread-1",
+        turn_id="turn-1",
+    )
+
+    assert result.code == 1
+    assert result.retryable is False
+    assert result.error == (
+        "daemon request failed: daemon chat response is malformed"
+    )
+    assert result.failure_phase == "payload_decode"
+    assert result.request_id == "request-1"
+    assert result.request_may_have_completed is True
 
 
 def test_daemon_application_failure_is_correlated_and_not_retryable(

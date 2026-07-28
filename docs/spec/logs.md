@@ -141,6 +141,9 @@ Rules:
 - `turn.started` and `turn.completed` use the same `thread_id` and, when available, the same top-level `turn_id`.
 - `turn.completed` includes `duration_ms` and compact metadata such as `node_trace` and `tool_call_count`.
 - `turn_retry` is a client-side transport retry marker. It must reuse the same `turn_id` and does not mean the daemon should persist a second user message.
+- `turn_retry` metadata retains the previous client failure phase, daemon
+  request id when allocated, whether that request may already have completed,
+  the next attempt number, and the maximum attempt count.
 - `turn.reused` confirms idempotency: the retry returned an existing completed result instead of rerunning chat/tools.
 - Final response boundary retries use `final_response_retry`; they are model-output retries inside one chat turn, not transport retries.
 - Interactive logs should show chat lifecycle and retry events so users can distinguish normal multi-tool execution from retry-driven repeated work.

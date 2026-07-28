@@ -121,6 +121,18 @@ class ClientSocket:
         return self._response
 
 
+class SendFailingClientSocket(ClientSocket):
+    def sendall(self, data: bytes) -> None:
+        del data
+        raise BrokenPipeError("request send failed")
+
+
+class ReceiveFailingClientSocket(ClientSocket):
+    def recv(self, size: int) -> bytes:
+        del size
+        raise socket.timeout("response timed out")
+
+
 def test_socket_frame_reader_accepts_fragmented_frame() -> None:
     sock = ChunkSocket([b'{"ok":', b"true}\n"])
 
@@ -467,6 +479,133 @@ def _prepare_socket_path(project_root: Path) -> None:
     paths.socket_path.touch()
 
 
+@pytest.mark.parametrize(
+    ("phase", "retryable", "may_have_completed"),
+    [
+        ("connect", True, False),
+        ("request_encode", False, False),
+        ("send", True, True),
+        ("receive", True, True),
+        ("response_decode", True, True),
+        ("response_identity", True, True),
+        ("payload_decode", False, True),
+        ("unknown", True, True),
+    ],
+)
+def test_connection_error_phase_drives_retry_and_completion_state(
+    phase: str,
+    retryable: bool,
+    may_have_completed: bool,
+) -> None:
+    error = DaemonConnectionError(
+        "failed",
+        phase=phase,  # type: ignore[arg-type]
+        request_id="request-1",
+    )
+
+    assert str(error) == "failed"
+    assert error.phase == phase
+    assert error.request_id == "request-1"
+    assert error.retryable is retryable
+    assert error.request_may_have_completed is may_have_completed
+
+
+def test_client_classifies_missing_socket_as_connect_failure(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(DaemonConnectionError) as captured:
+        client.request("ping", project_root=tmp_path)
+
+    assert captured.value.phase == "connect"
+    assert captured.value.request_id is not None
+    assert captured.value.retryable is True
+    assert captured.value.request_may_have_completed is False
+    assert captured.value.__cause__ is None
+
+
+def test_client_request_encoding_failure_is_not_retryable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _prepare_socket_path(tmp_path)
+    fake_socket = ClientSocket(b"")
+
+    def socket_factory(
+        *args: object,
+        **kwargs: object,
+    ) -> ClientSocket:
+        del args, kwargs
+        return fake_socket
+
+    monkeypatch.setattr(
+        client.socket,
+        "socket",
+        socket_factory,
+    )
+
+    with pytest.raises(DaemonConnectionError) as captured:
+        client.request(
+            "echo",
+            {"value": float("nan")},
+            project_root=tmp_path,
+        )
+
+    assert captured.value.phase == "request_encode"
+    assert captured.value.request_id is not None
+    assert captured.value.retryable is False
+    assert captured.value.request_may_have_completed is False
+    assert isinstance(captured.value.__cause__, ProtocolError)
+    assert fake_socket.sent == b""
+
+
+@pytest.mark.parametrize(
+    ("fake_socket", "phase", "message"),
+    [
+        (
+            SendFailingClientSocket(b""),
+            "send",
+            "request send failed",
+        ),
+        (
+            ReceiveFailingClientSocket(b""),
+            "receive",
+            "response timed out",
+        ),
+    ],
+)
+def test_client_classifies_socket_io_phase(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_socket: ClientSocket,
+    phase: str,
+    message: str,
+) -> None:
+    _prepare_socket_path(tmp_path)
+
+    def socket_factory(
+        *args: object,
+        **kwargs: object,
+    ) -> ClientSocket:
+        del args, kwargs
+        return fake_socket
+
+    monkeypatch.setattr(
+        client.socket,
+        "socket",
+        socket_factory,
+    )
+
+    with pytest.raises(DaemonConnectionError) as captured:
+        client.request("ping", project_root=tmp_path)
+
+    assert captured.value.phase == phase
+    assert captured.value.request_id is not None
+    assert captured.value.retryable is True
+    assert captured.value.request_may_have_completed is True
+    assert message in str(captured.value)
+    assert isinstance(captured.value.__cause__, OSError)
+
+
 def test_client_rejects_mismatched_response_identity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -488,6 +627,10 @@ def test_client_rejects_mismatched_response_identity(
 
     assert isinstance(captured.value.__cause__, ProtocolError)
     assert "request_id does not match" in str(captured.value)
+    assert captured.value.phase == "response_identity"
+    assert captured.value.request_id is not None
+    assert captured.value.retryable is True
+    assert captured.value.request_may_have_completed is True
 
 
 def test_client_wraps_extra_response_frame_as_connection_error(
@@ -507,6 +650,10 @@ def test_client_wraps_extra_response_frame_as_connection_error(
         client.request("ping", project_root=tmp_path)
 
     assert isinstance(captured.value.__cause__, DaemonExtraFrameData)
+    assert captured.value.phase == "response_decode"
+    assert captured.value.request_id is not None
+    assert captured.value.retryable is True
+    assert captured.value.request_may_have_completed is True
 
 
 @pytest.mark.parametrize("timeout", [0, -1, float("inf"), float("nan"), True])
@@ -541,3 +688,7 @@ def test_typed_response_decoder_wraps_malformed_success() -> None:
 
     assert isinstance(captured.value.__cause__, ProtocolError)
     assert "ping response is malformed" in str(captured.value)
+    assert captured.value.phase == "payload_decode"
+    assert captured.value.request_id == "r"
+    assert captured.value.retryable is False
+    assert captured.value.request_may_have_completed is True

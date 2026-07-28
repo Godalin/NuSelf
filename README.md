@@ -79,6 +79,11 @@ Daemon response encoding completes before socket delivery. Invalid or
 oversized handler responses are observed separately and fall back to a bounded
 error frame with the same request identity when delivery is still possible.
 
+Daemon client errors retain their transport phase and request identity. REPL
+retry decisions are structural: transient transport/frame failures may retry
+the same stable turn, while local request encoding and typed payload schema
+failures do not.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).

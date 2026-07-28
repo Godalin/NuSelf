@@ -739,7 +739,11 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
                 turn_id=turn_id if isinstance(turn_id, str) else None,
                 status="retryable timeout",
             )
-            raise DaemonConnectionError("timed out")
+            raise DaemonConnectionError(
+                "timed out",
+                phase="receive",
+                request_id="chat-request-1",
+            )
         return DaemonResponse(
             request_id="r1",
             status="ok",
@@ -767,6 +771,22 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
     assert "Retrying message after failed attempt (2/2)..." in captured.out
     assert "builder_self: first attempt reached persona discussion" in captured.out
     assert "daemon reply" in captured.out
+    retry_event = next(
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="chat",
+        )
+        if event.event == "turn_retry"
+    )
+    assert retry_event.metadata == {
+        "attempt": 2,
+        "max_attempts": 2,
+        "previous_error": "daemon request failed: timed out",
+        "failure_phase": "receive",
+        "request_id": "chat-request-1",
+        "request_may_have_completed": True,
+    }
 
 
 def test_interactive_daemon_application_error_does_not_retry(
@@ -822,6 +842,61 @@ def test_interactive_daemon_application_error_does_not_retry(
     assert "Retrying message after failed attempt" not in captured.out
     assert "Message failed after retry" not in captured.err
     assert captured.out.count("[chat] turn_failed") == 1
+
+
+def test_interactive_malformed_daemon_payload_does_not_retry(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
+    daemon_status = DaemonStatus(
+        running=True,
+        pid=123,
+        socket_path=tmp_path / "private" / "runtime" / "nuself.sock",
+        pid_path=tmp_path / "private" / "runtime" / "nuself.pid",
+    )
+    calls = 0
+
+    def fake_request(
+        request_type: object,
+        payload: object | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        nonlocal calls
+        del payload, project_root, timeout
+        if request_type == "activity_open":
+            raise DaemonConnectionError("activity transport unavailable")
+        calls += 1
+        return DaemonResponse(
+            request_id="malformed-response",
+            status="ok",
+            payload={"unexpected": True},
+        )
+
+    def fake_status(project_root: Path | None) -> DaemonStatus:
+        del project_root
+        return daemon_status
+
+    monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
+    monkeypatch.setattr(
+        "nuself.cli.lifecycle.status",
+        fake_status,
+    )
+    monkeypatch.setattr(
+        "nuself.cli.chat.client.request",
+        fake_request,
+    )
+
+    result = main(["--project-root", str(tmp_path), "chat"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert calls == 1
+    assert "response is malformed" in captured.err
+    assert "Retrying message after failed attempt" not in captured.out
+    assert "Message failed after retry" not in captured.err
 
 
 def test_interactive_export_saves_connection_transcript(

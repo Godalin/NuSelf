@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon client connection errors now retain their transport phase, request
+  identity, retryability, and possible-completion state. REPL chat no longer
+  retries local request-encoding or typed response-payload schema failures.
 - Daemon response encoding failures are now distinct from socket delivery
   failures. Invalid or oversized handler responses fall back to a bounded
   request-correlated error frame when the connection remains writable.

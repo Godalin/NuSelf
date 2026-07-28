@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Daemon response encoding is separate from byte delivery; an invalid or
-oversized decided response produces an observed, request-correlated protocol
-failure frame when the connection remains writable.
+Idle. Daemon client failures carry structured transport phases so REPL chat
+retries only failures that can plausibly benefit from retry, while retaining
+request identity and whether the daemon may already have executed the request.
 
 ## Active Branch
 
@@ -24,18 +24,21 @@ code.
 
 ## Completion Evidence
 
-- Invalid status/error combinations and oversized handler payloads emit
-  `daemon/response_encode_failed` with request correlation and the decided
-  response status.
-- An unencodable response is replaced before the first write by one bounded
-  error frame with the same request id.
-- Structured diagnostic storage failure emits a runtime warning but does not
-  prevent fallback-frame encoding or delivery.
-- Fallback broken-pipe failure remains separately observable as
-  `daemon/response_delivery_failed`, including frame status and
-  `fallback=true`; no second frame is attempted after writing begins.
-- Focused daemon transport, protocol, and server tests: 82 passed.
-- Final full tests: 1344 passed.
+- `DaemonConnectionError` exposes connect, request-encode, send, receive,
+  response-decode, response-identity, payload-decode, and legacy unknown
+  phases while preserving concise text and the original cause.
+- Every real client request failure retains its generated request id;
+  retryability and possible daemon completion are derived from phase.
+- Missing socket and request-encoding failures are known to precede daemon
+  execution; send and later failures conservatively allow for completion.
+- REPL chat retries transient transport/framing failures with the same stable
+  turn id, but does not retry local request encoding or malformed typed
+  success-payload schemas.
+- Interactive results retain phase, daemon request id, and possible-completion
+  state; `turn_retry` projects the same fields as structured metadata.
+- Shutdown acknowledgement validation retains the response request id.
+- Focused daemon transport, CLI chat, and CLI integration tests: 335 passed.
+- Final full tests: 1358 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -46,4 +49,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-daemon response encoding and byte delivery have distinct failure boundaries.
+daemon client failures carry structured phase and retry semantics.

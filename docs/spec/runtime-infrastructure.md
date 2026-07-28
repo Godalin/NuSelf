@@ -226,6 +226,11 @@ bounded by `MAX_DAEMON_FRAME_BYTES`, including that newline.
 - Malformed, oversized, incomplete, extra, or mismatched responses are exposed
   to callers as `DaemonConnectionError` with the protocol/transport error as
   cause.
+- Client connection errors retain the generated request id and one structural
+  phase. Retryability and whether the daemon may already have executed the
+  request are derived from that phase, rather than inferred from exception
+  text. Typed payload decode happens after a valid response envelope and is
+  non-retryable.
 - A client that disconnects before response delivery does not change an
   already-completed operation. The server records
   `daemon/response_delivery_failed` and returns from the connection handler
