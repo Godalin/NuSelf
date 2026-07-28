@@ -65,8 +65,8 @@ contract owned by the Persona subsystem.
 
 ## Publication
 
-Pending this batch's implementation commit and push.
+`dev/v0.3.x` is ready to publish through implementation commit `ce0fd22`.
 
 ## Next Review Batch
 
-Select after this batch is verified and published.
+Review Notification/outbox audit schema ownership.
