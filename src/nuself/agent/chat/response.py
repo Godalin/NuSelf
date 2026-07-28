@@ -31,10 +31,9 @@ from nuself.llm import (
     is_endpoint_availability_error,
     redact_llm_error,
 )
-from nuself.logs import write_log_event
 from nuself.runtime.observability import (
     report_observed_failure,
-    run_observed_best_effort,
+    write_observed_log_event,
 )
 
 
@@ -84,23 +83,17 @@ class ConversationResponseSynthesizer:
         state: ConversationTurnState,
         draft: ChatStructuredOutput,
     ) -> ChatStructuredOutput:
-        run_observed_best_effort(
-            lambda: write_log_event(
-                "chat",
-                "final_response_completed",
-                "final response accepted from chat supervisor",
-                project_root=self._project_root,
-                thread_id=state.thread_id,
-                status="completed",
-                metadata={
-                    "epistemic_status": draft.epistemic_status
-                },
-            ),
-            component="chat",
-            event="final_response_log_failed",
-            message="Could not record accepted final response",
+        write_observed_log_event(
+            "chat",
+            "final_response_completed",
+            "final response accepted from chat supervisor",
             project_root=self._project_root,
-            metadata={"thread_id": state.thread_id},
+            thread_id=state.thread_id,
+            status="completed",
+            metadata={"epistemic_status": draft.epistemic_status},
+            failure_event="final_response_log_failed",
+            failure_message="Could not record accepted final response",
+            failure_metadata={"thread_id": state.thread_id},
         )
         return draft
 

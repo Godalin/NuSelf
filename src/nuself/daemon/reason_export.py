@@ -24,7 +24,7 @@ from nuself.agent.text import TextAgent, default_text_agent
 from nuself.clock import utc_now_iso
 from nuself.config import ConfigSystem
 from nuself.daemon.workers import DaemonWorkerSupervisor
-from nuself.logs import LogLevel, write_log_event
+from nuself.logs import LogLevel
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.output import (
     ReasonOutputManifest,
@@ -37,7 +37,7 @@ from nuself.runtime.jobs import JobMessage
 from nuself.runtime.observability import (
     format_exception_chain,
     report_observed_failure,
-    run_observed_best_effort,
+    write_observed_log_event,
 )
 from nuself.storage import write_json_atomic
 from nuself.workspace import PrivateWorkspaceStore
@@ -100,21 +100,16 @@ def _write_export_audit_event(
 ) -> None:
     """Project an export lifecycle event without changing worker control flow."""
 
-    run_observed_best_effort(
-        lambda: write_log_event(
-            "daemon",
-            event,
-            message,
-            project_root=project_root,
-            level=level,
-            status=status,
-            metadata=metadata,
-        ),
-        component="daemon",
-        event="export_audit_write_failed",
-        message=f"Could not record export audit event {event}",
+    write_observed_log_event(
+        "daemon",
+        event,
+        message,
         project_root=project_root,
-        metadata={"audit_event": event},
+        level=level,
+        status=status,
+        metadata=metadata,
+        failure_event="export_audit_write_failed",
+        failure_message=f"Could not record export audit event {event}",
     )
 
 

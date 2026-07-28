@@ -636,10 +636,6 @@ def test_worker_audit_failure_cannot_suppress_durable_retry(
         FakeTimer,
     )
     monkeypatch.setattr(
-        "nuself.daemon.reason_export.write_log_event",
-        fail_log,
-    )
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
@@ -696,10 +692,6 @@ def test_progress_diagnostic_failure_cannot_block_composition(
         compose,
     )
     monkeypatch.setattr(
-        "nuself.daemon.reason_export.write_log_event",
-        fail_log,
-    )
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
@@ -751,10 +743,6 @@ def test_reconciliation_diagnostic_failure_does_not_truncate_scan(
         raise OSError("audit store unavailable")
 
     monkeypatch.setattr(
-        "nuself.daemon.reason_export.write_log_event",
-        fail_log,
-    )
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
@@ -782,10 +770,6 @@ def test_shutdown_audit_failure_cannot_undo_queue_drain(
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
-    monkeypatch.setattr(
-        "nuself.daemon.reason_export.write_log_event",
-        fail_log,
-    )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,

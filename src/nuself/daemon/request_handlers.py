@@ -38,7 +38,6 @@ from nuself.daemon.types import WorkerHealth
 from nuself.logs import (
     LogLevel,
     observe_log_events,
-    write_log_event,
 )
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.runtime.handlers import HandlerRegistry, UnknownHandlerError
@@ -46,6 +45,7 @@ from nuself.runtime.context import runtime_context
 from nuself.runtime.observability import (
     report_observed_failure,
     run_observed_best_effort,
+    write_observed_log_event,
 )
 
 
@@ -80,24 +80,19 @@ def _write_request_audit_event(
 ) -> None:
     """Project request lifecycle without changing response decisions."""
 
-    run_observed_best_effort(
-        lambda: write_log_event(
-            "daemon",
-            event,
-            message,
-            project_root=project_root,
-            level=level,
-            status=status,
-            error=error,
-            duration_ms=duration_ms,
-            request_id=request_id,
-            metadata=metadata,
-        ),
-        component="daemon",
-        event="request_audit_write_failed",
-        message=f"Could not record daemon request audit event {event}",
+    write_observed_log_event(
+        "daemon",
+        event,
+        message,
         project_root=project_root,
-        metadata={"audit_event": event},
+        level=level,
+        status=status,
+        error=error,
+        duration_ms=duration_ms,
+        request_id=request_id,
+        metadata=metadata,
+        failure_event="request_audit_write_failed",
+        failure_message=f"Could not record daemon request audit event {event}",
     )
 
 
@@ -157,23 +152,19 @@ def handle_request(
         )
     except ProtocolError as exc:
         error = str(exc)
-        run_observed_best_effort(
-            lambda: write_log_event(
-                "daemon",
-                "request_rejected",
-                "daemon request payload rejected",
-                project_root=state.project_root,
-                level="warning",
-                request_id=request.request_id,
-                status="error",
-                error=error,
-                metadata={"request_type": request.type},
-            ),
-            component="daemon",
-            event="request_rejection_log_failed",
-            message="daemon request rejection log failed",
+        write_observed_log_event(
+            "daemon",
+            "request_rejected",
+            "daemon request payload rejected",
             project_root=state.project_root,
-            metadata={
+            level="warning",
+            request_id=request.request_id,
+            status="error",
+            error=error,
+            metadata={"request_type": request.type},
+            failure_event="request_rejection_log_failed",
+            failure_message="daemon request rejection log failed",
+            failure_metadata={
                 "request_id": request.request_id,
                 "request_type": request.type,
             },

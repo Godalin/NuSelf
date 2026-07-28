@@ -370,10 +370,6 @@ def test_finalize_log_failure_cannot_replace_accepted_response(
         raise OSError("audit store unavailable")
 
     monkeypatch.setattr(
-        "nuself.agent.chat.response.write_log_event",
-        fail_log,
-    )
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )

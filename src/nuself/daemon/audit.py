@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.logs import LogLevel, write_log_event
-from nuself.runtime.observability import run_observed_best_effort
+from nuself.logs import LogLevel
+from nuself.runtime.observability import write_observed_log_event
 
 
 def write_lifecycle_audit(
@@ -20,20 +20,15 @@ def write_lifecycle_audit(
 ) -> None:
     """Project a lifecycle decision without changing its authoritative result."""
 
-    run_observed_best_effort(
-        lambda: write_log_event(
-            "daemon",
-            event,
-            message,
-            project_root=project_root,
-            level=level,
-            status=status,
-            error=error,
-            metadata=metadata,
-        ),
-        component="daemon",
-        event="lifecycle_audit_write_failed",
-        message=f"Could not record daemon lifecycle audit event {event}",
+    write_observed_log_event(
+        "daemon",
+        event,
+        message,
         project_root=project_root,
-        metadata={"audit_event": event},
+        level=level,
+        status=status,
+        error=error,
+        metadata=metadata,
+        failure_event="lifecycle_audit_write_failed",
+        failure_message=f"Could not record daemon lifecycle audit event {event}",
     )

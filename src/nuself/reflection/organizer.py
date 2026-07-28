@@ -6,9 +6,8 @@ from dataclasses import dataclass
 import re
 from pathlib import Path
 
-from nuself.logs import write_log_event
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
-from nuself.runtime.observability import run_observed_best_effort
+from nuself.runtime.observability import write_observed_log_event
 
 SIMILARITY_THRESHOLD = 0.48
 
@@ -48,23 +47,19 @@ class ReflectionOrganizer:
             archived_entries=archived_count,
         )
         if result.archived_entries:
-            run_observed_best_effort(
-                lambda: write_log_event(
-                    "reflection",
-                    "organizer_completed",
-                    "reflection organizer merged similar pending entries",
-                    project_root=self._project_root,
-                    status="completed",
-                    metadata={
-                        "merged_groups": result.merged_groups,
-                        "archived_entries": result.archived_entries,
-                    },
-                ),
-                component="reflection",
-                event="organizer_audit_write_failed",
-                message="Could not record completed reflection organization",
+            write_observed_log_event(
+                "reflection",
+                "organizer_completed",
+                "reflection organizer merged similar pending entries",
                 project_root=self._project_root,
                 metadata={
+                    "merged_groups": result.merged_groups,
+                    "archived_entries": result.archived_entries,
+                },
+                status="completed",
+                failure_event="organizer_audit_write_failed",
+                failure_message="Could not record completed reflection organization",
+                failure_metadata={
                     "merged_groups": result.merged_groups,
                     "archived_entries": result.archived_entries,
                 },

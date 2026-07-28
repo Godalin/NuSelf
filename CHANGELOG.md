@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Auxiliary structured-log projections now use one typed observability
+  boundary, and their failure diagnostics consistently identify the original
+  `audit_event`.
 - Agent tool logging and capture now consume the same immutable typed outcome
   instead of parallel callback arguments. Non-JSON tool arguments still reach
   the framework tool; projection failure cannot replace its result or error.

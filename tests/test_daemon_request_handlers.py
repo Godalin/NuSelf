@@ -125,16 +125,23 @@ def test_payload_rejection_survives_logging_failure(
         del args, kwargs
         raise OSError("log unavailable")
 
-    monkeypatch.setattr(request_handlers, "write_log_event", fail_log)
-
-    response = handle_request(
-        DaemonRequest(
-            type="ping",
-            payload={"unexpected": True},
-            request_id="rejection-log-failure",
-        ),
-        cast(DaemonRequestState, state),
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
     )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="daemon/request_rejection_log_failed",
+    ):
+        response = handle_request(
+            DaemonRequest(
+                type="ping",
+                payload={"unexpected": True},
+                request_id="rejection-log-failure",
+            ),
+            cast(DaemonRequestState, state),
+        )
 
     assert response.status == "error"
     assert response.error == "unknown payload field(s): unexpected"

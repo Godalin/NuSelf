@@ -237,10 +237,6 @@ def test_contended_daemon_preserves_owner_resources(
         raise OSError("audit store unavailable")
 
     monkeypatch.setattr(
-        "nuself.daemon.audit.write_log_event",
-        fail_log,
-    )
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
@@ -551,6 +547,8 @@ def test_stopped_event_is_written_after_owned_cleanup(
         nonlocal stopped_observed
         if event == "started":
             raise OSError("audit store unavailable")
+        if event == "lifecycle_audit_write_failed":
+            raise OSError("diagnostic store unavailable")
         if event == "stopped":
             assert states[0].stop_calls == [
                 "memory",
@@ -573,19 +571,8 @@ def test_stopped_event_is_written_after_owned_cleanup(
     monkeypatch.setattr(server_module, "DaemonState", make_state)
     monkeypatch.setattr(server_module, "NuSelfUnixServer", ImmediateServer)
     monkeypatch.setattr(
-        "nuself.daemon.audit.write_log_event",
-        capture_write,
-    )
-
-    def fail_diagnostic(
-        *args: object,
-        **kwargs: object,
-    ) -> None:
-        raise OSError("diagnostic store unavailable")
-
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
-        fail_diagnostic,
+        capture_write,
     )
     monkeypatch.setattr(
         signal,

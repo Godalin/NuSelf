@@ -66,10 +66,6 @@ def _fail_lifecycle_audit_storage(
         raise OSError("audit store unavailable")
 
     monkeypatch.setattr(
-        "nuself.daemon.audit.write_log_event",
-        fail_log,
-    )
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )

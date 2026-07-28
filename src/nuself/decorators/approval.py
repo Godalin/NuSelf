@@ -5,8 +5,8 @@ import json
 from functools import wraps
 from typing import Any, Callable
 
-from nuself.logs import LogComponent, write_log_event
-from nuself.runtime.observability import run_observed_best_effort
+from nuself.logs import LogComponent
+from nuself.runtime.observability import write_observed_log_event
 
 
 def _write_approval_audit(
@@ -17,17 +17,14 @@ def _write_approval_audit(
     tool: str,
     metadata: dict[str, object],
 ) -> None:
-    run_observed_best_effort(
-        lambda: write_log_event(
-            component,
-            event,
-            message,
-            metadata=metadata,
-        ),
-        component=component,
-        event="approval_audit_failed",
-        message=f"Could not persist approval audit: {event}",
-        metadata={"operation": event, "tool": tool},
+    write_observed_log_event(
+        component,
+        event,
+        message,
+        metadata=metadata,
+        failure_event="approval_audit_failed",
+        failure_message=f"Could not persist approval audit: {event}",
+        failure_metadata={"operation": event, "tool": tool},
     )
 
 

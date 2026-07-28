@@ -731,10 +731,6 @@ def test_curator_audit_failure_cannot_replay_committed_candidate(
         raise OSError("audit store unavailable")
 
     monkeypatch.setattr(
-        "nuself.memory.curator.write_log_event",
-        fail_log,
-    )
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
@@ -796,10 +792,6 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
         TraceRecorder,
         "record_memory_update",
         fail_trace,
-    )
-    monkeypatch.setattr(
-        "nuself.memory.curator.write_log_event",
-        fail_log,
     )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",

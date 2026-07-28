@@ -311,16 +311,9 @@ def test_chat_completion_audit_cannot_invalidate_response(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nuself.daemon import request_handlers
-
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
-    monkeypatch.setattr(
-        request_handlers,
-        "write_log_event",
-        fail_log,
-    )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
@@ -861,16 +854,9 @@ def test_shutdown_audit_failure_cannot_block_accepted_request(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nuself.daemon import request_handlers
-
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
-    monkeypatch.setattr(
-        request_handlers,
-        "write_log_event",
-        fail_log,
-    )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,

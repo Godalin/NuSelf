@@ -1,7 +1,9 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+import nuself.runtime.observability as observability
 from nuself.agent.chat.persona import ConversationPersonaOrchestrator
 from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.cli.commands.persona import _record_lifecycle  # pyright: ignore[reportPrivateUsage]
@@ -128,21 +130,19 @@ def test_audit_failure_is_observed_without_failing_tool(
 ) -> None:
     structured_failures: list[tuple[str, str | None]] = []
 
-    def fail_audit(*args: object, **kwargs: object) -> None:
-        raise OSError("audit store unavailable")
-
-    def capture_failure(
+    def fail_audit_or_capture_failure(
         component: str,
         event: str,
         message: str,
         **kwargs: object,
     ) -> None:
+        if event != "audit_log_failed":
+            raise OSError("audit store unavailable")
         structured_failures.append((event, kwargs.get("error")))  # type: ignore[arg-type]
 
-    monkeypatch.setattr("nuself.decorators.audit.write_log_event", fail_audit)
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
-        capture_failure,
+        fail_audit_or_capture_failure,
     )
 
     @audit_log("chat")
@@ -163,11 +163,16 @@ def test_persona_failure_log_cannot_mask_discussion_failure(
         def discuss(self, *args: object, **kwargs: object) -> None:
             raise RuntimeError("discussion unavailable")
 
-    def fail_audit(*args: object, **kwargs: object) -> None:
-        raise OSError("audit store unavailable")
+    write_log_event = observability.write_log_event
+
+    def fail_audit(*args: Any, **kwargs: Any) -> object:
+        event = args[1]
+        if event == "persona_discussion_failure":
+            raise OSError("audit store unavailable")
+        return write_log_event(*args, **kwargs)
 
     monkeypatch.setattr(
-        "nuself.agent.chat.persona.write_log_event",
+        "nuself.runtime.observability.write_log_event",
         fail_audit,
     )
     orchestrator = ConversationPersonaOrchestrator.__new__(
@@ -198,4 +203,5 @@ def test_persona_failure_log_cannot_mask_discussion_failure(
         "event": "persona_discussion_failure",
         "thread_id": "thread-1",
         "original_error": "discussion unavailable",
+        "audit_event": "persona_discussion_failure",
     }

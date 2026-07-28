@@ -8,7 +8,7 @@ from typing import Protocol
 
 from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
-from nuself.logs import LogLevel, write_log_event
+from nuself.logs import LogLevel
 from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
 from nuself.reason.errors import (
     ReasonAdvanceError,
@@ -18,7 +18,10 @@ from nuself.reason.errors import (
 from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
 from nuself.store import ScopedWorkspace, SqliteStore
-from nuself.runtime.observability import run_observed_best_effort
+from nuself.runtime.observability import (
+    run_observed_best_effort,
+    write_observed_log_event,
+)
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 
@@ -36,21 +39,16 @@ def _write_reason_audit_event(
 ) -> None:
     """Project a reason lifecycle event without changing domain results."""
 
-    run_observed_best_effort(
-        lambda: write_log_event(
-            "reasoning",
-            event,
-            message,
-            project_root=project_root,
-            level=level,
-            status=status,
-            metadata=metadata,
-        ),
-        component="reasoning",
-        event="reason_audit_write_failed",
-        message=f"Could not record reason audit event {event}",
+    write_observed_log_event(
+        "reasoning",
+        event,
+        message,
         project_root=project_root,
-        metadata={"audit_event": event},
+        level=level,
+        status=status,
+        metadata=metadata,
+        failure_event="reason_audit_write_failed",
+        failure_message=f"Could not record reason audit event {event}",
     )
 
 

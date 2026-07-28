@@ -614,6 +614,12 @@ operation. It records the failure through the structured log sink and falls
 back to Python warnings only when that sink is unavailable. Domains must not
 implement equivalent broad `try/except/pass` wrappers locally.
 
+Auxiliary structured logs must call `write_observed_log_event(...)` directly.
+They must not recreate that typed projection by passing a
+`write_log_event(...)` closure to `run_observed_best_effort(...)`.
+`run_observed_best_effort(...)` remains the generic boundary for secondary
+effects that are not themselves structured-log writes.
+
 `nuself.runtime.diagnostics.emit_runtime_warning` is the terminal warning
 primitive for that fallback and other non-authoritative observers. It catches
 warning filters or hooks that promote or fail `RuntimeWarning`, so

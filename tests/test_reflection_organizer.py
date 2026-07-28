@@ -120,10 +120,6 @@ def test_organizer_audit_failure_cannot_replace_merged_result(
         raise OSError("audit store unavailable")
 
     monkeypatch.setattr(
-        "nuself.reflection.organizer.write_log_event",
-        fail_log,
-    )
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )

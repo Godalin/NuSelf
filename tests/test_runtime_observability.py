@@ -1,3 +1,4 @@
+import ast
 import warnings
 from pathlib import Path
 
@@ -16,6 +17,35 @@ from nuself.runtime.observability import (
     run_observed_best_effort,
     write_observed_log_event,
 )
+
+
+def test_domains_do_not_rebuild_observed_log_projection() -> None:
+    source_root = Path(__file__).parents[1] / "src" / "nuself"
+    violations: list[str] = []
+    for path in source_root.rglob("*.py"):
+        if path == source_root / "runtime" / "observability.py":
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            callee = node.func
+            if not isinstance(callee, ast.Name):
+                continue
+            if callee.id != "run_observed_best_effort" or not node.args:
+                continue
+            operation = node.args[0]
+            if not isinstance(operation, ast.Lambda):
+                continue
+            for nested in ast.walk(operation.body):
+                if (
+                    isinstance(nested, ast.Call)
+                    and isinstance(nested.func, ast.Name)
+                    and nested.func.id == "write_log_event"
+                ):
+                    relative = path.relative_to(source_root)
+                    violations.append(f"{relative}:{node.lineno}")
+    assert violations == []
 
 
 def test_format_exception_chain_preserves_unique_cause_messages() -> None:

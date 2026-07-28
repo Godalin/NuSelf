@@ -15,13 +15,14 @@ from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
-from nuself.logs import LogLevel, write_log_event
+from nuself.logs import LogLevel
 from nuself.profile.repository import ProfileItemRepository
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import looks_like_raw_transcript
 from nuself.runtime.observability import (
     report_corrupt_record,
     run_observed_best_effort,
+    write_observed_log_event,
 )
 from nuself.storage import write_json_atomic
 from nuself.trace.service import TraceRecorder
@@ -41,21 +42,16 @@ def _write_curator_audit_event(
 ) -> None:
     """Project curator activity without changing durable memory results."""
 
-    run_observed_best_effort(
-        lambda: write_log_event(
-            "memory",
-            event,
-            message,
-            project_root=project_root,
-            level=level,
-            status=status,
-            metadata=metadata,
-        ),
-        component="memory",
-        event="curator_audit_write_failed",
-        message=f"Could not record curator audit event {event}",
+    write_observed_log_event(
+        "memory",
+        event,
+        message,
         project_root=project_root,
-        metadata={"audit_event": event},
+        level=level,
+        status=status,
+        metadata=metadata,
+        failure_event="curator_audit_write_failed",
+        failure_message=f"Could not record curator audit event {event}",
     )
 
 

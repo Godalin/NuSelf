@@ -38,7 +38,10 @@ def test_approval_prompt_is_visible(monkeypatch: pytest.MonkeyPatch, capsys: pyt
         events.append((component, event, message))
         return object()
 
-    monkeypatch.setattr("nuself.decorators.approval.write_log_event", fake_write_log_event)
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fake_write_log_event,
+    )
     monkeypatch.setattr("nuself.decorators.approval.getpass.getuser", lambda: "tester")
 
     @approval_required("chat")
@@ -65,15 +68,14 @@ def test_approval_audit_failures_do_not_replace_approved_result(
     failures: list[tuple[str, str | None, object]] = []
     calls: list[str] = []
 
-    def fail_audit(*args: object, **kwargs: object) -> None:
-        raise OSError("audit store unavailable")
-
-    def capture_failure(
+    def fail_audit_or_capture_failure(
         component: str,
         event: str,
         message: str,
         **kwargs: object,
     ) -> None:
+        if event != "approval_audit_failed":
+            raise OSError("audit store unavailable")
         failures.append(
             (
                 event,
@@ -83,12 +85,8 @@ def test_approval_audit_failures_do_not_replace_approved_result(
         )
 
     monkeypatch.setattr(
-        "nuself.decorators.approval.write_log_event",
-        fail_audit,
-    )
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
-        capture_failure,
+        fail_audit_or_capture_failure,
     )
     monkeypatch.setattr("builtins.input", lambda: "yes")
     monkeypatch.setattr(
@@ -114,17 +112,29 @@ def test_approval_audit_failures_do_not_replace_approved_result(
         (
             "approval_audit_failed",
             "audit store unavailable",
-            {"operation": "approval_prompted", "tool": "tool"},
+                {
+                    "operation": "approval_prompted",
+                    "tool": "tool",
+                    "audit_event": "approval_prompted",
+                },
         ),
         (
             "approval_audit_failed",
             "audit store unavailable",
-            {"operation": "service_tool_executed", "tool": "tool"},
+                {
+                    "operation": "service_tool_executed",
+                    "tool": "tool",
+                    "audit_event": "service_tool_executed",
+                },
         ),
         (
             "approval_audit_failed",
             "audit store unavailable",
-            {"operation": "service_tool_approved", "tool": "tool"},
+                {
+                    "operation": "service_tool_approved",
+                    "tool": "tool",
+                    "audit_event": "service_tool_approved",
+                },
         ),
     ]
 
@@ -134,19 +144,17 @@ def test_approval_prompt_audit_failure_does_not_change_decline(
 ) -> None:
     failures: list[object] = []
 
-    def fail_audit(*args: object, **kwargs: object) -> None:
-        raise OSError("audit store unavailable")
-
-    def capture_failure(*args: object, **kwargs: object) -> None:
+    def fail_audit_or_capture_failure(
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        if len(args) >= 2 and args[1] != "approval_audit_failed":
+            raise OSError("audit store unavailable")
         failures.append(kwargs.get("metadata"))
 
     monkeypatch.setattr(
-        "nuself.decorators.approval.write_log_event",
-        fail_audit,
-    )
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
-        capture_failure,
+        fail_audit_or_capture_failure,
     )
     monkeypatch.setattr("builtins.input", lambda: "n")
 
@@ -160,26 +168,31 @@ def test_approval_prompt_audit_failure_does_not_change_decline(
         "result": None,
     }
     assert failures == [
-        {"operation": "approval_prompted", "tool": "tool"},
+        {
+            "operation": "approval_prompted",
+            "tool": "tool",
+            "audit_event": "approval_prompted",
+        },
     ]
 
 
 def test_approval_diagnostic_failure_warns_without_masking_tool_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail_audit(*args: object, **kwargs: object) -> None:
+    def fail_audit_and_diagnostic(
+        component: str,
+        event: str,
+        message: str,
+        **kwargs: object,
+    ) -> None:
+        del component, message, kwargs
+        if event == "approval_audit_failed":
+            raise RuntimeError("diagnostic store unavailable")
         raise OSError("audit store unavailable")
 
-    def fail_diagnostic(*args: object, **kwargs: object) -> None:
-        raise RuntimeError("diagnostic store unavailable")
-
-    monkeypatch.setattr(
-        "nuself.decorators.approval.write_log_event",
-        fail_audit,
-    )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
-        fail_diagnostic,
+        fail_audit_and_diagnostic,
     )
     monkeypatch.setattr("builtins.input", lambda: "y")
 
@@ -200,19 +213,20 @@ def test_approval_diagnostic_failure_warns_without_masking_tool_exception(
 def test_approval_diagnostic_failure_warns_without_replacing_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail_audit(*args: object, **kwargs: object) -> None:
+    def fail_audit_and_diagnostic(
+        component: str,
+        event: str,
+        message: str,
+        **kwargs: object,
+    ) -> None:
+        del component, message, kwargs
+        if event == "approval_audit_failed":
+            raise RuntimeError("diagnostic store unavailable")
         raise OSError("audit store unavailable")
 
-    def fail_diagnostic(*args: object, **kwargs: object) -> None:
-        raise RuntimeError("diagnostic store unavailable")
-
-    monkeypatch.setattr(
-        "nuself.decorators.approval.write_log_event",
-        fail_audit,
-    )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
-        fail_diagnostic,
+        fail_audit_and_diagnostic,
     )
     monkeypatch.setattr("builtins.input", lambda: "y")
     monkeypatch.setattr(

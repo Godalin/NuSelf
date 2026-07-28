@@ -35,7 +35,7 @@ from nuself.reason.errors import ReasonAdvanceError
 from nuself.runtime import current_runtime_context, runtime_context
 from nuself.runtime.observability import (
     report_observed_failure,
-    run_observed_best_effort,
+    write_observed_log_event,
 )
 from nuself.workspace import PrivateWorkspaceStore
 
@@ -54,12 +54,10 @@ def _log_tool_outcome(
     project_root: Path | None,
 ) -> None:
     """Emit a service_tool_called log event for a reasoning tool invocation."""
-    from nuself.logs import write_log_event
-
     service_component = (
         (tool_service_map or {}).get(outcome.name) or "reason_advancer"
     )
-    write_log_event(
+    write_observed_log_event(
         "reasoning",
         "service_tool_called",
         (
@@ -75,6 +73,11 @@ def _log_tool_outcome(
             service_component=service_component,
             tool_name=outcome.name,
         ),
+        failure_event="tool_log_projection_failed",
+        failure_message=(
+            f"Could not project reason tool outcome {outcome.name}"
+        ),
+        failure_metadata={"tool": outcome.name},
     )
 
 
@@ -369,20 +372,10 @@ class ReasonAdvancer:
         snapshots: list[dict[str, object]] = []
         for outcome in self._captured:
             args = dict(outcome.args)
-            run_observed_best_effort(
-                lambda outcome=outcome: _log_tool_outcome(
-                    outcome,
-                    project_root=self._project_root,
-                    tool_service_map=self._tool_service_map,
-                ),
-                component="reasoning",
-                event="tool_log_projection_failed",
-                message=(
-                    f"Could not project reason tool outcome "
-                    f"{outcome.name}"
-                ),
+            _log_tool_outcome(
+                outcome,
                 project_root=self._project_root,
-                metadata={"tool": outcome.name},
+                tool_service_map=self._tool_service_map,
             )
             failed = outcome.error is not None
             snapshots.append(

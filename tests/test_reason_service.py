@@ -305,10 +305,6 @@ def test_start_projections_cannot_replace_persisted_thread(
         fail_trace,
     )
     monkeypatch.setattr(
-        "nuself.reason.service.write_log_event",
-        fail_log,
-    )
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
@@ -357,10 +353,6 @@ def test_transition_audit_failure_cannot_replace_persisted_status(
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
-    monkeypatch.setattr(
-        "nuself.reason.service.write_log_event",
-        fail_log,
-    )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
@@ -502,10 +494,6 @@ def test_advance_projections_cannot_replace_committed_step(
         fail_trace,
     )
     monkeypatch.setattr(
-        "nuself.reason.service.write_log_event",
-        fail_log,
-    )
-    monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
@@ -539,10 +527,6 @@ def test_delete_success_audit_failure_cannot_replace_deletion(
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
-    monkeypatch.setattr(
-        "nuself.reason.service.write_log_event",
-        fail_log,
-    )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,

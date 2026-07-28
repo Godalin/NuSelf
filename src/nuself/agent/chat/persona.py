@@ -7,7 +7,7 @@ from pathlib import Path
 
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import LangChainLLMEndpoint
-from nuself.logs import LogLevel, write_log_event
+from nuself.logs import LogLevel
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.persona import (
     AgentBackedActivationPolicy,
@@ -24,7 +24,7 @@ from nuself.persona import (
 from nuself.runtime.context import current_runtime_context
 from nuself.runtime.observability import (
     format_exception_chain,
-    run_observed_best_effort,
+    write_observed_log_event,
 )
 
 
@@ -293,23 +293,19 @@ class ConversationPersonaOrchestrator:
         }
         if metadata is not None and "original_error" in metadata:
             failure_metadata["original_error"] = metadata["original_error"]
-        run_observed_best_effort(
-            lambda: write_log_event(
-                "persona",
-                event,
-                message,
-                project_root=self._project_root,
-                thread_id=thread_id,
-                status=status,
-                level=level,
-                error=error,
-                metadata=metadata,
-            ),
-            component="persona",
-            event=f"{event}_write_failed",
-            message=f"Failed to write {event} audit record",
+        write_observed_log_event(
+            "persona",
+            event,
+            message,
             project_root=self._project_root,
-            metadata=failure_metadata,
+            thread_id=thread_id,
+            status=status,
+            level=level,
+            error=error,
+            metadata=metadata,
+            failure_event=f"{event}_write_failed",
+            failure_message=f"Failed to write {event} audit record",
+            failure_metadata=failure_metadata,
         )
 
     @staticmethod

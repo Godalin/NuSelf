@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Use one immutable `ToolOutcome` object for tool capture and log projection
-through the shared agent middleware.
+Remove parallel auxiliary-log wrappers so every non-authoritative structured
+log uses the shared typed observed-log projection boundary.
 
 ## Active Branch
 
@@ -14,39 +14,40 @@ through the shared agent middleware.
 
 ## Ordered Work
 
-1. Audit middleware callback, capture, and failure reporter ownership.
-2. Confirm one reporter produces one diagnostic without recursive warnings.
-3. Replace the parallel callback argument protocol with `ToolOutcome`.
-4. Rename chat composition contracts around outcome projection.
-5. Verify success/error identity across logging and capture.
+1. Inventory `run_observed_best_effort(lambda: write_log_event(...))` callers.
+2. Confirm which callers are log projections and which are other side effects.
+3. Route every auxiliary structured log through `write_observed_log_event`.
+4. Preserve domain-specific failure event names and diagnostic metadata.
+5. Add an architecture guard against reintroducing the parallel composition.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Middleware remains the only layer that catches callback failure.
-- The composition-root reporter remains responsible for structured degradation.
-- Tool execution, cache, and retry-suppression semantics remain unchanged.
+- `run_observed_best_effort` remains the boundary for non-log secondary effects.
+- Authoritative log persistence continues to use `write_log_event` directly.
+- Existing event names, correlation fields, and degradation behavior remain
+  unchanged; shared failure metadata consistently includes `audit_event`.
 
 ## Completion Evidence
 
-- `ToolCaptureMiddleware` constructs one immutable `ToolOutcome` and passes the
-  exact same object to both projection callback and capture sink.
-- Chat composition and `ConversationToolRuntime` now accept
-  `log_tool_outcome`/`log_outcome` rather than the parallel variadic protocol.
-- Reason outcome projection consumes the captured `ToolOutcome` directly while
-  retaining its middleware-independent best-effort boundary.
-- Non-JSON arguments still execute; outcome construction failure reaches the
-  single reporter and preserves both successful results and tool exceptions.
-- Focused middleware, chat response/runtime, reason advancer, and agent tests:
-  `112 passed`.
-- `.venv/bin/pytest -q`: `1564 passed` with no warnings.
+- Domain lifecycle, request, approval, curator, reflection, chat/persona, and
+  reason-tool audit paths call `write_observed_log_event(...)` directly.
+- `run_observed_best_effort(...)` remains in use for non-log effects such as
+  trace recording, job enqueue, configuration decoding, and callback capture.
+- Failure event names and correlation fields are preserved; the shared writer
+  now consistently adds the source `audit_event` to diagnostic metadata.
+- An AST architecture test rejects direct domain reconstruction via
+  `run_observed_best_effort(lambda: write_log_event(...))`.
+- Focused observability and affected-domain regression tests: `453 passed`.
+- `.venv/bin/pytest -q`: `1565 passed` with no warnings.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `99759ea`.
+`dev/v0.3.x` is published through `78a8e74`.
 
 ## Next Review Batch
 
-Audit remaining direct auxiliary projections and domain-owned exceptions.
+Audit remaining domain-owned broad exception boundaries after auxiliary log
+projection is structurally unified.
