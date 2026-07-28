@@ -28,6 +28,9 @@ Persona graph 的 LLM 故障会保留确定性的贡献、汇总和激活 fallba
 竞争式 persona discussion 对评分、参与者选择和 moderator 判断使用相同边界，
 诊断归属调用项目，而不是隐式进程状态。
 
+运行时文件的原子写入在临时文件清理也失败时仍保留原始持久化错误，并向调用方
+同时暴露两个错误和残留路径。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。

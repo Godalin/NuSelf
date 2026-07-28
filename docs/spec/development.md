@@ -89,6 +89,15 @@ Runtime JSON and text state uses `nuself.storage.write_json_atomic()` or
 file, atomically replaces the destination, and removes the temporary file on
 failure while preserving any prior destination.
 
+A write or replace failure remains the propagated exception when temporary
+cleanup succeeds or the temporary file is already absent. If cleanup itself
+fails, `AtomicWriteCleanupError` exposes both `primary_error` and
+`cleanup_error`, names the residual temporary path, and uses the primary
+persistence error as its explicit cause. Cleanup must not mask the
+authoritative failure, and the residual artifact is not silently reported as
+removed. The shared writer performs no hidden write, replace, or cleanup
+retry.
+
 `write_json_atomic()` validates and serializes the complete payload as strict
 JSON before creating its temporary file. Non-string mapping keys, arbitrary
 objects, and non-finite floats fail without touching the destination or

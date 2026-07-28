@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Atomic text/JSON persistence now retains both the original write/replace
+  failure and a simultaneous temporary-file cleanup failure in a typed
+  `AtomicWriteCleanupError`, instead of allowing unlink failure to mask the
+  authoritative storage error.
 - Standard persona graph LLM degradation is now observable across structured
   endpoint failover, contribution generation, synthesis, and activation.
   Diagnostic storage failure cannot stop failover or replace the existing

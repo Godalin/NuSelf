@@ -149,6 +149,15 @@ after a memory or persona update.
 - Expected parsing fallbacks and cleanup races should use their specific
   exception types and do not need best-effort failure events.
 
+## Atomic File Failure Provenance
+
+Shared atomic text/JSON persistence propagates an ordinary write or replace
+exception unchanged when its sibling temporary file is removed successfully.
+If that cleanup also fails, `AtomicWriteCleanupError` retains the original
+`primary_error`, the `cleanup_error`, and the residual `temporary_path`; the
+primary error is its explicit cause. Because both persistence and cleanup are
+authoritative, neither failure is degraded into a warning or retried.
+
 ## Corrupt Record Isolation
 
 Collection listing and rebuild operations isolate malformed records so one bad

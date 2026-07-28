@@ -32,6 +32,10 @@ Competitive persona discussions apply the same boundary to scoring,
 participant selection, and moderator judgment, with diagnostics stored under
 the calling project rather than implicit process state.
 
+Atomic runtime-file writes preserve the original persistence failure even when
+temporary-file cleanup also fails, exposing both errors and the residual path
+to callers.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).

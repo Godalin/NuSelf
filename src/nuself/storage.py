@@ -96,6 +96,25 @@ COLLECTION_DIR_MAP: dict[str, str] = {
 # ── File implementation ──────────────────────────────────────────────────
 
 
+class AtomicWriteCleanupError(RuntimeError):
+    """An atomic write failed and its temporary artifact could not be removed."""
+
+    def __init__(
+        self,
+        temporary_path: Path,
+        *,
+        primary_error: Exception,
+        cleanup_error: Exception,
+    ) -> None:
+        super().__init__(
+            "atomic write failed and temporary cleanup failed: "
+            f"{temporary_path}"
+        )
+        self.temporary_path = temporary_path
+        self.primary_error = primary_error
+        self.cleanup_error = cleanup_error
+
+
 def _read_json_record(path: Path) -> dict[str, object]:
     raw = decode_json_value(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -136,11 +155,17 @@ def write_text_atomic(path: Path, text: str) -> None:
     try:
         tmp_path.write_text(text, encoding="utf-8")
         tmp_path.replace(path)
-    except Exception:
+    except Exception as primary_error:
         try:
             tmp_path.unlink()
         except FileNotFoundError:
             pass
+        except Exception as cleanup_error:
+            raise AtomicWriteCleanupError(
+                tmp_path,
+                primary_error=primary_error,
+                cleanup_error=cleanup_error,
+            ) from primary_error
         raise
 
 

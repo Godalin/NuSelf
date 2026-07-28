@@ -5,9 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Competitive persona discussion records every LLM/schema degradation
-under the calling project without allowing diagnostic failure to replace its
-scoring, selection, or moderator fallback.
+Idle. The shared atomic file boundary preserves both the authoritative
+write/replace failure and temporary-file cleanup failure when both occur.
 
 ## Active Branch
 
@@ -24,17 +23,17 @@ code.
 
 ## Completion Evidence
 
-- Scoring, participant selection, and moderator judgment failures use
-  `persona_discussion_degraded` with stage-specific safe metadata.
-- The shared service passes its project root to the discussion engine, scoring
-  node, and synthesizer; diagnostics no longer depend on implicit CWD state.
-- Diagnostic storage failure emits a terminal warning without replacing the
-  neutral score or generic contribution fallback.
-- Neutral score, deterministic participant pool, non-converged moderator
-  result, prompts, schemas, discussion bounds, and retry behavior are
-  unchanged.
-- Focused discussion, shared-service, and persona graph tests: 41 passed.
-- Final full tests: 1296 passed.
+- A partial write failure propagates unchanged, preserves the prior
+  destination, and removes its unique sibling temporary file.
+- A replace failure with successful cleanup retains its existing exception and
+  leaves no temporary artifact.
+- Simultaneous replace and unlink failures raise `AtomicWriteCleanupError`,
+  exposing `primary_error`, `cleanup_error`, and the residual temporary path,
+  with the primary persistence error as the explicit cause.
+- Successful text/JSON writes, validation, destination replacement,
+  concurrency, and retry behavior are unchanged.
+- Focused storage, daemon PID, and LLM state tests: 31 passed.
+- Final full tests: 1298 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -45,4 +44,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-competitive persona discussion has no silent LLM/schema degradation.
+the shared atomic writer preserves dual failure provenance.
