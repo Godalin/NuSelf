@@ -103,6 +103,12 @@ Rules:
 - `MemoryCuratorSettings.auto_accept` defaults to `True`.
 - When `auto_accept=True`, immediately call `accept(candidate.id)` after saving.
   - For `create`/`update`/`merge`: produces `MemoryEntry`, then overwrites `review_state="reviewed"`.
+  - Validation or not-found failures retain the already-durable candidate as
+    `pending`, emit `memory/auto_accept_failed` with its identity and compact
+    exception chain, and allow the curator cursor to advance so the same source
+    turn is not converted into another candidate.
+  - Undeclared storage or implementation failures propagate and prevent cursor
+    advance; auto-accept must not broadly suppress a potentially partial write.
 - When `auto_accept=False`, candidates remain `pending`.
 
 ## Optimization Flow (`MemoryOptimizer`)

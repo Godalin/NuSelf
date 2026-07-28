@@ -201,6 +201,11 @@ operation. It records the failure through the structured log sink and falls
 back to Python warnings only when that sink is unavailable. Domains must not
 implement equivalent broad `try/except/pass` wrappers locally.
 
+The caller may declare a narrower tuple of recoverable exception classes.
+Only those failures are degraded; undeclared storage, programming, and
+invariant failures continue to propagate. Omitting the tuple retains the
+catch-all behavior for genuinely non-authoritative effects such as audit logs.
+
 Persona consultation and discussion audit writes are secondary effects. Their
 failure must not replace a successful persona result or mask the original
 discussion failure. They use the shared boundary so failure reporting itself

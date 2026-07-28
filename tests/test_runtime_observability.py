@@ -44,6 +44,28 @@ def test_best_effort_returns_none_and_writes_structured_failure(
     assert event.metadata == {"memory_id": "m1"}
 
 
+def test_best_effort_propagates_undeclared_exception(
+    tmp_path: Path,
+) -> None:
+    def fail() -> None:
+        raise OSError("storage unavailable")
+
+    with pytest.raises(OSError, match="storage unavailable"):
+        run_observed_best_effort(
+            fail,
+            component="memory",
+            event="validation_failed",
+            message="Recoverable validation failed",
+            project_root=tmp_path,
+            errors=(ValueError,),
+        )
+
+    assert read_log_events(
+        project_root=tmp_path,
+        component="memory",
+    ) == []
+
+
 def test_best_effort_warns_when_structured_sink_also_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

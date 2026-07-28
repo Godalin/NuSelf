@@ -54,6 +54,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Recoverable memory-curator auto-accept failures now retain the durable pending
+  candidate and emit `memory/auto_accept_failed`; unexpected storage or
+  programming failures still propagate instead of being broadly suppressed.
 - Memory-curator cursors are now strictly validated and written atomically.
   Corrupt shape, thread identity, or message counts stop the curation run with
   a payload-safe diagnostic instead of silently resetting to zero and

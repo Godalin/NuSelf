@@ -17,7 +17,10 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import clamp_unit, extract_json_object, looks_like_raw_transcript
-from nuself.runtime.observability import report_corrupt_record
+from nuself.runtime.observability import (
+    report_corrupt_record,
+    run_observed_best_effort,
+)
 from nuself.storage import write_json_atomic
 from nuself.trace.service import TraceRecorder
 
@@ -421,14 +424,27 @@ class MemoryCurator:
     def _auto_accept(self, candidate: MemoryCandidate) -> None:
         if not self._settings.auto_accept:
             return
-        try:
-            result = self._candidate_repository.accept(candidate.id)
-            if isinstance(result, MemoryEntry) and result.review_state != "quarantined":
-                reviewed = result.with_updates(review_state="reviewed")
-                self._repository.save(reviewed)
-                self._record_memory_update_trace(result)
-        except (ValueError, MemoryEntryNotFound):
-            pass
+        result = run_observed_best_effort(
+            lambda: self._candidate_repository.accept(candidate.id),
+            component="memory",
+            event="auto_accept_failed",
+            message="Memory candidate auto-accept failed",
+            project_root=self._paths.project_root,
+            metadata={
+                "candidate_id": candidate.id,
+                "action": candidate.action,
+                "memory_type": candidate.type,
+                "target_entry_id": candidate.target_entry_id,
+            },
+            errors=(ValueError, MemoryEntryNotFound),
+        )
+        if (
+            isinstance(result, MemoryEntry)
+            and result.review_state != "quarantined"
+        ):
+            reviewed = result.with_updates(review_state="reviewed")
+            self._repository.save(reviewed)
+            self._record_memory_update_trace(result)
 
     def _record_memory_update_trace(self, entry: MemoryEntry) -> None:
         if self._trace_recorder is None:

@@ -38,12 +38,13 @@ def run_observed_best_effort(
     message: str,
     project_root: Path | None = None,
     metadata: dict[str, object] | None = None,
+    errors: tuple[type[Exception], ...] = (Exception,),
 ) -> T | None:
     """Run a secondary effect without hiding its failure."""
 
     try:
         return operation()
-    except Exception as exc:
+    except errors as exc:
         _report_observed_failure(
             exc,
             component=component,

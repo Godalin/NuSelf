@@ -593,3 +593,125 @@ def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
     candidates = MemoryCandidateRepository(tmp_path).list(include_reviewed=True)
     assert len(candidates) == 1
     assert candidates[0].review_state == "accepted"
+
+
+def test_memory_curator_reports_recoverable_auto_accept_failure(
+    tmp_path: Path,
+) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "Remember that invalid candidate promotion must remain "
+                        "visible and recoverable without replaying this turn."
+                    ),
+                )
+            ],
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"create","type":"episode",'
+        '"title":"Recoverable promotion","body":"Keep pending.",'
+        '"tags":["memory"],"confidence":0.8,'
+        '"reason":"explicit durability requirement"}]}'
+    )
+    repo = MemoryEntryRepository(
+        tmp_path,
+        registry=MemoryTypeRegistry([RejectingEpisodeDescriptor()]),
+    )
+    curator = MemoryCurator(
+        tmp_path,
+        llm=llm,
+        thread_store=thread_store,
+        repository=repo,
+    )
+
+    result = curator.run_once()
+    second = curator.run_once()
+
+    assert result.created == 1
+    assert second.processed_messages == 0
+    assert len(llm.calls) == 1
+    assert repo.list() == []
+    candidates = MemoryCandidateRepository(tmp_path).list()
+    assert len(candidates) == 1
+    assert candidates[0].review_state == "pending"
+    event = [
+        item
+        for item in read_log_events(
+            project_root=tmp_path,
+            component="memory",
+        )
+        if item.event == "auto_accept_failed"
+    ][-1]
+    assert event.metadata == {
+        "candidate_id": candidates[0].id,
+        "action": "create",
+        "memory_type": "episode",
+        "target_entry_id": None,
+    }
+    assert event.error is not None
+    assert "rejected by test descriptor" in event.error
+
+
+def test_memory_curator_propagates_unexpected_auto_accept_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "Remember that storage failures must stop cursor "
+                        "advancement because a partial promotion may exist."
+                    ),
+                )
+            ],
+        )
+    )
+    llm = FakeCuratorLLM(
+        '{"actions":[{"action":"create","type":"episode",'
+        '"title":"Storage boundary","body":"Do not suppress storage.",'
+        '"tags":["memory"],"confidence":0.8,'
+        '"reason":"partial write safety"}]}'
+    )
+    candidate_repo = MemoryCandidateRepository(tmp_path)
+
+    def fail_accept(candidate_id: str) -> MemoryEntry:
+        raise OSError("candidate storage unavailable")
+
+    monkeypatch.setattr(candidate_repo, "accept", fail_accept)
+    curator = MemoryCurator(
+        tmp_path,
+        llm=llm,
+        thread_store=thread_store,
+        candidate_repository=candidate_repo,
+    )
+
+    with pytest.raises(OSError, match="candidate storage unavailable"):
+        curator.run_once()
+
+    cursor_path = (
+        tmp_path
+        / "private"
+        / "memory"
+        / "cursors"
+        / "default.json"
+    )
+    assert not cursor_path.exists()
+    assert len(candidate_repo.list()) == 1
+    assert all(
+        event.event != "auto_accept_failed"
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="memory",
+        )
+    )
