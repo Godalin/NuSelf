@@ -6,6 +6,29 @@ from functools import wraps
 from typing import Any, Callable
 
 from nuself.logs import LogComponent, write_log_event
+from nuself.runtime.observability import run_observed_best_effort
+
+
+def _write_approval_audit(
+    component: LogComponent,
+    event: str,
+    message: str,
+    *,
+    tool: str,
+    metadata: dict[str, object],
+) -> None:
+    run_observed_best_effort(
+        lambda: write_log_event(
+            component,
+            event,
+            message,
+            metadata=metadata,
+        ),
+        component=component,
+        event="approval_audit_failed",
+        message=f"Could not persist approval audit: {event}",
+        metadata={"operation": event, "tool": tool},
+    )
 
 
 def approval_required(
@@ -22,10 +45,11 @@ def approval_required(
             # Always prompt the user synchronously and execute immediately on confirmation.
             # Record the event first, then render a theme-consistent banner so
             # interactive users see the pending action before the question.
-            write_log_event(
+            _write_approval_audit(
                 component,
                 "approval_prompted",
                 summary,
+                tool=fn.__name__,
                 metadata={"tool": fn.__name__, "summary": summary},
             )
             from nuself.tui.render import render_approval_prompt
@@ -39,10 +63,22 @@ def approval_required(
                 resp = "n"
             if resp.strip().lower() in {"y", "yes"}:
                 result = fn(*args, **kwargs)
-                write_log_event(component, "service_tool_executed", f"Tool executed interactively: {fn.__name__}", metadata={"tool": fn.__name__})
+                _write_approval_audit(
+                    component,
+                    "service_tool_executed",
+                    f"Tool executed interactively: {fn.__name__}",
+                    tool=fn.__name__,
+                    metadata={"tool": fn.__name__},
+                )
                 # Also log an explicit approval record with the approver identity.
                 approver = getpass.getuser()
-                write_log_event(component, "service_tool_approved", f"{component} approved by {approver}", metadata={"tool": fn.__name__, "approver": approver})
+                _write_approval_audit(
+                    component,
+                    "service_tool_approved",
+                    f"{component} approved by {approver}",
+                    tool=fn.__name__,
+                    metadata={"tool": fn.__name__, "approver": approver},
+                )
                 # Return a structured JSON string that preserves the underlying result
                 return json.dumps({"approved": True, "component": component, "approver": approver, "result": result})
             # Cancellation also returns a structured JSON string indicating no approval

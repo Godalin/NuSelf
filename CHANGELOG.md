@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Approval-gated tools now treat prompt, execution, and approval audit writes
+  as observable best-effort effects. Audit storage failure no longer suppresses
+  the prompt, changes a decline, or replaces an approved tool result; degraded
+  diagnostics fall back to a runtime warning if structured logging also fails.
 - Daemon-backed, one-shot, and interactive retry client chat operations now
   establish one `source="client"` runtime scope. Transport, completion,
   retry, and post-turn curation audits inherit thread/turn correlation instead

@@ -403,6 +403,20 @@ approval flow would require a durable typed request/job contract with explicit
 project, identity, expiry, and idempotency semantics; retaining arbitrary
 Python callables is not such a contract.
 
+The prompt interaction, approval decision, wrapped callable, original callable
+exception, and structured approval result are primary effects. The
+`approval_prompted`, `service_tool_executed`, and `service_tool_approved`
+records are secondary observations and use shared best-effort observability:
+
+- audit persistence failure never skips the prompt, changes a decline, replaces
+  an approved result, or masks the wrapped callable's exception;
+- each failed audit write emits a structured degraded diagnostic containing
+  the failed operation and tool name;
+- if that diagnostic cannot be persisted, a `RuntimeWarning` is emitted while
+  the primary approval flow continues;
+- neither an audit failure nor its diagnostic triggers a prompt, callable, or
+  audit retry.
+
 Reasoning thread creation is the first migration target for this pattern. The old post-turn confirmation flow remains documented below for compatibility, but the implementation goal is to move approval into the tool composition layer so the agent lifecycle does not depend on a separate after-turn replay step.
 
 ### Behavioral Guidelines for Reason Awareness (Prompt-Level)

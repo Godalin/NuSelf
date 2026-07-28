@@ -16,6 +16,9 @@ NuSelf 是一个本地 AI 镜像项目。它的目标是逐步成长为一个带
 
 LangGraph 现已支撑 conversation runtime。聊天 agent 可在对话中调用工具搜索记忆、列出和搁置待讨论反思主题、归档过时记忆、调整重要性分数、查看活跃 reason 线程，并搜索 thought trace。内部 persona 系统对聊天和后台反思共用一套竞争式讨论流程，LLM 驱动的人格节点可生成独立观点。邮件和 macOS 通知在配置后可用。
 
+审批门控工具在次要审计存储不可用时仍以用户提示和工具结果为准；
+故障会通过结构化降级诊断记录，并在诊断日志也失败时退化为运行时警告。
+
 ## 项目 TODOs
 
 项目进度记录在 [`docs/TODOs.md`](docs/TODOs.md)。短期实现焦点在 [`docs/current-goal.md`](docs/current-goal.md)。
