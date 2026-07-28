@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Harden internal message transport so event, job, and audit envelopes cross
-subsystem boundaries through typed, definition-validated adapters.
+Close one-shot CLI handler ownership so argparse selects stable command keys
+and a sealed shared registry performs dispatch.
 
 ## Active Branch
 
@@ -14,61 +14,46 @@ subsystem boundaries through typed, definition-validated adapters.
 
 ## Ordered Work
 
-1. Inventory every `RuntimeEnvelope` construction, decode, publication, queue,
-   and persistence boundary.
-2. Compare the event definition registry, job wrapper, and audit/log adapter
-   for duplicated validation and untyped escape hatches.
-3. Define the target transport contract in the governing runtime/log specs
-   before implementation.
-4. Add closed job definitions and typed event/job/audit decoding where raw
-   envelope kind checks currently leak across owners.
-5. Route producers and consumers through shared typed adapters without
-   weakening immutable payload or runtime-context guarantees.
-6. Remove obsolete constructors, aliases, and duplicate validation paths
-   rather than preserving compatibility shims.
+1. Inventory all one-shot CLI handler bindings, help-only parser states, and
+   dispatch tests.
+2. Define stable command keys without duplicating argparse's presentation and
+   argument schema.
+3. Update the CLI/development specs before changing composition.
+4. Compose and seal one `HandlerRegistry` for the parser tree; parsed
+   namespaces carry keys rather than raw callable objects.
+5. Preserve help behavior, integer result validation, dependency-injected
+   entry handlers, and every existing command surface.
+6. Reject duplicate keys, unsealed dispatch, unknown commands, and callable
+   return-contract violations through the shared handler boundary.
 7. Run focused and full quality gates, commit by functional boundary, and
    push.
 
 ## Out Of Scope
 
 - No process-global registry containing every domain's audit events.
-- No change to domain payload semantics, daemon delivery ordering, durable job
-  state, or audit JSONL wire format without an explicit spec decision.
-- No process-external message broker in this batch.
-- Reason audit ownership was completed in `b2d2b07`.
+- No CLI command rename, flag change, output change, or handler behavior change.
+- No merge of REPL command parsing with argparse; both reuse the shared
+  registry primitive while retaining their distinct grammars.
+- Closed job message contracts were completed in `2c74e2d`.
 - Generic corrupt-record and audit-projection diagnostics remain shared.
 - Generic corrupt-record diagnostics remain owned by observability.
 - Generic audit-projection failure events remain owned by observability.
 
 ## Completion Evidence
 
-- Initial inspection confirms `RuntimeEnvelope` is the shared immutable wire
-  shape, while events validate through a definition registry, jobs use a typed
-  wrapper without closed name definitions, and audits adapt the envelope
-  separately in `logs.py`.
-- Direct envelope construction is already confined to the event publisher,
-  `JobMessage`, and log/audit adapter; no domain bypass requires another
-  wrapper layer.
-- `docs/spec/runtime-infrastructure.md` and
-  `docs/spec/reason-output.md` now define the missing sealed job-definition
-  boundary and reject unknown jobs before queue mutation.
-- `JobDefinitionRegistry` now owns dotted job names, allowed producers, exact
-  data validators, duplicate rejection, sealing, and typed-message validation.
-- Reason owns the `reason.output.export` contract for `reasoning`,
-  `daemon_retry`, and `daemon_reconciliation`; enqueue validates before the
-  only `SimpleQueue.put(...)` call.
-- The worker's unknown-name compatibility branch and
-  `export_job_type_ignored` audit were removed.
-- Focused runtime-job/Reason-export suite: `106 passed`.
-- Full test suite: `2005 passed`.
-- Pyright: `0 errors, 0 warnings, 0 informations`.
-- `git diff --check` passed.
+- Initial inspection finds daemon requests and REPL commands already use
+  `HandlerRegistry`, while one-shot argparse embeds raw callables in parsed
+  namespaces.
+- The one-shot parser currently has 103 handler bindings across the root and
+  Memory parser modules.
+- Pending full inventory, design, implementation, and verification.
 
 ## Publication
 
-Pending this batch's implementation commit and push.
+Closed job message contracts were implemented in `2c74e2d`; publication is
+pending the milestone commit and push.
 
 ## Next Review Batch
 
-Continue shared handler/log/message infrastructure review after the transport
-contract is verified and published.
+Continue shared handler/log/message infrastructure review after one-shot CLI
+dispatch is verified and published.
