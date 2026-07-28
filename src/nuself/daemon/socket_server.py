@@ -29,6 +29,36 @@ from nuself.runtime.observability import (
 DAEMON_REQUEST_IO_TIMEOUT_SECONDS = 5.0
 
 
+def _report_response_failure(
+    exc: Exception,
+    *,
+    request_id: str,
+    event: str,
+    message: str,
+    project_root: Path | None,
+    metadata: dict[str, object],
+) -> None:
+    context = (
+        runtime_context(
+            request_id=request_id,
+            source="daemon",
+        )
+        if request_id != "unknown"
+        else runtime_context(source="daemon")
+    )
+    with context:
+        report_observed_failure(
+            exc,
+            component="daemon",
+            event=event,
+            message=message,
+            project_root=project_root,
+            metadata=metadata,
+            level="warning",
+            status="error",
+        )
+
+
 class NuSelfUnixServer(socketserver.ThreadingUnixStreamServer):
     """Unix stream server carrying structural daemon request state."""
 
@@ -100,28 +130,39 @@ class RequestHandler(socketserver.StreamRequestHandler):
                     )
                 response = DaemonResponse.fail(request_id, chain)
 
+        fallback = False
         try:
-            write_stream_frame(self.wfile, response.to_json_line())
-        except (OSError, ProtocolError) as exc:
-            context = (
-                runtime_context(
-                    request_id=request_id,
-                    source="daemon",
-                )
-                if request_id != "unknown"
-                else runtime_context(source="daemon")
+            frame = response.to_json_line()
+        except ProtocolError as exc:
+            _report_response_failure(
+                exc,
+                request_id=request_id,
+                event="response_encode_failed",
+                message="Daemon response could not be encoded",
+                project_root=self._request_project_root(),
+                metadata={"response_status": response.status},
             )
-            with context:
-                report_observed_failure(
-                    exc,
-                    component="daemon",
-                    event="response_delivery_failed",
-                    message="Daemon response could not be delivered",
-                    project_root=self._request_project_root(),
-                    metadata=None,
-                    level="warning",
-                    status="error",
-                )
+            response = DaemonResponse.fail(
+                request_id,
+                "daemon response encoding failed",
+            )
+            frame = response.to_json_line()
+            fallback = True
+
+        try:
+            write_stream_frame(self.wfile, frame)
+        except OSError as exc:
+            _report_response_failure(
+                exc,
+                request_id=request_id,
+                event="response_delivery_failed",
+                message="Daemon response could not be delivered",
+                project_root=self._request_project_root(),
+                metadata={
+                    "response_status": response.status,
+                    "fallback": fallback,
+                },
+            )
 
     def _request_project_root(self) -> Path | None:
         try:

@@ -75,6 +75,10 @@ completed response, or prevent an accepted shutdown request.
 Daemon lifecycle audits from the server, CLI, and interactive restart share
 one observable projection boundary and cannot alter lifecycle results.
 
+Daemon response encoding completes before socket delivery. Invalid or
+oversized handler responses are observed separately and fall back to a bounded
+error frame with the same request identity when delivery is still possible.
+
 ## Project TODOs
 
 Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term implementation focus lives in [`docs/current-goal.md`](docs/current-goal.md).

@@ -67,6 +67,17 @@ rejected before handler dispatch. The server may return a failed response when
 the connection remains writable; failure to deliver that response is reported
 as a secondary transport diagnostic and never escapes the connection thread.
 
+A typed handler response is a decided business result, but it must pass the
+protocol encoder before any bytes are written. Encoding failure is observed as
+`daemon/response_encode_failed`; the server then encodes one stable bounded
+error response with the same request id. Failure of the encoding diagnostic
+does not prevent that fallback. Once a frame write begins, the server never
+retries or substitutes another frame because the peer may have received a
+prefix. Any write or flush failure, including delivery of the fallback frame,
+is observed separately as `daemon/response_delivery_failed`. Encoding
+diagnostics retain the decided response status; delivery diagnostics retain
+the frame status and whether the frame was an encoding fallback.
+
 Client-side socket failures and invalid response frames share
 `DaemonConnectionError`. The original `OSError` or `ProtocolError` is retained
 as the explicit cause. A response with another request's id is invalid even if

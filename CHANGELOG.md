@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon response encoding failures are now distinct from socket delivery
+  failures. Invalid or oversized handler responses fall back to a bounded
+  request-correlated error frame when the connection remains writable.
 - Daemon server, CLI, and interactive lifecycle audits now share one observable
   projection boundary. Audit storage failure cannot alter lifecycle execution,
   status output, or exit decisions.

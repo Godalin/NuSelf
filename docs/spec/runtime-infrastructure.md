@@ -230,6 +230,12 @@ bounded by `MAX_DAEMON_FRAME_BYTES`, including that newline.
   already-completed operation. The server records
   `daemon/response_delivery_failed` and returns from the connection handler
   without leaking the socket error.
+- Response encoding completes before the first socket write. An invalid or
+  oversized decided response records `daemon/response_encode_failed` and is
+  replaced by one stable bounded error frame with the same request id. The
+  server does not substitute a frame after a write has begun; fallback or
+  ordinary frame write/flush failure remains
+  `daemon/response_delivery_failed`.
 
 `nuself.daemon.socket_server` owns the Unix-socket transport adapter. Its
 `NuSelfUnixServer` stores only the structural `DaemonRequestState`; its
@@ -239,11 +245,11 @@ writes one bounded frame. The module must not import `DaemonState` or the
 daemon process runner.
 
 Transport `ProtocolError` values become failed responses. Request-read
-`OSError`, unexpected handler exceptions, and response-delivery failures retain
-their existing observed audit boundaries. A clean peer disconnect returns
-without a response. The daemon process runner owns socket path creation,
-server-loop timing, state construction, signals, workers, and cleanup; none of
-those responsibilities belong to the socket adapter.
+`OSError`, unexpected handler exceptions, response-encoding failures, and
+response-delivery failures retain distinct observed audit boundaries. A clean
+peer disconnect returns without a response. The daemon process runner owns
+socket path creation, server-loop timing, state construction, signals, workers,
+and cleanup; none of those responsibilities belong to the socket adapter.
 
 ## Runtime Envelope And Correlation Context
 

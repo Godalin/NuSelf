@@ -174,6 +174,18 @@ def _handler_fake(
     )
 
 
+def _invalid_success_response(
+    daemon_request: DaemonRequest,
+    state: object,
+) -> DaemonResponse:
+    del state
+    return DaemonResponse(
+        request_id=daemon_request.request_id,
+        status="ok",
+        error="invalid success",
+    )
+
+
 def test_server_clean_eof_returns_without_response(tmp_path: Path) -> None:
     from nuself.daemon.socket_server import RequestHandler
 
@@ -306,6 +318,147 @@ def test_server_broken_pipe_is_observed_without_escaping(
     assert event.event == "response_delivery_failed"
     assert event.request_id == "disconnect-request"
     assert event.error == "client disconnected"
+
+
+@pytest.mark.parametrize("failure", ["invalid", "oversized"])
+def test_server_replaces_unencodable_response_with_failure_frame(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    from nuself.daemon import socket_server as server_module
+
+    request = DaemonRequest(
+        type="ping",
+        payload={},
+        request_id=f"{failure}-response",
+    )
+    writer = io.BytesIO()
+    fake = _handler_fake(
+        project_root=tmp_path,
+        raw=io.BytesIO(request.to_json_line()),
+        writer=writer,
+    )
+
+    def respond(
+        daemon_request: DaemonRequest,
+        state: object,
+    ) -> DaemonResponse:
+        del state
+        if failure == "invalid":
+            return DaemonResponse(
+                request_id=daemon_request.request_id,
+                status="ok",
+                error="invalid success",
+            )
+        return DaemonResponse.ok(
+            daemon_request,
+            {"content": "x" * MAX_DAEMON_FRAME_BYTES},
+        )
+
+    monkeypatch.setattr(server_module, "handle_request", respond)
+
+    server_module.RequestHandler.handle(fake)  # type: ignore[arg-type]
+
+    response = DaemonResponse.from_json_line(writer.getvalue())
+    assert response.request_id == request.request_id
+    assert response.status == "error"
+    assert response.error == "daemon response encoding failed"
+    event = read_log_events(
+        project_root=tmp_path,
+        component="daemon",
+    )[-1]
+    assert event.event == "response_encode_failed"
+    assert event.request_id == request.request_id
+    assert event.status == "error"
+    assert event.metadata == {"response_status": "ok"}
+
+
+def test_response_encode_diagnostic_failure_cannot_block_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.daemon import socket_server as server_module
+
+    request = DaemonRequest(
+        type="ping",
+        payload={},
+        request_id="encode-diagnostic-failure",
+    )
+    writer = io.BytesIO()
+    fake = _handler_fake(
+        project_root=tmp_path,
+        raw=io.BytesIO(request.to_json_line()),
+        writer=writer,
+    )
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("diagnostic store unavailable")
+
+    monkeypatch.setattr(
+        server_module,
+        "handle_request",
+        _invalid_success_response,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="daemon/response_encode_failed",
+    ):
+        server_module.RequestHandler.handle(fake)  # type: ignore[arg-type]
+
+    response = DaemonResponse.from_json_line(writer.getvalue())
+    assert response.request_id == request.request_id
+    assert response.status == "error"
+    assert response.error == "daemon response encoding failed"
+
+
+def test_unencodable_response_fallback_delivery_failure_is_distinct(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.daemon import socket_server as server_module
+
+    request = DaemonRequest(
+        type="ping",
+        payload={},
+        request_id="fallback-disconnect",
+    )
+    fake = _handler_fake(
+        project_root=tmp_path,
+        raw=io.BytesIO(request.to_json_line()),
+        writer=BrokenWriter(),
+    )
+
+    monkeypatch.setattr(
+        server_module,
+        "handle_request",
+        _invalid_success_response,
+    )
+
+    server_module.RequestHandler.handle(fake)  # type: ignore[arg-type]
+
+    events = read_log_events(
+        project_root=tmp_path,
+        component="daemon",
+    )
+    assert [event.event for event in events[-2:]] == [
+        "response_encode_failed",
+        "response_delivery_failed",
+    ]
+    assert all(
+        event.request_id == request.request_id
+        for event in events[-2:]
+    )
+    assert events[-1].error == "client disconnected"
+    assert events[-1].metadata == {
+        "response_status": "error",
+        "fallback": True,
+    }
 
 
 def _prepare_socket_path(project_root: Path) -> None:
