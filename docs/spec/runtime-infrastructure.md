@@ -56,6 +56,15 @@ request-dispatch primitive.
   sealing raises.
 - Dispatch through an unregistered key raises `UnknownHandlerError`.
 - A registry has no process-global singleton; the composition root owns it.
+- Registries accept typed synchronous middleware during composition. Like
+  handlers, middleware cannot be added after sealing.
+- Middleware receives the handler key, the next callable, and the original
+  typed arguments. It executes in registration order: the first middleware is
+  outermost and the handler is innermost.
+- Middleware may establish correlation, observation, authorization, or timing
+  scopes, but it must not silently retry a request. Return values and
+  exceptions propagate unchanged unless a boundary-specific middleware
+  explicitly documents a translation.
 - Transport adapters remain responsible for decoding requests and encoding
   responses. Business handlers do not read sockets or argparse internals.
 - Boundary-specific exception handling wraps registry dispatch rather than
@@ -65,6 +74,13 @@ The daemon request registry must be complete for every declared
 `RequestType`. CLI and REPL registries should migrate only where the shared
 primitive improves ownership; argparse remains responsible for argument
 parsing and LangChain remains responsible for agent tool dispatch.
+
+Daemon dispatch installs one request-scope middleware. Every handler inherits
+the daemon request id and `source="daemon"` through `RuntimeContext`, and log
+activity projection is active for the complete handler invocation. Individual
+handlers may add thread, turn, job, or trace fields through nested context
+scopes. Unknown request mapping and unexpected exception-to-response encoding
+remain daemon transport responsibilities outside the middleware pipeline.
 
 ## Daemon Payload Contracts
 

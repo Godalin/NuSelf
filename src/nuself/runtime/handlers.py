@@ -2,13 +2,33 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable
+from collections.abc import Callable, Hashable, Iterable
 from threading import RLock
-from typing import Generic, ParamSpec, TypeVar
+from typing import Generic, ParamSpec, Protocol, TypeVar
 
 HandlerKey = TypeVar("HandlerKey", bound=Hashable)
 HandlerParams = ParamSpec("HandlerParams")
 HandlerResult = TypeVar("HandlerResult")
+MiddlewareKey = TypeVar(
+    "MiddlewareKey",
+    bound=Hashable,
+    contravariant=True,
+)
+MiddlewareResult = TypeVar("MiddlewareResult")
+
+
+class HandlerMiddleware(
+    Protocol[MiddlewareKey, HandlerParams, MiddlewareResult]
+):
+    """One typed synchronous wrapper around the next request handler."""
+
+    def __call__(
+        self,
+        key: MiddlewareKey,
+        next_handler: Callable[HandlerParams, MiddlewareResult],
+        *args: HandlerParams.args,
+        **kwargs: HandlerParams.kwargs,
+    ) -> MiddlewareResult: ...
 
 
 class HandlerRegistryError(RuntimeError):
@@ -32,11 +52,17 @@ class HandlerRegistry(
 ):
     """Maps one key to one callable and seals after composition."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        middleware: Iterable[
+            HandlerMiddleware[HandlerKey, HandlerParams, HandlerResult]
+        ] = (),
+    ) -> None:
         self._handlers: dict[
             HandlerKey,
             Callable[HandlerParams, HandlerResult],
         ] = {}
+        self._middleware = list(middleware)
         self._sealed = False
         self._lock = RLock()
 
@@ -65,6 +91,23 @@ class HandlerRegistry(
                     f"handler already registered for {key!r}"
                 )
             self._handlers[key] = handler
+
+    def use(
+        self,
+        middleware: HandlerMiddleware[
+            HandlerKey,
+            HandlerParams,
+            HandlerResult,
+        ],
+    ) -> None:
+        """Append middleware while the registry is still being composed."""
+
+        with self._lock:
+            if self._sealed:
+                raise HandlerRegistrySealedError(
+                    "handler registry is sealed; cannot add middleware"
+                )
+            self._middleware.append(middleware)
 
     def handler(
         self,
@@ -110,4 +153,27 @@ class HandlerRegistry(
         *args: HandlerParams.args,
         **kwargs: HandlerParams.kwargs,
     ) -> HandlerResult:
-        return self.resolve(key)(*args, **kwargs)
+        handler = self.resolve(key)
+        with self._lock:
+            middleware = tuple(self._middleware)
+        for wrapper in reversed(middleware):
+            handler = _wrap_handler(key, wrapper, handler)
+        return handler(*args, **kwargs)
+
+
+def _wrap_handler(
+    key: HandlerKey,
+    middleware: HandlerMiddleware[
+        HandlerKey,
+        HandlerParams,
+        HandlerResult,
+    ],
+    next_handler: Callable[HandlerParams, HandlerResult],
+) -> Callable[HandlerParams, HandlerResult]:
+    def wrapped(
+        *args: HandlerParams.args,
+        **kwargs: HandlerParams.kwargs,
+    ) -> HandlerResult:
+        return middleware(key, next_handler, *args, **kwargs)
+
+    return wrapped

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 
 from nuself.runtime.handlers import (
@@ -55,3 +57,94 @@ def test_handler_registry_rejects_unknown_dispatch() -> None:
 
     with pytest.raises(UnknownHandlerError):
         registry.dispatch("missing", "value")
+
+
+def test_handler_middleware_wraps_in_registration_order() -> None:
+    calls: list[str] = []
+    registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
+
+    def outer(
+        key: str,
+        next_handler: Callable[[str], str],
+        value: str,
+    ) -> str:
+        calls.append(f"outer-before:{key}")
+        result = next_handler(value)
+        calls.append("outer-after")
+        return result
+
+    def inner(
+        key: str,
+        next_handler: Callable[[str], str],
+        value: str,
+    ) -> str:
+        calls.append(f"inner-before:{key}")
+        result = next_handler(value)
+        calls.append("inner-after")
+        return result
+
+    registry.use(outer)
+    registry.use(inner)
+    registry.register(
+        "echo",
+        lambda value: calls.append("handler") or value,
+    )
+    registry.seal()
+
+    assert registry.dispatch("echo", "hello") == "hello"
+    assert calls == [
+        "outer-before:echo",
+        "inner-before:echo",
+        "handler",
+        "inner-after",
+        "outer-after",
+    ]
+
+
+def test_handler_middleware_preserves_handler_exception() -> None:
+    registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
+    observed: list[BaseException] = []
+
+    def observe(
+        key: str,
+        next_handler: Callable[[str], str],
+        value: str,
+    ) -> str:
+        del key
+        try:
+            return next_handler(value)
+        except BaseException as exc:
+            observed.append(exc)
+            raise
+
+    failure = RuntimeError("handler failed")
+
+    def fail(value: str) -> str:
+        del value
+        raise failure
+
+    registry.use(observe)
+    registry.register("fail", fail)
+    registry.seal()
+
+    with pytest.raises(RuntimeError) as captured:
+        registry.dispatch("fail", "value")
+
+    assert captured.value is failure
+    assert observed == [failure]
+
+
+def test_handler_registry_rejects_middleware_after_seal() -> None:
+    registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
+    registry.seal()
+
+    def passthrough(
+        key: str,
+        next_handler: Callable[[str], str],
+        value: str,
+    ) -> str:
+        del key
+        return next_handler(value)
+
+    with pytest.raises(HandlerRegistrySealedError):
+        registry.use(passthrough)

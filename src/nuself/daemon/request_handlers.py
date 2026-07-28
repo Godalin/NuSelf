@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
@@ -34,12 +35,12 @@ from nuself.daemon.protocol import (
 )
 from nuself.daemon.types import WorkerHealth
 from nuself.logs import (
-    log_context,
     observe_log_events,
     write_log_event,
 )
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.runtime.handlers import HandlerRegistry, UnknownHandlerError
+from nuself.runtime.context import runtime_context
 from nuself.runtime.observability import run_observed_best_effort
 
 
@@ -62,6 +63,7 @@ DaemonRequestRegistry = HandlerRegistry[
 
 def build_daemon_request_registry() -> DaemonRequestRegistry:
     registry: DaemonRequestRegistry = HandlerRegistry()
+    registry.use(_daemon_request_scope)
     registry.register("ping", _handle_ping)
     registry.register("health", _handle_health)
     registry.register("echo", _handle_echo)
@@ -80,18 +82,34 @@ def build_daemon_request_registry() -> DaemonRequestRegistry:
     return registry.seal()
 
 
+def _daemon_request_scope(
+    request_type: RequestType,
+    next_handler: Callable[
+        [DaemonRequest, DaemonRequestState],
+        DaemonResponse,
+    ],
+    request: DaemonRequest,
+    state: DaemonRequestState,
+) -> DaemonResponse:
+    del request_type
+    with runtime_context(
+        request_id=request.request_id,
+        source="daemon",
+    ), observe_log_events(state.activity_broker.publish):
+        return next_handler(request, state)
+
+
 def handle_request(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
     """Dispatch a validated daemon request through the sealed registry."""
     try:
-        with observe_log_events(state.activity_broker.publish):
-            return DAEMON_REQUEST_HANDLERS.dispatch(
-                request.type,
-                request,
-                state,
-            )
+        return DAEMON_REQUEST_HANDLERS.dispatch(
+            request.type,
+            request,
+            state,
+        )
     except UnknownHandlerError:
         return DaemonResponse.fail(
             request.request_id,
@@ -148,11 +166,9 @@ def _handle_chat(
         )
         return DaemonResponse.fail(request.request_id, error)
     started_at = time.monotonic()
-    with log_context(
-        request_id=request.request_id,
+    with runtime_context(
         thread_id=chat_request.thread_id,
         turn_id=chat_request.turn_id,
-        source="daemon",
     ):
         try:
             result = state.chat_agent.respond(
@@ -194,11 +210,9 @@ def _handle_chat(
             else None
         ),
     )
-    with log_context(
-        request_id=request.request_id,
+    with runtime_context(
         thread_id=result.thread_id,
         turn_id=chat_request.turn_id,
-        source="daemon",
     ):
         write_log_event(
             "daemon",

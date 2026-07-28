@@ -23,6 +23,7 @@ from nuself.runtime.events import (
 )
 from nuself.runtime.handlers import (
     DuplicateHandlerError,
+    HandlerMiddleware,
     HandlerRegistry,
     HandlerRegistrySealedError,
     UnknownHandlerError,
@@ -52,6 +53,7 @@ __all__ = [
     "EventSubscriber",
     "EventSubscription",
     "HandlerRegistry",
+    "HandlerMiddleware",
     "HandlerRegistrySealedError",
     "JobMessage",
     "JobSink",
