@@ -36,9 +36,6 @@ try:
     from nuself.cli.commands.daemon import (
         format_status as _format_status,
     )
-    from nuself.cli.commands.memory.entries import (
-        format_memory_preview as _format_memory_preview,
-    )
     from nuself.cli.commands.output import (
         print_ansi as _print_ansi,
     )
@@ -74,69 +71,14 @@ try:
         build_parser as _build_parser,
     )
     from nuself.cli.repl.commands import (
-        handle_interactive_history_command as _handle_interactive_history_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_inbox_command as _handle_interactive_inbox_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_memory_command as _handle_interactive_memory_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_notify_command as _handle_interactive_notify_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_notify_list_command as _handle_interactive_notify_list_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_notify_show_command as _handle_interactive_notify_show_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_notify_subcommand as _handle_interactive_notify_subcommand,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_persona_command as _handle_interactive_persona_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_reason_command as _handle_interactive_reason_command,
-    )
-    from nuself.cli.repl.commands import (
         handle_interactive_reason_watch as _handle_interactive_reason_watch,
     )
-    from nuself.cli.repl.commands import (
-        handle_interactive_reflection_command as _handle_interactive_reflection_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_reflection_list_command as _handle_interactive_reflection_list_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_reflection_show_command as _handle_interactive_reflection_show_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_reflection_subcommand as _handle_interactive_reflection_subcommand,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_restart_command as _handle_interactive_restart_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_threads_command as _handle_interactive_threads_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_trace_command as _handle_interactive_trace_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_watch_command as _handle_interactive_watch_command,
-    )
-    from nuself.cli.repl.commands import (
-        handle_interactive_whoami_command as _handle_interactive_whoami_command,
+    from nuself.cli.repl.dispatcher import (
+        handle_interactive_command as _handle_interactive_command,
     )
     from nuself.cli.repl.input import (
         InteractiveCompleter as _InteractiveCompleter,
     )
-    from nuself.cli.repl.input import (
-        interactive_help as _interactive_help,
-    )
-    from nuself.cli.repl.registry import command_body, command_matches
     from nuself.cli.repl.runtime import (
         ReplCallbacks,
         run_interactive_loop,
@@ -148,9 +90,6 @@ try:
         auto_save_interactive_transcripts as _auto_save_interactive_transcripts,
     )
     from nuself.cli.repl.transcript import (
-        handle_interactive_export_command as _handle_interactive_export_command,
-    )
-    from nuself.cli.repl.transcript import (
         render_chat_transcript as _render_chat_transcript,
     )
     from nuself.cli.repl.types import InteractiveChatResult
@@ -159,7 +98,6 @@ try:
     from nuself.logs import (
         InteractiveLogCursor,
         LogEvent,
-        read_log_events,
         write_log_event,
     )
     from nuself.memory.curator import MemoryCurator
@@ -167,7 +105,7 @@ try:
         RuntimeContext,
         use_runtime_context,
     )
-    from nuself.tui.render import TerminalTheme, render_log_event, render_session_header
+    from nuself.tui.render import TerminalTheme, render_session_header
 finally:
     warnings.warn = _original_warn
 
@@ -694,226 +632,6 @@ def _brand_banner() -> str:
     )
 
 
-def _handle_interactive_command(
-    command: str,
-    project_root: Path | None,
-    current_thread_id: str,
-    session: InteractiveSession,
-) -> tuple[str, str]:
-    if command_matches(command, "q"):
-        _auto_save_interactive_transcripts(project_root, session)
-        return ("exit", current_thread_id)
-    if command_matches(command, "history"):
-        print()
-        _print_ansi(
-            _handle_interactive_history_command(project_root, current_thread_id)
-        )
-        return ("", current_thread_id)
-    if command_matches(command, "whoami"):
-        print()
-        _print_ansi(_handle_interactive_whoami_command(project_root))
-        return ("", current_thread_id)
-    inbox_body = command_body(command, "inbox")
-    if inbox_body is not None:
-        print()
-        if inbox_body == "":
-            _print_ansi(_handle_interactive_inbox_command(project_root))
-        elif inbox_body == "reflection":
-            _print_ansi(_handle_interactive_reflection_command(project_root))
-        elif inbox_body.startswith("reflection "):
-            parts = inbox_body.removeprefix("reflection ").split(maxsplit=1)
-            if parts[0] == "list":
-                _print_ansi(_handle_interactive_reflection_list_command(project_root))
-            elif parts[0] == "show" and len(parts) == 2:
-                _print_ansi(
-                    _handle_interactive_reflection_show_command(project_root, parts[1])
-                )
-            elif len(parts) == 2:
-                _print_ansi(
-                    _handle_interactive_reflection_subcommand(
-                        project_root, parts[0], parts[1]
-                    )
-                )
-            else:
-                print(_interactive_help(":inbox reflection"))
-        elif inbox_body == "notify":
-            _print_ansi(_handle_interactive_notify_command(project_root))
-        elif inbox_body.startswith("notify "):
-            parts = inbox_body.removeprefix("notify ").split(maxsplit=1)
-            if parts[0] == "list":
-                _print_ansi(_handle_interactive_notify_list_command(project_root))
-            elif parts[0] == "show" and len(parts) == 2:
-                _print_ansi(
-                    _handle_interactive_notify_show_command(project_root, parts[1])
-                )
-            elif parts[0] == "watch":
-                _handle_interactive_watch_command(project_root)
-            elif len(parts) == 2:
-                _print_ansi(
-                    _handle_interactive_notify_subcommand(
-                        project_root, parts[0], parts[1]
-                    )
-                )
-            else:
-                print(_interactive_help(":inbox notify"))
-        else:
-            print(_interactive_help(command))
-        return ("", current_thread_id)
-    if command_matches(command, "help"):
-        print()
-        print(_interactive_help())
-        return ("", current_thread_id)
-    dev_body = command_body(command, "dev")
-    if dev_body == "status":
-        print()
-        print(_format_status(lifecycle.status(project_root)))
-        return ("", current_thread_id)
-    if dev_body == "logs":
-        print()
-        _print_recent_logs(project_root, limit=8)
-        return ("", current_thread_id)
-    if dev_body is not None:
-        print()
-        print(_interactive_help(":dev"))
-        return ("", current_thread_id)
-    if command_body(command, "export") is not None:
-        print()
-        _print_ansi(
-            _handle_interactive_export_command(
-                command, project_root, current_thread_id, session
-            )
-        )
-        return ("", current_thread_id)
-    memory_body = command_body(command, "mem")
-    if memory_body is not None:
-        print()
-        if memory_body == "":
-            _print_ansi(_format_memory_preview(project_root))
-        else:
-            _print_ansi(_handle_interactive_memory_command(memory_body, project_root))
-        return ("", current_thread_id)
-    thread_body = command_body(command, "thread")
-    if thread_body is not None:
-        print()
-        if thread_body == "":
-            _print_ansi(_handle_interactive_threads_command(project_root))
-            return ("", current_thread_id)
-        new_id = thread_body
-        if new_id == "":
-            print(_interactive_help(":thread"))
-        else:
-            store = ThreadStore(project_root)
-            if new_id not in store.list():
-                store.save(ThreadState.empty(new_id))
-            print(f"Switched to thread: {new_id}")
-        return ("redraw_header", new_id if new_id != "" else current_thread_id)
-    reason_body = command_body(command, "reason")
-    if reason_body is not None and (
-        reason_body == "watch" or reason_body.startswith("watch ")
-    ):
-        print()
-        body = reason_body.removeprefix("watch").strip()
-        thread_ref = body if body else None
-        _handle_interactive_reason_watch(project_root, thread_ref=thread_ref)
-        return ("", current_thread_id)
-    if reason_body is not None:
-        print()
-        _print_ansi(_handle_interactive_reason_command(reason_body, project_root))
-        return ("", current_thread_id)
-    trace_body = command_body(command, "trace")
-    if trace_body is not None:
-        print()
-        _print_ansi(_handle_interactive_trace_command(trace_body, project_root))
-        return ("", current_thread_id)
-    persona_body = command_body(command, "persona")
-    if persona_body is not None:
-        print()
-        _print_ansi(
-            _handle_interactive_persona_command(persona_body or "list", project_root)
-        )
-        return ("", current_thread_id)
-    if command_matches(command, "restart"):
-        print()
-        _print_ansi(_handle_interactive_restart_command(project_root))
-        return ("redraw_header", current_thread_id)
-    rename_body = command_body(command, "rename")
-    if rename_body is not None:
-        print()
-        new_id = rename_body
-        if new_id == "":
-            print(_interactive_help(":rename"))
-        else:
-            try:
-                ThreadStore(project_root).rename(current_thread_id, new_id)
-                print(f"Renamed thread to: {new_id}")
-            except ValueError as exc:
-                print(f"Error: {exc}")
-        return ("redraw_header", new_id if new_id != "" else current_thread_id)
-    branch_body = command_body(command, "branch")
-    if branch_body is not None:
-        print()
-        parts = branch_body.split()
-        new_id = parts[0] if parts else ""
-        index: int | None = None
-        if len(parts) >= 2:
-            try:
-                index = int(parts[1])
-            except ValueError:
-                print(f"Invalid index: {parts[1]}")
-                return ("", current_thread_id)
-        if new_id == "":
-            print(_interactive_help(":branch"))
-        else:
-            try:
-                ThreadStore(project_root).branch(current_thread_id, new_id, index)
-                print(f"Branched to thread: {new_id}")
-            except ValueError as exc:
-                print(f"Error: {exc}")
-        return ("redraw_header", new_id if new_id != "" else current_thread_id)
-    if command_matches(command, "archive"):
-        print()
-        try:
-            ThreadStore(project_root).archive(current_thread_id)
-            print(f"Archived thread: {current_thread_id}")
-        except ValueError as exc:
-            print(f"Error: {exc}")
-        return ("redraw_header", "default")
-    unarchive_body = command_body(command, "unarchive")
-    if unarchive_body is not None:
-        print()
-        thread_id = unarchive_body
-        if thread_id == "":
-            print(_interactive_help(":unarchive"))
-        else:
-            try:
-                ThreadStore(project_root).unarchive(thread_id)
-                print(f"Unarchived thread: {thread_id}")
-            except ValueError as exc:
-                print(f"Error: {exc}")
-        return ("", current_thread_id)
-    if command_matches(command, "archived"):
-        print()
-        store = ThreadStore(project_root)
-        ids = store.list_archived()
-        if not ids:
-            print("No archived threads.")
-        else:
-            for thread_id in ids:
-                print(thread_id)
-        return ("", current_thread_id)
-    if command_matches(command, "delete"):
-        print()
-        try:
-            ThreadStore(project_root).delete(current_thread_id)
-            print(f"Deleted thread: {current_thread_id}")
-        except ValueError as exc:
-            print(f"Error: {exc}")
-        return ("redraw_header", "default")
-    print()
-    print(_interactive_help(command))
-    return ("", current_thread_id)
-
-
 def _one_shot_reply(
     message: str,
     project_root: Path | None,
@@ -961,15 +679,6 @@ def _render_assistant_reply_rich(text: str) -> None:
 def _interactive_daemon_status(project_root: Path | None) -> str:
     status = lifecycle.status(project_root)
     return "running" if status.running else "one-shot"
-
-
-def _print_recent_logs(project_root: Path | None, *, limit: int) -> None:
-    events = read_log_events(project_root=project_root, tail=limit)
-    if not events:
-        print("No recent activity logs.")
-        return
-    for event in events:
-        _print_ansi(render_log_event(event))
 
 
 if __name__ == "__main__":

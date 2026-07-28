@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The REPL transcript orchestration consolidation is complete.
+Idle. The top-level REPL command dispatcher extraction is complete.
 
 ## Active Branch
 
@@ -22,15 +22,14 @@ code.
 
 ## Completion Evidence
 
-- `cli/repl/transcript.py` owns export option parsing, save coordination,
-  export progress, clipboard results, and connection-exit autosave.
-- Transcript orchestration consumes `TranscriptSession`; the module does not
-  import the concrete session implementation or the CLI composition root.
-- Explicit export, invalid options, incremental progress, all-log export,
-  clipboard/no-clipboard behavior, quit/EOF autosave, and multi-thread autosave
-  remain covered.
-- Focused transcript, session, and CLI tests: 306 passed.
-- Full tests: 1256 passed.
+- `cli/repl/dispatcher.py` owns registry matching, subsystem routing, dev
+  status/logs, export routing, thread lifecycle, and unknown-command help.
+- The dispatcher does not import the CLI composition root; the root wires its
+  handler directly through `ReplCallbacks`.
+- Existing aliases, output placement, action tuples, active-thread transitions,
+  subsystem commands, export, and autosave remain covered.
+- Focused dispatcher, registry, session, transcript, and CLI tests: 310 passed.
+- Full tests: 1258 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -40,5 +39,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Extract the next complete CLI composition responsibility after transcript
-ownership is consolidated.
+Extract the next complete CLI composition responsibility after command
+dispatch ownership is isolated.

@@ -229,7 +229,11 @@ under the same package.
 - `cli/repl/session.py` owns per-connection message/log capture and export
   progress state.
 - `cli/repl/commands.py` owns subsystem REPL commands and their focused help
-  text; the composition root only dispatches parsed interactive input.
+  text.
+- `cli/repl/dispatcher.py` owns top-level registry matching, subsystem routing,
+  interactive thread lifecycle commands, dev status/logs, export routing, and
+  unknown-command help. It depends on REPL command/session APIs and never
+  imports the CLI composition root; the root only wires it as a callback.
 - `cli/repl/input.py` owns prompt-toolkit input, deduplicated history,
   completion, and top-level interactive help.
 - `cli/repl/activity.py` owns incremental activity reads, transcript capture
