@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reason lifecycle, proposal, scheduler, advancer, trace, output, and daemon
+  export-worker audits now use one sealed Reason-owned registry with fixed
+  messages and exact metadata; audit records no longer duplicate private
+  topics, summaries, mandates, terminal reasons, artifact paths, runtime
+  correlation, or secondary exception details.
 - Memory curation, post-chat scheduling, and trace-persistence failures now use
   one closed Memory-owned audit registry; clients no longer emit the redundant
   `curator_changed` record or persist free-form curator summaries and duplicate

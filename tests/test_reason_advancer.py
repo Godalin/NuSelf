@@ -401,7 +401,7 @@ def test_advance_failure_logs_shared_context_and_restores_caller(
         )
 
     events = read_log_events(project_root=tmp_path, component="reasoning")
-    failure = next(event for event in events if event.event == "advance_tool_failed")
+    failure = next(event for event in events if event.event == "advance_failed")
     assert failure.thread_id == "reason-test"
     assert failure.request_id == "request-1"
     assert failure.source == "client"
@@ -462,7 +462,7 @@ def test_agent_failure_still_projects_prior_failed_tool_outcome(
         event.event == "llm_failover_suppressed_after_tool_call"
         for event in events
     )
-    assert events[-1].event == "advance_tool_failed"
+    assert events[-1].event == "advance_failed"
     assert events[-1].error == (
         "Reason endpoint failover suppressed after tool execution "
         "<- agent failed after tool"
@@ -492,7 +492,7 @@ def test_advance_failure_log_cannot_mask_original_exception(
     with pytest.warns(
         RuntimeWarning,
         match=(
-            "reasoning/advance_tool_failed: agent failed; "
+            "reasoning/advance_failed: agent failed; "
             "structured logging failed: audit store unavailable"
         ),
     ), pytest.raises(RuntimeError) as captured:

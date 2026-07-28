@@ -121,7 +121,7 @@ def test_run_once_advances_eligible_thread_when_audit_is_unavailable(
         del args, kwargs
 
     monkeypatch.setattr(
-        "nuself.reason.scheduler.write_observed_log_event",
+        "nuself.reason.scheduler.write_reason_audit",
         drop_audit,
     )
     service = _reason_service(repository=ReasonRepository(tmp_path))
@@ -208,7 +208,7 @@ def test_run_once_logs_and_cools_down_failed_advance(tmp_path: Path) -> None:
     assert len(failed) == 1
     assert failed[0].thread_id == thread.id
     assert failed[0].status == "error"
-    assert failed[0].metadata == {"error_type": "FileNotFoundError", "thread_id": thread.id}
+    assert failed[0].metadata == {}
 
 
 def test_scheduler_failure_log_cannot_raise_or_undo_cooldown(

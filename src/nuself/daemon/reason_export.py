@@ -31,9 +31,9 @@ from nuself.reason.output import (
     ReasonOutputSection,
     ReasonOutputService,
 )
-from nuself.reason.output_audit import (
-    report_reason_output_failure,
-    write_export_worker_audit,
+from nuself.reason.audit import (
+    report_reason_failure,
+    write_reason_audit,
 )
 from nuself.runtime.context import use_runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_chain
@@ -307,9 +307,8 @@ class ReasonExportWorker:
                 except queue.Empty:
                     break
         if drained:
-            write_export_worker_audit(
+            write_reason_audit(
                 "export_queue_drained",
-                f"Drained {drained} unprocessed export jobs",
                 project_root=self._project_root,
                 metadata={"drained_jobs": drained},
             )
@@ -332,11 +331,9 @@ class ReasonExportWorker:
             except queue.Empty:
                 continue
             except Exception as exc:
-                report_reason_output_failure(
+                report_reason_failure(
                     exc,
-                    component="daemon",
                     event="export_worker_get_error",
-                    message="Export queue read failed",
                     project_root=self._project_root,
                     metadata=None,
                 )
@@ -354,26 +351,18 @@ class ReasonExportWorker:
 
     def _process(self, message: JobMessage) -> None:
         if message.envelope.name != EXPORT_JOB_NAME:
-            write_export_worker_audit(
+            write_reason_audit(
                 "export_job_type_ignored",
-                (
-                    "Ignored unsupported export job type "
-                    f"{message.envelope.name}"
-                ),
                 project_root=self._project_root,
-                metadata={
-                    "message_id": message.envelope.message_id,
-                    "job_name": message.envelope.name,
-                },
+                metadata={},
             )
             return
         thread_id = message.resource_id
         job_id = message.job_id
-        write_export_worker_audit(
+        write_reason_audit(
             "export_job_dequeued",
-            f"Processing export job {job_id} for thread {thread_id}",
             project_root=self._project_root,
-            metadata={"job_id": job_id, "thread_id": thread_id},
+            metadata={},
         )
 
         store, service = self._dependencies()
@@ -397,40 +386,26 @@ class ReasonExportWorker:
             KeyError,
         ) as exc:
             self._supervisor.record_failure(EXPORT_WORKER_NAME, exc)
-            report_reason_output_failure(
+            report_reason_failure(
                 exc,
-                component="daemon",
                 event="export_job_manifest_invalid",
-                message=(
-                    f"Cannot process export job {job_id}: invalid manifest"
-                ),
                 project_root=self._project_root,
-                metadata={"job_id": job_id, "thread_id": thread_id},
+                metadata={},
             )
             return
         if inspection.terminal:
             return
         if inspection.progress_error is not None:
-            report_reason_output_failure(
+            report_reason_failure(
                 inspection.progress_error,
-                component="daemon",
                 event="export_job_progress_invalid",
-                message=(
-                    f"Ignoring invalid progress for export job {job_id}"
-                ),
                 project_root=self._project_root,
-                metadata={"job_id": job_id, "thread_id": thread_id},
+                metadata={},
             )
-        write_export_worker_audit(
+        write_reason_audit(
             "export_job_composition_started",
-            (
-                f"Composing {inspection.total_chunks} chunk(s) "
-                f"for job {job_id}"
-            ),
             project_root=self._project_root,
             metadata={
-                "job_id": job_id,
-                "thread_id": thread_id,
                 "chunks": inspection.total_chunks,
             },
         )
@@ -464,54 +439,29 @@ class ReasonExportWorker:
                 max_attempts=MAX_EXPORT_ATTEMPTS,
             )
         except Exception as state_error:
-            report_reason_output_failure(
+            report_reason_failure(
                 state_error,
-                component="daemon",
                 event="export_job_state_persist_failed",
-                message=(
-                    f"Could not persist failure state for export job {job_id}"
-                ),
                 project_root=self._project_root,
-                metadata={
-                    "job_id": job_id,
-                    "thread_id": thread_id,
-                    "operation_error": diagnostic_exception_chain(
-                        operation_error
-                    ),
-                },
+                metadata={},
             )
             return
         attempts = failed_manifest.attempts
         if attempts >= MAX_EXPORT_ATTEMPTS:
-            report_reason_output_failure(
+            report_reason_failure(
                 operation_error,
-                component="daemon",
                 event="export_job_failed",
-                message=(
-                    f"Export job {job_id} exhausted retries: "
-                    f"{operation_error!s}"
-                ),
                 project_root=self._project_root,
-                metadata={
-                    "job_id": job_id,
-                    "thread_id": thread_id,
-                    "attempts": attempts,
-                },
+                metadata={"attempts": attempts},
             )
             return
         if self._stopping.is_set() or self._shutdown_requested.is_set():
             return
         backoff = _next_backoff(attempts)
-        write_export_worker_audit(
+        write_reason_audit(
             "export_job_retry",
-            (
-                f"Export job {job_id} will retry in {backoff}s "
-                f"(attempt {attempts})"
-            ),
             project_root=self._project_root,
             metadata={
-                "job_id": job_id,
-                "thread_id": thread_id,
                 "attempts": attempts,
                 "next_backoff": backoff,
             },
@@ -567,14 +517,9 @@ class ReasonExportWorker:
                         EXPORT_WORKER_NAME,
                         exc,
                     )
-                    report_reason_output_failure(
+                    report_reason_failure(
                         exc,
-                        component="daemon",
                         event="export_reconciliation_skip",
-                        message=(
-                            "Skipping invalid export manifest for "
-                            f"{job_dir.name}"
-                        ),
                         project_root=self._project_root,
                         metadata={
                             "thread_id": owner_id,
@@ -593,12 +538,8 @@ class ReasonExportWorker:
                     )
                 )
                 reconciled += 1
-        write_export_worker_audit(
+        write_reason_audit(
             "export_queue_reconciled",
-            (
-                "Export queue reconciled on startup; re-enqueued "
-                f"{reconciled} job(s)"
-            ),
             project_root=self._project_root,
             metadata={"replayed_jobs": reconciled},
         )

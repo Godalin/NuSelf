@@ -5,7 +5,7 @@ from typing import cast
 
 import pytest
 
-from nuself.reason import output_audit
+from nuself.reason import audit
 from nuself.runtime.audit_definitions import (
     AuditSchemaError,
     UnknownAuditDefinitionError,
@@ -16,6 +16,75 @@ _CANONICAL: tuple[
     tuple[str, str, dict[str, object], int | None],
     ...,
 ] = (
+    (
+        "reasoning",
+        "proposal_created",
+        {"active_item_count": 2, "mandate_count": 1},
+        None,
+    ),
+    ("reasoning", "thread_started", {"thread_id": "thread-1"}, None),
+    (
+        "reasoning",
+        "thread_status_changed",
+        {
+            "thread_id": "thread-1",
+            "from_status": "active",
+            "to_status": "paused",
+        },
+        None,
+    ),
+    ("reasoning", "thread_deleted", {"thread_id": "thread-1"}, None),
+    ("reasoning", "advance_started", {"thread_id": "thread-1"}, None),
+    (
+        "reasoning",
+        "advance_completed",
+        {
+            "thread_id": "thread-1",
+            "step_id": "step-1",
+            "step_kind": "progress",
+            "new_findings": 1,
+            "new_pending": 0,
+            "retired_findings": 0,
+            "next_steps": 1,
+        },
+        None,
+    ),
+    (
+        "reasoning",
+        "terminal_recommendation_applied",
+        {
+            "thread_id": "thread-1",
+            "step_id": "step-1",
+            "terminal_status": "suggest_paused",
+            "from_status": "active",
+            "to_status": "paused",
+        },
+        None,
+    ),
+    (
+        "reasoning",
+        "trace_recording_failed",
+        {
+            "operation": "advance_thread",
+            "thread_id": "thread-1",
+            "step_id": "step-1",
+        },
+        None,
+    ),
+    ("reasoning", "scheduler_advance_failed", {}, None),
+    (
+        "reasoning",
+        "scheduler_advance_completed",
+        {"step_id": "step-1", "step_kind": "progress"},
+        None,
+    ),
+    (
+        "reasoning",
+        "llm_failover_suppressed_after_tool_call",
+        {},
+        None,
+    ),
+    ("reasoning", "advance_failed", {}, None),
     (
         "reasoning",
         "reason_output_planned",
@@ -56,7 +125,6 @@ _CANONICAL: tuple[
             "thread_id": "thread-1",
             "job_id": "job-1",
             "chunk_index": 0,
-            "chunk_path": "/private/chunk.md",
         },
         12,
     ),
@@ -67,32 +135,31 @@ _CANONICAL: tuple[
             "thread_id": "thread-1",
             "job_id": "job-1",
             "chunk_count": 2,
-            "combined": "/private/combined.md",
         },
         None,
     ),
     (
         "reasoning",
         "reason_output_pdf_started",
-        {"combined": "/private/combined.md", "pdf": "/private/output.pdf"},
+        {"thread_id": "thread-1", "job_id": "job-1"},
         None,
     ),
     (
         "reasoning",
         "reason_output_pdf_timeout",
-        {"combined": "/private/combined.md", "pdf": "/private/output.pdf"},
+        {"thread_id": "thread-1", "job_id": "job-1"},
         None,
     ),
     (
         "reasoning",
         "reason_output_pdf_failed",
-        {"combined": "/private/combined.md", "pdf": "/private/output.pdf"},
+        {"thread_id": "thread-1", "job_id": "job-1"},
         None,
     ),
     (
         "reasoning",
         "reason_output_pdf_created",
-        {"combined": "/private/combined.md", "pdf": "/private/output.pdf"},
+        {"thread_id": "thread-1", "job_id": "job-1"},
         None,
     ),
     (
@@ -112,55 +179,49 @@ _CANONICAL: tuple[
     (
         "daemon",
         "export_job_type_ignored",
-        {"message_id": "message-1", "job_name": "other.job"},
+        {},
         None,
     ),
     (
         "daemon",
         "export_job_dequeued",
-        {"thread_id": "thread-1", "job_id": "job-1"},
+        {},
         None,
     ),
     (
         "daemon",
         "export_job_manifest_invalid",
-        {"thread_id": "thread-1", "job_id": "job-1"},
+        {},
         None,
     ),
     (
         "daemon",
         "export_job_progress_invalid",
-        {"thread_id": "thread-1", "job_id": "job-1"},
+        {},
         None,
     ),
     (
         "daemon",
         "export_job_composition_started",
-        {"thread_id": "thread-1", "job_id": "job-1", "chunks": "?"},
+        {"chunks": "?"},
         None,
     ),
     (
         "daemon",
         "export_job_state_persist_failed",
-        {
-            "thread_id": "thread-1",
-            "job_id": "job-1",
-            "operation_error": "runner failed",
-        },
+        {},
         None,
     ),
     (
         "daemon",
         "export_job_failed",
-        {"thread_id": "thread-1", "job_id": "job-1", "attempts": 5},
+        {"attempts": 5},
         None,
     ),
     (
         "daemon",
         "export_job_retry",
         {
-            "thread_id": "thread-1",
-            "job_id": "job-1",
             "attempts": 1,
             "next_backoff": 10,
         },
@@ -176,10 +237,10 @@ _CANONICAL: tuple[
 )
 
 
-def test_reason_output_audit_registry_owns_complete_taxonomy() -> None:
+def test_reason_audit_registry_owns_complete_taxonomy() -> None:
     assert {
         (definition.component, definition.event)
-        for definition in output_audit.REASON_OUTPUT_AUDIT_REGISTRY.definitions
+        for definition in audit.REASON_AUDIT_REGISTRY.definitions
     } == {
         (component, event)
         for component, event, _, _ in _CANONICAL
@@ -190,13 +251,13 @@ def test_reason_output_audit_registry_owns_complete_taxonomy() -> None:
     ("component", "event", "metadata", "duration_ms"),
     _CANONICAL,
 )
-def test_reason_output_audit_definitions_accept_canonical_payloads(
+def test_reason_audit_definitions_accept_canonical_payloads(
     component: str,
     event: str,
     metadata: dict[str, object],
     duration_ms: int | None,
 ) -> None:
-    definition = output_audit.REASON_OUTPUT_AUDIT_REGISTRY.resolve(
+    definition = audit.REASON_AUDIT_REGISTRY.resolve(
         cast(LogComponent, component),
         event,
     )
@@ -218,13 +279,13 @@ def test_reason_output_audit_definitions_accept_canonical_payloads(
     ("component", "event", "metadata", "duration_ms"),
     _CANONICAL,
 )
-def test_reason_output_audit_definitions_reject_unknown_metadata(
+def test_reason_audit_definitions_reject_unknown_metadata(
     component: str,
     event: str,
     metadata: dict[str, object],
     duration_ms: int | None,
 ) -> None:
-    definition = output_audit.REASON_OUTPUT_AUDIT_REGISTRY.resolve(
+    definition = audit.REASON_AUDIT_REGISTRY.resolve(
         cast(LogComponent, component),
         event,
     )
@@ -243,7 +304,7 @@ def test_reason_output_audit_definitions_reject_unknown_metadata(
         )
 
 
-def test_reason_output_audit_rejects_unknown_event_before_sink(
+def test_reason_audit_rejects_unknown_event_before_sink(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -254,16 +315,14 @@ def test_reason_output_audit_rejects_unknown_event_before_sink(
         sink_calls += 1
 
     monkeypatch.setattr(
-        output_audit,
+        audit,
         "write_observed_log_event",
         unexpected_sink,
     )
 
     with pytest.raises(UnknownAuditDefinitionError):
-        output_audit.write_reason_output_audit(
-            "reasoning",
-            cast(output_audit.ReasonOutputAuditEvent, "reason_output_done"),
-            "invalid",
+        audit.write_reason_audit(
+            cast(audit.ReasonAuditEvent, "reason_output_done"),
             project_root=tmp_path,
         )
 

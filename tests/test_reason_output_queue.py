@@ -177,7 +177,14 @@ def test_compose_from_enqueued_job(
     manifest = output_service.plan_job(thread.id, segment_size=1)
     paths = output_service.job_paths(thread.id, manifest.job_id)
 
-    def _fake_generate_pdf(self: ReasonOutputService, paths: ReasonOutputPaths) -> Path:
+    def _fake_generate_pdf(
+        self: ReasonOutputService,
+        paths: ReasonOutputPaths,
+        *,
+        thread_id: str,
+        job_id: str,
+    ) -> Path:
+        del thread_id, job_id
         paths.pdf.write_text("pdf", encoding="utf-8")
         return paths.pdf
 

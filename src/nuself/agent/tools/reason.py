@@ -5,19 +5,18 @@ from __future__ import annotations
 from importlib import import_module
 import json
 from pathlib import Path
-from uuid import uuid4
 
 from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.common import structured_tool_factory
 from nuself.handles import VisibleHandleError, parse_visible_index
+from nuself.reason.audit import write_reason_audit
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.output import ReasonOutputService, SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.jobs import JobSink
-from nuself.runtime.observability import write_observed_log_event
 
 
 def build_reason_tools(
@@ -191,19 +190,12 @@ def build_reason_tools(
         topic = topic.strip()
         if not topic:
             return "Error: topic must be a non-empty string"
-        proposal_id = uuid4().hex[:12]
-        write_observed_log_event(
-            "reasoning",
+        write_reason_audit(
             "proposal_created",
-            f"Reasoning thread proposal: {topic[:60]}",
             project_root=project_root,
             metadata={
-                "proposal_id": proposal_id,
-                "topic": topic,
-                "working_summary": working_summary.strip(),
-                "active_items": active_items,
-                "mandates": mandates,
-                "evidence_refs": [],
+                "active_item_count": len(active_items),
+                "mandate_count": len(mandates),
             },
         )
         thread = service.start_thread(

@@ -1247,7 +1247,16 @@ def test_reason_propose_creates_thread_after_confirmation(tmp_path: Path, monkey
     assert parsed.get("approved") is True
     assert parsed.get("component") == "reasoning"
     assert parsed.get("result") is not None
-    assert any(event.event == "proposal_created" for event in events)
+    proposal = next(
+        event for event in events if event.event == "proposal_created"
+    )
+    assert proposal.metadata == {
+        "active_item_count": 1,
+        "mandate_count": 1,
+    }
+    assert "We should keep the thread short." not in str(
+        proposal.to_record()
+    )
     assert events[-1].event == "thread_started"
 
 
@@ -1274,7 +1283,7 @@ def test_reason_propose_creates_thread_when_proposal_audit_is_unavailable(
         del args, kwargs
 
     monkeypatch.setattr(
-        "nuself.agent.tools.reason.write_observed_log_event",
+        "nuself.agent.tools.reason.write_reason_audit",
         drop_audit,
     )
 

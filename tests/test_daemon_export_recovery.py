@@ -538,7 +538,7 @@ def test_worker_does_not_compose_corrupt_manifest(
     assert event.job_id == "job_1"
     assert event.thread_id == "thread_1"
     assert event.source == "daemon.worker.export_worker"
-    assert event.metadata == {"job_id": "job_1", "thread_id": "thread_1"}
+    assert event.metadata == {}
 
 
 def test_worker_reports_invalid_progress_and_continues(
@@ -580,10 +580,7 @@ def test_worker_reports_invalid_progress_and_continues(
     assert calls
     assert set(calls) == {"job_1"}
     assert event.status == "degraded"
-    assert event.metadata == {
-        "job_id": "job_1",
-        "thread_id": "thread_1",
-    }
+    assert event.metadata == {}
     assert "secret progress" not in str(event.to_record())
 
 
@@ -659,7 +656,7 @@ def test_worker_audit_failure_cannot_suppress_durable_retry(
     )
     assert persisted.attempts == 1
     assert any(
-        "daemon/export_audit_write_failed" in str(warning.message)
+        "daemon/reason_audit_write_failed" in str(warning.message)
         for warning in captured
     )
     worker.stop()
@@ -787,7 +784,7 @@ def test_shutdown_audit_failure_cannot_undo_queue_drain(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/export_audit_write_failed",
+        match="daemon/reason_audit_write_failed",
     ):
         worker.stop()
 
@@ -982,9 +979,5 @@ def test_worker_logs_state_persistence_failure_without_retry(
     state.stop_background_export_worker()
 
     assert event.error == "disk full <- compose failed"
-    assert event.metadata == {
-        "job_id": "job_1",
-        "thread_id": "thread_1",
-        "operation_error": "compose failed",
-    }
+    assert event.metadata == {}
     assert state.reason_export_worker.pending_retry_count == 0

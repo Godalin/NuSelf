@@ -31,10 +31,10 @@ from nuself.reason.domain import (
     StepKind,
     TerminalStatus,
 )
+from nuself.reason.audit import report_reason_failure
 from nuself.reason.errors import ReasonAdvanceError
 from nuself.runtime import current_runtime_context, runtime_context
 from nuself.runtime.observability import (
-    report_observed_failure,
     write_observed_log_event,
 )
 from nuself.workspace import PrivateWorkspaceStore
@@ -303,20 +303,13 @@ class ReasonAdvancer:
                         )
                     except Exception as exc:
                         if self._captured:
-                            report_observed_failure(
+                            report_reason_failure(
                                 exc,
-                                component="reasoning",
                                 event=(
                                     "llm_failover_suppressed_after_tool_call"
                                 ),
-                                message=(
-                                    "Reason endpoint failover suppressed after "
-                                    "tool execution"
-                                ),
                                 project_root=self._project_root,
-                                level="warning",
-                                status="failed",
-                                metadata={"thread_id": thread.id},
+                                metadata={},
                             )
                             raise ReasonAdvanceError(
                                 "Reason endpoint failover suppressed after "
@@ -352,15 +345,11 @@ class ReasonAdvancer:
                     tool_logs=step_tool_logs,
                 )
             except Exception as exc:
-                report_observed_failure(
+                report_reason_failure(
                     exc,
-                    component="reasoning",
-                    event="advance_tool_failed",
-                    message=f"Reason advance failed for thread {thread.id}",
+                    event="advance_failed",
                     project_root=self._project_root,
-                    level="error",
-                    status="failed",
-                    metadata={"thread_id": thread.id},
+                    metadata={},
                 )
                 raise
 

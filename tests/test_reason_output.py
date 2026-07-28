@@ -32,7 +32,7 @@ def test_reason_output_plan_and_compose(tmp_path: Path, monkeypatch: pytest.Monk
         del args, kwargs
 
     monkeypatch.setattr(
-        "nuself.reason.output.write_reason_output_audit",
+        "nuself.reason.output.write_reason_audit",
         drop_audit,
     )
     service = _reason_service(tmp_path)
@@ -48,7 +48,14 @@ def test_reason_output_plan_and_compose(tmp_path: Path, monkeypatch: pytest.Monk
 
     output_service = ReasonOutputService(project_root=tmp_path, reason_service=service)
 
-    def _fake_generate_pdf(self: ReasonOutputService, paths: ReasonOutputPaths) -> Path:
+    def _fake_generate_pdf(
+        self: ReasonOutputService,
+        paths: ReasonOutputPaths,
+        *,
+        thread_id: str,
+        job_id: str,
+    ) -> Path:
+        del thread_id, job_id
         paths.pdf.write_text("pdf", encoding="utf-8")
         return paths.pdf
 
@@ -85,7 +92,14 @@ def test_reason_output_section_plan_is_independent_of_chunk_size(tmp_path: Path,
 
     output_service = ReasonOutputService(project_root=tmp_path, reason_service=service)
 
-    def _fake_generate_pdf(self: ReasonOutputService, paths: ReasonOutputPaths) -> Path:
+    def _fake_generate_pdf(
+        self: ReasonOutputService,
+        paths: ReasonOutputPaths,
+        *,
+        thread_id: str,
+        job_id: str,
+    ) -> Path:
+        del thread_id, job_id
         paths.pdf.write_text("pdf", encoding="utf-8")
         return paths.pdf
 
@@ -127,7 +141,14 @@ def test_reason_output_list_jobs_and_resume(tmp_path: Path, monkeypatch: pytest.
 
     output_service = ReasonOutputService(project_root=tmp_path, reason_service=service)
 
-    def _fake_generate_pdf(self: ReasonOutputService, paths: ReasonOutputPaths) -> Path:
+    def _fake_generate_pdf(
+        self: ReasonOutputService,
+        paths: ReasonOutputPaths,
+        *,
+        thread_id: str,
+        job_id: str,
+    ) -> Path:
+        del thread_id, job_id
         paths.pdf.write_text("pdf", encoding="utf-8")
         return paths.pdf
 

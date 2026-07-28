@@ -14,8 +14,8 @@ callers use one sealed domain registry instead of authoring raw projections.
 
 ## Ordered Work
 
-1. Inventory Reason events and payloads across `output_audit`, scheduler,
-   advancer, service, and the agent tool.
+1. Inventory Reason events and payloads across the former output-only
+   registry, scheduler, advancer, service, and the agent tool.
 2. Separate stable audit metadata from private prompts, summaries, errors, and
    duplicated runtime correlation fields.
 3. Expand or replace the existing output-only registry with one sealed
@@ -42,12 +42,27 @@ callers use one sealed domain registry instead of authoring raw projections.
 
 ## Completion Evidence
 
-- Pending Reason inventory, design, implementation, and verification.
+- Inventory found 24 output/export events already closed in an output-only
+  registry and 12 lifecycle, proposal, trace, scheduler, and advancer events
+  still authored as parallel string protocols.
+- `service_tool_called` remains the intentional shared tool-event contract and
+  is not duplicated into the Reason registry.
+- `docs/spec/reason.md` and `docs/spec/reason-output.md` now define the unified
+  registry, fixed messages, exact metadata, and privacy boundary before code
+  migration.
+- `nuself.reason.audit` now owns all 36 Reason lifecycle, peripheral, output,
+  and export-worker event definitions; the output-only module and names were
+  removed without compatibility aliases.
+- All Reason producers use domain adapters except the intentionally shared
+  `service_tool_called` projection.
+- Focused Reason/Output/export-worker/Chat suite: `228 passed`.
+- Full test suite: `1988 passed`.
+- Pyright: `0 errors, 0 warnings, 0 informations`.
+- `git diff --check` passed.
 
 ## Publication
 
-Memory peripheral audit ownership was implemented in `219df65`; publication is
-pending the milestone commit and push.
+Pending this batch's implementation commit and push.
 
 ## Next Review Batch
 

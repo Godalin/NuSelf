@@ -14,14 +14,11 @@ from nuself.reason.advancer import (
     ReasonAdvancer,
     default_reason_advancer,
 )
+from nuself.reason.audit import report_reason_failure, write_reason_audit
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.runtime.context import runtime_context
-from nuself.runtime.observability import (
-    report_observed_failure,
-    write_observed_log_event,
-)
 
 
 class ReasonScheduler:
@@ -82,15 +79,11 @@ class ReasonScheduler:
                 step = self._advancer.advance(candidate)
             except Exception as exc:
                 self._apply_cooldown(candidate)
-                report_observed_failure(
+                report_reason_failure(
                     exc,
-                    component="reasoning",
                     event="scheduler_advance_failed",
-                    message=f"Background advance for thread {candidate.id} failed",
                     project_root=self._project_root,
-                    level="error",
-                    status="error",
-                    metadata={"thread_id": candidate.id, "error_type": type(exc).__name__},
+                    metadata={},
                 )
                 return
             if step is None:
@@ -98,15 +91,11 @@ class ReasonScheduler:
                 return
             updated = self._service.advance_thread(candidate.id, step=step)
             self._apply_cooldown(updated)
-
-        write_observed_log_event(
-            "reasoning",
-            "scheduler_advance",
-            f"Background advance for thread {candidate.id}: {step.kind}",
-            project_root=self._project_root,
-            status="completed",
-            metadata={"thread_id": candidate.id, "step_kind": step.kind, "step_id": step.id},
-        )
+            write_reason_audit(
+                "scheduler_advance_completed",
+                project_root=self._project_root,
+                metadata={"step_kind": step.kind, "step_id": step.id},
+            )
 
     def _apply_cooldown(self, thread: ReasoningThread) -> None:
         cooldown_end = (

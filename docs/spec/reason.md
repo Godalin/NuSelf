@@ -454,11 +454,11 @@ endpoint failure. This prevents workspace, persona, or other tools from being
 executed twice by a fresh agent run. Non-availability errors never fail over.
 
 An exception from the advancer's agent/tool/structured-step path is
-authoritative and propagates unchanged. Its `advance_tool_failed` projection
+authoritative and propagates unchanged. Its `advance_failed` projection
 uses shared failure reporting with thread/runtime correlation; audit storage
 failure falls back to a terminal warning and cannot mask or replace the
-original exception. Traceback text is not used as the log message or metadata
-payload.
+original exception. The runtime context already carries the thread identity,
+so traceback text, exception type, and thread id are not copied into metadata.
 
 A `ReasonAdvancer` owns one compiled LangGraph agent and its middleware capture
 buffer. Invocation-local capture must not overlap across calls on that
@@ -555,7 +555,7 @@ run_once()
   ├─ if step returned, call ReasonService.advance_thread(id, step=step)
   ├─ if advance raises, log scheduler_advance_failed and cool down the thread
   ├─ set skip_next_advance_until to now + interval_seconds
-  └─ log the advance result
+  └─ log scheduler_advance_completed
 ```
 
 Scheduler advance failure applies cooldown before reporting
@@ -615,23 +615,11 @@ The chat agent is the actor. The system prompt must instruct the agent to:
 Reason uses the synchronous
 [approval boundary](cli.md#approval-and-event-boundaries) for thread creation.
 
-It produces `proposal_created` domain events with `component="reasoning"` and the following metadata:
-
-```python
-write_log_event(
-    "reasoning",
-    "proposal_created",
-    f"Reasoning thread proposal: {topic[:60]}",
-    metadata={
-        "proposal_id": str,
-        "topic": str,
-        "working_summary": str,
-        "active_items": list[dict],
-        "mandates": list[str],
-        "evidence_refs": list[str],
-    },
-)
-```
+It produces a `proposal_created` domain event with `component="reasoning"`.
+The exact metadata contains only `active_item_count` and `mandate_count`.
+Topics, working summaries, item bodies, mandates, and synthetic proposal ids
+are not audit data. The approved `thread_started` record supplies the durable
+thread identity.
 
 The CLI may still surface `proposal_created` as an audit event, but reasoning
 does not use post-turn log dispatch for confirmation. See
@@ -797,7 +785,9 @@ Each step renders:
 
 #### Delete Behavior
 
-`reason delete <id>` permanently removes a thread and all its data: thread file, steps directory, workspace, and writes a `thread_deleted` log event before deletion.
+`reason delete <id>` permanently removes a thread and all its data: thread
+file, steps directory, and workspace. It writes `thread_deleted` only after
+those authoritative deletions complete.
 
 The `--yes` flag is required to confirm. Without it, the command prints "Use --yes to confirm deletion." and exits with code 1.
 
@@ -846,17 +836,38 @@ REPL output must match CLI formatting as closely as possible.
 
 ### Log Events
 
-Reason uses the `reasoning` log component.
+Reason owns one sealed registry in `nuself.reason.audit`. It includes Reason
+lifecycle, trace, scheduler, advancer, proposal, output, and export-worker
+events even when a Chat tool or daemon worker initiates the operation.
+Producers use Reason-owned adapters and do not choose event messages, levels,
+statuses, or error policy. The registry rejects unknown events, missing fields,
+extra fields, and invalid enum values before the best-effort sink.
 
-| Event                   | Status      | Meaning                            |
-| ----------------------- | ----------- | ---------------------------------- |
-| `thread_started`        | `created`   | New reasoning thread created       |
-| `thread_status_changed` | `updated`   | Pause, resume, resolve, or archive |
-| `thread_deleted`        | `deleted`   | Thread permanently removed         |
-| `advance_started`       | `started`   | Advance began                      |
-| `advance_completed`     | `completed` | Step persisted                     |
-| `advance_no_change`     | `skipped`   | No meaningful update               |
-| `advance_failed`        | `failed`    | Advance failed safely              |
+Lifecycle and peripheral `reasoning` events:
+
+| Event | Level | Status | Error | Exact metadata |
+|---|---|---|---|---|
+| `proposal_created` | `info` | none | forbidden | active-item and mandate counts |
+| `thread_started` | `info` | `created` | forbidden | thread id |
+| `thread_status_changed` | `info` | `updated` | forbidden | thread id, from/to status |
+| `thread_deleted` | `info` | `deleted` | forbidden | thread id |
+| `advance_started` | `info` | `started` | forbidden | thread id |
+| `advance_completed` | `info` | `completed` | forbidden | thread/step ids, step kind, finding/pending/retired/next counts |
+| `terminal_recommendation_applied` | `info` | `updated` | forbidden | thread/step ids, terminal/from/to statuses |
+| `trace_recording_failed` | `warning` | `degraded` | required | operation, thread id, nullable step id |
+| `scheduler_advance_failed` | `error` | `error` | required | none; runtime context carries thread |
+| `scheduler_advance_completed` | `info` | `completed` | forbidden | step id and kind; runtime context carries thread |
+| `llm_failover_suppressed_after_tool_call` | `warning` | `failed` | required | none; runtime context carries thread |
+| `advance_failed` | `error` | `failed` | required | none; runtime context carries thread |
+
+Messages are fixed by the registry and contain no topic, summary, tool output,
+terminal reason, exception type, or filesystem path. The caught exception is
+represented once by the canonical error chain.
+
+`service_tool_called` remains the shared service-tool event shape rather than
+a Reason-domain lifecycle event. Its full step-local snapshots and rendering
+contract are defined below; it is deliberately not duplicated in the Reason
+registry.
 
 ### Tool Call Display Via Log System
 

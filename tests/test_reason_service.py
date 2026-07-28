@@ -224,11 +224,14 @@ def test_start_thread(tmp_path: Path) -> None:
 def test_start_thread_writes_logs_under_project_root(tmp_path: Path) -> None:
     service = _reason_service(project_root=tmp_path)
 
-    service.start_thread("Where should reason logs live?")
+    thread = service.start_thread("Where should reason logs live?")
 
     events = read_log_events(project_root=tmp_path, component="reasoning")
     assert events
     assert events[-1].event == "thread_started"
+    assert events[-1].message == "Reason thread started"
+    assert events[-1].metadata == {"thread_id": thread.id}
+    assert thread.topic not in str(events[-1].to_record())
     assert (tmp_path / "private" / "logs" / "reasoning.log").is_file()
 
 
@@ -423,6 +426,8 @@ def test_advance_thread_applies_resolved_terminal_status(tmp_path: Path) -> None
     assert applied[-1].metadata is not None
     assert applied[-1].metadata["terminal_status"] == "suggest_resolved"
     assert applied[-1].metadata["to_status"] == "resolved"
+    assert "terminal_reason" not in applied[-1].metadata
+    assert step.terminal_reason not in str(applied[-1].to_record())
 
 
 def test_advance_thread_applies_paused_terminal_status(tmp_path: Path) -> None:
