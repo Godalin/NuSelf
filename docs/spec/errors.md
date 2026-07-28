@@ -276,6 +276,13 @@ are projected from those results rather than inferring mutation from the final
 status; restart failure metadata additionally names the failed `stop` or
 `start` stage.
 
+Lifecycle audit schema violations are producer programming errors, not sink
+failures. Unknown events, invalid projection combinations, and malformed
+metadata raise before the best-effort persistence boundary; they are never
+reported as `lifecycle_audit_write_failed`. Once a record passes schema
+validation, persistence failure remains secondary and cannot replace the
+authoritative lifecycle result.
+
 ## Best-Effort Side Effects
 
 Some secondary effects must not change the result of an already-successful

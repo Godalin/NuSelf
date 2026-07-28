@@ -98,10 +98,7 @@ def run_daemon(project_root: Path | None = None) -> int:
     except DaemonInstanceLockContended as exc:
         write_lifecycle_audit(
             "instance_lock_contended",
-            "daemon start rejected because this project already has an owner",
             project_root=paths.project_root,
-            level="warning",
-            status="skipped",
             error=diagnostic_exception_message(exc),
         )
         return 1
@@ -148,7 +145,6 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
             state.start_background_notification_delivery()
             write_lifecycle_audit(
                 "started",
-                "daemon started",
                 project_root=paths.project_root,
             )
             ready = True
@@ -205,7 +201,6 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
     if ready and not cleanup_failures:
         write_lifecycle_audit(
             "stopped",
-            "daemon stopped",
             project_root=paths.project_root,
         )
     _finish_daemon_lifecycle(
@@ -246,9 +241,7 @@ def _reconcile_stale_runtime_metadata(paths: RuntimePaths) -> None:
     if any(recovered.values()):
         write_lifecycle_audit(
             "runtime_metadata_recovered",
-            "stale daemon runtime metadata recovered",
             project_root=paths.project_root,
-            status="recovered",
             metadata=recovered,
         )
 

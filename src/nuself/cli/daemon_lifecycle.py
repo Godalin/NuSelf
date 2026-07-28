@@ -34,12 +34,10 @@ def write_start_failure_audit(
 ) -> None:
     """Project one authoritative daemon-start failure."""
 
+    event = "start_failed" if operation == "start" else "restart_failed"
     write_lifecycle_audit(
-        f"{operation}_failed",
-        f"daemon {operation} failed",
+        event,
         project_root=project_root,
-        level="error",
-        status="error",
         error=diagnostic_exception_chain(error),
         metadata={
             "reason": error.reason,
@@ -59,12 +57,10 @@ def _write_stop_failure_audit(
     project_root: Path | None,
     stage: Literal["stop"] | None = None,
 ) -> None:
+    event = "stop_failed" if operation == "stop" else "restart_failed"
     write_lifecycle_audit(
-        f"{operation}_failed",
-        f"daemon {operation} failed",
+        event,
         project_root=project_root,
-        level="error",
-        status="error",
         error=diagnostic_exception_chain(error),
         metadata={
             "reason": error.reason,
@@ -112,7 +108,6 @@ def start_daemon_observed(
 
     write_lifecycle_audit(
         "start_requested",
-        "daemon start requested",
         project_root=project_root,
     )
     try:
@@ -132,9 +127,7 @@ def start_daemon_observed(
         raise
     write_lifecycle_audit(
         "start_completed",
-        f"daemon start {result.outcome}",
         project_root=project_root,
-        status=result.status.phase,
         metadata=_start_result_metadata(result),
     )
     return result
@@ -147,7 +140,6 @@ def stop_daemon_observed(
 
     write_lifecycle_audit(
         "stop_requested",
-        "daemon stop requested",
         project_root=project_root,
     )
     try:
@@ -161,9 +153,7 @@ def stop_daemon_observed(
         raise
     write_lifecycle_audit(
         "stop_completed",
-        f"daemon stop {result.outcome}",
         project_root=project_root,
-        status=result.status.phase,
         metadata=_stop_result_metadata(result),
     )
     return result
@@ -176,7 +166,6 @@ def restart_daemon_observed(
 
     write_lifecycle_audit(
         "restart_requested",
-        "daemon restart requested",
         project_root=project_root,
     )
     try:
@@ -208,9 +197,7 @@ def restart_daemon_observed(
     )
     write_lifecycle_audit(
         "restart_completed",
-        "daemon restart completed",
         project_root=project_root,
-        status=result.status.phase,
         metadata={
             "stop_outcome": result.stop.outcome,
             "stop_changed": result.stop.changed,

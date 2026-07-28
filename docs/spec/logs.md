@@ -75,6 +75,19 @@ boundaries. An idempotent start or stop is still a completed request, but its
 outcome is `already_ready` or `already_stopped` and `changed=false`; it must not
 masquerade as a newly performed transition.
 
+Daemon lifecycle audit event names form a closed set owned by an immutable
+definition registry in `daemon.audit`. Each definition owns the persisted
+message, level, status, whether an error is required, and one exact metadata
+schema. Producers supply only the event name plus schema data; they cannot
+override projection defaults locally. Unknown events, missing or extra metadata
+fields, incorrect field types, forbidden errors, and missing required errors
+are programming errors raised before the best-effort log sink boundary.
+
+`restart_failed` is one event with two explicit metadata variants selected by
+`stage`: the `start` variant carries start-failure reason/phase/PID/socket/exit
+code, while the `stop` variant carries stop-failure
+reason/phase/PID/socket/owner-active state. No mixed variant is valid.
+
 ## Service Call Logs
 
 When one subsystem invokes another subsystem through an agent-facing service/tool boundary, write a caller-owned log event with a service tag in metadata.

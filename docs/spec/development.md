@@ -240,7 +240,8 @@ under the same package.
   construction. Chat failure/completion and accepted-shutdown audit records
   use shared observability and cannot replace the already-decided response or
   shutdown flag.
-- `daemon/audit.py` owns the best-effort lifecycle audit sink boundary.
+- `daemon/audit.py` owns the immutable lifecycle event definition registry,
+  exact per-event schema validation, and best-effort audit sink boundary.
   `cli/daemon_lifecycle.py` owns shared observable start/stop/restart
   orchestration and typed transition projection for one-shot, launch, and REPL
   surfaces.

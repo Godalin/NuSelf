@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon lifecycle audits now use a closed immutable event registry with fixed
+  projection defaults and exact per-event metadata schemas; producer mistakes
+  fail before reaching the best-effort log sink.
 - Daemon start/stop now return explicit transition outcomes, and one-shot plus
   interactive restart share one audited orchestration that reports both stop
   and start outcomes instead of inferring work from the final status.
