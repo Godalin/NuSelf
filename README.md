@@ -16,6 +16,9 @@ The current implementation is an early CLI-first system:
 
 LangGraph now backs the conversation runtime. The chat agent can invoke tools to search memory, list and dismiss pending reflection ideas, archive outdated memories, adjust importance scores, inspect active reasoning threads, and search thought traces. The internal persona system uses a shared competitive discussion flow for both chat and background reflection, with LLM-backed persona nodes generating distinct voices. Email and macOS notifications are supported when configured.
 
+The canonical conversation runtime API is `ConversationGraphRuntime`; active
+development does not retain the former `ChatAgent` class-name alias.
+
 Approval-gated tools keep prompting and tool results authoritative when
 secondary audit storage is unavailable; the failure is reported through
 structured degraded diagnostics or a runtime warning.

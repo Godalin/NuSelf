@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Expected reason-domain failures now use one authoritative exception
-hierarchy, and CLI/REPL no longer relabel arbitrary `RuntimeError` values.
+Idle. `ConversationGraphRuntime` is now the sole conversation runtime class
+name, with no `ChatAgent` compatibility alias or daemon composition field.
 
 ## Active Branch
 
@@ -23,18 +23,15 @@ code.
 
 ## Completion Evidence
 
-- `nuself.reason.errors` owns `ReasonError`, `ReasonNotFound`,
-  `ReasonPromptError`, `ReasonAdvanceError`, and `ReasonTransitionError`.
-- Repository, service, prompt, advancer, agent tools, output, CLI, REPL, and
-  tests migrated directly; no repository forwarding alias or legacy
-  `ValueError` base remains.
-- Expected reason failures retain concise CLI/REPL results through
-  `ReasonError`.
-- Unexpected prompt-generator, LLM-adapter, and handler `RuntimeError` or
-  `TypeError` objects propagate unchanged.
-- Provider `RuntimeError` from the LLM abstraction becomes
-  `ReasonPromptError` with the provider failure retained as explicit cause.
-- Focused reason/error-boundary tests: 90 passed.
+- The compatibility assignment and package-root export are deleted.
+- Production CLI, daemon, evaluation, request-state protocols, and tests import
+  `ConversationGraphRuntime` directly.
+- Daemon composition owns `conversation_runtime`; no `chat_agent` state field
+  remains.
+- Graph node methods remain explicit testable seams and are no longer
+  documented as compatibility adapters.
+- `rg '\bChatAgent\b' src tests` returns no code or test references.
+- Focused chat, graph, daemon, CLI, and evaluation tests: 399 passed.
 - Final full tests: 1387 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
@@ -45,6 +42,6 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit previous refactors for forwarding modules, compatibility aliases,
-parallel protocols, and legacy entrypoints that can be removed through direct
-repository-wide migration.
+Audit the local chat response compatibility parser and remaining legacy
+persisted-data fallbacks, separating removable parallel runtime protocols from
+explicit storage migrations.

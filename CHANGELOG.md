@@ -14,6 +14,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Removed the `ChatAgent` class-name alias. Production composition, tests, and
+  public imports now use `ConversationGraphRuntime` directly.
 - Reason not-found, prompt, advance, and transition failures now use a declared
   domain exception hierarchy. CLI and REPL reason commands keep concise output
   for those expected outcomes without relabeling unrelated `RuntimeError`

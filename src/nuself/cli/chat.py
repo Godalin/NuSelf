@@ -6,7 +6,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from nuself.agent.chat import ChatAgent
+from nuself.agent.chat import ConversationGraphRuntime
 from nuself.cli.commands.output import print_ansi
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.config import ConfigSystem
@@ -223,7 +223,7 @@ def one_shot_reply(
     """Invoke the local conversation runtime and return its reply text."""
 
     return (
-        ChatAgent(project_root)
+        ConversationGraphRuntime(project_root)
         .respond(message, thread_id=thread_id, turn_id=turn_id)
         .reply
     )

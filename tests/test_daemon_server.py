@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.agent.chat import ChatAgent
+from nuself.agent.chat import ConversationGraphRuntime
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState
@@ -99,7 +99,7 @@ def test_daemon_state_owns_worker_event_and_audit_composition(
 
 def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
-    state.chat_agent = ChatAgent(tmp_path, llm=StructuredFakeLLM())
+    state.conversation_runtime = ConversationGraphRuntime(tmp_path, llm=StructuredFakeLLM())
     request = DaemonRequest(type="chat", payload={"message": "hello"}, request_id="chat1")
 
     response = handle_request(request, state)
@@ -120,7 +120,7 @@ def test_daemon_chat_uses_state_event_publisher(
     tmp_path: Path,
 ) -> None:
     state = DaemonState(tmp_path)
-    state.chat_agent = ChatAgent(
+    state.conversation_runtime = ConversationGraphRuntime(
         tmp_path,
         llm=StructuredFakeLLM(),
         event_publisher=state.event_publisher,
@@ -181,7 +181,7 @@ def test_daemon_chat_uses_state_event_publisher(
 
 def test_daemon_chat_uses_explicit_thread_id(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
-    state.chat_agent = ChatAgent(tmp_path, llm=StructuredFakeLLM())
+    state.conversation_runtime = ConversationGraphRuntime(tmp_path, llm=StructuredFakeLLM())
     request = DaemonRequest(type="chat", payload={"message": "hello", "thread_id": "custom"}, request_id="chat2")
 
     response = handle_request(request, state)
@@ -193,7 +193,7 @@ def test_daemon_chat_uses_explicit_thread_id(tmp_path: Path) -> None:
 
 def test_daemon_chat_persists_turn_id_for_retry_idempotency(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
-    state.chat_agent = ChatAgent(tmp_path, llm=StructuredFakeLLM())
+    state.conversation_runtime = ConversationGraphRuntime(tmp_path, llm=StructuredFakeLLM())
     request = DaemonRequest(
         type="chat",
         payload={"message": "hello", "thread_id": "default", "turn_id": "turn-retry"},
@@ -209,7 +209,7 @@ def test_daemon_chat_persists_turn_id_for_retry_idempotency(tmp_path: Path) -> N
 
 def test_daemon_chat_error_includes_root_cause(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
-    state.chat_agent = ChatAgent(tmp_path, llm=FailingLLM())
+    state.conversation_runtime = ConversationGraphRuntime(tmp_path, llm=FailingLLM())
     request = DaemonRequest(type="chat", payload={"message": "hello"}, request_id="chat-fail")
 
     response = handle_request(request, state)
@@ -232,7 +232,7 @@ def test_chat_failure_diagnostic_cannot_replace_original_response(
         fail_log,
     )
     state = DaemonState(tmp_path)
-    state.chat_agent = ChatAgent(tmp_path, llm=FailingLLM())
+    state.conversation_runtime = ConversationGraphRuntime(tmp_path, llm=FailingLLM())
     request = DaemonRequest(
         type="chat",
         payload={"message": "hello"},
@@ -274,7 +274,7 @@ def test_chat_completion_audit_cannot_invalidate_response(
         fail_log,
     )
     state = DaemonState(tmp_path)
-    state.chat_agent = ChatAgent(
+    state.conversation_runtime = ConversationGraphRuntime(
         tmp_path,
         llm=StructuredFakeLLM(),
     )
@@ -296,7 +296,7 @@ def test_chat_completion_audit_cannot_invalidate_response(
 
 def test_daemon_chat_error_preserves_repeated_exception_messages(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
-    state.chat_agent = ChatAgent(tmp_path, llm=RepeatedChainFailingLLM())
+    state.conversation_runtime = ConversationGraphRuntime(tmp_path, llm=RepeatedChainFailingLLM())
     request = DaemonRequest(type="chat", payload={"message": "hello"}, request_id="chat-repeat-fail")
 
     response = handle_request(request, state)

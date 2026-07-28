@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from nuself.agent.chat import ChatAgent
+from nuself.agent.chat import ConversationGraphRuntime
 from nuself.config import ConfigSystem
 from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.reason_export import (
@@ -48,7 +48,7 @@ class DaemonState:
             self.shutdown_requested,
             self._worker_supervisor,
         )
-        self.chat_agent = ChatAgent(
+        self.conversation_runtime = ConversationGraphRuntime(
             project_root,
             job_sink=self.reason_export_worker.enqueue,
             section_planner=build_reason_export_section_planner(
@@ -114,7 +114,7 @@ class DaemonState:
                 != "new"
             ):
                 return
-            tools = getattr(self.chat_agent, "_tools", None)
+            tools = getattr(self.conversation_runtime, "_tools", None)
             readonly_tools = (
                 [
                     tool
@@ -125,7 +125,7 @@ class DaemonState:
                 else None
             )
             langchain_models = getattr(
-                self.chat_agent,
+                self.conversation_runtime,
                 "_langchain_models",
                 None,
             )

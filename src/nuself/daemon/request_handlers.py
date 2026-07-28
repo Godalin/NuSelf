@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from nuself.agent.chat import ChatAgent
+from nuself.agent.chat import ConversationGraphRuntime
 from nuself.daemon.activity import (
     ActivityBroker,
     ActivitySubscriptionNotFound,
@@ -51,7 +51,7 @@ from nuself.runtime.observability import (
 
 class DaemonRequestState(Protocol):
     project_root: Path
-    chat_agent: ChatAgent
+    conversation_runtime: ConversationGraphRuntime
     memory_curator: MemoryCurator
     shutdown_requested: threading.Event
     activity_broker: ActivityBroker
@@ -226,7 +226,7 @@ def _handle_chat(
         turn_id=chat_request.turn_id,
     ):
         try:
-            result = state.chat_agent.respond(
+            result = state.conversation_runtime.respond(
                 chat_request.message,
                 thread_id=chat_request.thread_id,
                 turn_id=chat_request.turn_id,

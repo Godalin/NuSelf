@@ -133,9 +133,10 @@ implementing every node directly:
 - `ConversationToolRuntime` owns tool registration, service-skill loading,
   prompt-facing tool metadata, and service-tool call logging.
 
-`ConversationGraphRuntime` retains compatibility node methods that delegate to
-these collaborators, and remains responsible for graph wiring and turn-level
-error/trace boundaries.
+`ConversationGraphRuntime` exposes explicit node methods that delegate to these
+collaborators. They are testable graph seams, not compatibility adapters. The
+runtime remains responsible for graph wiring and turn-level error/trace
+boundaries.
 
 The package root is the stable public import boundary. Runtime implementation,
 context preparation, state management, persona orchestration, conversation

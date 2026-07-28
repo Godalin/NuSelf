@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import cast
 
-from nuself.agent.chat import ChatAgent, ChatResult
+from nuself.agent.chat import ConversationGraphRuntime, ChatResult
 from nuself.domain.memory import MemoryEntry
 from nuself.llm import ChatMessage
 
@@ -131,7 +131,7 @@ def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
     for entry in fixture.memory_entries:
         repo.save(entry.to_domain())
 
-    agent = ChatAgent(project_root, llm=FixtureLLM(fixture.llm_response))
+    agent = ConversationGraphRuntime(project_root, llm=FixtureLLM(fixture.llm_response))
     result = agent.respond(fixture.user_message, fixture.thread_id)
     return score_result(fixture, result)
 

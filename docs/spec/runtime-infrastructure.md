@@ -475,7 +475,8 @@ the publisher into `DaemonWorkerSupervisor`.
 - Join timeout remains the direct `daemon/thread_timeout` audit record because
   a timed-out worker is still alive and has not emitted a stopped transition.
 
-Chat-turn lifecycle is the second production event boundary. `ChatAgent`
+Chat-turn lifecycle is the second production event boundary.
+`ConversationGraphRuntime`
 accepts an instance-scoped publisher; `DaemonState` injects its existing
 publisher, while a standalone agent composes a private publisher with an audit
 subscriber.

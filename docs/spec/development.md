@@ -184,7 +184,7 @@ under the same package.
   implement either capability itself.
 - `cli/chat.py` owns CLI-facing daemon and one-shot chat adapters: configured
   request timeout, transport/application error translation, correlated audit
-  writes, direct `ChatAgent` invocation, and post-turn memory curator
+  writes, direct `ConversationGraphRuntime` invocation, and post-turn memory curator
   coordination. `agent/chat/` remains the conversation domain/runtime; the CLI
   adapter only translates that capability to CLI result and output contracts.
 - `daemon/request_handlers.py` owns typed request dispatch and response

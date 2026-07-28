@@ -533,7 +533,3 @@ def _completed_turn_result(
                 return ChatResult(answer=assistant_message.content, thread_id=thread_id)
             return None
     return None
-
-
-# Backward-compatible alias
-ChatAgent = ConversationGraphRuntime
