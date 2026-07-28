@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from nuself.eval import load_fixtures, run_eval
-
-NOTIFICATION_EVAL_FIXTURE_COUNT = 3
+from nuself.eval import EvalResult, load_fixtures, run_eval
+from nuself.notification_eval import run_notification_eval
 
 
 def handle_eval(args: argparse.Namespace) -> int:
@@ -19,12 +17,7 @@ def handle_eval(args: argparse.Namespace) -> int:
     fixture_total = 0
 
     if component in ("conversations", "all"):
-        default_fixtures = (
-            Path(__file__).parent.parent.parent
-            / "tests"
-            / "fixtures"
-            / "conversations"
-        )
+        default_fixtures = _repository_root() / "tests" / "fixtures" / "conversations"
         fixtures_directory = args.fixtures or default_fixtures
         if fixtures_directory.exists():
             fixtures = load_fixtures(fixtures_directory)
@@ -33,24 +26,10 @@ def handle_eval(args: argparse.Namespace) -> int:
                     results = run_eval(
                         Path(temporary), fixtures_directory
                     )
-                passed = sum(
-                    1 for result in results if result.passed
-                )
-                total = len(results)
+                passed, total = _result_counts(results)
                 passed_total += passed
                 fixture_total += total
-                print(
-                    f"== conversations: {passed}/{total} "
-                    "passed =="
-                )
-                for result in results:
-                    status = "PASS" if result.passed else "FAIL"
-                    print(
-                        f"  {status} {result.fixture_name} "
-                        f"(score={result.score:.2f})"
-                    )
-                    for failure in result.failures:
-                        print(f"    - {failure}")
+                _print_results("conversations", results)
             else:
                 print("No conversation fixtures found.")
         else:
@@ -61,24 +40,28 @@ def handle_eval(args: argparse.Namespace) -> int:
             )
 
     if component in ("notifications", "all"):
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pytest",
-                "tests/test_notification_eval_fixtures.py",
-                "-v",
-            ],
-            capture_output=True,
-            text=True,
+        notifications_directory = (
+            _repository_root()
+            / "tests"
+            / "fixtures"
+            / "notifications"
         )
-        print("== notifications ==")
-        print(result.stdout)
-        fixture_total += NOTIFICATION_EVAL_FIXTURE_COUNT
-        if result.returncode == 0:
-            passed_total += NOTIFICATION_EVAL_FIXTURE_COUNT
+        if notifications_directory.exists():
+            with tempfile.TemporaryDirectory() as temporary:
+                results = run_notification_eval(
+                    Path(temporary),
+                    notifications_directory,
+                )
+            passed, total = _result_counts(results)
+            passed_total += passed
+            fixture_total += total
+            _print_results("notifications", results)
         else:
-            print(result.stderr, file=sys.stderr)
+            print(
+                "Fixtures directory not found: "
+                f"{notifications_directory}",
+                file=sys.stderr,
+            )
 
     print(f"\n{passed_total}/{fixture_total} passed")
     return (
@@ -86,3 +69,30 @@ def handle_eval(args: argparse.Namespace) -> int:
         if passed_total == fixture_total and fixture_total > 0
         else 1
     )
+
+
+def _repository_root() -> Path:
+    return Path(__file__).resolve().parents[4]
+
+
+def _result_counts(results: list[EvalResult]) -> tuple[int, int]:
+    return (
+        sum(1 for result in results if result.passed),
+        len(results),
+    )
+
+
+def _print_results(
+    component: str,
+    results: list[EvalResult],
+) -> None:
+    passed, total = _result_counts(results)
+    print(f"== {component}: {passed}/{total} passed ==")
+    for result in results:
+        status = "PASS" if result.passed else "FAIL"
+        print(
+            f"  {status} {result.fixture_name} "
+            f"(score={result.score:.2f})"
+        )
+        for failure in result.failures:
+            print(f"    - {failure}")

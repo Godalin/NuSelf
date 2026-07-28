@@ -151,7 +151,10 @@ under the same package.
 - `cli/commands/pack.py` owns thought-pack export/import/list/inspect behavior,
   including pack path resolution and human-readable archive sizes.
 - `cli/commands/eval.py` owns conversation and notification fixture evaluation
-  orchestration for both the canonical and compatibility CLI routes.
+  orchestration for both the canonical and compatibility CLI routes. Every
+  evaluator returns one typed `EvalResult` per scenario; the command derives
+  totals and exit status from those results and must not infer fixture counts
+  from pytest output, hard-coded constants, or process return codes.
 - `cli/commands/system.py` owns one-shot status, health, effective-config, and log
   tail commands. Interactive log views and default/chat session orchestration
   remain in `nuself.cli`.
