@@ -339,6 +339,8 @@ tools 的活动持久 reason thread，同时保留 request/job correlation。
 Runtime envelope 与 log event 共用同一个严格 JSON freeze/thaw 边界，因此持久化
 audit data 和 live activity 会得到同一份不可变 metadata snapshot，不会保留对调用
 方容器的别名。
+每轮 agent tool 去重也使用同一套严格 JSON 语义生成 canonical cache identity；
+非 JSON 参数会绕过缓存，而不是因字符串强制转换发生碰撞或阻止 LangChain 处理。
 
 ## 通知
 

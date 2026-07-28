@@ -12,6 +12,8 @@ from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
+from nuself.runtime import freeze_json_value, thaw_json_value
+
 
 class ToolCaptureMiddleware(AgentMiddleware):
     """AgentMiddleware that captures, logs, and optionally caches tool calls.
@@ -79,8 +81,12 @@ class ToolCaptureMiddleware(AgentMiddleware):
         args: dict[str, Any] = tool_call.get("args", {})
         call_id: str | None = tool_call.get("id")
 
-        if self._cache is not None:
-            cache_key = f"{name}:{json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
+        cache_key = (
+            _tool_cache_key(name, args)
+            if self._cache is not None
+            else None
+        )
+        if self._cache is not None and cache_key is not None:
             with self._cache_lock:
                 cached = self._cache.get(cache_key)
             if cached is not None:
@@ -97,8 +103,7 @@ class ToolCaptureMiddleware(AgentMiddleware):
 
         result_text = _middleware_result_text(result)
 
-        if self._cache is not None:
-            cache_key = f"{name}:{json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
+        if self._cache is not None and cache_key is not None:
             with self._cache_lock:
                 self._cache[cache_key] = result_text
 
@@ -108,6 +113,26 @@ class ToolCaptureMiddleware(AgentMiddleware):
             self._captured.append((name, dict(args), result_text))
 
         return result
+
+
+def _tool_cache_key(
+    tool_name: str,
+    args: dict[str, Any],
+) -> str | None:
+    try:
+        canonical = thaw_json_value(freeze_json_value(args))
+    except TypeError:
+        return None
+    return (
+        f"{tool_name}:"
+        + json.dumps(
+            canonical,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+    )
 
 
 def _middleware_result_text(result: ToolMessage | Command[Any]) -> str:

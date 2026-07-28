@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import cast, overload
 
@@ -430,7 +429,12 @@ class ActivityEventsResponsePayload:
     events: tuple[LogEvent, ...]
 
     def to_wire(self) -> dict[str, JsonValue]:
-        return {"events": [_json_value(event.to_record()) for event in self.events]}
+        return {
+            "events": [
+                cast(JsonValue, event.to_record())
+                for event in self.events
+            ]
+        }
 
     @classmethod
     def from_wire(
@@ -645,15 +649,3 @@ def _expect_fields(
     if unknown:
         names = ", ".join(sorted(unknown))
         raise ProtocolError(f"unknown payload field(s): {names}")
-
-
-def _json_value(value: object) -> JsonValue:
-    if value is None or isinstance(value, str | bool | int | float):
-        return value
-    if isinstance(value, list | tuple):
-        sequence = cast(Iterable[object], value)
-        return [_json_value(item) for item in sequence]
-    if isinstance(value, Mapping):
-        mapping = cast(Mapping[object, object], value)
-        return {str(key): _json_value(item) for key, item in mapping.items()}
-    raise TypeError(f"activity event contains non-JSON value: {type(value).__name__}")

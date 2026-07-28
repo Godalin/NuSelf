@@ -376,6 +376,10 @@ Structured logs are an append-only sink and read model.
 - Runtime envelopes and log events use the same recursive JSON freeze/thaw
   boundary. Frozen payloads do not retain caller container aliases, while
   serialized records are detached mutable dict/list trees.
+- Boundary adapters must not re-normalize a validated record by coercing keys
+  or arbitrary values. Daemon activity encoding consumes the detached
+  `LogEvent.to_record()` result directly and leaves final wire validation to
+  the daemon protocol codec.
 - File writes are serialized per project/component.
 - Readers use stable event ids and incremental cursors; complete-record hashing
   is a legacy compatibility fallback only.

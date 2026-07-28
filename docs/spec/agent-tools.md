@@ -159,6 +159,13 @@ response-protocol fields remains ordinary text.
 
 Within one logical chat turn, repeated tool calls with the same normalized tool name and identical arguments should reuse the first result. The runtime should still return a `ToolMessage` for every LangChain tool call id, but it should not execute or log duplicate service calls. This keeps interactive logs readable and prevents repeated status queries such as `memory_count` from looking like retries.
 
+Duplicate identity uses the tool name plus canonical strict JSON arguments:
+mapping keys must be strings, floats must be finite, and mapping key order does
+not affect the key. The cache must not stringify arbitrary Python objects.
+Arguments that cannot cross the JSON tool boundary bypass duplicate
+suppression; middleware still delegates them to LangChain's handler so caching
+does not introduce a second validation protocol or suppress execution.
+
 Direct service-status queries, such as asking how many memory/reflection/reason/trace records exist, should call those service tools directly. These are operational tool queries; persona discussion before tool results tends to invent capability limits and adds noise.
 
 ## Tool Catalog

@@ -360,6 +360,9 @@ audit write, and observers are not implicitly carried into new worker threads.
 Runtime envelopes and log events share one strict JSON freeze/thaw boundary,
 so persisted audit data and live activity receive the same immutable metadata
 snapshot without retaining aliases to caller-owned containers.
+Per-turn agent tool deduplication uses the same strict JSON semantics for
+canonical cache identities. Non-JSON arguments bypass caching rather than
+colliding through string coercion or preventing LangChain from handling them.
 
 ## Notifications
 

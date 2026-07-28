@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The immutable LogEvent metadata ownership batch is complete.
+Idle. The runtime JSON-normalization drift batch is complete.
 
 ## Active Branch
 
@@ -22,12 +22,12 @@ code.
 
 ## Completion Evidence
 
-- LogEvent metadata is recursively immutable and detached from caller input.
-- Audit serialization returns a detached JSON-safe record.
-- Observers and activity queues see the same immutable event snapshot.
-- Non-string keys, non-finite floats, and non-JSON values fail before writing.
-- Focused tests: 91 passed.
-- Full tests: 1215 passed.
+- Activity payloads consume detached LogEvent records without key coercion.
+- Canonically equivalent tool argument mappings produce the same cache key.
+- Non-JSON and non-finite tool arguments cannot collide through stringification.
+- Invalid cache arguments bypass deduplication while the handler still runs.
+- Focused tests: 96 passed.
+- Full tests: 1219 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -37,4 +37,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit remaining direct JSON normalization helpers for shared-boundary drift.
+Audit persistence writers for non-finite JSON and partial-write behavior.

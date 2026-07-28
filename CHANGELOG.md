@@ -75,6 +75,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   snapshot before audit persistence and live projection. Caller or observer
   mutation cannot change queued activity, and invalid keys, values, or
   non-finite numbers fail before a partial record is written.
+- Per-turn agent tool deduplication now uses canonical strict JSON arguments
+  instead of `default=str` coercion. Invalid non-JSON arguments bypass the
+  cache without blocking execution, and daemon activity no longer
+  re-normalizes validated log records.
 - Daemon JSONL transport now uses a shared 1 MiB request/response frame limit,
   requires newline-complete UTF-8 JSON, times out stalled server reads, and
   rejects incomplete, extra, non-finite, or response-id-mismatched frames.
