@@ -896,6 +896,60 @@ def test_incremental_cursor_finishes_rotated_inode_before_active_file(
     ]
 
 
+@pytest.mark.parametrize("active_file_moved", (False, True))
+def test_rotation_failure_preserves_current_event_and_safe_diagnostic(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    active_file_moved: bool,
+) -> None:
+    observed: list[LogEvent] = []
+    write_log_event(
+        "chat",
+        "turn_started",
+        "private existing event",
+        project_root=tmp_path,
+    )
+    private_path = tmp_path / "private-rotation-target"
+
+    def fail_rotation(
+        target: Path,
+        *,
+        incoming_bytes: int,
+        policy: LogRetentionPolicy,
+    ) -> None:
+        del incoming_bytes, policy
+        if active_file_moved:
+            target.replace(target.with_name(f"{target.name}.1"))
+        raise PermissionError(13, "private failure", private_path)
+
+    monkeypatch.setattr(logs, "_rotate_log_if_needed", fail_rotation)
+    policy = LogRetentionPolicy(max_bytes=1, backup_count=2)
+
+    with pytest.warns(RuntimeWarning) as captured:
+        with observe_log_events(observed.append):
+            written = write_log_event(
+                "chat",
+                "turn_completed",
+                "private current event",
+                project_root=tmp_path,
+                retention_policy=policy,
+            )
+
+    assert observed == [written]
+    assert [
+        event.message
+        for event in read_log_events(project_root=tmp_path, component="chat")
+    ] == ["private existing event", "private current event"]
+    assert len(captured) == 1
+    warning = str(captured[0].message)
+    assert "logs/rotation_failed" in warning
+    assert "component=chat" in warning
+    assert "error_type=PermissionError" in warning
+    assert "private current event" not in warning
+    assert "private failure" not in warning
+    assert str(private_path) not in warning
+
+
 def test_log_retention_policy_rejects_unbounded_values() -> None:
     with pytest.raises(ValueError, match="max_bytes"):
         LogRetentionPolicy(max_bytes=0)

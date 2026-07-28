@@ -474,11 +474,14 @@ def _append_log_event(
     with _log_write_lock(path), lock_path.open("a", encoding="utf-8") as lock_file:
         flock(lock_file.fileno(), LOCK_EX)
         try:
-            _rotate_log_if_needed(
-                path,
-                incoming_bytes=encoded_size,
-                policy=retention_policy,
-            )
+            try:
+                _rotate_log_if_needed(
+                    path,
+                    incoming_bytes=encoded_size,
+                    policy=retention_policy,
+                )
+            except OSError as exc:
+                _report_log_rotation_failure(event_record.component, exc)
             with path.open("a", encoding="utf-8") as log_file:
                 log_file.write(line)
                 log_file.flush()
@@ -495,6 +498,18 @@ def _append_log_event(
             )
             continue
     return event_record
+
+
+def _report_log_rotation_failure(
+    component: LogComponent,
+    exc: OSError,
+) -> None:
+    emit_runtime_warning(
+        "logs/rotation_failed: "
+        f"component={component} error_type={type(exc).__name__}; "
+        "continuing without guaranteed retention bounds",
+        stacklevel=3,
+    )
 
 
 def _report_log_observer_failure(

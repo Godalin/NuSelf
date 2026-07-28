@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Reconcile duplicate log identities consistently across full, rotated,
-incremental, and non-file activity reads.
+Keep structured event persistence available when bounded-retention rotation
+encounters filesystem failures.
 
 ## Active Branch
 
@@ -14,38 +14,39 @@ incremental, and non-file activity reads.
 
 ## Ordered Work
 
-1. Audit full-reader, rotation-overlap, cursor, and `mark_seen()` identity state.
-2. Specify exact duplicate versus conflicting duplicate behavior.
-3. Add one canonical record fingerprint per seen identity.
-4. Share reconciliation across full and incremental readers.
-5. Verify exact deduplication and cross-batch conflict diagnostics.
+1. Audit rotation mutation order and write-failure boundaries.
+2. Specify persistence-first degradation for retention failures.
+3. Isolate rotation failures without weakening append failures.
+4. Emit one safe non-raising rotation diagnostic.
+5. Verify failures before and after active-file replacement.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep the chronologically first record as canonical.
-- Do not expose event IDs or record payloads in conflict diagnostics.
-- Preserve content-derived identity for legacy records without event IDs.
+- Append, lock, and runtime-directory failures still propagate to the caller.
+- Observers run only after the current event is successfully appended.
+- Do not expose event content, filesystem paths, or exception messages in the
+  degradation diagnostic.
 
 ## Completion Evidence
 
-- Full and incremental readers share canonical-record fingerprint
-  reconciliation after chronological sorting.
-- Exact rotated/active and activity/file overlaps are silently deduplicated;
-  the chronologically first record remains canonical.
-- Reused event IDs with different content suppress the later record and emit
-  one aggregate warning without IDs, payloads, messages, metadata, or paths.
-- `InteractiveLogCursor.mark_seen(...)` retains fingerprints across transport
-  and file batches instead of recording identity alone.
-- Focused log, CLI, and REPL activity tests: `358 passed`.
-- `.venv/bin/pytest -q`: `1542 passed`.
+- Retention rotation `OSError`s are isolated from the active event append;
+  lock, directory, and append failures remain outside the degradation boundary.
+- A failed rotation before active-file replacement continues in the existing
+  active file; a failure after replacement creates a new active file.
+- Both recovery states preserve readable event history and deliver the
+  successfully persisted event to process-local observers.
+- Rotation diagnostics are non-raising and expose only component plus exception
+  type, excluding event content, paths, and exception messages.
+- Focused log infrastructure tests: `48 passed`.
+- `.venv/bin/pytest -q`: `1544 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `a6bebbf`.
+`dev/v0.3.x` is published through `762d32c`.
 
 ## Next Review Batch
 
-Audit log retention and rotation recovery under filesystem failures.
+Audit partial append recovery and record durability guarantees.

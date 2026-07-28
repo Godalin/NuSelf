@@ -329,6 +329,14 @@ Structured component logs use `LogRetentionPolicy`. The production default is
 - A stable sidecar advisory lock serializes rotation and append across
   processes; locking the active inode itself is insufficient because rotation
   replaces that inode.
+- Rotation is bounded-retention maintenance, not a prerequisite for event
+  persistence. An `OSError` while deleting or replacing rotation files does
+  not reject the current event: the writer appends it to whichever active file
+  exists after the failed attempt, creating a new active file when the prior
+  one was already moved. It emits one non-raising terminal warning containing
+  only the component and exception type, never event content, filesystem
+  paths, or the exception message. Lock acquisition, directory creation, and
+  active-file append failures still propagate.
 - Readers include numbered backups in chronological sorting.
 - Incremental cursors track file identity as well as byte offset. If rotation
   replaces the active file, a cursor finishes the matching `.1` inode from its
