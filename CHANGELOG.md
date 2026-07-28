@@ -54,6 +54,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- The derived LLM endpoint preference is now versioned, strictly validated, and
+  atomically written. Corrupt, invalid, or stale state emits a payload-safe
+  diagnostic and safely returns to configured endpoint order instead of
+  failing silently.
 - Reflection schedule state is now versioned, strictly validated, and written
   atomically. Corrupt or partial state fails closed with a payload-safe
   diagnostic instead of silently disabling cooldown, interval, or daily-cap

@@ -15,6 +15,8 @@ from langchain_openai import ChatOpenAI
 from nuself.config import ConfigSystem
 from nuself.config import runtime_paths
 from nuself.logs import write_log_event
+from nuself.runtime.observability import report_corrupt_record
+from nuself.storage import write_json_atomic
 
 ChatRole: TypeAlias = Literal["system", "user", "assistant"]
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
@@ -109,7 +111,7 @@ class LocalFallbackLLM:
 
 def default_llm(project_root: Path | None = None) -> ChatLLM:
     """Return the configured LLM, or a deterministic local fallback."""
-    langchain_endpoints = configured_langchain_chat_models(project_root)
+    langchain_endpoints = _configured_llm_endpoints(project_root)
     if not langchain_endpoints:
         return LocalFallbackLLM()
     return _LangChainFailoverLLM(langchain_endpoints, project_root=project_root)
@@ -131,7 +133,10 @@ class _LangChainFailoverLLM:
     ) -> None:
         self._endpoints = endpoints
         self._project_root = project_root
-        self._start_index = _load_llm_state(project_root)
+        self._start_index = _load_llm_state(
+            project_root,
+            available_indices={endpoint.index for endpoint in endpoints},
+        )
 
     def complete(self, messages: list[ChatMessage]) -> str:
         last_error: RuntimeError | None = None
@@ -212,7 +217,10 @@ def configured_langchain_chat_models(project_root: Path | None = None) -> tuple[
     endpoints = _configured_llm_endpoints(project_root)
     if not endpoints:
         return ()
-    start_index = _load_llm_state(project_root)
+    start_index = _load_llm_state(
+        project_root,
+        available_indices={endpoint.index for endpoint in endpoints},
+    )
     by_index = {ep.index: ep for ep in endpoints}
     ordered: list[LangChainLLMEndpoint] = []
     if start_index in by_index:
@@ -307,22 +315,83 @@ def redact_llm_error(message: str) -> str:
 # ============================================================================
 
 
-def _load_llm_state(project_root: Path | None) -> int:
+@dataclass(frozen=True)
+class LLMEndpointState:
+    """Versioned derived preference for the last successful endpoint."""
+
+    schema_version: int
+    active_endpoint_index: int
+
+    def __post_init__(self) -> None:
+        if type(self.schema_version) is not int or self.schema_version != 1:
+            raise ValueError("LLM endpoint state version is unsupported")
+        if (
+            type(self.active_endpoint_index) is not int
+            or self.active_endpoint_index < 0
+        ):
+            raise ValueError(
+                "LLM endpoint state index must be a non-negative integer"
+            )
+
+    @classmethod
+    def from_wire(cls, raw: object) -> LLMEndpointState:
+        if not isinstance(raw, dict):
+            raise ValueError("LLM endpoint state must be a JSON object")
+        data = cast(dict[object, object], raw)
+        if set(data) != {"schema_version", "active_endpoint_index"}:
+            raise ValueError("LLM endpoint state fields are invalid")
+        schema_version = data["schema_version"]
+        endpoint_index = data["active_endpoint_index"]
+        if type(schema_version) is not int:
+            raise ValueError("LLM endpoint state version must be an integer")
+        if type(endpoint_index) is not int:
+            raise ValueError("LLM endpoint state index must be an integer")
+        return cls(
+            schema_version=schema_version,
+            active_endpoint_index=endpoint_index,
+        )
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "active_endpoint_index": self.active_endpoint_index,
+        }
+
+
+def _load_llm_state(
+    project_root: Path | None,
+    *,
+    available_indices: set[int] | None = None,
+) -> int | None:
     path = runtime_paths(project_root).runtime_dir / "llm_state.json"
     try:
         raw: object = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return 0
-    if not isinstance(raw, dict):
-        return 0
-    data = cast(dict[object, object], raw)
-    index = data.get("active_endpoint_index")
-    return index if isinstance(index, int) and index >= 0 else 0
+        state = LLMEndpointState.from_wire(raw)
+        if (
+            available_indices is not None
+            and state.active_endpoint_index not in available_indices
+        ):
+            raise ValueError(
+                "saved LLM endpoint index is not currently configured"
+            )
+        return state.active_endpoint_index
+    except FileNotFoundError:
+        return None
+    except (OSError, json.JSONDecodeError, ValueError):
+        report_corrupt_record(
+            ValueError("LLM endpoint preference state is invalid"),
+            component="chat",
+            collection="llm_endpoint_state",
+            record_id=path.stem,
+            project_root=project_root,
+        )
+        return None
 
 
 def _save_llm_state(project_root: Path | None, endpoint_index: int) -> None:
-    paths = runtime_paths(project_root)
-    paths.runtime_dir.mkdir(parents=True, exist_ok=True)
-    path = paths.runtime_dir / "llm_state.json"
-    payload: dict[str, JsonValue] = {"active_endpoint_index": endpoint_index}
-    path.write_text(json.dumps(payload, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8")
+    state = LLMEndpointState(
+        schema_version=1,
+        active_endpoint_index=endpoint_index,
+    )
+    path = runtime_paths(project_root).runtime_dir / "llm_state.json"
+    write_json_atomic(path, state.to_wire())

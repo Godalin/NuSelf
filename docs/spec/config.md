@@ -103,6 +103,14 @@ Rules:
 - Runtime LLM state is stored under `private/runtime/llm_state.json`.
 - State records the last successful configured endpoint index in the `llm` list.
 - On the next process use, NuSelf starts from the saved successful index, then wraps around through the configured endpoints.
+- The state is a versioned derived preference record and is written through
+  atomic file replacement. Its endpoint index must be a non-negative JSON
+  integer; booleans are not integers for this contract.
+- Missing state is the normal first-run case and silently uses configured
+  endpoint order. Malformed, partial, unsupported, unreadable, or stale state
+  emits a payload-safe `record_decode_failed` diagnostic and also uses
+  configured endpoint order. Because this state is only a rebuildable
+  preference, corruption must not prevent LLM use.
 - The saved index is updated only after a successful request.
 - When an endpoint fails with a provider-account availability error, NuSelf tries the next configured endpoint in the same request.
 - Provider-account availability errors include HTTP 401, 402, 403, 429, and response bodies containing subscription, quota, billing, credit, or insufficient-balance indicators.
