@@ -146,6 +146,19 @@ agent run, but it is not authority to replay a completed tool in a new agent
 run. Before any tool executes, the existing bounded same-endpoint retry and
 endpoint failover behavior remains unchanged.
 
+### Tool Outcome Transfer
+
+Middleware transfers tool execution state internally as one immutable
+`ToolOutcome`, never as a positional tuple. The record contains tool name,
+detached arguments, and exactly one of `result` or `error`. Successful and
+failed outcomes therefore remain distinguishable to retry policy, audit
+projection, and persisted reason-step snapshots.
+
+Reason tool outcomes are projected even when the enclosing agent later fails.
+Projection failure remains secondary, but the authoritative agent error is not
+allowed to erase evidence that a tool already ran. Public tool-log snapshots
+retain the existing `metadata.result` / `metadata.error` wire contract.
+
 `ConversationGraphRuntime` runs a small LangGraph workflow with four nodes:
 
 1. **prepare_context** — assemble durable context (memory, thread state, skills)

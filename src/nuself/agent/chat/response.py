@@ -15,7 +15,7 @@ from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
-from nuself.agent.middleware import ToolCaptureMiddleware
+from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
 from nuself.llm import (
     ChatLLM,
     ChatMessage,
@@ -237,9 +237,7 @@ class _LangChainChatSupervisor:
         self._tools = tuple(tools)
         self._log_tool_call = log_tool_call
         self._report_tool_log_failure = report_tool_log_failure
-        self._tool_outcomes: list[
-            tuple[str, dict[str, object], str | None]
-        ] = []
+        self._tool_outcomes: list[ToolOutcome] = []
 
     @property
     def has_tool_outcomes(self) -> bool:

@@ -8,7 +8,11 @@ import pytest
 from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 
-from nuself.agent.middleware import ToolCaptureMiddleware, _tool_cache_key
+from nuself.agent.middleware import (
+    ToolCaptureMiddleware,
+    ToolOutcome,
+    _tool_cache_key,
+)
 
 
 def _message_content(message: ToolMessage) -> str:
@@ -145,6 +149,48 @@ def test_tool_log_failure_does_not_replace_successful_result() -> None:
     assert _message_content(result) == "completed"
     assert len(observed) == 1
     assert str(observed[0]) == "audit unavailable"
+
+
+def test_tool_capture_preserves_success_and_failure_semantics() -> None:
+    captured: list[ToolOutcome] = []
+    middleware = ToolCaptureMiddleware(captured=captured)
+
+    middleware.wrap_tool_call(
+        _request({"nested": {"value": 1}}, call_id="success"),
+        lambda request: ToolMessage(
+            content="completed",
+            name="memory_count",
+            tool_call_id=request.tool_call["id"] or "",
+        ),
+    )
+
+    def fail_tool(_request: ToolCallRequest) -> ToolMessage:
+        raise LookupError("primary failure")
+
+    with pytest.raises(LookupError, match="primary failure"):
+        middleware.wrap_tool_call(
+            _request({"target": "x"}, call_id="failure"),
+            fail_tool,
+        )
+
+    assert captured[0].result == "completed"
+    assert captured[0].error is None
+    assert captured[1].result is None
+    assert captured[1].error == "primary failure"
+    with pytest.raises(TypeError):
+        captured[0].args["new"] = "mutation"  # type: ignore[index]
+
+
+def test_tool_outcome_requires_exactly_one_result_kind() -> None:
+    with pytest.raises(ValueError):
+        ToolOutcome(name="tool", args={})
+    with pytest.raises(ValueError):
+        ToolOutcome(
+            name="tool",
+            args={},
+            result="ok",
+            error="failed",
+        )
 
 
 def test_tool_log_failure_does_not_replace_tool_exception() -> None:

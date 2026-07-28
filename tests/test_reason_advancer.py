@@ -14,6 +14,7 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
+from nuself.agent.middleware import ToolOutcome
 from nuself.logs import read_log_events
 from nuself.reason.advancer import (
     REASON_ADVANCE_SYSTEM_PROMPT,
@@ -68,11 +69,15 @@ class _ConcurrentCaptureAgent:
             self.max_active = max(self.max_active, self._active)
         try:
             captured = cast(
-                list[tuple[str, dict[str, object], str | None]],
+                list[ToolOutcome],
                 cast(Any, advancer)._captured,
             )
             captured.append(
-                (f"tool-{thread_id}", {"thread_id": thread_id}, thread_id)
+                ToolOutcome.succeeded(
+                    f"tool-{thread_id}",
+                    {"thread_id": thread_id},
+                    thread_id,
+                )
             )
             time.sleep(0.03)
             return {
@@ -215,6 +220,57 @@ def test_advance_failure_logs_shared_context_and_restores_caller(
     assert failure.source == "client"
     assert failure.error == "agent failed"
     assert "Traceback" not in failure.message
+
+
+def test_agent_failure_still_projects_prior_failed_tool_outcome(
+    tmp_path: Path,
+) -> None:
+    class FailingAfterToolAgent:
+        def __init__(self) -> None:
+            self.advancer: ReasonAdvancer | None = None
+
+        def invoke(self, _input: object) -> dict[str, object]:
+            assert self.advancer is not None
+            captured = cast(
+                list[ToolOutcome],
+                cast(Any, self.advancer)._captured,
+            )
+            captured.append(
+                ToolOutcome.failed(
+                    "workspace_put",
+                    {"key": "decision"},
+                    "storage unavailable",
+                )
+            )
+            raise RuntimeError("agent failed after tool")
+
+    agent = FailingAfterToolAgent()
+    advancer = _advancer_with_agent(tmp_path, agent)
+    agent.advancer = advancer
+
+    with pytest.raises(
+        RuntimeError,
+        match="agent failed after tool",
+    ):
+        advancer.advance(
+            ReasoningThread(id="reason-test", topic="Q")
+        )
+
+    events = read_log_events(
+        project_root=tmp_path,
+        component="reasoning",
+    )
+    tool_event = next(
+        event
+        for event in events
+        if event.event == "service_tool_called"
+    )
+    assert tool_event.status == "failed"
+    assert tool_event.metadata is not None
+    assert tool_event.metadata["tool"] == "workspace_put"
+    assert tool_event.metadata["error"] == "storage unavailable"
+    assert events[-1].event == "advance_tool_failed"
+    assert events[-1].error == "agent failed after tool"
 
 
 def test_advance_failure_log_cannot_mask_original_exception(

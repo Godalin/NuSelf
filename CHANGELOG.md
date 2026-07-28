@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Shared agent middleware now transfers tool execution through immutable typed
+  `ToolOutcome` records with distinct result/error fields. Reason tool outcomes
+  are projected even when the enclosing agent later fails, so executed or
+  failed tools no longer disappear or become mislabeled successful results.
 - Chat model retry and endpoint failover are now suppressed after the current
   agent invocation records any tool outcome. Provider or structured-output
   failure can no longer replay a mutation through a fresh agent run; failures

@@ -373,6 +373,10 @@ Chat endpoint retry is also tool-safe: once an agent invocation has produced
 any tool outcome, a later model failure cannot start a fresh agent run or
 switch endpoints and replay that tool. Failures before the first tool retain
 the bounded retry and failover policy.
+Agent middleware carries each tool outcome as an immutable typed record with
+separate result and error states. Reason tool activity is therefore still
+logged accurately when the enclosing reasoning agent fails after a tool ran;
+the original agent failure remains authoritative.
 
 ## Daemon
 

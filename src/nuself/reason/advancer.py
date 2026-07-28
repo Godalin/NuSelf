@@ -12,7 +12,7 @@ from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
-from nuself.agent.middleware import ToolCaptureMiddleware
+from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
 
 from nuself.llm import LangChainLLMEndpoint
 from nuself.reason.domain import (
@@ -23,7 +23,10 @@ from nuself.reason.domain import (
 )
 from nuself.reason.errors import ReasonAdvanceError
 from nuself.runtime import current_runtime_context, runtime_context
-from nuself.runtime.observability import report_observed_failure
+from nuself.runtime.observability import (
+    report_observed_failure,
+    run_observed_best_effort,
+)
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -220,7 +223,7 @@ class ReasonAdvancer:
         self._workspace_store = workspace_store
         self._readonly_tools = tuple(readonly_tools) if readonly_tools else ()
         self._langchain_models = langchain_models or ()
-        self._captured: list[tuple[str, dict[str, object], str | None]] = []
+        self._captured: list[ToolOutcome] = []
         self._invoke_lock = Lock()
         self._middleware = ToolCaptureMiddleware(captured=self._captured)
         self._agent = self._build_agent()
@@ -262,30 +265,13 @@ class ReasonAdvancer:
                 base = build_advance_prompt(thread)
                 system = SystemMessage(content=build_system_prompt(thread))
                 messages = [system, HumanMessage(content=base)]
-                result = self._agent.invoke({"messages": messages})
+                try:
+                    result = self._agent.invoke({"messages": messages})
+                except Exception:
+                    self._project_tool_outcomes()
+                    raise
                 state = cast(dict[str, object], result) if isinstance(result, dict) else {}
-                for name, args, tc_result in self._captured:
-                    _log_tool_call(name, args, project_root=self._project_root, result=tc_result, tool_service_map=self._tool_service_map)
-                from nuself.agent.tool_utils import tool_log_metadata
-
-                step_tool_logs = cast(
-                    "tuple[dict[str, object], ...]",
-                    tuple(
-                        {
-                            "component": "reasoning",
-                            "event": "service_tool_called",
-                            "message": f"{name} completed",
-                            "status": "completed",
-                            "metadata": tool_log_metadata(
-                                args=dict(args),
-                                result=result,
-                                service_component=self._tool_service_map.get(name, ""),
-                                tool_name=name,
-                            ),
-                        }
-                        for name, args, result in self._captured
-                    ),
-                )
+                step_tool_logs = self._project_tool_outcomes()
                 structured = state.get("structured_response")
                 if not isinstance(structured, ReasonStepOutput):
                     raise ReasonAdvanceError(
@@ -307,6 +293,56 @@ class ReasonAdvancer:
                     metadata={"thread_id": thread.id},
                 )
                 raise
+
+    def _project_tool_outcomes(
+        self,
+    ) -> tuple[dict[str, object], ...]:
+        from nuself.agent.tool_utils import tool_log_metadata
+
+        snapshots: list[dict[str, object]] = []
+        for outcome in self._captured:
+            args = dict(outcome.args)
+            run_observed_best_effort(
+                lambda outcome=outcome, args=args: _log_tool_call(
+                    outcome.name,
+                    args,
+                    project_root=self._project_root,
+                    result=outcome.result,
+                    error=outcome.error,
+                    tool_service_map=self._tool_service_map,
+                ),
+                component="reasoning",
+                event="tool_log_projection_failed",
+                message=(
+                    f"Could not project reason tool outcome "
+                    f"{outcome.name}"
+                ),
+                project_root=self._project_root,
+                metadata={"tool": outcome.name},
+            )
+            failed = outcome.error is not None
+            snapshots.append(
+                {
+                    "component": "reasoning",
+                    "event": "service_tool_called",
+                    "message": (
+                        f"{outcome.name} "
+                        f"{'failed' if failed else 'completed'}"
+                    ),
+                    "status": "failed" if failed else "completed",
+                    "metadata": tool_log_metadata(
+                        args=args,
+                        result=outcome.result,
+                        error=outcome.error,
+                        service_component=self._tool_service_map.get(
+                            outcome.name,
+                            "",
+                        ),
+                        tool_name=outcome.name,
+                    ),
+                }
+            )
+        return tuple(snapshots)
 
     def _build_workspace_tools(self) -> tuple[Any, ...]:
         """Build workspace tools once that resolve the active reason thread."""

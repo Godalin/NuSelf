@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The chat tool-safe retry boundary is complete.
+Idle. The typed tool-outcome migration is complete.
 
 ## Active Branch
 
@@ -21,20 +21,21 @@ None while idle.
 
 ## Completion Evidence
 
-- Chat supervisor middleware exposes invocation-local tool outcomes.
-- Any successful or failed tool outcome suppresses same-endpoint retry and
-  cross-endpoint failover for that turn.
-- Suppression writes `chat/llm_retry_suppressed_after_tool_call` and uses the
-  existing no-tool fallback without replaying tools.
-- Failures before the first tool preserve bounded retry and failover.
-- `.venv/bin/pytest -q`: `1474 passed`.
+- Shared middleware emits immutable `ToolOutcome` records with detached
+  arguments and exactly one of result or error.
+- Chat retry suppression consumes typed outcomes without positional tuples.
+- Reason tool-log projection preserves result/error status in the existing
+  public wire shape.
+- Tool outcomes are projected before a later reason-agent failure propagates;
+  projection failure cannot replace the agent error.
+- `.venv/bin/pytest -q`: `1477 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `a3dc758`.
+`dev/v0.3.x` is published through `1f8f661`.
 
 ## Next Review Batch
 
-Audit reason advancer endpoint availability without permitting tool replay.
+Add tool-safe reason endpoint failover using typed outcomes.

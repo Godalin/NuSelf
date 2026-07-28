@@ -4,15 +4,58 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Mapping, cast
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
-from nuself.runtime import encode_json_value
+from nuself.runtime import encode_json_value, freeze_json_value
 from nuself.runtime.diagnostics import emit_runtime_warning
+
+
+@dataclass(frozen=True)
+class ToolOutcome:
+    """One immutable internal tool execution outcome."""
+
+    name: str
+    args: Mapping[str, object]
+    result: str | None = None
+    error: str | None = None
+
+    def __post_init__(self) -> None:
+        if (self.result is None) == (self.error is None):
+            raise ValueError(
+                "tool outcome requires exactly one of result or error"
+            )
+        frozen = freeze_json_value(dict(self.args))
+        if not isinstance(frozen, Mapping):
+            raise TypeError("tool outcome args must be a mapping")
+        object.__setattr__(
+            self,
+            "args",
+            cast(Mapping[str, object], frozen),
+        )
+
+    @classmethod
+    def succeeded(
+        cls,
+        name: str,
+        args: Mapping[str, object],
+        result: str,
+    ) -> ToolOutcome:
+        return cls(name=name, args=args, result=result)
+
+    @classmethod
+    def failed(
+        cls,
+        name: str,
+        args: Mapping[str, object],
+        error: str,
+    ) -> ToolOutcome:
+        return cls(name=name, args=args, error=error)
 
 
 class ToolCaptureMiddleware(AgentMiddleware):
@@ -48,7 +91,7 @@ class ToolCaptureMiddleware(AgentMiddleware):
         *,
         log_callback: Callable[..., None] | None = None,
         log_error_callback: Callable[[Exception], None] | None = None,
-        captured: list[tuple[str, dict[str, object], str | None]] | None = None,
+        captured: list[ToolOutcome] | None = None,
         cache: dict[str, str] | None = None,
     ) -> None:
         super().__init__()
@@ -113,7 +156,9 @@ class ToolCaptureMiddleware(AgentMiddleware):
         except Exception as exc:
             self._log(name, args, error=str(exc))
             if self._captured is not None:
-                self._captured.append((name, dict(args), str(exc)))
+                self._captured.append(
+                    ToolOutcome.failed(name, args, str(exc))
+                )
             raise
 
         result_text = _middleware_result_text(result)
@@ -124,7 +169,9 @@ class ToolCaptureMiddleware(AgentMiddleware):
 
         self._log(name, args, result=result_text)
         if self._captured is not None:
-            self._captured.append((name, dict(args), result_text))
+            self._captured.append(
+                ToolOutcome.succeeded(name, args, result_text)
+            )
 
         return result
 

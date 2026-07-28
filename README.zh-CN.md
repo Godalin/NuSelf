@@ -340,6 +340,9 @@ summary，使 context persistence 仍能完成且不会编造内容。
 chat endpoint retry 也遵循工具副作用安全边界：当前 agent invocation 一旦产生任意
 tool outcome，后续模型失败就不能启动新的 agent run 或切换 endpoint 来重放该工具；
 首个工具执行前的失败仍保留有界 retry 与 failover。
+agent middleware 使用不可变 typed record 传递每个 tool outcome，并明确区分 result
+与 error。因此 reason agent 在工具运行后失败时，工具活动仍会被准确记录，同时原始
+agent failure 继续作为权威错误。
 
 ## 守护进程
 
