@@ -30,6 +30,7 @@ from nuself.runtime import decode_json_value, encode_json_value
 __all__ = [
     "SqliteStore",
     "ScopedWorkspace",
+    "WorkspaceCollection",
 ]
 
 
@@ -241,8 +242,10 @@ class ScopedWorkspace:
         filter: dict[str, Any] | None = None,
         limit: int = 10,
         offset: int = 0,
+        sub: str | None = None,
     ) -> list[dict[str, Any]]:
-        items = self._store.search(self._prefix, query=query, filter=filter, limit=limit, offset=offset)
+        prefix = self._prefix + ((sub,) if sub else ())
+        items = self._store.search(prefix, query=query, filter=filter, limit=limit, offset=offset)
         return [item.value for item in items]
 
     def delete(self, key: str, *, sub: str | None = None) -> None:
@@ -259,3 +262,43 @@ class ScopedWorkspace:
         return self._store.list_namespaces(prefix=self._prefix, max_depth=max_depth, limit=limit, offset=offset)
 
 
+class WorkspaceCollection:
+    """Expose one scoped workspace namespace as a storage collection."""
+
+    def __init__(self, workspace: ScopedWorkspace, *, namespace: str) -> None:
+        if not namespace:
+            raise ValueError("workspace collection namespace must not be empty")
+        self._workspace = workspace
+        self._namespace = namespace
+
+    def get(self, key: str) -> dict[str, object] | None:
+        return cast(
+            dict[str, object] | None,
+            self._workspace.get(key, sub=self._namespace),
+        )
+
+    def put(self, key: str, value: dict[str, object]) -> None:
+        self._workspace.put(key, cast(dict[str, Any], value), sub=self._namespace)
+
+    def delete(self, key: str) -> None:
+        self._workspace.delete(key, sub=self._namespace)
+
+    def list(self) -> tuple[dict[str, object], ...]:
+        return tuple(
+            cast(
+                list[dict[str, object]],
+                self._workspace.search(limit=10_000, sub=self._namespace),
+            )
+        )
+
+    def find(self, **filters: object) -> tuple[dict[str, object], ...]:
+        return tuple(
+            cast(
+                list[dict[str, object]],
+                self._workspace.search(
+                    filter=cast(dict[str, Any], filters),
+                    limit=10_000,
+                    sub=self._namespace,
+                ),
+            )
+        )

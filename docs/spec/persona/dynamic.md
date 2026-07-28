@@ -27,14 +27,12 @@ prompt is loaded, used as LLM context for one call, and the result is returned
 to the calling agent. The caller (reason advancer, chat supervisor,
 `selves_consult`) decides when and whether to invoke a persona.
 
-## Storage — Private Repo
+## Storage
 
-```
-private/
-  persona_prompts/
-    <id>.json           # one file per prompt
-    name_index.json     # {name: id} lookup
-```
+Global dynamic personas use the durable `persona_prompts`
+`StorageCollection`. Reason-thread personas use the same repository contract
+through a `WorkspaceCollection` over the thread's scoped SQLite workspace.
+There is no parallel raw-file repository or derived name index.
 
 ### PersonaPrompt Model
 
@@ -60,22 +58,15 @@ class PersonaPromptRepository:
     def resolve(self, name_or_id: str) -> PersonaPrompt | None: ...
 ```
 
-- `<id>.json` prompt records are authoritative; `name_index.json` is a
-  rebuildable derived projection.
-- `save()` writes `<id>.json` and atomically rebuilds `name_index.json`, so
-  saving an existing ID under a new name cannot leave its old name as an alias.
+- The injected collection record keyed by persona id is authoritative.
+- `save()` replaces that record. Name lookup is derived from current collection
+  records, so renaming an id cannot leave its old name as an alias.
 - `resolve()` tries id first, then name lookup.
-- All writes are atomic (write a unique temp file, rename).
-- Writes for the same local process are serialized per repository root, so
-  concurrent tool calls cannot race on `name_index.json` or leave stale temp
-  file state.
-- Name lookup validates that the index is a string-to-string mapping equal to
-  the projection of all healthy prompt records. A missing index is rebuilt.
-  Malformed or stale indexes emit a payload-safe `record_decode_failed` event
-  and are atomically replaced before lookup continues.
+- Mutation atomicity and concurrency belong to the injected storage
+  collection, not to persona-specific filesystem code.
 - Corrupt prompt records remain isolated under the repository decode contract
-  and are excluded from the rebuilt index. Filesystem I/O failures propagate.
-- Deletion removes both the file and the index entry.
+  and are excluded from list/name resolution.
+- Deletion removes the collection record.
 
 ## Trace Recording
 

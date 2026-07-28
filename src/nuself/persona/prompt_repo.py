@@ -4,21 +4,13 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-import json
 from pathlib import Path
 import threading
-from typing import cast
 from uuid import uuid4
 
-from nuself.config import find_project_root, runtime_paths
-from nuself.runtime.observability import (
-    decode_observed_record,
-    report_corrupt_record,
-)
-from nuself.storage import StorageBackend, auto_backend, write_json_atomic
-
-_REPO_LOCKS_LOCK = threading.Lock()
-_REPO_LOCKS: dict[Path, threading.RLock] = {}
+from nuself.config import runtime_paths
+from nuself.runtime.observability import decode_observed_record
+from nuself.storage import StorageCollection
 
 # ── Unified ID prefix for persona prompts ──────────────────────────────
 ID_PREFIX = "pp"
@@ -77,61 +69,31 @@ def _expect_str(data: dict[str, object], key: str) -> str:
 
 
 class PersonaPromptRepository:
-    """Repository for dynamic thinking personas.
-
-    Two modes:
-    * **backend** (primary) — uses a ``StorageBackend`` collection.
-    * **legacy_file** (transitional, v0.2.4+) — uses a raw *root* directory
-      for thread-scoped workspace personas.
-    """
+    """Repository for dynamic thinking personas over one collection protocol."""
 
     def __init__(
         self,
-        backend: StorageBackend | None = None,
+        collection: StorageCollection,
         *,
-        root: Path | None = None,
         project_root: Path | None = None,
     ) -> None:
-        effective_root = (
-            project_root
-            if project_root is not None
-            else find_project_root(root) if root is not None else None
-        )
-        self._project_root = runtime_paths(effective_root).project_root
-        if root is not None:
-            self._mode = "legacy_file"
-            self._root = root
-            self._lock = _lock_for_root(self._root)
-        elif backend is not None:
-            self._mode = "backend"
-            self._col = backend.collection("persona_prompts")
-            self._lock = threading.RLock()
-        else:
-            self._mode = "backend"
-            self._col = auto_backend().collection("persona_prompts")
-            self._lock = threading.RLock()
+        self._project_root = runtime_paths(project_root).project_root
+        self._collection = collection
+        self._lock = threading.RLock()
 
     # Public API ---------------------------------------------------------------
 
     def save(self, prompt: PersonaPrompt) -> None:
         with self._lock:
-            if self._mode == "legacy_file":
-                self._legacy_save(prompt)
-            else:
-                self._col.put(prompt.id, prompt.to_wire())
+            self._collection.put(prompt.id, prompt.to_wire())
 
     def get(self, prompt_id: str) -> PersonaPrompt | None:
-        if self._mode == "legacy_file":
-            return self._legacy_get(prompt_id)
-        wire = self._col.get(prompt_id)
+        wire = self._collection.get(prompt_id)
         if wire is None:
             return None
         return PersonaPrompt.from_wire(wire)
 
     def get_by_name(self, name: str) -> PersonaPrompt | None:
-        if self._mode == "legacy_file":
-            with self._lock:
-                return self._legacy_get_by_name(name)
         for p in self.list():
             if p.name == name:
                 return p
@@ -144,10 +106,8 @@ class PersonaPromptRepository:
         return self.get_by_name(name_or_id)
 
     def list(self) -> tuple[PersonaPrompt, ...]:
-        if self._mode == "legacy_file":
-            return self._legacy_list()
         result: list[PersonaPrompt] = []
-        for wire in self._col.list():
+        for wire in self._collection.list():
             prompt = decode_observed_record(
                 wire,
                 PersonaPrompt.from_wire,
@@ -161,10 +121,7 @@ class PersonaPromptRepository:
 
     def delete(self, prompt_id: str) -> None:
         with self._lock:
-            if self._mode == "legacy_file":
-                self._legacy_delete(prompt_id)
-            else:
-                self._col.delete(prompt_id)
+            self._collection.delete(prompt_id)
 
     def set_disabled(self, prompt_id: str, disabled: bool) -> None:
         prompt = self.get(prompt_id)
@@ -172,146 +129,6 @@ class PersonaPromptRepository:
             return
         updated = prompt.with_updates(disabled=disabled)
         self.save(updated)
-
-
-    # ── Legacy file-backed mode (root=) ──────────────────────────────────────
-
-    def _legacy_save(self, prompt: PersonaPrompt) -> None:
-        self._root.mkdir(parents=True, exist_ok=True)
-        write_json_atomic(self._root / f"{prompt.id}.json", prompt.to_wire())
-        self._legacy_rebuild_name_index()
-
-    def _legacy_get(self, prompt_id: str) -> PersonaPrompt | None:
-        path = self._root / f"{prompt_id}.json"
-        if not path.exists():
-            return None
-        return _read_legacy_prompt_file(path)
-
-    def _legacy_get_by_name(self, name: str) -> PersonaPrompt | None:
-        index = self._legacy_load_name_index()
-        prompt_id = index.get(name)
-        if prompt_id is None:
-            return None
-        return self._legacy_get(prompt_id)
-
-    def _legacy_list(self) -> tuple[PersonaPrompt, ...]:
-        if not self._root.exists():
-            return ()
-        result: list[PersonaPrompt] = []
-        for path in sorted(self._root.iterdir()):
-            if path.suffix == ".json" and path.name != "name_index.json":
-                prompt = self._decode_legacy_prompt(path)
-                if prompt is not None:
-                    result.append(prompt)
-        return tuple(result)
-
-    def _decode_legacy_prompt(self, path: Path) -> PersonaPrompt | None:
-        def decode(_: dict[str, object]) -> PersonaPrompt:
-            return _read_legacy_prompt_file(path)
-
-        return decode_observed_record(
-            {"id": path.stem},
-            decode,
-            component="persona",
-            collection="persona_prompts",
-            project_root=self._project_root,
-            errors=(json.JSONDecodeError, ValueError, KeyError, TypeError),
-        )
-
-    def _legacy_delete(self, prompt_id: str) -> None:
-        path = self._root / f"{prompt_id}.json"
-        if path.exists():
-            path.unlink()
-        self._legacy_rebuild_name_index()
-
-    def _legacy_load_name_index(self) -> dict[str, str]:
-        projected = self._legacy_project_name_index()
-        path = self._root / "name_index.json"
-        if not path.exists():
-            if self._root.exists():
-                write_json_atomic(
-                    path,
-                    cast("dict[str, object]", dict(projected)),
-                )
-            return projected
-        try:
-            raw: object = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(raw, dict):
-                raise ValueError("persona name index must be a JSON object")
-            index: dict[str, str] = {}
-            for name, prompt_id in cast(
-                "dict[str, object]",
-                raw,
-            ).items():
-                if not isinstance(prompt_id, str):
-                    raise ValueError(
-                        "persona name index values must be strings"
-                    )
-                index[name] = prompt_id
-            if index != projected:
-                raise ValueError(
-                    "persona name index does not match prompt records"
-                )
-            return index
-        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
-            report_corrupt_record(
-                exc,
-                component="persona",
-                collection="persona_prompt_name_index",
-                record_id="name_index",
-                project_root=self._project_root,
-            )
-            write_json_atomic(
-                path,
-                cast("dict[str, object]", dict(projected)),
-            )
-            return projected
-
-    def _legacy_project_name_index(self) -> dict[str, str]:
-        index: dict[str, str] = {}
-        if not self._root.exists():
-            return index
-        for path in sorted(self._root.iterdir()):
-            if path.suffix == ".json" and path.name != "name_index.json":
-                prompt = self._decode_legacy_prompt(path)
-                if prompt is not None:
-                    previous = index.get(prompt.name)
-                    if previous is not None and previous != prompt.id:
-                        raise ValueError(
-                            "duplicate persona prompt name "
-                            f"{prompt.name!r}: {previous}, {prompt.id}"
-                        )
-                    index[prompt.name] = prompt.id
-        return index
-
-    def _legacy_rebuild_name_index(self) -> dict[str, str]:
-        index = self._legacy_project_name_index()
-        if self._root.exists():
-            write_json_atomic(
-                self._root / "name_index.json",
-                cast("dict[str, object]", dict(index)),
-            )
-        return index
-
-
-# ── Helpers ──────────────────────────────────────────────────────────────
-
-
-def _read_legacy_prompt_file(path: Path) -> PersonaPrompt:
-    raw: object = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise ValueError("persona prompt record must be an object")
-    return PersonaPrompt.from_wire(cast("dict[str, object]", raw))
-
-
-def _lock_for_root(root: Path) -> threading.RLock:
-    key = root.resolve()
-    with _REPO_LOCKS_LOCK:
-        lock = _REPO_LOCKS.get(key)
-        if lock is None:
-            lock = threading.RLock()
-            _REPO_LOCKS[key] = lock
-        return lock
 
 
 def create_persona_prompt(name: str, prompt_text: str, *, project_root: Path | None = None) -> PersonaPrompt:

@@ -11,6 +11,7 @@ from nuself.llm import ChatMessage, default_llm
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
 from nuself.runtime.observability import run_observed_best_effort
 from nuself.storage import auto_backend
+from nuself.store import ScopedWorkspace, WorkspaceCollection
 
 
 def _persona_tool(
@@ -33,7 +34,7 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
     """Build persona tools that any agent (chat, reason) can use."""
 
     repo = PersonaPromptRepository(
-        backend=auto_backend(project_root),
+        collection=auto_backend(project_root).collection("persona_prompts"),
         project_root=project_root,
     )
 
@@ -243,13 +244,13 @@ def _record_prompt_enabled_trace(prompt: PersonaPrompt, *, project_root: Path | 
 def build_reason_persona_tools(
     *,
     global_project_root: Path | None,
-    get_thread_persona_root: Callable[[], Path],
+    get_thread_workspace: Callable[[], ScopedWorkspace],
 ) -> tuple[StructuredTool, ...]:
     """Build persona tools scoped to a reason thread.
 
-    *get_thread_persona_root* is called on each tool invocation to resolve the
-    current thread's private persona directory, allowing the same tool instances
-    to be reused across threads.
+    *get_thread_workspace* is called on each tool invocation to resolve the
+    current thread's private workspace, allowing the same tool instances to be
+    reused across threads.
 
     - ``persona_craft`` stores in the thread's private workspace only.
     - ``persona_list`` merges global + local personas.
@@ -257,11 +258,17 @@ def build_reason_persona_tools(
     """
 
     def _thread_repo() -> PersonaPromptRepository:
-        return PersonaPromptRepository(root=get_thread_persona_root())
+        return PersonaPromptRepository(
+            WorkspaceCollection(
+                get_thread_workspace(),
+                namespace="persona_prompts",
+            ),
+            project_root=global_project_root,
+        )
 
     global_repo = (
         PersonaPromptRepository(
-            backend=auto_backend(global_project_root),
+            collection=auto_backend(global_project_root).collection("persona_prompts"),
             project_root=global_project_root,
         )
         if global_project_root

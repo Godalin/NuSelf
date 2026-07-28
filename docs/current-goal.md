@@ -5,8 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The CLI parser now injects only dynamic chat entrypoint policy; reason
-watch is owned and bound directly by the REPL command subsystem.
+Idle. Global and reason-thread personas now share one collection-based
+repository protocol, and thread-local personas use scoped SQLite workspace
+storage.
 
 ## Active Branch
 
@@ -23,17 +24,19 @@ code.
 
 ## Completion Evidence
 
-- The argparse reason-watch adapter lives with the REPL reason-watch command.
-- The parser binds reason watch directly without routing it through the CLI
-  composition root.
-- `EntrypointHandlers` now contains only default/chat/attach/open callbacks
-  backed by the configured `EntrypointController`.
-- Activity reader/presenter effects remain explicit testable dependencies and
-  are no longer described as compatibility callbacks.
-- A parser-dispatch regression test verifies project root, interval, and thread
-  selection reach the REPL command owner.
-- Focused reason-watch test: 1 passed.
-- Final full tests: 1378 passed.
+- `PersonaPromptRepository` consumes one `StorageCollection`; its raw
+  directory mode and derived name-index implementation are deleted.
+- `WorkspaceCollection` adapts a namespaced `ScopedWorkspace` to the canonical
+  collection protocol.
+- Global persona composition roots inject the durable collection; reason
+  persona tools inject the thread workspace collection.
+- Reason service, workspace tools, and persona tools share the canonical
+  `("workspace", "reason", thread_id)` namespace.
+- Dynamic-persona and workspace specs describe the actual SQLite-backed
+  implementation and explicitly reject migration of non-authoritative scratch
+  JSON.
+- Focused persona/workspace/reason tests: 68 passed.
+- Final full tests: 1373 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -43,5 +46,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit explicit legacy persisted-data fallbacks, removing only those without a
-current migration contract.
+Continue auditing record-level legacy defaults after removing the larger
+repository-level dual protocol.

@@ -139,7 +139,10 @@ class ReasonService:
             return cached
         ws = self._workspace_store.ensure(thread_id)
         store = SqliteStore(ws.database)
-        w = ScopedWorkspace(store, (thread_id,))
+        w = ScopedWorkspace(
+            store,
+            ("workspace", "reason", thread_id),
+        )
         self._workspace_cache[thread_id] = w
         return w
 

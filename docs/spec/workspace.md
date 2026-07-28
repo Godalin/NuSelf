@@ -50,6 +50,9 @@ remain unchanged. Reads reject non-standard non-finite JSON constants.
 | `created_at` | First initialization time |
 
 Services may create additional tables inside their own workspace database.
+Repository-shaped scratch state uses a `ScopedWorkspace` collection adapter
+over `SqliteStore`; it must not introduce a second raw-file repository
+protocol or derived name-index files.
 
 ## Reason Usage
 
@@ -60,6 +63,11 @@ private/workspaces/reason/{thread_id}/workspace.sqlite
 ```
 
 The reason workspace can hold branch tables, temporary tracked items, local evidence indexes, tool results, scratch rankings, intermediate plans, and failed-path records.
+Reason-thread persona prompts are stored under the thread workspace's
+`persona_prompts` namespace in SQLite. They are task-local scratch state, not
+durable global persona records. Pre-SQLite thread persona JSON is not migrated.
+All reason workspace consumers use the canonical
+`("workspace", "reason", thread_id)` namespace prefix.
 
 Stable data leaves the workspace only through explicit promotion:
 

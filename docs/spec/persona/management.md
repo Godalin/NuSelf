@@ -46,14 +46,19 @@ class PersonaPrompt:
 
 ### PersonaPromptRepository (extended)
 
-New method:
+The repository consumes one `StorageCollection` protocol. Global personas use
+the durable `persona_prompts` collection; reason-thread personas use a
+workspace-scoped collection adapter over `SqliteStore`. There is no raw
+directory mode, JSON file scanner, or derived name index.
+
+Method:
 
 ```python
 def set_disabled(self, prompt_id: str, disabled: bool) -> None: ...
 ```
 
-Implemented by reading the prompt file, calling `with_updates(...)`, and
-writing it back atomically (same pattern as `ReasoningThread.with_updates`).
+Implemented by reading the collection record, calling `with_updates(...)`, and
+writing it back through the same collection.
 
 ## CLI
 
@@ -192,11 +197,9 @@ Existing persona files on disk lack the `disabled` field. The `from_wire`
 method defaults to `False`, so existing personas remain active. No explicit
 migration step is needed.
 
-## Migration
-
-Existing persona files on disk lack the `disabled` field. The `from_wire`
-method defaults to `False`, so existing personas remain active. No explicit
-migration step is needed.
+Old reason-thread persona JSON is workspace scratch rather than authoritative
+global state and is intentionally not migrated when thread personas move to
+the scoped SQLite workspace collection.
 
 ## Non-Goals
 

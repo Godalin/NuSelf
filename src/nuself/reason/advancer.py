@@ -329,7 +329,10 @@ class ReasonAdvancer:
             thread_id = _current_reason_thread_id()
             wpath = ws_store.ensure(thread_id)
             sqlite = SqliteStore(wpath.database)
-            return ScopedWorkspace(sqlite, ("workspace", thread_id))
+            return ScopedWorkspace(
+                sqlite,
+                ("workspace", "reason", thread_id),
+            )
 
         return _build_workspace_tools_from_provider(_resolve)
 
@@ -340,15 +343,17 @@ class ReasonAdvancer:
 
         ws_store = self._workspace_store
         from nuself.persona.tools import build_reason_persona_tools
+        from nuself.store import ScopedWorkspace, SqliteStore
 
-        def _persona_root() -> Path:
+        def _thread_workspace() -> ScopedWorkspace:
             thread_id = _current_reason_thread_id()
             wpath = ws_store.ensure(thread_id)
-            root = wpath.root / "persona_prompts"
-            root.mkdir(parents=True, exist_ok=True)
-            return root
+            return ScopedWorkspace(
+                SqliteStore(wpath.database),
+                ("workspace", "reason", thread_id),
+            )
 
         return build_reason_persona_tools(
             global_project_root=self._project_root,
-            get_thread_persona_root=_persona_root,
+            get_thread_workspace=_thread_workspace,
         )
