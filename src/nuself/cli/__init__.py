@@ -64,9 +64,11 @@ try:
     )
     from nuself.cli.repl.input import (
         InteractiveCompleter as _InteractiveCompleter,
-        init_interactive_input as _init_interactive_input,
         interactive_help as _interactive_help,
-        read_interactive_input as _read_interactive_input,
+    )
+    from nuself.cli.repl.runtime import (
+        ReplCallbacks,
+        run_interactive_loop,
     )
     from nuself.cli.repl.transcript import (
         copy_text_to_clipboard as _copy_text_to_clipboard,
@@ -368,56 +370,20 @@ def _interactive_loop(
     *,
     initial_thread_id: str = "default",
 ) -> int:
-    _init_interactive_input(project_root)
-    current_thread_id = initial_thread_id
-    session = InteractiveSession(connected_at=datetime.now(UTC))
-    session.start_index_for(project_root, current_thread_id)
-    print(_brand_banner())
-    print("νSelf interactive mode. Type :help for commands, :q to quit.")
-    _last_header_thread = current_thread_id
-    _print_ansi(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
-    try:
-        while True:
-            try:
-                line = _read_interactive_input()
-            except EOFError:
-                print()
-                _auto_save_interactive_transcripts(project_root, session)
-                return 0
-            except KeyboardInterrupt:
-                print()
-                continue
-            message = line.strip()
-            if message == "":
-                continue
-            if message.startswith(":"):
-                command_result, current_thread_id = _handle_interactive_command(
-                    message, project_root, current_thread_id, session
-                )
-                session.start_index_for(project_root, current_thread_id)
-                if command_result == "exit":
-                    return 0
-                if command_result == "redraw_header":
-                    _last_header_thread = current_thread_id
-                    _print_ansi(render_session_header(daemon_status=_interactive_daemon_status(project_root), thread_id=current_thread_id))
-                continue
-            try:
-                result = _send_interactive_chat_turn(
-                    send_message,
-                    project_root,
-                    current_thread_id,
-                    message,
-                    session,
-                )
-            except KeyboardInterrupt:
-                print("\nInterrupted.")
-                continue
-            _maybe_show_session_update(project_root, current_thread_id)
-            if result != 0:
-                continue
-    finally:
-        _auto_save_interactive_transcripts(project_root, session)
-        _run_memory_curator(project_root)
+    return run_interactive_loop(
+        send_message,
+        project_root,
+        ReplCallbacks(
+            handle_command=_handle_interactive_command,
+            send_turn=_send_interactive_chat_turn,
+            auto_save=_auto_save_interactive_transcripts,
+            run_curator=_run_memory_curator,
+            show_session_update=_maybe_show_session_update,
+            daemon_status=_interactive_daemon_status,
+            brand_banner=_brand_banner,
+        ),
+        initial_thread_id=initial_thread_id,
+    )
 
 
 def _send_interactive_chat_turn(
