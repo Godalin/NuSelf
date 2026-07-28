@@ -163,6 +163,8 @@ under the same package.
   persistence naming, shareable-log filtering, and clipboard integration.
 - `cli/repl/session.py` owns per-connection message/log capture and export
   progress state.
+- `cli/repl/commands.py` owns subsystem REPL commands and their focused help
+  text; the composition root only dispatches parsed interactive input.
 
 Conversation runtime types follow the same rule: `agent/chat_types.py` owns
 settings, structured response/result records, typed turn state, and graph error
