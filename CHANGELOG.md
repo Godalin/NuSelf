@@ -58,6 +58,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Isolated LangGraph tool-log projection failures so an unavailable audit sink
+  no longer replaces a successful tool result or masks the original tool
+  exception; the failure is reported as a structured degraded event when
+  possible.
 - Interactive chat send callbacks now preserve the exact thread/turn runtime
   context across their worker-thread boundary without inheriting stale
   request, job, or trace identity. Transcript capture keeps low-level activity

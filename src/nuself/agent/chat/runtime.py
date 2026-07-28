@@ -131,6 +131,7 @@ class ConversationGraphRuntime:
             langchain_models=self._langchain_models,
             tools=self._tools.values(),
             log_tool_call=self._tool_runtime.log_call,
+            report_tool_log_failure=self._tool_runtime.report_log_failure,
         )
         graph: Any = StateGraph(_ConversationGraphState)
         graph.add_node("prepare_context", self._graph_prepare_context)

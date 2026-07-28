@@ -40,12 +40,14 @@ class ConversationResponseSynthesizer:
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         tools: Iterable[BaseTool],
         log_tool_call: Callable[..., None],
+        report_tool_log_failure: Callable[[Exception], None] | None = None,
     ) -> None:
         self._project_root = project_root
         self._llm = llm
         self._langchain_models = langchain_models
         self._tools = tuple(tools)
         self._log_tool_call = log_tool_call
+        self._report_tool_log_failure = report_tool_log_failure
 
     def complete(
         self,
@@ -87,6 +89,7 @@ class ConversationResponseSynthesizer:
                         endpoint=endpoint,
                         tools=self._tools,
                         log_tool_call=self._log_tool_call,
+                        report_tool_log_failure=self._report_tool_log_failure,
                     ).complete(prompt)
                 except Exception as exc:
                     last_error = exc
@@ -171,10 +174,12 @@ class _LangChainChatSupervisor:
         endpoint: LangChainLLMEndpoint,
         tools: Iterable[BaseTool],
         log_tool_call: Callable[..., None],
+        report_tool_log_failure: Callable[[Exception], None] | None,
     ) -> None:
         self._endpoint = endpoint
         self._tools = tuple(tools)
         self._log_tool_call = log_tool_call
+        self._report_tool_log_failure = report_tool_log_failure
 
     def complete(
         self,
@@ -183,6 +188,7 @@ class _LangChainChatSupervisor:
         system_prompt, messages = _split_prompt(prompt)
         middleware = ToolCaptureMiddleware(
             log_callback=self._log_tool_call,
+            log_error_callback=self._report_tool_log_failure,
             cache={},
         )
         create_agent = cast(Any, _create_agent)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+import pytest
 from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 
@@ -118,3 +119,73 @@ def test_tool_middleware_bypasses_cache_for_non_json_arguments() -> None:
     assert isinstance(second, ToolMessage)
     assert _message_content(first) == "result-1"
     assert _message_content(second) == "result-2"
+
+
+def test_tool_log_failure_does_not_replace_successful_result() -> None:
+    observed: list[Exception] = []
+
+    def fail_log(*_args: object, **_kwargs: object) -> None:
+        raise OSError("audit unavailable")
+
+    middleware = ToolCaptureMiddleware(
+        log_callback=fail_log,
+        log_error_callback=observed.append,
+    )
+
+    result = middleware.wrap_tool_call(
+        _request({}, call_id="call-1"),
+        lambda request: ToolMessage(
+            content="completed",
+            name="memory_count",
+            tool_call_id=request.tool_call["id"] or "",
+        ),
+    )
+
+    assert isinstance(result, ToolMessage)
+    assert _message_content(result) == "completed"
+    assert len(observed) == 1
+    assert str(observed[0]) == "audit unavailable"
+
+
+def test_tool_log_failure_does_not_replace_tool_exception() -> None:
+    observed: list[Exception] = []
+
+    def fail_log(*_args: object, **_kwargs: object) -> None:
+        raise OSError("audit unavailable")
+
+    def fail_tool(_request: ToolCallRequest) -> ToolMessage:
+        raise LookupError("primary tool failure")
+
+    middleware = ToolCaptureMiddleware(
+        log_callback=fail_log,
+        log_error_callback=observed.append,
+    )
+
+    with pytest.raises(LookupError, match="primary tool failure"):
+        middleware.wrap_tool_call(
+            _request({}, call_id="call-1"),
+            fail_tool,
+        )
+
+    assert len(observed) == 1
+    assert str(observed[0]) == "audit unavailable"
+
+
+def test_unreported_tool_log_failure_warns_without_changing_result() -> None:
+    def fail_log(*_args: object, **_kwargs: object) -> None:
+        raise OSError("audit unavailable")
+
+    middleware = ToolCaptureMiddleware(log_callback=fail_log)
+
+    with pytest.warns(RuntimeWarning, match="audit unavailable"):
+        result = middleware.wrap_tool_call(
+            _request({}, call_id="call-1"),
+            lambda request: ToolMessage(
+                content="completed",
+                name="memory_count",
+                tool_call_id=request.tool_call["id"] or "",
+            ),
+        )
+
+    assert isinstance(result, ToolMessage)
+    assert _message_content(result) == "completed"

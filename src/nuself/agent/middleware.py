@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import warnings
 from collections.abc import Callable
 from typing import Any
 
@@ -20,14 +21,14 @@ class ToolCaptureMiddleware(AgentMiddleware):
     Replaces the per-file ``_LoggedTool`` (chat.py) and ``_CapturingTool``
     (advancer.py) pattern with a single LangGraph middleware hook.
 
-    The same middleware instance can be reused across multiple agent
-    invocations by calling ``reset()`` before each ``invoke()``.
-
     Parameters
     ----------
     log_callback:
         Called as ``log_callback(name, args, result=text)`` or
         ``log_callback(name, args, error=text)`` after each tool execution.
+    log_error_callback:
+        Called when ``log_callback`` fails. Neither callback may change the
+        primary tool result or exception.
     captured:
         Mutable list to which ``(name, args, result)`` tuples are appended
         for post-execution inspection.
@@ -46,29 +47,47 @@ class ToolCaptureMiddleware(AgentMiddleware):
         self,
         *,
         log_callback: Callable[..., None] | None = None,
+        log_error_callback: Callable[[Exception], None] | None = None,
         captured: list[tuple[str, dict[str, object], str | None]] | None = None,
         cache: dict[str, str] | None = None,
     ) -> None:
         super().__init__()
         self._log_callback = log_callback
+        self._log_error_callback = log_error_callback
         self._captured = captured
         self._cache = cache
         self._cache_lock = threading.Lock()
 
-    def reset(
+    def _log(
         self,
-        *,
-        log_callback: Callable[..., None] | None = None,
-        captured: list[tuple[str, dict[str, object], str | None]] | None = None,
-        cache: dict[str, str] | None = None,
+        name: str,
+        args: dict[str, Any],
+        **outcome: str,
     ) -> None:
-        """Replace per-invocation state without rebuilding the middleware."""
-        if log_callback is not None:
-            self._log_callback = log_callback
-        if captured is not None:
-            self._captured = captured
-        if cache is not None:
-            self._cache = cache
+        """Project one tool outcome without changing the primary operation."""
+
+        if self._log_callback is None:
+            return
+        try:
+            self._log_callback(name, args, **outcome)
+        except Exception as exc:  # noqa: BLE001 - observer failures are secondary
+            if self._log_error_callback is not None:
+                try:
+                    self._log_error_callback(exc)
+                    return
+                except Exception as report_exc:  # noqa: BLE001 - preserve primary outcome
+                    warnings.warn(
+                        "tool log callback failed: "
+                        f"{exc}; failure reporter failed: {report_exc}",
+                        RuntimeWarning,
+                        stacklevel=3,
+                    )
+                    return
+            warnings.warn(
+                f"tool log callback failed: {exc}",
+                RuntimeWarning,
+                stacklevel=3,
+            )
 
     def wrap_tool_call(
         self,
@@ -94,8 +113,7 @@ class ToolCaptureMiddleware(AgentMiddleware):
         try:
             result = handler(request)
         except Exception as exc:
-            if self._log_callback is not None:
-                self._log_callback(name, args, error=str(exc))
+            self._log(name, args, error=str(exc))
             if self._captured is not None:
                 self._captured.append((name, dict(args), str(exc)))
             raise
@@ -106,8 +124,7 @@ class ToolCaptureMiddleware(AgentMiddleware):
             with self._cache_lock:
                 self._cache[cache_key] = result_text
 
-        if self._log_callback is not None:
-            self._log_callback(name, args, result=result_text)
+        self._log(name, args, result=result_text)
         if self._captured is not None:
             self._captured.append((name, dict(args), result_text))
 

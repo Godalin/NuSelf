@@ -166,6 +166,24 @@ Arguments that cannot cross the JSON tool boundary bypass duplicate
 suppression; middleware still delegates them to LangChain's handler so caching
 does not introduce a second validation protocol or suppress execution.
 
+The shared tool middleware owns its cache, capture sink, tool-log callback, and
+tool-log failure reporter for its complete lifetime. These constructor-bound
+effects are not replaced between invocations. A caller that needs different
+per-invocation effects creates another middleware instance; a reused agent
+must instead serialize access to any shared mutable capture state.
+
+Tool-log projection is a secondary observation effect:
+
+- failure after a successful tool execution cannot replace its `ToolMessage`
+  or `Command`;
+- failure while reporting a tool exception cannot replace that original
+  exception;
+- the composition root provides a failure reporter backed by shared structured
+  observability;
+- if no reporter is configured, or the reporter itself fails, middleware emits
+  a `RuntimeWarning` without changing the primary tool outcome;
+- no logging or reporting failure triggers a hidden tool retry.
+
 Direct service-status queries, such as asking how many memory/reflection/reason/trace records exist, should call those service tools directly. These are operational tool queries; persona discussion before tool results tends to invent capability limits and adds noise.
 
 ## Tool Catalog

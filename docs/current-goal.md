@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The runtime event subscription ownership batch is complete.
+Idle. The agent tool-log observer ownership batch is complete.
 
 ## Active Branch
 
@@ -22,14 +22,14 @@ code.
 
 ## Completion Evidence
 
-- Every `EventPublisher` creates a UUID lifetime identity independent of its
-  reusable process memory address.
-- Subscription removal rejects handles from another publisher even when both
-  publishers issued the same numeric subscription id.
-- Aggregate delivery failures retain the original lifetime-bound subscription
-  handle.
-- Focused event, log observer, and daemon activity tests: 34 passed.
-- Full tests: 1242 passed.
+- `ToolCaptureMiddleware` owns callback, reporter, capture, and cache bindings
+  for its complete lifetime; the incomplete unused reset surface is removed.
+- A tool-log callback failure cannot replace a successful `ToolMessage` or the
+  primary tool exception.
+- Chat composition routes callback failures through shared structured
+  observability, with a warning fallback when no reporter is available.
+- Focused middleware, chat, and reason tests: 95 passed.
+- Full tests: 1246 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -39,5 +39,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Continue auditing shared callback and observer ownership after event
-subscription isolation.
+Continue auditing remaining callback ownership and oversized composition
+modules after agent tool-log isolation.
