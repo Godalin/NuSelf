@@ -130,7 +130,17 @@ with the prompt as system message and `question` as user message, and returns
 the response.
 
 - If `persona` is not found, returns an error message.
-- The underlying LLM call uses the same model as the calling agent.
+- The underlying call uses the shared framework-native `TextAgent` capability.
+  `TextAgent` accepts LangChain messages and returns one stripped, non-empty
+  natural-language conclusion. It does not use `ChatMessage`,
+  `ChatLLM.complete()`, a one-field structured-output workaround, or a hidden
+  local fallback.
+- The default capability uses configured LangChain endpoint order and the same
+  shared agent endpoint-failover primitive as structured agents.
+- Global and thread-scoped persona tools receive the text capability through
+  their builder composition boundary; handlers do not construct models.
+- An unavailable or empty result retains the existing visible
+  `Error consulting persona ...` / `persona_think failed: ...` tool failure.
 - The tool call is visible in the caller's log and trace (via existing
   `service_tool_called` mechanism).
 

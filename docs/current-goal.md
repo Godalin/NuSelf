@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The reason prompt structured-agent migration is complete.
+Idle. The shared free-text agent and persona tool migration is complete.
 
 ## Active Branch
 
@@ -21,22 +21,22 @@ None while idle.
 
 ## Completion Evidence
 
-- `ReasonPromptOutput` is strict, extra-forbid, and requires a non-blank
-  generated prompt.
-- Prompt generation uses LangChain messages through the shared
-  `StructuredAgent` runner and consumes only the typed output.
-- Direct `default_llm().complete()`, raw response trimming, and the parallel
-  text-model protocol are removed from reason prompt generation.
-- Failure still raises `ReasonPromptError` before any thread is persisted.
-- `.venv/bin/pytest -q`: `1460 passed`.
+- `TextAgent` accepts LangChain messages and requires a stripped, non-empty
+  natural-language result without a fake structured schema.
+- Text and structured agents use one shared endpoint invocation/failover
+  primitive.
+- Global and thread-scoped persona tool builders inject the capability once;
+  handlers no longer construct an LLM.
+- Both persona `default_llm().complete()` paths and hidden local fallback are
+  removed.
+- `.venv/bin/pytest -q`: `1465 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `62081ca`.
+`dev/v0.3.x` is published through `e164674`.
 
 ## Next Review Batch
 
-Design a shared free-text agent capability, then migrate both global and
-thread-scoped `persona_think` without weakening its natural-language contract.
+Audit the next remaining direct model boundary after persona tools.

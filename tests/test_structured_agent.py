@@ -9,6 +9,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, ConfigDict
 
+from nuself.agent import failover as failover_module
 from nuself.agent import structured as structured_module
 from nuself.agent.structured import LangChainStructuredAgent
 from nuself.llm import LLMSettings, LangChainLLMEndpoint
@@ -71,7 +72,7 @@ def test_structured_agent_returns_actual_schema_instance(
 
     monkeypatch.setattr(structured_module, "_create_agent", create_agent)
     monkeypatch.setattr(
-        structured_module,
+        failover_module,
         "record_llm_endpoint_success",
         record_success,
     )
@@ -158,12 +159,12 @@ def test_structured_agent_fails_over_only_for_endpoint_availability(
         create_agent,
     )
     monkeypatch.setattr(
-        structured_module,
+        failover_module,
         "report_observed_failure",
         report_failure,
     )
     monkeypatch.setattr(
-        structured_module,
+        failover_module,
         "record_llm_endpoint_success",
         record_success,
     )

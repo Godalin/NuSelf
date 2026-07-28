@@ -11,15 +11,12 @@ from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
+from nuself.agent.failover import invoke_agent_endpoint
 from nuself.llm import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
-    is_endpoint_availability_error,
-    record_llm_endpoint_success,
-    redact_llm_error,
 )
 from nuself.logs import LogComponent
-from nuself.runtime.observability import report_observed_failure
 
 StructuredOutputT = TypeVar(
     "StructuredOutputT",
@@ -52,46 +49,31 @@ class LangChainStructuredAgent(Generic[StructuredOutputT]):
         self._project_root = project_root
         self._component: LogComponent = component
         create_agent = cast(Any, _create_agent)
-        self._agents = tuple(
-            (
-                endpoint,
-                create_agent(
-                    model=endpoint.model,
-                    tools=[],
-                    response_format=ToolStrategy(schema),
-                ),
+        self._agents = {
+            endpoint.index: create_agent(
+                model=endpoint.model,
+                tools=[],
+                response_format=ToolStrategy(schema),
             )
             for endpoint in endpoints
-        )
+        }
+        self._endpoints = endpoints
 
     def invoke(
         self,
         messages: Sequence[BaseMessage],
     ) -> StructuredOutputT:
-        if not self._agents:
-            raise RuntimeError("no configured LangChain model")
-        last_error: Exception | None = None
-        for position, (endpoint, agent) in enumerate(self._agents):
-            try:
-                result: object = agent.invoke({"messages": list(messages)})
-                structured = self._structured_response(result)
-            except Exception as exc:
-                if not is_endpoint_availability_error(str(exc)):
-                    raise
-                last_error = exc
-                self._report_endpoint_failure(
-                    exc,
-                    endpoint=endpoint,
-                    has_next=position + 1 < len(self._agents),
-                )
-                continue
-            record_llm_endpoint_success(self._project_root, endpoint.index)
-            return structured
-        assert last_error is not None
-        raise RuntimeError(
-            "all configured LLM endpoints failed: "
-            f"{redact_llm_error(str(last_error))}"
-        ) from last_error
+        def complete(endpoint: LangChainLLMEndpoint) -> StructuredOutputT:
+            agent = self._agents[endpoint.index]
+            result: object = agent.invoke({"messages": list(messages)})
+            return self._structured_response(result)
+
+        return invoke_agent_endpoint(
+            self._endpoints,
+            complete,
+            project_root=self._project_root,
+            component=self._component,
+        )
 
     def _structured_response(self, result: object) -> StructuredOutputT:
         if not isinstance(result, dict):
@@ -111,37 +93,6 @@ class LangChainStructuredAgent(Generic[StructuredOutputT]):
                 f"{type(structured).__name__}"
             )
         return structured
-
-    def _report_endpoint_failure(
-        self,
-        exc: Exception,
-        *,
-        endpoint: LangChainLLMEndpoint,
-        has_next: bool,
-    ) -> None:
-        report_observed_failure(
-            RuntimeError(redact_llm_error(str(exc))),
-            component=self._component,
-            event=(
-                "llm_endpoint_failed_over"
-                if has_next
-                else "llm_endpoint_unavailable"
-            ),
-            message=(
-                "LLM endpoint failed; trying next configured endpoint"
-                if has_next
-                else "LLM endpoint failed and no fallback endpoint remains"
-            ),
-            project_root=self._project_root,
-            level="warning",
-            status="failed_over" if has_next else "exhausted",
-            metadata={
-                "endpoint_index": endpoint.index,
-                "base_url": endpoint.settings.base_url,
-                "model": endpoint.settings.model,
-            },
-        )
-
 
 def default_structured_agent(
     schema: type[StructuredOutputT],

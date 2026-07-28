@@ -5,9 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 
-from nuself.llm import ChatMessage, default_llm
+from nuself.agent.text import TextAgent, default_text_agent
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
 from nuself.runtime.observability import run_observed_best_effort
 from nuself.storage import auto_backend
@@ -30,12 +31,24 @@ def _persona_tool(
     )
 
 
-def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredTool, ...]:
+def build_persona_tools(
+    project_root: Path | None = None,
+    *,
+    text_agent: TextAgent | None = None,
+) -> tuple[StructuredTool, ...]:
     """Build persona tools that any agent (chat, reason) can use."""
 
     repo = PersonaPromptRepository(
         collection=auto_backend(project_root).collection("persona_prompts"),
         project_root=project_root,
+    )
+    persona_agent = (
+        text_agent
+        if text_agent is not None
+        else default_text_agent(
+            project_root=project_root,
+            component="persona",
+        )
     )
 
     def persona_craft(name: str, prompt: str) -> str:
@@ -112,13 +125,12 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
             return f"Persona '{prompt.name}' is disabled. Use persona_enable tool or CLI to reactivate it."
 
         messages = [
-            ChatMessage(role="system", content=prompt.prompt),
-            ChatMessage(role="user", content=question),
+            SystemMessage(content=prompt.prompt),
+            HumanMessage(content=question),
         ]
         try:
-            llm = default_llm(project_root)
-            response = llm.complete(messages).strip()
-        except RuntimeError as exc:
+            response = persona_agent.invoke(messages)
+        except (RuntimeError, ValueError) as exc:
             return f"Error consulting persona '{prompt.name}': {exc}"
 
         return response
@@ -245,6 +257,7 @@ def build_reason_persona_tools(
     *,
     global_project_root: Path | None,
     get_thread_workspace: Callable[[], ScopedWorkspace],
+    text_agent: TextAgent | None = None,
 ) -> tuple[StructuredTool, ...]:
     """Build persona tools scoped to a reason thread.
 
@@ -273,6 +286,14 @@ def build_reason_persona_tools(
         )
         if global_project_root
         else None
+    )
+    persona_agent = (
+        text_agent
+        if text_agent is not None
+        else default_text_agent(
+            project_root=global_project_root,
+            component="persona",
+        )
     )
 
     def _craft(name: str, prompt: str) -> str:
@@ -349,17 +370,13 @@ def build_reason_persona_tools(
             return f"No persona found for '{persona}'. Use persona_craft to create one first."
 
         messages = [
-            ChatMessage(role="system", content=prompt.prompt),
-            ChatMessage(role="user", content=question),
+            SystemMessage(content=prompt.prompt),
+            HumanMessage(content=question),
         ]
-        from nuself.llm import default_llm
-
-        llm = default_llm(global_project_root)
         try:
-            raw = llm.complete(messages)
-        except RuntimeError as exc:
+            result = persona_agent.invoke(messages)
+        except (RuntimeError, ValueError) as exc:
             return f"persona_think failed: {exc}"
-        result = raw.strip()
         return result
 
     def _disable(persona: str) -> str:

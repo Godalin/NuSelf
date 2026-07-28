@@ -287,6 +287,11 @@ request/job/trace identity，并在结束后恢复调用方 context。
 
 thread-scoped dynamic persona prompt 文件是权威数据；其派生 name index 会在缺失、损坏或陈旧时被校验并原子重建，因此损坏的 lookup metadata 不会隐藏健康 persona，改名后也不会残留旧名称。
 
+全局和 thread-scoped `persona_think` 统一使用框架原生的自由文本 agent
+capability。自然语言结论保持为普通文本；空结果或 endpoint 不可用时会返回明确的
+tool error，而不是隐藏的本地响应；自由文本与 structured agent 共用同一套 endpoint
+failover 基础设施。
+
 reflection relevance 和 candidate generation 使用共享的 LangChain structured-agent 边界与严格 typed response schema。缺失字段、额外字段、越界分数、malformed batch、字符串布尔值和未知 candidate type 会进入既有安全 fallback，而不会被补默认值、clamp、强制转换或部分接受。
 
 persona activation 和 competitive discussion 同样遵循严格的 typed-output

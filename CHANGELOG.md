@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Global and thread-scoped `persona_think` now use an injected framework-native
+  `TextAgent` with LangChain messages and a required non-empty natural-language
+  result. Both direct `default_llm().complete()` paths and the hidden local
+  fallback were removed; text and structured agents now share one endpoint
+  failover primitive.
 - Reason thread prompt generation now uses exact `ReasonPromptOutput` through
   the shared structured-agent runner. Direct `default_llm().complete()`, raw
   response trimming, and the parallel text-model protocol were removed;

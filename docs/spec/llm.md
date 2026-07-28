@@ -1,5 +1,22 @@
 # LLM-Driven Decisions Spec
 
+## Shared Agent Invocation
+
+Framework-native generated-output capabilities live under `nuself.agent`.
+`StructuredAgent` owns exact Pydantic results and `TextAgent` owns non-empty
+natural-language results. Both receive LangChain `BaseMessage` sequences.
+
+Configured endpoint iteration, availability classification, redacted
+diagnostics, active-endpoint persistence, exhaustion errors, and component
+attribution are implemented once by the shared agent endpoint invocation
+primitive. Capability runners provide only the endpoint-specific framework
+call and result validation; they must not own another retry loop.
+
+`TextAgent` invokes the LangChain chat model directly because natural-language
+persona conclusions are the intended result. It must not create a fake
+single-field schema merely to reuse structured output, and it rejects an empty
+or non-text conclusion.
+
 ## Overview
 
 This spec defines the behavioral contracts for replacing hardcoded heuristic scoring with LLM-driven contextual decisions across NuSelf. All L2 (judgment-layer) decisions follow the same pattern: the system assembles a structured prompt with full context, calls the LLM with a strict output schema, and uses the returned values as the decision.

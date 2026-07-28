@@ -310,6 +310,12 @@ caller request/job/trace identity, and restore the caller context afterward.
 
 Thread-scoped dynamic persona prompt files are authoritative; their derived name index is validated and atomically rebuilt when missing, malformed, or stale, so damaged lookup metadata does not hide healthy personas or retain old names after a rename.
 
+Global and thread-scoped `persona_think` calls use the shared framework-native
+free-text agent capability. Natural-language conclusions remain plain text,
+while empty results and unavailable endpoints produce explicit tool errors
+instead of a hidden local response; free-text and structured agents share the
+same endpoint failover infrastructure.
+
 Reflection relevance and candidate generation use the shared LangChain structured-agent boundary with strict typed response schemas. Missing fields, extra fields, out-of-range scores, malformed batches, string booleans, and unknown candidate types take the existing safe fallback instead of being defaulted, clamped, coerced, or partially accepted.
 
 Persona activation and competitive discussion use the same strict typed-output
