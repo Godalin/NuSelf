@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import warnings
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -425,20 +426,111 @@ def test_log_reader_isolates_corrupt_record_without_hiding_legacy(
     corrupt = dict(healthy)
     corrupt["time"] = "2026-01-01T00:00:00Z"
     corrupt["duration_ms"] = True
+    corrupt["message"] = "PRIVATE CORRUPT CONTENT"
+    corrupt_identity = dict(healthy)
+    corrupt_identity["schema_version"] = True
+    corrupt_identity["message"] = "ANOTHER PRIVATE VALUE"
     path.write_text(
         "\n".join(
             json.dumps(record)
-            for record in (corrupt, legacy, healthy)
+            for record in (
+                corrupt,
+                corrupt_identity,
+                legacy,
+                healthy,
+            )
         )
         + "\n",
         encoding="utf-8",
     )
 
-    events = read_log_events(project_root=tmp_path, component="chat")
+    with pytest.warns(RuntimeWarning) as captured:
+        events = read_log_events(
+            project_root=tmp_path,
+            component="chat",
+        )
 
     assert [event.message for event in events] == ["legacy", "healthy"]
     assert events[0].event_id is None
     assert events[1].event_id == healthy["event_id"]
+    assert len(captured) == 1
+    warning = str(captured[0].message)
+    assert "component=chat" in warning
+    assert "file=chat.log" in warning
+    assert "count=2" in warning
+    assert "log duration_ms must be an integer" in warning
+    assert "PRIVATE" not in warning
+    assert str(tmp_path) not in warning
+
+
+def test_incremental_cursor_reports_corruption_once_per_consumed_batch(
+    tmp_path: Path,
+) -> None:
+    cursor = InteractiveLogCursor.from_project(tmp_path)
+    path = log_path("chat", project_root=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    healthy = LogEvent(
+        time="2026-01-01T00:00:00Z",
+        level="info",
+        component="chat",
+        event="healthy_event",
+        message="healthy",
+    ).to_record()
+    corrupt = dict(healthy)
+    corrupt["metadata"] = []
+    corrupt["message"] = "DO NOT DISCLOSE"
+    path.write_text(
+        json.dumps(corrupt)
+        + "\nplain legacy line\n"
+        + json.dumps(healthy)
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.warns(RuntimeWarning) as captured:
+        events = cursor.read_new_events(tmp_path)
+
+    assert [event.message for event in events] == [
+        "plain legacy line",
+        "healthy",
+    ]
+    assert len(captured) == 1
+    assert "count=1" in str(captured[0].message)
+    assert "DO NOT DISCLOSE" not in str(captured[0].message)
+
+    with warnings.catch_warnings(record=True) as repeated:
+        warnings.simplefilter("always")
+        assert cursor.read_new_events(tmp_path) == []
+    assert repeated == []
+
+
+def test_log_corruption_warning_policy_cannot_fail_read(
+    tmp_path: Path,
+) -> None:
+    path = log_path("chat", project_root=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "time": "2026-01-01T00:00:00Z",
+                "level": "info",
+                "component": "chat",
+                "event": "corrupt_event",
+                "message": "private",
+                "event_id": "event-1",
+                "schema_version": True,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        assert read_log_events(
+            project_root=tmp_path,
+            component="chat",
+        ) == []
 
 
 def test_log_writes_are_complete_under_thread_contention(tmp_path: Path) -> None:

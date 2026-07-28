@@ -201,6 +201,12 @@ contract errors and propagate unchanged. A delivery error retains the created
 envelope, so the best-effort wrapper returns that envelope after reporting the
 failed subscribers rather than claiming that publication never occurred.
 
+Structured log readers isolate corrupt JSON records and report one aggregated
+terminal warning per file-read batch. This diagnostic uses the non-raising
+runtime warning boundary directly, never the structured log sink, so it cannot
+recurse or replace healthy/legacy read results. Raw lines and arbitrary values
+are excluded from the warning.
+
 Reflection trace recording and organizer execution after a persisted
 reflection are secondary under this contract. Corrupt reflection schedule
 diagnostics are also secondary to the authoritative fail-closed block/cooldown

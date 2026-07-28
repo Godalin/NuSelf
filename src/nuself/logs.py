@@ -584,10 +584,20 @@ def read_log_events(
                 lines = path.read_text(encoding="utf-8").splitlines()
             except FileNotFoundError:
                 continue
+            corruptions: list[Exception] = []
             for line in lines:
-                parsed = _parse_log_line(line, current_component)
+                parsed = _parse_log_line(
+                    line,
+                    current_component,
+                    on_corrupt=corruptions.append,
+                )
                 if parsed is not None:
                     events.append(parsed)
+            _report_log_read_corruptions(
+                path,
+                current_component,
+                corruptions,
+            )
     events.sort(key=lambda item: item.time)
     if tail is not None and tail > 0:
         return events[-tail:]
@@ -604,7 +614,12 @@ def _component_log_paths(active_path: Path) -> tuple[Path, ...]:
     return (*(path for _, path in backups), active_path)
 
 
-def _parse_log_line(line: str, component: LogComponent) -> LogEvent | None:
+def _parse_log_line(
+    line: str,
+    component: LogComponent,
+    *,
+    on_corrupt: Callable[[Exception], None] | None = None,
+) -> LogEvent | None:
     stripped = line.strip()
     if stripped == "":
         return None
@@ -621,11 +636,35 @@ def _parse_log_line(line: str, component: LogComponent) -> LogEvent | None:
             schema_version=None,
         )
     if not isinstance(parsed, dict):
+        if on_corrupt is not None:
+            on_corrupt(
+                ValueError("structured log record must be a JSON object")
+            )
         return None
     try:
         return LogEvent.from_record(cast(dict[str, object], parsed))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
+        if on_corrupt is not None:
+            on_corrupt(exc)
         return None
+
+
+def _report_log_read_corruptions(
+    path: Path,
+    component: LogComponent,
+    corruptions: list[Exception],
+) -> None:
+    if not corruptions:
+        return
+    first = corruptions[0]
+    detail = str(first).strip() or type(first).__name__
+    emit_runtime_warning(
+        "logs/corrupt_records_skipped: "
+        f"component={component} file={path.name} "
+        f"count={len(corruptions)} "
+        f"first_error={type(first).__name__}: {detail}",
+        stacklevel=3,
+    )
 
 
 def _record_optional_str(
@@ -796,11 +835,17 @@ def _read_log_path(
         appended = log_file.read()
     complete_length = _complete_line_length(appended)
     parsed_events: list[LogEvent] = []
+    corruptions: list[Exception] = []
     for raw_line in appended[:complete_length].splitlines():
         line = raw_line.decode("utf-8", errors="replace")
-        parsed = _parse_log_line(line, component)
+        parsed = _parse_log_line(
+            line,
+            component,
+            on_corrupt=corruptions.append,
+        )
         if parsed is not None:
             parsed_events.append(parsed)
+    _report_log_read_corruptions(path, component, corruptions)
     return parsed_events, offset + complete_length
 
 

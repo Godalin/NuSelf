@@ -287,6 +287,14 @@ Display name mapping: `persona` → `selves`.
   rather than being silently coerced to `None`. Duration is a non-negative
   integer and metadata remains strict JSON. The reader isolates the invalid
   line and continues with healthy and genuinely legacy records.
+- Each full-reader file scan and each incremental file batch emits at most one
+  terminal `RuntimeWarning` when structured records are isolated. The warning
+  contains only the component, basename, skipped count, and first schema error
+  type/message. It never contains the raw line, arbitrary record values,
+  metadata, or an absolute path, and it never writes another structured log.
+  Multiple corrupt records in the same batch are aggregated. Warning policy or
+  hooks cannot make the read fail. Non-JSON legacy text remains readable and
+  does not produce a corruption diagnostic.
 - `InteractiveLogCursor` starts at the current byte length of each component
   file, reads only newly appended complete lines, and retains an incomplete
   trailing line for the next read. Stable event IDs provide deduplication;

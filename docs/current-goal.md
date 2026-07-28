@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Distinguish missing legacy `LogEvent` fields from present-but-corrupt fields
-without silently coercing evidence to `None`.
+Make isolated corrupt structured log records observable without recursive
+logging, warning floods, or payload disclosure.
 
 ## Active Branch
 
@@ -14,40 +14,39 @@ without silently coercing evidence to `None`.
 
 ## Ordered Work
 
-1. Audit local construction, record decoding, and reader skip behavior.
-2. Specify legacy absence versus malformed presence.
-3. Validate all required and optional fields in `LogEvent`.
-4. Require new envelope identity fields to appear as a consistent pair.
-5. Verify corrupt records are skipped without hiding healthy or legacy lines.
+1. Audit full-reader and incremental-cursor parse paths.
+2. Specify a terminal payload-safe corruption diagnostic.
+3. Aggregate corrupt records once per file read batch.
+4. Share the diagnostic boundary across full and incremental reads.
+5. Verify warnings cannot escape or expose raw log content.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Preserve readable pre-envelope records with both identity fields absent.
-- Preserve plain non-JSON legacy line wrapping.
-- Keep the reader's record-isolation policy: one corrupt line does not hide
-  healthy lines.
+- Preserve plain non-JSON legacy lines without warning.
+- Do not append diagnostics to any structured log.
+- Do not include raw lines, absolute paths, or arbitrary record values.
 
 ## Completion Evidence
 
-- `LogEvent.__post_init__()` now validates required identity, level/component,
-  paired envelope identity, optional scalar types, non-negative duration, and
-  strict metadata for both local and decoded construction.
-- `LogEvent.from_record()` uses field-aware strict decoders; invalid present
-  values no longer collapse to `None`, and booleans are rejected as integers.
-- Records are legacy only when both `event_id` and `schema_version` are absent
-  or null; partial or unsupported identity is corrupt.
-- Tests cover every formerly coerced optional field, partial envelope identity,
-  genuine legacy decoding, and reader isolation of corrupt lines.
-- Focused log, CLI, TUI, and REPL activity tests: `365 passed`.
-- `.venv/bin/pytest -q`: `1532 passed`.
+- `_parse_log_line()` reports structured-record schema failures through an
+  injected collector while preserving plain non-JSON legacy behavior.
+- Full reads and incremental `_read_log_path()` batches aggregate failures and
+  call the non-raising terminal warning boundary once per affected file/batch.
+- Diagnostics contain only component, basename, count, and the first schema
+  error type/message; tests prove private record content and absolute paths are
+  absent.
+- Cursor offsets prevent repeat warnings after a corrupt line is consumed, and
+  warning filters promoted to errors cannot fail the read.
+- Focused log, CLI, and REPL activity tests: `350 passed`.
+- `.venv/bin/pytest -q`: `1534 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `dd0e288`.
+`dev/v0.3.x` is published through `bd5f4e4`.
 
 ## Next Review Batch
 
-Audit log-reader diagnostics for isolated corrupt structured records.
+Audit timestamp validation and chronological ordering invariants.
