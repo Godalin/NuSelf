@@ -14,6 +14,9 @@ Diagnostic detail must not persist credentials. Shared diagnostic sanitization
 replaces credential-like labeled values, bearer credentials, and recognized
 raw provider keys with `***` while retaining surrounding failure context.
 Domain boundaries apply sanitization before truncation or persistence.
+Single-exception projections use the shared safe diagnostic-message formatter
+rather than calling `str(exception)` locally. The formatter cannot raise when
+exception rendering fails and sanitizes before returning text.
 
 ## Error Classes
 

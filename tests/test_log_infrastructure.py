@@ -212,9 +212,12 @@ def test_log_observer_failure_is_isolated_from_later_observers(
     tmp_path: Path,
 ) -> None:
     delivered: list[LogEvent] = []
+    observer_secret = "observer-secret-value"
 
     def fail(_event: LogEvent) -> None:
-        raise RuntimeError("projection failed")
+        raise RuntimeError(
+            f"projection failed api_key={observer_secret}"
+        )
 
     with observe_log_events(fail), observe_log_events(delivered.append):
         written = write_log_event(
@@ -231,7 +234,8 @@ def test_log_observer_failure_is_isolated_from_later_observers(
         component="daemon",
     )
     assert diagnostic.event == "log_observer_failed"
-    assert diagnostic.error == "projection failed"
+    assert diagnostic.error == "projection failed api_key=***"
+    assert observer_secret not in str(diagnostic.to_record())
 
 
 def test_log_observer_diagnostic_failure_warns_without_affecting_delivery(
@@ -239,6 +243,8 @@ def test_log_observer_diagnostic_failure_warns_without_affecting_delivery(
     tmp_path: Path,
 ) -> None:
     delivered: list[LogEvent] = []
+    observer_secret = "observer-secret-value"
+    store_secret = "store-secret-value"
     append_log_event = logs._append_log_event  # pyright: ignore[reportPrivateUsage]
 
     def fail_daemon_diagnostic(
@@ -246,22 +252,27 @@ def test_log_observer_diagnostic_failure_warns_without_affecting_delivery(
         **kwargs: object,
     ) -> LogEvent:
         if event_record.component == "daemon":
-            raise OSError("diagnostic store unavailable")
+            raise OSError(
+                f"diagnostic store unavailable token={store_secret}"
+            )
         return append_log_event(
             event_record,
             **kwargs,  # type: ignore[arg-type]
         )
 
     def fail_observer(_event: LogEvent) -> None:
-        raise RuntimeError("projection failed")
+        raise RuntimeError(
+            f"projection failed api_key={observer_secret}"
+        )
 
     monkeypatch.setattr(logs, "_append_log_event", fail_daemon_diagnostic)
 
     with pytest.warns(
         RuntimeWarning,
         match=(
-            "daemon/log_observer_failed: projection failed; "
-            "structured logging failed: diagnostic store unavailable"
+            "daemon/log_observer_failed: projection failed api_key=\\*\\*\\*; "
+            "structured logging failed: diagnostic store unavailable "
+            "token=\\*\\*\\*"
         ),
     ) as captured:
         with observe_log_events(fail_observer), observe_log_events(
@@ -275,6 +286,9 @@ def test_log_observer_diagnostic_failure_warns_without_affecting_delivery(
             )
 
     assert len(captured) == 1
+    warning = str(captured[0].message)
+    assert observer_secret not in warning
+    assert store_secret not in warning
     assert delivered == [written]
     assert read_log_events(project_root=tmp_path, component="chat") == [written]
     assert read_log_events(project_root=tmp_path, component="daemon") == []

@@ -8,7 +8,10 @@ import nuself.runtime.observability as observability
 from nuself.logs import LogAppendLifecycleError, read_log_events
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.event_definitions import UnknownEventDefinitionError
-from nuself.runtime.diagnostics import emit_runtime_warning
+from nuself.runtime.diagnostics import (
+    diagnostic_exception_message,
+    emit_runtime_warning,
+)
 from nuself.runtime.observability import (
     decode_observed_record,
     format_exception_chain,
@@ -77,6 +80,20 @@ def test_format_exception_chain_survives_broken_exception_renderer() -> None:
         raise BrokenMessageError() from ValueError("root")
     except BrokenMessageError as exc:
         assert format_exception_chain(exc) == "BrokenMessageError <- root"
+
+
+def test_diagnostic_exception_message_is_safe_and_sanitized() -> None:
+    class BrokenMessageError(RuntimeError):
+        def __str__(self) -> str:
+            raise KeyboardInterrupt
+
+    assert (
+        diagnostic_exception_message(BrokenMessageError())
+        == "BrokenMessageError"
+    )
+    assert diagnostic_exception_message(
+        RuntimeError("failed password=private-value")
+    ) == "failed password=***"
 
 
 def test_best_effort_returns_none_and_writes_structured_failure(

@@ -339,6 +339,10 @@ Tool-log projection is a secondary observation effect:
   observability;
 - if no reporter is configured, or the reporter itself fails, middleware emits
   a `RuntimeWarning` without changing the primary tool outcome;
+- captured tool-error text and fallback warnings use the shared safe diagnostic
+  formatter. The original tool exception is re-raised unchanged, while its
+  secondary projection cannot expose credential-like values or fail because
+  exception stringification is broken;
 - no logging or reporting failure triggers a hidden tool retry.
 
 Direct service-status queries, such as asking how many memory/reflection/reason/trace records exist, should call those service tools directly. These are operational tool queries; persona discussion before tool results tends to invent capability limits and adds noise.

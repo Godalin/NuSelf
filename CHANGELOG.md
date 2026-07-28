@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Log-observer and agent-tool failure projections now share safe credential
+  redaction for structured records, captured outcomes, and terminal warnings;
+  original observer and tool exceptions remain unchanged.
 - LLM provider failure diagnostics now redact labeled credentials,
   authorization and bearer values, credential-bearing query parameters, and
   common raw provider keys before truncation and persistence.

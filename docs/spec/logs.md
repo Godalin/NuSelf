@@ -219,6 +219,10 @@ are callable delivery effects, not serializable correlation identity.
   structured-log failure. The warning is the terminal fallback: it does not
   recurse, retry, or escape into the business operation, including when
   process warning policy promotes runtime warnings to errors.
+- Observer failure records and terminal warnings use the shared safe diagnostic
+  formatter for each exception. Broken exception renderers cannot replace the
+  audit result, and credential-like values are removed before persistence or
+  warning emission.
 - Observers are not implicitly copied to new threads. A future deferred path
   that genuinely continues the same live projection must bind that effect
   explicitly; long-lived workers must establish their own ownership.

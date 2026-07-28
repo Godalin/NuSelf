@@ -13,7 +13,10 @@ from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
 from nuself.runtime import encode_json_value, freeze_json_value
-from nuself.runtime.diagnostics import emit_runtime_warning
+from nuself.runtime.diagnostics import (
+    diagnostic_exception_message,
+    emit_runtime_warning,
+)
 
 
 @dataclass(frozen=True)
@@ -148,12 +151,15 @@ class ToolCaptureMiddleware(AgentMiddleware):
             except Exception as report_exc:  # noqa: BLE001 - preserve primary outcome
                 emit_runtime_warning(
                     "tool log callback failed: "
-                    f"{exc}; failure reporter failed: {report_exc}",
+                    f"{diagnostic_exception_message(exc)}; "
+                    "failure reporter failed: "
+                    f"{diagnostic_exception_message(report_exc)}",
                     stacklevel=3,
                 )
                 return
         emit_runtime_warning(
-            f"tool log callback failed: {exc}",
+            "tool log callback failed: "
+            f"{diagnostic_exception_message(exc)}",
             stacklevel=3,
         )
 
@@ -181,7 +187,11 @@ class ToolCaptureMiddleware(AgentMiddleware):
         try:
             result = handler(request)
         except Exception as exc:
-            self._capture_and_log(name, args, error=str(exc))
+            self._capture_and_log(
+                name,
+                args,
+                error=diagnostic_exception_message(exc),
+            )
             raise
 
         result_text = _middleware_result_text(result)

@@ -265,6 +265,28 @@ def test_tool_projection_and_capture_share_exact_outcome_objects() -> None:
     assert captured[1].error == "failed"
 
 
+def test_tool_error_projection_is_sanitized_without_replacing_exception() -> None:
+    captured: list[ToolOutcome] = []
+    middleware = ToolCaptureMiddleware(captured=captured)
+    tool_secret = "tool-secret-value"
+    primary_error = LookupError(
+        f"tool failed api_key={tool_secret}"
+    )
+
+    def fail_tool(_request: ToolCallRequest) -> ToolMessage:
+        raise primary_error
+
+    with pytest.raises(LookupError) as failed:
+        middleware.wrap_tool_call(
+            _request({}, call_id="failure"),
+            fail_tool,
+        )
+
+    assert failed.value is primary_error
+    assert captured[0].error == "tool failed api_key=***"
+    assert tool_secret not in (captured[0].error or "")
+
+
 def test_tool_outcome_requires_exactly_one_result_kind() -> None:
     with pytest.raises(ValueError):
         ToolOutcome(name="tool", args={})
@@ -302,12 +324,17 @@ def test_tool_log_failure_does_not_replace_tool_exception() -> None:
 
 
 def test_unreported_tool_log_failure_warns_without_changing_result() -> None:
+    audit_secret = "audit-secret-value"
+
     def fail_log(*_args: object, **_kwargs: object) -> None:
-        raise OSError("audit unavailable")
+        raise OSError(f"audit unavailable token={audit_secret}")
 
     middleware = ToolCaptureMiddleware(log_callback=fail_log)
 
-    with pytest.warns(RuntimeWarning, match="audit unavailable"):
+    with pytest.warns(
+        RuntimeWarning,
+        match="audit unavailable token=\\*\\*\\*",
+    ) as captured:
         result = middleware.wrap_tool_call(
             _request({}, call_id="call-1"),
             lambda request: ToolMessage(
@@ -319,3 +346,4 @@ def test_unreported_tool_log_failure_warns_without_changing_result() -> None:
 
     assert isinstance(result, ToolMessage)
     assert _message_content(result) == "completed"
+    assert audit_secret not in str(captured[0].message)

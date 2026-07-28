@@ -21,7 +21,10 @@ from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
 )
-from nuself.runtime.diagnostics import emit_runtime_warning
+from nuself.runtime.diagnostics import (
+    diagnostic_exception_message,
+    emit_runtime_warning,
+)
 from nuself.runtime.event_payloads import RuntimeLogEventPayload
 from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
@@ -689,15 +692,15 @@ def _report_log_observer_failure(
                 project_root=project_root,
                 level="warning",
                 status="error",
-                error=str(exc),
+                error=diagnostic_exception_message(exc),
                 metadata={
                     "error_type": type(exc).__name__,
                     "observer_type": type(observer).__name__,
                 },
             )
         except Exception as log_exc:
-            observer_error = str(exc).strip() or type(exc).__name__
-            log_error = str(log_exc).strip() or type(log_exc).__name__
+            observer_error = diagnostic_exception_message(exc)
+            log_error = diagnostic_exception_message(log_exc)
             emit_runtime_warning(
                 "daemon/log_observer_failed: "
                 f"{observer_error}; structured logging failed: {log_error}",
