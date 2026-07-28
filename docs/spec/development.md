@@ -102,6 +102,8 @@ command implementations must move into focused modules as they are touched.
 
 - `cli_daemon.py` owns daemon lifecycle/health handlers and daemon status
   formatting.
+- `cli_threads.py` owns one-shot thread list/show/create/rename/branch/archive
+  lifecycle handlers; REPL thread switching remains in the REPL layer.
 - Extracted command modules accept `argparse.Namespace` only at the CLI edge;
   domain work continues to flow through lifecycle, client, service, and
   repository APIs.

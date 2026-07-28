@@ -61,6 +61,17 @@ try:
         handle_daemon_status,
         handle_daemon_stop,
     )
+    from nuself.cli_threads import (
+        handle_thread_archive,
+        handle_thread_archived,
+        handle_thread_branch,
+        handle_thread_create,
+        handle_thread_delete,
+        handle_thread_list,
+        handle_thread_rename,
+        handle_thread_show,
+        handle_thread_unarchive,
+    )
     from nuself.handles import (
         VisibleHandleError,
         resolve_visible_handle,
@@ -1377,112 +1388,6 @@ def handle_memory_unquarantine(args: argparse.Namespace) -> int:
         print(str(exc), file=sys.stderr)
         return 1
     print(f"Unquarantined memory entry: {args.entry_id}")
-    return 0
-
-
-def handle_thread_list(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
-    ids = store.list()
-    if not ids:
-        print("No active threads.")
-        return 0
-    for tid in ids:
-        print(tid)
-    return 0
-
-
-def handle_thread_show(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
-    state = store.load(args.thread_id)
-    if not state.messages and args.thread_id not in store.list():
-        print(f"Thread not found: {args.thread_id}", file=sys.stderr)
-        return 1
-    print(f"Thread: {args.thread_id}")
-    if state.summary:
-        print(f"Summary: {state.summary}")
-    print(f"Messages: {len(state.messages)}")
-    for msg in state.messages:
-        prefix = ">" if msg.role == "user" else "<"
-        content = msg.content[:120]
-        if len(msg.content) > 120:
-            content += "..."
-        print(f"  {prefix} {content}")
-    return 0
-
-
-def handle_thread_create(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
-    if args.thread_id in store.list():
-        print(f"Thread already exists: {args.thread_id}", file=sys.stderr)
-        return 1
-    store.save(ThreadState.empty(args.thread_id))
-    print(f"Created thread: {args.thread_id}")
-    return 0
-
-
-def handle_thread_rename(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
-    try:
-        store.rename(args.old_thread_id, args.new_thread_id)
-        print(f"Renamed thread: {args.old_thread_id} -> {args.new_thread_id}")
-        return 0
-    except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-
-
-def handle_thread_branch(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
-    try:
-        store.branch(args.source_thread_id, args.new_thread_id, args.index)
-        print(f"Branched thread: {args.source_thread_id} -> {args.new_thread_id}")
-        return 0
-    except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-
-
-def handle_thread_archive(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
-    try:
-        store.archive(args.thread_id)
-        print(f"Archived thread: {args.thread_id}")
-        return 0
-    except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-
-
-def handle_thread_delete(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
-    try:
-        store.delete(args.thread_id)
-        print(f"Deleted thread: {args.thread_id}")
-        return 0
-    except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-
-
-def handle_thread_unarchive(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
-    try:
-        store.unarchive(args.thread_id)
-        print(f"Unarchived thread: {args.thread_id}")
-        return 0
-    except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-
-
-def handle_thread_archived(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
-    ids = store.list_archived()
-    if not ids:
-        print("No archived threads.")
-        return 0
-    for thread_id in ids:
-        print(thread_id)
     return 0
 
 
