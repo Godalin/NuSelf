@@ -13,7 +13,7 @@ v0.3 optimization batches (do in order, each its own commit + tests):
 
 1. ☑ Batch A — correctness/concurrency bug fixes.
 2. ☑ Batch B — caching / N+1 performance.
-3. ☐ Batch C — dedup & dead-code cleanup.
+3. ☑ Batch C — dedup & dead-code cleanup.
 
 `main` remains the stable, releasable branch. `dev/v0.3.x` is the active line;
 `feature/*` stays isolated for one feature or fix at a time.

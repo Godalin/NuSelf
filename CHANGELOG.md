@@ -42,6 +42,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Reindex commands now write real rebuildable JSON projections under
   `private/derived/`; shared memory, persona-tool, and CLI handle helpers replace
   duplicated implementations.
+- `nuself dev eval` now reports one structured result per fixture scenario and
+  derives totals and exit status from those results. Notification evaluation no
+  longer launches a nested pytest process or assumes a fixed fixture count.
 
 ### Fixed
 

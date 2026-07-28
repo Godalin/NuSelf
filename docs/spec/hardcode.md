@@ -76,11 +76,11 @@ behavior, grouped by subsystem. Configurable defaults live in
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `CHAT_REQUEST_TIMEOUT_SECONDS` | `cli.py:120` | 120 s | Interactive chat request timeout |
-| `DEFAULT_MEMORY_PREVIEW_LIMIT` | `cli.py:121` | 8 | Memory preview entry count |
-| `INTERACTIVE_CHAT_ATTEMPTS` | `cli.py:122` | 2 | Max interactive chat retries |
-| `INTERACTIVE_LOG_POLL_INTERVAL_SECONDS` | `cli.py:123` | 0.1 s | Log poll interval |
-| profile display | `cli.py:4079` | 6 | Max profile items shown inline |
+| `CHAT_REQUEST_TIMEOUT_SECONDS` | `cli/__init__.py:116` | 120 s | Interactive chat request timeout |
+| `DEFAULT_MEMORY_PREVIEW_LIMIT` | `cli/__init__.py:117` | 8 | Memory preview entry count |
+| `INTERACTIVE_CHAT_ATTEMPTS` | `cli/__init__.py:118` | 2 | Max interactive chat retries |
+| `INTERACTIVE_LOG_POLL_INTERVAL_SECONDS` | `cli/__init__.py:119` | 0.1 s | Log poll interval |
+| profile display | `cli/repl/commands.py:467` | 6 | Max profile items shown inline |
 
 ## LLM
 
@@ -104,9 +104,9 @@ behavior, grouped by subsystem. Configurable defaults live in
 |----------|-----------|-------|--------|
 | `limit: int = 8` | `agent/tools.py:42` | 8 | Default memory search limit in agent tools |
 | `limit: int = 5` | `agent/tools.py:74,375,417` | 5 | Default reflection/trace list limits |
-| `range(2)` | `agent/chat.py:558` | 2 | LLM endpoint retry attempts |
-| `[:3]` | `agent/chat.py:747` | 3 | Max default fallback personas |
-| note/summary truncation | `agent/chat.py:1055,1059` | 140 | Persona contribution display truncation |
+| `range(2)` | `agent/chat/response.py:91` | 2 | LLM endpoint retry attempts |
+| `[:3]` | `agent/chat/persona.py:209` | 3 | Max default fallback personas |
+| note/summary truncation | `agent/chat/persona.py:309,313` | 140 | Persona contribution display truncation |
 
 ## Render / TUI
 
