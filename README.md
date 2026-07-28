@@ -301,7 +301,9 @@ uv run nuself dev health
 Daemon health reflects both scheduled-iteration failures and unexpected worker
 target exits. Worker diagnostics carry a `daemon.worker.<name>` source; failure
 to write that diagnostic falls back to a runtime warning without terminating
-the scheduled loop.
+the scheduled loop. Shutdown attempts every owned cleanup step and retains
+simultaneous failures; `daemon/stopped` is emitted only after workers,
+project-scoped storage, socket, and PID cleanup all succeed.
 
 Quick status overview:
 

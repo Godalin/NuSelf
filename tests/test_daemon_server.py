@@ -8,13 +8,17 @@ import pytest
 
 from nuself.agent.chat import ChatAgent
 from nuself.daemon.protocol import DaemonRequest
-from nuself.daemon.server import DaemonState, handle_request
+from nuself.daemon.server import (
+    DaemonState,
+    DaemonWorkerJoinTimeoutError,
+    handle_request,
+)
 from nuself.llm import ChatMessage
 from nuself.logs import read_log_events
 from nuself.memory.curator import MemoryCuratorResult
 from nuself.notification import NotificationOutbox, OutboxEntry
-from nuself.runtime.workers import OwnedWorker
 from nuself.runtime.context import RuntimeContext, current_runtime_context
+from nuself.runtime.workers import OwnedWorker
 
 
 class StructuredFakeLLM:
@@ -372,10 +376,7 @@ def test_export_worker_initialization_fails_before_thread_start(
 
 def test_daemon_worker_join_timeout_is_logged_and_remains_live(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nuself.daemon import server as server_mod
-
     state = DaemonState(tmp_path)
     release = threading.Event()
 
@@ -387,28 +388,27 @@ def test_daemon_worker_join_timeout_is_logged_and_remains_live(
         thread_name="test-memory-curator",
         target=wait_for_release,
     )
-    logged: list[tuple[tuple[object, ...], dict[str, object]]] = []
-
-    def capture_log(*args: object, **kwargs: object) -> None:
-        logged.append((args, kwargs))
-
-    monkeypatch.setattr(server_mod, "write_log_event", capture_log)
-
     state.start_background_memory_curator()
-    state._join_worker(  # pyright: ignore[reportPrivateUsage]
-        "memory_curator",
-        timeout=0,
-    )
+    with pytest.raises(
+        DaemonWorkerJoinTimeoutError,
+        match="memory_curator did not stop",
+    ):
+        state._join_worker(  # pyright: ignore[reportPrivateUsage]
+            "memory_curator",
+            timeout=0,
+        )
 
     health = next(
         item for item in state.worker_health() if item.name == "memory_curator"
     )
     assert health.alive is True
-    assert len(logged) == 1
-    assert logged[0][0][1] == "thread_timeout"
-    assert logged[0][1]["project_root"] == tmp_path
-    assert logged[0][1]["status"] == "timed_out"
-    assert logged[0][1]["metadata"] == {
+    event = read_log_events(
+        project_root=tmp_path,
+        component="daemon",
+    )[-1]
+    assert event.event == "thread_timeout"
+    assert event.status == "timed_out"
+    assert event.metadata == {
         "worker": "memory_curator",
         "timeout_seconds": 0,
         "lifecycle_state": "timed_out",

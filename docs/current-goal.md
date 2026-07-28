@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The daemon worker supervision and shared scheduled-iteration stage is
-complete; no implementation change is currently active.
+Idle. The daemon shutdown cleanup aggregation and ownership stage is complete;
+no implementation change is currently active.
 
 ## Active Branch
 
@@ -31,4 +31,4 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit daemon shutdown cleanup ordering and multi-error preservation.
+Audit daemon startup signal-handler ownership and restoration.

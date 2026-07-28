@@ -83,6 +83,26 @@ unexpected per-iteration exception unless shutdown has been requested.
   timeout. The worker remains reported alive/timed-out until its target exits;
   shutdown must not claim a successful join.
 
+## Daemon Lifecycle Cleanup
+
+Daemon shutdown owns an ordered set of named cleanup steps. It signals
+shutdown, attempts each worker stop independently, resets only the current
+project's default storage backend, removes the socket and PID independently,
+and releases the instance lock last.
+
+Every ordinary `Exception` from a cleanup step is retained as a
+`DaemonCleanupFailure(step, error)` while later steps continue. When cleanup
+fails, `DaemonLifecycleError` exposes the complete ordered failure tuple. If
+bind, serve, or another primary operation also failed, that original exception
+is retained as `primary_error` and as the lifecycle error's explicit cause.
+A cleanup error must never silently replace or discard the primary failure.
+
+The `daemon/stopped` audit event is written only after all owned cleanup steps
+before instance-lock release succeed. Failed cleanup emits
+`daemon/shutdown_cleanup_failed` as a best-effort diagnostic and propagates the
+lifecycle error. Failure of that diagnostic does not alter the retained error
+set.
+
 ## Best-Effort Side Effects
 
 Some secondary effects must not change the result of an already-successful

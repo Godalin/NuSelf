@@ -298,7 +298,10 @@ If the lock is already held, the contender writes
 `daemon/instance_lock_contended`, returns a non-zero exit status, and must not
 construct daemon state or modify socket/PID resources. Unix-server binding must
 complete before background workers start. Any bind or partial-start failure
-still runs owner cleanup before the lock is released.
+still runs every owner cleanup step before the lock is released. Cleanup
+failures are named and aggregated without discarding the bind/serve failure.
+The daemon resets only the current project root's default storage backend;
+other in-process project backends are not part of its ownership.
 
 ### PID Metadata
 

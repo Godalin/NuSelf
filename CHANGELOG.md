@@ -58,6 +58,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Daemon shutdown now attempts every worker, project-scoped backend, socket,
+  PID, and instance-lock cleanup step even when earlier steps fail. Named
+  cleanup failures are retained together with any bind/serve error, worker join
+  timeouts prevent a false `daemon/stopped` event, and one daemon no longer
+  resets other projects' cached backends.
 - Daemon background workers now share one supervised iteration boundary.
   Unexpected target exits and per-iteration failures update health with
   correlated `daemon.worker.<name>` diagnostics, and a logging failure can no
