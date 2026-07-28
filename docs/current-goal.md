@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. `relations` is now the only memory/profile relation wire schema; obsolete
-relation fields are rejected instead of read or written.
+Idle. Every persisted reason step now carries an explicit terminal decision;
+incomplete records are rejected instead of silently treated as `continue`.
 
 ## Active Branch
 
@@ -23,18 +23,16 @@ code.
 
 ## Completion Evidence
 
-- Memory entries, candidates, profile items, and `MemoryObject` payloads write
-  only the `relations` object.
-- Entry, candidate, and profile decoders require `relations` and reject
-  `supersedes` / `related_memory_ids` even when canonical data is also present.
-- Memory-object validation rejects obsolete relation payload fields.
-- `source_refs`, notification-context upgrade reads, and historical log reads
-  remain because their migration contracts are explicit.
-- The full suite exposed and now covers concurrent SQLite dynamic-column
-  expansion across separate backend connections.
-- Focused memory/profile tests: 68 passed.
-- SQLite concurrency stress test: 5 consecutive passes.
-- Final full tests: 1381 passed.
+- `ReasoningStep.from_wire()` requires `terminal_status` and validates it
+  against the terminal-status enum.
+- `terminal_reason` is required even when an ordinary continuing step stores
+  the empty string.
+- In-memory construction defaults remain available and every serializer writes
+  both fields.
+- Regression tests reject records missing either half of the terminal
+  decision.
+- Focused reason domain/repository/service/advancer tests: 79 passed.
+- Final full tests: 1382 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -44,5 +42,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Require `terminal_status` in persisted reason steps instead of silently
-defaulting missing records to `continue`.
+Audit remaining optional persisted reason fields against their actual
+introduction and migration contracts.

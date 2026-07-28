@@ -144,6 +144,11 @@ Properties:
 - `retired_findings` — returns `[TrackedItem]` from `retired_findings_data`.
 - `next_steps` — returns `[TrackedItem]` from `next_steps_data`.
 
+Persisted step records must include both `terminal_status` and
+`terminal_reason`. An ordinary non-terminal step writes
+`terminal_status="continue"` and `terminal_reason=""`; missing fields are
+invalid state, not an implicit continue decision.
+
 ### State Transitions
 
 | From                           | Action    | To         |

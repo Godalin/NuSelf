@@ -237,16 +237,21 @@ def test_step_detaches_nested_tool_logs_and_wire_output() -> None:
     ]
 
 
-def test_step_from_legacy_wire_defaults_terminal_status() -> None:
-    s = ReasoningStep(thread_id="reason-abc", summary="Legacy step")
-    wire = s.to_wire()
-    del wire["terminal_status"]
-    del wire["terminal_reason"]
+@pytest.mark.parametrize(
+    "field_name",
+    ["terminal_status", "terminal_reason"],
+)
+def test_step_wire_requires_explicit_terminal_decision(
+    field_name: str,
+) -> None:
+    wire = ReasoningStep(
+        thread_id="reason-abc",
+        summary="Explicit terminal decision",
+    ).to_wire()
+    del wire[field_name]
 
-    parsed = ReasoningStep.from_wire(wire)
-
-    assert parsed.terminal_status == "continue"
-    assert parsed.terminal_reason == ""
+    with pytest.raises(ValueError, match=f"field '{field_name}' must be"):
+        ReasoningStep.from_wire(wire)
 
 
 def test_step_invalid_terminal_status_raises() -> None:

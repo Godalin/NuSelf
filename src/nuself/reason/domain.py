@@ -307,8 +307,8 @@ class ReasoningStep:
             new_pending_data=_optional_tracked_items(data, "new_pending_data"),
             retired_findings_data=_optional_tracked_items(data, "retired_findings_data"),
             next_steps_data=_optional_tracked_items(data, "next_steps_data"),
-            terminal_status=_optional_terminal_status(data, "terminal_status"),
-            terminal_reason=_optional_str_with_default(data, "terminal_reason"),
+            terminal_status=_expect_terminal_status(data, "terminal_status"),
+            terminal_reason=_expect_str(data, "terminal_reason"),
         )
 
 
@@ -444,11 +444,12 @@ def _optional_float(data: dict[str, object], field_name: str) -> float | None:
     raise ValueError(f"field '{field_name}' must be a number or null")
 
 
-def _optional_terminal_status(data: dict[str, object], field_name: str) -> TerminalStatus:
-    value = data.get(field_name)
-    if value is None:
-        return "continue"
-    if isinstance(value, str) and value in TERMINAL_STATUSES:
+def _expect_terminal_status(
+    data: dict[str, object],
+    field_name: str,
+) -> TerminalStatus:
+    value = _expect_str(data, field_name)
+    if value in TERMINAL_STATUSES:
         return value  # pyright: ignore[reportReturnType]
     raise ValueError(f"field '{field_name}' must be a terminal status")
 
