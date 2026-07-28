@@ -112,6 +112,11 @@ try:
         handle_persona_show,
         resolve_persona_id as _resolve_persona_id,
     )
+    from nuself.commands.dev import (
+        handle_dev_db_schema,
+        handle_dev_migrate,
+        handle_dev_storage,
+    )
     from nuself.commands.memory.profile import (
         handle_memory_profile_delete,
         handle_memory_profile_list,
@@ -1086,71 +1091,6 @@ def handle_open(args: argparse.Namespace) -> int:
         args.project_root,
         initial_thread_id=thread_id,
     )
-
-
-def handle_dev_migrate(args: argparse.Namespace) -> int:
-    from nuself.storage import create_file_backend, create_sqlite_backend, migrate_all
-    from nuself.storage_sqlite import SqliteStorageBackend
-
-    src = create_file_backend(args.project_root)
-    dst = create_sqlite_backend(args.project_root, db_path=args.db)
-    assert isinstance(dst, SqliteStorageBackend)
-    result = migrate_all(src, dst, clear_dst=args.clear)
-    if result:
-        for name, count in sorted(result.items()):
-            print(f"  {name}: {count} items")
-    else:
-        print("  (no data to migrate)")
-    total = sum(result.values())
-    print(f"Migrated {total} items across {len(result)} collections to {dst.db_path}")
-    return 0
-
-
-def handle_dev_db_schema(args: argparse.Namespace) -> int:
-    from nuself.storage import create_sqlite_backend
-    from nuself.storage_sqlite import SqliteStorageBackend
-
-    backend = create_sqlite_backend(args.project_root)
-    assert isinstance(backend, SqliteStorageBackend)
-    tables = backend.collection_names()
-    if not tables:
-        print("(no tables)")
-        return 0
-    for table in sorted(tables):
-        info = backend.table_info(table)
-        print(f"{table}:")
-        for col_name, col_type, notnull, default_val, pk in info:
-            nullable = "" if notnull else " NULL"
-            pk_flag = " PK" if pk else ""
-            default_str = f" DEFAULT {default_val}" if default_val is not None else ""
-            print(f"  {col_name}  {col_type}{nullable}{pk_flag}{default_str}")
-    return 0
-
-
-def handle_dev_storage(args: argparse.Namespace) -> int:
-    from nuself.storage import auto_backend
-    from nuself.storage_sqlite import SqliteStorageBackend
-
-    backend = auto_backend(args.project_root)
-
-    if isinstance(backend, SqliteStorageBackend):
-        print("Active backend: SqliteStorageBackend")
-        print(f"  database: {backend.db_path}")
-        tables = backend.collection_names()
-        print(f"  collections: {len(tables)}")
-        for name in sorted(tables):
-            count = len(backend.collection(name).list())
-            if count:
-                print(f"    {name}: {count} items")
-    else:
-        fbe = backend
-        fbe_root = getattr(fbe, "_root", None)
-        if fbe_root is not None:
-            print("Active backend: FileStorageBackend")
-            print(f"  file root: {fbe_root}")
-        else:
-            print(f"Active backend: {type(backend).__name__}")
-    return 0
 
 
 def handle_pack_export(args: argparse.Namespace) -> int:

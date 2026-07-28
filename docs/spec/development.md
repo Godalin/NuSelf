@@ -118,6 +118,8 @@ top-level application namespace stays focused on subsystem APIs.
 - `commands/persona.py` owns dynamic persona list/create/show/delete/enable/
   disable handlers and visible-handle resolution shared with persona REPL
   shortcuts.
+- `commands/dev.py` owns storage migration, SQLite schema inspection, and active
+  storage backend diagnostics.
 - Memory CLI commands live together under the `commands/memory/` package and
   are split by subdomain instead of collected in one oversized module.
   `commands/memory/profile.py` owns profile list/search/show/delete/reindex
