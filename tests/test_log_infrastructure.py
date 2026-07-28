@@ -7,6 +7,7 @@ import warnings
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import stat
 from typing import IO, BinaryIO, cast
 
 import pytest
@@ -42,6 +43,29 @@ def test_new_log_events_have_stable_envelope_identity(tmp_path: Path) -> None:
 
     assert read.event_id == written.event_id
     assert read.schema_version == RUNTIME_SCHEMA_VERSION
+
+
+def test_log_append_hardens_directory_data_backups_and_lock(
+    tmp_path: Path,
+) -> None:
+    logs_dir = tmp_path / "private" / "logs"
+    logs_dir.mkdir(parents=True, mode=0o755)
+    logs_dir.chmod(0o755)
+    for name in ("chat.log", "chat.log.1", "chat.log.lock"):
+        path = logs_dir / name
+        path.write_bytes(b"")
+        path.chmod(0o644)
+
+    write_log_event(
+        "chat",
+        "permission_test",
+        "private",
+        project_root=tmp_path,
+    )
+
+    assert stat.S_IMODE(logs_dir.stat().st_mode) == 0o700
+    for name in ("chat.log", "chat.log.1", "chat.log.lock"):
+        assert stat.S_IMODE((logs_dir / name).stat().st_mode) == 0o600
 
 
 def test_audit_envelope_round_trip_retains_complete_projection(

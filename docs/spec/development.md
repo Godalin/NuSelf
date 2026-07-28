@@ -93,11 +93,12 @@ Runtime JSON and text state uses `nuself.storage.write_json_atomic()` or
 file, atomically replaces the destination, and removes the temporary file on
 failure while preserving any prior destination.
 
-NuSelf-owned runtime state is private by default. The shared writer creates or
-hardens the destination directory to owner-only `0700`, creates the unique
-temporary file as owner-only `0600` before writing content, and therefore
-publishes a `0600` destination through atomic replacement. Sensitive content
-must never exist in a broader-permission temporary file, even briefly.
+NuSelf-owned runtime state is private by default. Dependency-neutral helpers
+in `nuself.private_fs` create or harden owned directories to owner-only `0700`
+and owned files to `0600`. Atomic writers, SQLite databases and internal
+snapshots, append-only logs, lock files, and other internal append streams all
+use that boundary. Sensitive content must never exist in a
+broader-permission file, even briefly.
 
 A write or replace failure remains the propagated exception when temporary
 cleanup succeeds or the temporary file is already absent. If cleanup itself
@@ -118,6 +119,11 @@ Subsystems must not define parallel atomic writer helpers or use a fixed
 explicit user-selected artifact whose partial-write and permission behavior is
 documented, or inside the shared writer after it securely creates the
 temporary file.
+
+An explicitly user-selected external export is not a NuSelf-owned runtime
+path. Its parent directory and resulting mode continue to follow the user's
+filesystem and `umask`; internal helpers must not silently chmod that external
+directory.
 
 ### Import Placement Policy
 

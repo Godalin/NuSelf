@@ -15,6 +15,10 @@ from uuid import uuid4
 
 from nuself.config import runtime_paths
 from nuself.logs import LogComponent
+from nuself.private_fs import (
+    create_private_file,
+    ensure_private_directory,
+)
 from nuself.runtime.observability import (
     report_corrupt_record,
     report_observed_failure,
@@ -23,9 +27,6 @@ from nuself.runtime import decode_json_value, encode_json_value
 
 if TYPE_CHECKING:
     from nuself.storage_sqlite import SqliteStorageBackend
-
-PRIVATE_DIRECTORY_MODE = 0o700
-PRIVATE_FILE_MODE = 0o600
 
 
 # ── Protocols ─────────────────────────────────────────────────────────────
@@ -156,18 +157,12 @@ def _list_json_record(
 def write_text_atomic(path: Path, text: str) -> None:
     """Privately replace UTF-8 text without exposing partial destination data."""
 
-    path.parent.mkdir(
-        mode=PRIVATE_DIRECTORY_MODE,
-        parents=True,
-        exist_ok=True,
-    )
-    path.parent.chmod(PRIVATE_DIRECTORY_MODE)
+    ensure_private_directory(path.parent)
     tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
     temporary_created = False
     try:
-        tmp_path.touch(mode=PRIVATE_FILE_MODE, exist_ok=False)
+        create_private_file(tmp_path)
         temporary_created = True
-        tmp_path.chmod(PRIVATE_FILE_MODE)
         tmp_path.write_text(text, encoding="utf-8")
         tmp_path.replace(path)
     except Exception as primary_error:
@@ -221,7 +216,7 @@ class _FileCollection:
         return _read_json_record(path)
 
     def put(self, key: str, value: dict[str, object]) -> None:
-        self._dir.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(self._dir)
         path = self._dir / f"{key}.json"
         write_json_atomic(path, value)
 

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nuself.config import runtime_paths
+from nuself.private_fs import ensure_private_directory
 
 @dataclass(frozen=True)
 class PrivateWorkspacePaths:
@@ -54,8 +55,8 @@ class PrivateWorkspaceStore:
 
     def ensure(self, owner_id: str) -> PrivateWorkspacePaths:
         workspace = self.paths(owner_id)
-        workspace.artifacts.mkdir(parents=True, exist_ok=True)
-        workspace.notes.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(workspace.artifacts)
+        ensure_private_directory(workspace.notes)
         return workspace
 
 

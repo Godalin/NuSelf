@@ -6,6 +6,8 @@ from fcntl import LOCK_EX, LOCK_NB, LOCK_UN, flock
 from pathlib import Path
 from typing import IO, Literal
 
+from nuself.private_fs import ensure_private_file
+
 
 class DaemonInstanceLockContended(RuntimeError):
     """Raised when another process owns the project daemon."""
@@ -43,7 +45,7 @@ class DaemonInstanceLock:
     def acquire(self) -> None:
         if self._handle is not None:
             return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_private_file(self.path)
         handle = self.path.open("a+", encoding="utf-8")
         try:
             flock(handle.fileno(), LOCK_EX | LOCK_NB)

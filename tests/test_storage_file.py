@@ -8,6 +8,7 @@ import pytest
 
 import nuself.storage as storage
 from nuself.logs import read_log_events
+from nuself.private_fs import ensure_private_file
 from nuself.storage import (
     AtomicWriteCleanupError,
     FileStorageBackend,
@@ -99,6 +100,22 @@ def test_write_text_atomic_hardens_directory_and_file_before_content_write(
     assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert path.read_text(encoding="utf-8") == "private content"
+
+
+def test_private_file_boundary_rejects_non_file_without_chmod(
+    tmp_path: Path,
+) -> None:
+    invalid = tmp_path / "private" / "not-a-file"
+    invalid.mkdir(parents=True, mode=0o755)
+    invalid.chmod(0o755)
+
+    with pytest.raises(
+        OSError,
+        match="private file path must be a regular file",
+    ):
+        ensure_private_file(invalid)
+
+    assert stat.S_IMODE(invalid.stat().st_mode) == 0o755
 
 
 def test_write_json_atomic_rejects_invalid_value_before_touching_destination(

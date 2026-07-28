@@ -3,6 +3,7 @@ from __future__ import annotations
 # pyright: reportPrivateUsage=false
 
 import subprocess
+import stat
 import sys
 import threading
 import tomllib
@@ -4609,7 +4610,12 @@ def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> No
 
     repo = MemoryEntryRepository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work."))
-    output = tmp_path / "export.json"
+    external = tmp_path / "external"
+    external.mkdir(mode=0o755)
+    external.chmod(0o755)
+    output = external / "export.json"
+    output.write_text("old", encoding="utf-8")
+    output.chmod(0o644)
 
     result = main(
         ["--project-root", str(tmp_path), "memory", "export", "-o", str(output)]
@@ -4623,6 +4629,8 @@ def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> No
     data = cast(list[object], json.loads(output.read_text(encoding="utf-8")))
     assert len(data) == 1
     assert cast(dict[str, object], data[0])["title"] == "Focus"
+    assert stat.S_IMODE(external.stat().st_mode) == 0o755
+    assert stat.S_IMODE(output.stat().st_mode) == 0o644
 
 
 def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> None:

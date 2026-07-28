@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from nuself.config import runtime_paths
+from nuself.private_fs import ensure_private_directory
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage import get_default_backend
 from nuself.storage_sqlite import (
@@ -28,7 +29,7 @@ def handle_pack_export(args: argparse.Namespace) -> int:
         )
         return 1
     exports = paths.private_root / "exports"
-    exports.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(exports)
     name = args.name.removesuffix(".sqlite")
     destination = (exports / name).with_suffix(".sqlite")
     backend = get_default_backend(args.project_root)
@@ -55,7 +56,7 @@ def handle_pack_import(args: argparse.Namespace) -> int:
     imports = runtime_paths(
         args.project_root
     ).private_root / "imports"
-    imports.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(imports)
     destination = imports / source.name
     if destination.exists():
         print(

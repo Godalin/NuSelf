@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Literal, TypeVar, cast
 
 from nuself.config import runtime_paths
+from nuself.private_fs import ensure_private_directory, ensure_private_file
 from nuself.storage import write_json_atomic
 
 ThreadRole = Literal["user", "assistant"]
@@ -138,7 +139,7 @@ class ThreadStore:
             return result
 
     def _locked(self, thread_id: str) -> "_ThreadLock":
-        self._threads_dir.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(self._threads_dir)
         return _ThreadLock(self._lock_path_for(thread_id))
 
     def _load_unlocked(self, thread_id: str) -> ThreadState:
@@ -151,7 +152,7 @@ class ThreadStore:
         return ThreadState.from_wire(cast(dict[str, object], raw))
 
     def _save_unlocked(self, state: ThreadState) -> None:
-        self._threads_dir.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(self._threads_dir)
         path = self._path_for(state.thread_id)
         write_json_atomic(path, state.to_wire())
 
@@ -247,7 +248,7 @@ class ThreadStore:
         if not source_path.exists():
             raise ValueError(f"thread not found: {thread_id}")
         archived_dir = self._threads_dir / "archived"
-        archived_dir.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(archived_dir)
         target_path = archived_dir / f"{thread_id}.json"
         if target_path.exists():
             raise ValueError(f"archived thread already exists: {thread_id}")
@@ -286,6 +287,7 @@ class _ThreadLock:
         self._file = None
 
     def __enter__(self) -> None:
+        ensure_private_file(self._path)
         self._file = self._path.open("ab")
         fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
 

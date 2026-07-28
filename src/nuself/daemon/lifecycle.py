@@ -12,6 +12,7 @@ import time
 
 from nuself.config import RuntimePaths, ensure_runtime_dirs, runtime_paths
 from nuself.daemon import client
+from nuself.private_fs import ensure_private_file
 from nuself.runtime.observability import report_corrupt_record
 
 
@@ -40,6 +41,7 @@ def start(project_root: Path | None = None) -> DaemonStatus:
     current = status(paths.project_root)
     if current.running:
         return current
+    ensure_private_file(paths.daemon_log_path)
     log_file = paths.daemon_log_path.open("ab")
     subprocess.Popen(
         [

@@ -16,6 +16,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 - Private text/JSON state and internal chat transcripts now use owner-only
   directories and files (`0700`/`0600`) at the shared atomic write boundary.
+- SQLite databases and sidecars, internal thought-pack snapshots, append-only
+  logs, lock files, and internal append streams now share the same owner-only
+  private filesystem boundary.
 - Every persisted audit projection now sanitizes credential-like message,
   error, and nested metadata fields at the canonical log sink, including
   runtime-event projections, without mutating the source envelope or weakening

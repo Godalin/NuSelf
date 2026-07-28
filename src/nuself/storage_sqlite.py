@@ -16,6 +16,10 @@ from typing import Protocol, cast
 from uuid import uuid4
 
 from nuself.logs import LogComponent
+from nuself.private_fs import (
+    ensure_private_directory,
+    ensure_private_file,
+)
 from nuself.runtime import (
     decode_json_value,
     encode_json_value,
@@ -419,7 +423,7 @@ class SqliteStorageBackend:
                 else db_path.parent
             )
         )
-        db_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_private_file(db_path)
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._lock = threading.RLock()
         self._transaction_state = _TransactionState()
@@ -433,6 +437,7 @@ class SqliteStorageBackend:
                 self._conn.execute("PRAGMA journal_mode=WAL")
                 self._conn.execute("PRAGMA synchronous=NORMAL")
                 self._init_schema()
+                _harden_sqlite_sidecars(db_path)
         except BaseException as init_error:
             try:
                 self._conn.close()
@@ -774,7 +779,7 @@ def _backup_connection_to_path(
     source: sqlite3.Connection,
     destination: Path,
 ) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    ensure_private_file(destination)
     backup = sqlite3.connect(str(destination))
     try:
         source.backup(backup)
@@ -788,6 +793,14 @@ def _backup_connection_to_path(
             ) from backup_error
         raise
     backup.close()
+
+
+def _harden_sqlite_sidecars(database: Path) -> None:
+    ensure_private_directory(database.parent)
+    for suffix in ("-wal", "-shm", "-journal"):
+        sidecar = database.with_name(f"{database.name}{suffix}")
+        if sidecar.exists():
+            ensure_private_file(sidecar)
 
 
 def _thought_pack_collection_count(

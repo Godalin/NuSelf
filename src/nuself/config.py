@@ -13,6 +13,7 @@ from typing import Any, cast
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from nuself.private_fs import ensure_private_directory
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
@@ -67,8 +68,8 @@ def runtime_paths(project_root: Path | None = None) -> RuntimePaths:
 def ensure_runtime_dirs(paths: RuntimePaths) -> None:
     """Create local ignored runtime directories."""
 
-    paths.runtime_dir.mkdir(parents=True, exist_ok=True)
-    paths.logs_dir.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(paths.runtime_dir)
+    ensure_private_directory(paths.logs_dir)
 
 
 # ============================================================================

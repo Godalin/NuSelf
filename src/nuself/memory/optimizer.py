@@ -15,6 +15,7 @@ from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import looks_like_raw_transcript
+from nuself.private_fs import ensure_private_file
 from nuself.profile.repository import ProfileItemRepository
 
 MemoryOptimizeActionType: TypeAlias = Literal["update", "delete", "ignore"]
@@ -303,7 +304,9 @@ class MemoryOptimizer:
 
     def _append_log(self, message: str) -> None:
         ensure_runtime_dirs(self._paths)
-        with self._memory_log_path().open("a", encoding="utf-8") as log_file:
+        path = self._memory_log_path()
+        ensure_private_file(path)
+        with path.open("a", encoding="utf-8") as log_file:
             log_file.write(f"{utc_now_iso()} {message}\n")
 
 

@@ -30,6 +30,7 @@ from nuself.runtime.observability import (
     write_observed_log_event,
 )
 from nuself.storage import write_json_atomic, write_text_atomic
+from nuself.private_fs import ensure_private_directory
 from nuself.workspace import PrivateWorkspaceStore
 
 REASON_OUTPUT_STORAGE_VERSION = "NuSelfReasonOutput/v1"
@@ -456,7 +457,7 @@ class ReasonOutputService:
         )
         paths = self._job_paths(thread.id, job_id)
         _clear_job_artifacts(paths)
-        paths.root.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(paths.root)
         manifest = ReasonOutputManifest(
             job_id=job_id,
             thread_id=thread.id,
@@ -595,7 +596,7 @@ class ReasonOutputService:
             raise RuntimeError("Cannot compose export job: one or more source steps are missing")
 
         paths = self._job_paths(thread.id, job_id)
-        paths.root.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(paths.root)
         chunks: list[ReasonOutputChunk] = []
         section_plan = self._resolve_section_plan(thread, manifest, selected)
         total = _chunk_count(len(selected), manifest.segment_size)

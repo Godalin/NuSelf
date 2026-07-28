@@ -25,6 +25,7 @@ from langgraph.store.base import (
 )
 
 from nuself.config import runtime_paths
+from nuself.private_fs import ensure_private_file
 from nuself.runtime import decode_json_value, encode_json_value
 
 __all__ = [
@@ -129,7 +130,7 @@ class SqliteStore(BaseStore):
 
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
-        db_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_private_file(db_path)
         _run_transaction(db_path, _create_workspace_entries_table)
 
     @classmethod

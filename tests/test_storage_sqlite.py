@@ -6,6 +6,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import sqlite3
+import stat
 from typing import cast
 
 import pytest
@@ -42,6 +43,34 @@ from nuself.storage_sqlite import (
     SqliteTransactionRollbackOnlyError,
     inspect_sqlite_thought_pack,
 )
+
+
+def test_sqlite_backend_hardens_database_directory_and_sidecars(
+    tmp_path: Path,
+) -> None:
+    private = tmp_path / "private"
+    private.mkdir(mode=0o755)
+    private.chmod(0o755)
+    database = private / "nuself.sqlite"
+    database.write_bytes(b"")
+    database.chmod(0o644)
+
+    backend = SqliteStorageBackend(database, project_root=tmp_path)
+    try:
+        backend.collection("memory_entries").put(
+            "private",
+            {"id": "private", "title": "Private"},
+        )
+        assert stat.S_IMODE(private.stat().st_mode) == 0o700
+        assert stat.S_IMODE(database.stat().st_mode) == 0o600
+        sidecars = list(private.glob("nuself.sqlite-*"))
+        assert sidecars
+        assert all(
+            stat.S_IMODE(sidecar.stat().st_mode) == 0o600
+            for sidecar in sidecars
+        )
+    finally:
+        backend.close()
 
 
 class TransactionConnectionProxy:

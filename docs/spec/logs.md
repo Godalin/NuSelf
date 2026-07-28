@@ -342,6 +342,10 @@ Structured component logs use `LogRetentionPolicy`. The production default is
 10 MiB per active file with three numbered backups.
 
 - Rotation occurs before an append that would exceed `max_bytes`.
+- The logs directory, active JSONL files, numbered backups, and stable lock
+  sidecars are NuSelf-owned private runtime state. Opening them creates or
+  hardens directories to `0700` and files to `0600`; append and rotation never
+  widen those modes.
 - `component.log.1` is the newest backup; older backups shift upward and the
   oldest backup beyond `backup_count` is deleted.
 - A stable sidecar advisory lock serializes rotation and append across

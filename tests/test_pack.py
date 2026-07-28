@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sqlite3
+import stat
 
 import pytest
 
@@ -43,6 +44,8 @@ def test_pack_export_creates_sqlite(tmp_path: Path) -> None:
     export = tmp_path / "private" / "exports" / "test-pack.sqlite"
     assert export.exists()
     assert export.stat().st_size > 0
+    assert stat.S_IMODE(export.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(export.stat().st_mode) == 0o600
 
 
 def test_pack_export_fails_without_db(tmp_path: Path) -> None:
@@ -101,6 +104,8 @@ def test_pack_import_copies_file(tmp_path: Path) -> None:
     assert main(["--project-root", str(tmp_path), "pack", "import", str(foreign)]) == 0
     imported = tmp_path / "private" / "imports" / "friend-thoughts.sqlite"
     assert imported.exists()
+    assert stat.S_IMODE(imported.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(imported.stat().st_mode) == 0o600
 
 
 def test_pack_import_rejects_duplicate(tmp_path: Path) -> None:

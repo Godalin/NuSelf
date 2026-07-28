@@ -181,6 +181,14 @@ flow to the correct structured log.
 
 ### SQLite Backend Lifecycle
 
+NuSelf-owned database directories use mode `0700`; the main database,
+workspace databases, WAL/SHM sidecars, and internal import/export snapshots use
+mode `0600`. Existing active files are hardened before use. SQLite must not
+create a broader-permission database and narrow it only after private content
+has been written. Paths explicitly selected by the user for external exports
+are not owned by this invariant and retain normal
+destination-directory/`umask` semantics.
+
 The creator of a `SqliteStorageBackend` owns it and must call `close()` when
 the backend is no longer needed. Process-default backends are owned by the
 default-backend registry and released by `reset_default_backend()`; temporary
@@ -453,6 +461,8 @@ nuself pack inspect [<path>]      → 展示 <path> 或主库的表统计
   WAL data and remains consistent while another connection is writing.
 - The source default backend remains owned by the outer CLI lifecycle. The
   backup operation owns and always closes its destination connection.
+- Project-managed `private/exports/` and `private/imports/` snapshots inherit
+  the owner-only SQLite file contract.
 - Runtime export, validated import, and pre-migration backup all use one
   connection-to-path backup primitive. It creates the destination directory,
   owns exactly one destination connection, and closes it once. If backup and

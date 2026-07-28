@@ -17,6 +17,7 @@ from uuid import uuid4
 from weakref import WeakValueDictionary
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
+from nuself.private_fs import ensure_private_file
 from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
@@ -509,6 +510,9 @@ def _append_log_event(
         lock_path,
         component=event_record.component,
     ):
+        for existing_path in _component_log_paths(path):
+            if existing_path.exists():
+                ensure_private_file(existing_path)
         try:
             _rotate_log_if_needed(
                 path,
@@ -541,6 +545,7 @@ def _locked_log_sidecar(
     *,
     component: LogComponent,
 ) -> Generator[None, None, None]:
+    ensure_private_file(lock_path)
     lock_file = lock_path.open("a", encoding="utf-8")
     locked = False
     try:
@@ -641,6 +646,7 @@ def _append_encoded_log_line(
 
 
 def _open_log_data_file(path: Path) -> BinaryIO:
+    ensure_private_file(path)
     return path.open("a+b", buffering=0)
 
 
