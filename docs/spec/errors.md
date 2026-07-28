@@ -291,6 +291,14 @@ succeeds, the original main-loop exception is re-raised with its traceback.
 `chat/interactive_cleanup_failed` is an auxiliary diagnostic of the aggregate;
 failure of that diagnostic cannot replace the lifecycle error.
 
+The outer CLI lifecycle always attempts `storage.default_backend.reset` after
+command dispatch, including when dispatch raises `KeyboardInterrupt`,
+`SystemExit`, or another `BaseException`. A reset failure is retained as a
+named `CleanupFailure` in `CliLifecycleError`. If dispatch also failed, the
+same primary object is retained on the lifecycle error and is its explicit
+cause. If reset succeeds, the original dispatch exception is re-raised with
+its traceback. Storage teardown runs outside and after REPL-specific cleanup.
+
 ## Local REPL Command Failures
 
 A local REPL command may catch an unexpected `Exception` only when the command

@@ -100,6 +100,9 @@ try:
     )
     from nuself.cli.repl.types import InteractiveChatResult
     from nuself.daemon import lifecycle
+    from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
+    from nuself.runtime.observability import report_observed_failure
+    from nuself.storage import reset_default_backend
 finally:
     warnings.warn = _original_warn
 
@@ -116,10 +119,66 @@ INTERACTIVE_CHAT_ATTEMPTS = 2
 INTERACTIVE_LOG_POLL_INTERVAL_SECONDS = 0.1
 
 
+class CliLifecycleError(RuntimeError):
+    """Raised when outer CLI storage teardown fails."""
+
+    def __init__(
+        self,
+        failures: tuple[CleanupFailure, ...],
+        *,
+        primary_error: BaseException | None = None,
+    ) -> None:
+        super().__init__(
+            f"CLI cleanup failed in {len(failures)} step(s)"
+        )
+        self.failures = failures
+        self.primary_error = primary_error
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return dispatch_cli(args, parser)
+    project_root: Path | None = args.project_root
+    primary_error: BaseException | None = None
+    result = 0
+    try:
+        result = dispatch_cli(args, parser)
+    except BaseException as exc:
+        primary_error = exc
+    cleanup_failures = run_cleanup_steps(
+        (
+            (
+                "storage.default_backend.reset",
+                lambda: reset_default_backend(project_root),
+            ),
+        )
+    )
+    if cleanup_failures:
+        lifecycle_error = CliLifecycleError(
+            cleanup_failures,
+            primary_error=primary_error,
+        )
+        report_observed_failure(
+            lifecycle_error,
+            component="storage",
+            event="cli_cleanup_failed",
+            message="CLI storage cleanup failed",
+            project_root=project_root,
+            metadata={
+                "steps": [
+                    failure.step for failure in cleanup_failures
+                ],
+                "primary_failed": primary_error is not None,
+            },
+            level="error",
+            status="error",
+        )
+        if primary_error is not None:
+            raise lifecycle_error from primary_error
+        raise lifecycle_error
+    if primary_error is not None:
+        raise primary_error.with_traceback(primary_error.__traceback__)
+    return result
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -196,6 +196,12 @@ registry is not consulted. `auto_backend()` is a low-level owned-backend
 factory for migration, diagnostics, and the default registry itself; ordinary
 repository constructors must not call it directly.
 
+The outer `nuself.cli.main()` invocation owns the default backend used by local
+one-shot and interactive work. It resets that project-root backend exactly
+once after dispatch finishes or raises. For interactive mode, this outer reset
+runs only after transcript and curator cleanup. Daemon server cleanup may have
+already reset the same backend; reset is idempotent when no backend remains.
+
 `close()` is lock-protected and idempotent after the underlying connection has
 closed successfully. It first requests a truncating WAL checkpoint and always
 attempts to close the connection even if that checkpoint fails. A checkpoint

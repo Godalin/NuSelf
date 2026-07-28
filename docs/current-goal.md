@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make ordinary repositories share the process-owned default storage backend so
-daemon shutdown can close every long-lived SQLite connection it owns.
+Give every top-level CLI invocation a symmetric default-backend teardown that
+runs after one-shot commands and after REPL cleanup.
 
 ## Active Branch
 
@@ -14,39 +14,39 @@ daemon shutdown can close every long-lived SQLite connection it owns.
 
 ## Ordered Work
 
-1. Audit repository backend creation and SQLite close semantics.
-2. Specify default versus explicitly injected backend ownership.
-3. Migrate ordinary repository and persona construction to the default backend.
-4. Verify repositories for one root share one backend and reset closes it.
-5. Keep explicit backend injection isolated and caller-owned.
+1. Audit CLI, REPL, and daemon lifecycle nesting.
+2. Specify the CLI storage teardown and failure precedence.
+3. Run backend reset once at the outer CLI boundary.
+4. Preserve primary exceptions and aggregate reset failures.
+5. Verify normal, exceptional, and cleanup-failure paths.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Do not change repository domain behavior or collection layouts.
-- Keep migration/diagnostic backends explicitly caller-owned.
-- Do not make repositories close a shared backend individually.
+- Keep REPL transcript/curator cleanup ordered before storage teardown.
+- Keep daemon-owned shutdown cleanup valid and reset idempotent.
+- Do not reset storage during nested command dispatch.
 
 ## Completion Evidence
 
-- Memory entry/candidate/source, profile, reason, reflection, trace,
-  notification, and persona construction now use
-  `get_default_backend(project_root)` by default.
-- Production search leaves `auto_backend()` only in its low-level factory,
-  default-registry creation, and the explicitly owned dev diagnostic command.
-- Eight repository families for one root obtain the same registered backend.
-- `reset_default_backend(root)` closes the SQLite connection used by an
-  already-created default repository.
-- Explicit `MemoryCandidateRepository(backend=...)` now passes that backend to
-  its implicit entry/profile repositories and never consults the registry.
-- `.venv/bin/pytest -q`: `1476 passed`.
+- `main()` runs one project-scoped `storage.default_backend.reset` after every
+  completed or failed dispatch.
+- REPL transcript and curator cleanup remain inside dispatch, so the outer
+  storage reset runs after both.
+- Successful reset preserves and re-raises the exact dispatch `BaseException`
+  object with its traceback.
+- Reset failure produces `CliLifecycleError` with the named shared
+  `CleanupFailure`; a simultaneous dispatch failure is retained as
+  `primary_error` and explicit cause.
+- Focused CLI tests cover normal return, `SystemExit`, and dual failure.
+- `.venv/bin/pytest -q`: `1479 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `6682cd2`.
+`dev/v0.3.x` is published through `e01d67b`.
 
 ## Next Review Batch
 
-Audit CLI-owned temporary backend closure and process teardown symmetry.
+Make the dev storage diagnostic explicitly close the backend it creates.
