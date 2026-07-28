@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The CLI chat adapter extraction is complete.
+Idle. The typed CLI entrypoint controller extraction is complete.
 
 ## Active Branch
 
@@ -22,16 +22,21 @@ code.
 
 ## Completion Evidence
 
-- `cli/chat.py` owns configured daemon timeout lookup, daemon/application
-  failure translation, correlated audit events, local `ChatAgent` invocation,
-  one-shot presentation, and post-turn curator coordination.
-- The CLI composition root retains only thin reply-rendering wrappers and
-  entrypoint wiring; tests patch the modules that actually own chat and live
-  activity transports.
-- Direct adapter tests prove retryability classification, error correlation,
-  successful reply/memory projection, and reply-before-curator ordering.
-- Focused CLI/chat/turn tests: 303 passed.
-- Final full tests: 1263 passed.
+- `cli/entrypoints.py` owns daemon startup/selection, require-daemon handling,
+  deep-link and thread preparation, and daemon/local interactive routing for
+  the default, `chat`, `attach`, and `open` entrypoints.
+- Chat sends and REPL execution enter through one immutable typed callback
+  bundle; the controller does not implement those capabilities.
+- Deep-link resolution produces an immutable open target instead of mutating
+  the parsed `argparse.Namespace`.
+- The CLI root binds one controller directly into `InteractiveHandlers` and
+  dropped all four policy-heavy handler implementations, reducing from 427 to
+  314 lines.
+- Direct controller tests cover failed daemon startup, require-daemon
+  rejection, daemon interactive routing, and new-thread deep-link local
+  routing.
+- Focused entrypoint and CLI tests: 302 passed.
+- Final full tests: 1267 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -41,5 +46,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Extract the remaining CLI entry/session presentation responsibilities or move
-to daemon composition review.
+Resolve the REPL header presentation contract or move to daemon composition
+review.

@@ -31,7 +31,6 @@ def _suppress_startup_warning(
 warnings.warn = _suppress_startup_warning
 try:
     from nuself import __version__
-    from nuself.agent.chat import ThreadState, ThreadStore
     from nuself.cli.chat import (
         run_memory_curator as _run_memory_curator,
     )
@@ -47,8 +46,9 @@ try:
     from nuself.cli.chat import (
         send_one_shot_chat_interactive as _send_one_shot_chat_interactive,
     )
-    from nuself.cli.commands.daemon import (
-        format_status as _format_status,
+    from nuself.cli.entrypoints import (
+        EntrypointCallbacks,
+        EntrypointController,
     )
     from nuself.cli.commands.output import (
         print_ansi as _print_ansi,
@@ -142,136 +142,23 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    entrypoints = EntrypointController(
+        EntrypointCallbacks(
+            send_daemon_chat=_send_chat,
+            send_daemon_chat_interactive=_send_chat_interactive,
+            send_one_shot_chat=_send_one_shot_chat,
+            send_one_shot_chat_interactive=_send_one_shot_chat_interactive,
+            run_interactive=_interactive_loop,
+        )
+    )
     return _build_parser(
         InteractiveHandlers(
-            default_entrypoint=handle_default_entrypoint,
-            chat=handle_chat,
-            attach=handle_attach,
-            open_thread=handle_open,
+            default_entrypoint=entrypoints.handle_default,
+            chat=entrypoints.handle_chat,
+            attach=entrypoints.handle_attach,
+            open_thread=entrypoints.handle_open,
             reason_watch=handle_reason_watch,
         )
-    )
-
-
-def handle_default_entrypoint(args: argparse.Namespace) -> int:
-    result = lifecycle.status(args.project_root)
-    if result.running:
-        if args.message is not None:
-            print(f"Using current daemon: {_format_status(result)}")
-    else:
-        print("Starting NuSelf daemon...")
-        result = lifecycle.start(args.project_root)
-        if not result.running:
-            print(f"Failed to start daemon: {_format_status(result)}", file=sys.stderr)
-            return 1
-        print(f"Daemon started: {_format_status(result)}")
-    if args.message is not None:
-        return _send_chat(args.message, args.project_root)
-    return _interactive_loop(
-        lambda message, thread_id, turn_id: _send_chat_interactive(
-            message, args.project_root, thread_id, turn_id=turn_id
-        ),
-        args.project_root,
-        daemon_activity=True,
-    )
-
-
-def handle_chat(args: argparse.Namespace) -> int:
-    if lifecycle.status(args.project_root).running:
-        if args.message is not None:
-            return _send_chat(args.message, args.project_root)
-        return _interactive_loop(
-            lambda message, thread_id, turn_id: _send_chat_interactive(
-                message, args.project_root, thread_id, turn_id=turn_id
-            ),
-            args.project_root,
-            daemon_activity=True,
-        )
-    if args.require_daemon:
-        print("NuSelf daemon is not running.", file=sys.stderr)
-        return 1
-    if args.message is not None:
-        return _send_one_shot_chat(args.message, args.project_root)
-    return _interactive_loop(
-        lambda message, thread_id, turn_id: _send_one_shot_chat_interactive(
-            message, args.project_root, thread_id, turn_id=turn_id
-        ),
-        args.project_root,
-    )
-
-
-def handle_attach(args: argparse.Namespace) -> int:
-    if not lifecycle.status(args.project_root).running:
-        print("NuSelf daemon is not running.", file=sys.stderr)
-        return 1
-    if args.message is not None:
-        return _send_chat(args.message, args.project_root)
-    return _interactive_loop(
-        lambda message, thread_id, turn_id: _send_chat_interactive(
-            message, args.project_root, thread_id, turn_id=turn_id
-        ),
-        args.project_root,
-        daemon_activity=True,
-    )
-
-
-def handle_open(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
-    thread_id: str | None = args.thread_id
-
-    if args.deep_link is not None:
-        from nuself.notification.deep_link import DeepLink
-
-        try:
-            link = DeepLink.parse(args.deep_link)
-        except ValueError as exc:
-            print(f"Invalid deep link: {exc}", file=sys.stderr)
-            return 1
-        if link.action == "new_thread":
-            thread_id = link.title or "new-thread"
-            store.save(ThreadState.empty(thread_id))
-            print(f"Created thread: {thread_id}")
-            if args.message is None and link.message is not None:
-                args.message = link.message
-        else:
-            thread_id = link.thread_id
-            if args.message is None and link.message is not None:
-                args.message = link.message
-
-    if thread_id is None:
-        print("Thread ID or --deep-link is required.", file=sys.stderr)
-        return 1
-
-    if thread_id not in store.list():
-        if args.create:
-            store.save(ThreadState.empty(thread_id))
-            print(f"Created thread: {thread_id}")
-        else:
-            print(f"Thread not found: {thread_id}", file=sys.stderr)
-            return 1
-    if lifecycle.status(args.project_root).running:
-        if args.message is not None:
-            result = _send_chat(args.message, args.project_root, thread_id)
-            if result != 0:
-                return result
-        return _interactive_loop(
-            lambda message, tid, turn_id: _send_chat_interactive(
-                message, args.project_root, tid, turn_id=turn_id
-            ),
-            args.project_root,
-            initial_thread_id=thread_id,
-            daemon_activity=True,
-        )
-    if args.message is not None:
-        result = _send_one_shot_chat(args.message, args.project_root, thread_id)
-        if result != 0:
-            return result
-    return _interactive_loop(
-        lambda message, tid, turn_id: _send_one_shot_chat_interactive(
-            message, args.project_root, tid, turn_id=turn_id
-        ),
-        args.project_root,
-        initial_thread_id=thread_id,
     )
 
 

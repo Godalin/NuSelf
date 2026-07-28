@@ -163,6 +163,12 @@ under the same package.
   `nuself.cli`.
 - `cli/handlers.py` owns typed argparse handler binding, help-only group
   binding, and exit-status validation at the single CLI dispatch boundary.
+- `cli/entrypoints.py` owns the launch policy for the default, `chat`,
+  `attach`, and `open` entrypoints: daemon startup/selection,
+  require-daemon handling, deep-link/thread preparation, and the choice
+  between daemon-backed and local interactive sessions. It receives chat and
+  REPL execution as typed callbacks from the composition root and does not
+  implement either capability itself.
 - `cli/chat.py` owns CLI-facing daemon and one-shot chat adapters: configured
   request timeout, transport/application error translation, correlated audit
   writes, direct `ChatAgent` invocation, and post-turn memory curator
