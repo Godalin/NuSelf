@@ -48,7 +48,7 @@ Make daemon readiness publication match actual service readiness.
 
 ## Publication
 
-`dev/v0.3.x` is ready to publish through implementation commit `af232d4`.
+`dev/v0.3.x` is published through implementation commit `af232d4`.
 
 ## Next Review Batch
 
