@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Remove the orphaned LangMem adapter and its parallel first-endpoint model
-runtime so memory generation has no hidden provider/failover protocol.
+Remove reason prompt generation's redundant endpoint preflight so the shared
+structured agent is the single model-availability boundary.
 
 ## Active Branch
 
@@ -14,38 +14,37 @@ runtime so memory generation has no hidden provider/failover protocol.
 
 ## Ordered Work
 
-1. Verify the adapter has no production caller.
-2. Remove the adapter, its tests, and the dead experimental config flag.
-3. Remove the unused direct LangMem dependency.
-4. Remove `LLMSettings.from_project`, which exists only for this bypass.
-5. Regenerate the lock and verify no LangMem/runtime references remain.
+1. Specify that prompt generation does not construct models for preflight.
+2. Remove direct `configured_langchain_chat_models` use.
+3. Let `default_structured_agent` construct endpoints exactly once.
+4. Preserve `ReasonPromptError` and the original shared runtime cause.
+5. Verify injected agents bypass configuration and no-model failure is typed.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Keep the active NuSelf memory curator and optimizer on shared structured
-  agents.
-- Keep `experimental.vector_index`; it is unrelated to this dead adapter.
+- Keep the explicit project-root requirement.
+- Keep exact `ReasonPromptOutput` validation in the shared structured agent.
 
 ## Completion Evidence
 
-- Full-tree import search confirms the LangMem adapter had no production
-  caller.
-- The adapter module, its dedicated tests, `experimental.langmem_adapter`, and
-  `LLMSettings.from_project` were removed.
-- `pyproject.toml` and `uv.lock` contain no LangMem reference.
-- Lock regeneration also removed the adapter-only `langchain`, `trustcall`, and
-  `dydantic` dependency chain.
-- Active memory curator and optimizer continue to use shared structured agents.
-- `.venv/bin/pytest -q`: `1463 passed`.
+- `reason.prompt` no longer imports or calls
+  `configured_langchain_chat_models`.
+- The default structured agent constructs configured endpoints once and the
+  shared endpoint runner owns no-model detection.
+- No-model generation raises `ReasonPromptError` with
+  `RuntimeError("no configured LangChain model")` preserved as its cause.
+- Injected structured agents continue to bypass model configuration.
+- Exact `ReasonPromptOutput` validation remains unchanged.
+- `.venv/bin/pytest -q`: `1464 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `debcefc`.
+`dev/v0.3.x` is published through `825dffe`.
 
 ## Next Review Batch
 
-Remove redundant endpoint-availability preflight from reason prompt generation
-and let the shared structured agent own model availability.
+Audit composition roots that still construct configured endpoints directly
+instead of receiving an agent capability.

@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reason prompt generation no longer constructs configured models once for an
+  availability preflight and again for the real structured agent. The shared
+  agent invocation is now the sole availability boundary; no-model failures
+  remain `ReasonPromptError` with the shared runtime error as their cause.
 - Chat response now uses the shared agent endpoint runner for bounded
   same-endpoint retry, availability failover, success preference, and
   diagnostics. Protocol and structured-output failures retry the current

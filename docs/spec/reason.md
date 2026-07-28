@@ -53,6 +53,13 @@ schema fails, or invocation fails, thread creation fails with
 thread request -> invoke typed prompt agent -> persist `reasoning_prompt` ->
 reuse that prompt for every advance of the thread.
 
+Prompt generation does not construct configured models as an availability
+preflight. When no agent is injected, `default_structured_agent` constructs the
+endpoint set once and the shared endpoint runner reports unavailability during
+invocation. The generator translates that declared `RuntimeError` to
+`ReasonPromptError` while preserving it as the cause. An injected prompt agent
+does not read model configuration.
+
 The generated prompt must define one bounded advance unit for the topic. For
 round-based simulations, debates, interviews, games, or staged discussions, one
 advance means at most one complete round. The advancer may do setup work during

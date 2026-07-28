@@ -56,6 +56,26 @@ def test_prompt_generation_requires_project_root_with_domain_error() -> None:
         generate_reasoning_prompt("Missing project")
 
 
+def test_prompt_generation_uses_shared_no_model_error(
+    tmp_path: Path,
+) -> None:
+    from nuself.reason.prompt import generate_reasoning_prompt
+
+    with pytest.raises(
+        ReasonPromptError,
+        match="no configured LangChain model",
+    ) as caught:
+        generate_reasoning_prompt(
+            "Missing model",
+            project_root=tmp_path,
+        )
+
+    assert isinstance(caught.value.__cause__, RuntimeError)
+    assert str(caught.value.__cause__) == (
+        "no configured LangChain model"
+    )
+
+
 def test_prompt_generation_wraps_declared_llm_runtime_failure(
     tmp_path: Path,
 ) -> None:

@@ -10,7 +10,6 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.llm import configured_langchain_chat_models
 from nuself.reason.errors import ReasonPromptError
 
 
@@ -37,10 +36,6 @@ def generate_reasoning_prompt(
     if project_root is None:
         raise ReasonPromptError(
             "Cannot generate reasoning prompt: project root is not configured"
-        )
-    if agent is None and not configured_langchain_chat_models(project_root):
-        raise ReasonPromptError(
-            "Cannot generate reasoning prompt: no LangChain chat model is configured"
         )
     parts = [
         "You are setting up a reasoning thread. The user's topic is:",
