@@ -55,7 +55,7 @@ Share one sealed definition registry without conflating event transports.
 
 ## Publication
 
-`dev/v0.3.x` is ready to publish through implementation commit `d2424c1`.
+`dev/v0.3.x` is published through implementation commit `d2424c1`.
 
 ## Next Review Batch
 
