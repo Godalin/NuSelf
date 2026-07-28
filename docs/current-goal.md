@@ -56,7 +56,7 @@ Make daemon lifecycle audit events closed, typed, and schema-validated.
 
 ## Publication
 
-`dev/v0.3.x` is published through implementation commit `d4aca10`.
+`dev/v0.3.x` is ready to publish through implementation commit `7be271a`.
 
 ## Next Review Batch
 
