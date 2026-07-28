@@ -53,7 +53,7 @@ Model daemon ownership and readiness as one explicit lifecycle phase.
 
 ## Publication
 
-`dev/v0.3.x` is ready to publish through implementation commit `e032535`.
+`dev/v0.3.x` is published through implementation commit `e032535`.
 
 ## Next Review Batch
 
