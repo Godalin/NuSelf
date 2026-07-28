@@ -116,9 +116,6 @@ def _complete_persona_structured(
             if isinstance(result, schema):
                 record_llm_endpoint_success(project_root, endpoint.index)
                 return result
-            if isinstance(result, dict):
-                record_llm_endpoint_success(project_root, endpoint.index)
-                return schema.model_validate(result)
             raise TypeError(f"structured persona output must be {schema.__name__}")
         except Exception as exc:
             # Fail visible: log every endpoint failure (including schema/validation

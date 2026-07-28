@@ -64,25 +64,51 @@ class PersonaActivation:
 class PersonaContributionOutput(BaseModel):
     """Structured persona note returned by a LangChain model."""
 
-    note: str = Field(description="One or two sentences from the persona perspective.")
-    questions: list[str] = Field(default_factory=list, description="Optional questions this persona would ask.")
-    confidence: float | None = Field(default=None, description="Optional confidence from 0.0 to 1.0.")
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    note: str = Field(
+        min_length=1,
+        description="One or two sentences from the persona perspective.",
+    )
+    questions: list[str] = Field(
+        default_factory=lambda: list[str](),
+        description="Optional questions this persona would ask.",
+    )
+    confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional confidence from 0.0 to 1.0.",
+    )
 
 
 class PersonaSynthesisOutput(BaseModel):
     """Structured persona synthesis returned by a LangChain model."""
 
-    summary: str = Field(description="One or two crisp sentences capturing consensus or key tension.")
-    confidence: float | None = Field(default=None, description="Optional confidence from 0.0 to 1.0.")
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    summary: str = Field(
+        min_length=1,
+        description="One or two crisp sentences capturing consensus or key tension.",
+    )
+    confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional confidence from 0.0 to 1.0.",
+    )
 
 
 class PersonaActivationOutput(BaseModel):
     """Structured persona activation decision returned by a LangChain model."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict(strict=True, extra="forbid")
 
     activated: bool = Field(description="Whether any personas should respond.")
-    selected_persona_ids: list[str] = Field(default_factory=list, description="Persona ids to activate.")
+    selected_persona_ids: list[str] = Field(
+        default_factory=lambda: list[str](),
+        description="Persona ids to activate.",
+    )
     trigger: str = Field(default="structured judgment", description="Brief reason for activation.")
     should_escalate: bool = Field(default=False, description="Whether competitive discussion should run.")
     escalation_reason: str = Field(default="", description="Brief reason for escalation.")

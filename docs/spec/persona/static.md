@@ -118,7 +118,14 @@ class PersonaSynthesizerNode(Protocol):
 - **LLMBackedSynthesizerNode**: Distills a turn's contributions into 1–2 sentences.
   Uses `PersonaSynthesisOutput` structured output when available.
 - **LLMBackedScoringPersonaNode** (discussion only): Returns both a note and a 0–1
-  support score. Used by `ProactivePersonaDiscussion`, not by the standard graph.
+support score. Used by `ProactivePersonaDiscussion`, not by the standard graph.
+
+LangChain `with_structured_output(...)` calls must return an instance of the
+declared persona output model. Dictionary results are protocol failures and
+participate in endpoint failover; they are not revalidated into a model.
+Activation, contribution, and synthesis output models use strict types,
+forbid unknown fields, and constrain present confidence values to the inclusive
+zero-to-one range.
 
 Every failed standard-graph LLM path is observable. Structured endpoint
 failures write `persona_structured_failed` and continue to the next endpoint

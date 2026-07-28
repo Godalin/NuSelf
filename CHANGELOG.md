@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Persona activation, contribution, and synthesis now require strict typed
+  LangChain outputs. Dictionary compatibility, unknown fields, coercive types,
+  and out-of-range confidence values now fail the endpoint instead of being
+  accepted into persona state.
 - Reason advances now consume LangChain's typed `ReasonStepOutput` directly.
   The manual dictionary parser and its filtering, clamping, and defaulting
   fallbacks were removed; malformed generated steps now fail validation

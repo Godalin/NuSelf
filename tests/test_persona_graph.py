@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from pydantic import BaseModel, ValidationError
 
-from nuself.llm import LangChainLLMEndpoint, LLMSettings
+from nuself.llm import ChatMessage, LangChainLLMEndpoint, LLMSettings
 from nuself.logs import read_log_events
 from nuself.persona import (
     LLMBackedActivationPolicy,
@@ -14,6 +15,7 @@ from nuself.persona import (
     LLMBackedSynthesizerNode,
     PersonaGraphDriver,
 )
+from nuself.persona.graph import _complete_persona_structured  # pyright: ignore[reportPrivateUsage]
 from nuself.persona.definition import (
     ANALYST_PERSONA,
     BUILDER_PERSONA,
@@ -21,9 +23,12 @@ from nuself.persona.definition import (
     HISTORIAN_PERSONA,
     SKEPTIC_PERSONA,
     PersonaContribution,
+    PersonaContributionOutput,
     PersonaDefinition,
     PersonaInput,
+    PersonaActivationOutput,
     PersonaSynthesis,
+    PersonaSynthesisOutput,
     PersonaTurnState,
 )
 
@@ -42,6 +47,81 @@ class _FakeActivationLLM:
 
     def complete(self, messages: object) -> str:
         return json.dumps(self._response)
+
+
+@pytest.mark.parametrize(
+    ("schema", "payload"),
+    [
+        (
+            PersonaContributionOutput,
+            {"note": "Perspective", "confidence": 1.1},
+        ),
+        (
+            PersonaContributionOutput,
+            {"note": 3},
+        ),
+        (
+            PersonaSynthesisOutput,
+            {"summary": "Synthesis", "unexpected": True},
+        ),
+        (
+            PersonaActivationOutput,
+            {"activated": 1},
+        ),
+    ],
+)
+def test_persona_output_models_reject_coercion_bounds_and_extra_fields(
+    schema: type[BaseModel],
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        schema.model_validate(payload)
+
+
+def test_persona_structured_output_rejects_dictionary_result(
+    tmp_path: Path,
+) -> None:
+    class DictionaryStructuredModel:
+        def with_structured_output(
+            self,
+            schema: object,
+        ) -> DictionaryStructuredModel:
+            return self
+
+        def invoke(self, messages: object) -> dict[str, object]:
+            return {
+                "note": "Dictionary compatibility",
+                "questions": [],
+                "confidence": 0.8,
+            }
+
+    settings = LLMSettings(
+        base_url="https://example.invalid/v1",
+        api_key="test",
+        model="test",
+    )
+    endpoint = LangChainLLMEndpoint(
+        index=0,
+        settings=settings,
+        model=cast(Any, DictionaryStructuredModel()),
+    )
+
+    result = _complete_persona_structured(
+        (endpoint,),
+        [ChatMessage(role="user", content="Review this")],
+        PersonaContributionOutput,
+        project_root=tmp_path,
+    )
+
+    assert result is None
+    event = read_log_events(
+        project_root=tmp_path,
+        component="persona",
+    )[-1]
+    assert event.event == "persona_structured_failed"
+    assert event.error == (
+        "structured persona output must be PersonaContributionOutput"
+    )
 
 
 class _BrokenLLM:
@@ -178,7 +258,7 @@ def test_persona_graph_runs_analyst_and_skeptic_together() -> None:
 
 
 def test_persona_graph_with_llm_backed_nodes() -> None:
-    from nuself.llm import ChatLLM, ChatMessage
+    from nuself.llm import ChatLLM
 
     class FakeLLM(ChatLLM):
         def complete(self, messages: list[ChatMessage]) -> str:
@@ -381,7 +461,7 @@ def test_structured_diagnostic_failure_does_not_stop_endpoint_failover(
         def __init__(
             self,
             label: str,
-            result: dict[str, object] | None,
+            result: object | None,
         ) -> None:
             self._label = label
             self._result = result
@@ -389,7 +469,7 @@ def test_structured_diagnostic_failure_does_not_stop_endpoint_failover(
         def with_structured_output(self, schema: object) -> _StructuredModel:
             return self
 
-        def invoke(self, messages: object) -> dict[str, object]:
+        def invoke(self, messages: object) -> object:
             calls.append(self._label)
             if self._result is None:
                 raise RuntimeError("primary endpoint failed")
@@ -420,11 +500,11 @@ def test_structured_diagnostic_failure_does_not_stop_endpoint_failover(
                 Any,
                 _StructuredModel(
                     "backup",
-                    {
-                        "note": "Backup perspective.",
-                        "questions": [],
-                        "confidence": 0.8,
-                    },
+                    PersonaContributionOutput(
+                        note="Backup perspective.",
+                        questions=[],
+                        confidence=0.8,
+                    ),
                 ),
             ),
         ),

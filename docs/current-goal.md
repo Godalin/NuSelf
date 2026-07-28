@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Chat's LangChain `structured_response` state now requires an actual
-`ChatStructuredOutput` instance; dictionary revalidation is deleted.
+Idle. Persona graph structured outputs are strict, and
+`with_structured_output(...)` must return the declared model type.
 
 ## Active Branch
 
@@ -23,16 +23,18 @@ code.
 
 ## Completion Evidence
 
-- LangChain state decoding accepts only `ChatStructuredOutput` for
-  `structured_response`.
-- Dictionary values are rejected rather than passed through a second Pydantic
-  validation path.
-- Typed structured state remains authoritative over ordinary message content,
-  and visible tool-call protocol text is still rejected.
-- The separate no-model plain-text fallback and typed
-  `ConversationResponseService` seam are unchanged.
-- Focused chat/runtime/daemon tests: 110 passed.
-- Final full tests: 1420 passed.
+- Activation, contribution, and synthesis output models use strict types and
+  forbid unknown fields.
+- Contribution and synthesis confidence values are constrained to the
+  inclusive zero-to-one range.
+- Persona graph structured endpoints accept only an instance of the requested
+  output model; dictionary results are observed endpoint failures.
+- Endpoint fakes now return typed models, and regression tests cover dictionary
+  rejection, coercion rejection, extra fields, and confidence bounds.
+- The documented ordinary `ChatLLM` fallback after structured endpoint
+  exhaustion remains unchanged.
+- Focused persona/chat tests: 92 passed.
+- Final full tests: 1425 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -42,5 +44,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Audit remaining Pydantic structured-output models for coercive/default-heavy
-configuration that weakens their framework validation.
+Audit reflection and memory LLM JSON models for strict shape, numeric bounds,
+and fail-closed action dispatch.
