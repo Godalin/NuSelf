@@ -5,8 +5,13 @@ import pytest
 from nuself import cli
 from nuself.agent.chat import ThreadStore
 from nuself.cli.chat import chat_request_timeout_seconds
-from nuself.cli.repl.commands import handle_interactive_history_command
+from nuself.cli.repl.commands import (
+    handle_interactive_history_command,
+    handle_interactive_persona_command,
+)
 from nuself.config import ConfigSystem
+from nuself.logs import read_log_events
+from nuself.persona.prompt_repo import PersonaPromptRepository
 
 
 def test_chat_timeout_uses_default_after_malformed_yaml(
@@ -67,3 +72,103 @@ def test_history_reports_compact_load_failure_chain(
         "Unable to load thread history for 'default': "
         "history decode failed <- thread file unreadable"
     )
+    [event] = read_log_events(project_root=tmp_path, component="chat")
+    assert event.event == "interactive_history_load_failed"
+    assert event.level == "error"
+    assert event.status == "error"
+    assert event.error == "history decode failed <- thread file unreadable"
+    assert event.metadata == {"thread_id": "default"}
+
+
+def test_persona_command_reports_failure_without_logging_prompt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_create(args: object) -> None:
+        raise OSError("persona store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.cli.repl.commands.handle_persona_create",
+        fail_create,
+    )
+
+    rendered = handle_interactive_persona_command(
+        "create guide private-prompt-text",
+        tmp_path,
+    )
+
+    assert "persona store unavailable" in rendered
+    [event] = read_log_events(project_root=tmp_path, component="persona")
+    assert event.event == "interactive_command_failed"
+    assert event.level == "error"
+    assert event.status == "error"
+    assert event.error == "persona store unavailable"
+    assert event.metadata == {"action": "create"}
+    assert "private-prompt-text" not in event.message
+    assert "private-prompt-text" not in event.error
+
+
+def test_history_keeps_rendered_error_when_diagnostic_sink_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_load(self: ThreadStore, thread_id: str) -> None:
+        raise RuntimeError("history unavailable")
+
+    def fail_log(*args: object, **kwargs: object) -> None:
+        raise OSError("log disk full")
+
+    monkeypatch.setattr(ThreadStore, "load", fail_load)
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "chat/interactive_history_load_failed.*history unavailable"
+            ".*log disk full"
+        ),
+    ):
+        rendered = handle_interactive_history_command(tmp_path, "default")
+
+    assert rendered == (
+        "Unable to load thread history for 'default': history unavailable"
+    )
+
+
+def test_history_does_not_convert_control_flow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interrupt = KeyboardInterrupt()
+
+    def interrupt_load(self: ThreadStore, thread_id: str) -> None:
+        raise interrupt
+
+    monkeypatch.setattr(ThreadStore, "load", interrupt_load)
+
+    with pytest.raises(KeyboardInterrupt) as caught:
+        handle_interactive_history_command(tmp_path, "default")
+
+    assert caught.value is interrupt
+    assert read_log_events(project_root=tmp_path, component="chat") == []
+
+
+def test_persona_command_does_not_convert_control_flow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interrupt = KeyboardInterrupt()
+
+    def interrupt_list(self: PersonaPromptRepository) -> None:
+        raise interrupt
+
+    monkeypatch.setattr(PersonaPromptRepository, "list", interrupt_list)
+
+    with pytest.raises(KeyboardInterrupt) as caught:
+        handle_interactive_persona_command("", tmp_path)
+
+    assert caught.value is interrupt
+    assert read_log_events(project_root=tmp_path, component="persona") == []

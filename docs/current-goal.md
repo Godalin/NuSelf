@@ -5,9 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Daemon and REPL named cleanup execution shares runtime infrastructure so
-every cleanup `BaseException` is retained consistently while domain lifecycle
-errors keep ownership of diagnostics and propagation.
+Idle. Recoverable local `:persona` and `:history` failures now retain concise
+interactive results while writing privacy-bounded structured diagnostics.
 
 ## Active Branch
 
@@ -24,19 +23,18 @@ code.
 
 ## Completion Evidence
 
-- `runtime.cleanup` owns public `CleanupFailure` and `run_cleanup_steps`.
-- The shared runner attempts every named operation exactly once, preserves
-  order, and retains the same `Exception`, `KeyboardInterrupt`, and
-  `SystemExit` objects.
-- Daemon and REPL both use the shared runner; their lifecycle error classes,
-  diagnostic events, step composition, ordering, and primary-error policy
-  remain domain-owned.
-- Daemon lock-release `KeyboardInterrupt` is aggregated after a serve failure,
-  with the serve failure retained as explicit cause.
-- Existing daemon cleanup ordering, REPL exact-once exit cleanup, diagnostic
-  fallback, and successful lifecycle behavior remain unchanged.
-- Focused shared cleanup, daemon instance, and REPL lifecycle tests: 21 passed.
-- Final full tests: 1372 passed.
+- `:persona` writes `persona/interactive_command_failed` with only the command
+  action; prompt text and other command arguments are excluded.
+- `:history` writes `chat/interactive_history_load_failed` with the requested
+  thread ID and compact exception chain.
+- Both diagnostics use error severity while preserving the existing rendered
+  command result and interactive-session behavior.
+- Structured logging failure falls back to `RuntimeWarning` without replacing
+  the original command error.
+- `KeyboardInterrupt` remains the same propagated object and produces no
+  command-failure diagnostic.
+- Focused local REPL error-boundary tests: 8 passed.
+- Final full tests: 1376 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -46,5 +44,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Continue auditing broad exception catches and local best-effort wrappers after
-daemon and REPL share one named cleanup runner.
+Audit daemon diagnostic-context lookup and remaining REPL/CLI broad exception
+boundaries without adding blanket command catches.

@@ -32,7 +32,10 @@ from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.repository import ReasonNotFound
 from nuself.reason.service import ReasonService
-from nuself.runtime.observability import format_exception_chain
+from nuself.runtime.observability import (
+    format_exception_chain,
+    report_observed_failure,
+)
 from nuself.storage import auto_backend
 from nuself.trace.repository import TraceNotFound
 from nuself.trace.service import TraceQueryService
@@ -365,6 +368,17 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
             return ""
         return interactive_persona_help(command)
     except Exception as exc:
+        action = command.split(maxsplit=1)[0] if command else "list"
+        report_observed_failure(
+            exc,
+            component="persona",
+            event="interactive_command_failed",
+            message="Interactive persona command failed",
+            project_root=project_root,
+            metadata={"action": action},
+            level="error",
+            status="error",
+        )
         return f"{theme.tag('[persona]', 'persona')} {theme.error(str(exc))}"
 
 
@@ -450,6 +464,16 @@ def handle_interactive_history_command(project_root: Path | None, thread_id: str
     try:
         state = ThreadStore(project_root).load(thread_id)
     except Exception as exc:
+        report_observed_failure(
+            exc,
+            component="chat",
+            event="interactive_history_load_failed",
+            message="Interactive thread history could not be loaded",
+            project_root=project_root,
+            metadata={"thread_id": thread_id},
+            level="error",
+            status="error",
+        )
         return (
             f"Unable to load thread history for '{thread_id}': "
             f"{format_exception_chain(exc)}"

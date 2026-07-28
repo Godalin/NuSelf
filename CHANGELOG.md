@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Recoverable local REPL `:persona` and `:history` failures now write
+  privacy-bounded structured diagnostics while preserving their concise
+  command result. Diagnostic storage failure cannot terminate the session or
+  replace the original error.
 - Daemon and REPL lifecycle owners now share one ordered named-cleanup runner.
   It retains `BaseException` failures while leaving domain-specific lifecycle
   errors, diagnostics, ordering, and primary-error policy with each owner.

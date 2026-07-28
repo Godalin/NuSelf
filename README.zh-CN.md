@@ -521,7 +521,7 @@ uv run nuself thread open <thread-id>
 uv run nuself thread open <thread-id> --message "hello"
 ```
 
-在 REPL 中，使用 `:thread <id>` 切换 thread，`:history` 查看近期消息，`:mem sources` 列出导入的 sources，`:mem search <query>` 搜索 memory，`:archive` 归档当前 thread，`:unarchive <id>` 恢复已归档 thread，`:archived` 列出已归档 threads，`:delete` 删除当前 thread。如果持久化 thread history 已损坏或无法读取，`:history` 会报告加载错误，而不会把它显示成空 thread。
+在 REPL 中，使用 `:thread <id>` 切换 thread，`:history` 查看近期消息，`:mem sources` 列出导入的 sources，`:mem search <query>` 搜索 memory，`:archive` 归档当前 thread，`:unarchive <id>` 恢复已归档 thread，`:archived` 列出已归档 threads，`:delete` 删除当前 thread。如果持久化 thread history 已损坏或无法读取，`:history` 会报告加载错误，而不会把它显示成空 thread。可恢复的 `:history` 与 `:persona` 失败也会写入隐私受限的结构化诊断；日志降级不会替换命令错误或关闭当前会话。
 
 ## 记忆条目
 

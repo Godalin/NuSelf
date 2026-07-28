@@ -291,6 +291,27 @@ succeeds, the original main-loop exception is re-raised with its traceback.
 `chat/interactive_cleanup_failed` is an auxiliary diagnostic of the aggregate;
 failure of that diagnostic cannot replace the lifecycle error.
 
+## Local REPL Command Failures
+
+A local REPL command may catch an unexpected `Exception` only when the command
+owns a recoverable interactive boundary and returns a concise error while
+keeping the session usable. Such a catch must also call the shared observable
+failure boundary:
+
+- `:persona` uses `persona/interactive_command_failed` and records the command
+  action without recording prompt text or other command arguments;
+- `:history` uses `chat/interactive_history_load_failed` and records the
+  requested thread ID;
+- the structured `error` field retains the compact exception chain;
+- diagnostic persistence failure falls back to a runtime warning and cannot
+  replace the command's existing rendered error;
+- `KeyboardInterrupt`, `SystemExit`, and other non-`Exception` control flow are
+  not converted into command results.
+
+Commands without an explicitly recoverable boundary continue to propagate
+unexpected failures to their owner. A broad catch must not be added merely to
+keep the prompt alive.
+
 Retryable:
 
 - daemon connection timeout

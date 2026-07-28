@@ -113,6 +113,21 @@ Rules:
 - The renderer (`_render_service_tool_called`) reads `metadata.service_component` directly. It must NOT re-derive the service from the tool name.
 - No subsystem stores a separate tool-call cache on domain objects. The log event is the record of a tool invocation. Any code that needs to display a past tool call queries the log system.
 
+## Local REPL Command Diagnostics
+
+Recoverable local command boundaries write ordinary structured events:
+
+| Component | Event                              | Required metadata |
+| --------- | ---------------------------------- | ----------------- |
+| `persona` | `interactive_command_failed`       | `action`          |
+| `chat`    | `interactive_history_load_failed`  | `thread_id`       |
+
+The persona `action` is the first command token, or `list` for an empty
+command. It must not contain the persona prompt, full command body, or other
+arguments. The history diagnostic may contain the thread ID but not stored
+message content. Both events use `status=error` and retain the compact
+exception chain in the structured `error` field.
+
 ## LLM Response Diagnostics
 
 Endpoint retry, failover, exhaustion/local-fallback, and final-response events
