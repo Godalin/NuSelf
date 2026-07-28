@@ -1,59 +1,38 @@
 # Current Goal
 
 This is NuSelf's short-lived execution board. It contains only the active
-objective, the next ordered steps, explicit exclusions, and completion
-evidence. Update it when active work changes. Completed history belongs in Git
-and `CHANGELOG.md`; deferred work belongs in [`TODOs.md`](TODOs.md).
+objective, ordered work, explicit exclusions, and completion evidence.
+Completed history belongs in Git and `CHANGELOG.md`; deferred work belongs in
+[`TODOs.md`](TODOs.md).
 
-## Objective
+## Status
 
-Simplify the documentation system without weakening authoritative behavioral
-specifications, and restore `current-goal.md` as the reliable entry point for
-active development progress.
+Idle — no implementation objective is currently active.
 
-## Active Branch
+## Next Action
 
-`dev/v0.3.x`
+Before starting non-trivial work:
 
-## Ordered Work
-
-1. [x] Define and document the responsibilities of active documentation.
-2. [x] Repair specification indexes, status labels, and internal links.
-3. [x] Reduce `TODOs.md` to unresolved backlog and remove the completed
-   milestone plan from active documentation.
-4. [x] Replace overlapping historical design documents with one concise
-   current architecture document.
-5. [x] Update English/Chinese README and `AGENTS.md` navigation.
-6. [ ] Run link, anchor, spec-index, formatting, and repository validation.
-7. [ ] Commit in reviewable stages and push `dev/v0.3.x`.
+1. Select and remove one outcome from [`TODOs.md`](TODOs.md), or define a newly
+   requested outcome.
+2. Replace this idle state with the objective, active branch, ordered steps,
+   exclusions, and objective completion evidence.
+3. Update the governing specification before implementation when behavior
+   changes.
+4. Update progress as soon as a step completes or scope changes, and include
+   that update in the same functional commit.
+5. On completion, move only unresolved follow-ups to `TODOs.md`, preserve
+   completed history in Git or `CHANGELOG.md`, and restore this idle state.
 
 ## Documentation Responsibilities
 
-- `AGENTS.md`: development constraints, the mandatory `current-goal` workflow,
-  and high-value navigation.
-- `docs/current-goal.md`: the one active execution board.
+- `AGENTS.md`: mandatory development constraints and high-value navigation.
+- `docs/current-goal.md`: the one active execution board, or this explicit idle
+  state.
 - `docs/TODOs.md`: unresolved medium/long-term backlog only.
-- `docs/architecture.md`: current high-level system boundaries and design
-  rationale; no behavioral contract duplication.
+- `docs/architecture.md`: current high-level boundaries and rationale.
 - `docs/spec/`: authoritative current behavior and development policies.
-- `CHANGELOG.md`: user-visible completed changes by release.
+- `CHANGELOG.md`: completed user-visible changes by release.
 - Git history: completed internal work and superseded implementation plans.
 - `README.md` and `README.zh-CN.md`: synchronized user-facing overview and
   entry points.
-
-## Out Of Scope
-
-- Changing runtime behavior while reorganizing documentation.
-- Removing detailed behavioral contracts merely to reduce line count.
-- Preserving superseded plans in an active archive; Git already retains them.
-
-## Completion Evidence
-
-- No broken local Markdown file or heading links.
-- Every authoritative spec is listed in `docs/spec/README.md`.
-- No active spec describes an implemented subsystem as merely planned or
-  draft.
-- `TODOs.md` contains no completed checklist history.
-- Active navigation does not reference removed design or milestone documents.
-- `git diff --check`, the documentation audit, and the project test/type gates
-  pass.
