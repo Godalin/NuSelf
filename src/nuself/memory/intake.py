@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from nuself.domain.memory import MemoryEntryType, MemoryTypeRegistry, default_memory_type_registry
 from nuself.llm import ChatLLM, ChatMessage, default_llm
+from nuself.memory.text import clamp_unit, extract_json_object
 from nuself.profile.repository import ProfileItemRepository
 
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
@@ -148,11 +149,7 @@ def _parse_intake_result(raw: str, *, allowed_types: tuple[str, ...] | None = No
 
 
 def _extract_json_object(raw: str) -> str:
-    stripped = raw.strip()
-    if stripped.startswith("```"):
-        lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
-        stripped = "\n".join(lines).strip()
-    return stripped
+    return extract_json_object(raw)
 
 
 def _memory_type(value: str, *, allowed_types: tuple[str, ...] | None = None) -> MemoryEntryType:
@@ -175,8 +172,8 @@ def _normalize_tags(tags: list[str]) -> tuple[str, ...]:
 
 
 def _clamp_confidence(value: float) -> float:
-    return max(0.0, min(value, 1.0))
+    return clamp_unit(value)
 
 
 def _clamp_importance(value: float) -> float:
-    return max(0.0, min(value, 1.0))
+    return clamp_unit(value)

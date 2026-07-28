@@ -15,6 +15,7 @@ from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, 
 from nuself.profile.repository import ProfileItemRepository
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
+from nuself.memory.text import clamp_unit, extract_json_object, looks_like_raw_transcript
 from nuself.trace.service import TraceRecorder
 
 MemoryActionType: TypeAlias = Literal["create", "update", "ignore"]
@@ -520,18 +521,12 @@ def _normalize_tags(tags: list[str]) -> tuple[str, ...]:
 
 
 def _clamp_confidence(value: float) -> float:
-    return max(0.0, min(value, 1.0))
+    return clamp_unit(value)
 
 
 def _extract_json_object(raw: str) -> str:
-    stripped = raw.strip()
-    if stripped.startswith("```"):
-        lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
-        stripped = "\n".join(lines).strip()
-    return stripped
+    return extract_json_object(raw)
 
 
 def _looks_like_raw_transcript(text: str) -> bool:
-    normalized = text.casefold()
-    markers = normalized.count("user:") + normalized.count("assistant:")
-    return markers >= 2
+    return looks_like_raw_transcript(text)

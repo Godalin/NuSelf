@@ -2,7 +2,6 @@
 
 from nuself.reflection.scheduler import (
     IdeaCandidateGenerator,
-    ReflectionEvent,
     ReflectionScheduler,
     LLMRelevanceGate,
 )
@@ -16,7 +15,6 @@ from nuself.reflection.service import ReflectionService
 
 __all__ = [
     "IdeaCandidateGenerator",
-    "ReflectionEvent",
     "ReflectionScheduler",
     "LLMRelevanceGate",
     "ReflectionEntry",

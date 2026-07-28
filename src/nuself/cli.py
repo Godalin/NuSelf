@@ -13,7 +13,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 from uuid import uuid4
 import warnings
 
@@ -31,6 +31,7 @@ _original_warn = warnings.warn
 TYPEWRITER_DELAY_SECONDS = 0.01
 TYPEWRITER_REFRESH_PER_SECOND = 30
 NOTIFICATION_EVAL_FIXTURE_COUNT = 3
+_HandleItem = TypeVar("_HandleItem")
 
 
 def _suppress_startup_warning(
@@ -153,14 +154,6 @@ def _maybe_show_session_update(project_root: Path | None, thread_id: str) -> Non
         _print_ansi(render_session_header(daemon_status=status, thread_id=thread_id))
     _last_header_thread = thread_id
     _last_header_status = status
-
-
-def _handle_proposals_after_turn(events: list[LogEvent], project_root: Path | None) -> None:
-    """Check for turn-confirmation proposals and prompt the user."""
-    # Reason proposals now confirm inside the decorated tool itself. The
-    # post-turn proposal path is kept for future subsystems, but reasoning
-    # proposal events remain audit/log records only.
-    return
 
 
 def _print_ansi(text: str, **kwargs: Any) -> None:
@@ -825,6 +818,36 @@ def _print_json_wire(*entities: object) -> None:
         print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
 
 
+def _resolve_handle(
+    value: str,
+    items: Sequence[_HandleItem],
+    *,
+    label: str,
+    get_id: Callable[[_HandleItem], str],
+) -> str | None:
+    try:
+        return resolve_visible_handle(value, items, label=label, get_id=get_id)
+    except VisibleHandleError as exc:
+        print(str(exc), file=sys.stderr)
+        return None
+
+
+def _resolve_handle_selection(
+    value: str,
+    items: Sequence[_HandleItem],
+    *,
+    label: str,
+    get_id: Callable[[_HandleItem], str],
+) -> list[str] | None:
+    try:
+        return resolve_visible_handle_selection(
+            value, items, label=label, get_id=get_id
+        )
+    except VisibleHandleError as exc:
+        print(str(exc), file=sys.stderr)
+        return None
+
+
 def _add_log_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--component", choices=list(LOG_COMPONENTS), default=None)
     parser.add_argument("--tail", type=int, default=50)
@@ -1249,39 +1272,39 @@ def _memory_entries_for_list(
 
 
 def _resolve_memory_entry_id(args: argparse.Namespace) -> str | None:
-    entries = _memory_entries_for_list(args.project_root)
-    try:
-        return resolve_visible_handle(args.entry_id, entries, label="memory", get_id=lambda entry: entry.id)
-    except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
+    return _resolve_handle(
+        args.entry_id,
+        _memory_entries_for_list(args.project_root),
+        label="memory",
+        get_id=lambda entry: entry.id,
+    )
 
 
 def _resolve_memory_entry_ids(args: argparse.Namespace) -> list[str] | None:
-    entries = _memory_entries_for_list(args.project_root)
-    try:
-        return resolve_visible_handle_selection(args.entry_id, entries, label="memory", get_id=lambda entry: entry.id)
-    except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
+    return _resolve_handle_selection(
+        args.entry_id,
+        _memory_entries_for_list(args.project_root),
+        label="memory",
+        get_id=lambda entry: entry.id,
+    )
 
 
 def _resolve_persona_id(args: argparse.Namespace) -> str | None:
-    prompts = _persona_prompts_for_list(args.project_root)
-    try:
-        return resolve_visible_handle(args.persona_id, prompts, label="persona", get_id=lambda p: p.id)
-    except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
+    return _resolve_handle(
+        args.persona_id,
+        _persona_prompts_for_list(args.project_root),
+        label="persona",
+        get_id=lambda prompt: prompt.id,
+    )
 
 
 def _resolve_persona_ids(args: argparse.Namespace) -> list[str] | None:
-    prompts = _persona_prompts_for_list(args.project_root)
-    try:
-        return resolve_visible_handle_selection(args.persona_id, prompts, label="persona", get_id=lambda p: p.id)
-    except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
+    return _resolve_handle_selection(
+        args.persona_id,
+        _persona_prompts_for_list(args.project_root),
+        label="persona",
+        get_id=lambda prompt: prompt.id,
+    )
 
 
 def _persona_prompts_for_list(project_root: Path | None) -> tuple[PersonaPrompt, ...]:
@@ -1788,13 +1811,12 @@ def _resolve_notify_entry_id(args: argparse.Namespace) -> str | None:
     """Resolve a notification id or visible numeric index to the stored id."""
     from nuself.notification import NotificationOutbox
 
-    outbox = NotificationOutbox(args.project_root)
-    entries = outbox.list()
-    try:
-        return resolve_visible_handle(args.entry_id, entries, label="notification", get_id=lambda entry: entry.id)
-    except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
+    return _resolve_handle(
+        args.entry_id,
+        NotificationOutbox(args.project_root).list(),
+        label="notification",
+        get_id=lambda entry: entry.id,
+    )
 
 
 def handle_notify_show(args: argparse.Namespace) -> int:
@@ -2106,13 +2128,12 @@ def _resolve_reflection_entry_id(args: argparse.Namespace) -> str | None:
     """Resolve a reflection id or visible numeric index to the stored id."""
     from nuself.reflection.repository import ReflectionRepository
 
-    repo = ReflectionRepository(args.project_root)
-    entries = repo.list()
-    try:
-        return resolve_visible_handle(args.entry_id, entries, label="reflection", get_id=lambda entry: entry.id)
-    except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
+    return _resolve_handle(
+        args.entry_id,
+        ReflectionRepository(args.project_root).list(),
+        label="reflection",
+        get_id=lambda entry: entry.id,
+    )
 
 
 def handle_reflection_list(args: argparse.Namespace) -> int:
@@ -2394,31 +2415,21 @@ def _memory_candidates_for_list(
 
 
 def _resolve_memory_candidate_id(args: argparse.Namespace) -> str | None:
-    candidates = _memory_candidates_for_list(args.project_root)
-    try:
-        return resolve_visible_handle(
-            args.candidate_id,
-            candidates,
-            label="memory candidate",
-            get_id=lambda candidate: candidate.id,
-        )
-    except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
+    return _resolve_handle(
+        args.candidate_id,
+        _memory_candidates_for_list(args.project_root),
+        label="memory candidate",
+        get_id=lambda candidate: candidate.id,
+    )
 
 
 def _resolve_memory_candidate_ids(args: argparse.Namespace) -> list[str] | None:
-    candidates = _memory_candidates_for_list(args.project_root)
-    try:
-        return resolve_visible_handle_selection(
-            args.candidate_id,
-            candidates,
-            label="memory candidate",
-            get_id=lambda candidate: candidate.id,
-        )
-    except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
+    return _resolve_handle_selection(
+        args.candidate_id,
+        _memory_candidates_for_list(args.project_root),
+        label="memory candidate",
+        get_id=lambda candidate: candidate.id,
+    )
 
 
 def handle_memory_source_ingest(args: argparse.Namespace) -> int:
@@ -2518,12 +2529,12 @@ def handle_memory_source_extract(args: argparse.Namespace) -> int:
 
 
 def _resolve_source_id(args: argparse.Namespace) -> str | None:
-    documents = SourceRepository(args.project_root).list_documents()
-    try:
-        return resolve_visible_handle(args.source_id, documents, label="source", get_id=lambda document: document.id)
-    except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
+    return _resolve_handle(
+        args.source_id,
+        SourceRepository(args.project_root).list_documents(),
+        label="source",
+        get_id=lambda document: document.id,
+    )
 
 
 def handle_memory_profile_list(args: argparse.Namespace) -> int:
@@ -2601,12 +2612,12 @@ def _profile_items_for_list(project_root: Path | None, *, sort_by: str = "update
 
 
 def _resolve_profile_id(args: argparse.Namespace) -> str | None:
-    items = _profile_items_for_list(args.project_root)
-    try:
-        return resolve_visible_handle(args.profile_id, items, label="profile", get_id=lambda item: item.id)
-    except VisibleHandleError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
+    return _resolve_handle(
+        args.profile_id,
+        _profile_items_for_list(args.project_root),
+        label="profile",
+        get_id=lambda item: item.id,
+    )
 
 
 def handle_persona_list(args: argparse.Namespace) -> int:
@@ -2949,7 +2960,6 @@ def _send_interactive_chat_turn(
             _print_ansi(_theme.paint("NuSelf:", "96"))
             print()
             _print_assistant_reply(result.reply)
-        _handle_proposals_after_turn(events, project_root)
         if result.code == 0:
             return 0
         if not result.retryable:

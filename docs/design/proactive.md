@@ -8,7 +8,7 @@ This design turns the existing skeleton (`reflection.py`, `notification/`, daemo
 
 | Component                | Current State                                                                                                                                                                         | Gap to Milestone 10 |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| `ReflectionScheduler`    | Randomized jitter, daily cap, quiet hours, cooldown, event triggers. Background thread in daemon polls. Configurable via `private/config.yaml` under `reflection.*`.                  | Done.               |
+| `ReflectionScheduler`    | Randomized jitter, daily cap, quiet hours, and cooldown. Background thread in daemon polls. Configurable via `private/config.yaml` under `reflection.*`.                  | Done.               |
 | `IdeaCandidateGenerator` | Uses LLM to scan recent threads, private memory, and new sources. Generates structured candidates with types, confidence, and evidence. Falls back to local candidate on LLM failure. | Done.               |
 | `LLMRelevanceGate`       | LLM-driven contextual scoring: novelty, confidence, urgency, interruption cost, composite, pass/fail with reasoning. Reads recent reflections for semantic context. Uses `config.gate.relevance_threshold`. | Done.               |
 | `NotificationOutbox`     | File-backed with idempotency, statuses, and CRUD. Daemon writes intents here without calling adapters directly.                                                                       | Done.               |
@@ -34,9 +34,12 @@ The gate returns a `RelevanceScore` with per-dimension floats and a final `passe
 
 The scheduler adds a jitter factor (±20% of interval) and a daily cap (max reflections per day). This prevents predictable timing and limits noise.
 
-### 5. Event Triggers via Lightweight Hooks
+### 5. Event Triggers Are Deferred
 
-Instead of a full event bus, expose a `ReflectionTrigger` interface. The memory curator and source ingestion can call `trigger_event(type, payload)` when they produce high-signal changes. The scheduler checks both time-based and event-based conditions.
+Reflection currently runs only from the daemon's scheduled polling loop. The
+old in-memory event queue did not affect scheduling decisions and was not
+restart-safe, so it has been removed. A future event-triggered design needs a
+persisted queue, explicit scheduling semantics, and restart/idempotency tests.
 
 ### 6. Deep Link Creates New Threads
 
@@ -85,16 +88,6 @@ class RelevanceScore:
     reasons: tuple[str, ...]
 ```
 
-### ReflectionEvent
-
-```python
-@dataclass(frozen=True)
-class ReflectionEvent:
-    event_type: Literal["new_memory", "new_source", "thread_milestone", "manual"]
-    payload: dict[str, object]
-    created_at: str = field(default_factory=now_iso)
-```
-
 ### NotificationIntent (extends OutboxEntry)
 
 Reuse existing `OutboxEntry`. Add optional `candidate_id` and `priority` fields to metadata for richer delivery policy.
@@ -109,11 +102,8 @@ class ReflectionScheduler:
     
     def should_reflect(self, now: datetime | None = None) -> bool: ...
     def reflect(self, now: datetime | None = None) -> bool: ...
-    def trigger_event(self, event: ReflectionEvent) -> None: ...
-    
     # internal
     def _time_trigger_ready(self, now: datetime) -> bool: ...
-    def _event_trigger_ready(self) -> bool: ...
     def _daily_cap_not_reached(self, now: datetime) -> bool: ...
 ```
 
@@ -217,7 +207,7 @@ We implement in small, testable slices:
 1. **Add `IdeaCandidate` and `RelevanceScore` models** with wire serialization tests.
 2. **Enhance `IdeaCandidateGenerator`** to use LLM over thread/memory/source context. Add fixture-based tests.
 3. **Replace `RelevanceGate` with `LLMRelevanceGate`** using LLM-driven contextual scoring. Add fallback, JSON parsing, and clamping tests.
-4. **Enhance `ReflectionScheduler`** with jitter, daily cap, and event triggers. Add fake-time tests.
+4. **Enhance `ReflectionScheduler`** with jitter, daily cap, quiet hours, and cooldown. Add fake-time tests.
 5. **Add `NotificationDeliveryLoop`** that polls outbox and dispatches through adapters. Add fake-adapter tests.
 6. **Decouple daemon**: make `reflect()` write to outbox only; start delivery thread. Add integration tests.
 7. **Enhance `DeepLink`** with `new_thread` action. Add parse/round-trip tests.
@@ -225,7 +215,7 @@ We implement in small, testable slices:
 
 ## Test Strategy
 
-- **Scheduler**: fake `datetime` fixtures; prove jitter, daily cap, quiet hours, cooldown, and event triggers.
+- **Scheduler**: fake `datetime` fixtures; prove jitter, daily cap, quiet hours, and cooldown.
 - **Generator**: fixture memory/threads/sources; prove candidates have expected types and evidence refs.
 - **Gate**: fixture candidates; prove low-value, duplicate, urgent, and cooldown cases.
 - **Delivery loop**: fake adapters; prove graph nodes never send directly, outbox records attempts/failures/success.
@@ -236,7 +226,7 @@ We implement in small, testable slices:
 - [x] `IdeaCandidate` and `RelevanceScore` are typed, serializable, and tested.
 - [x] `IdeaCandidateGenerator` scans threads, memory, and sources; produces structured candidates.
 - [x] `LLMRelevanceGate` uses LLM judgment for novelty, confidence, urgency, interruption cost, composite, and pass/fail with reasoning.
-- [x] `ReflectionScheduler` supports randomized intervals, daily caps, quiet hours, cooldowns, and event triggers.
+- [x] `ReflectionScheduler` supports randomized intervals, daily caps, quiet hours, and cooldowns.
 - [x] `NotificationDeliveryLoop` polls pending outbox entries and dispatches through configured adapters.
 - [x] Daemon `reflect()` writes to outbox only; adapters are called only from the delivery loop.
 - [x] `DeepLink` supports both `open_thread` and `new_thread` actions.

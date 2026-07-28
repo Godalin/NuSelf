@@ -12,6 +12,7 @@ from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry, now_iso
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
+from nuself.memory.text import clamp_unit, extract_json_object, looks_like_raw_transcript
 from nuself.profile.repository import ProfileItemRepository
 
 MemoryOptimizeActionType: TypeAlias = Literal["update", "delete", "ignore"]
@@ -356,18 +357,12 @@ def _optional_memory_type(value: str | None, *, allowed_types: tuple[str, ...]) 
 
 
 def _clamp_confidence(value: float) -> float:
-    return max(0.0, min(value, 1.0))
+    return clamp_unit(value)
 
 
 def _extract_json_object(raw: str) -> str:
-    stripped = raw.strip()
-    if stripped.startswith("```"):
-        lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
-        stripped = "\n".join(lines).strip()
-    return stripped
+    return extract_json_object(raw)
 
 
 def _looks_like_raw_transcript(text: str) -> bool:
-    normalized = text.casefold()
-    markers = normalized.count("user:") + normalized.count("assistant:")
-    return markers >= 2
+    return looks_like_raw_transcript(text)

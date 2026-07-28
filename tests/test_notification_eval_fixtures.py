@@ -65,7 +65,6 @@ def test_reflection_scheduler_fixture() -> None:
         scheduler = ReflectionScheduler.__new__(ReflectionScheduler)
         scheduler._config = settings  # pyright: ignore[reportPrivateUsage]
         scheduler._last_reflection_path = Path("/dev/null")  # pyright: ignore[reportPrivateUsage]
-        scheduler._event_queue = []  # pyright: ignore[reportPrivateUsage]
         if last is not None:
             scheduler._write_last_reflection = lambda now: None  # type: ignore[method-assign]  # pyright: ignore[reportUnknownLambdaType]
             # Monkey-patch _read_last_reflection for this test

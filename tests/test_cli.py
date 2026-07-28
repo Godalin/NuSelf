@@ -357,23 +357,6 @@ def test_interactive_turn_prints_activity_events_while_waiting(
     assert captured.out.index("[chat] [memory] service_tool_called") < captured.out.index("NuSelf:\n\nfinal reply")
 
 
-def test_reason_proposal_confirmation_is_tool_driven(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.cli import _handle_proposals_after_turn  # pyright: ignore[reportPrivateUsage]
-
-    _handle_proposals_after_turn(
-        [
-            LogEvent(
-                time="2026-05-29T00:00:00Z",
-                level="info",
-                component="reasoning",
-                event="proposal_created",
-                message="Reasoning thread proposal: demo",
-                metadata={"proposal_id": "abc123", "topic": "demo"},
-            )
-        ],
-        tmp_path,
-    )
-
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""

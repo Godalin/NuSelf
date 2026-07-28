@@ -12,6 +12,22 @@ from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, c
 from nuself.storage import auto_backend
 
 
+def _persona_tool(
+    func: Callable[..., str],
+    *,
+    name: str,
+    description: str,
+    readonly: bool = False,
+) -> StructuredTool:
+    return StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
+        func=func,
+        name=name,
+        description=description,
+        tags=("readonly",) if readonly else None,
+        metadata={"service_component": "persona"},
+    )
+
+
 def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredTool, ...]:
     """Build persona tools that any agent (chat, reason) can use."""
 
@@ -131,37 +147,32 @@ def build_persona_tools(project_root: Path | None = None) -> tuple[StructuredToo
         return f"Enabled persona: {prompt.name}"
 
     return (
-        StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
+        _persona_tool(
             func=persona_craft,
             name="persona_craft",
             description="Create or update a reusable thinking persona with a name and custom prompt.",
-            metadata={"service_component": "persona"},
         ),
-        StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
+        _persona_tool(
             func=persona_list,
             name="persona_list",
             description="List available thinking personas with id and name. Pass include_disabled=True to show disabled ones.",
-            tags=("readonly",),
-            metadata={"service_component": "persona"},
+            readonly=True,
         ),
-        StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
+        _persona_tool(
             func=persona_think,
             name="persona_think",
             description="Consult a thinking persona by name or id and get its response to a question.",
-            tags=("readonly",),
-            metadata={"service_component": "persona"},
+            readonly=True,
         ),
-        StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
+        _persona_tool(
             func=persona_disable,
             name="persona_disable",
             description="Disable a thinking persona by name or id. Disabled personas are hidden from persona_list and cannot be consulted.",
-            metadata={"service_component": "persona"},
         ),
-        StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
+        _persona_tool(
             func=persona_enable,
             name="persona_enable",
             description="Enable a thinking persona by name or id. Enabled personas appear in persona_list and can be consulted.",
-            metadata={"service_component": "persona"},
         ),
     )
 
@@ -344,13 +355,10 @@ def build_reason_persona_tools(
         _record_prompt_enabled_trace(prompt, project_root=global_project_root)
         return f"Enabled persona: {prompt.name}"
 
-    from langchain_core.tools import StructuredTool
-
-    from_function = getattr(StructuredTool, "from_function")
     return (
-        from_function(func=_craft, name="persona_craft", description="Create or update a thinking persona scoped to the current reason thread. Also consults global personas when listing and thinking.", metadata={"service_component": "persona"}),
-        from_function(func=_list, name="persona_list", description="List available thinking personas (global + current reason thread). Pass scope='local' for only thread-scoped personas, scope='global' for only global ones.", tags=("readonly",), metadata={"service_component": "persona"}),
-        from_function(func=_think, name="persona_think", description="Consult a thinking persona by name or id. Searches local (thread-scoped) first then global by default. Pass scope='local' to search only local, scope='global' to search only global.", tags=("readonly",), metadata={"service_component": "persona"}),
-        from_function(func=_disable, name="persona_disable", description="Disable a global thinking persona by name or id. Disabled personas are hidden from persona_list and cannot be consulted.", metadata={"service_component": "persona"}),
-        from_function(func=_enable, name="persona_enable", description="Enable a global thinking persona by name or id. Enabled personas appear in persona_list and can be consulted.", metadata={"service_component": "persona"}),
+        _persona_tool(func=_craft, name="persona_craft", description="Create or update a thinking persona scoped to the current reason thread. Also consults global personas when listing and thinking."),
+        _persona_tool(func=_list, name="persona_list", description="List available thinking personas (global + current reason thread). Pass scope='local' for only thread-scoped personas, scope='global' for only global ones.", readonly=True),
+        _persona_tool(func=_think, name="persona_think", description="Consult a thinking persona by name or id. Searches local (thread-scoped) first then global by default. Pass scope='local' to search only local, scope='global' to search only global.", readonly=True),
+        _persona_tool(func=_disable, name="persona_disable", description="Disable a global thinking persona by name or id. Disabled personas are hidden from persona_list and cannot be consulted."),
+        _persona_tool(func=_enable, name="persona_enable", description="Enable a global thinking persona by name or id. Enabled personas appear in persona_list and can be consulted."),
     )

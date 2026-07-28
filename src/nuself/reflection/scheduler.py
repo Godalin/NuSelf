@@ -24,15 +24,6 @@ if TYPE_CHECKING:
     from nuself.llm import ChatLLM, ChatMessage
 
 
-@dataclass(frozen=True)
-class ReflectionEvent:
-    """Event that can trigger an immediate reflection cycle."""
-
-    event_type: str
-    payload: dict[str, object]
-    created_at: str
-
-
 class RelevanceScoreOutput(BaseModel):
     """Structured relevance evaluation returned by the LLM."""
 
@@ -79,12 +70,6 @@ class ReflectionScheduler:
         self._last_reflection_path = paths.runtime_dir / "last_reflection.json"
         self._reflection_repo = ReflectionRepository(project_root)
         self._outbox = NotificationOutbox(project_root)
-        self._event_queue: list[ReflectionEvent] = []
-
-    def trigger_event(self, event: ReflectionEvent) -> None:
-        """Queue an event-triggered reflection request."""
-        self._event_queue.append(event)
-
     def should_reflect(self, now: datetime | None = None) -> bool:
         """Return whether deterministic scheduling gates allow a reflection cycle."""
         if now is None:
@@ -122,8 +107,6 @@ class ReflectionScheduler:
 
         self._organize_pending_reflections()
 
-        # Consume any queued events before generating candidates
-        self._event_queue.clear()
         candidates = IdeaCandidateGenerator(self._project_root, config=self._config).generate()
         if not candidates:
             return False
