@@ -20,6 +20,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   provenance. Developer migration and schema inspection also close their
   temporary SQLite connections, while storage inspection reuses the shared
   backend.
+- Thought-pack export now uses SQLite's online backup API, so committed WAL
+  data is included and exports remain consistent during concurrent writes.
 - CLI, REPL, and background scheduling now use one reason-layer factory to
   compose `ReasonAdvancer` workspace and model dependencies. A directly
   constructed scheduler with a project root now loads configured endpoints

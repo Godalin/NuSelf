@@ -129,6 +129,23 @@ class SqliteStorageInitializationCleanupError(
         self.cleanup_error = cleanup_error
 
 
+class SqliteStorageBackupCleanupError(SqliteStorageLifecycleError):
+    """Raised when a failed backup also cannot release its destination."""
+
+    def __init__(
+        self,
+        *,
+        backup_error: BaseException,
+        cleanup_error: Exception,
+    ) -> None:
+        super().__init__(
+            "SQLite backup failed and its destination connection "
+            "could not be closed"
+        )
+        self.backup_error = backup_error
+        self.cleanup_error = cleanup_error
+
+
 class _SqliteWalCheckpointBusyError(RuntimeError):
     """Internal diagnostic for a checkpoint that returned SQLITE_BUSY."""
 
@@ -442,6 +459,26 @@ class SqliteStorageBackend:
                 raise SqliteStorageCheckpointError(
                     "SQLite connection closed after WAL checkpoint failed"
                 ) from checkpoint_error
+
+    def backup_to(self, destination: Path) -> None:
+        """Write one consistent online backup and close its connection."""
+        if destination.resolve() == self._db_path.resolve():
+            raise ValueError("SQLite backup destination must differ from source")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with self._lock:
+            backup = sqlite3.connect(str(destination))
+            try:
+                self._conn.backup(backup)
+            except BaseException as backup_error:
+                try:
+                    backup.close()
+                except Exception as cleanup_error:
+                    raise SqliteStorageBackupCleanupError(
+                        backup_error=backup_error,
+                        cleanup_error=cleanup_error,
+                    ) from backup_error
+                raise
+            backup.close()
 
     def _init_schema(self) -> None:
         self._conn.execute(

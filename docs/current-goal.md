@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make developer storage commands honor backend ownership: diagnostics reuse the
-CLI default backend while migration/schema commands close owned connections.
+Make thought-pack export produce a consistent SQLite snapshot under WAL and
+concurrent writers instead of copying only the main database file.
 
 ## Active Branch
 
@@ -14,38 +14,40 @@ CLI default backend while migration/schema commands close owned connections.
 
 ## Ordered Work
 
-1. Audit all developer storage backend creation.
-2. Specify diagnostic versus temporary backend ownership.
-3. Move storage inspection to the default backend.
-4. Close migration and schema SQLite backends on every return path.
-5. Verify reuse and close behavior at command level.
+1. Audit remaining low-level backend and SQLite construction.
+2. Specify online snapshot and destination ownership.
+3. Add a locked SQLite `backup_to` boundary.
+4. Migrate `pack export` from file copy to the project default backend.
+5. Verify uncheckpointed WAL data and destination connection closure.
 6. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Do not close the shared default backend inside a command handler.
-- Keep migration source and destination behavior unchanged.
-- Preserve existing developer command output.
+- Keep pack import as an inert file copy into the imports directory.
+- Keep pack inspect's temporary backend explicitly closed.
+- Preserve existing export paths and command output.
 
 ## Completion Evidence
 
-- `dev storage` reads the project default backend and delegates closure to the
-  outer CLI lifecycle.
-- `dev migrate` closes its owned SQLite destination after success and after a
-  migration exception.
-- `dev db-schema` closes its owned SQLite backend, including the empty-schema
-  early return.
-- `create_sqlite_backend()` exposes its concrete closeable return type.
-- Production search finds `auto_backend()` only inside the storage factory and
-  default-registry implementation.
-- `.venv/bin/pytest -q`: `1483 passed`.
+- `SqliteStorageBackend.backup_to()` runs SQLite online backup while holding
+  the source lock and rejects a source-equal destination.
+- The backup operation owns and closes each destination connection; dual
+  backup/cleanup failure retains the backup error as the cause.
+- `pack export` resolves the shared project SQLite backend and no longer calls
+  `shutil.copy2` for the live database.
+- Tests prove committed uncheckpointed WAL data is exported, repeated export
+  updates an existing destination, and every destination connection closes
+  once.
+- A command-level test reopens the exported pack and reads data written through
+  the live default backend.
+- `.venv/bin/pytest -q`: `1485 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `169fe7e`.
+`dev/v0.3.x` is published through `e48cbd6`.
 
 ## Next Review Batch
 
-Audit other low-level factory callers and temporary SQLite exports.
+Audit thought-pack import validation before accepting an external database.

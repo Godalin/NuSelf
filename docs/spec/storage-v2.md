@@ -440,7 +440,7 @@ private/
 ### CLI 接口
 
 ```
-nuself pack export <name>         → cp nuself.sqlite → exports/<name>.sqlite
+nuself pack export <name>         → SQLite online backup → exports/<name>.sqlite
 nuself pack import <path>         → cp <path> → imports/<filename>.sqlite
 nuself pack inspect [<path>]      → 展示 <path> 或主库的表统计
                                    (默认展示主库)
@@ -448,6 +448,11 @@ nuself pack inspect [<path>]      → 展示 <path> 或主库的表统计
 
 ### 导出约束
 
+- Export uses SQLite's online backup API through the shared project backend;
+  it never copies only the main database file. The snapshot includes committed
+  WAL data and remains consistent while another connection is writing.
+- The source default backend remains owned by the outer CLI lifecycle. The
+  backup operation owns and always closes its destination connection.
 - **不包含 runtime state**（chat threads, daemon state, logs, cache — 这些不在 nuself.sqlite 里）
 - **不包含本地配置**（config.yaml — 不在库里）
 - **保持 identity 来源信息**（出处可追溯）

@@ -116,6 +116,14 @@ class CheckpointCursor:
         return self._result
 
 
+class TrackingConnection(sqlite3.Connection):
+    close_calls: int
+
+    def close(self) -> None:
+        self.close_calls += 1
+        super().close()
+
+
 class CloseBackend:
     def __init__(self, *, error: Exception | None = None) -> None:
         self.error = error
@@ -301,6 +309,69 @@ def test_close_is_idempotent_after_connection_closes(
 
     assert proxy.checkpoint_calls == 1
     assert proxy.close_calls == 1
+
+
+def test_online_backup_includes_wal_data_and_closes_destination(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = SqliteStorageBackend(tmp_path / "source.sqlite")
+    source_connection = cast(
+        sqlite3.Connection,
+        getattr(source, "_conn"),
+    )
+    source_connection.execute("PRAGMA wal_autocheckpoint=0")
+    source.collection("memory_entries").put(
+        "wal-entry",
+        {"id": "wal-entry", "title": "Committed in WAL"},
+    )
+    original_connect = sqlite3.connect
+    destinations: list[TrackingConnection] = []
+
+    def tracking_connect(
+        database: str,
+    ) -> sqlite3.Connection:
+        connection = original_connect(
+            database,
+            factory=TrackingConnection,
+        )
+        tracked = connection
+        tracked.close_calls = 0
+        destinations.append(tracked)
+        return tracked
+
+    monkeypatch.setattr(
+        "nuself.storage_sqlite.sqlite3.connect",
+        tracking_connect,
+    )
+    destination = tmp_path / "exports" / "snapshot.sqlite"
+
+    try:
+        source.backup_to(destination)
+        source.collection("memory_entries").put(
+            "wal-entry",
+            {"id": "wal-entry", "title": "Updated WAL data"},
+        )
+        source.backup_to(destination)
+    finally:
+        source.close()
+
+    assert len(destinations) == 2
+    assert all(
+        connection.close_calls == 1
+        for connection in destinations
+    )
+    monkeypatch.undo()
+    snapshot = SqliteStorageBackend(destination)
+    try:
+        assert snapshot.collection("memory_entries").get(
+            "wal-entry"
+        ) == {
+            "id": "wal-entry",
+            "title": "Updated WAL data",
+        }
+    finally:
+        snapshot.close()
 
 
 def test_checkpoint_failure_is_raised_after_connection_closes(

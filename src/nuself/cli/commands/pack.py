@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from nuself.config import runtime_paths
+from nuself.storage import get_default_backend
 from nuself.storage_sqlite import SqliteStorageBackend
 
 
@@ -25,7 +26,12 @@ def handle_pack_export(args: argparse.Namespace) -> int:
     exports.mkdir(parents=True, exist_ok=True)
     name = args.name.removesuffix(".sqlite")
     destination = (exports / name).with_suffix(".sqlite")
-    shutil.copy2(source, destination)
+    backend = get_default_backend(args.project_root)
+    if not isinstance(backend, SqliteStorageBackend):
+        raise RuntimeError(
+            "nuself.sqlite exists but the active backend is not SQLite"
+        )
+    backend.backup_to(destination)
     print(f"Exported to {destination}")
     return 0
 
