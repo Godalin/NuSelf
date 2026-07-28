@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Share one sealed definition registry without conflating event transports.
+Make runtime and persisted event identities stable and evolution-safe.
 
 ## Active Branch
 
@@ -13,51 +13,47 @@ Share one sealed definition registry without conflating event transports.
 
 ## Ordered Work
 
-1. Compare runtime event and persisted audit ownership/failure semantics.
-2. Extract generic duplicate-safe, resolvable, sealable registry mechanics.
-3. Rebuild `EventDefinitionRegistry` as a semantic adapter over that primitive.
-4. Move lifecycle audit definitions from a mapping proxy to the same primitive.
-5. Preserve separate definition types, extension policy, and delivery paths.
-6. Verify duplicates, unknown keys, late registration, ordering, and isolation.
+1. Inventory event names, ownership, envelope versions, and historical readers.
+2. Define shared lexical rules for producers, runtime events, and audit events.
+3. Define wire-version versus semantic-contract evolution policy.
+4. Enforce identities when definitions and new log records are constructed.
+5. Preserve explicitly supported legacy JSONL reads without rewriting history.
+6. Verify invalid identities, valid domain extensions, and version boundaries.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Runtime events remain synchronous immutable envelope delivery.
-- Lifecycle audits remain direct best-effort persisted projections.
-- No audit replay, implicit event publication, or shared extension namespace.
+- No version-2 runtime envelope or persisted-record migration.
+- No global registry for every direct domain audit event.
+- No merging of runtime publication and persisted audit delivery.
+- No compatibility aliases for invalid new identities.
 
 ## Completion Evidence
 
-- The review established that runtime events and lifecycle audits have distinct
-  delivery, extension, failure, and replay semantics and must not be merged.
-- `runtime.definitions.DefinitionRegistry` now owns ordered registration,
-  duplicate rejection, lookup, explicit sealing, and immutable snapshots.
-- The generic registry accepts any hashable key and definition value, including
-  `None`; unknown lookup does not rely on a sentinel definition value.
-- `EventDefinitionRegistry` is now a semantic adapter over the shared primitive
-  and preserves its public producer/name API and event-specific exceptions.
-- Core plus domain runtime-event composition still rejects duplicates and late
-  mutation and validates unknown events before synchronous delivery.
-- The daemon lifecycle audit registry now uses the same primitive with
-  event-slug keys while retaining its closed definition type and exact schemas.
-- Audit registration remains sealed at module composition; runtime event
-  domains retain their explicit extension path.
-- No audit write publishes an envelope, no runtime publication implicitly
-  writes a lifecycle audit, and persisted records remain non-replayable.
-- Direct tests cover generic ordering, lookup, snapshots, duplicates, sealing,
-  unknown keys, invalid composition, nullable definitions, event adapters, and
-  audit registry immutability.
-- Focused definition/event/observability/audit suites: `65 passed`.
-- Full test suite: `1750 passed`.
+- Runtime envelope versioning is now explicitly limited to the common wire
+  shape; it cannot stand in for event payload or semantic versioning.
+- Breaking runtime-event contracts require a new registered event identity;
+  breaking direct-audit semantics require a new stable audit slug.
+- `runtime.identities` owns the lexical grammar shared by runtime definitions,
+  direct audit construction, persisted projections, and lifecycle definitions.
+- Runtime producers accept one lowercase slug; runtime event names require at
+  least two dotted slug segments; direct audit names accept exactly one slug.
+- `RuntimeEventDefinition` and `DaemonLifecycleAuditDefinition` reject invalid
+  identities during construction, before registry composition or delivery.
+- Direct audit construction rejects dotted runtime names, while persisted
+  runtime projections retain valid dotted names including domain extensions
+  such as `reason.output.export`.
+- Existing legacy JSONL records still use the explicit absent-identity path;
+  no historical record is rewritten or silently reclassified.
+- Focused runtime-event, lifecycle-audit, and log suites: `121 passed`.
+- Full test suite: `1769 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through implementation commit `d2424c1`.
+The current naming and evolution batch is awaiting its implementation commit.
 
 ## Next Review Batch
 
-Review runtime event and audit naming/versioning policy after registry mechanics
-have one owner.
+Review whether all direct domain audit schemas have explicit owning contracts.

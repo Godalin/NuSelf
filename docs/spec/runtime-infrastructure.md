@@ -314,6 +314,14 @@ Both locally constructed and decoded envelopes enforce the same invariants:
   non-blank strings;
 - payload is a mapping with string keys and recursively JSON-safe values.
 
+The envelope `schema_version` versions only this transport-neutral wire shape.
+It does not version the meaning of a runtime event name or its payload. A
+compatible payload extension remains governed by that event's registered
+validator. A breaking payload or semantic change requires a new event name;
+it must not silently reuse an existing producer/name pair or bump the global
+envelope version. The envelope version changes only when the common envelope
+record itself requires a new decoder contract.
+
 Payload keys are never coerced because coercion can collapse distinct keys.
 Non-finite floats are not JSON values and are rejected. Decoded context and
 payload containers are detached from the caller, and nested payload mappings
@@ -490,8 +498,17 @@ Every published event resolves through a sealed
 domains extend them during composition through
 `build_event_definition_registry(...)`. Duplicate definitions, late
 registration, unknown names, and producer/name ownership mismatches fail before
-delivery. Runtime event names use dotted subject/action names such as
-`worker.started`; historical JSONL audit event slugs remain readable.
+delivery. Runtime producers are lowercase slugs beginning with a letter and
+containing only lowercase letters, digits, and underscores. Runtime event names
+contain at least two dot-separated segments under the same slug grammar, such
+as `worker.started` or `reason.output.export`. Definitions reject invalid
+identities at construction, before registry composition or publication.
+
+A registered `(producer, name)` pair is an immutable semantic contract.
+Renaming it or making its payload contract incompatible creates a new event
+identity and coordinated producer/consumer migration. Historical JSONL audit
+event slugs remain readable and are never rewritten merely because current
+naming policy changes.
 
 Definition storage mechanics have one owner:
 `runtime.definitions.DefinitionRegistry`. It provides ordered registration,

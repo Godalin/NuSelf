@@ -14,6 +14,10 @@ from nuself.runtime.definitions import (
 from nuself.runtime.event_payloads import (
     validate_runtime_log_event_payload,
 )
+from nuself.runtime.identities import (
+    require_identity_segment,
+    require_runtime_event_name,
+)
 
 EventPayloadValidator = Callable[[Mapping[str, object]], None]
 
@@ -44,8 +48,13 @@ class RuntimeEventDefinition:
     )
 
     def __post_init__(self) -> None:
-        if not self.producer or not self.name or not self.description:
-            raise ValueError("event definition fields must not be empty")
+        require_identity_segment(
+            self.producer,
+            label="runtime event producer",
+        )
+        require_runtime_event_name(self.name)
+        if not self.description:
+            raise ValueError("event definition description must not be empty")
         if (
             self.payload_validator is not None
             and not callable(self.payload_validator)

@@ -436,3 +436,51 @@ def test_event_definition_rejects_non_callable_payload_validator() -> None:
             description="A durable memory entry changed.",
             payload_validator=object(),  # type: ignore[arg-type]
         )
+
+
+@pytest.mark.parametrize(
+    "producer",
+    ("", "Memory", "memory-agent", "1memory", "memory.agent"),
+)
+def test_event_definition_rejects_invalid_producer_identity(
+    producer: str,
+) -> None:
+    with pytest.raises(ValueError, match="runtime event producer"):
+        RuntimeEventDefinition(
+            producer=producer,
+            name="entry.changed",
+            description="A durable memory entry changed.",
+        )
+
+
+@pytest.mark.parametrize(
+    "name",
+    (
+        "",
+        "changed",
+        "Entry.changed",
+        "entry-changed",
+        "entry..changed",
+        "1entry.changed",
+        "entry.1changed",
+    ),
+)
+def test_event_definition_rejects_invalid_runtime_event_name(
+    name: str,
+) -> None:
+    with pytest.raises(ValueError, match="runtime event name"):
+        RuntimeEventDefinition(
+            producer="memory",
+            name=name,
+            description="A durable memory entry changed.",
+        )
+
+
+def test_event_definition_accepts_multi_segment_runtime_event_name() -> None:
+    definition = RuntimeEventDefinition(
+        producer="reason",
+        name="reason.output.export",
+        description="A reason output export changed state.",
+    )
+
+    assert definition.name == "reason.output.export"

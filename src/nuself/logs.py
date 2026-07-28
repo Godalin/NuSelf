@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from collections import OrderedDict
 from collections.abc import Callable, Generator, Iterable, Mapping
 from contextlib import contextmanager
@@ -31,6 +30,11 @@ from nuself.runtime.diagnostics import (
     sanitize_diagnostic_metadata,
 )
 from nuself.runtime.event_payloads import RuntimeLogEventPayload
+from nuself.runtime.identities import (
+    require_audit_event_name,
+    require_persisted_event_name,
+    require_runtime_event_name,
+)
 from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
     RuntimeEnvelope,
@@ -64,9 +68,6 @@ LOG_COMPONENTS: tuple[LogComponent, ...] = (
     "reflection",
     "reasoning",
     "storage",
-)
-_AUDIT_EVENT_NAME = re.compile(
-    r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$"
 )
 _LOG_LOCKS_GUARD = Lock()
 _LOG_WRITE_LOCKS: WeakValueDictionary[Path, RLock] = WeakValueDictionary()
@@ -368,7 +369,8 @@ def create_audit_envelope(
 ) -> RuntimeEnvelope:
     """Create one complete immutable direct-audit envelope."""
 
-    _require_log_identity(component, event)
+    _require_log_component(component)
+    require_audit_event_name(event)
     context = current_runtime_context()
     payload = RuntimeLogEventPayload(
         message=message,
@@ -440,10 +442,10 @@ def _write_envelope_log_projection(
         )
     if envelope.producer not in LOG_COMPONENTS:
         raise ValueError("log envelope producer is not a log component")
-    _require_log_identity(
-        envelope.producer,
-        envelope.name,
-    )
+    if required_kind == "audit":
+        require_audit_event_name(envelope.name)
+    else:
+        require_runtime_event_name(envelope.name)
     payload = RuntimeLogEventPayload.from_mapping(envelope.payload)
     if required_kind == "audit" and payload.message is None:
         raise ValueError("audit envelope requires a message")
@@ -822,10 +824,16 @@ def _require_log_identity(
     component: object,
     event: object,
 ) -> None:
+    _require_log_component(component)
+    try:
+        require_persisted_event_name(event)
+    except ValueError as exc:
+        raise ValueError("log event name is invalid") from exc
+
+
+def _require_log_component(component: object) -> None:
     if component not in LOG_COMPONENTS:
         raise ValueError("log component is invalid")
-    if not isinstance(event, str) or _AUDIT_EVENT_NAME.fullmatch(event) is None:
-        raise ValueError("log event name is invalid")
 
 
 def read_log_events(

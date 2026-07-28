@@ -380,7 +380,14 @@ def test_log_observers_are_not_inherited_by_new_threads(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "event",
-    ("", "TurnStarted", "turn-started", "turn..started", "1turn"),
+    (
+        "",
+        "TurnStarted",
+        "turn-started",
+        "turn.started",
+        "turn..started",
+        "1turn",
+    ),
 )
 def test_new_log_writes_reject_invalid_event_names(
     tmp_path: Path,

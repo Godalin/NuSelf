@@ -12,6 +12,7 @@ from nuself.runtime.definitions import (
     DefinitionRegistry,
     UnknownDefinitionError,
 )
+from nuself.runtime.identities import require_audit_event_name
 from nuself.runtime.observability import write_observed_log_event
 
 DaemonLifecycleAuditEvent = Literal[
@@ -63,6 +64,7 @@ class DaemonLifecycleAuditDefinition:
     metadata_validator: MetadataValidator = _validate_no_metadata
 
     def __post_init__(self) -> None:
+        require_audit_event_name(self.event)
         if not self.message:
             raise ValueError("lifecycle audit message must not be empty")
         if self.error_policy not in {"forbidden", "required"}:

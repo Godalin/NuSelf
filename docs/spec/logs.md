@@ -289,6 +289,11 @@ Display name mapping: `persona` → `selves`.
 - Direct audit event names are stable lowercase slugs. Each segment starts
   with a letter and contains lowercase letters, digits, or underscores;
   registered runtime-event projections may join such segments with dots.
+- A direct audit slug is one underscore-capable segment and therefore never
+  contains a dot. A runtime-event projection contains at least two
+  dot-separated segments. Runtime producers use one segment under the same
+  grammar. These lexical rules have one shared implementation and are enforced
+  for new records and definitions.
 - Ephemeral runtime event names and producer ownership remain governed by
   `EventDefinitionRegistry` before publication. Direct append-only domain
   audit slugs are not forced into one process-global registry: their semantics
@@ -300,6 +305,10 @@ Display name mapping: `persona` → `selves`.
 - Directory creation before open.
 - New writes project a version-1 `RuntimeEnvelope`, including its stable
   `message_id` as `event_id`.
+- The projected `schema_version` identifies the shared envelope/record wire
+  shape, not the domain meaning of `event`. Breaking audit semantics use a new
+  stable event slug; breaking runtime-event semantics use a new registered
+  runtime event name. Existing persisted names are not repurposed or rewritten.
 - A direct audit envelope carries the complete `RuntimeLogEventPayload`; its
   message, level, node, duration, status, error, and metadata survive envelope
   record round trips. An empty audit envelope is not a valid direct write.

@@ -50,6 +50,20 @@ def test_lifecycle_audit_registry_is_closed_and_immutable() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "event",
+    ("", "StartRequested", "start-requested", "start.requested", "1started"),
+)
+def test_lifecycle_audit_definition_rejects_invalid_event_slug(
+    event: str,
+) -> None:
+    with pytest.raises(ValueError, match="audit event name"):
+        audit.DaemonLifecycleAuditDefinition(
+            event=cast(audit.DaemonLifecycleAuditEvent, event),
+            message="invalid lifecycle event",
+        )
+
+
 def test_lifecycle_audit_rejects_unknown_event_before_sink(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
