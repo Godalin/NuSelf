@@ -168,18 +168,21 @@ class ReasoningThread:
             topic=_expect_str(data, "topic"),
             status=_expect_reason_status(data, "status"),
             working_summary=_expect_str(data, "working_summary"),
-            evidence_refs=_optional_str_list(data, "evidence_refs"),
+            evidence_refs=_expect_str_list(data, "evidence_refs"),
             priority=_expect_reason_priority(data, "priority"),
-            last_advanced_at=_optional_str(data, "last_advanced_at"),
-            next_review_after=_optional_str(data, "next_review_after"),
-            skip_next_advance_until=_optional_str(data, "skip_next_advance_until"),
+            last_advanced_at=_expect_optional_str(data, "last_advanced_at"),
+            next_review_after=_expect_optional_str(data, "next_review_after"),
+            skip_next_advance_until=_expect_optional_str(
+                data,
+                "skip_next_advance_until",
+            ),
             created_at=_expect_str(data, "created_at"),
             updated_at=_expect_str(data, "updated_at"),
-            active_items_data=_optional_tracked_items(data, "active_items_data"),
-            pending_items_data=_optional_tracked_items(data, "pending_items_data"),
-            next_steps_data=_optional_tracked_items(data, "next_steps_data"),
-            mandates_data=_optional_mandates(data, "mandates_data"),
-            reasoning_prompt=_optional_str_with_default(data, "reasoning_prompt"),
+            active_items_data=_expect_tracked_items(data, "active_items_data"),
+            pending_items_data=_expect_tracked_items(data, "pending_items_data"),
+            next_steps_data=_expect_tracked_items(data, "next_steps_data"),
+            mandates_data=_expect_mandates(data, "mandates_data"),
+            reasoning_prompt=_expect_str(data, "reasoning_prompt"),
         )
 
     def with_status(self, status: ReasonStatus) -> ReasoningThread:
@@ -298,15 +301,18 @@ class ReasoningStep:
             kind=_expect_step_kind(data, "kind"),
             summary=_expect_str(data, "summary"),
             delta=_expect_str(data, "delta"),
-            evidence_refs=_optional_str_list(data, "evidence_refs"),
-            output=_optional_str_with_default(data, "output"),
-            tool_logs=_optional_tool_logs(data, "tool_logs"),
-            confidence=_optional_float(data, "confidence"),
+            evidence_refs=_expect_str_list(data, "evidence_refs"),
+            output=_expect_str(data, "output"),
+            tool_logs=_expect_tool_logs(data, "tool_logs"),
+            confidence=_expect_optional_float(data, "confidence"),
             created_at=_expect_str(data, "created_at"),
-            new_findings_data=_optional_tracked_items(data, "new_findings_data"),
-            new_pending_data=_optional_tracked_items(data, "new_pending_data"),
-            retired_findings_data=_optional_tracked_items(data, "retired_findings_data"),
-            next_steps_data=_optional_tracked_items(data, "next_steps_data"),
+            new_findings_data=_expect_tracked_items(data, "new_findings_data"),
+            new_pending_data=_expect_tracked_items(data, "new_pending_data"),
+            retired_findings_data=_expect_tracked_items(
+                data,
+                "retired_findings_data",
+            ),
+            next_steps_data=_expect_tracked_items(data, "next_steps_data"),
             terminal_status=_expect_terminal_status(data, "terminal_status"),
             terminal_reason=_expect_str(data, "terminal_reason"),
         )
@@ -326,31 +332,33 @@ def partition_steps(items: ReasonStepList, size: int) -> list[ReasonStepList]:
     return result
 
 
-def _optional_tracked_items(
+def _expect_tracked_items(
     data: dict[str, object],
     field_name: str,
 ) -> tuple[Mapping[str, object], ...]:
     value = data.get(field_name)
-    if value is None:
-        return ()
     if not isinstance(value, list):
-        return ()
+        raise ValueError(f"field '{field_name}' must be a list")
     raw = cast(list[object], value)
     result: list[dict[str, object]] = []
     for item in raw:
-        if isinstance(item, dict):
-            result.append(cast(dict[str, object], item))
+        if not isinstance(item, dict):
+            raise ValueError(f"field '{field_name}' must contain objects")
+        result.append(cast(dict[str, object], item))
     return tuple(result)
 
 
-def _optional_mandates(data: dict[str, object], field_name: str) -> tuple[str, ...]:
+def _expect_mandates(
+    data: dict[str, object],
+    field_name: str,
+) -> tuple[str, ...]:
     value = data.get(field_name)
-    if value is None:
-        return ()
     if not isinstance(value, list):
-        return ()
+        raise ValueError(f"field '{field_name}' must be a list of strings")
     raw = cast(list[object], value)
-    return tuple(str(item) for item in raw if isinstance(item, str))
+    if not all(isinstance(item, str) for item in raw):
+        raise ValueError(f"field '{field_name}' must be a list of strings")
+    return tuple(cast(list[str], raw))
 
 
 def _expect_str(data: dict[str, object], field_name: str) -> str:
@@ -360,8 +368,13 @@ def _expect_str(data: dict[str, object], field_name: str) -> str:
     return value
 
 
-def _optional_str(data: dict[str, object], field_name: str) -> str | None:
-    value = data.get(field_name)
+def _expect_optional_str(
+    data: dict[str, object],
+    field_name: str,
+) -> str | None:
+    if field_name not in data:
+        raise ValueError(f"field '{field_name}' must be a string or null")
+    value = data[field_name]
     if value is None:
         return None
     if not isinstance(value, str):
@@ -369,10 +382,11 @@ def _optional_str(data: dict[str, object], field_name: str) -> str | None:
     return value
 
 
-def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
+def _expect_str_list(
+    data: dict[str, object],
+    field_name: str,
+) -> list[str]:
     value = data.get(field_name)
-    if value is None:
-        return []
     if not isinstance(value, list):
         raise ValueError(f"field '{field_name}' must be a list of strings")
     raw = cast(list[object], value)
@@ -381,20 +395,11 @@ def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:
     return list(cast(list[str], raw))
 
 
-def _optional_str_with_default(data: dict[str, object], field_name: str, default: str = "") -> str:
-    value = data.get(field_name)
-    if isinstance(value, str):
-        return value
-    return default
-
-
-def _optional_tool_logs(
+def _expect_tool_logs(
     data: dict[str, object],
     field_name: str,
 ) -> tuple[Mapping[str, object], ...]:
     value = data.get(field_name)
-    if value is None:
-        return ()
     if not isinstance(value, list):
         raise ValueError(f"field '{field_name}' must be a list")
     result: list[dict[str, object]] = []
@@ -435,10 +440,17 @@ def _freeze_mapping_sequence(
     return cast(tuple[Mapping[str, object], ...], frozen_items)
 
 
-def _optional_float(data: dict[str, object], field_name: str) -> float | None:
-    value = data.get(field_name)
+def _expect_optional_float(
+    data: dict[str, object],
+    field_name: str,
+) -> float | None:
+    if field_name not in data:
+        raise ValueError(f"field '{field_name}' must be a number or null")
+    value = data[field_name]
     if value is None:
         return None
+    if isinstance(value, bool):
+        raise ValueError(f"field '{field_name}' must be a number or null")
     if isinstance(value, int | float):
         return float(value)
     raise ValueError(f"field '{field_name}' must be a number or null")

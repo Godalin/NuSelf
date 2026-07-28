@@ -127,6 +127,48 @@ def test_thread_from_wire_rejects_invalid_timestamps(
         ReasoningThread.from_wire(wire)
 
 
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "evidence_refs",
+        "last_advanced_at",
+        "next_review_after",
+        "skip_next_advance_until",
+        "active_items_data",
+        "pending_items_data",
+        "next_steps_data",
+        "mandates_data",
+        "reasoning_prompt",
+    ],
+)
+def test_thread_wire_requires_fixed_schema_fields(field_name: str) -> None:
+    wire = ReasoningThread(topic="Strict wire schema").to_wire()
+    del wire[field_name]
+
+    with pytest.raises(ValueError, match=f"field '{field_name}'"):
+        ReasoningThread.from_wire(wire)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        ("active_items_data", ["not-an-object"]),
+        ("pending_items_data", {"label": "wrong-container"}),
+        ("next_steps_data", [1]),
+        ("mandates_data", ["valid", 2]),
+    ],
+)
+def test_thread_wire_rejects_malformed_collections(
+    field_name: str,
+    invalid_value: object,
+) -> None:
+    wire = ReasoningThread(topic="Strict wire schema").to_wire()
+    wire[field_name] = invalid_value
+
+    with pytest.raises(ValueError, match=f"field '{field_name}'"):
+        ReasoningThread.from_wire(wire)
+
+
 def test_thread_local_construction_rejects_naive_cooldown() -> None:
     with pytest.raises(ValueError, match="include a timezone"):
         ReasoningThread(
@@ -251,6 +293,55 @@ def test_step_wire_requires_explicit_terminal_decision(
     del wire[field_name]
 
     with pytest.raises(ValueError, match=f"field '{field_name}' must be"):
+        ReasoningStep.from_wire(wire)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "evidence_refs",
+        "output",
+        "tool_logs",
+        "confidence",
+        "new_findings_data",
+        "new_pending_data",
+        "retired_findings_data",
+        "next_steps_data",
+    ],
+)
+def test_step_wire_requires_fixed_schema_fields(field_name: str) -> None:
+    wire = ReasoningStep(
+        thread_id="reason-abc",
+        summary="Strict wire schema",
+    ).to_wire()
+    del wire[field_name]
+
+    with pytest.raises(ValueError, match=f"field '{field_name}'"):
+        ReasoningStep.from_wire(wire)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        ("tool_logs", ["not-an-object"]),
+        ("new_findings_data", [1]),
+        ("new_pending_data", {"label": "wrong-container"}),
+        ("retired_findings_data", [None]),
+        ("next_steps_data", ["not-an-object"]),
+        ("confidence", True),
+    ],
+)
+def test_step_wire_rejects_malformed_fixed_fields(
+    field_name: str,
+    invalid_value: object,
+) -> None:
+    wire = ReasoningStep(
+        thread_id="reason-abc",
+        summary="Strict wire schema",
+    ).to_wire()
+    wire[field_name] = invalid_value
+
+    with pytest.raises(ValueError, match=f"field '{field_name}'"):
         ReasoningStep.from_wire(wire)
 
 

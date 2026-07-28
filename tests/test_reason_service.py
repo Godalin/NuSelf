@@ -561,18 +561,18 @@ def test_delete_failure_does_not_emit_success_audit(
 
 
 def test_reason_step_rejects_non_object_tool_logs() -> None:
+    wire = ReasoningStep(
+        id="step-test",
+        thread_id="reason-test",
+        kind="progress",
+        summary="Advanced",
+        delta="Moved",
+        created_at="2026-05-27T00:00:00+00:00",
+    ).to_wire()
+    wire["tool_logs"] = ["not an object"]
+
     try:
-        ReasoningStep.from_wire(
-            {
-                "id": "step-test",
-                "thread_id": "reason-test",
-                "kind": "progress",
-                "summary": "Advanced",
-                "delta": "Moved",
-                "tool_logs": ["not an object"],
-                "created_at": "2026-05-27T00:00:00+00:00",
-            }
-        )
+        ReasoningStep.from_wire(wire)
         assert False, "expected ValueError"
     except ValueError as exc:
         assert "tool_logs" in str(exc)

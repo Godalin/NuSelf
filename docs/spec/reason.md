@@ -149,6 +149,15 @@ Persisted step records must include both `terminal_status` and
 `terminal_status="continue"` and `terminal_reason=""`; missing fields are
 invalid state, not an implicit continue decision.
 
+All fields emitted by `ReasoningThread.to_wire()` and
+`ReasoningStep.to_wire()` are required record keys. Semantically nullable
+fields (`last_advanced_at`, `next_review_after`,
+`skip_next_advance_until`, and step `confidence`) may contain JSON `null`, but
+the keys may not disappear. Collection fields must be lists of the documented
+member type. Missing keys, wrong container types, and malformed members are
+corrupt state; decoders must not replace them with empty collections, empty
+strings, or default values.
+
 ### State Transitions
 
 | From                           | Action    | To         |
