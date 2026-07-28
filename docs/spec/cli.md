@@ -206,9 +206,15 @@ All human-readable logs use one metadata style: `[component] event key=value ...
 
 When a log records one subsystem calling another subsystem's service/tool boundary, it renders two leading tags: `[caller] [service] event key=value ...`. For example, chat calling a memory tool renders `[chat] [memory] service_tool_called ...`. The second tag comes from `metadata.service_component`; it is not repeated as `service_component=...` in the key/value header.
 
-`persona_summary` activity is rendered as a multi-line block. The header follows the same `[component] event key=value ...` rule and names the event once, then each persona contribution is printed on its own indented line in contribution order, followed by the synthesizer line if present. It must not collapse multiple persona thoughts into one pipe-delimited line. Because self activation `status` and host `escalation_reason` values can be long natural-language text, `[selves]` logs render these values as indented body text instead of placing them in the header. Indented lines under `[selves]` logs are prose/body lines, not additional `key=value` metadata. If the log message already contains the escalation reason, the renderer must not repeat it as a separate `escalation_reason=...` field.
-
-Competitive persona discussion logs, including chat-triggered and reflection-triggered discussions, are `persona` component logs and render with the display tag `[selves]`. Logs with `discussion_trace` metadata render the header as one compact log line and then print the trace underneath using the discussion trace block format. The trace block is indented relative to the log header so each self contribution reads like a chat message instead of a single serialized metadata list. Chat-triggered competitive discussions also emit `persona_discussion_step` logs as each trace entry is produced, then emit a final `persona_discussion` summary without re-dumping the full trace.
+Persona audit activity renders with the display tag `[selves]` and the shared
+compact `key=value` header. These audit records are deliberately content-free:
+`persona_summary` carries only contribution count and synthesis presence;
+`host_discussion_decision` carries only the escalation boolean; and
+`persona_discussion_step` carries only its ordinal. Persona contributions,
+synthesis, escalation reasons, and discussion utterances remain in the
+authoritative persona result/trace rather than being copied into Chat logs or
+transcript audit blocks. The final `persona_discussion` record contains stable
+ids, outcome booleans, and counts only.
 
 The live-chat send thread is a continuation of the interactive turn, not an
 independent worker. Its target captures the creating RuntimeContext before the

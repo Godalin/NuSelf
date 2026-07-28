@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from nuself.agent.chat import ThreadStore
+from nuself.agent.chat.audit import report_chat_failure
 from nuself.cli.daemon_lifecycle import (
     format_start_failure,
     format_stop_failure,
@@ -40,9 +41,6 @@ from nuself.reason.service import ReasonService
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     diagnostic_exception_message,
-)
-from nuself.runtime.observability import (
-    report_observed_failure,
 )
 from nuself.storage import get_default_backend
 from nuself.trace.repository import TraceNotFound
@@ -474,15 +472,11 @@ def handle_interactive_history_command(project_root: Path | None, thread_id: str
     try:
         state = ThreadStore(project_root).load(thread_id)
     except Exception as exc:
-        report_observed_failure(
+        report_chat_failure(
             exc,
-            component="chat",
             event="interactive_history_load_failed",
-            message="Interactive thread history could not be loaded",
             project_root=project_root,
             metadata={"thread_id": thread_id},
-            level="error",
-            status="error",
         )
         return (
             f"Unable to load thread history for '{thread_id}': "

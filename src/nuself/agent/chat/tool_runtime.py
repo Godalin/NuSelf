@@ -8,6 +8,7 @@ from typing import cast
 
 from langchain_core.tools import BaseTool, StructuredTool
 
+from nuself.agent.chat.audit import report_chat_failure
 from nuself.agent.skills import (
     AgentSkill,
     load_agent_skills,
@@ -24,7 +25,6 @@ from nuself.memory.query import MemoryQueryService
 from nuself.reason.output import SectionPlanner
 from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.jobs import JobSink
-from nuself.runtime.observability import report_observed_failure
 
 
 class ConversationToolRuntime:
@@ -97,13 +97,10 @@ class ConversationToolRuntime:
     def report_log_failure(self, exc: Exception) -> None:
         """Report a failed tool-log projection without changing tool execution."""
 
-        report_observed_failure(
+        report_chat_failure(
             exc,
-            component="chat",
             event="tool_log_projection_failed",
-            message="Tool outcome could not be projected to structured logs",
             project_root=self._project_root,
-            metadata={"error_type": type(exc).__name__},
         )
 
     def _build_skill_loader(self) -> BaseTool:

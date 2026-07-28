@@ -226,7 +226,7 @@ def test_pre_tool_implementation_errors_propagate_without_retry_or_fallback(
         fail_endpoint,
     )
     monkeypatch.setattr(
-        "nuself.agent.chat.response.report_observed_failure",
+        "nuself.agent.chat.response.report_chat_failure",
         capture_diagnostic,
     )
     endpoint = LangChainLLMEndpoint(
@@ -349,7 +349,7 @@ def test_tool_outcome_suppresses_retry_before_failure_policy(
         property(has_tool_outcomes),
     )
     monkeypatch.setattr(
-        "nuself.agent.chat.response.report_observed_failure",
+        "nuself.agent.chat.response.report_chat_failure",
         report_failure,
     )
 
@@ -479,7 +479,7 @@ def test_finalize_log_failure_cannot_replace_accepted_response(
     with pytest.warns(
         RuntimeWarning,
         match=(
-            "chat/final_response_log_failed: audit store unavailable; "
+            "chat/chat_audit_write_failed: audit store unavailable; "
             "structured logging failed: audit store unavailable"
         ),
     ):

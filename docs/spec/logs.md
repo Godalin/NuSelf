@@ -162,6 +162,36 @@ response. Persisting the last successful endpoint is also a derived preference:
 its failure is reported as `llm_endpoint_state_write_failed` without discarding
 the response.
 
+Direct Chat diagnostics are owned by a sealed Chat audit registry. LLM retry
+records may retain a non-negative configured endpoint index and model name,
+but never the endpoint base URL. Client retry records use the standard
+`request_id` field and never duplicate the previous exception text in
+metadata.
+
+| Event family | Fixed status | Exact metadata |
+|---|---|---|
+| `daemon_chat_completed`, `one_shot_chat_completed` | `ok` | none |
+| `daemon_chat_failed`, `one_shot_chat_failed` | `error` | required error, no metadata |
+| `final_response_completed` | `completed` | optional normalized `epistemic_status` |
+| `llm_endpoint_retry` | `retry` | `endpoint_index`, `model` |
+| `llm_retry_suppressed_after_tool_call` | `fallback` | `endpoint_index`, `model` |
+| `llm_endpoints_exhausted` | `fallback` | required error, no metadata |
+| `llm_endpoint_state_write_failed` | `degraded` | required error, `endpoint_index` |
+| `tool_log_projection_failed` | `degraded` | required error, no metadata |
+| `interactive_history_load_failed` | `error` | required error, `thread_id` |
+| `interactive_history_write_failed` | `degraded` | required error, no metadata |
+| `completion_load_failed` | `degraded` | required error, completion kind |
+| `interactive_prompt_failed` | `degraded` | required error, fixed fallback kind |
+| `turn_retry` | `retry` | attempt bounds, failure phase, possible-completion flag |
+| `activity_transport_degraded` | `degraded` | stage, error kind, optional connection decision fields and subscription-presence flag |
+| `interactive_send_failed` | `error` | required error, no metadata |
+| `interactive_cleanup_failed` | `error` | required error, ordered step names and primary-failure flag |
+
+Messages are fixed operational descriptions. User messages, assistant
+responses, tool arguments/results, endpoint URLs, previous exception text,
+subscription ids, and duplicated request ids are forbidden in these metadata
+schemas.
+
 ## Chat Turn Logs
 
 Every chat turn publishes registered lifecycle events from the chat component;

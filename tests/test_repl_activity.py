@@ -230,8 +230,8 @@ def test_live_send_falls_back_when_activity_open_fails(
     assert degraded.metadata == {
         "stage": "open",
         "error_kind": "connection",
+        "has_subscription": False,
         "failure_phase": "connect",
-        "request_id": "activity-open-1",
         "retryable": True,
         "request_may_have_completed": False,
     }
@@ -331,9 +331,8 @@ def test_live_send_observes_poll_failure_and_uses_file_fallback(
     assert degraded.metadata == {
         "stage": "poll",
         "error_kind": "connection",
-        "subscription_id": "sub-poll",
+        "has_subscription": True,
         "failure_phase": "receive",
-        "request_id": "activity-poll-1",
         "retryable": True,
         "request_may_have_completed": True,
     }
@@ -412,7 +411,7 @@ def test_live_send_recovers_file_events_when_final_drain_fails(
     assert degraded.metadata == {
         "stage": "drain",
         "error_kind": "application",
-        "subscription_id": "sub-drain",
+        "has_subscription": True,
     }
 
 
@@ -476,9 +475,8 @@ def test_live_send_observes_close_failure_without_changing_result(
     assert degraded.metadata == {
         "stage": "close",
         "error_kind": "connection",
-        "subscription_id": "sub-close",
+        "has_subscription": True,
         "failure_phase": "send",
-        "request_id": "activity-close-1",
         "retryable": True,
         "request_may_have_completed": True,
     }
@@ -587,7 +585,7 @@ def test_live_send_reports_callback_exception_without_escaping(
     assert failure.level == "error"
     assert failure.status == "error"
     assert failure.error == "send exploded"
-    assert failure.metadata == {"exception_type": "ValueError"}
+    assert failure.metadata == {}
 
 
 def test_send_failure_diagnostic_storage_loss_keeps_repl_failure(

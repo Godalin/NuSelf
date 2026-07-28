@@ -7,6 +7,10 @@ from collections.abc import Callable
 from pathlib import Path
 
 from nuself.agent.chat import ConversationGraphRuntime
+from nuself.agent.chat.audit import (
+    report_chat_failure,
+    write_chat_audit,
+)
 from nuself.cli.commands.output import print_ansi
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.config import ConfigSystem
@@ -87,25 +91,16 @@ def send_daemon_chat_interactive(
             )
         except client.DaemonApplicationError as exc:
             error = diagnostic_exception_message(exc)
-            write_observed_log_event(
-                "chat",
-                "daemon_chat_failed",
-                "daemon chat request failed",
+            report_chat_failure(
+                exc,
+                event="daemon_chat_failed",
                 project_root=project_root,
-                level="error",
-                status="error",
-                error=error,
-                failure_message="Chat client audit projection failed",
             )
             return InteractiveChatResult(code=1, error=error)
         with runtime_context(thread_id=response.thread_id):
-            write_observed_log_event(
-                "chat",
+            write_chat_audit(
                 "daemon_chat_completed",
-                "daemon chat request completed",
                 project_root=project_root,
-                status="ok",
-                failure_message="Chat client audit projection failed",
             )
         return InteractiveChatResult(
             code=0,
@@ -162,27 +157,18 @@ def send_one_shot_chat_interactive(
                 thread_id,
                 turn_id=turn_id,
             )
-            write_observed_log_event(
-                "chat",
+            write_chat_audit(
                 "one_shot_chat_completed",
-                "one-shot chat turn completed",
                 project_root=project_root,
-                status="ok",
-                failure_message="Chat client audit projection failed",
             )
             run_memory_curator(project_root)
             return InteractiveChatResult(code=0, reply=reply)
         except RuntimeError as exc:
             error = diagnostic_exception_message(exc)
-            write_observed_log_event(
-                "chat",
-                "one_shot_chat_failed",
-                "one-shot chat turn failed",
+            report_chat_failure(
+                exc,
+                event="one_shot_chat_failed",
                 project_root=project_root,
-                level="error",
-                status="error",
-                error=error,
-                failure_message="Chat client audit projection failed",
             )
             print(error, file=sys.stderr)
             return InteractiveChatResult(code=1)

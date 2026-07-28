@@ -10,8 +10,8 @@ from pathlib import Path
 from nuself.cli.repl.input import InteractiveInput
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
+from nuself.agent.chat.audit import report_chat_failure
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
-from nuself.runtime.observability import report_observed_failure
 
 SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
 HandleCommand = Callable[
@@ -79,11 +79,9 @@ def _finish_interactive_lifecycle(
             cleanup_failures,
             primary_error=primary_error,
         )
-        report_observed_failure(
+        report_chat_failure(
             lifecycle_error,
-            component="chat",
             event="interactive_cleanup_failed",
-            message="Interactive session cleanup failed",
             project_root=project_root,
             metadata={
                 "steps": [
@@ -91,8 +89,6 @@ def _finish_interactive_lifecycle(
                 ],
                 "primary_failed": primary_error is not None,
             },
-            level="error",
-            status="error",
         )
         if primary_error is not None:
             raise lifecycle_error from primary_error

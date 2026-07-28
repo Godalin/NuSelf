@@ -146,7 +146,7 @@ def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(
     def drop_audit(*args: object, **kwargs: object) -> None:
         del args, kwargs
 
-    monkeypatch.setattr(turns, "write_observed_log_event", drop_audit)
+    monkeypatch.setattr(turns, "write_chat_audit", drop_audit)
 
     result = send_interactive_chat_turn(
         send,

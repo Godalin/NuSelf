@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Give Notification delivery one closed, privacy-minimal audit contract owned by
-the Notification subsystem.
+Give Chat and its REPL/client surfaces closed, privacy-minimal audit contracts
+without duplicating the existing runtime-event and service-tool registries.
 
 ## Active Branch
 
@@ -14,62 +14,70 @@ the Notification subsystem.
 
 ## Ordered Work
 
-1. Inventory log-only, email, macOS, config-decode, and delivery-loop audit
-   producers.
-2. Define one Notification-owned event taxonomy and privacy boundary.
-3. Register exact level/status/error/metadata contracts for all owned events.
-4. Route adapters and configuration failures through Notification-owned
-   projection adapters.
-5. Separate authoritative outbox content from delivery audit records.
-6. Verify titles, bodies, deep links, idempotency keys, recipients, and SMTP
-   configuration never enter Notification audit records.
+1. Inventory chat supervisor, client, LLM failover, tool-log, REPL transport,
+   retry, input, completion, and cleanup audit producers.
+2. Separate Chat-owned diagnostics from registered turn lifecycle events,
+   shared service-tool logs, generic corrupt-record diagnostics, and
+   cross-domain Memory/trace effects.
+3. Define closed event families for Chat runtime, client, and interactive
+   surfaces with exact privacy-minimal schemas.
+4. Route direct producers through Chat-owned adapters without weakening
+   best-effort or authoritative-effect semantics.
+5. Remove copied previous errors, endpoint addresses, tool payloads, message
+   content, and other redundant/private diagnostic metadata where the owning
+   record already exists.
+6. Preserve turn/request correlation through runtime context fields rather
+   than duplicating identifiers into arbitrary metadata.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
 - No process-global registry containing every domain's audit events.
 - No migration or rewriting of historical JSONL records.
-- No change to outbox state transitions, retry count, adapter ordering, or
-  delivery success semantics.
-- No removal of notification content from authoritative outbox entries or
-  external email/macOS delivery payloads; only audit projection is minimized.
+- No redesign of registered `turn.started`, `turn.reused`, `turn.completed`,
+  or `turn.failed` runtime envelopes and their existing audit projection.
+- No replacement of the shared validated `service_tool_called` contract.
+- No change to retry/failover decisions, thread persistence, final answers,
+  or REPL liveness behavior.
+- Memory curator and chat trace failures keep their owning component and will
+  be reviewed with those domain contracts rather than relabeled as Chat.
 - Generic corrupt-record diagnostics remain owned by observability.
 - Generic audit-projection failure events remain owned by observability.
 
 ## Completion Evidence
 
-- The inventory covers log-only delivery, email/macOS dry runs, unavailable
-  platform delivery, missing/invalid email configuration, SMTP failure, and
-  macOS subprocess failure.
-- One sealed `notification.audit` registry owns all eight direct delivery
-  event identities and their exact level, status, error, and metadata
-  contracts.
-- Log-only, email, and macOS adapters now use Notification-owned adapters
-  instead of constructing raw `outbox` log records.
-- Delivery audits retain only an entry id plus zero-based attempt count, or the
-  fixed `email.toml` record name for configuration decoding.
-- Notification title/body, deep link, idempotency key, runtime context,
-  recipient, and SMTP data remain in their authoritative/private delivery
-  locations and are absent from audit messages and metadata.
-- Log-only, explicit dry-run, and macOS-unavailable writes remain
-  authoritative delivery effects: sink failure propagates instead of marking
-  an undelivered entry sent.
-- Caught adapter/configuration failures remain best-effort diagnostics and
-  cannot replace the adapter's `False` result or the outbox failed transition.
-- Generic malformed outbox-record diagnostics remain owned by shared
-  observability and are not duplicated into the delivery registry.
-- Direct tests cover all eight canonical schemas, unknown metadata, unknown
-  identities, pre-sink rejection, projection privacy, and delivery-context
-  preservation.
-- Focused Notification/outbox suites: `77 passed`.
-- Full test suite: `1919 passed`.
+- The inventory separates eighteen direct Chat/client/REPL diagnostics from
+  registered `turn.*` runtime events, shared `service_tool_called` records,
+  generic corrupt-record diagnostics, and Memory-owned trace/curator effects.
+- One sealed `agent.chat.audit` registry owns all eighteen direct event
+  identities and their exact level, status, error, and metadata contracts.
+- Chat supervisor finalization/failover, LLM endpoint preference persistence,
+  daemon/one-shot clients, tool-log failure reporting, and REPL history,
+  completion, input, activity, retry, send, and cleanup boundaries now use
+  Chat-owned adapters.
+- LLM retry records retain endpoint index and model but no endpoint base URL.
+- Transport retry records retain attempt bounds, failure phase, and
+  possible-completion state; request correlation uses the standard
+  `request_id` field and previous exception text is not duplicated.
+- Activity degradation records retain decision-relevant booleans and stage,
+  but no subscription id or duplicated request id. Send/tool-log failures no
+  longer duplicate exception class names outside the structured error.
+- Existing authoritative control flow is unchanged: audit failures cannot
+  alter a reply, endpoint order, fallback, retry decision, REPL liveness, or
+  cleanup aggregation.
+- CLI Persona activity documentation was synchronized with the previously
+  sealed content-free Persona audit contract.
+- Direct tests cover all eighteen canonical schemas, unknown metadata,
+  unknown identities, pre-sink rejection, and endpoint URL exclusion.
+- Focused Chat/REPL suites: `195 passed`.
+- Full test suite: `1958 passed`.
 - Pyright 1.1.409: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is ready to publish through implementation commit `e270dc2`.
+Pending this batch's implementation commit and push.
 
 ## Next Review Batch
 
-Review Chat/REPL audit schema ownership.
+Select after this batch is verified and published.

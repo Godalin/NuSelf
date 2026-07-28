@@ -15,9 +15,9 @@ from nuself.cli.repl.activity import (
 )
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
+from nuself.agent.chat.audit import write_chat_audit
 from nuself.logs import InteractiveLogCursor, LogEvent
 from nuself.runtime.context import RuntimeContext, use_runtime_context
-from nuself.runtime.observability import write_observed_log_event
 from nuself.tui.render import TerminalTheme
 
 SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
@@ -68,23 +68,20 @@ def send_interactive_chat_turn(
             )
         ):
             if attempt > 1:
-                write_observed_log_event(
-                    "chat",
+                write_chat_audit(
                     "turn_retry",
-                    "retrying chat turn after retryable transport failure",
                     project_root=project_root,
-                    status="retry",
+                    request_id=result.request_id,
                     metadata={
                         "attempt": attempt,
                         "max_attempts": max_attempts,
-                        "previous_error": result.error,
-                        "failure_phase": result.failure_phase,
-                        "request_id": result.request_id,
+                        "failure_phase": (
+                            result.failure_phase or "unknown"
+                        ),
                         "request_may_have_completed": (
                             result.request_may_have_completed
                         ),
                     },
-                    failure_message="Chat retry audit projection failed",
                 )
                 print()
                 print(

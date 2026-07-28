@@ -19,6 +19,10 @@ from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
+from nuself.agent.chat.audit import (
+    report_chat_failure,
+    write_chat_audit,
+)
 from nuself.agent.failover import (
     invoke_agent_endpoint,
     is_recoverable_agent_failure,
@@ -35,10 +39,6 @@ from nuself.llm import (
     redacted_llm_diagnostic,
 )
 from nuself.runtime.diagnostics import safe_exception_message
-from nuself.runtime.observability import (
-    report_observed_failure,
-    write_observed_log_event,
-)
 
 class ConversationResponseService(Protocol):
     """Typed response capability consumed by the conversation graph."""
@@ -86,17 +86,11 @@ class ConversationResponseSynthesizer:
         state: ConversationTurnState,
         draft: ChatStructuredOutput,
     ) -> ChatStructuredOutput:
-        write_observed_log_event(
-            "chat",
+        write_chat_audit(
             "final_response_completed",
-            "final response accepted from chat supervisor",
             project_root=self._project_root,
             thread_id=state.thread_id,
-            status="completed",
             metadata={"epistemic_status": draft.epistemic_status},
-            failure_event="final_response_log_failed",
-            failure_message="Could not record accepted final response",
-            failure_metadata={"thread_id": state.thread_id},
         )
         return draft
 
@@ -159,17 +153,10 @@ class ConversationResponseSynthesizer:
                 return _local_response_output(prompt)
             if not is_recoverable_agent_failure(exc):
                 raise
-            report_observed_failure(
+            report_chat_failure(
                 redacted_llm_diagnostic(exc),
-                component="chat",
                 event="llm_endpoints_exhausted",
-                message=(
-                    "All LLM endpoints failed; using local response policy"
-                ),
                 project_root=self._project_root,
-                level="warning",
-                status="fallback",
-                metadata=None,
             )
         return _local_response_output(prompt)
 
@@ -178,17 +165,10 @@ class ConversationResponseSynthesizer:
         endpoint: LangChainLLMEndpoint,
         error: Exception,
     ) -> None:
-        report_observed_failure(
+        report_chat_failure(
             redacted_llm_diagnostic(error),
-            component="chat",
             event="llm_retry_suppressed_after_tool_call",
-            message=(
-                "LLM retry and endpoint failover suppressed after tool "
-                "execution"
-            ),
             project_root=self._project_root,
-            level="warning",
-            status="fallback",
             metadata=_endpoint_metadata(endpoint),
         )
 
@@ -197,14 +177,10 @@ class ConversationResponseSynthesizer:
         endpoint: LangChainLLMEndpoint,
         error: Exception,
     ) -> None:
-        report_observed_failure(
+        report_chat_failure(
             redacted_llm_diagnostic(error),
-            component="chat",
             event="llm_endpoint_retry",
-            message="LLM endpoint error; retrying",
             project_root=self._project_root,
-            level="warning",
-            status="retry",
             metadata=_endpoint_metadata(endpoint),
         )
 
@@ -259,7 +235,6 @@ def _endpoint_metadata(
 ) -> dict[str, object]:
     return {
         "endpoint_index": endpoint.index,
-        "base_url": endpoint.settings.base_url,
         "model": endpoint.settings.model,
     }
 

@@ -20,4 +20,4 @@ def test_tool_log_failure_reporter_writes_structured_degradation(
     assert event.event == "tool_log_projection_failed"
     assert event.status == "degraded"
     assert event.error == "audit unavailable"
-    assert event.metadata == {"error_type": "OSError"}
+    assert event.metadata == {}

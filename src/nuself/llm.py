@@ -19,7 +19,6 @@ from nuself.runtime.diagnostics import (
 )
 from nuself.runtime.observability import (
     report_corrupt_record,
-    run_observed_best_effort,
 )
 from nuself.storage import write_json_atomic
 
@@ -113,11 +112,11 @@ def _endpoint_langchain_chat_model(settings: LLMSettings) -> BaseChatModel:
 
 def record_llm_endpoint_success(project_root: Path | None, endpoint_index: int) -> None:
     """Remember the last successful configured LLM endpoint."""
-    run_observed_best_effort(
+    from nuself.agent.chat.audit import run_chat_observed
+
+    run_chat_observed(
         lambda: _save_llm_state(project_root, endpoint_index),
-        component="chat",
         event="llm_endpoint_state_write_failed",
-        message="Could not persist the last successful LLM endpoint",
         project_root=project_root,
         metadata={"endpoint_index": endpoint_index},
     )

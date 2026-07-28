@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Chat supervisor, LLM failover, daemon/one-shot client, and REPL diagnostics
+  now use one closed Chat-owned audit registry; retry records no longer persist
+  endpoint URLs, previous exception text, subscription IDs, duplicated request
+  IDs, or redundant exception-type metadata.
 - Notification delivery audits now use one closed Notification-owned schema;
   log-only, dry-run, unavailable, configuration, and delivery-failure records
   no longer duplicate notification content, deep links, idempotency keys,

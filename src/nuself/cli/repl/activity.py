@@ -10,11 +10,11 @@ from pathlib import Path
 from typing import Literal, Protocol
 
 from nuself.cli.commands.output import print_ansi
+from nuself.agent.chat.audit import report_chat_failure
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import client
 from nuself.logs import InteractiveLogCursor, LogEvent
 from nuself.runtime.context import bind_runtime_context
-from nuself.runtime.observability import report_observed_failure
 from nuself.tui.render import render_log_event
 
 SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
@@ -53,14 +53,13 @@ def _report_activity_transport_degraded(
 ) -> None:
     metadata: dict[str, object] = {
         "stage": stage,
+        "has_subscription": subscription_id is not None,
         "error_kind": (
             "connection"
             if isinstance(exc, client.DaemonConnectionError)
             else "application"
         ),
     }
-    if subscription_id is not None:
-        metadata["subscription_id"] = subscription_id
     if isinstance(exc, client.DaemonConnectionError):
         metadata.update(
             {
@@ -71,13 +70,9 @@ def _report_activity_transport_degraded(
                 ),
             }
         )
-        if exc.request_id is not None:
-            metadata["request_id"] = exc.request_id
-    report_observed_failure(
+    report_chat_failure(
         exc,
-        component="chat",
         event="activity_transport_degraded",
-        message=f"Daemon activity transport {stage} failed",
         project_root=project_root,
         metadata=metadata,
     )
@@ -202,17 +197,10 @@ def run_live_activity_send(
         )
     if error_box:
         error = error_box[0]
-        report_observed_failure(
+        report_chat_failure(
             error,
-            component="chat",
             event="interactive_send_failed",
-            message="Interactive chat send callback failed",
             project_root=project_root,
-            metadata={
-                "exception_type": error.__class__.__name__,
-            },
-            level="error",
-            status="error",
         )
         print(f"chat turn failed: {error}", file=sys.stderr)
         return InteractiveChatResult(code=1), captured_events, printed_logs

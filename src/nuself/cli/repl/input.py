@@ -13,6 +13,7 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.shortcuts import prompt as _prompt
 from prompt_toolkit.styles import Style
 
+from nuself.agent.chat.audit import run_chat_observed
 from nuself.agent.chat import ThreadStore
 from nuself.cli.repl.registry import (
     command_tokens,
@@ -36,11 +37,9 @@ class DedupFileHistory(FileHistory):
         self._project_root = project_root
 
     def append_string(self, string: str) -> None:
-        run_observed_best_effort(
+        run_chat_observed(
             lambda: self._append_string(string),
-            component="chat",
             event="interactive_history_write_failed",
-            message="Failed to persist interactive input history",
             project_root=self._project_root,
         )
 
@@ -143,11 +142,9 @@ class InteractiveCompleter(Completer):
 
     def _thread_completions(self, word: str) -> Iterable[Completion]:
         threads = (
-            run_observed_best_effort(
+            run_chat_observed(
                 lambda: ThreadStore(self._project_root).list(),
-                component="chat",
                 event="completion_load_failed",
-                message="Failed to load thread completions",
                 project_root=self._project_root,
                 metadata={"completion": "threads"},
             )
@@ -159,11 +156,9 @@ class InteractiveCompleter(Completer):
 
     def _archived_thread_completions(self, word: str) -> Iterable[Completion]:
         threads = (
-            run_observed_best_effort(
+            run_chat_observed(
                 lambda: ThreadStore(self._project_root).list_archived(),
-                component="chat",
                 event="completion_load_failed",
-                message="Failed to load archived thread completions",
                 project_root=self._project_root,
                 metadata={"completion": "archived_threads"},
             )
@@ -191,11 +186,9 @@ class InteractiveInput:
     def read(self) -> str:
         """Read styled input, falling back to built-in input."""
 
-        styled = run_observed_best_effort(
+        styled = run_chat_observed(
             self._read_styled,
-            component="chat",
             event="interactive_prompt_failed",
-            message="Styled interactive input failed; using built-in input",
             project_root=self._project_root,
             metadata={"fallback": "builtin_input"},
             errors=(AttributeError, OSError),

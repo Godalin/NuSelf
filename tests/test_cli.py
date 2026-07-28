@@ -862,11 +862,10 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
     assert retry_event.metadata == {
         "attempt": 2,
         "max_attempts": 2,
-        "previous_error": "daemon request failed: timed out",
         "failure_phase": "receive",
-        "request_id": "chat-request-1",
         "request_may_have_completed": True,
     }
+    assert retry_event.request_id == "chat-request-1"
 
 
 def test_interactive_daemon_application_error_does_not_retry(
