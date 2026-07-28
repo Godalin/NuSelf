@@ -101,6 +101,9 @@ Rules:
 command implementations live under the `nuself.commands` package so the
 top-level application namespace stays focused on subsystem APIs.
 
+- `cli_parser.py` owns top-level parser construction and accepts the small set
+  of interactive callbacks through `InteractiveHandlers`; it never imports
+  `nuself.cli`.
 - `commands/daemon.py` owns daemon lifecycle/health handlers and daemon status
   formatting.
 - `commands/threads.py` owns one-shot thread list/show/create/rename/branch/archive
