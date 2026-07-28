@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager, contextmanager
 from collections.abc import Generator
+import os
 from pathlib import Path
 import threading
 from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
@@ -110,8 +111,8 @@ class AtomicWriteCleanupError(RuntimeError):
         self,
         temporary_path: Path,
         *,
-        primary_error: Exception,
-        cleanup_error: Exception,
+        primary_error: BaseException,
+        cleanup_error: BaseException,
     ) -> None:
         super().__init__(
             "atomic write failed and temporary cleanup failed: "
@@ -120,6 +121,23 @@ class AtomicWriteCleanupError(RuntimeError):
         self.temporary_path = temporary_path
         self.primary_error = primary_error
         self.cleanup_error = cleanup_error
+
+
+class AtomicWriteDurabilityError(RuntimeError):
+    """A replacement is visible but its directory entry may not be durable."""
+
+    def __init__(
+        self,
+        destination_path: Path,
+        *,
+        sync_error: BaseException,
+    ) -> None:
+        super().__init__(
+            "atomic destination replaced but directory synchronization failed: "
+            f"{destination_path}"
+        )
+        self.destination_path = destination_path
+        self.sync_error = sync_error
 
 
 def _read_json_record(path: Path) -> dict[str, object]:
@@ -164,20 +182,45 @@ def write_text_atomic(path: Path, text: str) -> None:
         create_private_file(tmp_path)
         temporary_created = True
         tmp_path.write_text(text, encoding="utf-8")
+        _sync_file(tmp_path)
         tmp_path.replace(path)
-    except Exception as primary_error:
+        temporary_created = False
+        try:
+            _sync_directory(path.parent)
+        except BaseException as sync_error:
+            raise AtomicWriteDurabilityError(
+                path,
+                sync_error=sync_error,
+            ) from sync_error
+    except BaseException as primary_error:
         if temporary_created:
             try:
                 tmp_path.unlink()
             except FileNotFoundError:
                 pass
-            except Exception as cleanup_error:
+            except BaseException as cleanup_error:
                 raise AtomicWriteCleanupError(
                     tmp_path,
                     primary_error=primary_error,
                     cleanup_error=cleanup_error,
                 ) from primary_error
         raise
+
+
+def _sync_file(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _sync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def write_json_atomic(path: Path, payload: dict[str, object]) -> None:

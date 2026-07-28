@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Enforce owner-only permissions across NuSelf-owned persistence paths.
+Make shared atomic writes crash-durable with truthful failure semantics.
 
 ## Active Branch
 
@@ -13,47 +13,46 @@ Enforce owner-only permissions across NuSelf-owned persistence paths.
 
 ## Ordered Work
 
-1. Audit SQLite, append-only logs, internal snapshots, and external exports.
-2. Separate NuSelf-owned paths from explicitly user-selected destinations.
-3. Extract a dependency-neutral private filesystem permission boundary.
-4. Apply it to SQLite, logs, runtime directories, and internal append files.
-5. Preserve user-selected external destination permission semantics.
-6. Verify creation, existing-file hardening, sidecars, and external boundaries.
+1. Audit the write, replace, close, and storage-synchronization sequence.
+2. Define success only after file content and the parent directory are synced.
+3. Preserve the old destination when content sync or replacement fails.
+4. Distinguish post-replace directory-sync uncertainty from pre-replace failure.
+5. Preserve primary and cleanup failures, including process interruptions.
+6. Verify operation ordering, filesystem outcomes, and exception provenance.
 7. Run full quality gates, commit, and push.
 
 ## Out Of Scope
 
-- Content privacy and diagnostic redaction rules are unchanged.
-- Explicit user-selected exports keep their parent-directory and `umask`
-  semantics; NuSelf does not silently chmod arbitrary external locations.
-- Migrating or recursively rewriting historical files is not part of runtime
-  path creation; active files are hardened when opened by their owner.
+- Append-only logs retain their separately documented process-visible,
+  non-`fsync` contract in this batch.
+- SQLite durability remains governed by SQLite journal and synchronous modes.
+- No hidden retries are added to write, sync, replace, or cleanup operations.
 
 ## Completion Evidence
 
-- `nuself.private_fs` is the dependency-neutral owner of `0700` directory and
-  `0600` regular-file creation/hardening; non-regular file targets fail without
-  being chmodded.
-- Shared atomic files, file collections, runtime directories, workspaces,
-  thread archives and locks, reason artifacts, and internal append streams use
-  the same boundary.
-- SQLite main/workspace databases are secured before connection; active
-  WAL/SHM sidecars and private import/export snapshots remain `0600`.
-- Structured log directories, active files, rotated backups, and stable lock
-  sidecars are hardened before append and remain owner-only through rotation.
-- Explicit user-selected memory export destinations retain their existing
-  directory and file modes.
-- Focused persistence, CLI, daemon, transcript, and workspace suites:
-  `529 passed`.
-- Full test suite: `1656 passed`.
+- `write_text_atomic(...)` now synchronizes the complete `0600` temporary file
+  before replacement and synchronizes its `0700` parent directory afterward.
+- File-sync and replace failures leave the previous destination authoritative
+  and remove the owned temporary file.
+- Cleanup runs for ordinary exceptions and `BaseException` interruptions while
+  preserving dual-failure provenance through `AtomicWriteCleanupError`.
+- A post-replace directory-sync failure raises
+  `AtomicWriteDurabilityError`; the complete new destination remains visible,
+  its crash persistence is explicitly uncertain, and the consumed temporary
+  pathname is never unlinked.
+- Tests verify write/sync/replace/sync ordering, both filesystem outcomes,
+  exception causes, interruption cleanup, collision ownership, and existing
+  atomic-write behavior.
+- Focused storage and atomic-writer consumer suites: `221 passed`.
+- Full test suite: `1660 passed`.
 - `uvx pyright`: `0 errors, 0 warnings, 0 informations`.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through implementation commit `7139497`.
+`dev/v0.3.x` is published through `f13cc08`.
 
 ## Next Review Batch
 
-Review crash durability and directory-entry synchronization after all
-NuSelf-owned persistence paths have explicit permission ownership.
+Review append-only log durability and batching policy after atomic replacement
+has a truthful crash-durable success contract.

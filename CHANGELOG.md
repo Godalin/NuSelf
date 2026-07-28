@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Shared atomic text/JSON writes now sync temporary-file content before
+  replacement and the parent directory afterward, with an explicit
+  post-replacement durability error when crash persistence is uncertain.
 - Private text/JSON state and internal chat transcripts now use owner-only
   directories and files (`0700`/`0600`) at the shared atomic write boundary.
 - SQLite databases and sidecars, internal thought-pack snapshots, append-only

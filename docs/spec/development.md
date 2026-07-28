@@ -90,8 +90,10 @@ Do not tag unreleased feature commits directly. Tags mark release commits only.
 
 Runtime JSON and text state uses `nuself.storage.write_json_atomic()` or
 `write_text_atomic()`. The shared writer creates a unique sibling temporary
-file, atomically replaces the destination, and removes the temporary file on
-failure while preserving any prior destination.
+file, writes and `fsync`s its complete content, atomically replaces the
+destination, then `fsync`s the parent directory. Success means both file
+content and the replacement directory entry reached the operating system's
+stable-storage boundary.
 
 NuSelf-owned runtime state is private by default. Dependency-neutral helpers
 in `nuself.private_fs` create or harden owned directories to owner-only `0700`
@@ -100,14 +102,20 @@ snapshots, append-only logs, lock files, and other internal append streams all
 use that boundary. Sensitive content must never exist in a
 broader-permission file, even briefly.
 
-A write or replace failure remains the propagated exception when temporary
-cleanup succeeds or the temporary file is already absent. If cleanup itself
-fails, `AtomicWriteCleanupError` exposes both `primary_error` and
-`cleanup_error`, names the residual temporary path, and uses the primary
-persistence error as its explicit cause. Cleanup must not mask the
-authoritative failure, and the residual artifact is not silently reported as
-removed. The shared writer performs no hidden write, replace, or cleanup
-retry.
+A write, file-sync, or replace failure remains the propagated exception when
+temporary cleanup succeeds or the temporary file is already absent. Cleanup
+also runs for `BaseException` interruptions. If cleanup itself fails,
+`AtomicWriteCleanupError` exposes both `primary_error` and `cleanup_error`,
+names the residual temporary path, and uses the primary persistence error as
+its explicit cause. Cleanup must not mask the authoritative failure, and the
+residual artifact is not silently reported as removed.
+
+After replacement, the temporary pathname is no longer owned and must never be
+cleaned. If parent-directory synchronization then fails,
+`AtomicWriteDurabilityError` reports that the new destination is
+process-visible but its crash durability is uncertain; its `sync_error` is the
+explicit cause. The shared writer performs no hidden write, sync, replace, or
+cleanup retry.
 
 `write_json_atomic()` validates and serializes the complete payload as strict
 JSON before creating its temporary file. Non-string mapping keys, arbitrary

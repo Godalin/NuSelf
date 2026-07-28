@@ -324,6 +324,14 @@ If that cleanup also fails, `AtomicWriteCleanupError` retains the original
 primary error is its explicit cause. Because both persistence and cleanup are
 authoritative, neither failure is degraded into a warning or retried.
 
+The same pre-replace rule applies to file-content synchronization and
+`BaseException` interruption. After atomic replacement, a parent-directory
+sync failure instead raises `AtomicWriteDurabilityError`: the destination
+contains the new complete value in the running system, while survival across a
+crash remains uncertain. It exposes `destination_path` and `sync_error`, uses
+the sync failure as its explicit cause, and never attempts to unlink the
+already-consumed temporary pathname.
+
 SQLite transaction rollback dual failure uses the existing
 `SqliteTransactionCleanupError`. It exposes both `primary_error` and
 `rollback_error` as `BaseException` values and uses `primary_error` as its

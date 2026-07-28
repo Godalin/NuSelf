@@ -11,6 +11,7 @@ from nuself.logs import read_log_events
 from nuself.private_fs import ensure_private_file
 from nuself.storage import (
     AtomicWriteCleanupError,
+    AtomicWriteDurabilityError,
     FileStorageBackend,
     write_json_atomic,
     write_text_atomic,
@@ -60,6 +61,103 @@ def test_write_text_atomic_replaces_complete_destination(
     write_text_atomic(path, "new\n")
 
     assert path.read_text(encoding="utf-8") == "new\n"
+    assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_write_text_atomic_syncs_content_before_replace_and_directory_after(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "runtime" / "state.txt"
+    operations: list[str] = []
+    original_write_text = Path.write_text
+    original_replace = Path.replace
+
+    def record_write(
+        target: Path,
+        text: str,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> int:
+        operations.append("write")
+        return original_write_text(
+            target,
+            text,
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+        )
+
+    def record_file_sync(target: Path) -> None:
+        assert target.suffix == ".tmp"
+        operations.append("file_sync")
+
+    def record_replace(source: Path, target: Path) -> Path:
+        operations.append("replace")
+        return original_replace(source, target)
+
+    def record_directory_sync(target: Path) -> None:
+        assert target == path.parent
+        operations.append("directory_sync")
+
+    monkeypatch.setattr(Path, "write_text", record_write)
+    monkeypatch.setattr(storage, "_sync_file", record_file_sync)
+    monkeypatch.setattr(Path, "replace", record_replace)
+    monkeypatch.setattr(storage, "_sync_directory", record_directory_sync)
+
+    write_text_atomic(path, "durable")
+
+    assert operations == [
+        "write",
+        "file_sync",
+        "replace",
+        "directory_sync",
+    ]
+
+
+def test_write_text_atomic_file_sync_failure_preserves_destination(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "runtime" / "state.txt"
+    path.parent.mkdir()
+    path.write_text("old", encoding="utf-8")
+
+    def fail_file_sync(target: Path) -> None:
+        raise OSError(f"file sync failed: {target.name}")
+
+    monkeypatch.setattr(storage, "_sync_file", fail_file_sync)
+
+    with pytest.raises(OSError, match="file sync failed"):
+        write_text_atomic(path, "new")
+
+    assert path.read_text(encoding="utf-8") == "old"
+    assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_write_text_atomic_directory_sync_failure_reports_visible_replacement(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "runtime" / "state.txt"
+    path.parent.mkdir()
+    path.write_text("old", encoding="utf-8")
+    sync_error = OSError("directory sync failed")
+
+    def fail_directory_sync(target: Path) -> None:
+        raise sync_error
+
+    monkeypatch.setattr(storage, "_sync_directory", fail_directory_sync)
+
+    with pytest.raises(AtomicWriteDurabilityError) as captured:
+        write_text_atomic(path, "new")
+
+    error = captured.value
+    assert error.destination_path == path
+    assert error.sync_error is sync_error
+    assert error.__cause__ is sync_error
+    assert path.read_text(encoding="utf-8") == "new"
     assert list(path.parent.glob("*.tmp")) == []
 
 
@@ -210,6 +308,32 @@ def test_write_text_atomic_partial_write_failure_cleans_temp(
 
     with pytest.raises(OSError, match="write failed"):
         write_text_atomic(path, "partial")
+
+    assert path.read_text(encoding="utf-8") == "old"
+    assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_write_text_atomic_interruption_cleans_owned_temporary_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "runtime" / "state.txt"
+    path.parent.mkdir()
+    path.write_text("old", encoding="utf-8")
+
+    def interrupt_write(
+        target: Path,
+        text: str,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> int:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(Path, "write_text", interrupt_write)
+
+    with pytest.raises(KeyboardInterrupt):
+        write_text_atomic(path, "new")
 
     assert path.read_text(encoding="utf-8") == "old"
     assert list(path.parent.glob("*.tmp")) == []
