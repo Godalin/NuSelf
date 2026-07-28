@@ -11,8 +11,8 @@ optimization: correctness/concurrency fixes, a caching layer over the post-v0.2.
 
 v0.3 optimization batches (do in order, each its own commit + tests):
 
-1. ☐ Batch A — correctness/concurrency bug fixes.
-2. ☐ Batch B — caching / N+1 performance.
+1. ☑ Batch A — correctness/concurrency bug fixes.
+2. ☑ Batch B — caching / N+1 performance.
 3. ☐ Batch C — dedup & dead-code cleanup.
 
 `main` remains the stable, releasable branch. `dev/v0.3.x` is the active line;
@@ -37,26 +37,35 @@ v0.3 optimization batches (do in order, each its own commit + tests):
 
 ### Batch A — correctness / concurrency bug fixes
 
-- [ ] `daemon/server.py` `handle()`: catch non-`ProtocolError` exceptions and return `DaemonResponse.fail` (fixes `UnboundLocalError` that hangs the client).
-- [ ] `daemon/server.py` `_export_timers`: guard with a lock; drop fired timers to stop unbounded growth.
-- [ ] `persona/graph.py` `_complete_persona_structured`: mirror chat.py failover policy and log swallowed errors instead of silent `None`.
-- [ ] `notification/macos.py`: add a `timeout=` to the `osascript` subprocess.
-- [ ] `config.py`: narrow the broad `except Exception: pass` around config load so malformed config is not silently treated as "no config".
+- [x] `daemon/server.py` `handle()`: catch non-`ProtocolError` exceptions and return `DaemonResponse.fail` (fixes `UnboundLocalError` that hangs the client).
+- [x] `daemon/server.py` `_export_timers`: guard with a lock; drop fired timers to stop unbounded growth.
+- [x] `persona/graph.py` `_complete_persona_structured`: mirror chat.py failover policy and log swallowed errors instead of silent `None`.
+- [x] `notification/macos.py`: add a `timeout=` to the `osascript` subprocess.
+- [x] `config.py`: narrow the broad `except Exception: pass` around config load so malformed config is not silently treated as "no config".
 
 ### Batch B — caching / N+1 performance
 
-- [ ] Memoize `ConfigSystem.load()` on `(config_path, mtime)`.
-- [ ] Compute the symbolic graph / transitive closure once per `MemoryQueryService.search`.
-- [ ] Share reason/trace/memory service instances in `agent/tools.py`; cache `auto_backend`.
-- [ ] SQLite backend: cache column tuple, push `find()` into a `WHERE` clause, reuse one connection in `SqliteStore.batch`.
-- [ ] Fix remaining N+1 reads (reason `get_job` direct read, notification single scan, reflection single `last_reflection` read, batched reasoning step counts, wasted moderator synthesizer call).
+- [x] Memoize `ConfigSystem.load()` on `(config_path, mtime, size)`.
+- [x] Compute the symbolic graph / transitive closure once per `MemoryQueryService.search`.
+- [x] Share reason/trace/memory service instances in `agent/tools.py`.
+- [x] SQLite backend: cache column tuple and push `find()` into a `WHERE` clause.
+- [x] Fix remaining N+1 reads (reason `get_job` direct read, notification single scan, reflection single `last_reflection` read, batched reasoning step counts, wasted moderator synthesizer call).
+
+### ✅ Review follow-up — data safety and worker reliability
+
+- [x] Preserve v1 SQLite payloads during schema upgrade and create a pre-upgrade backup.
+- [x] Make reason step + thread batches real SQLite transactions with rollback.
+- [x] Scope cached default backends by project root and close them on reset.
+- [x] Keep background workers alive after unexpected iteration errors and expose `daemon health`.
+- [x] Declare directly imported runtime packages and use `README.md` as package metadata.
 
 ### Batch C — dedup & dead-code cleanup
 
-- [ ] `cli.py`: generic `_resolve_handle` + `_load_or_report` helpers.
-- [ ] Extract shared memory text/json/clamp helpers + a typed `list` helper.
-- [ ] Dedup `persona/tools.py` builders.
-- [ ] Remove dead code (reflection event-trigger mechanism, `reindex()` no-ops, `_handle_proposals_after_turn`).
+- [x] `cli.py`: generic `_resolve_handle` helpers.
+- [x] Extract shared memory text/json/clamp helpers.
+- [x] Dedup `persona/tools.py` builders.
+- [x] Remove dead reflection event-trigger and `_handle_proposals_after_turn` paths.
+- [x] Replace `reindex()` no-ops with real rebuildable derived JSON projections.
 
 ## Completion Criteria
 

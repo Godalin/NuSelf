@@ -6,6 +6,12 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+### Added
+
+- Added `nuself daemon health`, backed by a typed daemon health request, to
+  inspect background worker liveness, consecutive failures, last success, and
+  last error.
+
 ### Changed
 
 - Redesigned the interactive tool-approval prompt to match the REPL theme. It now
@@ -31,6 +37,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   every match; the SQLite backend caches each table's columns (was a `PRAGMA` per
   read/write) and `SqliteCollection.find()` filters with a SQL `WHERE` clause instead
   of loading and deserializing the whole table.
+- Runtime dependencies imported directly by NuSelf are now declared directly,
+  and built package metadata uses the public README instead of `AGENTS.md`.
+- Reindex commands now write real rebuildable JSON projections under
+  `private/derived/`; shared memory, persona-tool, and CLI handle helpers replace
+  duplicated implementations.
 
 ### Fixed
 
@@ -43,6 +54,19 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   timers, fixing a shutdown-time race and unbounded growth over long uptime.
 - The macOS notification adapter now applies a 10s timeout to `osascript`, so a hung
   system dialog can no longer block the notification-delivery loop indefinitely.
+- SQLite v1 databases now preserve and expand every legacy `payload` object
+  during the v2 schema migration, create a pre-upgrade backup, and roll back the
+  schema version on failure instead of dropping user data.
+- Reason step and thread updates now use a real SQLite transaction, so a failed
+  second write rolls back the whole reasoning advance.
+- Cached default storage backends are now scoped by project root and closed
+  when reset, preventing one process from accidentally reusing another
+  workspace's database.
+- Daemon memory-curator, reflection, reason, export, and notification workers
+  now retain health state and keep their owning loops alive after unexpected
+  per-iteration exceptions.
+- Removed the unused in-memory reflection event queue and obsolete post-turn
+  reason proposal callback, neither of which affected active behavior.
 
 ## v0.2.5 - 2026-06-20
 

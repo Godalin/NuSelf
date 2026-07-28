@@ -9,9 +9,9 @@ The current implementation is an early CLI-first system:
 - Local `nuself` command.
 - Optional local background daemon over a Unix socket.
 - A LangGraph-backed memory-aware chat agent that can run one-shot or through the daemon, with tool use for memory search, reflection inspection, memory curation, active reasoning threads, and trace provenance lookup.
-- File-backed memory entries and profile items that can be listed, viewed, added, edited, deleted, searched, and re-indexed.
-- File-backed source ingestion for Markdown and plain text under ignored `private/sources/`, plus reviewable candidates extracted from imported chunks.
-- File-backed trace records and long-run reasoning threads for durable thought provenance.
+- Storage-backed memory entries and profile items that can be listed, viewed, added, edited, deleted, and searched.
+- Source ingestion for Markdown and plain text under ignored `private/sources/`, plus reviewable candidates extracted from imported chunks.
+- Storage-backed trace records and long-run reasoning threads for durable thought provenance. Existing SQLite databases are selected automatically.
 - Persisted chat threads with compressed conversation context.
 
 LangGraph now backs the conversation runtime. The chat agent can invoke tools to search memory, list and dismiss pending reflection ideas, archive outdated memories, adjust importance scores, inspect active reasoning threads, and search thought traces. The internal persona system uses a shared competitive discussion flow for both chat and background reflection, with LLM-backed persona nodes generating distinct voices. Email and macOS notifications are supported when configured.
@@ -23,7 +23,7 @@ Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term impl
 ## Branch And Version Policy
 
 - `main` is the stable, releasable branch.
-- `dev/0.2.x` is the ongoing stabilization branch.
+- `dev/v0.3.x` is the active optimization branch.
 - `feature/*` branches are isolated experimental work.
 - `patch` versions cover stabilization, refactors, and fixes.
 - `minor` versions add new subsystems or cognitive capabilities.
@@ -200,6 +200,7 @@ Start, inspect, and stop the local daemon:
 ```bash
 uv run nuself daemon start
 uv run nuself daemon status
+uv run nuself daemon health
 uv run nuself daemon list
 uv run nuself daemon logs
 uv run nuself daemon attach --message "continue"
