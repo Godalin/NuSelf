@@ -10,6 +10,7 @@ from pathlib import Path
 from nuself.cli.repl.input import InteractiveInput
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
+from nuself.runtime.observability import report_observed_failure
 
 SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
 HandleCommand = Callable[
@@ -32,6 +33,87 @@ class ReplCallbacks:
     brand_banner: Callable[[], str]
 
 
+@dataclass(frozen=True)
+class InteractiveCleanupFailure:
+    """One named interactive-session cleanup step that failed."""
+
+    step: str
+    error: BaseException
+
+
+class InteractiveLifecycleError(RuntimeError):
+    """Raised when interactive exit cleanup retains one or more failures."""
+
+    def __init__(
+        self,
+        failures: tuple[InteractiveCleanupFailure, ...],
+        *,
+        primary_error: BaseException | None = None,
+    ) -> None:
+        super().__init__(
+            f"interactive cleanup failed in {len(failures)} step(s)"
+        )
+        self.failures = failures
+        self.primary_error = primary_error
+
+
+def _run_interactive_cleanup(
+    callbacks: ReplCallbacks,
+    project_root: Path | None,
+    session: InteractiveSession,
+) -> tuple[InteractiveCleanupFailure, ...]:
+    failures: list[InteractiveCleanupFailure] = []
+    steps: tuple[tuple[str, Callable[[], None]], ...] = (
+        (
+            "transcript.auto_save",
+            lambda: callbacks.auto_save(project_root, session),
+        ),
+        (
+            "memory.curator.run",
+            lambda: callbacks.run_curator(project_root),
+        ),
+    )
+    for step, operation in steps:
+        try:
+            operation()
+        except BaseException as exc:
+            failures.append(InteractiveCleanupFailure(step, exc))
+    return tuple(failures)
+
+
+def _finish_interactive_lifecycle(
+    *,
+    project_root: Path | None,
+    primary_error: BaseException | None,
+    cleanup_failures: tuple[InteractiveCleanupFailure, ...],
+) -> None:
+    if cleanup_failures:
+        lifecycle_error = InteractiveLifecycleError(
+            cleanup_failures,
+            primary_error=primary_error,
+        )
+        report_observed_failure(
+            lifecycle_error,
+            component="chat",
+            event="interactive_cleanup_failed",
+            message="Interactive session cleanup failed",
+            project_root=project_root,
+            metadata={
+                "steps": [
+                    failure.step for failure in cleanup_failures
+                ],
+                "primary_failed": primary_error is not None,
+            },
+            level="error",
+            status="error",
+        )
+        if primary_error is not None:
+            raise lifecycle_error from primary_error
+        raise lifecycle_error
+    if primary_error is not None:
+        raise primary_error.with_traceback(primary_error.__traceback__)
+
+
 def run_interactive_loop(
     send_message: SendMessage,
     project_root: Path | None,
@@ -49,13 +131,14 @@ def run_interactive_loop(
         ":q to quit."
     )
     callbacks.show_session_header(project_root, current_thread_id)
-    try:
+
+    def run_loop() -> int:
+        nonlocal current_thread_id
         while True:
             try:
                 line = interactive_input.read()
             except EOFError:
                 print()
-                callbacks.auto_save(project_root, session)
                 return 0
             except KeyboardInterrupt:
                 print()
@@ -98,6 +181,21 @@ def run_interactive_loop(
             )
             if result != 0:
                 continue
-    finally:
-        callbacks.auto_save(project_root, session)
-        callbacks.run_curator(project_root)
+
+    primary_error: BaseException | None = None
+    result = 0
+    try:
+        result = run_loop()
+    except BaseException as exc:
+        primary_error = exc
+    cleanup_failures = _run_interactive_cleanup(
+        callbacks,
+        project_root,
+        session,
+    )
+    _finish_interactive_lifecycle(
+        project_root=project_root,
+        primary_error=primary_error,
+        cleanup_failures=cleanup_failures,
+    )
+    return result

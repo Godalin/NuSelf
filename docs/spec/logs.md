@@ -151,6 +151,9 @@ Rules:
 - `interactive_send_failed` records an unexpected `Exception` escaping the
   bound send callback. Process-control `BaseException` values are re-raised and
   are not projected as ordinary chat failures.
+- `interactive_cleanup_failed` records the ordered failed cleanup step names
+  and whether the main loop already had a primary failure. It never replaces
+  the structured interactive lifecycle error.
 - `turn.reused` confirms idempotency: the retry returned an existing completed result instead of rerunning chat/tools.
 - Final response boundary retries use `final_response_retry`; they are model-output retries inside one chat turn, not transport retries.
 - Interactive logs should show chat lifecycle and retry events so users can distinguish normal multi-tool execution from retry-driven repeated work.

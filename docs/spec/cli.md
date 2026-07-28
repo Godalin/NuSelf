@@ -117,6 +117,10 @@ interactive input state.
   exception suppression is not allowed.
 - Tests and embedded callers may construct two sessions in one process without
   requiring a global reset hook.
+- Every exit path runs transcript auto-save and exit memory curation exactly
+  once, in that order. EOF does not perform an additional inline save.
+- Both cleanup steps are attempted even if the first fails. Cleanup failures
+  are never converted into a successful exit code.
 
 ### Command Prefix
 
@@ -200,6 +204,12 @@ result after final activity drain and subscription close, and emits
 skips auxiliary final drain, closes the subscription, and re-raises the same
 exception object with its traceback. Control state must not be converted into
 `code=1` or replaced by activity diagnostics.
+
+The outer interactive lifecycle retains a main-loop `BaseException` while
+running exit cleanup. If cleanup succeeds, it re-raises the same primary object
+with its traceback. If cleanup fails, `InteractiveLifecycleError` retains the
+primary object plus every named cleanup failure and uses the primary as its
+explicit cause.
 
 Daemon-backed and one-shot client adapters establish one
 `source="client"` scope for the whole operation. Interactive retry markers and

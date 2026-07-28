@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- REPL exit now runs transcript auto-save and memory curation exactly once each
+  and attempts both. Named cleanup failures are aggregated without losing an
+  existing main-loop exception or allowing diagnostics to replace it.
 - The live-chat send-thread boundary now observes unexpected callback
   exceptions without crashing the REPL, while preserving `KeyboardInterrupt`,
   `SystemExit`, and other control exceptions across the thread boundary after

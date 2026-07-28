@@ -276,7 +276,9 @@ under the same package.
   deduplication. Configured retry/poll values and rendering effects are
   injected by the composition root.
 - `cli/repl/runtime.py` owns the interactive session loop and receives
-  application effects through `ReplCallbacks`.
+  application effects through `ReplCallbacks`. Transcript auto-save and memory
+  curation execute once each through named cleanup aggregation that preserves
+  any main-loop primary failure.
 
 Conversation runtime code lives under `agent/chat/`. `types.py` owns settings,
 structured response/result records, typed turn state, and graph error contracts;

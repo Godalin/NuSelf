@@ -280,6 +280,16 @@ values remain control flow. The same object is re-raised on the main thread
 after subscription close, with cause and traceback retained. Auxiliary final
 drain is skipped so it cannot mask the control exception.
 
+REPL exit cleanup uses one lifecycle aggregation boundary. The ordered steps
+are `transcript.auto_save` and `memory.curator.run`. Both execute exactly once
+and all caught `BaseException` values are retained as named
+`InteractiveCleanupFailure` entries. When cleanup fails,
+`InteractiveLifecycleError` retains the tuple and the main-loop
+`primary_error`; the primary is its explicit cause when present. If cleanup
+succeeds, the original main-loop exception is re-raised with its traceback.
+`chat/interactive_cleanup_failed` is an auxiliary diagnostic of the aggregate;
+failure of that diagnostic cannot replace the lifecycle error.
+
 Retryable:
 
 - daemon connection timeout

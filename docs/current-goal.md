@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Ordinary live-chat callback failures are separate from process-control
-`BaseException` values: failures remain observable while interrupts and exits
-cross the send-thread boundary after subscription cleanup.
+Idle. REPL exit cleanup executes transcript auto-save and memory curation
+exactly once each while retaining the main-loop failure and every named cleanup
+failure without one replacing another.
 
 ## Active Branch
 
@@ -24,21 +24,21 @@ code.
 
 ## Completion Evidence
 
-- Unexpected callback `Exception` values emit
-  `chat/interactive_send_failed` with compact error and exception type after
-  activity drain and subscription close.
-- Ordinary callback failure retains the existing non-retryable `code=1` REPL
-  result and stderr message.
-- Structured diagnostic storage failure falls back to a runtime warning
-  without replacing that ordinary failure result.
-- Callback `KeyboardInterrupt` and `SystemExit` preserve the same exception
-  object, explicit cause, and traceback when re-raised on the main thread.
-- Control exceptions skip auxiliary final drain, complete subscription close,
-  and are not projected as ordinary chat failures.
-- Main-thread `KeyboardInterrupt`, unexpected poll/renderer failures, expected
-  activity degradation, and context binding retain their existing behavior.
-- Focused REPL activity, turn, session-state, and CLI tests: 321 passed.
-- Final full tests: 1365 passed.
+- EOF, command exit, normal return, and main-loop failure converge on one
+  interactive exit boundary; EOF no longer invokes auto-save inline.
+- `transcript.auto_save` and `memory.curator.run` execute exactly once and in
+  order, including when auto-save fails.
+- `InteractiveLifecycleError` retains every named cleanup failure and the
+  original failure objects.
+- A main-loop `SystemExit` is the lifecycle error's explicit cause when cleanup
+  also fails; with successful cleanup the same control object and traceback
+  are re-raised.
+- `chat/interactive_cleanup_failed` records ordered steps and primary presence;
+  diagnostic storage failure cannot replace the lifecycle error.
+- Transcript rendering/export semantics and expected curator `RuntimeError`
+  handling remain unchanged.
+- Focused REPL lifecycle, CLI, activity, and session-state tests: 325 passed.
+- Final full tests: 1370 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -49,4 +49,4 @@ All local commits remain pending until explicit push authorization.
 ## Next Review Batch
 
 Continue auditing broad exception catches and local best-effort wrappers after
-the live-chat send thread preserves failure and control-flow semantics.
+REPL exit cleanup preserves primary and cleanup failure provenance.
