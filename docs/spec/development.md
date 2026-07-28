@@ -120,6 +120,8 @@ top-level application namespace stays focused on subsystem APIs.
   shortcuts.
 - `commands/dev.py` owns storage migration, SQLite schema inspection, and active
   storage backend diagnostics.
+- `commands/pack.py` owns thought-pack export/import/list/inspect behavior,
+  including pack path resolution and human-readable archive sizes.
 - Memory CLI commands live together under the `commands/memory/` package and
   are split by subdomain instead of collected in one oversized module.
   `commands/memory/profile.py` owns profile list/search/show/delete/reindex

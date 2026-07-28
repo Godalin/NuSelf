@@ -117,6 +117,12 @@ try:
         handle_dev_migrate,
         handle_dev_storage,
     )
+    from nuself.commands.pack import (
+        handle_pack_export,
+        handle_pack_import,
+        handle_pack_inspect,
+        handle_pack_list,
+    )
     from nuself.commands.memory.profile import (
         handle_memory_profile_delete,
         handle_memory_profile_list,
@@ -1091,108 +1097,6 @@ def handle_open(args: argparse.Namespace) -> int:
         args.project_root,
         initial_thread_id=thread_id,
     )
-
-
-def handle_pack_export(args: argparse.Namespace) -> int:
-    from nuself.config import runtime_paths
-    import shutil
-
-    paths = runtime_paths(args.project_root)
-    src = paths.private_root / "nuself.sqlite"
-    if not src.exists():
-        print("No nuself.sqlite found. Run 'nuself dev migrate' first.", file=sys.stderr)
-        return 1
-    exports_dir = paths.private_root / "exports"
-    exports_dir.mkdir(parents=True, exist_ok=True)
-    name = args.name.removesuffix(".sqlite")
-    dst = (exports_dir / name).with_suffix(".sqlite")
-    shutil.copy2(src, dst)
-    print(f"Exported to {dst}")
-    return 0
-
-
-def handle_pack_import(args: argparse.Namespace) -> int:
-    from nuself.config import runtime_paths
-    import shutil
-
-    src = args.path.resolve()
-    if not src.exists():
-        print(f"File not found: {src}", file=sys.stderr)
-        return 1
-    if src.suffix != ".sqlite":
-        print(f"Expected .sqlite file, got: {src.suffix}", file=sys.stderr)
-        return 1
-    paths = runtime_paths(args.project_root)
-    imports_dir = paths.private_root / "imports"
-    imports_dir.mkdir(parents=True, exist_ok=True)
-    dst = imports_dir / src.name
-    if dst.exists():
-        print(f"Already imported: {dst.name}", file=sys.stderr)
-        return 1
-    shutil.copy2(src, dst)
-    print(f"Imported to {dst}")
-    return 0
-
-
-def handle_pack_list(args: argparse.Namespace) -> int:
-    from nuself.config import runtime_paths
-
-    paths = runtime_paths(args.project_root)
-    for subdir, label in [("imports", "Imports"), ("exports", "Exports")]:
-        d = paths.private_root / subdir
-        if not d.exists():
-            continue
-        files = sorted(d.glob("*.sqlite"))
-        if not files:
-            continue
-        print(f"{label}:")
-        for f in files:
-            size = f.stat().st_size
-            size_str = f"{size / 1024:.0f}K" if size < 1024 * 1024 else f"{size / 1024 / 1024:.1f}M"
-            print(f"  {f.stem}  ({size_str})")
-    return 0
-
-
-def handle_pack_inspect(args: argparse.Namespace) -> int:
-    from nuself.config import runtime_paths
-    from nuself.storage_sqlite import SqliteStorageBackend
-
-    if args.name is not None:
-        candidates = [
-            Path(args.name).resolve(),
-            runtime_paths(args.project_root).private_root / "imports" / f"{args.name}.sqlite",
-            runtime_paths(args.project_root).private_root / "exports" / f"{args.name}.sqlite",
-        ]
-        db_path: Path | None = None
-        for c in candidates:
-            if c.exists() and c.suffix == ".sqlite":
-                db_path = c
-                break
-        if db_path is None:
-            print(f"No pack found: {args.name}", file=sys.stderr)
-            return 1
-    else:
-        db_path = runtime_paths(args.project_root).private_root / "nuself.sqlite"
-        if not db_path.exists():
-            print("No nuself.sqlite found.", file=sys.stderr)
-            return 1
-
-    backend = SqliteStorageBackend(db_path)
-    try:
-        tables = backend.collection_names()
-        total_items = 0
-        print(f"Thought pack: {db_path.name}")
-        print(f"  path: {db_path}")
-        print(f"  collections: {len(tables)}")
-        for name in sorted(tables):
-            count = len(backend.collection(name).list())
-            if count:
-                print(f"    {name}: {count} items")
-                total_items += count
-        print(f"  total items: {total_items}")
-    finally:
-        backend.close()
-    return 0
 
 
 def handle_eval(args: argparse.Namespace) -> int:
