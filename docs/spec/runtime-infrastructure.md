@@ -129,6 +129,36 @@ raises `DaemonConnectionError` with the payload `ProtocolError` as its cause.
 Nested worker and activity records fail the whole response; clients must not
 skip malformed records or synthesize defaults.
 
+## Daemon Worker Supervision
+
+`nuself.daemon.workers.DaemonWorkerSupervisor` owns daemon background-thread
+registration and common lifecycle semantics over the neutral
+`nuself.runtime.workers.OwnedWorker` primitive.
+
+- The daemon composition root registers each named worker exactly once and
+  seals the supervisor before workers can start. Duplicate, late, or unknown
+  worker access fails immediately.
+- The supervisor owns `OwnedWorker` instances and combines their live
+  lifecycle snapshot with the last successful iteration, compact exception
+  chain, and consecutive failure count.
+- Every worker target runs under `source="daemon.worker.<name>"`. An exception
+  escaping the complete target is observed as
+  `daemon/worker_exited_unexpectedly` and updates health without escaping the
+  thread.
+- Every scheduled iteration gets a fresh job id and a context containing only
+  that job id and worker source. Ambient request, thread, trace, and job
+  identity must not leak into worker iterations.
+- Expected iteration failures update health and emit the worker-specific error
+  event without terminating the schedule. A later successful iteration clears
+  the consecutive failure count while retaining a success timestamp.
+- Joining a still-live worker after the caller's timeout emits
+  `daemon/thread_timeout` with worker, timeout, and lifecycle state, then raises
+  `DaemonWorkerJoinTimeoutError`. The worker remains owned and may be joined
+  again after it exits.
+- The supervisor owns only common execution semantics. `DaemonState` retains
+  subsystem construction, interval values, concrete operations, export queue
+  behavior, and daemon startup/cleanup order.
+
 ### JSONL Transport Framing
 
 The daemon transport is one request and one response per Unix-socket

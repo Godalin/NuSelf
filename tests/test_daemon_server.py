@@ -10,8 +10,11 @@ from nuself.agent.chat import ChatAgent
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.server import (
     DaemonState,
-    DaemonWorkerJoinTimeoutError,
     handle_request,
+)
+from nuself.daemon.workers import (
+    DaemonWorkerJoinTimeoutError,
+    DaemonWorkerSupervisor,
 )
 from nuself.llm import ChatMessage
 from nuself.logs import read_log_events
@@ -22,7 +25,6 @@ from nuself.runtime.context import (
     current_runtime_context,
     runtime_context,
 )
-from nuself.runtime.workers import OwnedWorker
 
 
 class StructuredFakeLLM:
@@ -265,31 +267,27 @@ def test_memory_curator_worker_survives_unexpected_error(
 def test_worker_supervisor_records_escaping_target_and_context(
     tmp_path: Path,
 ) -> None:
-    state = DaemonState(tmp_path)
+    shutdown_requested = threading.Event()
+    supervisor = DaemonWorkerSupervisor(tmp_path, shutdown_requested)
     observed: list[RuntimeContext] = []
 
     def fail_target() -> None:
         observed.append(current_runtime_context())
         raise ValueError("target escaped")
 
-    state._workers["memory_curator"] = OwnedWorker(  # pyright: ignore[reportPrivateUsage]
-        name="memory_curator",
-        thread_name="test-supervised-worker",
-        target=state._supervised_worker_target(  # pyright: ignore[reportPrivateUsage]
-            "memory_curator",
-            fail_target,
-        ),
-    )
-
-    state.start_background_memory_curator()
-    state._join_worker(  # pyright: ignore[reportPrivateUsage]
+    supervisor.register(
         "memory_curator",
-        timeout=1,
+        thread_name="test-supervised-worker",
+        target=fail_target,
     )
+    supervisor.seal()
+
+    supervisor.start("memory_curator")
+    supervisor.join("memory_curator", timeout=1)
 
     assert observed[0].source == "daemon.worker.memory_curator"
     health = next(
-        item for item in state.worker_health() if item.name == "memory_curator"
+        item for item in supervisor.health() if item.name == "memory_curator"
     )
     assert health.alive is False
     assert health.consecutive_failures == 1
@@ -358,7 +356,13 @@ def test_worker_error_log_failure_does_not_stop_scheduled_loop(
 def test_worker_iterations_have_isolated_job_contexts(
     tmp_path: Path,
 ) -> None:
-    state = DaemonState(tmp_path)
+    supervisor = DaemonWorkerSupervisor(tmp_path, threading.Event())
+    supervisor.register(
+        "memory_curator",
+        thread_name="test-memory-curator",
+        target=lambda: None,
+    )
+    supervisor.seal()
     observed: list[RuntimeContext] = []
 
     def first_operation() -> None:
@@ -375,13 +379,13 @@ def test_worker_iterations_have_isolated_job_contexts(
         trace_id="ambient-trace",
         source="test",
     ):
-        assert state._run_worker_iteration(  # pyright: ignore[reportPrivateUsage]
+        assert supervisor.run_iteration(
             "memory_curator",
             first_operation,
             error_event="memory_curator_error",
             error_message="memory curator iteration failed",
         )
-        assert state._run_worker_iteration(  # pyright: ignore[reportPrivateUsage]
+        assert supervisor.run_iteration(
             "memory_curator",
             second_operation,
             error_event="memory_curator_error",
@@ -411,14 +415,20 @@ def test_worker_iterations_have_isolated_job_contexts(
 def test_worker_failure_log_uses_iteration_job_context(
     tmp_path: Path,
 ) -> None:
-    state = DaemonState(tmp_path)
+    supervisor = DaemonWorkerSupervisor(tmp_path, threading.Event())
+    supervisor.register(
+        "reflection_scheduler",
+        thread_name="test-reflection-scheduler",
+        target=lambda: None,
+    )
+    supervisor.seal()
     observed: list[RuntimeContext] = []
 
     def fail() -> None:
         observed.append(current_runtime_context())
         raise ValueError("tick failed")
 
-    assert not state._run_worker_iteration(  # pyright: ignore[reportPrivateUsage]
+    assert not supervisor.run_iteration(
         "reflection_scheduler",
         fail,
         error_event="reflection_scheduler_error",
@@ -455,39 +465,44 @@ def test_export_worker_initialization_fails_before_thread_start(
     with pytest.raises(OSError, match="workspace unavailable"):
         state.start_background_export_worker()
 
-    snapshot = state._workers[  # pyright: ignore[reportPrivateUsage]
-        "export_worker"
-    ].snapshot
-    assert snapshot.state == "new"
-    assert snapshot.alive is False
+    health = next(
+        item
+        for item in state.worker_health()
+        if item.name == "export_worker"
+    )
+    assert health.alive is False
+    assert health.last_success_at is None
+    assert health.last_error is None
 
 
 def test_daemon_worker_join_timeout_is_logged_and_remains_live(
     tmp_path: Path,
 ) -> None:
-    state = DaemonState(tmp_path)
+    shutdown_requested = threading.Event()
+    supervisor = DaemonWorkerSupervisor(tmp_path, shutdown_requested)
     release = threading.Event()
 
     def wait_for_release() -> None:
         release.wait()
 
-    state._workers["memory_curator"] = OwnedWorker(  # pyright: ignore[reportPrivateUsage]
-        name="memory_curator",
+    supervisor.register(
+        "memory_curator",
         thread_name="test-memory-curator",
         target=wait_for_release,
     )
-    state.start_background_memory_curator()
+    supervisor.seal()
+    supervisor.start("memory_curator")
     with pytest.raises(
         DaemonWorkerJoinTimeoutError,
         match="memory_curator did not stop",
     ):
-        state._join_worker(  # pyright: ignore[reportPrivateUsage]
+        supervisor.join(
             "memory_curator",
             timeout=0,
         )
 
     health = next(
-        item for item in state.worker_health() if item.name == "memory_curator"
+        item for item in supervisor.health() if item.name == "memory_curator"
     )
     assert health.alive is True
     event = read_log_events(
@@ -503,12 +518,12 @@ def test_daemon_worker_join_timeout_is_logged_and_remains_live(
     }
 
     release.set()
-    state._join_worker(  # pyright: ignore[reportPrivateUsage]
+    supervisor.join(
         "memory_curator",
         timeout=1,
     )
     health = next(
-        item for item in state.worker_health() if item.name == "memory_curator"
+        item for item in supervisor.health() if item.name == "memory_curator"
     )
     assert health.alive is False
 

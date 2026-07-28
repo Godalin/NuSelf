@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The typed CLI entrypoint controller extraction is complete.
+Idle. Daemon worker supervision has been extracted from `DaemonState`.
 
 ## Active Branch
 
@@ -22,21 +22,19 @@ code.
 
 ## Completion Evidence
 
-- `cli/entrypoints.py` owns daemon startup/selection, require-daemon handling,
-  deep-link and thread preparation, and daemon/local interactive routing for
-  the default, `chat`, `attach`, and `open` entrypoints.
-- Chat sends and REPL execution enter through one immutable typed callback
-  bundle; the controller does not implement those capabilities.
-- Deep-link resolution produces an immutable open target instead of mutating
-  the parsed `argparse.Namespace`.
-- The CLI root binds one controller directly into `InteractiveHandlers` and
-  dropped all four policy-heavy handler implementations, reducing from 427 to
-  314 lines.
-- Direct controller tests cover failed daemon startup, require-daemon
-  rejection, daemon interactive routing, and new-thread deep-link local
-  routing.
-- Focused entrypoint and CLI tests: 302 passed.
-- Final full tests: 1267 passed.
+- `daemon/workers.py` owns sealed unique registration, `OwnedWorker`
+  lifecycle, health projection, fresh iteration context, failure observation,
+  scheduled loops, start audits, and join-timeout translation.
+- `DaemonState` registers five subsystem-specific targets during composition
+  and delegates common worker execution semantics to one supervisor.
+- Export processing reports its job-level success and failure through the same
+  supervisor health boundary instead of parallel state bookkeeping.
+- Supervisor tests cover duplicate/late/unknown registration, start-before-seal
+  rejection, ambient-context replacement/restoration, escaping target
+  observation, iteration correlation, and retryable join timeout.
+- `daemon/server.py` decreased from 1282 to 1116 lines.
+- Focused daemon worker/server/lifecycle tests: 54 passed.
+- Final full tests: 1269 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -46,5 +44,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Resolve the REPL header presentation contract or move to daemon composition
-review.
+Extract the reason export job processor or continue daemon lifecycle
+composition review.
