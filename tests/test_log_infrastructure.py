@@ -4,9 +4,12 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import pytest
+
 from nuself.logs import (
     InteractiveLogCursor,
     LogEvent,
+    LogRetentionPolicy,
     log_path,
     read_log_events,
     write_log_event,
@@ -101,3 +104,62 @@ def test_incremental_cursor_deduplicates_stable_event_ids(tmp_path: Path) -> Non
 
     assert cursor.read_new_events(tmp_path) == [event]
     assert cursor.read_new_events(tmp_path) == []
+
+
+def test_log_rotation_bounds_backups_and_readers_include_them(
+    tmp_path: Path,
+) -> None:
+    policy = LogRetentionPolicy(max_bytes=300, backup_count=2)
+
+    for index in range(6):
+        write_log_event(
+            "daemon",
+            "worker_tick",
+            f"tick {index}",
+            project_root=tmp_path,
+            retention_policy=policy,
+        )
+
+    path = log_path("daemon", project_root=tmp_path)
+    assert path.is_file()
+    assert path.with_name("daemon.log.1").is_file()
+    assert path.with_name("daemon.log.2").is_file()
+    assert not path.with_name("daemon.log.3").exists()
+    events = read_log_events(project_root=tmp_path, component="daemon")
+    assert [event.message for event in events] == [
+        "tick 3",
+        "tick 4",
+        "tick 5",
+    ]
+
+
+def test_incremental_cursor_finishes_rotated_inode_before_active_file(
+    tmp_path: Path,
+) -> None:
+    write_log_event("chat", "turn_started", "seen", project_root=tmp_path)
+    cursor = InteractiveLogCursor.from_project(tmp_path)
+    write_log_event("chat", "tool_activity", "before rotation", project_root=tmp_path)
+    path = log_path("chat", project_root=tmp_path)
+    policy = LogRetentionPolicy(
+        max_bytes=path.stat().st_size + 1,
+        backup_count=2,
+    )
+    write_log_event(
+        "chat",
+        "turn_completed",
+        "after rotation",
+        project_root=tmp_path,
+        retention_policy=policy,
+    )
+
+    assert [event.message for event in cursor.read_new_events(tmp_path)] == [
+        "before rotation",
+        "after rotation",
+    ]
+
+
+def test_log_retention_policy_rejects_unbounded_values() -> None:
+    with pytest.raises(ValueError, match="max_bytes"):
+        LogRetentionPolicy(max_bytes=0)
+    with pytest.raises(ValueError, match="backup_count"):
+        LogRetentionPolicy(backup_count=0)

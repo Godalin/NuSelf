@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Structured component logs now rotate at 10 MiB with three retained backups,
+  using cross-process-safe sidecar locking; diagnostics read retained backups
+  and live cursors follow file replacement without dropping unseen events.
 - Redesigned the interactive tool-approval prompt to match the REPL theme. It now
   shows a single colored `[component] approval required  tool=<name>` banner with
   the pending action indented below and an `approve? [y/N]` question, replacing the

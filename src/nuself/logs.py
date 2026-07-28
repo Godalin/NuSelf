@@ -37,6 +37,23 @@ _LOG_LOCKS_GUARD = Lock()
 _LOG_WRITE_LOCKS: dict[Path, RLock] = {}
 
 
+@dataclass(frozen=True)
+class LogRetentionPolicy:
+    """Bounded size and backup count for one component log."""
+
+    max_bytes: int = 10 * 1024 * 1024
+    backup_count: int = 3
+
+    def __post_init__(self) -> None:
+        if self.max_bytes < 1:
+            raise ValueError("log max_bytes must be positive")
+        if self.backup_count < 1:
+            raise ValueError("log backup_count must be positive")
+
+
+DEFAULT_LOG_RETENTION = LogRetentionPolicy()
+
+
 LogContext = RuntimeContext
 
 
@@ -158,6 +175,7 @@ def write_log_event(
     status: str | None = None,
     error: str | None = None,
     metadata: dict[str, object] | None = None,
+    retention_policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION,
 ) -> LogEvent:
     """Append a structured log event and return it."""
 
@@ -195,13 +213,18 @@ def write_log_event(
         error=error,
         metadata=metadata,
     )
-    return _append_log_event(event_record, project_root=project_root)
+    return _append_log_event(
+        event_record,
+        project_root=project_root,
+        retention_policy=retention_policy,
+    )
 
 
 def write_runtime_event(
     envelope: RuntimeEnvelope,
     *,
     project_root: Path | None = None,
+    retention_policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION,
 ) -> LogEvent:
     """Persist an event envelope as an audit projection with the same identity."""
 
@@ -241,16 +264,26 @@ def write_runtime_event(
         error=_optional_str(payload.get("error")),
         metadata=metadata,
     )
-    return _append_log_event(event_record, project_root=project_root)
+    return _append_log_event(
+        event_record,
+        project_root=project_root,
+        retention_policy=retention_policy,
+    )
 
 
 def runtime_event_log_sink(
     project_root: Path | None = None,
+    *,
+    retention_policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION,
 ) -> Callable[[RuntimeEnvelope], None]:
     """Build an event subscriber that persists audit projections."""
 
     def sink(envelope: RuntimeEnvelope) -> None:
-        write_runtime_event(envelope, project_root=project_root)
+        write_runtime_event(
+            envelope,
+            project_root=project_root,
+            retention_policy=retention_policy,
+        )
 
     return sink
 
@@ -259,6 +292,7 @@ def _append_log_event(
     event_record: LogEvent,
     *,
     project_root: Path | None,
+    retention_policy: LogRetentionPolicy,
 ) -> LogEvent:
     paths = runtime_paths(project_root)
     ensure_runtime_dirs(paths)
@@ -266,14 +300,47 @@ def _append_log_event(
     line = (
         json.dumps(event_record.to_record(), sort_keys=True, ensure_ascii=True) + "\n"
     )
-    with _log_write_lock(path), path.open("a", encoding="utf-8") as log_file:
-        flock(log_file.fileno(), LOCK_EX)
+    encoded_size = len(line.encode("utf-8"))
+    lock_path = path.with_name(f"{path.name}.lock")
+    with _log_write_lock(path), lock_path.open("a", encoding="utf-8") as lock_file:
+        flock(lock_file.fileno(), LOCK_EX)
         try:
-            log_file.write(line)
-            log_file.flush()
+            _rotate_log_if_needed(
+                path,
+                incoming_bytes=encoded_size,
+                policy=retention_policy,
+            )
+            with path.open("a", encoding="utf-8") as log_file:
+                log_file.write(line)
+                log_file.flush()
         finally:
-            flock(log_file.fileno(), LOCK_UN)
+            flock(lock_file.fileno(), LOCK_UN)
     return event_record
+
+
+def _rotate_log_if_needed(
+    path: Path,
+    *,
+    incoming_bytes: int,
+    policy: LogRetentionPolicy,
+) -> None:
+    try:
+        current_size = path.stat().st_size
+    except FileNotFoundError:
+        return
+    if current_size == 0 or current_size + incoming_bytes <= policy.max_bytes:
+        return
+    oldest = _rotated_log_path(path, policy.backup_count)
+    oldest.unlink(missing_ok=True)
+    for index in range(policy.backup_count - 1, 0, -1):
+        source = _rotated_log_path(path, index)
+        if source.exists():
+            source.replace(_rotated_log_path(path, index + 1))
+    path.replace(_rotated_log_path(path, 1))
+
+
+def _rotated_log_path(path: Path, index: int) -> Path:
+    return path.with_name(f"{path.name}.{index}")
 
 
 def current_log_context() -> LogContext:
@@ -309,19 +376,30 @@ def read_log_events(
         (component,) if component is not None else LOG_COMPONENTS
     )
     for current_component in components:
-        path = log_path(current_component, project_root=project_root)
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except FileNotFoundError:
-            continue
-        for line in lines:
-            parsed = _parse_log_line(line, current_component)
-            if parsed is not None:
-                events.append(parsed)
+        active_path = log_path(current_component, project_root=project_root)
+        for path in _component_log_paths(active_path):
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines()
+            except FileNotFoundError:
+                continue
+            for line in lines:
+                parsed = _parse_log_line(line, current_component)
+                if parsed is not None:
+                    events.append(parsed)
     events.sort(key=lambda item: item.time)
     if tail is not None and tail > 0:
         return events[-tail:]
     return events
+
+
+def _component_log_paths(active_path: Path) -> tuple[Path, ...]:
+    backups: list[tuple[int, Path]] = []
+    for candidate in active_path.parent.glob(f"{active_path.name}.*"):
+        suffix = candidate.name.removeprefix(f"{active_path.name}.")
+        if suffix.isdigit():
+            backups.append((int(suffix), candidate))
+    backups.sort(key=lambda item: item[0], reverse=True)
+    return (*(path for _, path in backups), active_path)
 
 
 def _parse_log_line(line: str, component: LogComponent) -> LogEvent | None:
@@ -391,20 +469,26 @@ class InteractiveLogCursor:
         self,
         seen_event_keys: set[str] | None = None,
         offsets: dict[LogComponent, int] | None = None,
+        identities: dict[LogComponent, tuple[int, int] | None] | None = None,
     ) -> None:
         self.seen_event_keys = seen_event_keys or set()
         self.offsets = offsets or {}
+        self.identities = identities or {}
 
     @classmethod
     def from_project(cls, project_root: Path | None) -> InteractiveLogCursor:
         offsets: dict[LogComponent, int] = {}
+        identities: dict[LogComponent, tuple[int, int] | None] = {}
         for component in LOG_COMPONENTS:
             path = log_path(component, project_root=project_root)
             try:
-                offsets[component] = path.stat().st_size
+                stat = path.stat()
+                offsets[component] = stat.st_size
+                identities[component] = (stat.st_dev, stat.st_ino)
             except FileNotFoundError:
                 offsets[component] = 0
-        return cls(offsets=offsets)
+                identities[component] = None
+        return cls(offsets=offsets, identities=identities)
 
     def read_new_events(self, project_root: Path | None) -> list[LogEvent]:
         events: list[LogEvent] = []
@@ -426,25 +510,74 @@ class InteractiveLogCursor:
     ) -> list[LogEvent]:
         path = log_path(component, project_root=project_root)
         offset = self.offsets.get(component, 0)
+        previous_identity = self.identities.get(component)
         try:
-            size = path.stat().st_size
+            stat = path.stat()
         except FileNotFoundError:
             self.offsets[component] = 0
+            self.identities[component] = None
             return []
-        if size < offset:
-            offset = 0
-        with path.open("rb") as log_file:
-            log_file.seek(offset)
-            appended = log_file.read()
-        complete_length = _complete_line_length(appended)
-        self.offsets[component] = offset + complete_length
+        current_identity = (stat.st_dev, stat.st_ino)
         parsed_events: list[LogEvent] = []
-        for raw_line in appended[:complete_length].splitlines():
-            line = raw_line.decode("utf-8", errors="replace")
-            parsed = _parse_log_line(line, component)
-            if parsed is not None:
-                parsed_events.append(parsed)
+        if previous_identity is not None and previous_identity != current_identity:
+            rotated_path = _find_log_with_identity(
+                path,
+                previous_identity,
+            )
+            if rotated_path is not None:
+                rotated_events, _ = _read_log_path(
+                    rotated_path,
+                    component=component,
+                    offset=offset,
+                )
+                parsed_events.extend(rotated_events)
+            offset = 0
+        elif stat.st_size < offset:
+            offset = 0
+        current_events, next_offset = _read_log_path(
+            path,
+            component=component,
+            offset=offset,
+        )
+        parsed_events.extend(current_events)
+        self.offsets[component] = next_offset
+        self.identities[component] = current_identity
         return parsed_events
+
+
+def _find_log_with_identity(
+    active_path: Path,
+    identity: tuple[int, int],
+) -> Path | None:
+    for candidate in _component_log_paths(active_path):
+        if candidate == active_path:
+            continue
+        try:
+            stat = candidate.stat()
+        except FileNotFoundError:
+            continue
+        if (stat.st_dev, stat.st_ino) == identity:
+            return candidate
+    return None
+
+
+def _read_log_path(
+    path: Path,
+    *,
+    component: LogComponent,
+    offset: int,
+) -> tuple[list[LogEvent], int]:
+    with path.open("rb") as log_file:
+        log_file.seek(offset)
+        appended = log_file.read()
+    complete_length = _complete_line_length(appended)
+    parsed_events: list[LogEvent] = []
+    for raw_line in appended[:complete_length].splitlines():
+        line = raw_line.decode("utf-8", errors="replace")
+        parsed = _parse_log_line(line, component)
+        if parsed is not None:
+            parsed_events.append(parsed)
+    return parsed_events, offset + complete_length
 
 
 def _complete_line_length(content: bytes) -> int:

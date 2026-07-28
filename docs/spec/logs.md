@@ -155,6 +155,19 @@ Display name mapping: `persona` → `selves`.
   trailing line for the next read. Stable event IDs provide deduplication;
   canonical record content is used only for legacy records.
 
-## Log Rotation
+## Log Retention And Rotation
 
-**No rotation or truncation policy exists.** Logs grow indefinitely.
+Structured component logs use `LogRetentionPolicy`. The production default is
+10 MiB per active file with three numbered backups.
+
+- Rotation occurs before an append that would exceed `max_bytes`.
+- `component.log.1` is the newest backup; older backups shift upward and the
+  oldest backup beyond `backup_count` is deleted.
+- A stable sidecar advisory lock serializes rotation and append across
+  processes; locking the active inode itself is insufficient because rotation
+  replaces that inode.
+- Readers include numbered backups in chronological sorting.
+- Incremental cursors track file identity as well as byte offset. If rotation
+  replaces the active file, a cursor finishes the matching `.1` inode from its
+  old offset before reading the new active file from byte zero.
+- Legacy and active files remain append-only within one file generation.
