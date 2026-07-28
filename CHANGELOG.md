@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Memory optimizer responses now use strict, extra-forbid action schemas with
+  bounded confidence. Every generated action is validated before candidate
+  dispatch; one invalid action defers the complete decision instead of
+  producing candidates for valid siblings.
 - Memory curator responses now use strict, extra-forbid action schemas with
   bounded confidence. Every generated action is validated before dispatch; one
   invalid action defers the complete decision instead of partially applying

@@ -182,8 +182,14 @@ errors are not degraded and continue to the daemon request backstop.
 
 - Must return JSON with `actions` array. Allowed: `update`, `delete`, `ignore`.
 - On failure → defer.
-- Update actions with empty `title`/`body` or raw-transcript bodies → rejected.
-- Delete actions missing `entry_id` → ignored.
+- The response and action models use strict types, forbid unknown fields, and
+  constrain present confidence values from zero through one.
+- Every action is validated and converted before any candidate is dispatched.
+  One invalid action defers the complete decision; valid siblings are not
+  partially dispatched.
+- Every action requires a non-empty `entry_id`. Update actions additionally
+  require non-blank `title`/`body`, reject raw-transcript bodies, and reject
+  unknown memory type overrides.
 
 ### Update Path
 

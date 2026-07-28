@@ -6,14 +6,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
-from nuself.memory.text import clamp_unit, extract_json_object, looks_like_raw_transcript
+from nuself.memory.text import extract_json_object, looks_like_raw_transcript
 from nuself.profile.repository import ProfileItemRepository
 
 MemoryOptimizeActionType: TypeAlias = Literal["update", "delete", "ignore"]
@@ -71,18 +71,27 @@ class MemoryOptimizeDecision:
 class OptimizeActionItem(BaseModel):
     """One structured memory optimization action from the LLM."""
 
+    model_config = ConfigDict(strict=True, extra="forbid")
+
     action: Literal["update", "delete", "ignore"] = Field(description="Optimization action type.")
     entry_id: str = Field(description="Existing memory entry id.")
     title: str = Field(default="", description="Updated entry title (required for update).")
     body: str = Field(default="", description="Updated entry body (required for update).")
     type: str | None = Field(default=None, description="Optional memory entry type override.")
     tags: list[str] | None = Field(default=None, description="Optional tag list override.")
-    confidence: float | None = Field(default=None, description="Optional confidence override.")
+    confidence: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description="Optional confidence override.",
+    )
     reason: str = Field(default="", description="Reason for the action.")
 
 
 class OptimizeActionsOutput(BaseModel):
     """Structured optimizer actions response from the LLM."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
 
     actions: list[OptimizeActionItem] = Field(description="Memory optimization actions.")
 
@@ -219,6 +228,7 @@ class MemoryOptimizer:
             existing = self._repository.get(action.entry_id)
         except MemoryEntryNotFound:
             return False
+        confidence = action.confidence if action.confidence is not None else existing.confidence
         incoming = MemoryObject(
             type=action.type or existing.type,
             payload={
@@ -226,7 +236,7 @@ class MemoryOptimizer:
                 "body": action.body,
                 "tags": list(action.tags) if action.tags is not None else existing.tags,
             },
-            confidence=_clamp_confidence(action.confidence if action.confidence is not None else existing.confidence),
+            confidence=confidence,
         )
         merged = self._registry.merge(existing.to_memory_object(), incoming)
         merged_title = cast(str, merged.payload.get("title", action.title))
@@ -240,7 +250,7 @@ class MemoryOptimizer:
             tags=merged_tags,
             source_refs=[source_ref],
             evidence=[MemoryEvidence(source_type="optimizer", source_ref=source_ref, summary=action.reason)],
-            confidence=_clamp_confidence(action.confidence if action.confidence is not None else existing.confidence),
+            confidence=confidence,
             privacy=existing.privacy,
             reason=action.reason,
             target_entry_id=existing.id,
@@ -316,32 +326,34 @@ def _render_entries(entries: list[MemoryEntry]) -> str:
 def _parse_optimize_actions(raw: str, *, allowed_types: tuple[str, ...]) -> list[MemoryOptimizeAction]:
     extracted = _extract_json_object(raw)
     output = OptimizeActionsOutput.model_validate_json(extracted)
-    actions: list[MemoryOptimizeAction] = []
-    for item in output.actions:
-        action = _optimize_action_from_item(item, allowed_types=allowed_types)
-        if action is not None:
-            actions.append(action)
-    return actions
+    return [
+        _optimize_action_from_item(item, allowed_types=allowed_types)
+        for item in output.actions
+    ]
 
 
 def _optimize_action_from_item(
     item: OptimizeActionItem,
     *,
     allowed_types: tuple[str, ...],
-) -> MemoryOptimizeAction | None:
-    if item.entry_id == "":
-        return None
-    if item.action == "update" and (item.title == "" or item.body == "" or _looks_like_raw_transcript(item.body)):
-        return None
-    try:
-        memory_type = _optional_memory_type(item.type, allowed_types=allowed_types)
-    except ValueError:
-        return None
+) -> MemoryOptimizeAction:
+    entry_id = item.entry_id.strip()
+    title = item.title.strip()
+    body = item.body.strip()
+    if not entry_id:
+        raise ValueError("optimizer action requires an entry id")
+    if item.action == "update" and (
+        not title
+        or not body
+        or _looks_like_raw_transcript(body)
+    ):
+        raise ValueError("optimizer update requires a summary title and body")
+    memory_type = _optional_memory_type(item.type, allowed_types=allowed_types)
     return MemoryOptimizeAction(
         action=item.action,
-        entry_id=item.entry_id,
-        title=item.title,
-        body=item.body,
+        entry_id=entry_id,
+        title=title,
+        body=body,
         type=memory_type,
         tags=tuple(item.tags) if item.tags is not None else None,
         confidence=item.confidence,
@@ -355,10 +367,6 @@ def _optional_memory_type(value: str | None, *, allowed_types: tuple[str, ...]) 
     if value in allowed_types:
         return cast(MemoryEntryType, value)
     raise ValueError(f"unsupported memory type: {value}")
-
-
-def _clamp_confidence(value: float) -> float:
-    return clamp_unit(value)
 
 
 def _extract_json_object(raw: str) -> str:

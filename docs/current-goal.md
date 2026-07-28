@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Memory curator action validation is strict, and any invalid generated
-action defers the complete decision before dispatch.
+Idle. Memory optimizer action validation is strict, and any invalid generated
+action defers the complete decision before candidate dispatch.
 
 ## Active Branch
 
@@ -23,25 +23,25 @@ code.
 
 ## Completion Evidence
 
-- Curator output and action models use strict types, forbid extra fields, limit
-  tags to four, and constrain confidence from zero through one.
-- Every action is converted to `MemoryAction` before dispatch; one invalid
-  sibling rejects the complete generated decision.
-- Mutation actions require non-blank title/body, normalized non-empty tags, a
-  registered memory type, and no raw transcript body.
-- Update actions require a non-empty target entry id.
+- Optimizer output and action models use strict types, forbid extra fields,
+  and constrain present confidence values from zero through one.
+- Every action is converted to `MemoryOptimizeAction` before dispatch; one
+  invalid sibling rejects the complete generated decision.
+- Every action requires a non-blank target entry id. Updates additionally
+  require non-blank title/body, reject raw transcripts, and reject unknown
+  memory type overrides.
 - Confidence clamping is removed from parsing and candidate creation because
   invalid values no longer cross the typed boundary.
-- Focused curator tests: 29 passed.
-- Final full tests: 1430 passed.
+- Focused optimizer tests: 15 passed.
+- Final full tests: 1438 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
 ## Publication
 
-`dev/v0.3.x` is published through `f02ca22`.
+Push is authorized; completed review batches are published immediately after
+their validated commit.
 
 ## Next Review Batch
 
-Strictly validate optimizer actions as a complete batch before candidate
-dispatch.
+Strictly validate memory intake JSON without clamping invalid scores.

@@ -2,10 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.llm import ChatMessage
-from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
+from nuself.memory.optimizer import (
+    MemoryOptimizer,
+    MemoryOptimizerSettings,
+    _parse_optimize_actions,  # pyright: ignore[reportPrivateUsage]
+)
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
 
@@ -189,6 +195,49 @@ def test_memory_optimizer_rejects_unknown_memory_type(tmp_path: Path) -> None:
     result = optimizer.run_once()
 
     assert result.reviewed == 0
+    assert MemoryCandidateRepository(tmp_path).list() == []
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        '{"actions":[{"action":"ignore","entry_id":"","reason":"missing id"}]}',
+        '{"actions":[{"action":"ignore","entry_id":"mem_1","confidence":1.2}]}',
+        '{"actions":[{"action":"ignore","entry_id":"mem_1","confidence":true}]}',
+        '{"actions":[{"action":"ignore","entry_id":"mem_1","unknown":"value"}]}',
+        '{"actions":[{"action":"update","entry_id":"mem_1","title":" ","body":"Summary"}]}',
+        '{"actions":[{"action":"update","entry_id":"mem_1","title":"Summary","body":" "}]}',
+        '{"actions":[{"action":"update","entry_id":"mem_1","title":"Summary",'
+        '"body":"Summary body","type":"unknown"}]}',
+    ],
+)
+def test_parse_optimizer_actions_rejects_invalid_schema(response: str) -> None:
+    with pytest.raises(ValueError):
+        _parse_optimize_actions(response, allowed_types=("belief", "episode"))
+
+
+def test_memory_optimizer_rejects_complete_mixed_valid_invalid_batch(tmp_path: Path) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    entry = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Keep memory concise",
+            body="The user wants concise memory entries.",
+        )
+    )
+    llm = FakeOptimizerLLM(
+        '{"actions":[{"action":"update","entry_id":"'
+        + entry.id
+        + '","title":"Concise memory","body":"Keep durable memories concise.",'
+        '"reason":"compress"},{"action":"delete","entry_id":"","reason":"invalid sibling"}]}'
+    )
+    optimizer = MemoryOptimizer(tmp_path, llm=llm, repository=repo)
+
+    result = optimizer.run_once()
+
+    assert result.reviewed == 0
+    assert result.updated == 0
+    assert result.deleted == 0
     assert MemoryCandidateRepository(tmp_path).list() == []
 
 
