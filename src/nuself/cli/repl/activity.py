@@ -2,11 +2,220 @@
 
 from __future__ import annotations
 
+import sys
+import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol
 
 from nuself.cli.commands.output import print_ansi
+from nuself.cli.repl.types import InteractiveChatResult
+from nuself.daemon import client
 from nuself.logs import InteractiveLogCursor, LogEvent
+from nuself.runtime.context import bind_runtime_context
 from nuself.tui.render import render_log_event
+
+SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
+
+
+class ActivityReader(Protocol):
+    """Read unseen events for one optional turn."""
+
+    def __call__(
+        self,
+        project_root: Path | None,
+        log_cursor: InteractiveLogCursor,
+        *,
+        turn_id: str | None = None,
+    ) -> list[LogEvent]: ...
+
+
+class ActivityPresenter(Protocol):
+    """Project delivered events and return updated output state."""
+
+    def __call__(
+        self,
+        events: list[LogEvent],
+        *,
+        printed_logs: bool,
+    ) -> bool: ...
+
+
+def run_live_activity_send(
+    send_message: SendMessage,
+    message: str,
+    thread_id: str,
+    turn_id: str | None,
+    project_root: Path | None,
+    log_cursor: InteractiveLogCursor,
+    *,
+    printed_logs: bool,
+    daemon_activity: bool,
+    poll_interval_seconds: float,
+    read_events: ActivityReader,
+    present_events: ActivityPresenter,
+) -> tuple[InteractiveChatResult, list[LogEvent], bool]:
+    """Run one bound send callback while collecting its live activity."""
+
+    subscription_id = _open_activity_subscription(
+        turn_id,
+        project_root,
+        enabled=daemon_activity,
+    )
+    result_box: list[InteractiveChatResult] = []
+    error_box: list[BaseException] = []
+
+    def target() -> None:
+        try:
+            result_box.append(send_message(message, thread_id, turn_id))
+        except BaseException as exc:  # pragma: no cover - defensive thread boundary
+            error_box.append(exc)
+
+    send_thread = threading.Thread(
+        target=bind_runtime_context(target),
+        daemon=True,
+    )
+    captured_events: list[LogEvent] = []
+    try:
+        send_thread.start()
+        try:
+            while send_thread.is_alive():
+                if subscription_id is not None:
+                    try:
+                        new_events = list(
+                            client.next_activity(
+                                subscription_id,
+                                project_root=project_root,
+                                timeout_ms=int(poll_interval_seconds * 1000),
+                            )
+                        )
+                    except (
+                        client.DaemonConnectionError,
+                        client.DaemonApplicationError,
+                    ):
+                        close_activity_subscription(
+                            subscription_id,
+                            project_root,
+                        )
+                        subscription_id = None
+                        new_events = []
+                else:
+                    time.sleep(poll_interval_seconds)
+                    new_events = read_events(
+                        project_root,
+                        log_cursor,
+                        turn_id=turn_id,
+                    )
+                if new_events:
+                    captured_events.extend(
+                        captured_interactive_activity_events(new_events)
+                    )
+                    printed_logs = present_events(
+                        new_events,
+                        printed_logs=printed_logs,
+                    )
+            send_thread.join()
+        except KeyboardInterrupt:
+            send_thread.join(timeout=0.5)
+            raise
+
+        new_events = _drain_final_activity(
+            subscription_id,
+            project_root,
+            log_cursor,
+            turn_id=turn_id,
+            read_events=read_events,
+        )
+    finally:
+        if subscription_id is not None:
+            close_activity_subscription(
+                subscription_id,
+                project_root,
+            )
+
+    if new_events:
+        captured_events.extend(captured_interactive_activity_events(new_events))
+        printed_logs = present_events(
+            new_events,
+            printed_logs=printed_logs,
+        )
+    if error_box:
+        print(f"chat turn failed: {error_box[0]}", file=sys.stderr)
+        return InteractiveChatResult(code=1), captured_events, printed_logs
+    return (
+        result_box[0] if result_box else InteractiveChatResult(code=1),
+        captured_events,
+        printed_logs,
+    )
+
+
+def _open_activity_subscription(
+    turn_id: str | None,
+    project_root: Path | None,
+    *,
+    enabled: bool,
+) -> str | None:
+    if not enabled or turn_id is None:
+        return None
+    try:
+        return client.open_activity(
+            turn_id,
+            project_root=project_root,
+        )
+    except (
+        client.DaemonConnectionError,
+        client.DaemonApplicationError,
+    ):
+        return None
+
+
+def _drain_final_activity(
+    subscription_id: str | None,
+    project_root: Path | None,
+    log_cursor: InteractiveLogCursor,
+    *,
+    turn_id: str | None,
+    read_events: ActivityReader,
+) -> list[LogEvent]:
+    if subscription_id is None:
+        return read_events(
+            project_root,
+            log_cursor,
+            turn_id=turn_id,
+        )
+    try:
+        return list(
+            client.next_activity(
+                subscription_id,
+                project_root=project_root,
+                timeout_ms=0,
+                limit=256,
+            )
+        )
+    except (
+        client.DaemonConnectionError,
+        client.DaemonApplicationError,
+    ):
+        return []
+
+
+def close_activity_subscription(
+    subscription_id: str,
+    project_root: Path | None,
+) -> None:
+    """Best-effort close one daemon activity subscription."""
+
+    try:
+        client.close_activity(
+            subscription_id,
+            project_root=project_root,
+        )
+    except (
+        client.DaemonConnectionError,
+        client.DaemonApplicationError,
+    ):
+        pass
 
 
 def read_interactive_activity_events(

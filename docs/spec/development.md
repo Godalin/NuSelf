@@ -231,7 +231,11 @@ under the same package.
   completion, and top-level interactive help.
 - `cli/repl/activity.py` owns incremental activity reads, transcript capture
   inclusion, user-visible event filtering, failure classification, and
-  rendering. It does not own the send thread or daemon subscription lifecycle.
+  rendering. It also owns the bound send thread and daemon activity
+  subscription lifecycle, including log-poll fallback, final drain, and
+  best-effort close. The composition root supplies polling configuration and
+  compatibility callbacks but does not implement thread or transport control
+  flow.
 - `cli/repl/runtime.py` owns the interactive session loop and receives
   application effects through `ReplCallbacks`.
 

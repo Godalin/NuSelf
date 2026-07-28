@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import threading
 import time
 import warnings
 from collections.abc import Callable, Sequence
@@ -45,13 +44,13 @@ try:
         print_ansi as _print_ansi,
     )
     from nuself.cli.repl.activity import (
-        captured_interactive_activity_events as _captured_interactive_activity_events,
-    )
-    from nuself.cli.repl.activity import (
         print_interactive_activity_events as _print_interactive_activity_events,
     )
     from nuself.cli.repl.activity import (
         read_interactive_activity_events as _interactive_activity_events,
+    )
+    from nuself.cli.repl.activity import (
+        run_live_activity_send as _run_live_activity_send,
     )
     from nuself.cli.repl.activity import (
         visible_interactive_activity_events as _visible_interactive_activity_events,
@@ -167,7 +166,6 @@ try:
     from nuself.memory.curator import MemoryCurator
     from nuself.runtime.context import (
         RuntimeContext,
-        bind_runtime_context,
         use_runtime_context,
     )
     from nuself.tui.render import TerminalTheme, render_log_event, render_session_header
@@ -567,135 +565,19 @@ def _run_interactive_send_with_live_logs(
     printed_logs: bool,
     daemon_activity: bool = False,
 ) -> tuple[InteractiveChatResult, list[LogEvent], bool]:
-    subscription_id: str | None = None
-    if daemon_activity and turn_id is not None:
-        try:
-            subscription_id = client.open_activity(
-                turn_id,
-                project_root=project_root,
-            )
-        except (
-            client.DaemonConnectionError,
-            client.DaemonApplicationError,
-        ):
-            subscription_id = None
-    result_box: list[InteractiveChatResult] = []
-    error_box: list[BaseException] = []
-
-    def _target() -> None:
-        try:
-            result_box.append(send_message(message, thread_id, turn_id))
-        except BaseException as exc:  # pragma: no cover - defensive thread boundary
-            error_box.append(exc)
-
-    send_thread = threading.Thread(
-        target=bind_runtime_context(_target),
-        daemon=True,
+    return _run_live_activity_send(
+        send_message,
+        message,
+        thread_id,
+        turn_id,
+        project_root,
+        log_cursor,
+        printed_logs=printed_logs,
+        daemon_activity=daemon_activity,
+        poll_interval_seconds=INTERACTIVE_LOG_POLL_INTERVAL_SECONDS,
+        read_events=_interactive_activity_events,
+        present_events=_print_visible_interactive_activity_events,
     )
-    send_thread.start()
-    captured_events: list[LogEvent] = []
-    try:
-        while send_thread.is_alive():
-            if subscription_id is not None:
-                try:
-                    new_events = list(
-                        client.next_activity(
-                            subscription_id,
-                            project_root=project_root,
-                            timeout_ms=int(
-                                INTERACTIVE_LOG_POLL_INTERVAL_SECONDS * 1000
-                            ),
-                        )
-                    )
-                except (
-                    client.DaemonConnectionError,
-                    client.DaemonApplicationError,
-                ):
-                    _close_activity_subscription(
-                        subscription_id,
-                        project_root,
-                    )
-                    subscription_id = None
-                    new_events = []
-            else:
-                time.sleep(INTERACTIVE_LOG_POLL_INTERVAL_SECONDS)
-                new_events = _interactive_activity_events(
-                    project_root,
-                    log_cursor,
-                    turn_id=turn_id,
-                )
-            if new_events:
-                captured_events.extend(
-                    _captured_interactive_activity_events(new_events)
-                )
-                printed_logs = _print_visible_interactive_activity_events(
-                    new_events, printed_logs=printed_logs
-                )
-        send_thread.join()
-    except KeyboardInterrupt:
-        if subscription_id is not None:
-            _close_activity_subscription(
-                subscription_id,
-                project_root,
-            )
-        send_thread.join(timeout=0.5)
-        raise
-    if subscription_id is not None:
-        try:
-            try:
-                new_events = list(
-                    client.next_activity(
-                        subscription_id,
-                        project_root=project_root,
-                        timeout_ms=0,
-                        limit=256,
-                    )
-                )
-            except (
-                client.DaemonConnectionError,
-                client.DaemonApplicationError,
-            ):
-                new_events = []
-        finally:
-            _close_activity_subscription(
-                subscription_id,
-                project_root,
-            )
-    else:
-        new_events = _interactive_activity_events(
-            project_root,
-            log_cursor,
-            turn_id=turn_id,
-        )
-    if new_events:
-        captured_events.extend(_captured_interactive_activity_events(new_events))
-        printed_logs = _print_visible_interactive_activity_events(
-            new_events, printed_logs=printed_logs
-        )
-    if error_box:
-        print(f"chat turn failed: {error_box[0]}", file=sys.stderr)
-        return InteractiveChatResult(code=1), captured_events, printed_logs
-    return (
-        result_box[0] if result_box else InteractiveChatResult(code=1),
-        captured_events,
-        printed_logs,
-    )
-
-
-def _close_activity_subscription(
-    subscription_id: str,
-    project_root: Path | None,
-) -> None:
-    try:
-        client.close_activity(
-            subscription_id,
-            project_root=project_root,
-        )
-    except (
-        client.DaemonConnectionError,
-        client.DaemonApplicationError,
-    ):
-        pass
 
 
 def _print_visible_interactive_activity_events(

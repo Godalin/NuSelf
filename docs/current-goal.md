@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The REPL activity projection extraction is complete.
+Idle. The live REPL activity transport extraction is complete.
 
 ## Active Branch
 
@@ -22,14 +22,14 @@ code.
 
 ## Completion Evidence
 
-- `cli/repl/activity.py` owns cursor reads, transcript capture inclusion,
-  visibility filtering, failure classification, and activity rendering.
-- The new module does not import the CLI composition root; existing root call
-  sites retain aliases to the extracted operations.
-- Capture and visibility remain distinct and daemon failures remain
-  user-visible without exposing unrelated domain activity.
-- Focused CLI and REPL activity tests: 296 passed.
-- Full tests: 1249 passed.
+- `cli/repl/activity.py` owns the context-bound send thread and daemon activity
+  subscription open, poll, fallback, final drain, and close lifecycle.
+- The CLI composition root supplies polling configuration and its compatibility
+  read/presentation callbacks through one thin adapter.
+- Subscription cleanup runs after normal completion, daemon delivery failure,
+  keyboard interruption, and unexpected poll/presentation failure.
+- Focused CLI and REPL activity tests: 301 passed.
+- Full tests: 1254 passed.
 - Pyright: 0 errors.
 - `git diff --check`: passed.
 
@@ -39,5 +39,5 @@ All local commits remain pending until explicit push authorization.
 
 ## Next Review Batch
 
-Move the live activity transport loop into the new REPL activity boundary, or
-extract the next complete CLI composition responsibility.
+Extract the next complete CLI composition responsibility after live activity
+ownership is isolated.

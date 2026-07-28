@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+import threading
+from pathlib import Path
 from typing import cast
 
+import pytest
+from _pytest.capture import CaptureFixture
+from _pytest.monkeypatch import MonkeyPatch
+
+from nuself.cli.repl import activity
 from nuself.cli.repl.activity import (
     captured_interactive_activity_events,
+    read_interactive_activity_events,
+    run_live_activity_send,
     visible_interactive_activity_events,
 )
-from nuself.logs import LogComponent, LogEvent
+from nuself.cli.repl.types import InteractiveChatResult
+from nuself.logs import InteractiveLogCursor, LogComponent, LogEvent
 
 
 def _event(
@@ -23,6 +33,23 @@ def _event(
         message=event,
         status=status,
     )
+
+
+def _successful_send(
+    _message: str,
+    _thread_id: str,
+    _turn_id: str | None,
+) -> InteractiveChatResult:
+    return InteractiveChatResult(code=0, reply="done")
+
+
+def _mark_presented(
+    events: list[LogEvent],
+    *,
+    printed_logs: bool,
+) -> bool:
+    del events
+    return True if not printed_logs else printed_logs
 
 
 def test_activity_projection_keeps_capture_and_visibility_distinct() -> None:
@@ -49,3 +76,291 @@ def test_daemon_failures_are_visible_without_capturing_other_domains() -> None:
 
     assert visible_interactive_activity_events(events) == [daemon_failure]
     assert captured_interactive_activity_events(events) == [daemon_failure]
+
+
+def test_live_send_drains_and_closes_daemon_subscription(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    event = _event("chat", "service_tool_called")
+    pending = [event]
+    closed: list[str] = []
+    presented: list[LogEvent] = []
+
+    def open_activity(
+        _turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del project_root
+        return "sub-1"
+
+    monkeypatch.setattr(
+        activity.client,
+        "open_activity",
+        open_activity,
+    )
+
+    def next_activity(*_args: object, **_kwargs: object) -> tuple[LogEvent, ...]:
+        if not pending:
+            return ()
+        return (pending.pop(),)
+
+    monkeypatch.setattr(activity.client, "next_activity", next_activity)
+    def close_activity(
+        subscription_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> bool:
+        del project_root
+        closed.append(subscription_id)
+        return True
+
+    monkeypatch.setattr(activity.client, "close_activity", close_activity)
+
+    def fail_file_read(
+        project_root: Path | None,
+        log_cursor: InteractiveLogCursor,
+        *,
+        turn_id: str | None = None,
+    ) -> list[LogEvent]:
+        del project_root, log_cursor, turn_id
+        pytest.fail("daemon activity must not fall back while transport is healthy")
+
+    def present(
+        events: list[LogEvent],
+        *,
+        printed_logs: bool,
+    ) -> bool:
+        presented.extend(events)
+        return printed_logs or bool(events)
+
+    result, captured, printed = run_live_activity_send(
+        _successful_send,
+        "hello",
+        "default",
+        "turn-1",
+        tmp_path,
+        InteractiveLogCursor.from_project(tmp_path),
+        printed_logs=False,
+        daemon_activity=True,
+        poll_interval_seconds=0,
+        read_events=fail_file_read,
+        present_events=present,
+    )
+
+    assert result.reply == "done"
+    assert captured == [event]
+    assert presented == [event]
+    assert printed is True
+    assert closed == ["sub-1"]
+
+
+def test_live_send_falls_back_when_activity_open_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    event = _event("chat", "turn_completed")
+    reads = 0
+
+    def fail_open(
+        turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del turn_id, project_root
+        raise activity.client.DaemonConnectionError("activity unavailable")
+
+    def read_events(
+        project_root: Path | None,
+        log_cursor: InteractiveLogCursor,
+        *,
+        turn_id: str | None = None,
+    ) -> list[LogEvent]:
+        del project_root, log_cursor, turn_id
+        nonlocal reads
+        reads += 1
+        return [event] if reads == 1 else []
+
+    monkeypatch.setattr(activity.client, "open_activity", fail_open)
+
+    result, captured, _printed = run_live_activity_send(
+        _successful_send,
+        "hello",
+        "default",
+        "turn-1",
+        tmp_path,
+        InteractiveLogCursor.from_project(tmp_path),
+        printed_logs=False,
+        daemon_activity=True,
+        poll_interval_seconds=0,
+        read_events=read_events,
+        present_events=_mark_presented,
+    )
+
+    assert result.code == 0
+    assert captured == [event]
+
+
+def test_live_send_reports_callback_exception_without_escaping(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    def fail_send(
+        message: str,
+        thread_id: str,
+        turn_id: str | None,
+    ) -> InteractiveChatResult:
+        del message, thread_id, turn_id
+        raise ValueError("send exploded")
+
+    def read_nothing(
+        project_root: Path | None,
+        log_cursor: InteractiveLogCursor,
+        *,
+        turn_id: str | None = None,
+    ) -> list[LogEvent]:
+        del project_root, log_cursor, turn_id
+        return []
+
+    result, captured, printed = run_live_activity_send(
+        fail_send,
+        "hello",
+        "default",
+        "turn-1",
+        tmp_path,
+        InteractiveLogCursor.from_project(tmp_path),
+        printed_logs=False,
+        daemon_activity=False,
+        poll_interval_seconds=0,
+        read_events=read_nothing,
+        present_events=_mark_presented,
+    )
+
+    assert result.code == 1
+    assert captured == []
+    assert printed is False
+    assert "chat turn failed: send exploded" in capsys.readouterr().err
+
+
+def test_live_send_closes_subscription_on_unexpected_poll_failure(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    release = threading.Event()
+    closed: list[str] = []
+
+    def wait_send(
+        _message: str,
+        _thread_id: str,
+        _turn_id: str | None,
+    ) -> InteractiveChatResult:
+        release.wait(1)
+        return InteractiveChatResult(code=0)
+
+    def fail_next(*_args: object, **_kwargs: object) -> tuple[LogEvent, ...]:
+        release.set()
+        raise ValueError("unexpected poll failure")
+
+    def close_activity(
+        subscription_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> bool:
+        del project_root
+        closed.append(subscription_id)
+        return True
+
+    def open_activity(
+        _turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del project_root
+        return "sub-1"
+
+    def read_nothing(
+        project_root: Path | None,
+        log_cursor: InteractiveLogCursor,
+        *,
+        turn_id: str | None = None,
+    ) -> list[LogEvent]:
+        del project_root, log_cursor, turn_id
+        return []
+
+    monkeypatch.setattr(activity.client, "open_activity", open_activity)
+    monkeypatch.setattr(activity.client, "next_activity", fail_next)
+    monkeypatch.setattr(activity.client, "close_activity", close_activity)
+
+    with pytest.raises(ValueError, match="unexpected poll failure"):
+        run_live_activity_send(
+            wait_send,
+            "hello",
+            "default",
+            "turn-1",
+            tmp_path,
+            InteractiveLogCursor.from_project(tmp_path),
+            printed_logs=False,
+            daemon_activity=True,
+            poll_interval_seconds=0,
+            read_events=read_nothing,
+            present_events=_mark_presented,
+        )
+
+    assert closed == ["sub-1"]
+
+
+def test_live_send_closes_subscription_when_presenter_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    closed: list[str] = []
+
+    def open_activity(
+        turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del turn_id, project_root
+        return "sub-1"
+
+    def next_activity(*_args: object, **_kwargs: object) -> tuple[LogEvent, ...]:
+        return (_event("chat", "service_tool_called"),)
+
+    def close_activity(
+        subscription_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> bool:
+        del project_root
+        closed.append(subscription_id)
+        return True
+
+    def fail_present(
+        events: list[LogEvent],
+        *,
+        printed_logs: bool,
+    ) -> bool:
+        del events, printed_logs
+        raise RuntimeError("renderer unavailable")
+
+    monkeypatch.setattr(activity.client, "open_activity", open_activity)
+    monkeypatch.setattr(activity.client, "next_activity", next_activity)
+    monkeypatch.setattr(activity.client, "close_activity", close_activity)
+
+    with pytest.raises(RuntimeError, match="renderer unavailable"):
+        run_live_activity_send(
+            _successful_send,
+            "hello",
+            "default",
+            "turn-1",
+            tmp_path,
+            InteractiveLogCursor.from_project(tmp_path),
+            printed_logs=False,
+            daemon_activity=True,
+            poll_interval_seconds=0,
+            read_events=read_interactive_activity_events,
+            present_events=fail_present,
+        )
+
+    assert closed == ["sub-1"]
