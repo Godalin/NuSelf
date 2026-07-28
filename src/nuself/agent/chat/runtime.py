@@ -7,7 +7,6 @@ from dataclasses import replace
 import json
 import logging
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
@@ -17,7 +16,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
 from nuself.agent.middleware import ToolCaptureMiddleware
-from nuself.agent.chat_types import (
+from nuself.agent.chat.types import (
     ChatAgentSettings,
     ChatResult,
     ChatStructuredOutput,
@@ -26,13 +25,13 @@ from nuself.agent.chat_types import (
     ConversationNodeResult,
     ConversationTurnState,
 )
-from nuself.agent.chat_context import ConversationContextPreparer
-from nuself.agent.chat_state import ConversationStateManager
+from nuself.agent.chat.context import ConversationContextPreparer
+from nuself.agent.chat.persona import ConversationPersonaOrchestrator
+from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.skills import AgentSkill, load_agent_skills, render_tool_placeholders
-from nuself.agent.thread import ThreadMessage, ThreadState, ThreadStore
+from nuself.agent.chat.thread import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.tools import build_langchain_chat_tools
 from nuself.agent.tool_utils import tool_log_metadata
-from nuself.domain.proactive import IdeaCandidate
 from nuself.config import ConfigSystem
 from nuself.llm import (
     ChatLLM,
@@ -44,21 +43,10 @@ from nuself.llm import (
     record_llm_endpoint_success,
     redact_llm_error,
 )
-from nuself.logs import current_log_context, log_context, write_log_event
-from nuself.memory.query import MemoryQuery, MemoryQueryService
+from nuself.logs import log_context, write_log_event
+from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
-from nuself.persona import (
-    LLMBackedActivationPolicy,
-    LLMBackedPersonaNode,
-    LLMBackedSynthesizerNode,
-    PersonaDefinition,
-    PersonaGraphDriver,
-    PersonaInput,
-    PersonaTurnState,
-    SharedPersonaDiscussionService,
-    load_persona_definitions,
-)
 from nuself.profile.repository import ProfileItemRepository
 from nuself.trace.service import TraceRecorder
 
@@ -114,32 +102,6 @@ class ConversationGraphRuntime:
         self._thread_store = thread_store or ThreadStore(project_root)
         system_config = ConfigSystem.load(project_root=project_root)
         self._language_preference = system_config.chat.language_preference
-        self._persona_definitions = load_persona_definitions(project_root)
-        self._activation_policy = LLMBackedActivationPolicy(
-            self._persona_definitions,
-            llm=self._llm,
-            langchain_models=self._langchain_models,
-            project_root=self._project_root,
-        )
-        self._persona_driver = PersonaGraphDriver(
-            persona_node=LLMBackedPersonaNode(
-                llm=self._llm,
-                language_preference=self._language_preference,
-                langchain_models=self._langchain_models,
-                project_root=self._project_root,
-            ),
-            synthesizer_node=LLMBackedSynthesizerNode(
-                llm=self._llm,
-                language_preference=self._language_preference,
-                langchain_models=self._langchain_models,
-                project_root=self._project_root,
-            ),
-        )
-        self._persona_discussion_service = SharedPersonaDiscussionService(
-            project_root=project_root,
-            llm=self._llm,
-            language_preference=self._language_preference,
-        )
         self._trace_recorder = TraceRecorder(project_root)
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),
@@ -152,6 +114,13 @@ class ConversationGraphRuntime:
         self._state_manager = ConversationStateManager(
             llm=self._llm,
             settings=self._settings,
+        )
+        self._persona_orchestrator = ConversationPersonaOrchestrator(
+            project_root=project_root,
+            llm=self._llm,
+            langchain_models=self._langchain_models,
+            language_preference=self._language_preference,
+            memory_query_service=self._memory_query_service,
         )
         from nuself.reflection.repository import ReflectionRepository
 
@@ -530,158 +499,10 @@ class ConversationGraphRuntime:
     # ------------------------------------------------------------------
 
     def _consult_selves_tool(self, topic: str, mode: str = "consult", context: str | None = None) -> str:
-        thread_id = current_log_context().thread_id or "default"
-        memory_context = self._memory_query_service.pack(MemoryQuery(text=topic)).text
-        extra_context = context.strip() if isinstance(context, str) else ""
-        combined_context = "\n\n".join(part for part in (memory_context, extra_context) if part)
-        persona_input = PersonaInput(user_message=topic, memory_context=combined_context)
-        activation = self._activation_policy.decide(persona_input)
-        selected_personas = activation.selected_personas or self._default_consult_personas()
-        turn_state = PersonaTurnState(input=persona_input, selected_personas=selected_personas)
-        updated_turn_state = self._persona_driver.run(turn_state)
-        trigger = activation.trigger or "selves_consult"
-        self._write_persona_summary_log(updated_turn_state, thread_id=thread_id, trigger=trigger)
-
-        force_discussion = mode.strip().casefold() in {"discussion", "discuss", "debate", "competitive"}
-        should_escalate = activation.should_escalate or force_discussion
-        escalation_reason = activation.escalation_reason or ("requested discussion mode" if force_discussion else "consultation only")
-        self._write_host_discussion_decision_log(
-            thread_id=thread_id,
-            should_escalate=should_escalate,
-            escalation_reason=escalation_reason,
-        )
-        discussion_note = ""
-        try:
-            if should_escalate:
-                result = self._persona_discussion_service.discuss(
-                    self._build_chat_discussion_candidate(
-                        thread_id=thread_id,
-                        user_message=topic,
-                        title=(topic.splitlines()[0] if topic.splitlines() else topic)[:120],
-                        source_summary=updated_turn_state.synthesis.summary if updated_turn_state.synthesis is not None else "",
-                    ),
-                    on_trace_entry=lambda entry: self._write_persona_discussion_step_log(
-                        thread_id,
-                        trigger,
-                        entry,
-                    ),
-                )
-                discussion_note = f"\nDiscussion result: {result.reason}"
-                try:
-                    write_log_event(
-                        "persona",
-                        "persona_discussion",
-                        f"chat-triggered discussion: {result.reason}",
-                        project_root=self._project_root,
-                        thread_id=thread_id,
-                        status=trigger,
-                        metadata={
-                            "winner_persona_ids": list(result.winner_persona_ids),
-                            "emergent_persona_ids": list(result.emergent_persona_ids),
-                            "blocking_vetos": list(result.blocking_vetos),
-                            "reason": result.reason,
-                            "discussion_steps": len(result.discussion_trace),
-                        },
-                    )
-                except Exception:
-                    LOGGER.exception("failed to write persona discussion log")
-        except Exception as exc:
-            write_log_event(
-                "persona",
-                "persona_discussion_failure",
-                str(exc),
-                project_root=self._project_root,
-                level="error",
-                error=str(exc),
-            )
-            discussion_note = f"\nDiscussion failed: {exc}"
-
-        return _format_selves_consult_result(updated_turn_state, trigger=trigger, discussion_note=discussion_note)
-
-    def _default_consult_personas(self) -> tuple[PersonaDefinition, ...]:
-        preferred = ("analyst_self", "skeptic_self", "builder_self")
-        by_id = {persona.id: persona for persona in self._persona_definitions}
-        selected = tuple(by_id[pid] for pid in preferred if pid in by_id)
-        if selected:
-            return selected
-        return tuple(self._persona_definitions[:3])
-
-    def _write_persona_summary_log(self, turn_state: PersonaTurnState, *, thread_id: str, trigger: str) -> None:
-        try:
-            write_log_event(
-                "persona",
-                "persona_summary",
-                _compact_persona_summary(turn_state),
-                project_root=self._project_root,
-                thread_id=thread_id,
-                status=trigger,
-                metadata={
-                    "persona_count": len(turn_state.contributions),
-                    "has_synthesis": turn_state.synthesis is not None,
-                },
-            )
-        except Exception:
-            LOGGER.exception("failed to write persona summary log")
-
-    def _write_host_discussion_decision_log(
-        self,
-        *,
-        thread_id: str,
-        should_escalate: bool,
-        escalation_reason: str,
-    ) -> None:
-        try:
-            write_log_event(
-                "persona",
-                "host_discussion_decision",
-                escalation_reason,
-                project_root=self._project_root,
-                thread_id=thread_id,
-                status="approved" if should_escalate else "skipped",
-                metadata={
-                    "should_escalate": should_escalate,
-                    "escalation_reason": escalation_reason,
-                },
-            )
-        except Exception:
-            LOGGER.exception("failed to write host discussion decision log")
-
-    def _write_persona_discussion_step_log(self, thread_id: str, trigger: str, entry: str) -> None:
-        try:
-            write_log_event(
-                "persona",
-                "persona_discussion_step",
-                "",
-                project_root=self._project_root,
-                thread_id=thread_id,
-                status=trigger,
-                metadata={"discussion_trace": [entry]},
-            )
-        except Exception:
-            LOGGER.exception("failed to write persona discussion step log")
-
-    def _build_chat_discussion_candidate(
-        self,
-        *,
-        thread_id: str,
-        user_message: str,
-        title: str,
-        source_summary: str,
-    ) -> IdeaCandidate:
-        ctype = "question" if "?" in user_message else "action"
-        return IdeaCandidate(
-            id=f"chat-{thread_id}-{int(datetime.now(UTC).timestamp())}",
-            title=title,
-            body=user_message,
-            candidate_type=ctype,
-            confidence=0.8,
-            novelty=0.5,
-            urgency=0.2,
-            interruption_cost=0.1,
-            evidence_refs=(),
-            suggested_thread_id=thread_id,
-            source_summary=source_summary,
-            created_at=datetime.now(UTC).isoformat(),
+        return self._persona_orchestrator.consult(
+            topic,
+            mode=mode,
+            context=context,
         )
 
     # ------------------------------------------------------------------
@@ -863,49 +684,6 @@ def _split_prompt(prompt: list[ChatMessage]) -> tuple[str | None, list[BaseMessa
 # ======================================================================
 # Module-level helpers
 # ======================================================================
-
-
-def _compact_persona_summary(turn_state: "PersonaTurnState") -> str:
-    parts: list[str] = []
-    for contrib in turn_state.contributions:
-        note = contrib.notes[0] if contrib.notes else ""
-        snippet = note if len(note) <= 140 else (note[:137] + "...")
-        parts.append(f"{contrib.persona_id}: {snippet}")
-    if turn_state.synthesis is not None:
-        summary = turn_state.synthesis.summary
-        synthesis_snippet = summary if len(summary) <= 140 else (summary[:137] + "...")
-        parts.append(f"synthesizer_self: {synthesis_snippet}")
-    if not parts:
-        return "(no persona contributions)"
-    return "\n".join(parts)
-
-
-def _format_selves_consult_result(
-    turn_state: "PersonaTurnState",
-    *,
-    trigger: str,
-    discussion_note: str = "",
-) -> str:
-    lines = [
-        "Selves consultation result:",
-        f"trigger: {trigger}",
-    ]
-    if turn_state.contributions:
-        lines.append("persona notes:")
-        for contribution in turn_state.contributions:
-            note = contribution.notes[0] if contribution.notes else "(no note)"
-            lines.append(f"- {contribution.persona_id}: {note}")
-    if turn_state.synthesis is not None:
-        lines.extend(
-            [
-                "synthesis:",
-                turn_state.synthesis.summary,
-                f"source_personas: {', '.join(turn_state.synthesis.source_personas)}",
-            ]
-        )
-    if discussion_note:
-        lines.append(discussion_note.strip())
-    return "\n".join(lines)
 
 
 def _require_thread_state(state: ThreadState | None) -> ThreadState:

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from nuself.agent.chat_types import (
+from nuself.agent.chat.types import (
     ChatAgentSettings,
     ConversationNodeResult,
     ConversationTurnState,
 )
-from nuself.agent.thread import ThreadMessage, ThreadState
+from nuself.agent.chat.thread import ThreadMessage, ThreadState
 from nuself.llm import ChatLLM, ChatMessage
 
 

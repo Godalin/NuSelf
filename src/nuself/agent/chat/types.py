@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from nuself.agent.thread import ThreadMessage, ThreadState
+from nuself.agent.chat.thread import ThreadMessage, ThreadState
 from nuself.config import ConfigSystem
 
 ConversationNodeName = Literal[

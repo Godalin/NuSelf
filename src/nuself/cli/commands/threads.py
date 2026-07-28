@@ -6,7 +6,7 @@ import argparse
 import sys
 from collections.abc import Callable
 
-from nuself.agent.thread import ThreadState, ThreadStore
+from nuself.agent.chat import ThreadState, ThreadStore
 
 
 def handle_thread_list(args: argparse.Namespace) -> int:

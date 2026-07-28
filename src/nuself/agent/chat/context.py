@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from nuself.agent.chat_types import (
+from nuself.agent.chat.types import (
     ConversationNodeResult,
     ConversationTurnState,
 )
-from nuself.agent.thread import ThreadMessage
+from nuself.agent.chat.thread import ThreadMessage
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 
 

@@ -112,17 +112,23 @@ NuSelf must not ask the model to print a private tool protocol in the assistant 
 3. **state_update** — persist messages and update thread state
 4. **compression** — summarize when the message window grows past the trigger threshold
 
-The runtime composes focused collaborators rather than implementing every node
-directly:
+The `nuself.agent.chat` package composes focused collaborators rather than
+implementing every node directly:
 
 - `ConversationContextPreparer` owns durable-context retrieval and prompt-window
   message filtering for **prepare_context**.
 - `ConversationStateManager` owns message-state persistence and bounded
   summarization for **state_update** and **compression**.
+- `ConversationPersonaOrchestrator` owns persona activation, bounded selves
+  consultation, discussion escalation, and persona activity logging.
 
 `ConversationGraphRuntime` retains compatibility node methods that delegate to
 these collaborators, and remains responsible for graph wiring and turn-level
 error/trace boundaries.
+
+The package root is the stable public import boundary. Runtime implementation,
+context preparation, state management, persona orchestration, conversation
+types, and thread persistence live in separate modules beneath it.
 
 Tool calling is delegated to `create_agent` inside the **respond** node.
 Persona/selves work is not a fixed pre-response stage; it is invoked through the `selves_consult` subagent tool when the main chat agent decides it is useful.
