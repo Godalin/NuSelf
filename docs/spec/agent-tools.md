@@ -57,10 +57,10 @@ Subsystems own their prompts and domain conversion after this boundary. They
 must not wrap the runner with prompted JSON, fenced-text extraction,
 `model_validate_json`, or schema-default compatibility behavior.
 
-If the active model or test double is not a LangChain chat model, NuSelf may use
-a deterministic local fallback parser, but fallback models must not become a
-parallel production protocol. They may return a plain final answer or a legacy
-JSON envelope used by tests and non-agent subsystems.
+There is no alternate chat model or parser behind this boundary. When no
+LangChain endpoint is available, chat constructs the deterministic local
+response described below. Tests that need generated behavior inject the typed
+service boundary rather than emulate a model protocol.
 
 ### Tool Registry
 
@@ -146,6 +146,21 @@ agent run, but it is not authority to replay a completed tool in a new agent
 run. Before any tool executes, the existing bounded same-endpoint retry and
 endpoint failover behavior remains unchanged.
 
+### No-Model Local Response
+
+The chat runtime has one real model protocol: LangChain endpoints and agents.
+No-model behavior is a deterministic local response policy, not a second
+`ChatLLM.complete()` implementation. It returns the existing configuration
+guidance plus the last user message and is converted directly into
+`ChatStructuredOutput`.
+
+`ConversationGraphRuntime` and `ConversationResponseSynthesizer` do not accept
+`llm=`. Tests that need generated responses inject the typed
+`ConversationResponseService`; endpoint exhaustion and tool-safe retry
+suppression use the deterministic local response policy. The local policy
+cannot call tools, claim model reasoning, or emit a NuSelf-only response
+protocol.
+
 ### Tool Outcome Transfer
 
 Middleware transfers tool execution state internally as one immutable
@@ -206,13 +221,11 @@ structured state is a protocol failure; message content is never reparsed as a
 second response protocol, and dictionary state is never revalidated into the
 response model.
 
-When no configured LangChain model exists, the deterministic local
-`ChatLLM` fallback may produce one plain answer. The runtime wraps that text in
-`ChatStructuredOutput` with default metadata. JSON objects, fenced JSON,
-response-field payloads, and visible tool-call markers are rejected rather
-than parsed. Tests or alternate composition roots that need non-default
-structured fields inject `ConversationResponseService`; they must not emulate
-a model by returning prompted JSON.
+When no configured LangChain model exists, the runtime constructs the
+deterministic local `ChatStructuredOutput` directly. It does not invoke or
+parse model-shaped text. Tests or alternate composition roots that need
+non-default structured fields inject `ConversationResponseService`; they must
+not emulate a model by returning prompted JSON.
 
 Within one logical chat turn, repeated tool calls with the same normalized tool name and identical arguments should reuse the first result. The runtime should still return a `ToolMessage` for every LangChain tool call id, but it should not execute or log duplicate service calls. This keeps interactive logs readable and prevents repeated status queries such as `memory_count` from looking like retries.
 

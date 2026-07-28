@@ -99,7 +99,10 @@ Rules:
 - If an endpoint has `anthropic: true`, NuSelf uses Anthropic Messages API semantics for that endpoint. `base_url` defaults to `https://api.anthropic.com/v1` when omitted.
 - Each endpoint may set `timeout_seconds`. It controls the provider HTTP request timeout for that endpoint. If omitted, the default is 60 seconds.
 - The old nested `llm.openai` shape is not part of v0.2.0. Configuration should use the direct `llm` list shape.
-- If every configured endpoint has an empty API key, NuSelf uses the local fallback LLM.
+- If every configured endpoint has an empty API key, no LangChain endpoint is
+  available. Chat returns its deterministic local configuration guidance;
+  subsystems that require model generation fail clearly according to their own
+  contract. NuSelf does not construct a local fallback LLM.
 - Runtime LLM state is stored under `private/runtime/llm_state.json`.
 - State records the last successful configured endpoint index in the `llm` list.
 - On the next process use, NuSelf starts from the saved successful index, then wraps around through the configured endpoints.

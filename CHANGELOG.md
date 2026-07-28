@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Chat runtime and response synthesis no longer accept `llm=` or construct
+  `default_llm()`. Missing endpoints, exhausted endpoints, and tool-safe retry
+  suppression now enter an explicit deterministic local response policy that
+  produces typed chat output; generated test behavior uses
+  `ConversationResponseService`.
 - `ReasonAdvancer` now builds equivalent agents for all configured endpoints
   and uses shared availability failover before any tool runs. Once middleware
   records a tool outcome, endpoint switching is suppressed with a chained

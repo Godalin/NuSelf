@@ -59,29 +59,25 @@ def _invoke_chat_tool(tool: BaseTool, args: dict[str, object] | None = None) -> 
     return str(invoke(args or {}))
 
 
-class FakeLLM:
+class FakeResponseService:
     def __init__(self, activation_response: dict[str, object] | None = None) -> None:
+        del activation_response
         self.calls: list[list[ChatMessage]] = []
-        self._activation_response = activation_response or {
-            "activated": False,
-            "selected_persona_ids": [],
-            "trigger": "test",
-            "should_escalate": False,
-            "escalation_reason": "",
-        }
 
-    def complete(self, messages: list[ChatMessage]) -> str:
-        content = messages[0].content
-        if "Persona Activation Gate" in content:
-            return json.dumps(self._activation_response)
-        if "private reflection council" in content:
-            return "analyst_self gives a concrete LLM-backed perspective."
-        if "You are the synthesizer. Distill" in content:
-            return "LLM-backed synthesis of internal perspectives."
-        self.calls.append(messages)
-        if "Compress a private NuSelf conversation" in content:
-            return "compressed context"
-        return "agent reply"
+    def complete(
+        self,
+        prompt: list[ChatMessage],
+    ) -> ChatStructuredOutput:
+        self.calls.append(prompt)
+        return ChatStructuredOutput(answer="agent reply")
+
+    def finalize(
+        self,
+        state: ConversationTurnState,
+        draft: ChatStructuredOutput,
+    ) -> ChatStructuredOutput:
+        del state
+        return draft
 
 
 class StaticResponseService:
@@ -101,9 +97,21 @@ class StaticResponseService:
         return draft
 
 
-class FailingLLM:
-    def complete(self, messages: list[ChatMessage]) -> str:
+class FailingResponseService:
+    def complete(
+        self,
+        prompt: list[ChatMessage],
+    ) -> ChatStructuredOutput:
+        del prompt
         raise RuntimeError("llm unavailable")
+
+    def finalize(
+        self,
+        state: ConversationTurnState,
+        draft: ChatStructuredOutput,
+    ) -> ChatStructuredOutput:
+        del state
+        return draft
 
 
 def test_chat_agent_includes_memory_entries(tmp_path: Path) -> None:
@@ -116,8 +124,8 @@ def test_chat_agent_includes_memory_entries(tmp_path: Path) -> None:
             tags=["style"],
         )
     )
-    llm = FakeLLM()
-    agent = ConversationGraphRuntime(tmp_path, llm=llm, memory_query_service=MemoryQueryService(repo))
+    llm = FakeResponseService()
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm, memory_query_service=MemoryQueryService(repo))
 
     result = agent.respond("clarity assumptions")
 
@@ -137,8 +145,8 @@ def test_chat_agent_omits_irrelevant_memory_entries(tmp_path: Path) -> None:
             tags=["style"],
         )
     )
-    llm = FakeLLM()
-    agent = ConversationGraphRuntime(tmp_path, llm=llm, memory_query_service=MemoryQueryService(repo))
+    llm = FakeResponseService()
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm, memory_query_service=MemoryQueryService(repo))
 
     agent.respond("weather forecast")
 
@@ -162,8 +170,8 @@ def test_chat_agent_includes_source_chunks_by_default(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     SourceRepository(tmp_path).ingest_path(source_path)
-    llm = FakeLLM()
-    agent = ConversationGraphRuntime(tmp_path, llm=llm)
+    llm = FakeResponseService()
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm)
 
     agent.respond("durable source evidence")
 
@@ -185,8 +193,8 @@ def test_chat_agent_includes_profile_items_by_default(tmp_path: Path) -> None:
             source_refs=["source:profile:0"],
         )
     )
-    llm = FakeLLM()
-    agent = ConversationGraphRuntime(tmp_path, llm=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path), profile_repository=profile_repo))
+    llm = FakeResponseService()
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path), profile_repository=profile_repo))
 
     agent.respond("direct answers")
 
@@ -197,7 +205,6 @@ def test_chat_agent_includes_profile_items_by_default(tmp_path: Path) -> None:
 
 
 def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
-    llm = FakeLLM()
     response_service = StaticResponseService(
         ChatStructuredOutput(
             answer="Use the profile context.",
@@ -208,7 +215,6 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
     )
     agent = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
         response_service=response_service,
         memory_query_service=MemoryQueryService(
             MemoryEntryRepository(tmp_path)
@@ -237,12 +243,12 @@ def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:
             self.calls.append(messages)
             return "compressed context"
 
-    llm = FakeLLM()
+    llm = FakeResponseService()
     compression_agent = _CompressionAgent()
     settings = ChatAgentSettings(recent_messages=2, summary_trigger_messages=4, summary_target_chars=200)
     agent = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
+        response_service=llm,
         settings=settings,
         compression_agent=compression_agent,
     )
@@ -295,8 +301,8 @@ def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
             ],
         )
     )
-    llm = FakeLLM()
-    agent = ConversationGraphRuntime(tmp_path, llm=llm, thread_store=thread_store)
+    llm = FakeResponseService()
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm, thread_store=thread_store)
 
     agent.respond("new question")
 
@@ -308,7 +314,7 @@ def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
 
 
 def test_selves_consult_writes_host_discussion_decision_log(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    llm = FakeLLM(activation_response={
+    llm = FakeResponseService(activation_response={
         "activated": True,
         "selected_persona_ids": ["analyst_self"],
         "trigger": "debate request",
@@ -317,7 +323,7 @@ def test_selves_consult_writes_host_discussion_decision_log(tmp_path: Path, caps
     })
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
+        response_service=llm,
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
 
@@ -363,10 +369,8 @@ def test_thread_store_update_writes_under_transaction(tmp_path: Path) -> None:
 
 
 def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> None:
-    llm = FakeLLM()
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
         response_service=StaticResponseService(
             ChatStructuredOutput(
                 answer="Runtime node reply.",
@@ -396,10 +400,8 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
 
 
 def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path) -> None:
-    llm = FakeLLM()
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="Trivial reply.", confidence=0.4)
         ),
@@ -483,18 +485,8 @@ def test_conversation_runtime_runs_agent_backed_personas_through_selves_subagent
         "nuself.agent.chat.persona.persona_graph_agents",
         fake_persona_graph_agents,
     )
-    llm = FakeLLM(
-        {
-            "activated": True,
-            "selected_persona_ids": ["analyst_self"],
-            "trigger": "analytical question",
-            "should_escalate": False,
-            "escalation_reason": "",
-        },
-    )
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
         langchain_models=cast(Any, (object(),)),
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="Persona reply.", confidence=0.4)
@@ -524,7 +516,6 @@ def test_conversation_runtime_runs_agent_backed_personas_through_selves_subagent
 
 
 def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path: Path) -> None:
-    llm = FakeLLM()
     response_service = StaticResponseService(
         ChatStructuredOutput(
             answer="Graph driver reply.",
@@ -535,7 +526,6 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
     )
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
         response_service=response_service,
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
@@ -583,7 +573,7 @@ def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Pat
     )
     agent = ConversationGraphRuntime(
         tmp_path,
-        llm=FailingLLM(),
+        response_service=FailingResponseService(),
         thread_store=thread_store,
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
@@ -635,7 +625,7 @@ def test_chat_completed_event_is_published_after_thread_persistence(
     publisher.subscribe(inspect_persisted_state)
     agent = ConversationGraphRuntime(
         tmp_path,
-        llm=FakeLLM(),
+        response_service=FakeResponseService(),
         thread_store=thread_store,
         event_publisher=publisher,
     )
@@ -676,7 +666,7 @@ def test_chat_persistence_failure_publishes_failed_not_completed(
 
     agent = ConversationGraphRuntime(
         tmp_path,
-        llm=FakeLLM(),
+        response_service=FakeResponseService(),
         thread_store=FailingSaveThreadStore(tmp_path),
     )
 
@@ -701,13 +691,13 @@ def test_chat_persistence_failure_publishes_failed_not_completed(
 def test_chat_reused_event_does_not_rerun_graph(
     tmp_path: Path,
 ) -> None:
-    llm = FakeLLM()
+    llm = FakeResponseService()
     publisher = EventPublisher()
     observed: list[RuntimeEnvelope] = []
     publisher.subscribe(observed.append)
     agent = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
+        response_service=llm,
         event_publisher=publisher,
     )
     agent.respond("same turn", turn_id="turn-1")
@@ -732,7 +722,7 @@ def test_chat_event_subscriber_failure_does_not_replace_original_failure(
     publisher.subscribe(fail_subscriber)
     agent = ConversationGraphRuntime(
         tmp_path,
-        llm=FailingLLM(),
+        response_service=FailingResponseService(),
         event_publisher=publisher,
     )
 
@@ -765,7 +755,7 @@ def test_chat_event_subscriber_failure_does_not_replace_completed_turn(
     publisher.subscribe(fail_subscriber)
     agent = ConversationGraphRuntime(
         tmp_path,
-        llm=FakeLLM(),
+        response_service=FakeResponseService(),
         event_publisher=publisher,
     )
 
@@ -787,8 +777,8 @@ def test_chat_event_subscriber_failure_does_not_replace_completed_turn(
 
 
 def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) -> None:
-    llm = FakeLLM()
-    agent = ConversationGraphRuntime(tmp_path, llm=llm)
+    llm = FakeResponseService()
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm)
 
     agent.respond("test")
 
@@ -799,8 +789,8 @@ def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) 
 
 
 def test_chat_agent_includes_service_skills_in_system_prompt(tmp_path: Path) -> None:
-    llm = FakeLLM()
-    agent = ConversationGraphRuntime(tmp_path, llm=llm)
+    llm = FakeResponseService()
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm)
 
     agent.respond("do you remember my earlier preferences?")
 
@@ -815,7 +805,7 @@ def test_conversation_runtime_registers_langchain_tools(tmp_path: Path) -> None:
 
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=FakeLLM(),
+        response_service=FakeResponseService(),
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
     tools = getattr(runtime, "_tools")
@@ -831,8 +821,8 @@ def test_chat_agent_injects_language_instruction(tmp_path: Path) -> None:
         "chat:\n  language_preference: zh-CN\n",
         encoding="utf-8",
     )
-    llm = FakeLLM()
-    agent = ConversationGraphRuntime(tmp_path, llm=llm)
+    llm = FakeResponseService()
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm)
 
     agent.respond("hello")
 
@@ -1123,8 +1113,8 @@ def test_reflection_archive_invalid_index(tmp_path: Path) -> None:
 def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -> None:
     from nuself.agent.chat import ConversationGraphRuntime
 
-    llm = FakeLLM()
-    agent = ConversationGraphRuntime(tmp_path, llm=llm)
+    llm = FakeResponseService()
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm)
     agent.respond("test")
 
     system_prompt = llm.calls[0][0].content
@@ -1135,8 +1125,8 @@ def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -
 
 
 def test_chat_agent_includes_reason_and_trace_tools_and_skills(tmp_path: Path) -> None:
-    llm = FakeLLM()
-    agent = ConversationGraphRuntime(tmp_path, llm=llm)
+    llm = FakeResponseService()
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm)
 
     agent.respond("what are you still thinking about?")
 
@@ -1155,7 +1145,7 @@ def test_chat_agent_includes_reason_and_trace_tools_and_skills(tmp_path: Path) -
 def test_load_reason_skills_have_separate_read_and_proposal_tools(tmp_path: Path) -> None:
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=FakeLLM(),
+        response_service=FakeResponseService(),
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
     tools = cast(dict[str, BaseTool], getattr(runtime, "_tools"))
@@ -1589,8 +1579,8 @@ def test_chat_trace_diagnostics_cannot_replace_completed_answer(
 def test_chat_agent_includes_memory_tools_in_system_prompt(tmp_path: Path) -> None:
     from nuself.agent.chat import ConversationGraphRuntime
 
-    llm = FakeLLM()
-    agent = ConversationGraphRuntime(tmp_path, llm=llm)
+    llm = FakeResponseService()
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm)
     agent.respond("test")
 
     system_prompt = llm.calls[0][0].content

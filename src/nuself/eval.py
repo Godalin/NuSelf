@@ -119,18 +119,6 @@ class EvalResult:
     failures: tuple[str, ...]
 
 
-class FixturePlainLLM:
-    """Plain LLM dependency used outside typed fixture response synthesis."""
-
-    def __init__(self, response: str) -> None:
-        self.response = response
-        self.calls: list[list[ChatMessage]] = []
-
-    def complete(self, messages: list[ChatMessage]) -> str:
-        self.calls.append(messages)
-        return self.response
-
-
 class FixtureResponseService:
     """Return the fixture's typed response without emulating a model protocol."""
 
@@ -160,7 +148,6 @@ def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
 
     agent = ConversationGraphRuntime(
         project_root,
-        llm=FixturePlainLLM(fixture.response.answer),
         response_service=FixtureResponseService(fixture.response),
     )
     result = agent.respond(fixture.user_message, fixture.thread_id)

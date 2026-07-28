@@ -32,11 +32,9 @@ from nuself.agent.chat.thread import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.config import ConfigSystem
 from nuself.llm import (
-    ChatLLM,
     ChatMessage,
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
-    default_llm,
 )
 from nuself.logs import runtime_event_log_sink
 from nuself.memory.query import MemoryQueryService
@@ -89,7 +87,6 @@ class ConversationGraphRuntime:
         self,
         project_root: Path | None = None,
         *,
-        llm: ChatLLM | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
         settings: ChatAgentSettings | None = None,
         memory_query_service: MemoryQueryService | None = None,
@@ -100,11 +97,10 @@ class ConversationGraphRuntime:
         response_service: ConversationResponseService | None = None,
         compression_agent: TextAgent | None = None,
     ) -> None:
-        self._llm = llm or default_llm(project_root)
         self._langchain_models: tuple[LangChainLLMEndpoint, ...] = (
             langchain_models
             if langchain_models is not None
-            else (() if llm is not None else configured_langchain_chat_models(project_root))
+            else configured_langchain_chat_models(project_root)
         )
         self._settings = settings or ChatAgentSettings.from_project(project_root)
         self._project_root = project_root
@@ -160,7 +156,6 @@ class ConversationGraphRuntime:
             if response_service is not None
             else ConversationResponseSynthesizer(
                 project_root=project_root,
-                llm=self._llm,
                 langchain_models=self._langchain_models,
                 tools=self._tools.values(),
                 log_tool_call=self._tool_runtime.log_call,

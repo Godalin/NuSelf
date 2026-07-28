@@ -114,7 +114,7 @@ class LLMRelevanceGate:
         self,
         project_root: Path | None = None,
         config: ReflectionSettings | None = None,
-        llm: ChatLLM | None = None,
+        relevance_agent: ReflectionRelevanceAgent | None = None,
     ) -> None:
         ...
 

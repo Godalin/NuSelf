@@ -48,15 +48,6 @@ def _worker_supervisor(
     )
 
 
-class PlainFakeLLM:
-    def __init__(self) -> None:
-        self.calls: list[list[ChatMessage]] = []
-
-    def complete(self, messages: list[ChatMessage]) -> str:
-        self.calls.append(messages)
-        return "stubbed: hello"
-
-
 class StaticResponseService:
     def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
         return ChatStructuredOutput(
@@ -81,23 +72,46 @@ def _successful_conversation_runtime(
 ) -> ConversationGraphRuntime:
     return ConversationGraphRuntime(
         tmp_path,
-        llm=PlainFakeLLM(),
         response_service=StaticResponseService(),
         event_publisher=event_publisher,
     )
 
 
-class FailingLLM:
-    def complete(self, messages: list[ChatMessage]) -> str:
+class FailingResponseService:
+    def complete(
+        self,
+        prompt: list[ChatMessage],
+    ) -> ChatStructuredOutput:
+        del prompt
         raise RuntimeError("llm unavailable")
 
+    def finalize(
+        self,
+        state: ConversationTurnState,
+        draft: ChatStructuredOutput,
+    ) -> ChatStructuredOutput:
+        del state
+        return draft
 
-class RepeatedChainFailingLLM:
-    def complete(self, messages: list[ChatMessage]) -> str:
+
+class RepeatedChainFailingResponseService:
+    def complete(
+        self,
+        prompt: list[ChatMessage],
+    ) -> ChatStructuredOutput:
+        del prompt
         try:
             raise RuntimeError("same")
         except RuntimeError as exc:
             raise RuntimeError("same") from exc
+
+    def finalize(
+        self,
+        state: ConversationTurnState,
+        draft: ChatStructuredOutput,
+    ) -> ChatStructuredOutput:
+        del state
+        return draft
 
 
 def test_daemon_state_owns_worker_event_and_audit_composition(
@@ -239,7 +253,10 @@ def test_daemon_chat_persists_turn_id_for_retry_idempotency(tmp_path: Path) -> N
 
 def test_daemon_chat_error_includes_root_cause(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
-    state.conversation_runtime = ConversationGraphRuntime(tmp_path, llm=FailingLLM())
+    state.conversation_runtime = ConversationGraphRuntime(
+        tmp_path,
+        response_service=FailingResponseService(),
+    )
     request = DaemonRequest(type="chat", payload={"message": "hello"}, request_id="chat-fail")
 
     response = handle_request(request, state)
@@ -262,7 +279,10 @@ def test_chat_failure_diagnostic_cannot_replace_original_response(
         fail_log,
     )
     state = DaemonState(tmp_path)
-    state.conversation_runtime = ConversationGraphRuntime(tmp_path, llm=FailingLLM())
+    state.conversation_runtime = ConversationGraphRuntime(
+        tmp_path,
+        response_service=FailingResponseService(),
+    )
     request = DaemonRequest(
         type="chat",
         payload={"message": "hello"},
@@ -323,7 +343,10 @@ def test_chat_completion_audit_cannot_invalidate_response(
 
 def test_daemon_chat_error_preserves_repeated_exception_messages(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
-    state.conversation_runtime = ConversationGraphRuntime(tmp_path, llm=RepeatedChainFailingLLM())
+    state.conversation_runtime = ConversationGraphRuntime(
+        tmp_path,
+        response_service=RepeatedChainFailingResponseService(),
+    )
     request = DaemonRequest(type="chat", payload={"message": "hello"}, request_id="chat-repeat-fail")
 
     response = handle_request(request, state)

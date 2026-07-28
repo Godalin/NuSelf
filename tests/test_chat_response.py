@@ -9,7 +9,6 @@ from langchain_core.messages import AIMessage
 from nuself.agent.chat.response import (
     ConversationResponseSynthesizer,
     _LangChainChatSupervisor,
-    _plain_fallback_output,  # pyright: ignore[reportPrivateUsage]
     _structured_output_from_state,  # pyright: ignore[reportPrivateUsage]
 )
 from nuself.agent.chat.thread import ThreadState
@@ -76,40 +75,6 @@ def test_missing_structured_output_does_not_parse_message_state() -> None:
         )
 
 
-def test_plain_fallback_preserves_non_protocol_text() -> None:
-    raw = "{This is ordinary unfinished prose"
-
-    result = _plain_fallback_output(raw)
-
-    assert result.answer == raw
-    assert result.evidence_references == []
-    assert result.confidence is None
-    assert result.epistemic_status == "inferred"
-
-
-@pytest.mark.parametrize(
-    "raw",
-    (
-        '{"answer":"A"}',
-        '{"answer":"private draft"',
-        "```json\n"
-        '{"answer":"Fenced answer","epistemic_status":"uncertain"}\n'
-        "```",
-    ),
-)
-def test_plain_fallback_rejects_response_protocol_text(
-    raw: str,
-) -> None:
-    with pytest.raises(ValueError, match="forbidden response protocol"):
-        _plain_fallback_output(raw)
-
-
-def test_plain_fallback_rejects_visible_tool_call(
-) -> None:
-    with pytest.raises(ValueError, match="visible tool call text"):
-        _plain_fallback_output("minimax:tool_call private")
-
-
 def test_tool_protocol_text_is_rejected_in_every_state_path(
 ) -> None:
     with pytest.raises(ValueError, match="tool call text"):
@@ -141,15 +106,6 @@ def test_endpoint_state_failure_retries_then_uses_local_fallback(
         fail_endpoint,
     )
 
-    class LocalLLM:
-        calls = 0
-
-        def complete(self, messages: list[ChatMessage]) -> str:
-            self.calls += 1
-            return "Local fallback"
-
-    local_llm = LocalLLM()
-
     def ignore_tool_call(*args: object, **kwargs: object) -> None:
         return None
 
@@ -164,7 +120,6 @@ def test_endpoint_state_failure_retries_then_uses_local_fallback(
     )
     synthesizer = ConversationResponseSynthesizer(
         project_root=tmp_path,
-        llm=local_llm,
         langchain_models=(endpoint,),
         tools=(),
         log_tool_call=ignore_tool_call,
@@ -175,8 +130,8 @@ def test_endpoint_state_failure_retries_then_uses_local_fallback(
     )
 
     assert endpoint_calls == 2
-    assert local_llm.calls == 1
-    assert result.answer == "Local fallback"
+    assert "LLM API is not configured yet" in result.answer
+    assert result.answer.endswith("Last message: hello")
 
 
 def test_tool_outcome_suppresses_retry_and_endpoint_failover(
@@ -221,14 +176,6 @@ def test_tool_outcome_suppresses_retry_and_endpoint_failover(
         report_failure,
     )
 
-    class LocalLLM:
-        calls = 0
-
-        def complete(self, messages: list[ChatMessage]) -> str:
-            self.calls += 1
-            return "Safe local fallback"
-
-    local_llm = LocalLLM()
     endpoints = tuple(
         LangChainLLMEndpoint(
             index=index,
@@ -243,7 +190,6 @@ def test_tool_outcome_suppresses_retry_and_endpoint_failover(
     )
     synthesizer = ConversationResponseSynthesizer(
         project_root=tmp_path,
-        llm=local_llm,
         langchain_models=endpoints,
         tools=(),
         log_tool_call=lambda *args, **kwargs: None,
@@ -254,8 +200,8 @@ def test_tool_outcome_suppresses_retry_and_endpoint_failover(
     )
 
     assert endpoint_calls == 1
-    assert local_llm.calls == 1
-    assert result.answer == "Safe local fallback"
+    assert "LLM API is not configured yet" in result.answer
+    assert result.answer.endswith("Last message: mutate once")
     assert events == ["llm_retry_suppressed_after_tool_call"]
 
 
@@ -285,14 +231,6 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
         fail_log,
     )
 
-    class LocalLLM:
-        calls = 0
-
-        def complete(self, messages: list[ChatMessage]) -> str:
-            self.calls += 1
-            return "Local fallback"
-
-    local_llm = LocalLLM()
     endpoint = LangChainLLMEndpoint(
         index=0,
         settings=LLMSettings(
@@ -304,7 +242,6 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
     )
     synthesizer = ConversationResponseSynthesizer(
         project_root=tmp_path,
-        llm=local_llm,
         langchain_models=(endpoint,),
         tools=(),
         log_tool_call=lambda *args, **kwargs: None,
@@ -316,8 +253,8 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
         )
 
     assert endpoint_calls == 2
-    assert local_llm.calls == 1
-    assert result.answer == "Local fallback"
+    assert "LLM API is not configured yet" in result.answer
+    assert result.answer.endswith("Last message: hello")
     messages = [str(warning.message) for warning in captured]
     assert any("chat/llm_endpoint_retry" in message for message in messages)
     assert any(
@@ -343,7 +280,6 @@ def test_finalize_log_failure_cannot_replace_accepted_response(
     )
     synthesizer = ConversationResponseSynthesizer(
         project_root=tmp_path,
-        llm=cast(Any, object()),
         langchain_models=(),
         tools=(),
         log_tool_call=lambda *args, **kwargs: None,

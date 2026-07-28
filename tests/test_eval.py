@@ -8,22 +8,11 @@ from nuself.eval import (
     EvalFixture,
     FixtureExpectations,
     FixtureMemoryEntry,
-    FixturePlainLLM,
     load_fixtures,
     run_fixture,
     score_result,
 )
 from nuself.agent.chat import ChatResult, ChatStructuredOutput
-from nuself.llm import ChatMessage
-
-
-def test_fixture_llm_returns_fixed_response() -> None:
-    llm = FixturePlainLLM("fixed reply")
-    result = llm.complete(
-        [ChatMessage(role="user", content="hello")]
-    )
-    assert result == "fixed reply"
-    assert len(llm.calls) == 1
 
 
 def test_score_result_passes_all_expectations() -> None:

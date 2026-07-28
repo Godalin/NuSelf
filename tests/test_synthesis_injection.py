@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import json
 from typing import Any, cast
 
 import pytest
@@ -24,8 +23,8 @@ from nuself.persona.definition import (
 )
 
 
-class FakeLLM:
-    """Fake LLM for persona and local fallback behavior."""
+class FakeResponseService:
+    """Typed response fixture plus persona activation data."""
 
     def __init__(self, activation_response: dict[str, object] | None = None) -> None:
         self.calls: list[list[ChatMessage]] = []
@@ -37,16 +36,20 @@ class FakeLLM:
             "escalation_reason": "consultation only",
         }
 
-    def complete(self, messages: list[ChatMessage]) -> str:
-        content = messages[0].content
-        if "Persona Activation Gate" in content:
-            return json.dumps(self._activation_response)
-        if "private reflection council" in content:
-            return "LLM-backed persona perspective."
-        if "You are the synthesizer. Distill" in content:
-            return "LLM-backed synthesis of internal perspectives."
-        self.calls.append(messages)
-        return "plain fallback"
+    def complete(
+        self,
+        prompt: list[ChatMessage],
+    ) -> ChatStructuredOutput:
+        self.calls.append(prompt)
+        return ChatStructuredOutput(answer="plain fallback")
+
+    def finalize(
+        self,
+        state: ConversationTurnState,
+        draft: ChatStructuredOutput,
+    ) -> ChatStructuredOutput:
+        del state
+        return draft
 
     @property
     def activation_response(self) -> dict[str, object]:
@@ -130,14 +133,14 @@ def test_selves_consult_returns_internal_synthesis(
     tmp_path: Path,
 ) -> None:
     """Verify that selves synthesis is now exposed through the subagent tool."""
-    llm = FakeLLM()
+    llm = FakeResponseService()
     models = _install_persona_agents(
         monkeypatch,
         llm.activation_response,
     )
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
+        response_service=llm,
         langchain_models=cast(Any, models),
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
@@ -153,10 +156,8 @@ def test_selves_consult_returns_internal_synthesis(
 
 def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
     """Verify that synthesis remains internal and does NOT appear in ChatResult.to_payload()."""
-    llm = FakeLLM()
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="Final answer.", confidence=0.5)
         ),
@@ -186,10 +187,8 @@ def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
 
 def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
     """Verify that the chat graph does not include synthesis sections in the normal respond path."""
-    llm = FakeLLM()
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="No synthesis reply.", confidence=0.5)
         ),
@@ -219,7 +218,7 @@ def test_selves_consult_handles_explicit_multi_persona_request(
     tmp_path: Path,
 ) -> None:
     """Verify synthesis is generated for explicit multi-persona requests through the subagent tool."""
-    llm = FakeLLM(
+    llm = FakeResponseService(
         {
             "activated": True,
             "selected_persona_ids": ["skeptic_self", "builder_self", "historian_self", "care_self"],
@@ -234,7 +233,7 @@ def test_selves_consult_handles_explicit_multi_persona_request(
     )
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
+        response_service=llm,
         langchain_models=cast(Any, models),
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
@@ -264,10 +263,10 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
         )
     )
     
-    llm = FakeLLM()
+    llm = FakeResponseService()
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
+        response_service=llm,
         memory_query_service=MemoryQueryService(repo),
     )
 
@@ -292,7 +291,6 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
 
 def test_respond_node_uses_main_prompt(tmp_path: Path) -> None:
     """Verify that respond_node uses the main prompt and selves is available as a tool."""
-    llm = FakeLLM()
     response_service = StaticResponseService(
         ChatStructuredOutput(
             answer="Synthesized reply.",
@@ -302,7 +300,6 @@ def test_respond_node_uses_main_prompt(tmp_path: Path) -> None:
     )
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
         response_service=response_service,
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )
@@ -333,13 +330,11 @@ def test_respond_node_uses_main_prompt(tmp_path: Path) -> None:
 
 def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
     """Verify that respond_node uses the main LLM system prompt."""
-    llm = FakeLLM()
     response_service = StaticResponseService(
         ChatStructuredOutput(answer="Normal reply.", confidence=0.5)
     )
     runtime = ConversationGraphRuntime(
         tmp_path,
-        llm=llm,
         response_service=response_service,
         memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
     )

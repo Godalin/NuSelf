@@ -17,7 +17,6 @@ from nuself.agent.chat.types import (
 )
 from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
 from nuself.llm import (
-    ChatLLM,
     ChatMessage,
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
@@ -53,14 +52,12 @@ class ConversationResponseSynthesizer:
         self,
         *,
         project_root: Path | None,
-        llm: ChatLLM,
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         tools: Iterable[BaseTool],
         log_tool_call: Callable[..., None],
         report_tool_log_failure: Callable[[Exception], None] | None = None,
     ) -> None:
         self._project_root = project_root
-        self._llm = llm
         self._langchain_models = langchain_models
         self._tools = tuple(tools)
         self._log_tool_call = log_tool_call
@@ -72,7 +69,7 @@ class ConversationResponseSynthesizer:
     ) -> ChatStructuredOutput:
         if self._langchain_models:
             return self._complete_with_langchain_tools(prompt)
-        return _plain_fallback_output(self._llm.complete(prompt))
+        return _local_response_output(prompt)
 
     def finalize(
         self,
@@ -156,7 +153,7 @@ class ConversationResponseSynthesizer:
                 status="fallback",
                 metadata=None,
             )
-        return _plain_fallback_output(self._llm.complete(prompt))
+        return _local_response_output(prompt)
 
     def _log_retry_suppressed(
         self,
@@ -304,33 +301,22 @@ def _looks_like_tool_call(text: str) -> bool:
     return "minimax:tool_call" in text
 
 
-def _plain_fallback_output(raw: str) -> ChatStructuredOutput:
-    if _looks_like_response_protocol(raw):
-        raise ValueError(
-            "Local chat fallback returned forbidden response protocol text"
-        )
-    parsed = ChatStructuredOutput(answer=raw)
-    _reject_visible_tool_call(parsed)
-    return parsed
-
-
-def _looks_like_response_protocol(text: str) -> bool:
-    stripped = text.lstrip()
-    first_line = stripped.splitlines()[0].strip().lower() if stripped else ""
-    if first_line == "```json":
-        return True
-    if stripped.startswith("```"):
-        stripped = "\n".join(stripped.splitlines()[1:]).lstrip()
-    if not stripped.startswith("{"):
-        return False
-    prefix = stripped[:500]
-    return any(
-        f'"{field_name}"' in prefix
-        for field_name in (
-            "answer",
-            "evidence_references",
-            "confidence",
-            "epistemic_status",
+def _local_response_output(
+    prompt: list[ChatMessage],
+) -> ChatStructuredOutput:
+    last_user = next(
+        (
+            message.content
+            for message in reversed(prompt)
+            if message.role == "user"
+        ),
+        "",
+    )
+    return ChatStructuredOutput(
+        answer=(
+            "LLM API is not configured yet. I saved the message and can use "
+            "local memory/context, but real reasoning needs an API key. "
+            f"Last message: {last_user}"
         )
     )
 
