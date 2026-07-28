@@ -57,7 +57,7 @@ Give Memory curation one closed, privacy-minimal audit contract.
 
 ## Publication
 
-The Memory curation audit-contract batch is awaiting its implementation commit.
+`dev/v0.3.x` is ready to publish through implementation commit `bcdc09d`.
 
 ## Next Review Batch
 
