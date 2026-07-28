@@ -172,6 +172,12 @@ a versioned `kind="job"` envelope plus explicit `job_id` and `resource_id`.
 Producers receive a `JobSink` through composition; domain modules must not
 install process-global enqueue callbacks.
 
+The durable job record is authoritative and queue delivery is a best-effort
+wake-up. If wake-up delivery fails, the producer keeps the durable record,
+reports the compact exception chain through the shared observability boundary,
+and does not claim that the job was enqueued. Recovery may rediscover the
+durable non-terminal record later.
+
 ## Logging
 
 Structured logs are an append-only sink and read model.
@@ -194,6 +200,11 @@ whose failure must be visible but must not alter an already-successful primary
 operation. It records the failure through the structured log sink and falls
 back to Python warnings only when that sink is unavailable. Domains must not
 implement equivalent broad `try/except/pass` wrappers locally.
+
+Persona consultation and discussion audit writes are secondary effects. Their
+failure must not replace a successful persona result or mask the original
+discussion failure. They use the shared boundary so failure reporting itself
+cannot become a new authoritative failure.
 
 Runtime behavior configured at composition time must be instance-scoped.
 Callbacks such as reason-output section planners flow explicitly from the

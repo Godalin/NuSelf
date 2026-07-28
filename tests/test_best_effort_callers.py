@@ -2,9 +2,11 @@ from pathlib import Path
 
 import pytest
 
+from nuself.agent.chat.persona import ConversationPersonaOrchestrator
 from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.decorators.audit import audit_log
 from nuself.logs import read_log_events
+from nuself.persona import PersonaInput, PersonaTurnState
 from nuself.persona.prompt_repo import PersonaPrompt
 from nuself.persona.tools import _record_prompt_trace  # pyright: ignore[reportPrivateUsage]
 
@@ -97,3 +99,49 @@ def test_audit_failure_is_observed_without_failing_tool(
     assert structured_failures == [
         ("audit_log_failed", "audit store unavailable"),
     ]
+
+
+def test_persona_failure_log_cannot_mask_discussion_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class FailingDiscussion:
+        def discuss(self, *args: object, **kwargs: object) -> None:
+            raise RuntimeError("discussion unavailable")
+
+    def fail_audit(*args: object, **kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.agent.chat.persona.write_log_event",
+        fail_audit,
+    )
+    orchestrator = ConversationPersonaOrchestrator.__new__(
+        ConversationPersonaOrchestrator
+    )
+    orchestrator._project_root = tmp_path  # pyright: ignore[reportPrivateUsage]
+    orchestrator._discussion_service = FailingDiscussion()  # pyright: ignore[reportPrivateUsage, reportAttributeAccessIssue]
+    turn_state = PersonaTurnState(
+        input=PersonaInput(user_message="compare"),
+        selected_personas=(),
+    )
+
+    result = orchestrator._run_discussion(  # pyright: ignore[reportPrivateUsage]
+        topic="compare",
+        thread_id="thread-1",
+        trigger="requested",
+        turn_state=turn_state,
+        should_escalate=True,
+    )
+
+    assert result == "\nDiscussion failed: discussion unavailable"
+    event = read_log_events(project_root=tmp_path, component="persona")[-1]
+    assert event.event == "persona_discussion_failure_write_failed"
+    assert event.error == (
+        "audit store unavailable <- discussion unavailable"
+    )
+    assert event.metadata == {
+        "event": "persona_discussion_failure",
+        "thread_id": "thread-1",
+        "original_error": "discussion unavailable",
+    }

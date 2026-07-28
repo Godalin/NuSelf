@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-import logging
 from pathlib import Path
 
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import ChatLLM, LangChainLLMEndpoint
-from nuself.logs import current_log_context, write_log_event
+from nuself.logs import LogLevel, current_log_context, write_log_event
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.persona import (
     LLMBackedActivationPolicy,
@@ -21,8 +20,10 @@ from nuself.persona import (
     SharedPersonaDiscussionService,
     load_persona_definitions,
 )
-
-LOGGER = logging.getLogger(__name__)
+from nuself.runtime.observability import (
+    format_exception_chain,
+    run_observed_best_effort,
+)
 
 
 class ConversationPersonaOrchestrator:
@@ -163,35 +164,30 @@ class ConversationPersonaOrchestrator:
                     entry,
                 ),
             )
-            try:
-                write_log_event(
-                    "persona",
-                    "persona_discussion",
-                    f"chat-triggered discussion: {result.reason}",
-                    project_root=self._project_root,
-                    thread_id=thread_id,
-                    status=trigger,
-                    metadata={
-                        "winner_persona_ids": list(result.winner_persona_ids),
-                        "emergent_persona_ids": list(
-                            result.emergent_persona_ids
-                        ),
-                        "blocking_vetos": list(result.blocking_vetos),
-                        "reason": result.reason,
-                        "discussion_steps": len(result.discussion_trace),
-                    },
-                )
-            except Exception:
-                LOGGER.exception("failed to write persona discussion log")
+            self._write_audit(
+                "persona_discussion",
+                f"chat-triggered discussion: {result.reason}",
+                thread_id=thread_id,
+                status=trigger,
+                metadata={
+                    "winner_persona_ids": list(result.winner_persona_ids),
+                    "emergent_persona_ids": list(
+                        result.emergent_persona_ids
+                    ),
+                    "blocking_vetos": list(result.blocking_vetos),
+                    "reason": result.reason,
+                    "discussion_steps": len(result.discussion_trace),
+                },
+            )
             return f"\nDiscussion result: {result.reason}"
         except Exception as exc:
-            write_log_event(
-                "persona",
+            self._write_audit(
                 "persona_discussion_failure",
                 str(exc),
-                project_root=self._project_root,
+                thread_id=thread_id,
                 level="error",
                 error=str(exc),
+                metadata={"original_error": format_exception_chain(exc)},
             )
             return f"\nDiscussion failed: {exc}"
 
@@ -215,21 +211,16 @@ class ConversationPersonaOrchestrator:
         thread_id: str,
         trigger: str,
     ) -> None:
-        try:
-            write_log_event(
-                "persona",
-                "persona_summary",
-                _compact_summary(turn_state),
-                project_root=self._project_root,
-                thread_id=thread_id,
-                status=trigger,
-                metadata={
-                    "persona_count": len(turn_state.contributions),
-                    "has_synthesis": turn_state.synthesis is not None,
-                },
-            )
-        except Exception:
-            LOGGER.exception("failed to write persona summary log")
+        self._write_audit(
+            "persona_summary",
+            _compact_summary(turn_state),
+            thread_id=thread_id,
+            status=trigger,
+            metadata={
+                "persona_count": len(turn_state.contributions),
+                "has_synthesis": turn_state.synthesis is not None,
+            },
+        )
 
     def _write_host_decision_log(
         self,
@@ -238,23 +229,16 @@ class ConversationPersonaOrchestrator:
         should_escalate: bool,
         escalation_reason: str,
     ) -> None:
-        try:
-            write_log_event(
-                "persona",
-                "host_discussion_decision",
-                escalation_reason,
-                project_root=self._project_root,
-                thread_id=thread_id,
-                status="approved" if should_escalate else "skipped",
-                metadata={
-                    "should_escalate": should_escalate,
-                    "escalation_reason": escalation_reason,
-                },
-            )
-        except Exception:
-            LOGGER.exception(
-                "failed to write host discussion decision log"
-            )
+        self._write_audit(
+            "host_discussion_decision",
+            escalation_reason,
+            thread_id=thread_id,
+            status="approved" if should_escalate else "skipped",
+            metadata={
+                "should_escalate": should_escalate,
+                "escalation_reason": escalation_reason,
+            },
+        )
 
     def _write_discussion_step_log(
         self,
@@ -262,18 +246,49 @@ class ConversationPersonaOrchestrator:
         trigger: str,
         entry: str,
     ) -> None:
-        try:
-            write_log_event(
+        self._write_audit(
+            "persona_discussion_step",
+            "",
+            thread_id=thread_id,
+            status=trigger,
+            metadata={"discussion_trace": [entry]},
+        )
+
+    def _write_audit(
+        self,
+        event: str,
+        message: str,
+        *,
+        thread_id: str,
+        status: str | None = None,
+        level: LogLevel = "info",
+        error: str | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
+        failure_metadata: dict[str, object] = {
+            "event": event,
+            "thread_id": thread_id,
+        }
+        if metadata is not None and "original_error" in metadata:
+            failure_metadata["original_error"] = metadata["original_error"]
+        run_observed_best_effort(
+            lambda: write_log_event(
                 "persona",
-                "persona_discussion_step",
-                "",
+                event,
+                message,
                 project_root=self._project_root,
                 thread_id=thread_id,
-                status=trigger,
-                metadata={"discussion_trace": [entry]},
-            )
-        except Exception:
-            LOGGER.exception("failed to write persona discussion step log")
+                status=status,
+                level=level,
+                error=error,
+                metadata=metadata,
+            ),
+            component="persona",
+            event=f"{event}_write_failed",
+            message=f"Failed to write {event} audit record",
+            project_root=self._project_root,
+            metadata=failure_metadata,
+        )
 
     @staticmethod
     def _build_candidate(

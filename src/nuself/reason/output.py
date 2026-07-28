@@ -19,6 +19,7 @@ from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
 from nuself.reason.repository import ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.runtime.jobs import JobMessage, JobSink
+from nuself.runtime.observability import run_observed_best_effort
 from nuself.workspace import PrivateWorkspaceStore
 
 REASON_OUTPUT_STORAGE_VERSION = "NuSelfReasonOutput/v1"
@@ -369,7 +370,8 @@ class ReasonOutputService:
             },
         )
 
-        if self._job_sink is not None:
+        job_sink = self._job_sink
+        if job_sink is not None:
             job_message = JobMessage.create(
                 name="reason.output.export",
                 producer="reasoning",
@@ -377,26 +379,46 @@ class ReasonOutputService:
                 resource_id=thread.id,
                 payload={"mode": mode, "output_format": output_format},
             )
-            try:
-                self._job_sink(job_message)
-                write_log_event(
-                    "daemon",
-                    "export_job_enqueued",
-                    f"Enqueued export job {job_id} for thread {thread.id}",
+
+            def enqueue() -> bool:
+                job_sink(job_message)
+                return True
+
+            enqueued = run_observed_best_effort(
+                enqueue,
+                component="daemon",
+                event="export_job_enqueue_failed",
+                message=(
+                    f"Failed to enqueue export job {job_id} "
+                    f"for thread {thread.id}"
+                ),
+                project_root=self._project_root,
+                metadata={"thread_id": thread.id, "job_id": job_id},
+            )
+            if enqueued:
+                run_observed_best_effort(
+                    lambda: write_log_event(
+                        "daemon",
+                        "export_job_enqueued",
+                        (
+                            f"Enqueued export job {job_id} "
+                            f"for thread {thread.id}"
+                        ),
+                        project_root=self._project_root,
+                        status="queued",
+                        metadata={
+                            "thread_id": thread.id,
+                            "job_id": job_id,
+                        },
+                    ),
+                    component="daemon",
+                    event="export_job_enqueue_log_failed",
+                    message="Failed to write export enqueue audit record",
                     project_root=self._project_root,
-                    status="queued",
-                    metadata={"thread_id": thread.id, "job_id": job_id},
-                )
-            except Exception:
-                # Enqueue failures should not break planning; log and continue.
-                write_log_event(
-                    "daemon",
-                    "export_job_enqueue_failed",
-                    f"Failed to enqueue export job {job_id} for thread {thread.id}",
-                    project_root=self._project_root,
-                    level="warning",
-                    status="error",
-                    metadata={"thread_id": thread.id, "job_id": job_id},
+                    metadata={
+                        "thread_id": thread.id,
+                        "job_id": job_id,
+                    },
                 )
         return manifest
 

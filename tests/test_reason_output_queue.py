@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from nuself.logs import read_log_events
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.output import (
     ReasonOutputManifest,
@@ -65,6 +66,49 @@ def test_plan_without_job_sink_skips_enqueue(tmp_path: Path) -> None:
     # No queue file, no callback — but manifest was still written
     assert not (paths.root / "queue").exists()
     assert paths.manifest.is_file()
+
+
+def test_plan_preserves_durable_job_when_wakeup_fails(
+    tmp_path: Path,
+) -> None:
+    service = _reason_service(tmp_path)
+    thread = service.start_thread("Recoverable wake-up")
+    service.advance_thread(
+        thread.id,
+        step=_step(thread.id, "A", "Out A", "D A"),
+    )
+
+    def fail_wakeup(message: JobMessage) -> None:
+        try:
+            raise OSError("queue unavailable")
+        except OSError as exc:
+            raise RuntimeError("wake-up rejected") from exc
+
+    output_service = ReasonOutputService(
+        project_root=tmp_path,
+        reason_service=service,
+        job_sink=fail_wakeup,
+    )
+
+    manifest = output_service.plan_job(thread.id, segment_size=1)
+    paths = output_service.job_paths(thread.id, manifest.job_id)
+
+    assert paths.manifest.is_file()
+    assert manifest.status == "planned"
+    events = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="daemon",
+        )
+        if event.event == "export_job_enqueue_failed"
+    ]
+    assert len(events) == 1
+    assert events[0].error == "wake-up rejected <- queue unavailable"
+    assert events[0].metadata == {
+        "thread_id": thread.id,
+        "job_id": manifest.job_id,
+    }
 
 
 def test_section_planners_are_isolated_per_service(tmp_path: Path) -> None:
