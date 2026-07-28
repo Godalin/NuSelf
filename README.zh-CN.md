@@ -341,6 +341,9 @@ audit data 和 live activity 会得到同一份不可变 metadata snapshot，不
 方容器的别名。
 每轮 agent tool 去重也使用同一套严格 JSON 语义生成 canonical cache identity；
 非 JSON 参数会绕过缓存，而不是因字符串强制转换发生碰撞或阻止 LangChain 处理。
+权威 file、SQLite collection 和 workspace persistence 会在 mutation 前校验严格
+JSON；非有限值不会留下部分文件、动态 column、被替换的旧 row 或部分提交的
+workspace batch。
 
 ## 通知
 

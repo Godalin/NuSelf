@@ -89,6 +89,11 @@ Runtime JSON and text state uses `nuself.storage.write_json_atomic()` or
 file, atomically replaces the destination, and removes the temporary file on
 failure while preserving any prior destination.
 
+`write_json_atomic()` validates and serializes the complete payload as strict
+JSON before creating its temporary file. Non-string mapping keys, arbitrary
+objects, and non-finite floats fail without touching the destination or
+creating a temporary artifact.
+
 Subsystems must not define parallel atomic writer helpers or use a fixed
 `.tmp` path. Direct `Path.write_text()` remains appropriate only for an
 explicit user-selected artifact whose partial-write behavior is documented, or

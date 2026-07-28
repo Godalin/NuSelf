@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -161,6 +162,37 @@ def thaw_json_value(value: object) -> object:
         items = cast(tuple[object, ...], value)
         return [thaw_json_value(item) for item in items]
     return value
+
+
+def encode_json_value(
+    value: object,
+    *,
+    indent: int | None = None,
+    sort_keys: bool = False,
+    ensure_ascii: bool = True,
+    separators: tuple[str, str] | None = None,
+) -> str:
+    """Validate and encode one strict JSON value."""
+
+    canonical = thaw_json_value(freeze_json_value(value))
+    return json.dumps(
+        canonical,
+        indent=indent,
+        sort_keys=sort_keys,
+        ensure_ascii=ensure_ascii,
+        allow_nan=False,
+        separators=separators,
+    )
+
+
+def decode_json_value(text: str) -> object:
+    """Decode JSON while rejecting non-standard numeric constants."""
+
+    return json.loads(text, parse_constant=_reject_json_constant)
+
+
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"non-standard JSON constant is invalid: {value}")
 
 
 def _record_string(

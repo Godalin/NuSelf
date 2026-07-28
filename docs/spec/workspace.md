@@ -34,6 +34,12 @@ private/workspaces/{scope}/{owner_id}/
 
 ## SQLite Contract
 
+Workspace values use the shared strict JSON encoder before SQL mutation.
+Non-string keys, arbitrary objects, and non-finite floats are rejected.
+`SqliteStore.batch()` owns one transaction: if any operation cannot encode,
+all earlier writes from that batch are rolled back and pre-existing entries
+remain unchanged. Reads reject non-standard non-finite JSON constants.
+
 `workspace.sqlite` must include a `workspace_meta` table:
 
 | Key | Meaning |

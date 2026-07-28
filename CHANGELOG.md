@@ -79,6 +79,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   instead of `default=str` coercion. Invalid non-JSON arguments bypass the
   cache without blocking execution, and daemon activity no longer
   re-normalizes validated log records.
+- File, SQLite collection, and reason-workspace persistence now share strict
+  JSON encoding. Invalid or non-finite values fail before file/schema/row
+  mutation; existing records remain intact, and an invalid workspace batch
+  rolls back earlier operations.
 - Daemon JSONL transport now uses a shared 1 MiB request/response frame limit,
   requires newline-complete UTF-8 JSON, times out stalled server reads, and
   rejects incomplete, extra, non-finite, or response-id-mismatched frames.

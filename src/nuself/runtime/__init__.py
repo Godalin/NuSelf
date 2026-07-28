@@ -35,6 +35,8 @@ from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
     MessageKind,
     RuntimeEnvelope,
+    decode_json_value,
+    encode_json_value,
     freeze_json_value,
     thaw_json_value,
 )
@@ -73,6 +75,8 @@ __all__ = [
     "build_event_definition_registry",
     "bind_runtime_context",
     "current_runtime_context",
+    "decode_json_value",
+    "encode_json_value",
     "freeze_json_value",
     "runtime_context",
     "thaw_json_value",

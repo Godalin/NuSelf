@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import threading
 from collections.abc import Callable
 from typing import Any
@@ -12,7 +11,7 @@ from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
-from nuself.runtime import freeze_json_value, thaw_json_value
+from nuself.runtime import encode_json_value
 
 
 class ToolCaptureMiddleware(AgentMiddleware):
@@ -120,19 +119,15 @@ def _tool_cache_key(
     args: dict[str, Any],
 ) -> str | None:
     try:
-        canonical = thaw_json_value(freeze_json_value(args))
-    except TypeError:
-        return None
-    return (
-        f"{tool_name}:"
-        + json.dumps(
-            canonical,
+        canonical = encode_json_value(
+            args,
             sort_keys=True,
             ensure_ascii=False,
-            allow_nan=False,
             separators=(",", ":"),
         )
-    )
+    except TypeError:
+        return None
+    return f"{tool_name}:{canonical}"
 
 
 def _middleware_result_text(result: ToolMessage | Command[Any]) -> str:

@@ -486,6 +486,47 @@ def test_put_overwrites(tmp_path: Path) -> None:
     assert result["value"] == 2
 
 
+def test_invalid_put_preserves_row_and_does_not_add_columns(
+    tmp_path: Path,
+) -> None:
+    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    col = backend.collection("memory_entries")
+    col.put("mem_001", {"id": "mem_001", "value": "old"})
+
+    with pytest.raises(TypeError, match="floats must be finite"):
+        col.put(
+            "mem_001",
+            {
+                "id": "mem_001",
+                "new_field": float("inf"),
+            },
+        )
+
+    assert col.get("mem_001") == {"id": "mem_001", "value": "old"}
+    assert "new_field" not in {
+        column[0] for column in backend.table_info("memory_entries")
+    }
+
+
+def test_get_rejects_non_standard_numeric_constants(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = SqliteStorageBackend(db_path)
+    col = backend.collection("memory_entries")
+    col.put("mem_001", {"id": "mem_001", "value": "old"})
+    _set_raw_sqlite_column(
+        db_path,
+        table="col_memory_entries",
+        record_id="mem_001",
+        column="value",
+        value="NaN",
+    )
+
+    with pytest.raises(ValueError, match="invalid JSON"):
+        col.get("mem_001")
+
+
 def test_put_replaces_and_removes_omitted_fields(tmp_path: Path) -> None:
     backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     col = backend.collection("memory_entries")

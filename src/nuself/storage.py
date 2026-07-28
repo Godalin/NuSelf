@@ -6,7 +6,6 @@ SQLite backend added in v0.2.4.
 
 from __future__ import annotations
 
-import json
 from contextlib import AbstractContextManager, contextmanager
 from collections.abc import Generator
 from pathlib import Path
@@ -20,6 +19,7 @@ from nuself.runtime.observability import (
     report_corrupt_record,
     report_observed_failure,
 )
+from nuself.runtime import decode_json_value, encode_json_value
 
 
 # ── Protocols ─────────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ COLLECTION_DIR_MAP: dict[str, str] = {
 
 
 def _read_json_record(path: Path) -> dict[str, object]:
-    raw: object = json.loads(path.read_text(encoding="utf-8"))
+    raw = decode_json_value(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("stored record must be a JSON object")
     result: dict[str, object] = {}
@@ -117,7 +117,7 @@ def _list_json_record(
         return _read_json_record(path)
     except FileNotFoundError:
         return None
-    except (json.JSONDecodeError, ValueError) as exc:
+    except (ValueError, TypeError) as exc:
         report_corrupt_record(
             exc,
             component=component,
@@ -145,15 +145,15 @@ def write_text_atomic(path: Path, text: str) -> None:
 
 
 def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
+    encoded = encode_json_value(
+        payload,
+        indent=2,
+        sort_keys=True,
+        ensure_ascii=True,
+    )
     write_text_atomic(
         path,
-        json.dumps(
-            payload,
-            indent=2,
-            sort_keys=True,
-            ensure_ascii=True,
-        )
-        + "\n",
+        encoded + "\n",
     )
 
 

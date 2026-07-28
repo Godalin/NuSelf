@@ -256,6 +256,16 @@ failed backend registered as if it were safe to reuse.
 wire 字典；SQLite 使用 conflict update 实现替换语义，不能依赖
 `INSERT OR REPLACE` 的隐式 delete+insert 行为。
 
+所有 file 与 SQLite collection payload 必须在任何文件、schema 或 row mutation
+之前完成共享 strict JSON 编码。mapping key 必须是 string，float 必须有限，
+任意 Python object 不得通过 `default=str` 或 NaN extension 落盘。SQLite
+dynamic-column `put()` 必须先编码完整 replacement，之后才能 `ALTER TABLE`；
+编码失败不得新增 column、修改旧 row 或依赖后续 rollback 偶然清理。
+
+持久化 JSON 读取也使用严格 decoder，拒绝 `NaN`、`Infinity` 和
+`-Infinity`。file list 和 SQLite list 继续按既有 corruption policy 隔离坏记录；
+直接 `get()` 继续暴露 corruption。
+
 ### Transaction contract
 
 - `StorageBackend.transaction()` 包围一个原子写入批次。

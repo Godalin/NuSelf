@@ -14,6 +14,8 @@ from nuself.runtime import (
     RuntimeEnvelope,
     bind_runtime_context,
     current_runtime_context,
+    decode_json_value,
+    encode_json_value,
     runtime_context,
     use_runtime_context,
 )
@@ -164,6 +166,18 @@ def test_runtime_envelope_payload_is_immutable() -> None:
 
     with pytest.raises(TypeError):
         nested["status"] = "stopped"  # type: ignore[index]
+
+
+def test_shared_json_codec_is_strict_and_canonical() -> None:
+    assert encode_json_value(
+        {"second": [2, 3], "first": 1},
+        sort_keys=True,
+        separators=(",", ":"),
+    ) == '{"first":1,"second":[2,3]}'
+    assert decode_json_value('{"items":[1,2]}') == {"items": [1, 2]}
+
+    with pytest.raises(ValueError, match="non-standard JSON constant"):
+        decode_json_value('{"value": Infinity}')
 
 
 def test_runtime_envelope_rejects_non_json_payload() -> None:

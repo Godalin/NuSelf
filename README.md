@@ -363,6 +363,9 @@ snapshot without retaining aliases to caller-owned containers.
 Per-turn agent tool deduplication uses the same strict JSON semantics for
 canonical cache identities. Non-JSON arguments bypass caching rather than
 colliding through string coercion or preventing LangChain from handling them.
+Authoritative file, SQLite collection, and workspace persistence validates
+strict JSON before mutation. Non-finite values cannot leave partial files,
+dynamic columns, replaced rows, or partially committed workspace batches.
 
 ## Notifications
 

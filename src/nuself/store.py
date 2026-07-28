@@ -7,7 +7,6 @@ so the agent does not need to manage namespaces manually.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +25,7 @@ from langgraph.store.base import (
 )
 
 from nuself.config import runtime_paths
+from nuself.runtime import decode_json_value, encode_json_value
 
 __all__ = [
     "SqliteStore",
@@ -123,7 +123,7 @@ class SqliteStore(BaseStore):
         if row is None:
             return None
         return Item(
-            value=cast(dict[str, Any], json.loads(row[0])),
+            value=cast(dict[str, Any], decode_json_value(row[0])),
             key=row[1],
             namespace=tuple(row[2].split("/")) if row[2] else (),
             created_at=row[3],
@@ -140,6 +140,7 @@ class SqliteStore(BaseStore):
             return
         now = datetime.now(UTC).isoformat()
         nskey = self._ns_key(op.namespace)
+        encoded_value = encode_json_value(op.value, ensure_ascii=True)
         existing = conn.execute(
             "SELECT created_at FROM workspace_entries WHERE namespace = ? AND key = ?",
             (nskey, op.key),
@@ -147,12 +148,12 @@ class SqliteStore(BaseStore):
         if existing is not None:
             conn.execute(
                 "UPDATE workspace_entries SET value = ?, updated_at = ? WHERE namespace = ? AND key = ?",
-                (json.dumps(op.value, ensure_ascii=True), now, nskey, op.key),
+                (encoded_value, now, nskey, op.key),
             )
         else:
             conn.execute(
                 "INSERT INTO workspace_entries (namespace, key, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                (nskey, op.key, json.dumps(op.value, ensure_ascii=True), now, now),
+                (nskey, op.key, encoded_value, now, now),
             )
 
     def _do_search(self, conn: sqlite3.Connection, op: SearchOp) -> list[SearchItem]:
@@ -169,7 +170,7 @@ class SqliteStore(BaseStore):
         rows = conn.execute(sql, params).fetchall()
         return [
             SearchItem(
-                value=cast(dict[str, Any], json.loads(row[0])),
+                value=cast(dict[str, Any], decode_json_value(row[0])),
                 key=row[1],
                 namespace=tuple(row[2].split("/")) if row[2] else (),
                 created_at=row[3],
@@ -256,6 +257,5 @@ class ScopedWorkspace:
         offset: int = 0,
     ) -> list[tuple[str, ...]]:
         return self._store.list_namespaces(prefix=self._prefix, max_depth=max_depth, limit=limit, offset=offset)
-
 
 

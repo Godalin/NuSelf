@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
+from langgraph.store.base import PutOp
+
 from nuself.store import ScopedWorkspace, SqliteStore
 from nuself.workspace import PrivateWorkspacePaths
 
@@ -45,6 +48,26 @@ def test_store_put_overwrites(tmp_path: Path) -> None:
     item = store.get(("ns",), "k")
     assert item is not None
     assert item.value == {"v": 2}
+
+
+def test_store_batch_rolls_back_when_later_value_is_not_strict_json(
+    tmp_path: Path,
+) -> None:
+    store = SqliteStore(_db(tmp_path))
+    store.put(("ns",), "existing", {"value": "old"})
+
+    with pytest.raises(TypeError, match="floats must be finite"):
+        store.batch(
+            [
+                PutOp(("ns",), "new", {"value": "written first"}),
+                PutOp(("ns",), "existing", {"value": float("-inf")}),
+            ]
+        )
+
+    assert store.get(("ns",), "new") is None
+    existing = store.get(("ns",), "existing")
+    assert existing is not None
+    assert existing.value == {"value": "old"}
 
 
 def test_store_delete(tmp_path: Path) -> None:

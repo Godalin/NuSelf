@@ -5,7 +5,11 @@ import threading
 import pytest
 
 from nuself.logs import read_log_events
-from nuself.storage import FileStorageBackend, write_text_atomic
+from nuself.storage import (
+    FileStorageBackend,
+    write_json_atomic,
+    write_text_atomic,
+)
 
 
 @pytest.mark.parametrize(
@@ -13,6 +17,7 @@ from nuself.storage import FileStorageBackend, write_text_atomic
     [
         ("{", json.JSONDecodeError),
         ("[]", ValueError),
+        ('{"value": NaN}', ValueError),
     ],
 )
 def test_file_collection_lists_isolate_corrupt_json_but_get_surfaces_it(
@@ -50,6 +55,19 @@ def test_write_text_atomic_replaces_complete_destination(
     write_text_atomic(path, "new\n")
 
     assert path.read_text(encoding="utf-8") == "new\n"
+    assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_write_json_atomic_rejects_invalid_value_before_touching_destination(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "runtime" / "state.json"
+    write_json_atomic(path, {"value": "old"})
+
+    with pytest.raises(TypeError, match="floats must be finite"):
+        write_json_atomic(path, {"value": float("nan")})
+
+    assert json.loads(path.read_text(encoding="utf-8")) == {"value": "old"}
     assert list(path.parent.glob("*.tmp")) == []
 
 

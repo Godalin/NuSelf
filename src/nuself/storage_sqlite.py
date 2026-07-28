@@ -1,13 +1,11 @@
 """SQLite-backed storage backend for v0.2.4+.
 
 Every top-level key from the wire dict becomes its own SQL column.
-Complex values (list, dict) are stored as JSON text.  All values
-round-trip through ``json.dumps/loads`` so types are preserved.
+Complex values (list, dict) are stored as strict JSON text.
 """
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
 from collections.abc import Generator
@@ -16,6 +14,12 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from nuself.logs import LogComponent
+from nuself.runtime import (
+    decode_json_value,
+    encode_json_value,
+    freeze_json_value,
+    thaw_json_value,
+)
 from nuself.runtime.observability import report_corrupt_record
 from nuself.storage import (
     COLLECTION_LOG_COMPONENTS,
@@ -24,11 +28,11 @@ from nuself.storage import (
 
 
 def _json(v: object) -> str:
-    return json.dumps(v, ensure_ascii=True)
+    return encode_json_value(v, ensure_ascii=True)
 
 
 def _from_json(value: str) -> object:
-    return json.loads(value)
+    return decode_json_value(value)
 
 
 def _collection_table(name: str) -> str:
@@ -190,7 +194,7 @@ class SqliteCollection:
                     )
                 try:
                     parsed = _from_json(val)
-                except (json.JSONDecodeError, ValueError) as exc:
+                except (ValueError, TypeError) as exc:
                     raise ValueError(
                         "stored SQLite dynamic column is invalid JSON"
                     ) from exc
@@ -206,7 +210,7 @@ class SqliteCollection:
         for row in rows:
             try:
                 item = self._row_to_dict(cols, row)
-            except (json.JSONDecodeError, ValueError, TypeError) as exc:
+            except (ValueError, TypeError) as exc:
                 report_corrupt_record(
                     exc,
                     component=self._component,
@@ -230,9 +234,18 @@ class SqliteCollection:
         return self._row_to_dict(cols, row)
 
     def put(self, key: str, value: dict[str, object]) -> None:
+        validated = cast(
+            dict[str, object],
+            thaw_json_value(freeze_json_value(value)),
+        )
+        encoded = {
+            field: _json(field_value)
+            for field, field_value in validated.items()
+            if field != "id"
+        }
         self._lock.acquire()
         try:
-            self._ensure_columns(set(value.keys()))
+            self._ensure_columns(set(validated))
             cols = self._columns()
             # put() replaces the complete wire object. Include every known
             # column so fields omitted by the replacement become SQL NULL.
@@ -240,7 +253,7 @@ class SqliteCollection:
             placeholders = ", ".join("?" for _ in write_cols)
             cols_sql = ", ".join(_identifier(c) for c in write_cols)
             vals = [key] + [
-                _json(value[c]) if c in value else None
+                encoded[c] if c in encoded else None
                 for c in write_cols
                 if c != "id"
             ]
@@ -449,7 +462,7 @@ class SqliteStorageBackend:
                 for row_id, payload_text in rows:
                     if not isinstance(row_id, str) or not isinstance(payload_text, str):
                         raise ValueError(f"invalid v1 row in collection {name!r}")
-                    parsed: object = json.loads(payload_text)
+                    parsed = decode_json_value(payload_text)
                     if not isinstance(parsed, dict):
                         raise ValueError(
                             f"invalid v1 payload in collection {name!r}: expected object"
