@@ -4,7 +4,11 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+)
 
 from nuself.agent.chat.response import (
     ConversationResponseSynthesizer,
@@ -16,7 +20,6 @@ from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
-from nuself.agent.messages import ChatMessage
 from nuself.llm import (
     LLMSettings,
     LangChainLLMEndpoint,
@@ -95,7 +98,7 @@ def test_endpoint_state_failure_retries_then_uses_local_fallback(
 
     def fail_endpoint(
         self: object,
-        prompt: list[ChatMessage],
+        prompt: list[BaseMessage],
     ) -> None:
         nonlocal endpoint_calls
         endpoint_calls += 1
@@ -126,7 +129,7 @@ def test_endpoint_state_failure_retries_then_uses_local_fallback(
     )
 
     result = synthesizer.complete(
-        [ChatMessage(role="user", content="hello")]
+        [HumanMessage(content="hello")]
     )
 
     assert endpoint_calls == 2
@@ -143,7 +146,7 @@ def test_tool_outcome_suppresses_retry_and_endpoint_failover(
 
     def fail_after_tool(
         self: object,
-        prompt: list[ChatMessage],
+        prompt: list[BaseMessage],
     ) -> None:
         del self, prompt
         nonlocal endpoint_calls
@@ -196,7 +199,7 @@ def test_tool_outcome_suppresses_retry_and_endpoint_failover(
     )
 
     result = synthesizer.complete(
-        [ChatMessage(role="user", content="mutate once")]
+        [HumanMessage(content="mutate once")]
     )
 
     assert endpoint_calls == 1
@@ -213,7 +216,7 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
 
     def fail_endpoint(
         self: object,
-        prompt: list[ChatMessage],
+        prompt: list[BaseMessage],
     ) -> None:
         nonlocal endpoint_calls
         endpoint_calls += 1
@@ -249,7 +252,7 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
 
     with pytest.warns(RuntimeWarning) as captured:
         result = synthesizer.complete(
-            [ChatMessage(role="user", content="hello")]
+            [HumanMessage(content="hello")]
         )
 
     assert endpoint_calls == 2

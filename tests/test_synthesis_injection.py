@@ -6,13 +6,14 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from langchain_core.messages import BaseMessage
+
 from nuself.agent.chat import (
     ChatStructuredOutput,
     ConversationGraphRuntime,
     ConversationTurnState,
     ThreadState,
 )
-from nuself.agent.messages import ChatMessage
 from nuself.llm import LangChainLLMEndpoint
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
@@ -28,7 +29,7 @@ class FakeResponseService:
     """Typed response fixture plus persona activation data."""
 
     def __init__(self, activation_response: dict[str, object] | None = None) -> None:
-        self.calls: list[list[ChatMessage]] = []
+        self.calls: list[list[BaseMessage]] = []
         self._activation_response = activation_response or {
             "activated": True,
             "selected_persona_ids": ["skeptic_self", "builder_self", "analyst_self"],
@@ -39,7 +40,7 @@ class FakeResponseService:
 
     def complete(
         self,
-        prompt: list[ChatMessage],
+        prompt: list[BaseMessage],
     ) -> ChatStructuredOutput:
         self.calls.append(prompt)
         return ChatStructuredOutput(answer="plain fallback")
@@ -60,9 +61,9 @@ class FakeResponseService:
 class StaticResponseService:
     def __init__(self, response: ChatStructuredOutput) -> None:
         self.response = response
-        self.calls: list[list[ChatMessage]] = []
+        self.calls: list[list[BaseMessage]] = []
 
-    def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
+    def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput:
         self.calls.append(prompt)
         return self.response
 
@@ -210,7 +211,7 @@ def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
     
     # Build prompt should not contain synthesis sections
     prompt = runtime._build_prompt(prepared.state)  # type: ignore[reportPrivateUsage]
-    system_prompt = prompt[0].content
+    system_prompt = prompt[0].text
     assert "Internal perspective fusion:" not in system_prompt
 
 
@@ -279,7 +280,7 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
     
     prepared = runtime.prepare_context_node(turn_state)
     prompt = runtime._build_prompt(prepared.state)  # type: ignore[reportPrivateUsage]
-    system_prompt = prompt[0].content
+    system_prompt = prompt[0].text
 
     # Verify essential sections are preserved
     assert "You are NuSelf" in system_prompt
@@ -321,7 +322,7 @@ def test_respond_node_uses_main_prompt(tmp_path: Path) -> None:
     
     # Verify main prompt was used; selves is available as a tool.
     assert len(response_service.calls) >= 1
-    system_prompt = response_service.calls[-1][0].content
+    system_prompt = response_service.calls[-1][0].text
     assert "You are NuSelf" in system_prompt
     assert "selves_consult" in system_prompt
     assert "synthesizer self" not in system_prompt
@@ -354,7 +355,7 @@ def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
     
     # Verify main prompt was used
     assert len(response_service.calls) >= 1
-    system_prompt = response_service.calls[0][0].content
+    system_prompt = response_service.calls[0][0].text
     assert "You are NuSelf" in system_prompt
     assert "synthesizer self" not in system_prompt
     assert "Do not narrate internal persona composition" in system_prompt

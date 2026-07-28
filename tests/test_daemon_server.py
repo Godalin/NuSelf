@@ -5,13 +5,13 @@ import time
 from pathlib import Path
 
 import pytest
+from langchain_core.messages import BaseMessage
 
 from nuself.agent.chat import (
     ChatStructuredOutput,
     ConversationGraphRuntime,
     ConversationTurnState,
 )
-from nuself.agent.messages import ChatMessage
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState
@@ -49,7 +49,7 @@ def _worker_supervisor(
 
 
 class StaticResponseService:
-    def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
+    def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput:
         return ChatStructuredOutput(
             answer="stubbed: hello",
             evidence_references=["mem_1", "source:note:0"],
@@ -80,7 +80,7 @@ def _successful_conversation_runtime(
 class FailingResponseService:
     def complete(
         self,
-        prompt: list[ChatMessage],
+        prompt: list[BaseMessage],
     ) -> ChatStructuredOutput:
         del prompt
         raise RuntimeError("llm unavailable")
@@ -97,7 +97,7 @@ class FailingResponseService:
 class RepeatedChainFailingResponseService:
     def complete(
         self,
-        prompt: list[ChatMessage],
+        prompt: list[BaseMessage],
     ) -> ChatStructuredOutput:
         del prompt
         try:

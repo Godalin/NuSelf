@@ -132,7 +132,7 @@ the response.
 - If `persona` is not found, returns an error message.
 - The underlying call uses the shared framework-native `TextAgent` capability.
   `TextAgent` accepts LangChain messages and returns one stripped, non-empty
-  natural-language conclusion. It does not use `ChatMessage`,
+  natural-language conclusion. It does not use a NuSelf-only prompt DTO,
   `ChatLLM.complete()`, a one-field structured-output workaround, or a hidden
   local fallback.
 - The default capability uses configured LangChain endpoint order and the same

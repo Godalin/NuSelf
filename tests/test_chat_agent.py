@@ -19,7 +19,6 @@ from nuself.agent.chat import (
     ThreadStore,
 )
 from nuself.agent.chat import ConversationGraphRuntimeError
-from nuself.agent.messages import ChatMessage
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.llm import LangChainLLMEndpoint
@@ -63,11 +62,11 @@ def _invoke_chat_tool(tool: BaseTool, args: dict[str, object] | None = None) -> 
 class FakeResponseService:
     def __init__(self, activation_response: dict[str, object] | None = None) -> None:
         del activation_response
-        self.calls: list[list[ChatMessage]] = []
+        self.calls: list[list[BaseMessage]] = []
 
     def complete(
         self,
-        prompt: list[ChatMessage],
+        prompt: list[BaseMessage],
     ) -> ChatStructuredOutput:
         self.calls.append(prompt)
         return ChatStructuredOutput(answer="agent reply")
@@ -84,9 +83,9 @@ class FakeResponseService:
 class StaticResponseService:
     def __init__(self, response: ChatStructuredOutput) -> None:
         self.response = response
-        self.calls: list[list[ChatMessage]] = []
+        self.calls: list[list[BaseMessage]] = []
 
-    def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
+    def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput:
         self.calls.append(prompt)
         return self.response
 
@@ -101,7 +100,7 @@ class StaticResponseService:
 class FailingResponseService:
     def complete(
         self,
-        prompt: list[ChatMessage],
+        prompt: list[BaseMessage],
     ) -> ChatStructuredOutput:
         del prompt
         raise RuntimeError("llm unavailable")
@@ -131,7 +130,7 @@ def test_chat_agent_includes_memory_entries(tmp_path: Path) -> None:
     result = agent.respond("clarity assumptions")
 
     assert result.reply == "agent reply"
-    system_prompt = llm.calls[0][0].content
+    system_prompt = llm.calls[0][0].text
     assert "Clarity matters" in system_prompt
     assert "Prefer explicit assumptions." in system_prompt
 
@@ -151,7 +150,7 @@ def test_chat_agent_omits_irrelevant_memory_entries(tmp_path: Path) -> None:
 
     agent.respond("weather forecast")
 
-    system_prompt = llm.calls[0][0].content
+    system_prompt = llm.calls[0][0].text
     assert "Relevant memory context:" not in system_prompt
     assert "Clarity matters" not in system_prompt
 
@@ -176,7 +175,7 @@ def test_chat_agent_includes_source_chunks_by_default(tmp_path: Path) -> None:
 
     agent.respond("durable source evidence")
 
-    system_prompt = llm.calls[0][0].content
+    system_prompt = llm.calls[0][0].text
     assert "Relevant memory context:" in system_prompt
     assert "Source chunks:" in system_prompt
     assert "Source Evidence" in system_prompt
@@ -199,7 +198,7 @@ def test_chat_agent_includes_profile_items_by_default(tmp_path: Path) -> None:
 
     agent.respond("direct answers")
 
-    system_prompt = llm.calls[0][0].content
+    system_prompt = llm.calls[0][0].text
     assert "Profile items:" in system_prompt
     assert "Direct style" in system_prompt
     assert "source:profile:0" in system_prompt
@@ -229,7 +228,7 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
     assert result.evidence_references == ("mem_123", "source:note:0")
     assert result.confidence == 0.92
     assert result.epistemic_status == "grounded"
-    assert response_service.calls[0][0].content.startswith("You are NuSelf")
+    assert response_service.calls[0][0].text.startswith("You are NuSelf")
     thread_path = tmp_path / "private" / "threads" / "default.json"
     text = thread_path.read_text(encoding="utf-8")
     assert "Use the profile context." in text
@@ -307,7 +306,7 @@ def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
 
     agent.respond("new question")
 
-    prompt_text = "\n".join(message.content for message in llm.calls[0][1:])
+    prompt_text = "\n".join(message.text for message in llm.calls[0][1:])
     saved_text = (tmp_path / "private" / "threads" / "default.json").read_text(encoding="utf-8")
     assert "LLM API is not configured yet" not in prompt_text
     assert "LLM API is not configured yet" not in saved_text
@@ -783,7 +782,7 @@ def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) 
 
     agent.respond("test")
 
-    system_prompt = llm.calls[0][0].content
+    system_prompt = llm.calls[0][0].text
     assert "Available tools:" in system_prompt
     assert "memory_search" in system_prompt
     assert "Search durable memory" in system_prompt
@@ -795,7 +794,7 @@ def test_chat_agent_includes_service_skills_in_system_prompt(tmp_path: Path) -> 
 
     agent.respond("do you remember my earlier preferences?")
 
-    system_prompt = llm.calls[0][0].content
+    system_prompt = llm.calls[0][0].text
     assert "load_skill" in system_prompt
     assert "memory" in system_prompt
     assert "reflection" in system_prompt
@@ -827,7 +826,7 @@ def test_chat_agent_injects_language_instruction(tmp_path: Path) -> None:
 
     agent.respond("hello")
 
-    system_prompt = llm.calls[0][0].content
+    system_prompt = llm.calls[0][0].text
     assert "Respond to the user in zh-CN" in system_prompt
 
 
@@ -1118,7 +1117,7 @@ def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -
     agent = ConversationGraphRuntime(tmp_path, response_service=llm)
     agent.respond("test")
 
-    system_prompt = llm.calls[0][0].content
+    system_prompt = llm.calls[0][0].text
     assert "reflection_list_pending" in system_prompt
     assert "reflection_count" in system_prompt
     assert "reflection_archive" in system_prompt
@@ -1131,7 +1130,7 @@ def test_chat_agent_includes_reason_and_trace_tools_and_skills(tmp_path: Path) -
 
     agent.respond("what are you still thinking about?")
 
-    system_prompt = llm.calls[0][0].content
+    system_prompt = llm.calls[0][0].text
     assert "reason_list_active" in system_prompt
     assert "reason_count" in system_prompt
     assert "reason_context" in system_prompt
@@ -1584,7 +1583,7 @@ def test_chat_agent_includes_memory_tools_in_system_prompt(tmp_path: Path) -> No
     agent = ConversationGraphRuntime(tmp_path, response_service=llm)
     agent.respond("test")
 
-    system_prompt = llm.calls[0][0].content
+    system_prompt = llm.calls[0][0].text
     assert "memory_archive" in system_prompt
     assert "memory_update_importance" in system_prompt
     assert "memory_count" in system_prompt

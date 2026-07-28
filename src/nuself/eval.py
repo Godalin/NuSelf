@@ -7,13 +7,14 @@ import json
 from pathlib import Path
 from typing import cast
 
+from langchain_core.messages import BaseMessage
+
 from nuself.agent.chat import (
     ChatResult,
     ChatStructuredOutput,
     ConversationGraphRuntime,
     ConversationTurnState,
 )
-from nuself.agent.messages import ChatMessage
 from nuself.domain.memory import MemoryEntry
 
 
@@ -124,10 +125,13 @@ class FixtureResponseService:
 
     def __init__(self, response: ChatStructuredOutput) -> None:
         self.response = response
-        self.calls: list[list[ChatMessage]] = []
+        self.calls: list[list[BaseMessage]] = []
 
-    def complete(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
-        self.calls.append(prompt)
+    def complete(
+        self,
+        prompt: list[BaseMessage],
+    ) -> ChatStructuredOutput:
+        self.calls.append(list(prompt))
         return self.response
 
     def finalize(

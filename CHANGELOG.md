@@ -21,6 +21,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   `ConversationResponseService`. The now-unused raw `ChatLLM`,
   `LocalFallbackLLM`, and private text failover adapters have been removed from
   `nuself.llm`.
+- Chat response services, evaluation fixtures, and optional LangMem extraction
+  now exchange framework-native LangChain messages directly. The temporary
+  NuSelf `ChatMessage` DTO and its redundant conversion layer were removed.
 - `ReasonAdvancer` now builds equivalent agents for all configured endpoints
   and uses shared availability failover before any tool runs. Once middleware
   records a tool outcome, endpoint switching is suppressed with a chained

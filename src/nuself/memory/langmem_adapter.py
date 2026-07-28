@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
-from nuself.agent.messages import ChatMessage
+from langchain_core.messages import BaseMessage
+
 from nuself.domain.memory import MemoryCandidate, MemoryEvidence, MemoryEntryType
 from nuself.llm import LLMSettings
 def _title_from_body(body: str) -> str:
@@ -14,10 +16,6 @@ def _title_from_body(body: str) -> str:
     if len(compact) <= 48:
         return compact
     return compact[:45].rstrip() + "..."
-
-
-def _to_langmem_messages(messages: list[ChatMessage]) -> list[dict[str, str]]:
-    return [{"role": message.role, "content": message.content} for message in messages]
 
 
 def _memory_type_from_content(content: str) -> MemoryEntryType:
@@ -67,11 +65,14 @@ class LangMemCurator:
         self._manager = create_memory_manager(llm)
         return self._manager
 
-    def extract(self, messages: list[ChatMessage], source_ref: str = "langmem") -> list[MemoryCandidate]:
+    def extract(
+        self,
+        messages: Sequence[BaseMessage],
+        source_ref: str = "langmem",
+    ) -> list[MemoryCandidate]:
         manager = self._ensure_manager()
-        langmem_messages = _to_langmem_messages(messages)
         try:
-            result = manager.invoke({"messages": langmem_messages})  # type: ignore[union-attr]
+            result = manager.invoke({"messages": list(messages)})  # type: ignore[union-attr]
         except Exception as exc:
             raise RuntimeError(f"langmem extraction failed: {exc}") from exc
         candidates: list[MemoryCandidate] = []

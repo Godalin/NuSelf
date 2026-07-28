@@ -160,12 +160,12 @@ text-completion protocol, a default model selector, or a private text failover
 adapter. Generated text and structured behavior belong behind the shared agent
 capabilities.
 
-Temporary prompt messages shared by chat, evaluation, and memory extraction
-belong to `nuself.agent.messages`, not the endpoint infrastructure module and
-not the chat subpackage. This avoids making memory depend on chat while the
-remaining callers are migrated to framework-native message objects. The DTO is
-an in-process prompt value only and does not define a wire serialization
-contract.
+Chat response services, evaluation fixtures, and optional memory extraction
+exchange framework-native LangChain `BaseMessage` values. NuSelf must not
+define a parallel prompt-message DTO or convert framework messages through a
+NuSelf-only wire shape before model invocation. Persisted `ThreadMessage`
+remains a storage model and is converted to framework messages at the runtime
+boundary.
 
 `ConversationGraphRuntime` and `ConversationResponseSynthesizer` do not accept
 `llm=`. Tests that need generated responses inject the typed

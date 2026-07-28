@@ -4,18 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.agent.messages import ChatMessage
+from langchain_core.messages import AIMessage, HumanMessage
+
 from nuself.llm import LLMSettings
-from nuself.memory.langmem_adapter import LangMemCurator, _memory_type_from_content, _title_from_body, _to_langmem_messages  # type: ignore[reportPrivateUsage]
-
-
-def test_to_langmem_messages_converts_chat_messages() -> None:
-    messages = [
-        ChatMessage(role="user", content="hello"),
-        ChatMessage(role="assistant", content="hi"),
-    ]
-    result = _to_langmem_messages(messages)
-    assert result == [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "hi"}]
+from nuself.memory.langmem_adapter import LangMemCurator, _memory_type_from_content, _title_from_body  # type: ignore[reportPrivateUsage]
 
 
 def test_memory_type_from_content_detects_preference() -> None:
@@ -36,7 +28,7 @@ def test_title_from_body_truncates_long_text() -> None:
 def test_langmem_curator_raises_when_api_key_missing(tmp_path: Path) -> None:
     curator = LangMemCurator(tmp_path, settings=LLMSettings(base_url="", api_key="", model=""))
     try:
-        curator.extract([ChatMessage(role="user", content="hello")])
+        curator.extract([HumanMessage(content="hello")])
     except RuntimeError as exc:
         assert "LLM API key is not configured" in str(exc)
         return
@@ -54,15 +46,25 @@ class FakeMemoryContent:
 
 
 class FakeManager:
+    def __init__(self) -> None:
+        self.payload: dict[str, object] | None = None
+
     def invoke(self, state: dict[str, object]) -> list[object]:
+        self.payload = state
         return [FakeExtractedMemory("User prefers concise output.")]
 
 
 def test_langmem_curator_extracts_candidates_with_fake_manager(tmp_path: Path) -> None:
     curator = LangMemCurator(tmp_path, settings=LLMSettings(base_url="http://x", api_key="k", model="m"))
-    setattr(curator, "_manager", FakeManager())
+    manager = FakeManager()
+    setattr(curator, "_manager", manager)
 
-    candidates = curator.extract([ChatMessage(role="user", content="hello")])
+    messages = [
+        HumanMessage(content="hello"),
+        AIMessage(content="hi"),
+    ]
+    candidates = curator.extract(messages)
+    assert manager.payload == {"messages": messages}
 
     assert len(candidates) == 1
     assert candidates[0].type == "preference"

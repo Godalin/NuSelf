@@ -10,6 +10,12 @@ from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from langchain_core.tools import BaseTool
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+)
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
 from nuself.agent.chat.types import (
     ChatAgentSettings,
@@ -29,7 +35,6 @@ from nuself.agent.chat.response import (
 from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.chat.tool_runtime import ConversationToolRuntime
 from nuself.agent.chat.thread import ThreadMessage, ThreadState, ThreadStore
-from nuself.agent.messages import ChatMessage
 from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.config import ConfigSystem
 from nuself.llm import (
@@ -439,10 +444,15 @@ class ConversationGraphRuntime:
     # Prompt building
     # ------------------------------------------------------------------
 
-    def _build_prompt(self, state: ConversationTurnState) -> list[ChatMessage]:
-        prompt: list[ChatMessage] = [ChatMessage(role="system", content=self._system_prompt(state))]
+    def _build_prompt(self, state: ConversationTurnState) -> list[BaseMessage]:
+        prompt: list[BaseMessage] = [
+            SystemMessage(content=self._system_prompt(state))
+        ]
         for message in state.active_messages[-self._settings.recent_messages :]:
-            prompt.append(ChatMessage(role=message.role, content=message.content))
+            if message.role == "assistant":
+                prompt.append(AIMessage(content=message.content))
+            else:
+                prompt.append(HumanMessage(content=message.content))
         return prompt
 
     def _system_prompt(self, state: ConversationTurnState) -> str:
@@ -486,7 +496,10 @@ class ConversationGraphRuntime:
     # Response generation
     # ------------------------------------------------------------------
 
-    def _complete_response(self, prompt: list[ChatMessage]) -> ChatStructuredOutput:
+    def _complete_response(
+        self,
+        prompt: list[BaseMessage],
+    ) -> ChatStructuredOutput:
         return self._response_synthesizer.complete(prompt)
 
     def _finalize_draft_response(self, state: ConversationTurnState, draft: ChatStructuredOutput) -> ChatStructuredOutput:

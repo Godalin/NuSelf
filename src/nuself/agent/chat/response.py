@@ -8,14 +8,17 @@ from typing import Any, Protocol, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain.agents.structured_output import ToolStrategy as _ToolStrategy
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import (
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+)
 from langchain_core.tools import BaseTool
 
 from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
-from nuself.agent.messages import ChatMessage
 from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
 from nuself.llm import (
     LangChainLLMEndpoint,
@@ -35,7 +38,7 @@ class ConversationResponseService(Protocol):
 
     def complete(
         self,
-        prompt: list[ChatMessage],
+        prompt: list[BaseMessage],
     ) -> ChatStructuredOutput: ...
 
     def finalize(
@@ -65,7 +68,7 @@ class ConversationResponseSynthesizer:
 
     def complete(
         self,
-        prompt: list[ChatMessage],
+        prompt: list[BaseMessage],
     ) -> ChatStructuredOutput:
         if self._langchain_models:
             return self._complete_with_langchain_tools(prompt)
@@ -98,7 +101,7 @@ class ConversationResponseSynthesizer:
 
     def _complete_with_langchain_tools(
         self,
-        prompt: list[ChatMessage],
+        prompt: list[BaseMessage],
     ) -> ChatStructuredOutput:
         last_error: Exception | None = None
         retry_suppressed = False
@@ -146,7 +149,7 @@ class ConversationResponseSynthesizer:
                 component="chat",
                 event="llm_endpoints_exhausted",
                 message=(
-                    "All LLM endpoints failed; falling back to local LLM"
+                    "All LLM endpoints failed; using local response policy"
                 ),
                 project_root=self._project_root,
                 level="warning",
@@ -242,7 +245,7 @@ class _LangChainChatSupervisor:
 
     def complete(
         self,
-        prompt: list[ChatMessage],
+        prompt: list[BaseMessage],
     ) -> ChatStructuredOutput:
         system_prompt, messages = _split_prompt(prompt)
         middleware = ToolCaptureMiddleware(
@@ -302,13 +305,13 @@ def _looks_like_tool_call(text: str) -> bool:
 
 
 def _local_response_output(
-    prompt: list[ChatMessage],
+    prompt: list[BaseMessage],
 ) -> ChatStructuredOutput:
     last_user = next(
         (
-            message.content
+            message.text
             for message in reversed(prompt)
-            if message.role == "user"
+            if isinstance(message, HumanMessage)
         ),
         "",
     )
@@ -332,17 +335,15 @@ def _reject_visible_tool_call(
 
 
 def _split_prompt(
-    prompt: list[ChatMessage],
+    prompt: list[BaseMessage],
 ) -> tuple[str | None, list[BaseMessage]]:
     system_parts: list[str] = []
     messages: list[BaseMessage] = []
     for message in prompt:
-        if message.role == "system":
-            system_parts.append(message.content)
-        elif message.role == "assistant":
-            messages.append(AIMessage(content=message.content))
+        if isinstance(message, SystemMessage):
+            system_parts.append(message.text)
         else:
-            messages.append(HumanMessage(content=message.content))
+            messages.append(message)
     return (
         "\n\n".join(system_parts) if system_parts else None,
         messages,
