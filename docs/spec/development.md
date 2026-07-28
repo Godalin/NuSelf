@@ -165,6 +165,8 @@ under the same package.
   progress state.
 - `cli/repl/commands.py` owns subsystem REPL commands and their focused help
   text; the composition root only dispatches parsed interactive input.
+- `cli/repl/input.py` owns prompt-toolkit input, deduplicated history,
+  completion, and top-level interactive help.
 
 Conversation runtime types follow the same rule: `agent/chat_types.py` owns
 settings, structured response/result records, typed turn state, and graph error
