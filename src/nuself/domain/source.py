@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Literal, TypeAlias, cast
 from uuid import uuid5, NAMESPACE_URL
 
-from nuself.domain.memory import PrivacyLevel, now_iso
+from nuself.clock import utc_now_iso
+from nuself.domain.memory import PrivacyLevel
 
 SourceKind: TypeAlias = Literal["markdown", "text"]
 
@@ -36,8 +37,8 @@ class SourceDocument:
     privacy: PrivacyLevel = "private"
     tags: list[str] = field(default_factory=empty_str_list)
     source_date: str | None = None
-    created_at: str = field(default_factory=now_iso)
-    updated_at: str = field(default_factory=now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
+    updated_at: str = field(default_factory=utc_now_iso)
 
     def to_wire(self) -> dict[str, object]:
         return {
@@ -80,7 +81,7 @@ class SourceChunk:
     text: str
     title: str
     path: str
-    created_at: str = field(default_factory=now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
 
     def to_wire(self) -> dict[str, object]:
         return {

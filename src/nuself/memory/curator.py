@@ -11,7 +11,8 @@ from pydantic import BaseModel, Field
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry, now_iso
+from nuself.clock import utc_now_iso
+from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
 from nuself.profile.repository import ProfileItemRepository
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
@@ -432,7 +433,7 @@ class MemoryCurator:
     def _append_log(self, message: str) -> None:
         ensure_runtime_dirs(self._paths)
         with self._memory_log_path().open("a", encoding="utf-8") as log_file:
-            log_file.write(f"{now_iso()} {message}\n")
+            log_file.write(f"{utc_now_iso()} {message}\n")
 
 
 def _render_transcript(messages: list[ThreadMessage]) -> str:
@@ -440,7 +441,7 @@ def _render_transcript(messages: list[ThreadMessage]) -> str:
 
 
 def _source_observed_at(source_ref: str) -> str | None:
-    return now_iso() if source_ref.startswith("thread:") else None
+    return utc_now_iso() if source_ref.startswith("thread:") else None
 
 
 def _has_memory_worthy_signal(messages: list[ThreadMessage], min_quality_chars: int) -> bool:

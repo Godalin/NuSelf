@@ -9,11 +9,11 @@ import shutil
 import subprocess
 import textwrap
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Sequence, cast
 from uuid import uuid4
 
+from nuself.clock import utc_now, utc_now_iso
 from nuself.logs import write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
 from nuself.reason.repository import ReasonNotFound
@@ -56,10 +56,6 @@ def set_section_planner(
     _section_planner = cb
 
 
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
-
-
 @dataclass(frozen=True)
 class ReasonOutputSection:
     index: int
@@ -69,7 +65,7 @@ class ReasonOutputSection:
     source_start_index: int
     source_end_index: int
     summary: str
-    created_at: str = field(default_factory=_now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
 
     def to_wire(self) -> dict[str, object]:
         return {
@@ -93,7 +89,7 @@ class ReasonOutputSection:
             source_start_index=_expect_int(data, "source_start_index"),
             source_end_index=_expect_int(data, "source_end_index"),
             summary=_expect_str(data, "summary"),
-            created_at=_optional_str(data, "created_at") or _now_iso(),
+            created_at=_optional_str(data, "created_at") or utc_now_iso(),
         )
 
 
@@ -102,7 +98,7 @@ class ReasonOutputChunk:
     index: int
     filename: str
     step_ids: tuple[str, ...]
-    created_at: str = field(default_factory=_now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
 
     def to_wire(self) -> dict[str, object]:
         return {
@@ -118,7 +114,7 @@ class ReasonOutputChunk:
             index=_expect_int(data, "index"),
             filename=_expect_str(data, "filename"),
             step_ids=tuple(str(item) for item in _expect_list(data, "step_ids") if isinstance(item, str)),
-            created_at=_optional_str(data, "created_at") or _now_iso(),
+            created_at=_optional_str(data, "created_at") or utc_now_iso(),
         )
 
 
@@ -135,8 +131,8 @@ class ReasonOutputManifest:
     status: str = "planned"
     combined_filename: str = "combined.md"
     progress_filename: str = "progress.json"
-    created_at: str = field(default_factory=_now_iso)
-    updated_at: str = field(default_factory=_now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
+    updated_at: str = field(default_factory=utc_now_iso)
     sections: tuple[ReasonOutputSection, ...] = ()
     chunks: tuple[ReasonOutputChunk, ...] = ()
     attempts: int = 0
@@ -180,8 +176,8 @@ class ReasonOutputManifest:
             status=_optional_str(data, "status") or "planned",
             combined_filename=_optional_str(data, "combined_filename") or "combined.md",
             progress_filename=_optional_str(data, "progress_filename") or "progress.json",
-            created_at=_optional_str(data, "created_at") or _now_iso(),
-            updated_at=_optional_str(data, "updated_at") or _now_iso(),
+            created_at=_optional_str(data, "created_at") or utc_now_iso(),
+            updated_at=_optional_str(data, "updated_at") or utc_now_iso(),
             sections=tuple(
                 ReasonOutputSection.from_wire(cast(dict[str, object], section))
                 for section in _expect_list(data, "sections")
@@ -207,7 +203,7 @@ class ReasonOutputManifest:
         last_error: str | None = None,
         last_attempt_at: str | None = None,
     ) -> ReasonOutputManifest:
-        kw: dict[str, object] = {"updated_at": _now_iso()}
+        kw: dict[str, object] = {"updated_at": utc_now_iso()}
         if status is not None:
             kw["status"] = status
         if chunks is not None:
@@ -502,9 +498,9 @@ class ReasonOutputService:
 
             # Runner composes the chunk text (e.g., via a subagent/LLM)
             try:
-                start_ts = datetime.now(UTC).timestamp()
+                start_ts = utc_now().timestamp()
                 composed_text = runner(thread, manifest, batch, section=section, section_plan=section_plan, index=index, total=total)
-                duration_ms = int((datetime.now(UTC).timestamp() - start_ts) * 1000)
+                duration_ms = int((utc_now().timestamp() - start_ts) * 1000)
             except Exception as exc:
                 write_log_event(
                     "reasoning",
@@ -625,7 +621,7 @@ class ReasonOutputService:
                 total_chunks=len(chunks),
                 pdf_status=pdf_status,
                 pdf_path=pdf_path_str,
-                updated_at=_now_iso(),
+                updated_at=utc_now_iso(),
             ),
         )
         return updated

@@ -5,9 +5,10 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
 from nuself.derived import write_derived_index
-from nuself.domain.memory import MemoryCandidate, merge_relations, now_iso
+from nuself.domain.memory import MemoryCandidate, merge_relations
 from nuself.domain.profile import ProfileItem
 from nuself.storage import StorageBackend, auto_backend
 
@@ -94,7 +95,7 @@ class ProfileItemRepository:
             privacy=existing.privacy,
             id=existing.id,
             created_at=existing.created_at,
-            updated_at=now_iso(),
+            updated_at=utc_now_iso(),
             observed_at=candidate.observed_at or existing.observed_at,
             valid_from=candidate.valid_from or existing.valid_from,
             valid_until=candidate.valid_until or existing.valid_until,

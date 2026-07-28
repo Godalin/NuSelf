@@ -10,8 +10,8 @@ import json
 from pathlib import Path
 from typing import Literal, cast
 
+from nuself.clock import utc_now_iso
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.domain.memory import now_iso
 
 LogLevel = Literal["debug", "info", "warning", "error"]
 LogComponent = Literal["daemon", "chat", "memory", "persona", "outbox", "reflection", "reasoning"]
@@ -137,7 +137,7 @@ def write_log_event(
 
     context = current_log_context()
     event_record = LogEvent(
-        time=now_iso(),
+        time=utc_now_iso(),
         level=level,
         component=component,
         event=event,

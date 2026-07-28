@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Literal, TypeAlias, cast
 from uuid import uuid4
+
+from nuself.clock import utc_now, utc_now_iso
 
 TraceKind: TypeAlias = Literal[
     "chat_turn",
@@ -54,10 +55,6 @@ TRACE_RELATIONS: tuple[TraceRelation, ...] = (
 )
 
 
-def trace_now_iso() -> str:
-    return datetime.now(UTC).isoformat()
-
-
 def new_trace_id() -> str:
     return f"trace-{_timestamp_id()}-{uuid4().hex[:8]}"
 
@@ -67,7 +64,7 @@ def new_trace_link_id() -> str:
 
 
 def _timestamp_id() -> str:
-    return datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    return utc_now().strftime("%Y%m%dT%H%M%S%fZ")
 
 
 def empty_str_list() -> list[str]:
@@ -94,7 +91,7 @@ class ThoughtTrace:
     decision_points: list[str] = field(default_factory=empty_str_list)
     thread_id: str | None = None
     visibility: TraceVisibility = "private"
-    created_at: str = field(default_factory=trace_now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
     metadata: dict[str, object] = field(default_factory=empty_metadata)
 
     def __post_init__(self) -> None:
@@ -154,7 +151,7 @@ class TraceLink:
     relation: TraceRelation
     summary: str
     id: str = field(default_factory=new_trace_link_id)
-    created_at: str = field(default_factory=trace_now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
     metadata: dict[str, object] = field(default_factory=empty_metadata)
 
     def __post_init__(self) -> None:

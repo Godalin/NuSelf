@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Literal, Protocol, TypeAlias, cast
 from uuid import uuid4
+
+from nuself.clock import utc_now_iso
 
 MemoryEntryType: TypeAlias = Literal[
     "source_note",
@@ -27,10 +28,6 @@ PrivacyLevel: TypeAlias = Literal["private", "shareable"]
 MemoryCandidateAction: TypeAlias = Literal["create", "update", "merge", "delete"]
 MemoryCandidateReviewState: TypeAlias = Literal["pending", "accepted", "rejected"]
 MemoryEvidenceSourceType: TypeAlias = Literal["thread", "manual", "source", "optimizer"]
-
-
-def now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def new_memory_entry_id() -> str:
@@ -94,7 +91,7 @@ class MemoryEvidence:
     summary: str = ""
     observed_at: str | None = None
     quote: str = ""
-    created_at: str = field(default_factory=now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
 
     def to_wire(self) -> dict[str, object]:
         return {
@@ -132,8 +129,8 @@ class MemoryEntry:
     privacy: PrivacyLevel = "private"
     review_state: ReviewState = "draft"
     id: str = field(default_factory=new_memory_entry_id)
-    created_at: str = field(default_factory=now_iso)
-    updated_at: str = field(default_factory=now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
+    updated_at: str = field(default_factory=utc_now_iso)
     revisit_at: str | None = None
     observed_at: str | None = None
     valid_from: str | None = None
@@ -169,7 +166,7 @@ class MemoryEntry:
             review_state=review_state if review_state is not None else self.review_state,
             id=self.id,
             created_at=self.created_at,
-            updated_at=now_iso(),
+            updated_at=utc_now_iso(),
             revisit_at=self.revisit_at,
             observed_at=observed_at if observed_at is not None else self.observed_at,
             valid_from=valid_from if valid_from is not None else self.valid_from,
@@ -322,8 +319,8 @@ class MemoryCandidate:
     review_state: MemoryCandidateReviewState = "pending"
     reason: str = ""
     id: str = field(default_factory=new_memory_candidate_id)
-    created_at: str = field(default_factory=now_iso)
-    updated_at: str = field(default_factory=now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
+    updated_at: str = field(default_factory=utc_now_iso)
     reviewed_at: str | None = None
     target_entry_id: str | None = None
     observed_at: str | None = None
@@ -347,7 +344,7 @@ class MemoryCandidate:
         valid_until: str | None = None,
         temporal_note: str | None = None,
     ) -> "MemoryCandidate":
-        reviewed_at = now_iso() if review_state in {"accepted", "rejected"} else self.reviewed_at
+        reviewed_at = utc_now_iso() if review_state in {"accepted", "rejected"} else self.reviewed_at
         return MemoryCandidate(
             type=self.type,
             title=title if title is not None else self.title,
@@ -362,7 +359,7 @@ class MemoryCandidate:
             reason=self.reason,
             id=self.id,
             created_at=self.created_at,
-            updated_at=now_iso(),
+            updated_at=utc_now_iso(),
             reviewed_at=reviewed_at,
             target_entry_id=target_entry_id if target_entry_id is not None else self.target_entry_id,
             observed_at=observed_at if observed_at is not None else self.observed_at,
@@ -497,8 +494,8 @@ class MemoryObject:
     review_state: ReviewState = "draft"
     privacy: PrivacyLevel = "private"
     id: str = field(default_factory=new_memory_entry_id)
-    created_at: str = field(default_factory=now_iso)
-    updated_at: str = field(default_factory=now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
+    updated_at: str = field(default_factory=utc_now_iso)
 
     def to_wire(self) -> dict[str, object]:
         return {

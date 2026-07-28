@@ -60,6 +60,13 @@ Do not tag unreleased feature commits directly. Tags mark release commits only.
 - Keep `docs/current-goal.md` concise (active focus, next steps, out-of-scope, completion criteria). Move completed history to README TODOs.
 - Keep scoped implementation constraints in local `AGENTS.md` files near the code, not the root README.
 
+### Shared Time Boundary
+
+- Generic UTC clock helpers live in `nuself.clock`, never in a domain module.
+  `utc_now()` returns an aware UTC `datetime`; `utc_now_iso()` is the shared
+  producer for persisted ISO-8601 timestamps. Domains may keep specialized ID
+  or scheduling helpers, but must compose them from the neutral clock.
+
 ## Framework-Native Agent Architecture
 
 NuSelf uses LangChain/LangGraph as the agent infrastructure layer. When the framework has a current recommended API for an agent concern, NuSelf must use that API rather than maintain an equivalent private protocol.
@@ -170,11 +177,12 @@ under the same package.
 - `cli/repl/runtime.py` owns the interactive session loop and receives
   application effects through `ReplCallbacks`.
 
-Conversation runtime types follow the same rule: `agent/chat_types.py` owns
-settings, structured response/result records, typed turn state, and graph error
-contracts. `agent/chat.py` owns orchestration and may re-export those names
-during the internal module split so existing callers do not need a flag-day
-import migration.
+Conversation runtime code lives under `agent/chat/`. `types.py` owns settings,
+structured response/result records, typed turn state, and graph error contracts;
+`thread.py` owns persistence; `context.py`, `state.py`, `persona.py`,
+`response.py`, and `tool_runtime.py` own focused collaborators; and
+`runtime.py` wires the LangGraph. The package root is the stable public import
+boundary and re-exports caller-facing names.
 
 ## Memory Architecture Direction
 

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
+from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
 from nuself.logs import write_log_event
 from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
@@ -185,7 +185,7 @@ class ReasonService:
         else:
             raise RuntimeError(f"Cannot advance thread {thread.id}: no reason advancer configured")
 
-        now = datetime.now(UTC).isoformat()
+        now = utc_now_iso()
         terminal_status = step.terminal_status
         final_status = _status_from_terminal_status(terminal_status) or thread.status
         updated = ReasoningThread(

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from nuself.clock import utc_now
 from nuself.llm import LangChainLLMEndpoint
 from nuself.logs import log_context, write_log_event
 from nuself.reason.advancer import ReasonAdvancer
@@ -52,7 +53,7 @@ class ReasonScheduler:
         threads = self._service.list_threads(status=None)
         active = [t for t in threads if t.status == "active"]
 
-        now = datetime.now(UTC)
+        now = utc_now()
         candidate: ReasoningThread | None = None
 
         for t in active:
@@ -101,7 +102,9 @@ class ReasonScheduler:
         )
 
     def _apply_cooldown(self, thread: ReasoningThread) -> None:
-        cooldown_end = (datetime.now(UTC) + timedelta(seconds=self._interval_seconds)).isoformat()
+        cooldown_end = (
+            utc_now() + timedelta(seconds=self._interval_seconds)
+        ).isoformat()
         cooled = ReasoningThread(
             id=thread.id,
             topic=thread.topic,

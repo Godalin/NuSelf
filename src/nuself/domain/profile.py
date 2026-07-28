@@ -6,13 +6,13 @@ from dataclasses import dataclass, field
 from typing import cast
 from uuid import NAMESPACE_URL, uuid5
 
+from nuself.clock import utc_now_iso
 from nuself.domain.memory import (
     MemoryCandidate,
     MemoryEvidence,
     PrivacyLevel,
     empty_evidence_list,
     empty_relations_dict,
-    now_iso,
 )
 
 
@@ -31,7 +31,7 @@ def _optional_float(data: dict[str, object], field_name: str) -> float | None:
 
 def new_profile_item_id(source_ref: str | None = None) -> str:
     if source_ref is None:
-        return f"profile_{uuid5(NAMESPACE_URL, now_iso()).hex}"
+        return f"profile_{uuid5(NAMESPACE_URL, utc_now_iso()).hex}"
     return f"profile_{uuid5(NAMESPACE_URL, source_ref).hex}"
 
 
@@ -48,8 +48,8 @@ class ProfileItem:
     importance: float = 0.5
     privacy: PrivacyLevel = "private"
     id: str = field(default_factory=new_profile_item_id)
-    created_at: str = field(default_factory=now_iso)
-    updated_at: str = field(default_factory=now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
+    updated_at: str = field(default_factory=utc_now_iso)
     observed_at: str | None = None
     valid_from: str | None = None
     valid_until: str | None = None
@@ -81,7 +81,7 @@ class ProfileItem:
             privacy=self.privacy,
             id=self.id,
             created_at=self.created_at,
-            updated_at=now_iso(),
+            updated_at=utc_now_iso(),
             observed_at=observed_at if observed_at is not None else self.observed_at,
             valid_from=valid_from if valid_from is not None else self.valid_from,
             valid_until=valid_until if valid_until is not None else self.valid_until,

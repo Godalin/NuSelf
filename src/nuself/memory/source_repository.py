@@ -10,7 +10,8 @@ from uuid import NAMESPACE_URL, uuid5
 
 from nuself.config import runtime_paths
 from nuself.derived import write_derived_index
-from nuself.domain.memory import MemoryCandidate, MemoryEvidence, PrivacyLevel, now_iso
+from nuself.clock import utc_now_iso
+from nuself.domain.memory import MemoryCandidate, MemoryEvidence, PrivacyLevel
 from nuself.domain.source import SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path
 from nuself.storage import StorageBackend, auto_backend
 
@@ -222,7 +223,7 @@ def load_source_file(path: Path, *, tags: list[str] | None = None, privacy: Priv
         privacy=metadata.privacy or privacy,
         tags=_dedupe_strings(merged_tags),
         source_date=metadata.source_date,
-        updated_at=now_iso(),
+        updated_at=utc_now_iso(),
     )
     chunks = _chunk_text(document, body)
     return document, chunks

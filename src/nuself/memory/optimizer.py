@@ -9,7 +9,8 @@ from typing import Literal, TypeAlias, cast
 from pydantic import BaseModel, Field
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry, now_iso
+from nuself.clock import utc_now_iso
+from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
 from nuself.llm import ChatLLM, ChatMessage, default_llm
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import clamp_unit, extract_json_object, looks_like_raw_transcript
@@ -133,7 +134,7 @@ class MemoryOptimizer:
                 log_path=self._memory_log_path(),
             )
 
-        source_ref = f"memory_optimize:{now_iso()}"
+        source_ref = f"memory_optimize:{utc_now_iso()}"
         updated = 0
         deleted = 0
         ignored = 0
@@ -288,7 +289,7 @@ class MemoryOptimizer:
     def _append_log(self, message: str) -> None:
         ensure_runtime_dirs(self._paths)
         with self._memory_log_path().open("a", encoding="utf-8") as log_file:
-            log_file.write(f"{now_iso()} {message}\n")
+            log_file.write(f"{utc_now_iso()} {message}\n")
 
 
 def _render_entries(entries: list[MemoryEntry]) -> str:

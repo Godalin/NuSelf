@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Literal, TypeAlias, cast
 from uuid import uuid4
+
+from nuself.clock import utc_now, utc_now_iso
 
 ReasonStatus: TypeAlias = Literal["active", "paused", "resolved", "archived"]
 StepKind: TypeAlias = Literal["progress", "no_change", "question", "synthesis", "contradiction", "resolution", "planning"]
@@ -20,16 +21,12 @@ TERMINAL_STATUSES: tuple[TerminalStatus, ...] = ("continue", "suggest_resolved",
 ACTIVE_STATUSES: tuple[ReasonStatus, ...] = ("active", "paused")
 
 
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
-
-
 def new_thread_id() -> str:
-    return f"reason-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}-{uuid4().hex[:8]}"
+    return f"reason-{utc_now().strftime('%Y%m%dT%H%M%S%fZ')}-{uuid4().hex[:8]}"
 
 
 def new_step_id() -> str:
-    return f"step-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}-{uuid4().hex[:8]}"
+    return f"step-{utc_now().strftime('%Y%m%dT%H%M%S%fZ')}-{uuid4().hex[:8]}"
 
 
 def _empty_str_list() -> list[str]:
@@ -75,8 +72,8 @@ class ReasoningThread:
     last_advanced_at: str | None = None
     next_review_after: str | None = None
     skip_next_advance_until: str | None = None
-    created_at: str = field(default_factory=_now_iso)
-    updated_at: str = field(default_factory=_now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
+    updated_at: str = field(default_factory=utc_now_iso)
     active_items_data: tuple[dict[str, object], ...] = ()
     pending_items_data: tuple[dict[str, object], ...] = ()
     next_steps_data: tuple[dict[str, object], ...] = ()
@@ -149,7 +146,7 @@ class ReasoningThread:
         )
 
     def with_status(self, status: ReasonStatus) -> ReasoningThread:
-        now = _now_iso()
+        now = utc_now_iso()
         return ReasoningThread(
             id=self.id,
             topic=self.topic,
@@ -181,7 +178,7 @@ class ReasoningStep:
     output: str = ""
     tool_logs: tuple[dict[str, object], ...] = ()
     confidence: float | None = None
-    created_at: str = field(default_factory=_now_iso)
+    created_at: str = field(default_factory=utc_now_iso)
     new_findings_data: tuple[dict[str, object], ...] = ()
     new_pending_data: tuple[dict[str, object], ...] = ()
     retired_findings_data: tuple[dict[str, object], ...] = ()

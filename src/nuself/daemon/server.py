@@ -12,10 +12,10 @@ import threading
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import cast, override
 
 from nuself.agent.chat import ChatAgent
+from nuself.clock import utc_now_iso
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.output import ReasonOutputManifest, ReasonOutputSection
 from nuself.reason.output import set_enqueue_callback, set_section_planner
@@ -211,7 +211,7 @@ class DaemonState:
             self._worker_health[name] = WorkerHealth(
                 name=name,
                 alive=True,
-                last_success_at=datetime.now(UTC).isoformat(),
+                last_success_at=utc_now_iso(),
             )
 
     def _record_worker_failure(self, name: str, exc: BaseException) -> str:
@@ -379,7 +379,6 @@ class DaemonState:
         self._join_thread(self._export_worker_thread, "export_worker")
 
     def _run_background_export_worker(self) -> None:
-        from datetime import UTC, datetime
         from nuself.logs import write_log_event
         from nuself.reason.output import ReasonOutputService
         from nuself.workspace import PrivateWorkspaceStore
@@ -562,7 +561,7 @@ class DaemonState:
                 # Persist attempts + error info on every failure using the
                 # typed manifest model, so crash recovery preserves counters.
                 attempts = 1
-                now_iso = datetime.now(UTC).isoformat()
+                now_iso = utc_now_iso()
                 if manifest_path.exists():
                     try:
                         raw: dict[str, object] = json.loads(manifest_path.read_text(encoding="utf-8"))

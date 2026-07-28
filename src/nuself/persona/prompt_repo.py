@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from datetime import UTC, datetime
 import json
 from pathlib import Path
 import threading
@@ -59,7 +58,7 @@ class PersonaPrompt:
         )
 
     def with_updates(self, *, disabled: bool | None = None) -> PersonaPrompt:
-        kw: dict[str, object] = {"updated_at": _now_iso()}
+        kw: dict[str, object] = {"updated_at": utc_now_iso()}
         if disabled is not None:
             kw["disabled"] = disabled
         return dataclasses.replace(self, **kw)  # pyright: ignore[reportArgumentType]
@@ -265,13 +264,9 @@ def _lock_for_root(root: Path) -> threading.RLock:
         return lock
 
 
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
-
-
 def create_persona_prompt(name: str, prompt_text: str, *, project_root: Path | None = None) -> PersonaPrompt:
     """Create a new PersonaPrompt with generated id and timestamps."""
-    now = _now_iso()
+    now = utc_now_iso()
     return PersonaPrompt(
         id=_generate_id(),
         name=name,
@@ -279,3 +274,4 @@ def create_persona_prompt(name: str, prompt_text: str, *, project_root: Path | N
         created_at=now,
         updated_at=now,
     )
+from nuself.clock import utc_now_iso

@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from nuself.config import runtime_paths
 from nuself.config import ConfigSystem, ReflectionSettings
-from nuself.domain.memory import now_iso
+from nuself.clock import utc_now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.reflection.organizer import ReflectionOrganizer
@@ -770,7 +770,7 @@ class IdeaCandidateGenerator:
                     evidence_refs=(),
                     suggested_thread_id=None,
                     source_summary="llm-generated",
-                    created_at=now_iso(),
+                    created_at=utc_now_iso(),
                 ))
             return results
         except (ValidationError, json.JSONDecodeError):
@@ -810,7 +810,7 @@ class IdeaCandidateGenerator:
                 evidence_refs=(),
                 suggested_thread_id=None,
                 source_summary="llm-generated",
-                created_at=now_iso(),
+                created_at=utc_now_iso(),
             ))
         return results
 

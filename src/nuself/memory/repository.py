@@ -8,6 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import cast
 
+from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
 from nuself.derived import write_derived_index
 from nuself.domain.memory import (
@@ -20,7 +21,6 @@ from nuself.domain.memory import (
     default_memory_type_registry,
     default_relation_descriptor_registry,
     merge_relations,
-    now_iso,
 )
 from nuself.domain.profile import ProfileItem
 from nuself.profile.repository import ProfileItemRepository
@@ -535,7 +535,7 @@ class MemoryCandidateRepository:
             review_state="draft",
             id=existing.id,
             created_at=existing.created_at,
-            updated_at=now_iso(),
+            updated_at=utc_now_iso(),
             revisit_at=existing.revisit_at,
             observed_at=candidate.observed_at or existing.observed_at,
             valid_from=candidate.valid_from or existing.valid_from,
