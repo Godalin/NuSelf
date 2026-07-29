@@ -57,12 +57,14 @@ escaping target exception.
 - Development policy and CI now include both pushes and pull requests for the
   complete `dev/**` branch family.
 - CI workflow YAML parsing and `git diff --check` passed.
+- Push run `30429446048` on `dev/v0.3.x` completed successfully across the
+  configured CI workflow.
 
 ## Publication
 
 Development-branch CI was implemented in `b5e8f4c`; premature worker-exit
-health was implemented in `5a9f3d0`. Milestone publication is pending this
-goal update and push.
+health was implemented in `5a9f3d0`. Both were published through `9149930`,
+and the resulting development-branch CI run passed.
 
 ## Next Review Batch
 
