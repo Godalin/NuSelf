@@ -5,9 +5,10 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make runtime event subscriptions use the same complete `(producer, name)`
-identity as registration and publication. Partial name-only selectors must not
-cross subsystem boundaries when extensions register the same event name.
+Bound durable-job wake-up admission independently of request volume while
+preserving manifest authority. Pending and in-flight wake-ups must coalesce by
+durable job identity, and capacity pressure must trigger online reconciliation
+instead of blocking producers or losing work until restart.
 
 ## Active Branch
 
@@ -15,45 +16,51 @@ cross subsystem boundaries when extensions register the same event name.
 
 ## Ordered Work
 
-1. Inventory definitions, same-named extension events, and every subscriber.
-2. Update runtime-infrastructure, logging, and development contracts first.
-3. Make subscriptions either unfiltered or exact `(producer, name)` selectors.
-4. Reject partial and unregistered selectors at subscription composition time.
-5. Prove same-named events from another producer cannot reach the subscriber.
-6. Run focused and full quality gates, commit by functional boundary, and push.
+1. Inventory initial enqueue, retry timers, startup reconciliation, duplicate
+   wake-ups, in-flight ownership, stop/drain, and manifest authority.
+2. Update durable-job, Reason output, development, and hardcode specs first.
+3. Add a shared bounded identity-deduplicating job admission queue.
+4. Keep identity active through processing and release it explicitly afterward.
+5. On capacity pressure, request online manifest reconciliation after capacity
+   is released; preserve retry backoff ownership.
+6. Prove duplicate, in-flight, full-capacity, recovery, and stop behavior.
+7. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No wildcard-by-producer or wildcard-by-name selectors.
-- No change to event definition, envelope, payload, or delivery-failure shapes.
-- No asynchronous delivery or subscriber retry.
-- No compatibility support for name-only subscriptions.
+- No persistent queue parallel to the manifest.
+- No blocking producer/request threads on queue capacity.
+- No early execution of jobs waiting on retry backoff timers.
+- No change to deterministic job IDs, retry limits, or composition semantics.
 
 ## Completion Evidence
 
-- Complete event subscription identity completed in `8765c8b`.
-- Filtered subscriptions require both producer and name and resolve the sealed
-  definition during composition.
-- Partial and unknown selectors fail before a subscription is installed.
-- A registered same-name extension event from another producer is proven not
-  to reach the exact subscriber.
-- Production subscribers contain no name-only selector.
-- Focused runtime event, observability, daemon-worker, Chat, and daemon-server
-  tests: 168 passed.
-- Full suite: 2086 passed.
+- Bounded identity-deduplicating job admission completed in `7f3a05b`.
+- `JobAdmissionQueue` coalesces `(name, job_id, resource_id)` across pending and
+  in-flight states and requires explicit completion.
+- Reason export pending wake-ups are capped at 256 without blocking producers.
+- Capacity pressure requests online manifest reconciliation after the worker
+  releases capacity; a focused real-manifest test proves the omitted job is
+  recovered in the same process.
+- Live retry-timer identities are excluded from reconciliation, preserving
+  backoff.
+- Focused job contract, admission, output queue, and export recovery tests:
+  61 passed.
+- Full suite: 2092 passed.
 - Pyright: 0 errors, 0 warnings.
-- Static subscription search and `git diff --check`: passed.
+- Static search proves production code no longer owns a `SimpleQueue` or raw
+  `queue.Queue`; `git diff --check` passed.
 
 ## Publication
 
-Complete event subscription identity was implemented in `8765c8b`; milestone
+Bounded durable-job wake-up admission was implemented in `7f3a05b`; milestone
 publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Review durable job admission and backpressure next. The Reason export worker
-uses an unbounded `SimpleQueue` while manifests are already authoritative;
-inventory duplicate enqueue paths, restart reconciliation, cancellation, and
-queue wake-up semantics, then determine whether the in-memory transport should
-be bounded and identity-deduplicated rather than able to grow independently of
-durable state.
+Review delayed retry scheduling next. Reason export still owns raw
+`threading.Timer` instances, retains completed timers until another retry is
+scheduled, and can strand its retry identity if timer start fails. Inventory
+timer lifecycle, shutdown races, context retention, and failure observability,
+then decide whether delayed wake-ups need a shared owned scheduler rather than
+domain-managed timer lists.
