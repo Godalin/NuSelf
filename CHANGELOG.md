@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon protocol failures now retain their source phase: request-envelope
+  decode, direct typed payload rejection, and registered handler invocation
+  have separate boundaries, so an internal `ProtocolError` is no longer
+  mislabeled as malformed client input.
 - Daemon request dispatch now distinguishes an unsupported request key from an
   `UnknownHandlerError` raised during registered handler invocation, preserving
   nested registry and middleware failure identity instead of mislabeling it.

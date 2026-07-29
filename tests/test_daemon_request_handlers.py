@@ -8,10 +8,12 @@ from nuself.daemon.protocol import (
     REQUEST_TYPES,
     DaemonRequest,
     DaemonResponse,
+    ProtocolError,
     RequestType,
 )
 from nuself.daemon.request_handlers import (
     DAEMON_REQUEST_HANDLERS,
+    DaemonRequestPayloadError,
     DaemonRequestState,
     build_daemon_request_registry,
     handle_request,
@@ -112,6 +114,45 @@ def test_registered_handler_unknown_error_is_not_reclassified(
     assert captured.value is failure
 
 
+def test_registered_handler_protocol_error_is_not_reclassified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failure = ProtocolError("nested protocol failed")
+    registry = HandlerRegistry[
+        RequestType,
+        [DaemonRequest, DaemonRequestState],
+        DaemonResponse,
+    ]()
+
+    def fail(
+        request: DaemonRequest,
+        state: DaemonRequestState,
+    ) -> DaemonResponse:
+        del request, state
+        raise failure
+
+    registry.register("ping", fail)
+    registry.seal()
+    monkeypatch.setattr(
+        request_handlers,
+        "DAEMON_REQUEST_HANDLERS",
+        registry,
+    )
+
+    with pytest.raises(ProtocolError) as captured:
+        handle_request(
+            DaemonRequest(
+                type="ping",
+                payload={},
+                request_id="nested-protocol",
+            ),
+            cast(DaemonRequestState, MiddlewareState(tmp_path)),
+        )
+
+    assert captured.value is failure
+
+
 def test_daemon_middleware_applies_context_and_activity_observation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -177,6 +218,30 @@ def test_control_handlers_reject_non_empty_payload_at_dispatch_boundary(
 
     assert response.status == "error"
     assert response.error == "unknown payload field(s): unexpected"
+
+
+def test_direct_payload_codec_failure_has_typed_source_wrapper(
+    tmp_path: Path,
+) -> None:
+    request = DaemonRequest(
+        type="ping",
+        payload={"unexpected": True},
+        request_id="typed-payload-error",
+    )
+
+    with pytest.raises(DaemonRequestPayloadError) as captured:
+        DAEMON_REQUEST_HANDLERS.dispatch(
+            "ping",
+            request,
+            cast(DaemonRequestState, MiddlewareState(tmp_path)),
+        )
+
+    assert str(captured.value) == "unknown payload field(s): unexpected"
+    assert isinstance(captured.value.__cause__, ProtocolError)
+    assert not isinstance(
+        captured.value.__cause__,
+        DaemonRequestPayloadError,
+    )
 
 
 def test_payload_rejection_survives_logging_failure(

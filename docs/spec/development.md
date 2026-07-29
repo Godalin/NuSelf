@@ -235,6 +235,13 @@ response; it must not surround handler invocation with
 `except UnknownHandlerError`, because that would relabel failures from
 middleware, nested registries, or the handler itself.
 
+The same rule applies to daemon `ProtocolError`. Socket envelope decode,
+request-specific payload decode, and handler invocation use separate lexical
+boundaries. Only a direct request payload codec failure is wrapped as
+`DaemonRequestPayloadError` and translated by request dispatch. Raw
+`ProtocolError` from later invocation preserves its identity and follows the
+unexpected handler failure path.
+
 Runtime event registration, publication, and filtered projection attachment
 all use the same `(producer, name)` identity. New internal projections must
 attach to all events intentionally or bind both fields; partial event-name

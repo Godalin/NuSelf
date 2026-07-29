@@ -385,6 +385,48 @@ def test_server_sanitizes_unexpected_handler_failure_response(
     assert root_secret not in (event.error or "")
 
 
+def test_server_treats_handler_protocol_error_as_invocation_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.daemon import socket_server as server_module
+
+    request = DaemonRequest(
+        type="ping",
+        payload={},
+        request_id="handler-protocol-failure",
+    )
+    writer = io.BytesIO()
+    fake = _handler_fake(
+        project_root=tmp_path,
+        raw=io.BytesIO(request.to_json_line()),
+        writer=writer,
+    )
+    failure = ProtocolError("nested handler protocol failed")
+
+    def fail_handler(
+        _request: DaemonRequest,
+        _state: object,
+    ) -> DaemonResponse:
+        raise failure
+
+    monkeypatch.setattr(server_module, "handle_request", fail_handler)
+
+    server_module.RequestHandler.handle(fake)  # type: ignore[arg-type]
+
+    response = DaemonResponse.from_json_line(writer.getvalue())
+    assert response.request_id == request.request_id
+    assert response.status == "error"
+    assert response.error == "nested handler protocol failed"
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="daemon",
+    )
+    assert event.event == "request_failed"
+    assert event.request_id == request.request_id
+    assert event.error == "nested handler protocol failed"
+
+
 def test_server_broken_pipe_is_observed_without_escaping(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

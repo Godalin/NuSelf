@@ -6,7 +6,7 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, TypeVar
 
 from nuself.agent.chat import ConversationGraphRuntime
 from nuself.daemon.activity import (
@@ -31,6 +31,7 @@ from nuself.daemon.protocol import (
     REQUEST_TYPES,
     DaemonRequest,
     DaemonResponse,
+    JsonValue,
     ProtocolError,
     RequestType,
 )
@@ -44,6 +45,13 @@ from nuself.memory.audit import run_memory_observed
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.runtime.context import runtime_context
+from nuself.runtime.diagnostics import diagnostic_exception_message
+
+RequestPayload = TypeVar("RequestPayload")
+
+
+class DaemonRequestPayloadError(ProtocolError):
+    """A direct request-specific payload codec rejected its input."""
 
 
 class DaemonRequestState(Protocol):
@@ -110,7 +118,7 @@ def handle_request(
             request,
             state,
         )
-    except ProtocolError as exc:
+    except DaemonRequestPayloadError as exc:
         response = DaemonResponse.fail_from_exception(
             request.request_id,
             exc,
@@ -130,7 +138,7 @@ def _handle_ping(
     state: DaemonRequestState,
 ) -> DaemonResponse:
     del state
-    EmptyRequestPayload.from_wire(request.payload)
+    _decode_request_payload(EmptyRequestPayload.from_wire, request.payload)
     return DaemonResponse.ok(
         request,
         MessagePayload("pong").to_wire(),
@@ -141,7 +149,7 @@ def _handle_health(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    EmptyRequestPayload.from_wire(request.payload)
+    _decode_request_payload(EmptyRequestPayload.from_wire, request.payload)
     payload = HealthResponsePayload(
         tuple(WorkerHealthPayload.from_health(item) for item in state.worker_health())
     )
@@ -160,7 +168,10 @@ def _handle_chat(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    chat_request = ChatRequestPayload.from_wire(request.payload)
+    chat_request = _decode_request_payload(
+        ChatRequestPayload.from_wire,
+        request.payload,
+    )
     started_at = time.monotonic()
     with runtime_context(
         thread_id=chat_request.thread_id,
@@ -226,7 +237,7 @@ def _handle_shutdown(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    EmptyRequestPayload.from_wire(request.payload)
+    _decode_request_payload(EmptyRequestPayload.from_wire, request.payload)
     state.shutdown_requested.set()
     write_daemon_request_audit(
         "shutdown_requested",
@@ -243,7 +254,10 @@ def _handle_activity_open(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    payload = ActivityOpenRequestPayload.from_wire(request.payload)
+    payload = _decode_request_payload(
+        ActivityOpenRequestPayload.from_wire,
+        request.payload,
+    )
     subscription_id = state.activity_broker.open(payload.turn_id)
     return DaemonResponse.ok(
         request,
@@ -255,7 +269,10 @@ def _handle_activity_next(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    payload = ActivityNextRequestPayload.from_wire(request.payload)
+    payload = _decode_request_payload(
+        ActivityNextRequestPayload.from_wire,
+        request.payload,
+    )
     try:
         batch = state.activity_broker.next_events(
             payload.subscription_id,
@@ -277,7 +294,10 @@ def _handle_activity_close(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    payload = ActivityCloseRequestPayload.from_wire(request.payload)
+    payload = _decode_request_payload(
+        ActivityCloseRequestPayload.from_wire,
+        request.payload,
+    )
     return DaemonResponse.ok(
         request,
         ActivityCloseResponsePayload(
@@ -301,6 +321,18 @@ def _run_memory_curator_once(
         metadata={},
         errors=(RuntimeError,),
     )
+
+
+def _decode_request_payload(
+    decoder: Callable[[dict[str, JsonValue]], RequestPayload],
+    payload: dict[str, JsonValue],
+) -> RequestPayload:
+    try:
+        return decoder(payload)
+    except ProtocolError as exc:
+        raise DaemonRequestPayloadError(
+            diagnostic_exception_message(exc)
+        ) from exc
 
 
 DAEMON_REQUEST_HANDLERS = build_daemon_request_registry()

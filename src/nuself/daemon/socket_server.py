@@ -73,25 +73,30 @@ class RequestHandler(socketserver.StreamRequestHandler):
         else:
             try:
                 request = DaemonRequest.from_json_line(raw_line)
-                request_id = request.request_id
-                response = handle_request(request, self._daemon_state())
             except ProtocolError as exc:
                 response = DaemonResponse.fail_from_exception(
-                    request_id or "unknown",
+                    "unknown",
                     exc,
                 )
-            except Exception as exc:
-                report_daemon_transport_failure(
-                    exc,
-                    event="request_failed",
-                    project_root=self._request_project_root(),
-                    request_id=request_id,
-                )
-                response = DaemonResponse.fail_from_exception(
-                    request_id or "unknown",
-                    exc,
-                    include_chain=True,
-                )
+            else:
+                request_id = request.request_id
+                try:
+                    response = handle_request(
+                        request,
+                        self._daemon_state(),
+                    )
+                except Exception as exc:
+                    report_daemon_transport_failure(
+                        exc,
+                        event="request_failed",
+                        project_root=self._request_project_root(),
+                        request_id=request_id,
+                    )
+                    response = DaemonResponse.fail_from_exception(
+                        request_id,
+                        exc,
+                        include_chain=True,
+                    )
 
         fallback = False
         try:

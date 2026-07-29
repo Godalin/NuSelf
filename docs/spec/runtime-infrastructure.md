@@ -151,6 +151,19 @@ as omitted. Payload codec `ProtocolError` values cross one daemon handler
 boundary as failed responses rather than escaping dispatch. Rejection logging
 is best effort and cannot replace that failed response.
 
+Request envelope decode, request-payload decode, and registered handler
+invocation are distinct exception sources:
+
+- socket request-envelope `ProtocolError` becomes a malformed-request response
+  before dispatch;
+- request handlers wrap only their direct payload codec call as
+  `DaemonRequestPayloadError`, which `handle_request(...)` translates into a
+  rejected-request response and audit;
+- a raw `ProtocolError` raised later by middleware, nested transport code, or
+  business logic is an unexpected invocation failure. It preserves identity
+  through the handler boundary and is handled by the socket adapter's generic
+  invocation-failure path, not relabeled as malformed client payload.
+
 `echo` is the deliberate exception: its contract is an arbitrary JSON object,
 so passing its payload through unchanged is the typed behavior of that request.
 
@@ -276,6 +289,12 @@ bounded by `MAX_DAEMON_FRAME_BYTES`, including that newline.
 the typed daemon request registry boundary, encodes one `DaemonResponse`, and
 writes one bounded frame. The module must not import `DaemonState` or the
 daemon process runner.
+
+The socket adapter catches request-envelope `ProtocolError` only around
+`DaemonRequest.from_json_line(...)`. Handler invocation has a separate
+`Exception` boundary, so an invocation that happens to raise `ProtocolError`
+is recorded as `request_failed` and cannot masquerade as envelope decode
+failure.
 
 `nuself.daemon.transport_audit` owns the socket adapter's sealed operational
 failure schemas. `socket_server` supplies only the caught exception, event
