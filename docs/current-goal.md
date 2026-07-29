@@ -5,9 +5,10 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Move delayed retry lifecycle into shared owned scheduling. Timer start,
-execution, completion, and cancellation must update ownership atomically so
-completed timers do not linger and failed starts cannot strand durable jobs.
+Make synchronous runtime-event latency ownership explicit. Preserve ordered
+log projection before publication returns, while removing the misleading
+general subscriber API that allowed arbitrary slow auxiliary effects to block
+producers without declaring that ownership.
 
 ## Active Branch
 
@@ -15,52 +16,57 @@ completed timers do not linger and failed starts cannot strand durable jobs.
 
 ## Ordered Work
 
-1. Inventory all raw timers, completed-task retention, start failure, callback
-   ownership, daemon shutdown races, and retry observability.
-2. Update runtime-infrastructure, Reason output, error, and development specs.
-3. Add a shared keyed delayed-task scheduler with atomic start rollback.
-4. Remove ownership before callback execution and cancel all owned timers
-   exactly once on close.
-5. Migrate Reason retries; report schedule failure and request durable
-   reconciliation without leaving a phantom retry identity.
-6. Prove execution cleanup, start rollback, duplicate suppression, and close
-   races.
-7. Run focused and full quality gates, commit by functional boundary, and push.
+1. Inventory production event subscribers and publish-return ordering
+   dependencies.
+2. Decide whether log persistence remains synchronous and whether any
+   production auxiliary subscriber requires independent delivery.
+3. Update runtime-infrastructure, logging, and development specs before code.
+4. Replace the general subscriber API with explicit synchronous projection
+   attachment and migrate every caller.
+5. Prove ordering, snapshot mutation, failure isolation, and publisher-scoped
+   detachment semantics under the new API.
+6. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No persistent delayed-task store.
-- No change to retry counts or exponential backoff values.
-- No generic retry policy inside the scheduler.
-- No compatibility retention of domain-owned timer lists.
+- No asynchronous event bus or background projection worker without a concrete
+  independently progressing production consumer.
+- No timeout implemented by abandoning callback threads.
+- No compatibility alias for `subscribe()` or `unsubscribe()`.
+- No change to event identities, payloads, ordering, or failure isolation.
 
 ## Completion Evidence
 
-- Shared delayed scheduling completed in `ccb44e5`.
-- `DelayedTaskScheduler` owns unique task keys, daemon timers, atomic start
-  rollback, completion removal, and idempotent close/cancellation.
-- Completed callbacks observe zero pending ownership; duplicate and post-close
-  schedules do not create timers.
-- Timer start failure removes and cancels the timer before propagating.
-- Reason retry scheduling uses the shared owner; schedule failure emits sealed
-  `daemon/export_retry_schedule_failed`, retains exact attempts/backoff
-  metadata, and requests manifest reconciliation without a phantom retry key.
-- Focused scheduler, Reason retry, export recovery, and audit tests: 115 passed.
+- Production inventory: daemon and standalone chat attach only
+  `runtime_event_log_sink(...)`; no independently progressing production
+  projection exists.
+- Chat tests require completed events to observe already-persisted thread state,
+  and event tests require ordered synchronous snapshot delivery.
+- Runtime events now expose `attach_projection(...)` and
+  `detach_projection(...)`; the old general `subscribe()` / `unsubscribe()`
+  surface and `EventSubscriber` / `EventSubscription` types were removed
+  without compatibility aliases.
+- Specs require every attached projection to be bounded synchronous in-process
+  work. Network calls, retries, unbounded waits, and independently progressing
+  effects must instead own bounded queue and worker lifecycles.
+- Daemon, standalone chat, tests, exports, error details, and exact-identity
+  filtering use the new projection vocabulary and handles.
+- Focused event, observability, chat, daemon worker, and daemon server tests:
+  168 passed.
 - Full suite: 2098 passed.
 - Pyright: 0 errors, 0 warnings.
-- Static search proves `threading.Timer` exists only inside the shared scheduler;
+- Static search found no old event subscription API or type references;
   `git diff --check` passed.
 
 ## Publication
 
-Shared delayed scheduling was implemented in `ccb44e5`; milestone publication
-is pending this goal update and push.
+Synchronous projection ownership was implemented in `1181f90`; milestone
+publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Review synchronous event subscriber latency ownership next. `EventPublisher`
-isolates raised exceptions but invokes every subscriber inline with no
-latency/timeout contract, so a blocked auxiliary subscriber can still block the
-producer indefinitely. Inventory production subscriber effects and ordering
-requirements before deciding whether log projection remains authoritative
-inline work or needs an owned bounded delivery facility.
+Review ad hoc thread ownership next. The runtime now centralizes long-lived
+workers and delayed callbacks, but interactive activity still creates a raw
+per-turn `threading.Thread` for the blocking daemon chat request. Verify
+start-failure rollback, exception handoff, cancellation, final join, and whether
+the one-shot thread belongs in shared owned execution infrastructure.
