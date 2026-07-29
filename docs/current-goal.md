@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close daemon socket transport audit ownership so read, dispatch, encode, and
-delivery failures use one exact validated contract.
+Close daemon operational audit ownership so worker join timeout and lifecycle
+cleanup failure use one exact validated contract.
 
 ## Active Branch
 
@@ -14,50 +14,50 @@ delivery failures use one exact validated contract.
 
 ## Ordered Work
 
-1. Inventory socket read, request dispatch, response encoding, and response
-   delivery failure producers, correlation, fallback state, and consumers.
-2. Separate protocol rejections that produce ordinary failed responses from
-   operational transport failures that require audit records.
+1. Inventory worker join timeout and daemon cleanup failure producers,
+   exception types, metadata, ordering, and consumers.
+2. Decide whether the two process-level records belong beside lifecycle
+   definitions or in one dedicated daemon operations registry.
 3. Update error, runtime-infrastructure, log, and development specs before
    implementation.
-4. Define one sealed daemon-transport audit registry with fixed messages and
+4. Define one sealed daemon operations audit registry with fixed messages and
    exact per-event metadata.
-5. Route socket failure paths through the shared adapter without changing
-   response fallback or connection-thread semantics.
-6. Remove `_report_response_failure`, raw transport audit calls, free-form
-   messages/defaults, and compatibility aliases.
+5. Route worker/server failure paths through the shared adapter without
+   changing raised exceptions or cleanup ordering.
+6. Remove raw `report_observed_failure` calls, free-form messages/defaults,
+   and compatibility aliases.
 7. Run focused and full quality gates, commit by functional boundary, and
    push.
 
 ## Out Of Scope
 
-- No change to daemon request/response wire payloads.
-- No retry of reads, dispatch, encoding, or delivery.
-- No audit for clean peer disconnect or ordinary protocol rejection.
-- No change to thread-per-connection ownership.
+- No change to worker thread start/stop/join mechanics.
+- No change to lifecycle cleanup ordering or exception aggregation.
+- No conversion of primary join/cleanup failures into best-effort success.
+- No change to request, transport, or lifecycle transition audit contracts.
 
 ## Completion Evidence
 
-- Daemon request audit ownership completed in `67d8cfe`.
-- `request_rejected`, `chat_turn_failed`, `chat_turn_completed`, and
-  `shutdown_requested` now use one sealed request-owned registry.
-- Request handlers no longer choose audit messages, levels, statuses,
-  error/duration policy, or metadata shape.
-- Accepted shutdown has explicit `status="accepted"`.
-- Initial next-batch inspection finds raw socket-server events for
-  `request_transport_failed`, `request_failed`, `response_encode_failed`, and
-  `response_delivery_failed`.
-- Focused tests: 66 passed.
-- Full suite: 2025 passed.
+- Daemon transport audit ownership completed in `52afe43`.
+- Socket read, unexpected dispatch, response encoding, and response delivery
+  failures now use one sealed transport registry.
+- `socket_server.py` no longer constructs failure messages or projection
+  defaults.
+- Undecoded requests no longer persist the internal `unknown` sentinel as
+  correlation identity.
+- Initial next-batch inspection finds raw daemon operations events for
+  `thread_timeout` and `shutdown_cleanup_failed`.
+- Focused tests: 55 passed.
+- Full suite: 2029 passed.
 - Pyright: 0 errors, 0 warnings.
 - Static search and `git diff --check`: passed.
 
 ## Publication
 
-Daemon request audit ownership was implemented in `67d8cfe`; milestone
+Daemon transport audit ownership was implemented in `52afe43`; milestone
 publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Continue shared handler/log/message infrastructure review after daemon socket
-transport audit ownership is verified and published.
+Continue shared handler/log/message infrastructure review after daemon
+operational audit ownership is verified and published.
