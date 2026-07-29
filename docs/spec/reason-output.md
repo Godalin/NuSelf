@@ -103,9 +103,12 @@ It must record:
 Export state lives in two places with different persistence semantics:
 
 - **Job data** — per-thread, persistent in the owning reason workspace (`private/workspaces/reason/{thread_id}/artifacts/export/jobs/{job_id}/`)
-- **Queue signal** — daemon-global, in-memory (`queue.SimpleQueue` on the daemon process)
+- **Queue signal** — daemon-global, bounded and identity-deduplicated in memory
 
-The queue is in-memory because the manifest is the real persistent state. A queue event is just a "go check the manifest" signal. The daemon worker is a single process-global event loop that reads from `SimpleQueue` and processes jobs by looking up their manifests.
+The queue is in-memory because the manifest is the real persistent state. A
+queue event is just a "go check the manifest" signal. The daemon worker is a
+single process-global event loop that reads from a bounded
+`JobAdmissionQueue` and processes jobs by looking up their manifests.
 
 ### Job data layout (per-thread)
 
@@ -230,7 +233,7 @@ Progress is a read-friendly summary of the manifest state. The manifest is alway
 ### Queue model: typed in-memory job wake-ups
 
 The export queue is **not** a filesystem directory or a general event bus. It
-is a `queue.SimpleQueue[JobMessage]` owned by the daemon composition root.
+is a bounded `JobAdmissionQueue` owned by the daemon composition root.
 
 **Rationale**: The `manifest.json` in the job directory is the real persistent state. The queue event is purely a signal — "there is a pending job, go look at its manifest". Writing that signal to a file is unnecessary I/O that introduces its own failure modes (duplicate events, partial writes, stale processing claims). An in-memory queue eliminates the `queue/`, `processing/`, and `failed/` directory tree entirely.
 
@@ -257,6 +260,12 @@ Mode and format use the same declared Reason Output enums as the manifest.
 mutating the queue. Unknown names, test-only/arbitrary producers, extra hints,
 and invalid values are programming errors; they are never queued and therefore
 do not produce an `export_job_type_ignored` audit.
+
+Pending and in-flight wake-ups coalesce by `(name, job_id, thread_id)` even
+when their producer or optional hints differ. Capacity pressure never blocks
+the caller and never discards the manifest. Instead it requests an online
+reconciliation pass after the worker releases capacity. A job with a live retry
+timer is skipped by reconciliation until that timer fires, preserving backoff.
 
 The worker reconstructs the job data path from `thread_id` and `job_id`: `private/workspaces/reason/{thread_id}/artifacts/export/jobs/{job_id}/manifest.json`.
 
@@ -308,14 +317,16 @@ Invalid-manifest diagnostics are best effort. Failure to persist one
 valid incomplete jobs from being enqueued. The final reconciliation summary is
 also auxiliary to the completed scan.
 
-This ensures that no pending work is lost across daemon restarts without requiring a persistent queue. The number of pending jobs at any time is bounded by the number of reason threads, so the startup scan is fast.
+This ensures that no pending work is lost across daemon restarts without
+requiring a persistent queue. The scan cost is bounded by durable job
+directories, while in-memory admission is independently bounded.
 
 ### State lifecycle summary
 
 | Concept | Where | Persistent? |
 |---|---|---|
 | Job data (manifest, chunks, artifacts) | Per-thread workspace (`jobs/{job_id}/`) | Yes |
-| Queue signal | `queue.SimpleQueue` in daemon process | No (rebuilt from manifests on startup) |
+| Queue signal | bounded `JobAdmissionQueue` in daemon process | No (rebuilt from manifests on startup) |
 | Retry timer | `threading.Timer` in daemon process | No (rebuilt from manifest attempts on startup) |
 | Compose lock | `.lock` file in job subdirectory | Yes (but cleared on startup) |
 

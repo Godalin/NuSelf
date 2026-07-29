@@ -559,6 +559,97 @@ def test_worker_rejects_unknown_job_before_queue_mutation(
     assert worker._queue.empty()
 
 
+def test_full_export_admission_recovers_from_durable_manifests_online(
+    tmp_path: Path,
+) -> None:
+    first_manifest, _ = _job_paths(
+        tmp_path,
+        job_id="a_first",
+        thread_id="thread_1",
+    )
+    second_manifest, _ = _job_paths(
+        tmp_path,
+        job_id="b_second",
+        thread_id="thread_1",
+    )
+    write_json_atomic(
+        first_manifest,
+        _manifest(job_id="a_first").to_wire(),
+    )
+    write_json_atomic(
+        second_manifest,
+        _manifest(job_id="b_second").to_wire(),
+    )
+    shutdown = threading.Event()
+    worker = ReasonExportWorker(
+        tmp_path,
+        shutdown,
+        DaemonWorkerSupervisor(
+            tmp_path,
+            shutdown,
+            EventPublisher(),
+        ),
+        text_agent=_TextAgent(),
+        queue_capacity=1,
+    )
+    worker.prepare()
+    worker.enqueue(
+        JobMessage.create(
+            name="reason.output.export",
+            producer="reasoning",
+            job_id="a_first",
+            resource_id="thread_1",
+        )
+    )
+    worker.enqueue(
+        JobMessage.create(
+            name="reason.output.export",
+            producer="reasoning",
+            job_id="b_second",
+            resource_id="thread_1",
+        )
+    )
+    first = worker._queue.get_nowait()
+    assert first.job_id == "a_first"
+
+    write_json_atomic(
+        first_manifest,
+        _manifest(job_id="a_first", status="complete").to_wire(),
+    )
+    worker._queue.complete(first)
+    store = PrivateWorkspaceStore(tmp_path, scope="reason")
+    worker._run_requested_reconciliation(store)
+
+    recovered = worker._queue.get_nowait()
+    assert recovered.job_id == "b_second"
+    worker._queue.complete(recovered)
+
+
+def test_reconciliation_does_not_bypass_live_retry_timer(
+    tmp_path: Path,
+) -> None:
+    manifest_path, _ = _job_paths(tmp_path)
+    write_json_atomic(manifest_path, _manifest(attempts=1).to_wire())
+    shutdown = threading.Event()
+    worker = ReasonExportWorker(
+        tmp_path,
+        shutdown,
+        DaemonWorkerSupervisor(
+            tmp_path,
+            shutdown,
+            EventPublisher(),
+        ),
+        text_agent=_TextAgent(),
+    )
+    worker.prepare()
+    with worker._timers_lock:
+        worker._retry_job_keys.add(("thread_1", "job_1"))
+
+    worker._reconcile(PrivateWorkspaceStore(tmp_path, scope="reason"))
+
+    assert worker._queue.empty()
+
+
 def test_worker_reports_invalid_progress_and_continues(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

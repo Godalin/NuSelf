@@ -707,6 +707,20 @@ reports the compact exception chain through the shared observability boundary,
 and does not claim that the job was enqueued. Recovery may rediscover the
 durable non-terminal record later.
 
+In-memory wake-up admission uses the shared bounded
+`JobAdmissionQueue`. Its identity is `(name, job_id, resource_id)`, deliberately
+excluding producer and hint data because initial, retry, and reconciliation
+messages all wake the same durable job. Pending and currently processing
+identities coalesce. Consumers explicitly complete an acquired message before
+that identity can be admitted again.
+
+Admission never blocks a producer. A full queue does not invalidate the durable
+manifest; the owner records that online reconciliation is required. After a
+consumer releases capacity, the owner scans authoritative non-terminal
+manifests and admits missing identities until pressure clears. Jobs owned by a
+live retry timer are excluded from online reconciliation so backoff cannot be
+bypassed. Startup reconciliation remains the crash-recovery boundary.
+
 ## Logging
 
 Structured logs are an append-only sink and read model.

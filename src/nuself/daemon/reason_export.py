@@ -41,7 +41,11 @@ from nuself.reason.audit import (
 )
 from nuself.runtime.context import use_runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_chain
-from nuself.runtime.jobs import JobMessage
+from nuself.runtime.jobs import (
+    JobAdmissionQueue,
+    JobAdmissionResult,
+    JobMessage,
+)
 from nuself.runtime.job_definitions import JobDefinitionRegistry
 from nuself.storage import write_json_atomic
 from nuself.workspace import PrivateWorkspaceStore
@@ -50,6 +54,7 @@ MAX_EXPORT_ATTEMPTS = 5
 EXPORT_RETRY_BASE_SECONDS = 10
 EXPORT_RETRY_MAX_SECONDS = 600
 EXPORT_QUEUE_POLL_SECONDS = 1.0
+EXPORT_QUEUE_CAPACITY = 256
 EXPORT_WORKER_NAME = "export_worker"
 
 SectionPlanner = Callable[
@@ -257,6 +262,7 @@ class ReasonExportWorker:
         *,
         text_agent: TextAgent | None = None,
         job_definitions: JobDefinitionRegistry | None = None,
+        queue_capacity: int = EXPORT_QUEUE_CAPACITY,
     ) -> None:
         self._project_root = project_root
         self._shutdown_requested = shutdown_requested
@@ -274,10 +280,12 @@ class ReasonExportWorker:
             if job_definitions is not None
             else build_reason_job_definition_registry()
         )
-        self._queue: queue.SimpleQueue[JobMessage] = queue.SimpleQueue()
+        self._queue = JobAdmissionQueue(queue_capacity)
+        self._reconciliation_requested = threading.Event()
         self._stopping = threading.Event()
         self._lifecycle_lock = threading.Lock()
         self._timers: list[threading.Timer] = []
+        self._retry_job_keys: set[tuple[str, str]] = set()
         self._timers_lock = threading.Lock()
         self._store: PrivateWorkspaceStore | None = None
         self._service: ReasonOutputService | None = None
@@ -286,10 +294,19 @@ class ReasonExportWorker:
         """Enqueue one typed export job message."""
 
         self._job_definitions.validate(message)
+        self._admit(message)
+
+    def _admit(
+        self,
+        message: JobMessage,
+    ) -> JobAdmissionResult | None:
         with self._lifecycle_lock:
             if self._stopping.is_set():
-                return
-            self._queue.put(message)
+                return None
+            result = self._queue.admit(message)
+            if result == "full":
+                self._reconciliation_requested.set()
+            return result
 
     def prepare(self) -> None:
         """Construct dependencies before the owned worker thread starts."""
@@ -309,14 +326,9 @@ class ReasonExportWorker:
             for timer in self._timers:
                 timer.cancel()
             self._timers.clear()
-        drained = 0
+            self._retry_job_keys.clear()
         with self._lifecycle_lock:
-            while not self._queue.empty():
-                try:
-                    self._queue.get_nowait()
-                    drained += 1
-                except queue.Empty:
-                    break
+            drained = len(self._queue.drain())
         if drained:
             write_reason_audit(
                 "export_queue_drained",
@@ -340,6 +352,7 @@ class ReasonExportWorker:
                     timeout=EXPORT_QUEUE_POLL_SECONDS
                 )
             except queue.Empty:
+                self._run_requested_reconciliation(store)
                 continue
             except Exception as exc:
                 report_reason_failure(
@@ -349,16 +362,29 @@ class ReasonExportWorker:
                     metadata=None,
                 )
                 continue
-            if self._shutdown_requested.is_set():
-                break
-            message_context = replace(
-                message.envelope.context,
-                thread_id=message.resource_id,
-                job_id=message.job_id,
-                source="daemon.worker.export_worker",
-            )
-            with use_runtime_context(message_context):
-                self._process(message)
+            try:
+                if self._shutdown_requested.is_set():
+                    break
+                message_context = replace(
+                    message.envelope.context,
+                    thread_id=message.resource_id,
+                    job_id=message.job_id,
+                    source="daemon.worker.export_worker",
+                )
+                with use_runtime_context(message_context):
+                    self._process(message)
+            finally:
+                self._queue.complete(message)
+            self._run_requested_reconciliation(store)
+
+    def _run_requested_reconciliation(
+        self,
+        store: PrivateWorkspaceStore,
+    ) -> None:
+        if not self._reconciliation_requested.is_set():
+            return
+        self._reconciliation_requested.clear()
+        self._reconcile(store)
 
     def _process(self, message: JobMessage) -> None:
         thread_id = message.resource_id
@@ -486,13 +512,22 @@ class ReasonExportWorker:
                 resource_id=thread_id,
                 payload={"attempt": attempts + 1},
             )
+            retry_key = (thread_id, job_id)
+            self._retry_job_keys.add(retry_key)
             timer = threading.Timer(
                 backoff,
-                self.enqueue,
+                self._enqueue_retry,
                 args=(retry_message,),
             )
             self._timers.append(timer)
             timer.start()
+
+    def _enqueue_retry(self, message: JobMessage) -> None:
+        with self._timers_lock:
+            self._retry_job_keys.discard(
+                (message.resource_id, message.job_id)
+            )
+        self.enqueue(message)
 
     def _reconcile(self, store: PrivateWorkspaceStore) -> None:
         reconciled = 0
@@ -533,7 +568,14 @@ class ReasonExportWorker:
                     continue
                 if manifest.status in ("complete", "failed"):
                     continue
-                self.enqueue(
+                with self._timers_lock:
+                    retry_pending = (
+                        owner_id,
+                        manifest.job_id,
+                    ) in self._retry_job_keys
+                if retry_pending:
+                    continue
+                result = self._admit(
                     JobMessage.create(
                         name=REASON_OUTPUT_JOB_NAME,
                         producer="daemon_reconciliation",
@@ -541,7 +583,8 @@ class ReasonExportWorker:
                         resource_id=owner_id,
                     )
                 )
-                reconciled += 1
+                if result == "admitted":
+                    reconciled += 1
         write_reason_audit(
             "export_queue_reconciled",
             project_root=self._project_root,

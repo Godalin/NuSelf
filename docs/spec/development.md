@@ -227,6 +227,11 @@ same `(producer, name)` identity. New internal consumers must subscribe to all
 events intentionally or bind both fields; partial event-name selectors are
 forbidden.
 
+Durable job wake-up owners use `runtime.jobs.JobAdmissionQueue` rather than raw
+`queue.Queue` or `SimpleQueue`. Capacity, identity coalescing, in-flight
+ownership, and explicit completion are shared transport mechanics; manifest
+reconciliation and retry policy remain domain-owned.
+
 ## CLI Module Boundaries
 
 `nuself.cli` is a package whose `__init__.py` remains the composition root and

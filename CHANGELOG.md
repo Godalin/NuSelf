@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reason export wake-ups now use bounded, identity-deduplicated admission that
+  coalesces pending and in-flight jobs; capacity pressure triggers online
+  manifest reconciliation instead of blocking callers or growing without bound.
 - Filtered runtime-event subscriptions now require the complete registered
   producer/name identity, preventing same-named extension events from crossing
   subsystem subscriber boundaries.
