@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Notification outbox records now persist attempts and success independently
+  for each stable adapter ID; interrupted delivery resumes without repeating
+  adapters whose external effect was already recorded as sent.
 - Notification outbox admission now serializes idempotency lookup and insertion
   across processes and storage connections, preventing duplicate intents from
   concurrent producers.

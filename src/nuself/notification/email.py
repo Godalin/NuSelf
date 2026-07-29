@@ -41,6 +41,8 @@ class EmailNotificationAdapter:
         to = "user@example.com"
     """
 
+    delivery_id = "email"
+
     def __init__(self, project_root: Path | None = None, *, dry_run: bool = False) -> None:
         from nuself.config import runtime_paths
 

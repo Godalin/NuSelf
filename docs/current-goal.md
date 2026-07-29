@@ -77,6 +77,12 @@ trustworthy 0.3.0 release candidate.
   durable entry wins for one shared idempotency key.
 - Focused notification, file-storage, and candidate tests: 94 passed; pyright
   reported 0 errors and 0 warnings.
+- Outbox entries now freeze stable required adapter IDs on first delivery and
+  persist each adapter result before invoking the next one. Interrupted pending
+  delivery resumes without repeating adapters already recorded as sent;
+  duplicate adapter IDs fail before external effects.
+- Focused outbox, delivery-loop, email, and macOS adapter tests: 60 passed;
+  pyright reported 0 errors and 0 warnings.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 

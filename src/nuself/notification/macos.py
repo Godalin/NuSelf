@@ -19,6 +19,8 @@ class MacOSNotificationAdapter:
     Falls back to logging when osascript is unavailable or ``dry_run`` is set.
     """
 
+    delivery_id = "macos"
+
     def __init__(self, project_root: Path | None = None, *, dry_run: bool = False) -> None:
         from nuself.config import runtime_paths
 

@@ -33,8 +33,14 @@ from nuself.storage import (
 class FakeAdapter:
     """Test adapter that records deliveries and can be configured to fail."""
 
-    def __init__(self, succeed: bool = True) -> None:
+    def __init__(
+        self,
+        succeed: bool = True,
+        *,
+        delivery_id: str = "fake",
+    ) -> None:
         self.succeed = succeed
+        self.delivery_id = delivery_id
         self.sent_entries: list[OutboxEntry] = []
         self.contexts: list[RuntimeContext] = []
 
@@ -205,6 +211,8 @@ def test_delivery_restores_context_when_adapter_raises(
     tmp_path: Path,
 ) -> None:
     class RaisingAdapter:
+        delivery_id = "raising"
+
         def send(self, entry: OutboxEntry) -> bool:
             del entry
             raise RuntimeError("adapter crashed")
@@ -308,15 +316,96 @@ def test_delivery_loop_all_adapters_must_succeed(tmp_path: Path) -> None:
     outbox = NotificationOutbox(tmp_path)
     outbox.add(OutboxEntry(id="e1", title="T1", body="B1", status="pending", idempotency_key="k1"))
 
-    good = FakeAdapter(succeed=True)
-    bad = FakeAdapter(succeed=False)
+    good = FakeAdapter(succeed=True, delivery_id="good")
+    bad = FakeAdapter(succeed=False, delivery_id="bad")
     loop = NotificationDeliveryLoop(tmp_path, adapters=[good, bad])
     delivered = loop.run_once()
 
     assert delivered == 0
     assert len(good.sent_entries) == 1
     assert len(bad.sent_entries) == 1
-    assert len(outbox.list(status="failed")) == 1
+    [failed] = outbox.list(status="failed")
+    assert failed.required_adapters == ("good", "bad")
+    assert failed.deliveries["good"].status == "sent"
+    assert failed.deliveries["good"].attempts == 1
+    assert failed.deliveries["bad"].status == "failed"
+    assert failed.deliveries["bad"].attempts == 1
+
+
+def test_delivery_loop_resumes_without_repeating_sent_adapter(
+    tmp_path: Path,
+) -> None:
+    class RaisingAdapter:
+        delivery_id = "second"
+
+        def send(self, entry: OutboxEntry) -> bool:
+            del entry
+            raise RuntimeError("second adapter crashed")
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="resume",
+            title="Resume",
+            body="Do not repeat external effects.",
+            status="pending",
+            idempotency_key="resume",
+        )
+    )
+    first = FakeAdapter(delivery_id="first")
+
+    with pytest.raises(RuntimeError, match="second adapter crashed"):
+        NotificationDeliveryLoop(
+            tmp_path,
+            adapters=[first, RaisingAdapter()],
+        ).run_once()
+
+    interrupted = outbox.get("resume")
+    assert interrupted.status == "pending"
+    assert interrupted.deliveries["first"].status == "sent"
+    assert interrupted.deliveries["second"].status == "pending"
+    assert len(first.sent_entries) == 1
+
+    recovered_second = FakeAdapter(delivery_id="second")
+    delivered = NotificationDeliveryLoop(
+        tmp_path,
+        adapters=[first, recovered_second],
+    ).run_once()
+
+    assert delivered == 1
+    assert len(first.sent_entries) == 1
+    assert len(recovered_second.sent_entries) == 1
+    completed = outbox.get("resume")
+    assert completed.status == "sent"
+    assert completed.deliveries["first"].attempts == 1
+    assert completed.deliveries["second"].attempts == 1
+
+
+def test_delivery_loop_rejects_duplicate_adapter_ids_before_sending(
+    tmp_path: Path,
+) -> None:
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="duplicate-adapters",
+            title="Duplicate",
+            body="No adapter should run.",
+            status="pending",
+            idempotency_key="duplicate-adapters",
+        )
+    )
+    first = FakeAdapter(delivery_id="duplicate")
+    second = FakeAdapter(delivery_id="duplicate")
+
+    with pytest.raises(ValueError, match="duplicate"):
+        NotificationDeliveryLoop(
+            tmp_path,
+            adapters=[first, second],
+        ).run_once()
+
+    assert first.sent_entries == []
+    assert second.sent_entries == []
+    assert outbox.get("duplicate-adapters").required_adapters == ()
 
 
 def test_outbox_clear_dismissed_older_than_removes_old_entries(tmp_path: Path) -> None:

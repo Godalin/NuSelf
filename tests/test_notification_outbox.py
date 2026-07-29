@@ -9,6 +9,7 @@ from multiprocessing.synchronize import Event
 from pathlib import Path
 
 from nuself.notification import (
+    AdapterDelivery,
     LogOnlyNotificationAdapter,
     NotificationOutbox,
     OutboxEntry,
@@ -239,3 +240,27 @@ def test_outbox_round_trip_wire_format(tmp_path: Path) -> None:
     assert loaded.title == "Title"
     assert loaded.body == "Body"
     assert loaded.deep_link == "nuself://thread-1"
+
+
+def test_outbox_round_trips_adapter_delivery_state(tmp_path: Path) -> None:
+    outbox = NotificationOutbox(tmp_path)
+    original = OutboxEntry(
+        id="delivery-state",
+        title="Title",
+        body="Body",
+        status="failed",
+        idempotency_key="delivery-state",
+        required_adapters=("email", "macos"),
+        deliveries={
+            "email": AdapterDelivery(
+                status="sent",
+                attempts=1,
+                sent_at="2026-07-29T12:00:00+00:00",
+            ),
+            "macos": AdapterDelivery(status="failed", attempts=2),
+        },
+    )
+
+    outbox.add(original)
+
+    assert outbox.get(original.id) == original

@@ -24,6 +24,20 @@ Sources that may create outbox entries:
 | `failed` | At least one adapter failed |
 | `dismissed` | User explicitly dismissed |
 
+The global status is a compatibility projection over durable per-adapter
+delivery state, not the sole delivery truth. Each entry may contain:
+
+- `required_adapters`: the ordered, unique stable adapter IDs frozen on its
+  first delivery attempt;
+- `deliveries`: one state per required adapter with `pending`, `sent`, or
+  `failed`, its own attempt count, and optional successful-delivery timestamp.
+
+`sent` means every required adapter is `sent`; `failed` means at least one
+required adapter is `failed` after an attempt completes; otherwise the entry
+remains `pending`. `dismissed` remains an explicit user override. Records from
+before adapter delivery state existed decode with an empty plan and acquire it
+atomically on their first subsequent delivery attempt.
+
 ### Valid Transitions
 
 ```
@@ -82,12 +96,19 @@ pending entries.
 2. For each pending entry, exactly installs its saved correlation context and
    replaces `source` with `daemon.worker.notification_delivery` for the
    complete adapter/state-transition operation.
-3. Iterates adapters in order.
-4. **"All adapters must succeed" semantics**:
-   - Each adapter's `send(entry)` must return `True`.
-   - If any adapter returns `False`, the loop sets `success = False` and **breaks immediately** (subsequent adapters are not tried).
-5. If `success` → `mark_sent()`.
-6. If `!success` → `mark_failed()`.
+3. Validates that configured adapters expose non-empty, unique stable
+   `delivery_id` values, then atomically freezes those IDs as the entry's
+   required plan if it has no plan yet. Duplicate or invalid IDs fail before
+   any adapter side effect.
+4. Iterates the frozen required adapter IDs in order. A previously `sent`
+   adapter is skipped. Each available non-sent adapter is invoked once and its
+   success or failure is persisted immediately before the next adapter runs.
+   A required adapter missing from the current configuration is persisted as
+   failed without inventing a replacement identity.
+5. After every required adapter has a durable result, derives and persists the
+   global status. A crash between adapter results leaves the entry `pending`;
+   the next run resumes the plan without repeating adapters already recorded
+   as sent.
 
 The prior ambient context is restored after each entry even when an adapter
 raises. Delivery logs therefore project the notification's originating
@@ -95,7 +116,9 @@ request/thread/turn/trace fields plus the delivery-owned source.
 
 ### Retry Behavior
 
-**No automatic retry.** A failed entry stays `failed` forever. No backoff, no re-queueing.
+**No automatic retry after a completed failed attempt.** A globally failed
+entry stays `failed` forever. Crash recovery of an incomplete pending attempt
+is not a retry of adapters already recorded as sent.
 
 ### Daemon Integration
 
@@ -110,6 +133,10 @@ request/thread/turn/trace fields plus the delivery-owned source.
 | `LogOnlyNotificationAdapter` | None | N/A | Always returns `True`; writes to `outbox.log` |
 | `EmailNotificationAdapter` | `private/email.toml` with `[smtp]` and `[notification]` sections | `dry_run=True` logs intent | Missing config → `False` + `email_no_config`; invalid config → `email_config_invalid`, then delivery returns `False` + `email_no_config`; SMTP error → `False` + `email_failed` |
 | `MacOSNotificationAdapter` | `osascript` on `$PATH` | `dry_run=True` logs intent | Missing `osascript` → returns `True` (graceful degradation); subprocess non-zero → `False` + `macos_failed` |
+
+Built-in stable delivery IDs are `log`, `email`, and `macos`. Third-party
+adapters must supply their own non-empty stable ID; class names and error text
+must never be used as persisted identities.
 
 ### Email Configuration
 

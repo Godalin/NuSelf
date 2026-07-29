@@ -55,6 +55,9 @@ candidate still triggers target compensation.
 File-backed transaction batches now use a stable cross-process advisory lock,
 and notification outbox admission performs idempotency lookup plus insertion
 inside that backend transaction.
+Notification delivery also persists one state per stable adapter (`log`,
+`email`, or `macos`). If a later adapter crashes, recovery skips channels whose
+successful external effect was already recorded instead of sending them again.
 
 Daemon instance-lock acquire and release likewise preserve simultaneous lock
 operation and handle-close failures, so ownership errors are not hidden by

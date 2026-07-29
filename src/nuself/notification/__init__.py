@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Literal, Protocol, cast
 
 from nuself.clock import utc_now, utc_now_iso
@@ -20,6 +21,49 @@ from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend, get_default_backend
 
 OutboxStatus = Literal["pending", "sent", "failed", "dismissed"]
+AdapterDeliveryStatus = Literal["pending", "sent", "failed"]
+
+
+@dataclass(frozen=True)
+class AdapterDelivery:
+    """Durable delivery state for one stable notification adapter."""
+
+    status: AdapterDeliveryStatus = "pending"
+    attempts: int = 0
+    sent_at: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.status not in {"pending", "sent", "failed"}:
+            raise ValueError(f"unsupported adapter delivery status: {self.status}")
+        if type(self.attempts) is not int or self.attempts < 0:
+            raise ValueError("adapter delivery attempts must be a non-negative integer")
+        if self.sent_at is not None:
+            _parse_aware_iso(self.sent_at, field_name="sent_at")
+        if self.status == "sent" and self.sent_at is None:
+            raise ValueError("sent adapter delivery requires sent_at")
+        if self.status != "sent" and self.sent_at is not None:
+            raise ValueError("non-sent adapter delivery must not define sent_at")
+
+    def to_wire(self) -> dict[str, object]:
+        wire: dict[str, object] = {
+            "status": self.status,
+            "attempts": self.attempts,
+        }
+        if self.sent_at is not None:
+            wire["sent_at"] = self.sent_at
+        return wire
+
+    @classmethod
+    def from_wire(cls, data: dict[str, object]) -> "AdapterDelivery":
+        return cls(
+            status=_expect_adapter_delivery_status(data, "status"),
+            attempts=_expect_int(data, "attempts"),
+            sent_at=_optional_timestamp(data, "sent_at"),
+        )
+
+
+def empty_adapter_deliveries() -> dict[str, AdapterDelivery]:
+    return {}
 
 
 @dataclass(frozen=True)
@@ -35,6 +79,10 @@ class OutboxEntry:
     created_at: str = field(default_factory=utc_now_iso)
     sent_at: str | None = None
     attempts: int = 0
+    required_adapters: tuple[str, ...] = ()
+    deliveries: Mapping[str, AdapterDelivery] = field(
+        default_factory=empty_adapter_deliveries
+    )
     context: RuntimeContext = field(
         default_factory=current_runtime_context
     )
@@ -43,6 +91,17 @@ class OutboxEntry:
         _parse_aware_iso(self.created_at, field_name="created_at")
         if self.sent_at is not None:
             _parse_aware_iso(self.sent_at, field_name="sent_at")
+        required_adapters = tuple(self.required_adapters)
+        if (
+            any(not adapter_id for adapter_id in required_adapters)
+            or len(set(required_adapters)) != len(required_adapters)
+        ):
+            raise ValueError("required adapter IDs must be non-empty and unique")
+        deliveries: dict[str, AdapterDelivery] = dict(self.deliveries)
+        if set(deliveries) != set(required_adapters):
+            raise ValueError("adapter deliveries must exactly match required adapters")
+        object.__setattr__(self, "required_adapters", required_adapters)
+        object.__setattr__(self, "deliveries", MappingProxyType(deliveries))
 
     def to_wire(self) -> dict[str, object]:
         wire: dict[str, object] = {
@@ -55,6 +114,12 @@ class OutboxEntry:
             "attempts": self.attempts,
             "context": self.context.to_record(),
         }
+        if self.required_adapters:
+            wire["required_adapters"] = list(self.required_adapters)
+            wire["deliveries"] = {
+                adapter_id: self.deliveries[adapter_id].to_wire()
+                for adapter_id in self.required_adapters
+            }
         if self.deep_link is not None:
             wire["deep_link"] = self.deep_link
         if self.sent_at is not None:
@@ -73,12 +138,16 @@ class OutboxEntry:
             created_at=_expect_str(data, "created_at"),
             sent_at=_optional_timestamp(data, "sent_at"),
             attempts=_expect_int(data, "attempts"),
+            required_adapters=_decode_required_adapters(data),
+            deliveries=_decode_deliveries(data),
             context=_decode_context(data),
         )
 
 
 class NotificationAdapter(Protocol):
     """Adapter that delivers one outbox entry to a notification channel."""
+
+    delivery_id: str
 
     def send(self, entry: OutboxEntry) -> bool:
         """Attempt to deliver the entry. Return True on success."""
@@ -87,6 +156,8 @@ class NotificationAdapter(Protocol):
 
 class LogOnlyNotificationAdapter:
     """Write notification intents to a structured log file."""
+
+    delivery_id = "log"
 
     def __init__(self, project_root: Path | None = None) -> None:
         from nuself.config import runtime_paths
@@ -156,6 +227,74 @@ class NotificationOutbox:
 
     def _write_entry(self, entry: OutboxEntry) -> None:
         self._col.put(entry.id, entry.to_wire())
+
+    def prepare_delivery(
+        self,
+        entry_id: str,
+        adapter_ids: tuple[str, ...],
+    ) -> OutboxEntry:
+        _validate_adapter_ids(adapter_ids)
+        with self._backend.transaction():
+            entry = self.get(entry_id)
+            if entry.required_adapters:
+                return entry
+            updated = replace(
+                entry,
+                required_adapters=adapter_ids,
+                deliveries={
+                    adapter_id: AdapterDelivery()
+                    for adapter_id in adapter_ids
+                },
+            )
+            self._write_entry(updated)
+            return updated
+
+    def record_adapter_result(
+        self,
+        entry_id: str,
+        adapter_id: str,
+        *,
+        success: bool,
+    ) -> OutboxEntry:
+        if type(success) is not bool:
+            raise TypeError("adapter delivery success must be a boolean")
+        with self._backend.transaction():
+            entry = self.get(entry_id)
+            state = entry.deliveries.get(adapter_id)
+            if state is None:
+                raise ValueError(
+                    f"adapter is not required for outbox entry: {adapter_id}"
+                )
+            if state.status == "sent":
+                return entry
+            deliveries = dict(entry.deliveries)
+            deliveries[adapter_id] = AdapterDelivery(
+                status="sent" if success else "failed",
+                attempts=state.attempts + 1,
+                sent_at=utc_now_iso() if success else None,
+            )
+            updated = replace(entry, deliveries=deliveries)
+            self._write_entry(updated)
+            return updated
+
+    def finalize_delivery(self, entry_id: str) -> OutboxEntry:
+        with self._backend.transaction():
+            entry = self.get(entry_id)
+            states = tuple(entry.deliveries.values())
+            if not states or any(state.status == "pending" for state in states):
+                status: OutboxStatus = "pending"
+            elif all(state.status == "sent" for state in states):
+                status = "sent"
+            else:
+                status = "failed"
+            updated = replace(
+                entry,
+                status=status,
+                sent_at=utc_now_iso() if status == "sent" else entry.sent_at,
+                attempts=entry.attempts + 1,
+            )
+            self._write_entry(updated)
+            return updated
 
     def mark_sent(self, entry_id: str) -> OutboxEntry:
         entry = self.get(entry_id)
@@ -250,6 +389,8 @@ class NotificationDeliveryLoop:
 
     def run_once(self) -> int:
         """Deliver all pending entries. Return count delivered."""
+        adapters = _index_adapters(self._adapters)
+        adapter_ids = tuple(adapters)
         delivered = 0
         for entry in self._outbox.list(status="pending"):
             delivery_context = replace(
@@ -257,18 +398,21 @@ class NotificationDeliveryLoop:
                 source="daemon.worker.notification_delivery",
             )
             with use_runtime_context(delivery_context):
-                success = False
-                for adapter in self._adapters:
-                    if adapter.send(entry):
-                        success = True
-                    else:
-                        success = False
-                        break
-                if success:
-                    self._outbox.mark_sent(entry.id)
+                prepared = self._outbox.prepare_delivery(entry.id, adapter_ids)
+                for adapter_id in prepared.required_adapters:
+                    current = self._outbox.get(entry.id)
+                    if current.deliveries[adapter_id].status == "sent":
+                        continue
+                    adapter = adapters.get(adapter_id)
+                    success = adapter.send(current) if adapter is not None else False
+                    self._outbox.record_adapter_result(
+                        entry.id,
+                        adapter_id,
+                        success=success,
+                    )
+                final = self._outbox.finalize_delivery(entry.id)
+                if final.status == "sent":
                     delivered += 1
-                else:
-                    self._outbox.mark_failed(entry.id)
         # Clean up old dismissed entries so the outbox does not grow forever.
         self._outbox.clear_dismissed_older_than(days=7)
         return delivered
@@ -321,7 +465,7 @@ def _optional_timestamp(
 
 def _expect_int(data: dict[str, object], field_name: str) -> int:
     value = data.get(field_name)
-    if not isinstance(value, int):
+    if type(value) is not int:
         raise ValueError(f"field '{field_name}' must be an integer")
     return value
 
@@ -345,3 +489,76 @@ def _expect_status(data: dict[str, object], field_name: str) -> OutboxStatus:
     if value not in {"pending", "sent", "failed", "dismissed"}:
         raise ValueError(f"unsupported outbox status: {value}")
     return cast(OutboxStatus, value)
+
+
+def _expect_adapter_delivery_status(
+    data: dict[str, object],
+    field_name: str,
+) -> AdapterDeliveryStatus:
+    value = _expect_str(data, field_name)
+    if value not in {"pending", "sent", "failed"}:
+        raise ValueError(f"unsupported adapter delivery status: {value}")
+    return cast(AdapterDeliveryStatus, value)
+
+
+def _decode_required_adapters(data: dict[str, object]) -> tuple[str, ...]:
+    value = data.get("required_adapters")
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError("field 'required_adapters' must be a string list")
+    raw_ids = cast(list[object], value)
+    if any(not isinstance(adapter_id, str) for adapter_id in raw_ids):
+        raise ValueError("field 'required_adapters' must be a string list")
+    return tuple(cast(list[str], raw_ids))
+
+
+def _decode_deliveries(
+    data: dict[str, object],
+) -> dict[str, AdapterDelivery]:
+    value = data.get("deliveries")
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError("field 'deliveries' must be an object")
+    result: dict[str, AdapterDelivery] = {}
+    mapping = cast(Mapping[object, object], value)
+    for adapter_id, raw_state in mapping.items():
+        if not isinstance(adapter_id, str) or not isinstance(raw_state, dict):
+            raise ValueError(
+                "field 'deliveries' must map adapter IDs to objects"
+            )
+        result[adapter_id] = AdapterDelivery.from_wire(
+            cast(dict[str, object], raw_state)
+        )
+    return result
+
+
+def _validate_adapter_ids(adapter_ids: tuple[str, ...]) -> None:
+    if (
+        not adapter_ids
+        or any(not adapter_id for adapter_id in adapter_ids)
+        or len(set(adapter_ids)) != len(adapter_ids)
+    ):
+        raise ValueError(
+            "notification adapter IDs must be non-empty and unique"
+        )
+
+
+def _index_adapters(
+    adapters: list[NotificationAdapter],
+) -> dict[str, NotificationAdapter]:
+    indexed: dict[str, NotificationAdapter] = {}
+    for adapter in adapters:
+        adapter_id = getattr(adapter, "delivery_id", None)
+        if not isinstance(adapter_id, str) or not adapter_id:
+            raise ValueError(
+                "notification adapter delivery_id must be a non-empty string"
+            )
+        if adapter_id in indexed:
+            raise ValueError(
+                f"duplicate notification adapter delivery_id: {adapter_id}"
+            )
+        indexed[adapter_id] = adapter
+    _validate_adapter_ids(tuple(indexed))
+    return indexed
