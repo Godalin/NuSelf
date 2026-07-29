@@ -37,16 +37,10 @@ def handle_status(args: argparse.Namespace) -> int:
 def handle_health(args: argparse.Namespace) -> int:
     issues: list[str] = []
     paths = runtime_paths(args.project_root)
-    config_path = paths.private_root / "config.yaml"
     if not paths.private_root.exists():
         issues.append(
             f"private root missing: {paths.private_root}"
         )
-    if (
-        paths.private_root.exists()
-        and not config_path.exists()
-    ):
-        issues.append(f"config file missing: {config_path}")
     status_unavailable = False
     daemon = observe_daemon_status(args.project_root)
     if daemon is None:
@@ -78,6 +72,7 @@ def handle_config(args: argparse.Namespace) -> int:
         else "not found (using defaults)"
     )
     print(f"config_file: {state}")
+    print("daemon_reload: restart required after configuration changes")
     effective = ConfigSystem.load(
         config_path, args.project_root
     )

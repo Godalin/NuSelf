@@ -21,6 +21,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   inputs from diagnostics and representations, and hardens the private root
   and config file before reads. Email uses only the unified YAML configuration,
   including its recipient, while daemon, CLI, and REPL share one adapter plan.
+- Developer health accepts an absent optional config file, and effective-config
+  output now states that running daemons require restart after changes.
 - Tests now use a domain-oriented hierarchy under `tests/unit/` with concise
   module names; opt-in real-provider checks live alongside them in
   `tests/live/` without entering default pytest or CI collection.

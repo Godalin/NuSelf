@@ -4511,7 +4511,7 @@ def test_notify_clear_removes_dismissed(tmp_path: Path, capsys: CaptureFixture) 
     assert len(outbox.list(status="dismissed")) == 0
 
 
-def test_health_command_reports_missing_config(
+def test_health_command_reports_missing_private_root(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     result = main(["--project-root", str(tmp_path), "dev", "health"])
@@ -4519,6 +4519,29 @@ def test_health_command_reports_missing_config(
     assert result == 1
     assert "Health issues:" in captured.out
     assert "private root missing" in captured.out
+
+
+def test_health_accepts_missing_config_when_private_root_and_daemon_are_ready(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
+    (tmp_path / "private").mkdir()
+
+    def ready_status(_project_root: Path | None) -> DaemonStatus:
+        return _mock_status(tmp_path)
+
+    monkeypatch.setattr(
+        "nuself.cli.commands.system.observe_daemon_status",
+        ready_status,
+    )
+
+    result = main(["--project-root", str(tmp_path), "dev", "health"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "All checks passed." in captured.out
+    assert "config file missing" not in captured.out
 
 
 def test_interactive_search_finds_memory(
@@ -4556,6 +4579,10 @@ def test_config_command_shows_paths(tmp_path: Path, capsys: CaptureFixture) -> N
     assert "config_file:" in captured.out
     assert "config_effective:" in captured.out
     assert "llm.0.api_key:" in captured.out
+    assert (
+        "daemon_reload: restart required after configuration changes"
+        in captured.out
+    )
 
 
 def test_config_command_never_prints_endpoint_secrets(

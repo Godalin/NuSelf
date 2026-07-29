@@ -64,5 +64,9 @@ findings identified by external audit.
   one adapter builder. Commit-level verification: 438 focused config,
   notification, daemon, and CLI tests passed; locked Pyright reported 0 errors
   and 0 warnings.
+- Health now treats an absent config file as the documented default state, and
+  config inspection explicitly reports the daemon restart boundary.
+  Commit-level verification: 415 CLI/config/notification tests passed; locked
+  Pyright reported 0 errors and 0 warnings.
 - Pending: the remaining external findings need implementation and direct
   regression evidence, followed by the complete stable-release gate.

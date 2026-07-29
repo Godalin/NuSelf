@@ -76,6 +76,12 @@ Supported values: any IETF language tag string (e.g. `en`, `zh-CN`, `zh-TW`). De
 
 If `private/config.yaml` is missing, `ConfigSystem.load()` proceeds with hardcoded defaults. No error is raised.
 
+`nuself dev health` does not report a missing config file as unhealthy.
+`nuself dev config` describes the effective file/default state and explicitly
+states that a running daemon must be restarted after configuration changes.
+The daemon freezes its effective configuration and adapter plan at startup;
+the disk projection is not presented as a live daemon reload.
+
 Malformed YAML, invalid encoding, and expected file-read failures print one
 concise warning and fall back to defaults. Unexpected exceptions are not
 configuration fallback: they propagate so programming defects remain visible.
