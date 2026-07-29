@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Process-local log callbacks now use an explicit bounded projection API.
+  Invalid projections fail during scope composition, and attachment-scoped
+  reentrancy guards prevent direct or mutual recursive log delivery.
 - Interactive chat now owns its one-shot send thread through shared execution
   infrastructure. Polling, rendering, and control-flow failures wait for the
   in-flight send to finish instead of abandoning a daemon thread.

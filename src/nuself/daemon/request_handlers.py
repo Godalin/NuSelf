@@ -39,7 +39,7 @@ from nuself.daemon.request_audit import (
     write_daemon_request_audit,
 )
 from nuself.daemon.types import WorkerHealth
-from nuself.logs import observe_log_events
+from nuself.logs import project_log_events
 from nuself.memory.audit import run_memory_observed
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
 from nuself.runtime.handlers import HandlerRegistry, UnknownHandlerError
@@ -97,7 +97,7 @@ def _daemon_request_scope(
     with runtime_context(
         request_id=request.request_id,
         source="daemon",
-    ), observe_log_events(state.activity_broker.publish):
+    ), project_log_events(state.activity_broker.publish):
         return next_handler(request, state)
 
 

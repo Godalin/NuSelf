@@ -11,7 +11,7 @@ from nuself.daemon.activity import (
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState
-from nuself.logs import LogEvent, observe_log_events, write_log_event
+from nuself.logs import LogEvent, project_log_events, write_log_event
 
 
 def _event(turn_id: str, message: str) -> LogEvent:
@@ -105,7 +105,7 @@ def test_request_scoped_log_projection_reaches_activity_broker(
     broker = ActivityBroker()
     subscription_id = broker.open("turn-1")
 
-    with observe_log_events(broker.publish):
+    with project_log_events(broker.publish):
         written = write_log_event(
             "chat",
             "tool_activity",

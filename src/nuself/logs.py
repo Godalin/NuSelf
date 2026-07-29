@@ -14,7 +14,7 @@ from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
 from threading import Lock, RLock
 from typing import IO, BinaryIO, Literal, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
 from nuself.config import ensure_runtime_dirs, runtime_paths
@@ -84,10 +84,24 @@ class LogRetentionPolicy:
 
 
 DEFAULT_LOG_RETENTION = LogRetentionPolicy()
-LogEventObserver = Callable[["LogEvent"], None]
-_CURRENT_LOG_EVENT_OBSERVERS: ContextVar[tuple[LogEventObserver, ...]] = ContextVar(
-    "nuself_log_event_observers",
+LogEventProjection = Callable[["LogEvent"], None]
+
+
+@dataclass(frozen=True)
+class _LogProjectionBinding:
+    binding_id: UUID
+    projection: LogEventProjection
+
+
+_CURRENT_LOG_EVENT_PROJECTIONS: ContextVar[
+    tuple[_LogProjectionBinding, ...]
+] = ContextVar(
+    "nuself_log_event_projections",
     default=(),
+)
+_ACTIVE_LOG_EVENT_PROJECTIONS: ContextVar[frozenset[UUID]] = ContextVar(
+    "nuself_active_log_event_projections",
+    default=frozenset(),
 )
 _LOG_OBSERVER_FAILURE_MESSAGE = "process-local log observer failed"
 
@@ -663,15 +677,23 @@ def _append_log_event(
             line.encode("utf-8"),
             component=event_record.component,
         )
-    for observer in _CURRENT_LOG_EVENT_OBSERVERS.get():
+    for binding in _CURRENT_LOG_EVENT_PROJECTIONS.get():
+        active = _ACTIVE_LOG_EVENT_PROJECTIONS.get()
+        if binding.binding_id in active:
+            continue
+        token = _ACTIVE_LOG_EVENT_PROJECTIONS.set(
+            active | {binding.binding_id}
+        )
         try:
-            observer(event_record)
+            binding.projection(event_record)
         except Exception as exc:
             _report_log_observer_failure(
                 exc,
                 project_root=paths.project_root,
             )
             continue
+        finally:
+            _ACTIVE_LOG_EVENT_PROJECTIONS.reset(token)
     return event_record
 
 
@@ -876,7 +898,7 @@ def _report_log_observer_failure(
     *,
     project_root: Path,
 ) -> None:
-    token = _CURRENT_LOG_EVENT_OBSERVERS.set(())
+    token = _CURRENT_LOG_EVENT_PROJECTIONS.set(())
     try:
         try:
             definition = LOG_INFRASTRUCTURE_AUDIT_REGISTRY.resolve(
@@ -912,7 +934,7 @@ def _report_log_observer_failure(
                 stacklevel=3,
             )
     finally:
-        _CURRENT_LOG_EVENT_OBSERVERS.reset(token)
+        _CURRENT_LOG_EVENT_PROJECTIONS.reset(token)
 
 
 def _rotate_log_if_needed(
@@ -941,19 +963,22 @@ def _rotated_log_path(path: Path, index: int) -> Path:
 
 
 @contextmanager
-def observe_log_events(
-    observer: LogEventObserver,
+def project_log_events(
+    projection: LogEventProjection,
 ) -> Generator[None, None, None]:
-    """Add one best-effort projection in this execution context."""
+    """Attach one bounded best-effort projection in this execution context."""
 
-    current = _CURRENT_LOG_EVENT_OBSERVERS.get()
-    token: Token[tuple[LogEventObserver, ...]] = (
-        _CURRENT_LOG_EVENT_OBSERVERS.set((*current, observer))
+    if not callable(projection):
+        raise TypeError("log event projection must be callable")
+    current = _CURRENT_LOG_EVENT_PROJECTIONS.get()
+    binding = _LogProjectionBinding(uuid4(), projection)
+    token: Token[tuple[_LogProjectionBinding, ...]] = (
+        _CURRENT_LOG_EVENT_PROJECTIONS.set((*current, binding))
     )
     try:
         yield
     finally:
-        _CURRENT_LOG_EVENT_OBSERVERS.reset(token)
+        _CURRENT_LOG_EVENT_PROJECTIONS.reset(token)
 
 
 def log_path(component: LogComponent, *, project_root: Path | None = None) -> Path:

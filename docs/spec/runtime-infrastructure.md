@@ -661,10 +661,12 @@ Healthy daemon-attached activity never polls files. Close failure is diagnostic
 only. Failure of the degradation diagnostic cannot fail, retry, or replace the
 chat result.
 
-The request-scoped audit observer used for this projection is an additive,
-process-local effect rather than part of `RuntimeContext`. Nested observers
-compose, and projection failure is isolated after the audit record is written.
-Observers are not blanket-propagated into new threads or long-lived workers.
+The request-scoped audit projection is attached through
+`project_log_events(...)`. It is an additive, bounded process-local effect
+rather than part of `RuntimeContext`. Nested projections compose, active
+projection identities are skipped during reentrant log writes, and projection
+failure is isolated after the audit record is written. Projections are not
+blanket-propagated into new threads or long-lived workers.
 
 ## Durable Jobs
 

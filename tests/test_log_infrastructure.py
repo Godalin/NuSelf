@@ -22,7 +22,7 @@ from nuself.logs import (
     LogRetentionPolicy,
     create_audit_envelope,
     log_path,
-    observe_log_events,
+    project_log_events,
     read_log_events,
     write_audit_envelope,
     write_log_event,
@@ -200,7 +200,7 @@ def test_audit_projection_sanitizes_persisted_diagnostics(
     }
     observed: list[LogEvent] = []
 
-    with observe_log_events(observed.append):
+    with project_log_events(observed.append):
         written = write_log_event(
             "chat",
             "turn_failed",
@@ -259,7 +259,7 @@ def test_log_event_metadata_is_detached_and_recursively_immutable(
     }
     observed: list[LogEvent] = []
 
-    with observe_log_events(observed.append):
+    with project_log_events(observed.append):
         written = write_log_event(
             "chat",
             "metadata_test",
@@ -325,9 +325,9 @@ def test_nested_log_observers_compose_in_order_and_restore(
     def inner(event: LogEvent) -> None:
         deliveries.append(("inner", event.message))
 
-    with observe_log_events(outer):
+    with project_log_events(outer):
         write_log_event("chat", "observer_test", "outer-1", project_root=tmp_path)
-        with observe_log_events(inner):
+        with project_log_events(inner):
             write_log_event(
                 "chat",
                 "observer_test",
@@ -346,6 +346,146 @@ def test_nested_log_observers_compose_in_order_and_restore(
     ]
 
 
+def test_log_projection_rejects_non_callable_at_scope_composition(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(TypeError, match="projection must be callable"):
+        with project_log_events(None):  # type: ignore[arg-type]
+            pytest.fail("invalid projection scope must not open")
+
+    assert read_log_events(project_root=tmp_path) == []
+
+
+def test_active_log_projection_is_skipped_during_nested_write(
+    tmp_path: Path,
+) -> None:
+    delivered: list[str] = []
+
+    def projection(event: LogEvent) -> None:
+        delivered.append(event.message)
+        if event.message == "root":
+            write_log_event(
+                "chat",
+                "projection_nested",
+                "nested",
+                project_root=tmp_path,
+            )
+
+    with project_log_events(projection):
+        write_log_event(
+            "chat",
+            "projection_root",
+            "root",
+            project_root=tmp_path,
+        )
+
+    assert delivered == ["root"]
+    assert [
+        event.message
+        for event in read_log_events(project_root=tmp_path, component="chat")
+    ] == ["root", "nested"]
+
+
+def test_active_projection_chain_prevents_mutual_recursive_delivery(
+    tmp_path: Path,
+) -> None:
+    delivered: list[tuple[str, str]] = []
+
+    def outer(event: LogEvent) -> None:
+        delivered.append(("outer", event.message))
+        if event.message == "root":
+            write_log_event(
+                "chat",
+                "projection_nested",
+                "from-outer",
+                project_root=tmp_path,
+            )
+
+    def inner(event: LogEvent) -> None:
+        delivered.append(("inner", event.message))
+        if event.message == "from-outer":
+            write_log_event(
+                "chat",
+                "projection_nested",
+                "from-inner",
+                project_root=tmp_path,
+            )
+
+    with project_log_events(outer), project_log_events(inner):
+        write_log_event(
+            "chat",
+            "projection_root",
+            "root",
+            project_root=tmp_path,
+        )
+
+    assert delivered == [
+        ("outer", "root"),
+        ("inner", "from-outer"),
+        ("inner", "root"),
+    ]
+
+
+def test_duplicate_callable_scopes_have_distinct_reentrancy_identity(
+    tmp_path: Path,
+) -> None:
+    delivered: list[str] = []
+
+    def projection(event: LogEvent) -> None:
+        delivered.append(event.message)
+        if event.message == "root":
+            write_log_event(
+                "chat",
+                "projection_nested",
+                "nested",
+                project_root=tmp_path,
+            )
+
+    with project_log_events(projection), project_log_events(projection):
+        write_log_event(
+            "chat",
+            "projection_root",
+            "root",
+            project_root=tmp_path,
+        )
+
+    assert delivered == ["root", "nested", "root", "nested"]
+
+
+def test_log_projection_control_failure_restores_active_identity(
+    tmp_path: Path,
+) -> None:
+    control = KeyboardInterrupt("stop projection")
+    delivered: list[str] = []
+
+    def projection(event: LogEvent) -> None:
+        delivered.append(event.message)
+        if event.message == "first":
+            raise control
+
+    with project_log_events(projection):
+        with pytest.raises(KeyboardInterrupt) as captured:
+            write_log_event(
+                "chat",
+                "projection_control",
+                "first",
+                project_root=tmp_path,
+            )
+        write_log_event(
+            "chat",
+            "projection_control",
+            "second",
+            project_root=tmp_path,
+        )
+
+    assert captured.value is control
+    assert delivered == ["first", "second"]
+    assert [
+        event.message
+        for event in read_log_events(project_root=tmp_path, component="chat")
+    ] == ["first", "second"]
+
+
 def test_log_observer_failure_is_isolated_from_later_observers(
     tmp_path: Path,
 ) -> None:
@@ -357,7 +497,7 @@ def test_log_observer_failure_is_isolated_from_later_observers(
             f"projection failed api_key={observer_secret}"
         )
 
-    with observe_log_events(fail), observe_log_events(delivered.append):
+    with project_log_events(fail), project_log_events(delivered.append):
         written = write_log_event(
             "chat",
             "observer_test",
@@ -417,7 +557,7 @@ def test_log_observer_diagnostic_failure_warns_without_affecting_delivery(
             "log_error=diagnostic store unavailable token=\\*\\*\\*"
         ),
     ) as captured:
-        with observe_log_events(fail_observer), observe_log_events(
+        with project_log_events(fail_observer), project_log_events(
             delivered.append
         ):
             written = write_log_event(
@@ -470,7 +610,7 @@ def test_log_corruption_warning_redacts_exception_credentials() -> None:
 def test_log_observers_are_not_inherited_by_new_threads(tmp_path: Path) -> None:
     delivered: list[LogEvent] = []
 
-    with observe_log_events(delivered.append):
+    with project_log_events(delivered.append):
         worker = threading.Thread(
             target=lambda: write_log_event(
                 "chat",
@@ -931,7 +1071,7 @@ def test_log_unlock_failure_preserves_success_and_observer_delivery(
     monkeypatch.setattr(logs, "flock", fail_unlock)
 
     with pytest.warns(RuntimeWarning) as captured:
-        with observe_log_events(observed.append):
+        with project_log_events(observed.append):
             written = write_log_event(
                 "chat",
                 "turn_completed",
@@ -963,7 +1103,7 @@ def test_log_lock_acquisition_failure_prevents_append_and_delivery(
 
     monkeypatch.setattr(logs, "flock", fail_acquire)
 
-    with observe_log_events(observed.append):
+    with project_log_events(observed.append):
         with pytest.raises(PermissionError, match="lock acquisition failed"):
             write_log_event(
                 "chat",
@@ -1279,7 +1419,7 @@ def test_rotation_failure_preserves_current_event_and_safe_diagnostic(
     policy = LogRetentionPolicy(max_bytes=1, backup_count=2)
 
     with pytest.warns(RuntimeWarning) as captured:
-        with observe_log_events(observed.append):
+        with project_log_events(observed.append):
             written = write_log_event(
                 "chat",
                 "turn_completed",
@@ -1326,7 +1466,7 @@ def test_partial_log_append_rolls_back_before_propagating(
 
     monkeypatch.setattr(logs, "_write_log_bytes", fail_after_partial_write)
 
-    with observe_log_events(observed.append):
+    with project_log_events(observed.append):
         with pytest.raises(OSError, match="private append failure"):
             write_log_event(
                 "chat",
@@ -1375,7 +1515,7 @@ def test_log_sync_failure_durably_rolls_back_before_propagating(
 
     monkeypatch.setattr(logs, "_sync_log_file", fail_append_sync)
 
-    with observe_log_events(observed.append):
+    with project_log_events(observed.append):
         with pytest.raises(OSError, match="append sync failed") as captured:
             write_log_event(
                 "chat",
@@ -1452,7 +1592,7 @@ def test_repeated_log_append_reuses_directory_sync_but_not_record_sync(
     monkeypatch.setattr(logs, "_sync_log_file", record_sync)
     monkeypatch.setattr(logs, "_sync_log_directory", record_directory_sync)
 
-    with observe_log_events(lambda event: operations.append("observer")):
+    with project_log_events(lambda event: operations.append("observer")):
         write_log_event(
             "chat",
             "turn_completed",
@@ -1490,7 +1630,7 @@ def test_new_log_directory_sync_failure_prevents_append_and_observer(
 
     monkeypatch.setattr(logs, "_sync_log_directory", fail_directory_sync)
 
-    with observe_log_events(observed.append):
+    with project_log_events(observed.append):
         with pytest.raises(
             OSError,
             match="log directory sync failed",
@@ -1637,7 +1777,7 @@ def test_log_data_close_failure_reports_persisted_outcome(
         open_with_failing_close,
     )
 
-    with observe_log_events(observed.append):
+    with project_log_events(observed.append):
         with pytest.raises(LogAppendLifecycleError) as captured:
             write_log_event(
                 "chat",

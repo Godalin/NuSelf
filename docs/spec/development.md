@@ -242,6 +242,11 @@ Result-producing one-shot thread boundaries use `runtime.execution.OwnedCall`.
 They must not reproduce ad hoc value/error boxes, daemonize authoritative work,
 or leave a successfully started call unreaped on an exceptional exit path.
 
+Process-local log delivery uses `project_log_events(...)` only for bounded
+synchronous projections. Projection callbacks must not perform network calls,
+retries, or unbounded waits. The logging core owns attachment identity and
+reentrancy suppression; callers must not build parallel recursion guards.
+
 Delayed callbacks use `runtime.scheduling.DelayedTaskScheduler` rather than
 domain-owned `threading.Timer` collections. Domains supply stable identities,
 delay values, callbacks, diagnostics, and recovery policy; the shared scheduler

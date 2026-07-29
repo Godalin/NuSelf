@@ -308,18 +308,33 @@ and `write_runtime_event()` use the same payload type, so producer and sink
 validation cannot drift. Extension event definitions may supply a different
 validator when their payload is not a log projection.
 
-## Process-Local Observation
+## Process-Local Projection
 
-`observe_log_events(observer)` adds a synchronous process-local projection for
-the current execution context. It is separate from `RuntimeContext`: observers
-are callable delivery effects, not serializable correlation identity.
+`project_log_events(projection)` adds one bounded synchronous process-local
+projection for the current execution context. It is separate from
+`RuntimeContext`: projections are callable delivery effects, not serializable
+correlation identity. This is not a general event observer API. Network calls,
+unbounded waits, retries, and independently progressing effects require an
+owned bounded transport instead.
 
-- Nested scopes compose in outer-to-inner registration order and restore the
-  previous observer set on exit.
-- The audit record is written before observers run.
-- Each observer is best effort. One observer failure cannot suppress later
-  observers, undo the audit write, or fail the business operation that logged.
-- Observer failures produce a best-effort `daemon/log_observer_failed`
+- A non-callable projection fails at scope composition before any log is
+  written.
+- Nested scopes compose in outer-to-inner attachment order and restore the
+  previous projection set on exit.
+- The audit record is written before projections run.
+- Each scope attachment has a distinct identity. During nested log writes, an
+  attachment already active anywhere in the current delivery chain is skipped.
+  Other attached projections still receive the nested record in order. This
+  prevents direct and mutual recursive projection loops without conflating two
+  scopes that intentionally attach the same callable.
+- Each projection is best effort. One projection failure cannot suppress later
+  projections, undo the audit write, or fail the business operation that
+  logged.
+- Best-effort isolation covers ordinary `Exception` values. A non-`Exception`
+  `BaseException` remains process-control state: active-delivery identity is
+  restored and the control object propagates after the durable append.
+- Projection failures produce the historical best-effort
+  `daemon/log_observer_failed`
   diagnostic with observation temporarily suspended. Logging core owns this
   event in a sealed infrastructure audit registry: the message is fixed, the
   level is `warning`, the status is `error`, the error is required, and
@@ -329,11 +344,11 @@ are callable delivery effects, not serializable correlation identity.
   is the terminal fallback: it does not recurse, retry, or escape into the
   business operation, including when process warning policy promotes runtime
   warnings to errors.
-- Observer failure records and terminal warnings use the shared safe diagnostic
+- Projection failure records and terminal warnings use the shared safe diagnostic
   formatter for each exception. Broken exception renderers cannot replace the
   audit result, and credential-like values are removed before persistence or
   warning emission.
-- Observers are not implicitly copied to new threads. A future deferred path
+- Projections are not implicitly copied to new threads. A future deferred path
   that genuinely continues the same live projection must bind that effect
   explicitly; long-lived workers must establish their own ownership.
 
