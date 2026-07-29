@@ -5,9 +5,10 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make process-local log projection a bounded, composition-validated boundary.
-Nested log writes must never recurse through an already-active projection, and
-projection failure must remain secondary to the completed durable log append.
+Unify local runtime-job construction under sealed semantic definitions.
+Production code must not create unknown or invalid job messages before queue
+ingress, while decoded envelopes remain structurally representable and are
+revalidated at every trust boundary.
 
 ## Active Branch
 
@@ -15,62 +16,68 @@ projection failure must remain secondary to the completed durable log append.
 
 ## Ordered Work
 
-1. Inventory process-local log projection storage, ordering, restoration,
-   production callbacks, and failure diagnostics.
-2. Reproduce non-callable delayed failure and reentrant logging behavior.
-3. Specify bounded synchronous projection, composition validation, and active
-   attachment identity semantics.
-4. Replace the general observation API and migrate every caller.
-5. Prove direct/mutual recursion suppression, duplicate callable identity,
-   nested ordering/restoration, failure isolation, and thread non-inheritance.
+1. Inventory all event/job/audit envelope construction and first semantic
+   validation points.
+2. Separate transport-envelope structural invariants from domain semantic
+   authorization.
+3. Add registry-owned job construction and remove unchecked
+   `JobMessage.create(...)`.
+4. Give every production job producer a sealed registry and retain queue
+   ingress validation for decoded/untrusted messages.
+5. Prove invalid name, producer, and domain data fail before a message is
+   returned or queue state changes.
 6. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No asynchronous log projection worker without a concrete production need.
-- No compatibility alias for `observe_log_events(...)`.
-- No rename of the persisted historical `log_observer_failed` audit identity.
-- No change to durable append, fsync, rotation, or retention behavior.
+- No universal factory that merges event, job, and audit semantic registries.
+- No assumption that successful envelope decoding grants domain authorization.
+- No compatibility retention of unchecked `JobMessage.create(...)`.
+- No change to job payload wire shape or durable manifest recovery.
 
 ## Completion Evidence
 
-- The only production attachment is request-scoped
-  `ActivityBroker.publish`, a bounded in-memory projection.
-- Current scope composition accepts non-callables and misreports their delayed
-  `TypeError` as a runtime observer failure after a later log append.
-- A projection that writes a log immediately receives its own nested record
-  again; no active-delivery identity prevents direct or mutual recursion.
-- Failure diagnostics already suspend all projections before writing the
-  historical `daemon/log_observer_failed` record.
-- The public scope API is now `project_log_events(...)`; the old generalized
-  `observe_log_events(...)` name was removed without a compatibility alias.
-- Scope composition rejects non-callables before any log append.
-- Each attachment owns a UUID identity. A separate active-identity
-  `ContextVar` skips projections already present anywhere in a nested delivery
-  chain while preserving ordered delivery to other attachments.
-- Two scopes using the same callable remain distinct attachments rather than
-  being incorrectly deduplicated by callable identity.
-- Ordinary projection exceptions retain the historical sealed
-  `daemon/log_observer_failed` diagnostic; process-control `BaseException`
-  values restore active state and propagate after the durable append.
-- Production request activity uses the renamed bounded projection boundary.
-- Focused log infrastructure, daemon activity, and request-handler tests:
-  91 passed.
-- Full suite: 2116 passed.
+- Event publication resolves a sealed event definition and validates its
+  payload before constructing the event envelope.
+- Direct audit construction validates component, audit-name grammar, and typed
+  log payload before constructing its envelope; domain audit registries remain
+  separate presentation/metadata contracts.
+- `JobMessage.create(...)` currently constructs unknown job names, disallowed
+  producers, and invalid domain data; only the worker queue ingress rejects
+  them.
+- Reason initial export, retry, and reconciliation are the only production job
+  producers and all use the same closed Reason job definition builder.
+- `JobDefinitionRegistry.create(...)` is now the only field-based local job
+  constructor. It builds the immutable structural envelope, validates the
+  registered name, allowed producer, and exact domain data, then returns the
+  authorized `JobMessage`.
+- `JobMessage.create(...)` was removed without a compatibility alias.
+- `DefinitionRegistry` exposes thread-safe sealed state; job validation and
+  construction reject unsealed registries before entering runtime use.
+- Reason initial export, retry, and reconciliation producers all use their
+  sealed Reason job registry.
+- Structurally decoded messages remain representable and worker ingress still
+  validates them before queue mutation; the unknown-job ingress test uses this
+  explicit untrusted path.
+- Production `RuntimeEnvelope(...)` construction now occurs only inside the
+  event publisher, audit builder, and job definition registry.
+- Focused definition, job, message, Reason contract/output, and export recovery
+  tests: 114 passed.
+- Full suite: 2121 passed.
 - Pyright: 0 errors, 0 warnings.
-- Static search found no old API/type/ContextVar references except the explicit
-  no-compatibility statement; `git diff --check` passed.
+- Static search found no `JobMessage.create(...)` or uncontrolled production
+  envelope construction; `git diff --check` passed.
 
 ## Publication
 
-Guarded process-local log projection was implemented in `0434d6f`; milestone
+Registry-owned job construction was implemented in `379e328`; milestone
 publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Review internal message construction next. `RuntimeEnvelope` centralizes
-identity, context, version, and JSON-safe payloads, but event, job, and audit
-domains still enter it through different validation paths and some sites
-construct envelopes directly. Inventory whether invalid producer/name pairs or
-domain payloads can exist before ingress, persistence, or projection, and
-whether one sealed factory/definition boundary should own construction.
+Review sealed-definition runtime ownership next. Job registries now reject
+runtime validation/construction before sealing, but `EventPublisher` accepts an
+arbitrary `EventDefinitionRegistry` and the shared definition resolver itself
+permits lookup during composition. Verify whether a publisher can observe late
+event registration or partially composed definitions, and make runtime owners
+require an immutable sealed snapshot consistently.
