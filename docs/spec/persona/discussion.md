@@ -88,6 +88,12 @@ Malformed output keeps the existing caller-owned safety behavior:
 - moderator judgment remains non-converged, selects no emergent persona, and
   allows the bounded discussion loop to continue.
 
+Each safety boundary catches only the shared typed `AgentError` hierarchy
+around `invoke(...)`. Raw `RuntimeError` or `ValueError` raised by an injected
+Agent implementation is a programming or integration failure and propagates
+unchanged; it must not be rendered as a neutral persona opinion, default
+selection, or moderator judgment.
+
 Agent and schema failures for all three stages write
 `persona/persona_discussion_degraded` through the Persona-owned audit adapter.
 Metadata identifies only `scoring`, `selection`, or `moderator`; subject ids,

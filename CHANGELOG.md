@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Persona discussion and `persona_think` now recover only from typed Agent
+  failures; raw Agent implementation `RuntimeError` and `ValueError` failures
+  propagate instead of appearing as normal persona fallback.
 - Reflection relevance scoring and candidate generation now recover only from
   typed Agent failures or semantic domain-materialization errors; raw Agent
   implementation `RuntimeError` and `ValueError` failures propagate.

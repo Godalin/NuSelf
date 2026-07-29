@@ -161,6 +161,12 @@ The reason-thread-scoped variants (`build_reason_persona_tools`) also follow
 these rules for **global** personas. Thread-scoped (local) personas are
 unaffected by global disable/enable.
 
+Both global and reason-thread `persona_think` use the shared free-text Agent
+contract. A typed `AgentError` becomes the existing sanitized tool error
+string. Raw `RuntimeError` or `ValueError` from an injected Agent
+implementation propagates unchanged instead of masquerading as an expected
+model availability or output failure.
+
 ## Activation Policy
 
 ### AgentBackedActivationPolicy

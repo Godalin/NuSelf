@@ -10,6 +10,7 @@ from typing import Annotated, Literal, TypeAlias
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import ConfigSystem, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
@@ -163,9 +164,7 @@ class AgentBackedScoringPersonaNode:
         ]
         try:
             output = self._agent.invoke(messages)
-            note = output.note
-            score = output.score
-        except (RuntimeError, ValueError) as exc:
+        except AgentError as exc:
             report_persona_failure(
                 exc,
                 event="persona_discussion_degraded",
@@ -174,6 +173,9 @@ class AgentBackedScoringPersonaNode:
             )
             note = f"{persona.id} considered the topic."
             score = 0.5
+        else:
+            note = output.note
+            score = output.score
 
         return PersonaContribution(persona_id=persona.id, notes=(note,), confidence=score)
 
@@ -390,7 +392,7 @@ class ProactivePersonaDiscussion:
         try:
             output = self._agents.selection.invoke(messages)
             selected_ids = output.selected_persona_ids
-        except (RuntimeError, ValueError) as exc:
+        except AgentError as exc:
             report_persona_failure(
                 exc,
                 event="persona_discussion_degraded",
@@ -505,7 +507,7 @@ class ProactivePersonaDiscussion:
         ]
         try:
             return self._agents.moderator.invoke(messages)
-        except (RuntimeError, ValueError) as exc:
+        except AgentError as exc:
             report_persona_failure(
                 exc,
                 event="persona_discussion_degraded",

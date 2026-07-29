@@ -9,8 +9,9 @@ from typing import Generic, Never, TypeVar
 
 import pytest
 from langchain_core.messages import BaseMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
+from nuself.agent.errors import AgentInvalidOutputError, AgentModelUnavailableError
 from nuself.domain.proactive import IdeaCandidate
 from nuself.logs import read_log_events
 from nuself.persona import (
@@ -85,9 +86,14 @@ class _FixtureAgent(Generic[OutputT]):
         messages: Sequence[BaseMessage],
     ) -> OutputT:
         self._fixture.agent_calls.append(messages)
-        return self._schema.model_validate_json(
-            self._fixture.response(self._key)
-        )
+        try:
+            return self._schema.model_validate_json(
+                self._fixture.response(self._key)
+            )
+        except ValidationError as exc:
+            raise AgentInvalidOutputError(
+                f"{self._key} agent returned invalid structured output"
+            ) from exc
 
 
 class _FakeLLM:
@@ -351,6 +357,26 @@ def test_agent_backed_scoring_persona_node_rejects_overflow() -> None:
     assert result.confidence == 0.5
 
 
+@pytest.mark.parametrize("error_type", [RuntimeError, ValueError])
+def test_scoring_persona_propagates_untyped_agent_errors(
+    error_type: type[Exception],
+) -> None:
+    expected = error_type("raw scoring implementation failure")
+
+    class _UntypedFailureAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> PersonaScoreOutput:
+            raise expected
+
+    node = AgentBackedScoringPersonaNode(_UntypedFailureAgent())
+
+    with pytest.raises(error_type) as caught:
+        node(ANALYST_PERSONA, PersonaInput(user_message="Review this"))
+    assert caught.value is expected
+
+
 def test_select_personas_uses_typed_agent_response() -> None:
     llm = _FakeLLM({
         "select": '{"selected_persona_ids": ["builder_self", "skeptic_self"], "reason": "needs action and critique"}',
@@ -392,6 +418,32 @@ def test_select_personas_rejects_partially_malformed_selection(
     )
     assert event.event == "persona_discussion_degraded"
     assert event.metadata == {"stage": "selection"}
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, ValueError])
+def test_select_personas_propagates_untyped_agent_errors(
+    error_type: type[Exception],
+) -> None:
+    fixture = _FakeLLM()
+    expected = error_type("raw selection implementation failure")
+
+    class _UntypedFailureAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> PersonaSelectionOutput:
+            raise expected
+
+    agents = PersonaDiscussionAgents(
+        scoring=fixture.agents.scoring,
+        selection=_UntypedFailureAgent(),
+        moderator=fixture.agents.moderator,
+    )
+    discussion = ProactivePersonaDiscussion(agents=agents)
+
+    with pytest.raises(error_type) as caught:
+        discussion._select_personas(_make_candidate())
+    assert caught.value is expected
 
 
 def test_moderator_judgment_detects_convergence() -> None:
@@ -440,6 +492,36 @@ def test_moderator_judgment_rejects_string_boolean(
     assert event.metadata == {"stage": "moderator"}
 
 
+@pytest.mark.parametrize("error_type", [RuntimeError, ValueError])
+def test_moderator_judgment_propagates_untyped_agent_errors(
+    error_type: type[Exception],
+) -> None:
+    fixture = _FakeLLM()
+    expected = error_type("raw moderator implementation failure")
+
+    class _UntypedFailureAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> ModeratorJudgmentOutput:
+            raise expected
+
+    agents = PersonaDiscussionAgents(
+        scoring=fixture.agents.scoring,
+        selection=fixture.agents.selection,
+        moderator=_UntypedFailureAgent(),
+    )
+    discussion = ProactivePersonaDiscussion(agents=agents)
+
+    with pytest.raises(error_type) as caught:
+        discussion._moderator_judgment(
+            {"analyst_self": 0.8},
+            ["turn-1: discussion"],
+            1,
+        )
+    assert caught.value is expected
+
+
 def test_discussion_diagnostic_failure_does_not_replace_scoring_fallback(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -449,7 +531,7 @@ def test_discussion_diagnostic_failure_does_not_replace_scoring_fallback(
             self,
             messages: Sequence[BaseMessage],
         ) -> Never:
-            raise RuntimeError("scoring unavailable")
+            raise AgentModelUnavailableError("scoring unavailable")
 
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("diagnostic store unavailable")

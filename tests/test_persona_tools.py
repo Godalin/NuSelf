@@ -4,9 +4,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Callable, cast
 
+import pytest
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 
+from nuself.agent.errors import AgentModelUnavailableError
 from nuself.persona.tools import (
     build_persona_tools,
     build_reason_persona_tools,
@@ -73,7 +75,7 @@ def test_persona_think_sanitizes_agent_failure(
     class _FailingTextAgent(_TextAgent):
         def invoke(self, messages: Sequence[BaseMessage]) -> str:
             self.calls.append(messages)
-            raise RuntimeError(
+            raise AgentModelUnavailableError(
                 f"persona unavailable api_key={agent_secret}"
             )
 
@@ -102,6 +104,59 @@ def test_persona_think_sanitizes_agent_failure(
         "persona unavailable api_key=***"
     )
     assert agent_secret not in str(result)
+
+
+@pytest.mark.parametrize("reason_scoped", [False, True])
+@pytest.mark.parametrize("error_type", [RuntimeError, ValueError])
+def test_persona_think_propagates_untyped_agent_errors(
+    tmp_path: Path,
+    reason_scoped: bool,
+    error_type: type[Exception],
+) -> None:
+    expected = error_type("raw text agent implementation failure")
+
+    class _UntypedFailureAgent(_TextAgent):
+        def invoke(self, messages: Sequence[BaseMessage]) -> str:
+            raise expected
+
+    if reason_scoped:
+        workspace = ScopedWorkspace(
+            SqliteStore(tmp_path / "private" / "workspace.sqlite"),
+            ("reason", "thread-1"),
+        )
+        tools = build_reason_persona_tools(
+            global_project_root=tmp_path,
+            get_thread_workspace=lambda: workspace,
+            text_agent=_UntypedFailureAgent(),
+        )
+        craft_args: dict[str, object] = {
+            "name": "local-reviewer",
+            "prompt": "Review local assumptions.",
+        }
+        think_args: dict[str, object] = {
+            "persona": "local-reviewer",
+            "question": "What is missing?",
+            "scope": "local",
+        }
+    else:
+        tools = build_persona_tools(
+            tmp_path,
+            text_agent=_UntypedFailureAgent(),
+        )
+        craft_args = {
+            "name": "reviewer",
+            "prompt": "Review global assumptions.",
+        }
+        think_args = {
+            "persona": "reviewer",
+            "question": "What is missing?",
+        }
+
+    _invoke_tool(_tool(tools, "persona_craft"), craft_args)
+
+    with pytest.raises(error_type) as caught:
+        _invoke_tool(_tool(tools, "persona_think"), think_args)
+    assert caught.value is expected
 
 
 def test_reason_persona_think_uses_same_injected_text_agent(

@@ -8,6 +8,7 @@ from pathlib import Path
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 
+from nuself.agent.errors import AgentError
 from nuself.agent.text import TextAgent, default_text_agent
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
 from nuself.runtime.diagnostics import diagnostic_exception_message
@@ -133,7 +134,7 @@ def build_persona_tools(
         ]
         try:
             response = persona_agent.invoke(messages)
-        except (RuntimeError, ValueError) as exc:
+        except AgentError as exc:
             return (
                 f"Error consulting persona '{prompt.name}': "
                 f"{diagnostic_exception_message(exc)}"
@@ -377,7 +378,7 @@ def build_reason_persona_tools(
         ]
         try:
             result = persona_agent.invoke(messages)
-        except (RuntimeError, ValueError) as exc:
+        except AgentError as exc:
             return (
                 "persona_think failed: "
                 f"{diagnostic_exception_message(exc)}"
