@@ -22,9 +22,9 @@ from nuself.private_fs import (
 )
 from nuself.runtime.observability import (
     report_corrupt_record,
-    report_observed_failure,
 )
 from nuself.runtime import decode_json_value, encode_json_value
+from nuself.storage_audit import report_backend_close_failure
 
 if TYPE_CHECKING:
     from nuself.storage_sqlite import SqliteStorageBackend
@@ -422,15 +422,10 @@ def reset_default_backend(project_root: Path | None = None) -> None:
                 close()
             except Exception as exc:
                 failures.append(exc)
-                report_observed_failure(
+                report_backend_close_failure(
                     exc,
-                    component="storage",
-                    event="backend_close_failed",
-                    message="Default storage backend could not be closed",
                     project_root=root,
-                    metadata={
-                        "backend_type": type(backend).__name__,
-                    },
+                    backend_type=type(backend).__name__,
                 )
     if failures:
         raise DefaultBackendResetError(tuple(failures))

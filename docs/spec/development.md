@@ -269,6 +269,9 @@ under the same package.
 - `daemon/operations_audit.py` owns process cleanup and worker join-timeout
   diagnostics. It preserves ordered cleanup error records while server and
   supervisor owners retain control flow and exception propagation.
+- `storage_audit.py` owns backend-close and outer CLI storage-cleanup audit
+  schemas. Storage and CLI owners retain teardown control flow and exception
+  aggregation but do not construct audit presentation.
 - `daemon/audit.py` owns the immutable lifecycle event definition registry,
   exact per-event schema validation, and best-effort audit sink boundary.
 - `runtime/definitions.py` owns generic sealed definition-registry mechanics.
@@ -370,9 +373,10 @@ under the same package.
   application effects through `ReplCallbacks`. Transcript auto-save and memory
   curation execute once each through named cleanup aggregation that preserves
   any main-loop primary failure.
-- `runtime/cleanup.py` owns domain-neutral ordered cleanup execution and
-  `CleanupFailure`. Lifecycle owners retain step composition, diagnostics,
-  primary-error policy, and domain error types.
+- `runtime/cleanup.py` owns domain-neutral ordered cleanup execution,
+  `CleanupFailure`, and canonical `{step,error}` audit records. Lifecycle
+  owners retain step composition, diagnostics, primary-error policy, and
+  domain error types.
 
 Conversation runtime code lives under `agent/chat/`. `types.py` owns settings,
 structured response/result records, typed turn state, and graph error contracts;

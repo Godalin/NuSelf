@@ -126,7 +126,7 @@ def test_cli_cleanup_failure_retains_primary_as_cause(
         fail_reset,
     )
     monkeypatch.setattr(
-        "nuself.cli.report_observed_failure",
+        "nuself.cli.report_cli_cleanup_failure",
         record_failure,
     )
 

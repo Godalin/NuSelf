@@ -101,8 +101,8 @@ try:
     )
     from nuself.cli.repl.types import InteractiveChatResult
     from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
-    from nuself.runtime.observability import report_observed_failure
     from nuself.storage import reset_default_backend
+    from nuself.storage_audit import report_cli_cleanup_failure
 finally:
     warnings.warn = _original_warn
 
@@ -158,20 +158,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             cleanup_failures,
             primary_error=primary_error,
         )
-        report_observed_failure(
+        report_cli_cleanup_failure(
             lifecycle_error,
-            component="storage",
-            event="cli_cleanup_failed",
-            message="CLI storage cleanup failed",
             project_root=project_root,
-            metadata={
-                "steps": [
-                    failure.step for failure in cleanup_failures
-                ],
-                "primary_failed": primary_error is not None,
-            },
-            level="error",
-            status="error",
+            failures=cleanup_failures,
+            primary_failed=primary_error is not None,
         )
         if primary_error is not None:
             raise lifecycle_error from primary_error

@@ -40,6 +40,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   sealed operations-audit registry. Cleanup diagnostics retain every ordered
   step/error chain, while timeout metadata no longer repeats its
   `timed_out` status.
+- Default storage backend close and outer CLI cleanup failures now use one
+  sealed storage operations-audit registry. Daemon and CLI cleanup diagnostics
+  share one canonical ordered `{step,error}` projection instead of retaining
+  only cleanup step names.
 - Internal job wake-ups now resolve through sealed name, producer, and payload
   definitions before queue mutation; Reason export workers reject invalid jobs
   at ingress instead of queueing and later emitting

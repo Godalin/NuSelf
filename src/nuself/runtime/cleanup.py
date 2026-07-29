@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from nuself.runtime.diagnostics import diagnostic_exception_chain
+
 
 @dataclass(frozen=True)
 class CleanupFailure:
@@ -26,3 +28,17 @@ def run_cleanup_steps(
         except BaseException as exc:
             failures.append(CleanupFailure(step, exc))
     return tuple(failures)
+
+
+def cleanup_failure_records(
+    failures: Sequence[CleanupFailure],
+) -> list[dict[str, object]]:
+    """Project retained cleanup failures into ordered safe audit records."""
+
+    return [
+        {
+            "step": failure.step,
+            "error": diagnostic_exception_chain(failure.error),
+        }
+        for failure in failures
+    ]

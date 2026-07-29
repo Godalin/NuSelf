@@ -406,7 +406,12 @@ pairs, attempts every operation exactly once, and returns an ordered tuple of
 `CleanupFailure(step, error)`. It catches `BaseException` so control failures
 cannot bypass later cleanup or silently replace an earlier primary failure.
 
-The primitive does not log, retry, raise, choose step order, or define a
+`cleanup_failure_records(...)` is the one audit-facing projection of that
+tuple. It returns ordered `{step,error}` records using the canonical safe
+exception chain, so lifecycle owners do not independently format nested
+cleanup errors.
+
+The cleanup utilities do not log, retry, raise, choose step order, or define a
 lifecycle result. Daemon and REPL owners compose their own steps and retain
 their domain-specific lifecycle error, diagnostic event, primary-cause, and
 success rules.
