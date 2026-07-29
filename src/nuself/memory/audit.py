@@ -21,6 +21,7 @@ from nuself.runtime.observability import (
 
 MemoryAuditEvent = Literal[
     "curator_history_gap",
+    "curator_contended",
     "curator_deferred",
     "curator_completed",
     "candidate_merged",
@@ -106,6 +107,11 @@ def _deferred(metadata: Mapping[str, object]) -> None:
         raise AuditSchemaError(
             "curator deferred processed_messages must be zero"
         )
+
+
+def _curator_contended(metadata: Mapping[str, object]) -> None:
+    _require_exact(metadata, frozenset({"thread_id"}))
+    _string(metadata, "thread_id")
 
 
 def _curator_completed(metadata: Mapping[str, object]) -> None:
@@ -215,6 +221,10 @@ def _build_registry() -> AuditDefinitionRegistry:
         AuditEventDefinition(
             "memory", "curator_history_gap", "warning", "degraded",
             metadata_validator=_history_gap,
+        ),
+        AuditEventDefinition(
+            "memory", "curator_contended", "info", "deferred",
+            metadata_validator=_curator_contended,
         ),
         AuditEventDefinition(
             "memory", "curator_deferred", "info", "deferred",

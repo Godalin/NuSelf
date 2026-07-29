@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Curator runs and plan discard now use the same per-thread cross-process lock,
+  preventing duplicate model work and repair races.
 - Added payload-safe `memory plan show` and force-gated `memory plan discard`
   commands for diagnosing and repairing curator recovery state.
 - Curator decisions are now durably resumable: cursor write failures reuse the

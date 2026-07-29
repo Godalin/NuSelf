@@ -36,6 +36,7 @@ from nuself.memory.curator_contract import (
 from nuself.memory.curator_plan import (
     MemoryCuratorPlan,
     MemoryCuratorPlanCorruptError,
+    MemoryCuratorPlanLockContended,
     MemoryCuratorPlanStore,
     validate_curator_thread_id,
 )
@@ -163,10 +164,40 @@ class MemoryCurator:
             registry=self._registry,
         )
         self._trace_recorder = trace_recorder
-        self._source_trace_id: str | None = None
 
-    def run_once(self, thread_id: str = "default", *, source_trace_id: str | None = None) -> MemoryCuratorResult:
-        self._source_trace_id = source_trace_id
+    def run_once(
+        self,
+        thread_id: str = "default",
+        *,
+        source_trace_id: str | None = None,
+    ) -> MemoryCuratorResult:
+        try:
+            with self._plan_store.exclusive(thread_id):
+                return self._run_once_locked(
+                    thread_id,
+                    source_trace_id=source_trace_id,
+                )
+        except MemoryCuratorPlanLockContended:
+            write_curator_audit(
+                "curator_contended",
+                "Memory curator found the source thread busy",
+                project_root=self._paths.project_root,
+                metadata={"thread_id": thread_id},
+            )
+            return MemoryCuratorResult(
+                processed_messages=0,
+                created=0,
+                updated=0,
+                ignored=0,
+                log_path=self._memory_log_path(),
+            )
+
+    def _run_once_locked(
+        self,
+        thread_id: str,
+        *,
+        source_trace_id: str | None,
+    ) -> MemoryCuratorResult:
         state = self._thread_store.load(thread_id)
         cursor = self._load_cursor(thread_id)
         visible_start = state.message_start_index
@@ -262,6 +293,7 @@ class MemoryCurator:
                     source_ref,
                     candidate_id=candidate_id,
                     observed_at=plan.observed_at,
+                    source_trace_id=source_trace_id,
                 )
                 if outcome == "create":
                     created += 1
@@ -275,6 +307,7 @@ class MemoryCurator:
                     source_ref,
                     candidate_id=candidate_id,
                     observed_at=plan.observed_at,
+                    source_trace_id=source_trace_id,
                 ):
                     updated += 1
                 else:
@@ -386,10 +419,12 @@ class MemoryCurator:
         *,
         candidate_id: str,
         observed_at: str,
+        source_trace_id: str | None,
     ) -> MemoryActionType:
         staged = self._staged_candidate(
             candidate_id,
             source_ref=source_ref,
+            source_trace_id=source_trace_id,
         )
         if staged is not None:
             return (
@@ -432,7 +467,10 @@ class MemoryCurator:
                     relations=existing.relations,
                 )
                 self._candidate_repository.save(candidate)
-                self._auto_accept(candidate)
+                self._auto_accept(
+                    candidate,
+                    source_trace_id=source_trace_id,
+                )
                 write_curator_audit(
                     "candidate_merged",
                     "Memory curator created an update candidate by merging",
@@ -465,7 +503,10 @@ class MemoryCurator:
             observed_at=observed_at,
         )
         self._candidate_repository.save(candidate)
-        self._auto_accept(candidate)
+        self._auto_accept(
+            candidate,
+            source_trace_id=source_trace_id,
+        )
         write_curator_audit(
             "candidate_created",
             "Memory curator created a candidate",
@@ -484,10 +525,12 @@ class MemoryCurator:
         *,
         candidate_id: str,
         observed_at: str,
+        source_trace_id: str | None,
     ) -> bool:
         if self._staged_candidate(
             candidate_id,
             source_ref=source_ref,
+            source_trace_id=source_trace_id,
         ) is not None:
             return True
         if action.entry_id is None:
@@ -523,7 +566,10 @@ class MemoryCurator:
             relations=existing.relations,
         )
         self._candidate_repository.save(candidate)
-        self._auto_accept(candidate)
+        self._auto_accept(
+            candidate,
+            source_trace_id=source_trace_id,
+        )
         write_curator_audit(
             "candidate_updated",
             "Memory curator created an explicit update candidate",
@@ -541,6 +587,7 @@ class MemoryCurator:
         candidate_id: str,
         *,
         source_ref: str,
+        source_trace_id: str | None,
     ) -> MemoryCandidate | None:
         try:
             candidate = self._candidate_repository.get(candidate_id)
@@ -552,10 +599,18 @@ class MemoryCurator:
                 f"{candidate_id}"
             )
         if candidate.review_state == "pending":
-            self._auto_accept(candidate)
+            self._auto_accept(
+                candidate,
+                source_trace_id=source_trace_id,
+            )
         return candidate
 
-    def _auto_accept(self, candidate: MemoryCandidate) -> None:
+    def _auto_accept(
+        self,
+        candidate: MemoryCandidate,
+        *,
+        source_trace_id: str | None,
+    ) -> None:
         if not self._settings.auto_accept:
             return
         result = run_memory_observed(
@@ -579,6 +634,7 @@ class MemoryCurator:
             self._record_memory_update_trace(
                 result,
                 action=candidate.action,
+                source_trace_id=source_trace_id,
             )
 
     def _record_memory_update_trace(
@@ -586,6 +642,7 @@ class MemoryCurator:
         entry: MemoryEntry,
         *,
         action: str,
+        source_trace_id: str | None,
     ) -> None:
         if self._trace_recorder is None:
             return
@@ -598,7 +655,7 @@ class MemoryCurator:
                 memory_type=entry.type,
                 action=action,
                 confidence=entry.confidence,
-                source_trace_id=self._source_trace_id,
+                source_trace_id=source_trace_id,
             ),
             event="trace_recording_failed",
             project_root=self._paths.project_root,

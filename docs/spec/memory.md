@@ -152,6 +152,21 @@ errors are not degraded and continue to the daemon request backstop.
   because discarding an unfinished plan makes the source range eligible for a
   new model decision. Missing and corrupt plans remain explicitly
   diagnosable; there is no automatic discard.
+- Curator plan/candidate/cursor mutation for one thread is guarded by a stable
+  advisory lock at `private/memory/locks/{thread_id}.lock`. The lock is
+  per-thread, so unrelated threads remain concurrent; it is separate from the
+  chat ThreadStore lock so model curation never blocks message persistence.
+- Lock acquisition is exclusive and non-blocking. A curator run that finds the
+  same thread busy performs no model call or plan/candidate/cursor mutation,
+  emits
+  `memory/curator_contended`, and returns a zero-change result. This is a normal
+  deferred outcome, not a worker failure.
+- `memory plan discard` holds the same lock across existence check and unlink.
+  Contention returns non-zero and leaves the plan untouched. `memory plan show`
+  reads one atomic snapshot and does not acquire the mutation lock.
+- Lock files are stable coordination inodes and are not deleted after release.
+  Acquisition/release must close owned handles and preserve primary lock
+  errors when cleanup also fails.
 - If `cursor >= next_message_index`, no-op (idempotent).
 - If thread was compressed (`cursor < message_start_index`), log gap and start from `visible_start`.
 - Advance cursor to `visible_end` after processing.
@@ -295,6 +310,7 @@ The closed Memory curation taxonomy is:
 | Event | Level | Status | Metadata |
 |---|---|---|---|
 | `curator_history_gap` | `warning` | `degraded` | thread, cursor, visible start |
+| `curator_contended` | `info` | `deferred` | thread |
 | `curator_deferred` | `info` | `deferred` | thread, source range, zero processed count |
 | `curator_completed` | `info` | `completed` | thread, source range, processed/create/update/ignore counts |
 | `candidate_merged` | `info` | `created` | candidate, target, memory type |

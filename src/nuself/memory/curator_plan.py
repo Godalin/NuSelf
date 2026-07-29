@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fcntl import LOCK_EX, LOCK_NB, LOCK_UN, flock
 import json
 from pathlib import Path
-from typing import Never, cast
+from typing import IO, Literal, Never, cast
 from uuid import NAMESPACE_URL, uuid5
 
 from nuself.config import runtime_paths
@@ -18,6 +19,7 @@ from nuself.memory.curator_contract import (
     MemoryAction,
     action_from_item,
 )
+from nuself.private_fs import ensure_private_file
 from nuself.runtime.observability import report_corrupt_record
 from nuself.storage import write_json_atomic
 
@@ -130,6 +132,105 @@ class MemoryCuratorPlanCorruptError(ValueError):
     """Raised when a curator recovery plan cannot be trusted."""
 
 
+class MemoryCuratorPlanLockContended(RuntimeError):
+    """Raised when another process is mutating one thread's curator state."""
+
+
+class MemoryCuratorPlanLockCleanupError(RuntimeError):
+    """A curator lock operation and required handle close both failed."""
+
+    def __init__(
+        self,
+        operation: Literal["acquire", "release"],
+        *,
+        primary_error: BaseException,
+        cleanup_error: BaseException,
+    ) -> None:
+        super().__init__(
+            f"memory curator plan lock {operation} and handle cleanup "
+            "both failed"
+        )
+        self.operation = operation
+        self.primary_error = primary_error
+        self.cleanup_error = cleanup_error
+
+
+class MemoryCuratorPlanLock:
+    """Hold one stable non-blocking advisory lock for curator mutation."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._handle: IO[str] | None = None
+
+    @property
+    def acquired(self) -> bool:
+        return self._handle is not None
+
+    def acquire(self) -> None:
+        if self._handle is not None:
+            return
+        ensure_private_file(self.path)
+        handle = self.path.open("a+", encoding="utf-8")
+        try:
+            flock(handle.fileno(), LOCK_EX | LOCK_NB)
+        except BlockingIOError:
+            primary_error = MemoryCuratorPlanLockContended(
+                "another process is mutating this thread's curator state"
+            )
+            try:
+                handle.close()
+            except BaseException as cleanup_error:
+                raise MemoryCuratorPlanLockCleanupError(
+                    "acquire",
+                    primary_error=primary_error,
+                    cleanup_error=cleanup_error,
+                ) from primary_error
+            raise primary_error from None
+        except BaseException as primary_error:
+            try:
+                handle.close()
+            except BaseException as cleanup_error:
+                raise MemoryCuratorPlanLockCleanupError(
+                    "acquire",
+                    primary_error=primary_error,
+                    cleanup_error=cleanup_error,
+                ) from primary_error
+            raise
+        self._handle = handle
+
+    def release(self) -> None:
+        handle = self._handle
+        if handle is None:
+            return
+        self._handle = None
+        try:
+            flock(handle.fileno(), LOCK_UN)
+        except BaseException as primary_error:
+            try:
+                handle.close()
+            except BaseException as cleanup_error:
+                raise MemoryCuratorPlanLockCleanupError(
+                    "release",
+                    primary_error=primary_error,
+                    cleanup_error=cleanup_error,
+                ) from primary_error
+            raise
+        else:
+            handle.close()
+
+    def __enter__(self) -> MemoryCuratorPlanLock:
+        self.acquire()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: object,
+    ) -> None:
+        self.release()
+
+
 class MemoryCuratorPlanStore:
     """Typed cursor-adjacent storage for curator recovery plans."""
 
@@ -221,11 +322,23 @@ class MemoryCuratorPlanStore:
         return plan
 
     def discard(self, thread_id: str) -> None:
-        path = self._path(thread_id)
-        try:
-            path.unlink()
-        except FileNotFoundError as exc:
-            raise MemoryCuratorPlanNotFound(thread_id) from exc
+        with self.exclusive(thread_id):
+            path = self._path(thread_id)
+            try:
+                path.unlink()
+            except FileNotFoundError as exc:
+                raise MemoryCuratorPlanNotFound(thread_id) from exc
+
+    def exclusive(self, thread_id: str) -> MemoryCuratorPlanLock:
+        """Return the authoritative mutation lock for one curator thread."""
+
+        validate_curator_thread_id(thread_id)
+        return MemoryCuratorPlanLock(
+            self._paths.private_root
+            / "memory"
+            / "locks"
+            / f"{thread_id}.lock"
+        )
 
     def _path(self, thread_id: str) -> Path:
         validate_curator_thread_id(thread_id)

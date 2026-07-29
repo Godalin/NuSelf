@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Give operators a safe, typed recovery surface for curator plans. Runtime and
-CLI must share decoding/path rules; inspection must be payload-safe, and
-discard must require an exact thread plus explicit destructive acknowledgement.
+Serialize curator plan/candidate/cursor mutation per thread across processes.
+Concurrent curation must not duplicate model work, and CLI discard must never
+race an active daemon curation run.
 
 ## Active Branch
 
@@ -15,63 +15,56 @@ discard must require an exact thread plus explicit destructive acknowledgement.
 
 ## Ordered Work
 
-1. Inspect memory CLI grouping, output contracts, and destructive conventions.
-2. Extract one plan store shared by curator runtime and operator commands.
-3. Add payload-safe `memory plan show <thread>`.
-4. Add exact-thread `memory plan discard <thread> --force`.
-5. Prove corrupt inspection fails safely and discard leaves cursor/candidates.
+1. Inspect existing ThreadStore, daemon, log, and reason-export locks.
+2. Define a separate stable per-thread curator advisory lock.
+3. Hold it across plan, candidate, auto-accept, and cursor mutation.
+4. Make curator contention a safe deferred result and discard contention an
+   immediate CLI error.
+5. Prove same-thread exclusion, different-thread independence, and no deletion
+   under contention.
 6. Run focused and full quality gates, commit by functional boundary, push,
    and confirm development-branch CI.
 
 ## Out Of Scope
 
 - No plan, candidate, cursor, or MemoryEntry wire-schema change.
-- No automatic plan repair or discard.
-- No CLI exposure of action body, title, tags, or model reason.
-- No cursor or candidate mutation during plan inspection or discard.
-- No bulk/wildcard plan deletion.
+- No reuse of the chat ThreadStore lock across a model call.
+- No blocking wait on contention.
+- No global curator lock that serializes unrelated threads.
+- No lock-file deletion during ordinary release.
 
 ## Completion Evidence
 
-- Runtime currently owns plan path construction and decoding as private
-  `MemoryCurator` methods, so CLI cannot inspect the same authoritative
-  contract without duplication or constructing an agent.
-- A corrupt plan safely aborts curation but the error does not provide an
-  in-project repair command; operators must locate and edit private files.
-- Existing memory commands are already grouped under
-  `nuself.cli.commands.memory`; a nested `plan` group preserves that ownership.
-- Chosen surface: payload-safe `show` plus exact-thread, force-gated `discard`.
-- Plan action/output contracts now live in `memory/curator_contract.py`; typed
-  plan storage and corruption handling live in `memory/curator_plan.py`.
-  `curator.py` is reduced from 1031 to 694 lines and remains the orchestration
-  boundary while retaining compatibility imports for existing callers.
-- Runtime and CLI share `MemoryCuratorPlanStore`; no command constructs an
-  agent merely to inspect control state.
-- `memory plan show` prints only operational identity metadata and deterministic
-  candidate handles. Tests prove title, body, tags, and model reason are absent.
-- `memory plan discard` requires `--force`, deletes only the exact thread plan,
-  and leaves cursor and candidates byte/record-equivalent.
-- Missing and corrupt show operations return non-zero; corrupt diagnostics use
-  the shared exception sanitizer and include fixed repair commands.
-- Focused curator/CLI tests: 42 passed.
-- Full suite: 2183 passed.
+- Curator runtime and CLI discard currently share plan decoding/path rules but
+  do not coordinate mutations.
+- A daemon run can save or resume a plan while CLI simultaneously unlinks it;
+  two daemon triggers can also model and stage the same source concurrently.
+- ThreadStore's lock cannot guard the full curator run without blocking chat
+  persistence for the duration of the model call.
+- Chosen design: a separate non-blocking advisory lock per curator thread.
+- `MemoryCuratorPlanStore.exclusive()` now owns the stable lock path and both
+  daemon curation and CLI discard use it as the single mutation boundary.
+- Curator contention emits the sealed `memory/curator_contended` deferred event
+  and returns zero changes before loading the thread or invoking the model.
+- CLI contention returns non-zero and retains the exact plan. Inspection
+  remains lock-free because plan writes are atomic snapshots.
+- `source_trace_id` now flows through the call instead of shared curator
+  instance state, preserving different-thread concurrency.
+- A spawned-process test proves same-thread exclusion; focused tests also prove
+  different-thread independence, stable lock files, exception release, dual
+  failure provenance, and no cursor/candidate mutation under contention.
+- Focused curator/CLI/audit/lock tests: 385 passed.
+- Full suite: 2191 passed.
 - Pyright: 0 errors, 0 warnings.
 - Exception-presentation guard and `git diff --check` passed.
-- Final CI run `30449234437` passed Python 3.13/3.14 but exposed a
-  pre-existing fixed-sleep race in the Python 3.12 reflection scheduler test.
-  The test now waits on an explicit event set after the outbox write and always
-  stops the worker in `finally`.
-- Focused scheduler test: 1 passed. Repeated full suite: 2183 passed. Pyright
-  remains at 0 errors/0 warnings and `git diff --check` passes; replacement
-  final-push CI is pending.
 
 ## Publication
 
-Curator plan diagnostics, explicit repair, modularization, and local validation
-are committed in `afd4e69`. Publication and final-push CI are the remaining
-gates.
+Implementation and local validation complete. Functional commit and
+intermediate publication are pending; CI will be tracked only after the final
+push of the broader infrastructure review.
 
 ## Next Review Batch
 
-After this boundary is complete, inspect cross-process curator locking so CLI
-repair cannot race a daemon curation run.
+After this boundary is complete, run a requirement-by-requirement completion
+audit over the shared handler/log/event/error infrastructure review.

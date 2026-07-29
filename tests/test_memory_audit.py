@@ -16,6 +16,7 @@ _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
         "curator_history_gap",
         {"thread_id": "thread-1", "cursor": 2, "visible_start": 5},
     ),
+    ("curator_contended", {"thread_id": "thread-1"}),
     (
         "curator_deferred",
         {

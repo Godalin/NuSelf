@@ -24,6 +24,7 @@ from nuself.memory.curator import (
     MemoryCuratorSettings,
     _actions_from_output,  # pyright: ignore[reportPrivateUsage]
 )
+from nuself.memory.curator_plan import MemoryCuratorPlanStore
 from nuself.memory.repository import (
     MemoryCandidateCommitError,
     MemoryCandidateRepository,
@@ -601,6 +602,59 @@ def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None
     assert result.processed_messages == 0
     assert result.created == 0
     assert repo.list() == []
+
+
+def test_memory_curator_contention_is_deferred_without_model_or_mutation(
+    tmp_path: Path,
+) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "Remember this sufficiently detailed durable decision "
+                        "so contention must prevent the curator model call."
+                    ),
+                ),
+            ],
+        )
+    )
+    agent = _curator_agent(
+        '{"actions":[{"action":"ignore","reason":"not reached"}]}'
+    )
+    curator = MemoryCurator(
+        tmp_path,
+        agent=agent,
+        thread_store=thread_store,
+        settings=MemoryCuratorSettings(auto_accept=False),
+    )
+
+    with MemoryCuratorPlanStore(tmp_path).exclusive("default"):
+        result = curator.run_once()
+
+    assert result.processed_messages == 0
+    assert result.created == 0
+    assert result.updated == 0
+    assert result.ignored == 0
+    assert agent.calls == []
+    assert MemoryCandidateRepository(tmp_path).list() == []
+    assert not (
+        tmp_path / "private" / "memory" / "cursors" / "default.json"
+    ).exists()
+    events = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="memory",
+        )
+        if event.event == "curator_contended"
+    ]
+    assert len(events) == 1
+    assert events[0].status == "deferred"
+    assert events[0].metadata == {"thread_id": "default"}
 
 
 @pytest.mark.parametrize(

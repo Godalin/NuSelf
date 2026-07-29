@@ -435,6 +435,8 @@ All memory subcommands follow the same list/detail/empty/error contracts.
 - `memory plan discard <thread> --force` deletes only that thread's curator
   plan. It never advances or rewinds the cursor and requires the explicit
   `--force` acknowledgement because the source may be modeled again.
+  If that thread is currently being curated, it returns non-zero immediately
+  and does not wait or delete the plan.
 
 ## Discussion Trace Contract
 

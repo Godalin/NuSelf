@@ -1951,6 +1951,52 @@ def test_memory_plan_discard_requires_force() -> None:
     assert captured.value.code == 2
 
 
+def test_memory_plan_discard_fails_without_deleting_when_busy(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+) -> None:
+    store = MemoryCuratorPlanStore(tmp_path)
+    plan = store.save(
+        MemoryCuratorPlan(
+            thread_id="default",
+            source_start=0,
+            source_end=1,
+            observed_at="2026-07-29T00:00:00+00:00",
+            actions=(
+                MemoryAction(
+                    action="ignore",
+                    title="",
+                    body="",
+                    reason="busy plan must be retained",
+                ),
+            ),
+        )
+    )
+
+    with store.exclusive("default"):
+        result = main(
+            [
+                "--project-root",
+                str(tmp_path),
+                "memory",
+                "plan",
+                "discard",
+                "default",
+                "--force",
+            ]
+        )
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert captured.out == ""
+    assert (
+        captured.err
+        == "Curator plan is busy for thread: default; "
+        "no plan was discarded.\n"
+    )
+    assert store.get("default") == plan
+
+
 def test_memory_plan_show_missing_is_an_explicit_error(
     tmp_path: Path,
     capsys: CaptureFixture,

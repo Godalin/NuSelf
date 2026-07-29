@@ -7,6 +7,7 @@ import sys
 
 from nuself.memory.curator_plan import (
     MemoryCuratorPlanCorruptError,
+    MemoryCuratorPlanLockContended,
     MemoryCuratorPlanNotFound,
     MemoryCuratorPlanStore,
 )
@@ -58,6 +59,13 @@ def handle_memory_plan_discard(args: argparse.Namespace) -> int:
     store = MemoryCuratorPlanStore(args.project_root)
     try:
         store.discard(args.thread_id)
+    except MemoryCuratorPlanLockContended:
+        print(
+            "Curator plan is busy for thread: "
+            f"{args.thread_id}; no plan was discarded.",
+            file=sys.stderr,
+        )
+        return 1
     except MemoryCuratorPlanNotFound:
         print(
             f"Curator plan not found for thread: {args.thread_id}",
