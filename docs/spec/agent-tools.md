@@ -66,6 +66,13 @@ failures advance to the next endpoint. Missing state, dictionary-shaped
 responses, wrong schema instances, and other protocol failures are surfaced
 without parsing final message text or trying another response protocol.
 
+The shared runner delegates each per-endpoint availability observation to the
+sealed agent endpoint audit registry. The registry admits exactly the Chat,
+Memory, Persona, Reason, and Reflection components and owns the fixed
+failed-over/exhausted presentation plus exact safe metadata. Capability owners
+retain aggregate exhaustion, fallback, and domain retry events; the endpoint
+audit adapter does not make retry or failover decisions.
+
 Subsystems own their prompts and domain conversion after this boundary. They
 must not wrap the runner with prompted JSON, fenced-text extraction,
 `model_validate_json`, or schema-default compatibility behavior.

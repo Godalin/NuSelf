@@ -11,12 +11,12 @@ from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
+from nuself.agent.endpoint_audit import AgentEndpointComponent
 from nuself.agent.failover import invoke_agent_endpoint
 from nuself.llm import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
 )
-from nuself.logs import LogComponent
 
 StructuredOutputT = TypeVar(
     "StructuredOutputT",
@@ -43,11 +43,11 @@ class LangChainStructuredAgent(Generic[StructuredOutputT]):
         *,
         endpoints: tuple[LangChainLLMEndpoint, ...],
         project_root: Path | None = None,
-        component: LogComponent,
+        component: AgentEndpointComponent,
     ) -> None:
         self._schema = schema
         self._project_root = project_root
-        self._component: LogComponent = component
+        self._component: AgentEndpointComponent = component
         create_agent = cast(Any, _create_agent)
         self._agents = {
             endpoint.index: create_agent(
@@ -107,7 +107,7 @@ def default_structured_agent(
     schema: type[StructuredOutputT],
     *,
     project_root: Path | None = None,
-    component: LogComponent,
+    component: AgentEndpointComponent,
 ) -> StructuredAgent[StructuredOutputT]:
     """Build the configured framework-native runner for one schema."""
     return LangChainStructuredAgent(

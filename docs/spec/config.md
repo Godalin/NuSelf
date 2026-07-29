@@ -124,8 +124,20 @@ Rules:
 - When an endpoint fails with a provider-account availability error, NuSelf tries the next configured endpoint in the same request.
 - Provider-account availability errors include HTTP 401, 402, 403, 429, and response bodies containing subscription, quota, billing, credit, or insufficient-balance indicators.
 - Non-account errors, malformed responses, and prompt/protocol errors are not endpoint failover triggers unless explicitly classified later.
-- Failover attempts are logged without exposing API keys.
-- The `llm_endpoint_failed_over` log is emitted only when a later configured endpoint will actually be tried. If the failed endpoint is the last available endpoint, NuSelf logs `llm_endpoint_unavailable` with `status=exhausted` instead.
+- Endpoint failover observations are owned by one sealed agent endpoint audit
+  registry. Only the `chat`, `memory`, `persona`, `reasoning`, and `reflection`
+  components may emit them.
+- `llm_endpoint_failed_over` is emitted with `status=failed_over` only when a
+  later configured endpoint will actually be tried.
+- `llm_endpoint_unavailable` is emitted with `status=exhausted` when the failed
+  endpoint is the last available endpoint. It is a per-endpoint observation;
+  the capability owner retains its separate aggregate exhaustion or fallback
+  contract.
+- Both endpoint events are warnings, require a redacted error, and have exact
+  metadata `{endpoint_index, model}`. The index is a non-negative integer and
+  the model is a non-blank string.
+- Endpoint audit metadata never contains API keys, endpoint base URLs, prompts,
+  responses, or raw provider exception text.
 
 ## Chat Daemon Request Timeout
 

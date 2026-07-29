@@ -425,6 +425,14 @@ projection are secondary. Failure of those projections or their diagnostics
 cannot discard a valid response, skip the next configured attempt, prevent
 local fallback, or replace a completed chat answer with an exception.
 
+The shared agent endpoint audit adapter receives a failure only after the
+runner has classified it and decided whether another endpoint exists. It
+redacts provider diagnostics before validation and persistence. The adapter
+cannot alter availability classification, attempt counts, endpoint order,
+raised exception identity, aggregate capability failure, or domain-specific
+retry behavior. Failure to persist the audit remains secondary and uses the
+shared terminal-warning boundary.
+
 Chat's local response policy is not an exception sink for implementation
 defects. Before any tool executes, the shared policy rejects assertion,
 attribute, import, lookup, memory exhaustion, name resolution, unimplemented

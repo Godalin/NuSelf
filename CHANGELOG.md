@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Shared Chat, Memory, Persona, Reason, and Reflection endpoint failover
+  observations now use one sealed audit contract with fixed presentation and
+  exact safe metadata; endpoint base URLs are no longer persisted.
 - Agent tool completion logs now come exclusively from framework middleware
   through one validated outcome projection shared by Chat, Reason, and
   persisted Reason step snapshots. Approval wrappers no longer emit duplicate

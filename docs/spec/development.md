@@ -280,6 +280,10 @@ under the same package.
 - `runtime/observability.py` owns the sealed secondary-failure taxonomy.
   Domain audit writers and event publishers provide only the failed primary
   identity; they never define local write/delivery failure event aliases.
+- `agent/endpoint_audit.py` owns the sealed per-endpoint failover/exhaustion
+  audit schemas for Chat, Memory, Persona, Reason, and Reflection.
+  `agent/failover.py` retains control-flow ownership and supplies only the
+  already-decided endpoint outcome plus safe endpoint identity fields.
   `cli/daemon_lifecycle.py` owns shared observable start/stop/restart
   orchestration and typed transition projection for one-shot, launch, and REPL
   surfaces.

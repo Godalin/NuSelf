@@ -179,6 +179,20 @@ response. Persisting the last successful endpoint is also a derived preference:
 its failure is reported as `llm_endpoint_state_write_failed` without discarding
 the response.
 
+Shared per-endpoint availability diagnostics are owned by one sealed agent
+endpoint audit registry for the `chat`, `memory`, `persona`, `reasoning`, and
+`reflection` components:
+
+| Event | Fixed level | Fixed status | Exact metadata |
+|---|---|---|---|
+| `llm_endpoint_failed_over` | `warning` | `failed_over` | `endpoint_index`, `model` |
+| `llm_endpoint_unavailable` | `warning` | `exhausted` | `endpoint_index`, `model` |
+
+Both events require a redacted structured error. Their messages are fixed by
+the registry adapter. Endpoint URLs and API keys are forbidden. These records
+describe one failed endpoint and remain distinct from caller-owned retry,
+aggregate exhaustion, and fallback events.
+
 Direct Chat diagnostics are owned by a sealed Chat audit registry. LLM retry
 records may retain a non-negative configured endpoint index and model name,
 but never the endpoint base URL. Client retry records use the standard

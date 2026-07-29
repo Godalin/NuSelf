@@ -6,16 +6,17 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TypeVar
 
+from nuself.agent.endpoint_audit import (
+    AgentEndpointComponent,
+    report_agent_endpoint_failure,
+)
 from nuself.llm import (
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
     record_llm_endpoint_success,
-    redacted_llm_diagnostic,
     redact_llm_error,
 )
-from nuself.logs import LogComponent
 from nuself.runtime.diagnostics import safe_exception_message
-from nuself.runtime.observability import report_observed_failure
 
 
 ResultT = TypeVar("ResultT")
@@ -47,7 +48,7 @@ def invoke_agent_endpoint(
     operation: Callable[[LangChainLLMEndpoint], ResultT],
     *,
     project_root: Path | None,
-    component: LogComponent,
+    component: AgentEndpointComponent,
     attempts_per_endpoint: int = 1,
     retry_if: FailurePredicate | None = None,
     failover_if: FailurePredicate | None = None,
@@ -79,9 +80,10 @@ def invoke_agent_endpoint(
                 if not should_failover(exc):
                     raise
                 has_next = position + 1 < len(endpoints)
-                _report_endpoint_failure(
+                report_agent_endpoint_failure(
                     exc,
-                    endpoint=endpoint,
+                    endpoint_index=endpoint.index,
+                    model=endpoint.settings.model,
                     has_next=has_next,
                     project_root=project_root,
                     component=component,
@@ -103,35 +105,3 @@ def invoke_agent_endpoint(
 
 def _is_availability_failure(exc: Exception) -> bool:
     return is_endpoint_availability_error(safe_exception_message(exc))
-
-
-def _report_endpoint_failure(
-    exc: Exception,
-    *,
-    endpoint: LangChainLLMEndpoint,
-    has_next: bool,
-    project_root: Path | None,
-    component: LogComponent,
-) -> None:
-    report_observed_failure(
-        redacted_llm_diagnostic(exc),
-        component=component,
-        event=(
-            "llm_endpoint_failed_over"
-            if has_next
-            else "llm_endpoint_unavailable"
-        ),
-        message=(
-            "LLM endpoint failed; trying next configured endpoint"
-            if has_next
-            else "LLM endpoint failed and no fallback endpoint remains"
-        ),
-        project_root=project_root,
-        level="warning",
-        status="failed_over" if has_next else "exhausted",
-        metadata={
-            "endpoint_index": endpoint.index,
-            "base_url": endpoint.settings.base_url,
-            "model": endpoint.settings.model,
-        },
-    )

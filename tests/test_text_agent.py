@@ -8,6 +8,7 @@ import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
+from nuself.agent import endpoint_audit
 from nuself.agent import failover as failover_module
 from nuself.agent.text import LangChainTextAgent
 from nuself.llm import LLMSettings, LangChainLLMEndpoint
@@ -112,7 +113,7 @@ def test_text_agent_uses_shared_endpoint_failover(
         del project_root, endpoint_index
 
     monkeypatch.setattr(
-        failover_module,
+        endpoint_audit,
         "report_observed_failure",
         report_failure,
     )

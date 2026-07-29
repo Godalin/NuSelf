@@ -8,12 +8,12 @@ from typing import Protocol
 
 from langchain_core.messages import BaseMessage
 
+from nuself.agent.endpoint_audit import AgentEndpointComponent
 from nuself.agent.failover import invoke_agent_endpoint
 from nuself.llm import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
 )
-from nuself.logs import LogComponent
 
 
 class TextAgent(Protocol):
@@ -30,11 +30,11 @@ class LangChainTextAgent:
         *,
         endpoints: tuple[LangChainLLMEndpoint, ...],
         project_root: Path | None = None,
-        component: LogComponent,
+        component: AgentEndpointComponent,
     ) -> None:
         self._endpoints = endpoints
         self._project_root = project_root
-        self._component: LogComponent = component
+        self._component: AgentEndpointComponent = component
 
     def invoke(self, messages: Sequence[BaseMessage]) -> str:
         def complete(endpoint: LangChainLLMEndpoint) -> str:
@@ -55,7 +55,7 @@ class LangChainTextAgent:
 def default_text_agent(
     *,
     project_root: Path | None = None,
-    component: LogComponent,
+    component: AgentEndpointComponent,
 ) -> TextAgent:
     """Build the configured framework-native free-text runner."""
     return LangChainTextAgent(
