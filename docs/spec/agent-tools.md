@@ -588,23 +588,33 @@ Python callables is not such a contract.
 
 The prompt interaction, approval decision, wrapped callable, original callable
 exception, and structured approval result are primary effects.
-`approval_prompted` and `service_tool_approved` are secondary observations and
-use shared best-effort observability. The approval record is written after an
-affirmative decision and before executing the callable; the middleware-owned
-tool outcome records subsequent success or failure:
+`approval_prompted` and `approval_decided` are secondary observations and use
+one sealed shared approval-audit contract. `approval_prompted` has fixed
+message/status policy and exact `tool`/`summary` metadata.
+`approval_decided` has fixed message/status policy and exact `tool`,
+`approved`, nullable `approver`, and `input_kind` metadata. `input_kind` is one
+of `affirmative`, `declined`, or `eof`; EOF is recorded as a negative decision
+without pretending that a user explicitly rejected the action.
+
+The decision record is written before an approved callable executes or a
+declined call returns. The middleware-owned tool outcome records subsequent
+execution success or failure:
 
 - prompt rendering and stdout failures propagate unchanged rather than being
   represented as a user decline;
 - stdin EOF means no affirmative approval was received and therefore follows
-  the safe-default decline path;
+  the safe-default decline path and records `input_kind="eof"`;
 - unexpected input failures propagate unchanged; they are not user decisions;
 - every render, output, EOF, input-failure, and explicit-decline path leaves
   the wrapped callable unexecuted;
 
 - audit persistence failure never skips the prompt, changes a decline, replaces
   an approved result, or masks the wrapped callable's exception;
+- invalid event names, missing or extra fields, wrong types, and invalid
+  `input_kind` values are programming errors rejected before the best-effort
+  sink;
 - each failed audit write emits a structured degraded diagnostic containing
-  the failed operation and tool name;
+  the failed event and tool name;
 - if that diagnostic cannot be persisted, a `RuntimeWarning` is emitted while
   the primary approval flow continues;
 - neither an audit failure nor its diagnostic triggers a prompt, callable, or

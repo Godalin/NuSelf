@@ -250,7 +250,17 @@ Rules:
   presentation so a later file fallback returns only events not already
   delivered.
 - Chat service-tool logs should include the active `thread_id` and, when available, the logical top-level `turn_id` so a tool call can be tied back to one chat turn.
-- Approval-gated tool execution writes an `approval_prompted` event before waiting for confirmation. The live REPL treats it as user-relevant interactive activity so the visible prompt appears before input is read.
+- Approval-gated tool execution writes `approval_prompted` before waiting for
+  confirmation. The live REPL treats it as user-relevant interactive activity
+  so the visible prompt appears before input is read.
+- Every completed approval interaction writes exactly one `approval_decided`
+  event before returning or invoking the approved callable. Its exact metadata
+  is `tool`, boolean `approved`, nullable `approver`, and
+  `input_kind=affirmative|declined|eof`. It is a decision record, not a tool
+  execution record.
+- Approval events use one sealed shared definition registry with fixed
+  messages, levels, statuses, forbidden errors/durations, and exact metadata.
+  Decorators do not choose projection defaults locally.
 
 Observed runtime-event publication treats only subscriber delivery failure as
 a best-effort projection failure. If one or more subscribers fail, all matching

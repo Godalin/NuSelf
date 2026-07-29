@@ -19,6 +19,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   persisted Reason step snapshots. Approval wrappers no longer emit duplicate
   pre-call or executed records, and failed snapshots retain the canonical
   top-level error.
+- Approval prompts and decisions now use one sealed audit contract with fixed
+  projection policy and exact metadata. Explicit rejection and EOF safe
+  rejection are durably distinguished, while approval events no longer imply
+  that the approved tool completed successfully.
 - Internal job wake-ups now resolve through sealed name, producer, and payload
   definitions before queue mutation; Reason export workers reject invalid jobs
   at ingress instead of queueing and later emitting

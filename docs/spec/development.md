@@ -167,6 +167,9 @@ Rules:
   implementations must not create parallel tool-execution audit events.
 - Approval wrappers own approval intent and decision records only. They must
   not duplicate the middleware-owned completed tool outcome.
+- Shared approval audit definitions are sealed before runtime use. The wrapper
+  supplies only schema data; fixed message, level, status, error, duration, and
+  failure-diagnostic policy belong to the approval audit adapter.
 
 ## Subsystem Service Architecture
 

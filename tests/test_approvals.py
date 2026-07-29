@@ -58,7 +58,7 @@ def test_approval_prompt_is_visible(monkeypatch: pytest.MonkeyPatch, capsys: pyt
     assert payload.get("component") == "chat"
     assert payload.get("result") == "done alice"
     assert any(event == "approval_prompted" for _, event, _ in events)
-    assert any(event == "service_tool_approved" for _, event, _ in events)
+    assert any(event == "approval_decided" for _, event, _ in events)
 
 
 def test_approval_decision_is_observed_before_tool_execution(
@@ -94,7 +94,7 @@ def test_approval_decision_is_observed_before_tool_execution(
 
     assert order == [
         "approval_prompted",
-        "service_tool_approved",
+        "approval_decided",
         "tool_body",
     ]
 
@@ -150,7 +150,7 @@ def test_approval_audit_failures_do_not_replace_approved_result(
             "approval_audit_failed",
             "audit store unavailable",
                 {
-                    "operation": "approval_prompted",
+                    "event": "approval_prompted",
                     "tool": "tool",
                     "audit_event": "approval_prompted",
                 },
@@ -159,9 +159,9 @@ def test_approval_audit_failures_do_not_replace_approved_result(
             "approval_audit_failed",
             "audit store unavailable",
                 {
-                    "operation": "service_tool_approved",
+                    "event": "approval_decided",
                     "tool": "tool",
-                    "audit_event": "service_tool_approved",
+                    "audit_event": "approval_decided",
                 },
         ),
     ]
@@ -197,9 +197,14 @@ def test_approval_prompt_audit_failure_does_not_change_decline(
     }
     assert failures == [
         {
-            "operation": "approval_prompted",
+            "event": "approval_prompted",
             "tool": "tool",
             "audit_event": "approval_prompted",
+        },
+        {
+            "event": "approval_decided",
+            "tool": "tool",
+            "audit_event": "approval_decided",
         },
     ]
 
@@ -208,11 +213,27 @@ def test_approval_eof_uses_safe_default_without_executing_tool(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
+    decisions: list[object] = []
 
     def end_input() -> str:
         raise EOFError("stdin closed")
 
     monkeypatch.setattr("builtins.input", end_input)
+
+    def capture(
+        _component: str,
+        event: str,
+        _message: str,
+        **kwargs: object,
+    ) -> object:
+        if event == "approval_decided":
+            decisions.append(kwargs.get("metadata"))
+        return object()
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        capture,
+    )
 
     @approval_required("chat")
     def tool() -> str:
@@ -225,6 +246,14 @@ def test_approval_eof_uses_safe_default_without_executing_tool(
         "result": None,
     }
     assert calls == []
+    assert decisions == [
+        {
+            "tool": "tool",
+            "approved": False,
+            "approver": None,
+            "input_kind": "eof",
+        }
+    ]
 
 
 def test_approval_render_failure_propagates_without_executing_tool(

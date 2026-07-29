@@ -6,26 +6,10 @@ from functools import wraps
 from typing import Any, Callable
 
 from nuself.logs import LogComponent
-from nuself.runtime.observability import write_observed_log_event
-
-
-def _write_approval_audit(
-    component: LogComponent,
-    event: str,
-    message: str,
-    *,
-    tool: str,
-    metadata: dict[str, object],
-) -> None:
-    write_observed_log_event(
-        component,
-        event,
-        message,
-        metadata=metadata,
-        failure_event="approval_audit_failed",
-        failure_message=f"Could not persist approval audit: {event}",
-        failure_metadata={"operation": event, "tool": tool},
-    )
+from nuself.decorators.approval_audit import (
+    write_approval_decided,
+    write_approval_prompted,
+)
 
 
 def approval_required(
@@ -42,12 +26,10 @@ def approval_required(
             # Always prompt the user synchronously and execute immediately on confirmation.
             # Record the event first, then render a theme-consistent banner so
             # interactive users see the pending action before the question.
-            _write_approval_audit(
+            write_approval_prompted(
                 component,
-                "approval_prompted",
-                summary,
                 tool=fn.__name__,
-                metadata={"tool": fn.__name__, "summary": summary},
+                summary=summary,
             )
             from nuself.tui.render import render_approval_prompt
 
@@ -65,20 +47,40 @@ def approval_required(
             try:
                 resp = input()
             except EOFError:
-                resp = "n"
+                write_approval_decided(
+                    component,
+                    tool=fn.__name__,
+                    approved=False,
+                    approver=None,
+                    input_kind="eof",
+                )
+                return json.dumps(
+                    {
+                        "approved": False,
+                        "component": component,
+                        "result": None,
+                    }
+                )
             if resp.strip().lower() in {"y", "yes"}:
                 approver = getpass.getuser()
-                _write_approval_audit(
+                write_approval_decided(
                     component,
-                    "service_tool_approved",
-                    f"{component} approved by {approver}",
                     tool=fn.__name__,
-                    metadata={"tool": fn.__name__, "approver": approver},
+                    approved=True,
+                    approver=approver,
+                    input_kind="affirmative",
                 )
                 result = fn(*args, **kwargs)
                 # Return a structured JSON string that preserves the underlying result
                 return json.dumps({"approved": True, "component": component, "approver": approver, "result": result})
             # Cancellation also returns a structured JSON string indicating no approval
+            write_approval_decided(
+                component,
+                tool=fn.__name__,
+                approved=False,
+                approver=None,
+                input_kind="declined",
+            )
             return json.dumps({"approved": False, "component": component, "result": None})
 
         return wrapper
