@@ -5,10 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Remove ad hoc per-turn thread ownership from interactive activity. One-shot
-execution must atomically own start, result/exception handoff, and completion,
-and no poll, presentation, or process-control path may abandon an in-flight
-authoritative send.
+Make process-local log projection a bounded, composition-validated boundary.
+Nested log writes must never recurse through an already-active projection, and
+projection failure must remain secondary to the completed durable log append.
 
 ## Active Branch
 
@@ -16,61 +15,62 @@ authoritative send.
 
 ## Ordered Work
 
-1. Inventory raw threads, join paths, start rollback, exception handoff, and
-   cancellation claims.
-2. Separate long-lived `OwnedWorker` lifecycle from one-shot result execution.
-3. Specify a shared `OwnedCall` with exact start, completion, timeout, and
-   exception-identity contracts.
-4. Migrate live activity send and remove result/error/control side-channel
-   lists.
-5. Prove start rollback, single execution, timeout observation, exact exception
-   transport, and cleanup after poll/presentation/control failures.
+1. Inventory process-local log projection storage, ordering, restoration,
+   production callbacks, and failure diagnostics.
+2. Reproduce non-callable delayed failure and reentrant logging behavior.
+3. Specify bounded synchronous projection, composition validation, and active
+   attachment identity semantics.
+4. Replace the general observation API and migrate every caller.
+5. Prove direct/mutual recursion suppression, duplicate callable identity,
+   nested ordering/restoration, failure isolation, and thread non-inheritance.
 6. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No unsafe Python thread termination.
-- No claim that a join timeout cancels model or daemon work.
-- No agent/model cooperative cancellation protocol in this batch.
-- No change to retry, activity rendering, or send-result policy.
+- No asynchronous log projection worker without a concrete production need.
+- No compatibility alias for `observe_log_events(...)`.
+- No rename of the persisted historical `log_observer_failed` audit identity.
+- No change to durable append, fsync, rotation, or retention behavior.
 
 ## Completion Evidence
 
-- Inventory found one raw production thread in live activity send.
-- Normal completion and main-thread `KeyboardInterrupt` joined it, but
-  unexpected polling or presentation failure could return while it remained
-  alive.
-- The control path waited only 0.5 seconds and then abandoned a still-running
-  daemon thread; this was not real cancellation.
-- Daemon requests have configured socket timeouts, while local one-shot model
-  calls expose no shared cooperative cancellation contract.
-- `runtime.execution.OwnedCall` now owns one non-daemon result-producing thread,
-  duplicate-safe start, atomic start rollback, exact value/error outcome, and
-  finite non-negative wait timeouts.
-- The target transports the same escaping `BaseException` object and traceback;
-  it does not convert process-control state into an ordinary failure.
-- Live activity send uses `OwnedCall`; ad hoc result, error, and control lists
-  plus its raw daemon thread were removed.
-- Unexpected poll/presentation failures and main-thread control exceptions wait
-  for the started send to finish before returning or re-raising. Start failure
-  still closes an opened activity subscription.
-- Static search finds thread construction only inside shared `OwnedWorker` and
-  `OwnedCall` owners.
-- Focused execution, REPL activity, and worker tests: 30 passed.
-- Full suite: 2111 passed.
+- The only production attachment is request-scoped
+  `ActivityBroker.publish`, a bounded in-memory projection.
+- Current scope composition accepts non-callables and misreports their delayed
+  `TypeError` as a runtime observer failure after a later log append.
+- A projection that writes a log immediately receives its own nested record
+  again; no active-delivery identity prevents direct or mutual recursion.
+- Failure diagnostics already suspend all projections before writing the
+  historical `daemon/log_observer_failed` record.
+- The public scope API is now `project_log_events(...)`; the old generalized
+  `observe_log_events(...)` name was removed without a compatibility alias.
+- Scope composition rejects non-callables before any log append.
+- Each attachment owns a UUID identity. A separate active-identity
+  `ContextVar` skips projections already present anywhere in a nested delivery
+  chain while preserving ordered delivery to other attachments.
+- Two scopes using the same callable remain distinct attachments rather than
+  being incorrectly deduplicated by callable identity.
+- Ordinary projection exceptions retain the historical sealed
+  `daemon/log_observer_failed` diagnostic; process-control `BaseException`
+  values restore active state and propagate after the durable append.
+- Production request activity uses the renamed bounded projection boundary.
+- Focused log infrastructure, daemon activity, and request-handler tests:
+  91 passed.
+- Full suite: 2116 passed.
 - Pyright: 0 errors, 0 warnings.
-- `git diff --check` passed.
+- Static search found no old API/type/ContextVar references except the explicit
+  no-compatibility statement; `git diff --check` passed.
 
 ## Publication
 
-Owned one-shot execution was implemented in `b347f10`; milestone publication
-is pending this goal update and push.
+Guarded process-local log projection was implemented in `0434d6f`; milestone
+publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Review process-local log observation next. `observe_log_events(...)` is another
-synchronous callback boundary used to feed daemon live activity. Verify that
-its public semantics distinguish bounded in-process projection from arbitrary
-observation, that nested scope restoration and failure diagnostics cannot
-recurse, and that no slow or reentrant observer can unexpectedly acquire
-authoritative log-write ownership.
+Review internal message construction next. `RuntimeEnvelope` centralizes
+identity, context, version, and JSON-safe payloads, but event, job, and audit
+domains still enter it through different validation paths and some sites
+construct envelopes directly. Inventory whether invalid producer/name pairs or
+domain payloads can exist before ingress, persistence, or projection, and
+whether one sealed factory/definition boundary should own construction.
