@@ -57,6 +57,13 @@ discard must require an exact thread plus explicit destructive acknowledgement.
 - Full suite: 2183 passed.
 - Pyright: 0 errors, 0 warnings.
 - Exception-presentation guard and `git diff --check` passed.
+- Final CI run `30449234437` passed Python 3.13/3.14 but exposed a
+  pre-existing fixed-sleep race in the Python 3.12 reflection scheduler test.
+  The test now waits on an explicit event set after the outbox write and always
+  stops the worker in `finally`.
+- Focused scheduler test: 1 passed. Repeated full suite: 2183 passed. Pyright
+  remains at 0 errors/0 warnings and `git diff --check` passes; replacement
+  final-push CI is pending.
 
 ## Publication
 

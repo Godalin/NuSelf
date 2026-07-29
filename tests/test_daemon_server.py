@@ -965,6 +965,7 @@ def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: P
     """End-to-end: daemon starts reflection scheduler thread, which reflects and creates an outbox entry."""
     state = DaemonState(tmp_path)
     state.reflection_check_interval_seconds = 0.05
+    reflected = threading.Event()
 
     class MockScheduler:
         def should_reflect(self, now: object = None) -> bool:
@@ -981,15 +982,16 @@ def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: P
                     idempotency_key="reflection-test-key",
                 )
             )
+            reflected.set()
             return True
 
     state.reflection_scheduler = MockScheduler()  # type: ignore[assignment]
     state.start_background_reflection_scheduler()
-
-    time.sleep(0.15)
-
-    state.shutdown_requested.set()
-    state.stop_background_reflection_scheduler()
+    try:
+        assert reflected.wait(timeout=1)
+    finally:
+        state.shutdown_requested.set()
+        state.stop_background_reflection_scheduler()
 
     outbox = NotificationOutbox(tmp_path)
     entries = outbox.list()
