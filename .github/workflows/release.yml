@@ -7,14 +7,16 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.12"
       - name: Install uv
@@ -34,25 +36,15 @@ jobs:
         run: |
           cd dist
           sha256sum * > SHA256SUMS
+      - name: Attest build provenance
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: "dist/*"
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           body: |
             Automated release for ${{ github.ref_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v1
-        with:
           files: dist/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # PyPI publication intentionally disabled here. To enable, add a
-      # `PYPI_API_TOKEN` secret and restore the following step:
-      # - name: Publish to PyPI (optional)
-      #   if: secrets.PYPI_API_TOKEN != ''
-      #   uses: pypa/gh-action-pypi-publish@v1.5.1
-      #   with:
-      #     password: ${{ secrets.PYPI_API_TOKEN }}

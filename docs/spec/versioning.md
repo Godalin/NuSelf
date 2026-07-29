@@ -85,6 +85,12 @@ The release workflow runs `scripts/check_release.py` before building: tag,
 `pyproject.toml`, runtime fallback version, and dated changelog heading must
 agree exactly. CI and release both build with `uv build` and smoke-test the
 wheel in a clean virtual environment. Release assets include SHA256 checksums.
+Every executable third-party action reference in CI and release workflows must
+be pinned to a full commit SHA with its human-readable release tag recorded in
+an adjacent comment. The release job must grant only the repository-content,
+OIDC-token, and attestation permissions needed to publish its assets and must
+generate GitHub build-provenance attestations for the distributions and
+checksum manifest before creating the release.
 
 NuSelf supports Linux and macOS. Windows is not supported because runtime
 coordination currently requires POSIX advisory locks and Unix-domain sockets.

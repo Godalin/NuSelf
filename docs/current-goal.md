@@ -142,6 +142,12 @@ trustworthy 0.3.0 release candidate.
   repositories. The migration explicitly normalizes legacy memory relation
   fields while malformed relation shapes remain fail-closed.
 - Focused storage migration and memory repository coverage: 94 passed.
+- All executable CI/release actions are pinned to immutable 40-character
+  commits with readable release labels. Release now grants explicit content,
+  OIDC, and attestation permissions, generates SHA256SUMS, and attests every
+  distribution/checksum artifact before one release-upload step.
+- Workflow and release-contract coverage: 6 passed; both workflow files parse
+  as YAML.
 - Full pyright remains the only local gate pending after its cache attempted a
   blocked refresh and the explicit retry approval service disconnected.
 - Remaining external findings require fault-injection or contract-level
@@ -153,4 +159,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-Pinned release automation, build provenance, and full validation.
+Full local validation, final push, and development-branch CI.
