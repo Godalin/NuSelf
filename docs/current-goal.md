@@ -60,7 +60,9 @@ cursor advancement and replaying the same source into duplicate candidates.
 
 ## Publication
 
-Pending implementation, validation, publication, and final-push CI.
+Daemon test stabilization is committed in `e8dac68`; the curator replay fix and
+local validation are committed in `987cbc5`. Publication and final-push CI are
+the remaining gates.
 
 ## Next Review Batch
 
