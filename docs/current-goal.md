@@ -5,8 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The OpenCode Go chat-response and opt-in live-provider test goal is
-complete.
+Idle. The multi-model OpenCode Go protocol-matrix goal is complete.
 
 ## Active Branch
 
@@ -18,13 +17,32 @@ complete.
 
 ## Out Of Scope
 
-- No implementation work is active.
 - Live provider tests remain outside default pytest and CI and retain explicit
   network/cost opt-in.
+- The matrix does not load private threads, memory, personas, sources, or
+  runtime prompts.
+- The live catalog is a tested representative subset, not a promise that every
+  model currently listed by OpenCode has identical capabilities.
 - No 0.3.0 release tag until every release-candidate gate is proven.
 
 ## Completion Evidence
 
+- OpenCode Go live verification now has an explicit five-model, twenty-case
+  matrix spanning OpenAI-compatible and Anthropic Messages transports plus
+  structured output, NuSelf chat, and tool-plus-final-response behavior.
+- The final real OpenCode Go matrix reported 16 passed, 3 strict expected
+  failures, and 1 non-strict unstable pass. GLM 5.1, MiniMax M2.7, and Qwen
+  3.7 Plus passed every declared layer; DeepSeek V4 Flash's unsupported agent
+  capabilities and Kimi K2.6's unstable tool completion are encoded as visible
+  capability baselines rather than hidden skips.
+- Anthropic SDK URL normalization now converts the public OpenCode Go
+  `/zen/go/v1` endpoint to the SDK base without duplicating `/v1/messages`.
+  Thinking is explicitly disabled for the tested Anthropic agent path so Qwen
+  can use framework-managed tool selection.
+- A restarted daemon using the OpenCode Go MiniMax M2.7 Anthropic Messages
+  route returned the requested real chat response.
+- Locked Pyright reported 0 errors and 0 warnings. Full default pytest reported
+  2363 passed, and `uv build` produced both the 0.3.0rc1 sdist and wheel.
 - Diagnosis: the OpenCode Go route and OpenAI-compatible provider selection
   are correct. Anthropic Messages semantics return an HTML page on this route.
 - Diagnosis: the failed turn reached the provider but returned no LangChain
@@ -221,7 +239,8 @@ complete.
 
 ## Publication
 
-The reviewed implementation is published on `dev/v0.3.x` through `e426587`.
+The reviewed implementation is published on `dev/v0.3.x`; the goal-closure
+commit is the branch tip.
 
 ## Next Review Batch
 
