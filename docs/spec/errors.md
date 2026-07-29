@@ -255,10 +255,13 @@ boundary. Binding precedes PID publication, so bind failure cannot publish a
 current-process PID. Recovery audit failure remains secondary.
 
 Daemon readiness is authoritative only after socket binding, PID publication,
-and every worker start operation succeed. The server publishes `started` at
-that boundary and begins request handling afterward. A partial worker-start
-failure performs full cleanup without publishing either a successful `started`
-or `stopped` record. Failure of the `started` audit itself remains secondary and
+every worker start operation succeeds, and the sealed supervisor confirms that
+every registered worker is still `running` and alive. A worker that exits
+during startup makes readiness fail even when its thread was spawned
+successfully. The server publishes `started` only after that check and begins
+request handling afterward. A partial worker-start or startup-health failure
+performs full cleanup without publishing either a successful `started` or
+`stopped` record. Failure of the `started` audit itself remains secondary and
 does not undo readiness.
 
 Daemon status observation combines typed ping readiness and instance-lock

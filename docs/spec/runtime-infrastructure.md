@@ -215,6 +215,11 @@ registration and common lifecycle semantics over the neutral
   `daemon/thread_timeout` with worker and timeout, then raises
   `DaemonWorkerJoinTimeoutError`. The worker remains owned and may be joined
   again after it exits.
+- Before daemon readiness, the supervisor checks every sealed registration.
+  Each worker must have lifecycle state `running` and `alive=true`; otherwise a
+  typed `DaemonWorkerReadinessError` names the non-running workers and aborts
+  startup. A successful `start()` call alone is not readiness evidence because
+  the target may already have exited.
 - The supervisor owns only common execution semantics. `DaemonState` retains
   subsystem construction, interval values, concrete operations, and worker
   target registration; the process runner retains daemon startup/cleanup
@@ -1031,14 +1036,15 @@ Daemon readiness has one ordered publication boundary:
 1. bind the Unix socket;
 2. publish the current PID;
 3. start every owned background worker;
-4. project `daemon/started` and mark the lifecycle ready;
-5. begin accepting socket requests.
+4. require every registered worker to remain running and alive;
+5. project `daemon/started` and mark the lifecycle ready;
+6. begin accepting socket requests.
 
 The `started` projection is best-effort and cannot prevent readiness. A worker
-startup failure before step 4 is a startup failure: it runs full cleanup but
-must not publish `started` or the matching successful `stopped` lifecycle
-record. A daemon ping can succeed only after this boundary because request
-handling begins last.
+startup or startup-health failure before step 5 is a startup failure: it runs
+full cleanup but must not publish `started` or the matching successful
+`stopped` lifecycle record. A daemon ping can succeed only after this boundary
+because request handling begins last.
 
 Client lifecycle observation uses one explicit phase model:
 

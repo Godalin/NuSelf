@@ -138,6 +138,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
             state.start_background_reason_scheduler()
             state.start_background_export_worker()
             state.start_background_notification_delivery()
+            state.require_background_workers_ready()
             write_lifecycle_audit(
                 "started",
                 project_root=paths.project_root,

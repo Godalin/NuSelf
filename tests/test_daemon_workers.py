@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from nuself.daemon.workers import (
+    DaemonWorkerReadinessError,
     DaemonWorkerRegistrationError,
     DaemonWorkerSupervisor,
 )
@@ -209,3 +210,50 @@ def test_worker_return_before_shutdown_records_unexpected_exit(
         "operation_event": "worker_exited_unexpectedly",
         "error_type": "DaemonWorkerUnexpectedExitError",
     }
+    with pytest.raises(
+        DaemonWorkerReadinessError,
+        match="worker=stopped",
+    ):
+        supervisor.require_all_running()
+
+
+def test_worker_readiness_requires_every_registration_alive(
+    tmp_path: Path,
+) -> None:
+    shutdown_requested = threading.Event()
+    supervisor = DaemonWorkerSupervisor(
+        tmp_path,
+        shutdown_requested,
+        EventPublisher(),
+    )
+    release = threading.Event()
+
+    def wait_for_release() -> None:
+        release.wait()
+
+    supervisor.register(
+        "first",
+        thread_name="test-worker-ready-first",
+        target=wait_for_release,
+    )
+    supervisor.register(
+        "second",
+        thread_name="test-worker-ready-second",
+        target=wait_for_release,
+    )
+    supervisor.seal()
+
+    supervisor.start("first")
+    with pytest.raises(
+        DaemonWorkerReadinessError,
+        match="second=new",
+    ):
+        supervisor.require_all_running()
+
+    supervisor.start("second")
+    supervisor.require_all_running()
+
+    shutdown_requested.set()
+    release.set()
+    supervisor.join("first", timeout=1)
+    supervisor.join("second", timeout=1)

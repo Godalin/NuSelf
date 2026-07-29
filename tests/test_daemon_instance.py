@@ -398,6 +398,7 @@ class _UnstartedDaemonState:
         self.shutdown_requested = threading.Event()
         self.start_calls: list[str] = []
         self.stop_calls: list[str] = []
+        self.readiness_checks = 0
 
     def start_background_memory_curator(self) -> None:
         self.start_calls.append("memory")
@@ -413,6 +414,9 @@ class _UnstartedDaemonState:
 
     def start_background_notification_delivery(self) -> None:
         self.start_calls.append("notification")
+
+    def require_background_workers_ready(self) -> None:
+        self.readiness_checks += 1
 
     def stop_background_memory_curator(self) -> None:
         self.stop_calls.append("memory")
@@ -555,6 +559,7 @@ def test_readiness_is_published_after_all_workers_and_before_requests(
                 "export",
                 "notification",
             ]
+            assert states[0].readiness_checks == 1
             transitions.append("started")
         elif event == "stopped":
             assert transitions == ["started", "request"]
@@ -662,6 +667,97 @@ def test_partial_worker_start_failure_never_publishes_ready_lifecycle(
         "export",
         "notification",
     ]
+    assert not paths.socket_path.exists()
+    assert not paths.pid_path.exists()
+
+
+def test_worker_readiness_failure_never_publishes_ready_lifecycle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import signal
+    import nuself.daemon.server as server_module
+
+    paths = runtime_paths(tmp_path)
+    paths.runtime_dir.mkdir(parents=True)
+    states: list[_UnstartedDaemonState] = []
+    lifecycle_events: list[str] = []
+    readiness_error = RuntimeError("export worker already stopped")
+
+    class UnreadyState(_UnstartedDaemonState):
+        def require_background_workers_ready(self) -> None:
+            super().require_background_workers_ready()
+            raise readiness_error
+
+    class BoundServer:
+        timeout = 0.0
+
+        def __init__(
+            self,
+            socket_path: str,
+            handler: object,
+            state: object,
+        ) -> None:
+            paths.socket_path.write_text("bound", encoding="utf-8")
+
+        def __enter__(self) -> BoundServer:
+            return self
+
+        def __exit__(
+            self,
+            exc_type: object,
+            exc: object,
+            traceback: object,
+        ) -> None:
+            return None
+
+    def make_state(project_root: Path) -> UnreadyState:
+        state = UnreadyState(project_root)
+        states.append(state)
+        return state
+
+    def capture_lifecycle(event: str, **_kwargs: object) -> None:
+        lifecycle_events.append(event)
+
+    def ignore_signal(
+        signal_number: int,
+        handler: object,
+    ) -> object:
+        return handler
+
+    monkeypatch.setattr(server_module, "DaemonState", make_state)
+    monkeypatch.setattr(server_module, "NuSelfUnixServer", BoundServer)
+    monkeypatch.setattr(
+        server_module,
+        "write_lifecycle_audit",
+        capture_lifecycle,
+    )
+    monkeypatch.setattr(
+        signal,
+        "signal",
+        ignore_signal,
+    )
+
+    with pytest.raises(RuntimeError) as captured:
+        server_module._run_owned_daemon(paths)
+
+    assert captured.value is readiness_error
+    assert states[0].readiness_checks == 1
+    assert states[0].start_calls == [
+        "memory",
+        "reflection",
+        "reason",
+        "export",
+        "notification",
+    ]
+    assert states[0].stop_calls == [
+        "memory",
+        "reflection",
+        "reason",
+        "export",
+        "notification",
+    ]
+    assert lifecycle_events == []
     assert not paths.socket_path.exists()
     assert not paths.pid_path.exists()
 

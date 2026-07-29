@@ -42,6 +42,10 @@ class DaemonWorkerUnexpectedExitError(RuntimeError):
     """Raised internally when a long-lived worker returns before shutdown."""
 
 
+class DaemonWorkerReadinessError(RuntimeError):
+    """Raised when a sealed worker set is not fully running at readiness."""
+
+
 class DaemonWorkerSupervisor:
     """Own sealed daemon worker registration, health, and execution scopes."""
 
@@ -117,6 +121,27 @@ class DaemonWorkerSupervisor:
                 consecutive_failures=health.consecutive_failures,
             )
             for name, health in recorded
+        )
+
+    def require_all_running(self) -> None:
+        """Require every sealed registration to be running and alive."""
+
+        self._require_sealed()
+        with self._registration_lock:
+            workers = tuple(self._workers.items())
+        unavailable: list[tuple[str, str]] = []
+        for name, worker in workers:
+            snapshot = worker.snapshot
+            if not snapshot.alive or snapshot.state != "running":
+                unavailable.append((name, snapshot.state))
+        if not unavailable:
+            return
+        details = ", ".join(
+            f"{name}={state}"
+            for name, state in unavailable
+        )
+        raise DaemonWorkerReadinessError(
+            f"daemon workers are not running: {details}"
         )
 
     def record_failure(self, name: str, exc: BaseException) -> str:

@@ -93,6 +93,11 @@ class DaemonState:
 
         return self._worker_supervisor.health()
 
+    def require_background_workers_ready(self) -> None:
+        """Require all registered workers to remain alive before readiness."""
+
+        self._worker_supervisor.require_all_running()
+
     def start_background_memory_curator(self) -> None:
         self._worker_supervisor.start("memory_curator")
 
