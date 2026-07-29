@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reason export retry delays now use a shared owned scheduler that removes
+  completed tasks promptly, rolls back failed starts, and cancels outstanding
+  work atomically during shutdown.
 - Reason export wake-ups now use bounded, identity-deduplicated admission that
   coalesces pending and in-flight jobs; capacity pressure triggers online
   manifest reconciliation instead of blocking callers or growing without bound.

@@ -224,6 +224,15 @@ _CANONICAL: tuple[
     ),
     (
         "daemon",
+        "export_retry_schedule_failed",
+        {
+            "attempts": 1,
+            "next_backoff": 10,
+        },
+        None,
+    ),
+    (
+        "daemon",
         "export_reconciliation_skip",
         {"thread_id": "thread-1", "job_id": "job-1"},
         None,

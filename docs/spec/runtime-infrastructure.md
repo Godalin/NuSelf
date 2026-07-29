@@ -721,6 +721,14 @@ manifests and admits missing identities until pressure clears. Jobs owned by a
 live retry timer are excluded from online reconciliation so backoff cannot be
 bypassed. Startup reconciliation remains the crash-recovery boundary.
 
+Delayed in-process callbacks use `runtime.scheduling.DelayedTaskScheduler`.
+The scheduler owns timers by a caller-supplied hashable identity, rejects
+duplicate or post-close scheduling, marks timers daemon-only, and rolls back
+ownership if construction or start fails. Ownership is removed as the callback
+begins, while `close()` atomically prevents new callbacks and cancels every
+still-owned timer exactly once. The scheduler owns no retry counts, intervals,
+logging, job payloads, or durable recovery policy.
+
 ## Logging
 
 Structured logs are an append-only sink and read model.

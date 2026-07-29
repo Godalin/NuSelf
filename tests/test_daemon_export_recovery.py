@@ -2,7 +2,7 @@
 
 import json
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 import time
 
@@ -642,12 +642,16 @@ def test_reconciliation_does_not_bypass_live_retry_timer(
         text_agent=_TextAgent(),
     )
     worker.prepare()
-    with worker._timers_lock:
-        worker._retry_job_keys.add(("thread_1", "job_1"))
+    assert worker._retry_scheduler.schedule(
+        ("thread_1", "job_1"),
+        60,
+        lambda: None,
+    )
 
     worker._reconcile(PrivateWorkspaceStore(tmp_path, scope="reason"))
 
     assert worker._queue.empty()
+    worker.stop()
 
 
 def test_worker_reports_invalid_progress_and_continues(
@@ -700,7 +704,9 @@ def test_worker_audit_failure_cannot_suppress_durable_retry(
     manifest_path, progress_path = _job_paths(tmp_path)
     write_json_atomic(manifest_path, _manifest().to_wire())
     write_json_atomic(progress_path, _progress().to_wire())
-    scheduled: list[JobMessage] = []
+    scheduled: list[
+        tuple[Callable[..., None], tuple[object, ...]]
+    ] = []
 
     def compose(
         self: ReasonOutputService,
@@ -714,11 +720,12 @@ def test_worker_audit_failure_cannot_suppress_durable_retry(
         def __init__(
             self,
             interval: float,
-            function: object,
-            args: tuple[JobMessage, ...],
+            function: Callable[..., None],
+            args: tuple[object, ...],
         ) -> None:
-            del interval, function
-            scheduled.extend(args)
+            del interval
+            scheduled.append((function, args))
+            self.daemon = False
 
         def start(self) -> None:
             return None
@@ -738,7 +745,7 @@ def test_worker_audit_failure_cannot_suppress_durable_retry(
         compose,
     )
     monkeypatch.setattr(
-        "nuself.daemon.reason_export.threading.Timer",
+        "nuself.runtime.scheduling.threading.Timer",
         FakeTimer,
     )
     monkeypatch.setattr(
@@ -759,7 +766,11 @@ def test_worker_audit_failure_cannot_suppress_durable_retry(
         worker._process(message)
 
     assert len(scheduled) == 1
-    assert scheduled[0].job_id == "job_1"
+    function, args = scheduled[0]
+    function(*args)
+    retry = worker._queue.get_nowait()
+    assert retry.job_id == "job_1"
+    worker._queue.complete(retry)
     persisted = ReasonOutputManifest.from_wire(
         json.loads(manifest_path.read_text(encoding="utf-8"))
     )
@@ -769,6 +780,73 @@ def test_worker_audit_failure_cannot_suppress_durable_retry(
         for warning in captured
     )
     worker.stop()
+
+
+def test_retry_timer_start_failure_rolls_back_and_requests_reconciliation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path, progress_path = _job_paths(tmp_path)
+    write_json_atomic(manifest_path, _manifest().to_wire())
+    write_json_atomic(progress_path, _progress().to_wire())
+
+    def compose(
+        self: ReasonOutputService,
+        thread_id: str,
+        job_id: str,
+        runner: object,
+    ) -> ReasonOutputManifest:
+        del self, thread_id, job_id, runner
+        raise RuntimeError("compose failed")
+
+    class FailingTimer:
+        daemon = False
+
+        def __init__(
+            self,
+            interval: float,
+            function: object,
+            args: tuple[object, ...],
+        ) -> None:
+            del interval, function, args
+            self.cancelled = False
+
+        def start(self) -> None:
+            raise OSError("timer start unavailable")
+
+        def cancel(self) -> None:
+            self.cancelled = True
+
+    monkeypatch.setattr(ReasonOutputService, "compose_with_runner", compose)
+    monkeypatch.setattr(
+        "nuself.runtime.scheduling.threading.Timer",
+        FailingTimer,
+    )
+    state = DaemonState(tmp_path)
+    worker = state.reason_export_worker
+    worker.prepare()
+    worker._process(
+        JobMessage.create(
+            name="reason.output.export",
+            producer="reasoning",
+            job_id="job_1",
+            resource_id="thread_1",
+        )
+    )
+
+    assert worker.pending_retry_count == 0
+    assert worker._reconciliation_requested.is_set()
+    event = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="daemon",
+        )
+        if event.event == "export_retry_schedule_failed"
+    ][-1]
+    assert event.status == "degraded"
+    assert event.metadata == {"attempts": 1, "next_backoff": 10}
+    assert "timer start unavailable" in (event.error or "")
 
 
 def test_progress_diagnostic_failure_cannot_block_composition(
@@ -918,7 +996,9 @@ def test_worker_retry_message_inherits_job_correlation(
     manifest_path, progress_path = _job_paths(tmp_path)
     write_json_atomic(manifest_path, _manifest().to_wire())
     write_json_atomic(progress_path, _progress().to_wire())
-    captured: list[JobMessage] = []
+    scheduled: list[
+        tuple[Callable[..., None], tuple[object, ...]]
+    ] = []
 
     def compose(
         self: ReasonOutputService,
@@ -932,11 +1012,12 @@ def test_worker_retry_message_inherits_job_correlation(
         def __init__(
             self,
             interval: float,
-            function: object,
-            args: tuple[JobMessage, ...],
+            function: Callable[..., None],
+            args: tuple[object, ...],
         ) -> None:
-            del interval, function
-            captured.extend(args)
+            del interval
+            scheduled.append((function, args))
+            self.daemon = False
 
         def start(self) -> None:
             return None
@@ -949,7 +1030,7 @@ def test_worker_retry_message_inherits_job_correlation(
 
     monkeypatch.setattr(ReasonOutputService, "compose_with_runner", compose)
     monkeypatch.setattr(
-        "nuself.daemon.reason_export.threading.Timer",
+        "nuself.runtime.scheduling.threading.Timer",
         FakeTimer,
     )
 
@@ -963,6 +1044,7 @@ def test_worker_retry_message_inherits_job_correlation(
         no_owners,
     )
     state = DaemonState(tmp_path)
+    captured: list[JobMessage] = []
     with runtime_context(
         request_id="request-retry",
         turn_id="turn-retry",
@@ -977,9 +1059,20 @@ def test_worker_retry_message_inherits_job_correlation(
                 resource_id="thread_1",
             )
         )
+    def capture_retry(message: JobMessage) -> None:
+        captured.append(message)
+
+    monkeypatch.setattr(
+        state.reason_export_worker,
+        "enqueue",
+        capture_retry,
+    )
 
     state.start_background_export_worker()
     event = _wait_for_event(tmp_path, "export_job_retry")
+    assert len(scheduled) == 1
+    function, args = scheduled[0]
+    function(*args)
     state.shutdown_requested.set()
     state.stop_background_export_worker()
 
@@ -1005,7 +1098,7 @@ def test_worker_stop_closes_retry_scheduling_race(
     write_json_atomic(progress_path, _progress().to_wire())
     compose_started = threading.Event()
     release_compose = threading.Event()
-    scheduled: list[JobMessage] = []
+    scheduled: list[object] = []
 
     def compose(
         self: ReasonOutputService,
@@ -1023,10 +1116,11 @@ def test_worker_stop_closes_retry_scheduling_race(
             self,
             interval: float,
             function: object,
-            args: tuple[JobMessage, ...],
+            args: tuple[object, ...],
         ) -> None:
             del interval, function
             scheduled.extend(args)
+            self.daemon = False
 
         def start(self) -> None:
             return None
@@ -1039,7 +1133,7 @@ def test_worker_stop_closes_retry_scheduling_race(
 
     monkeypatch.setattr(ReasonOutputService, "compose_with_runner", compose)
     monkeypatch.setattr(
-        "nuself.daemon.reason_export.threading.Timer",
+        "nuself.runtime.scheduling.threading.Timer",
         FakeTimer,
     )
     state = DaemonState(tmp_path)

@@ -501,11 +501,14 @@ propagates unchanged.
 Chat's outer competitive-discussion orchestration uses the same policy and
 must not convert those implementation errors into a normal answer appendix.
 
-Reason-export manifests, composition, retry timer creation/start, and worker
+Reason-export manifests, composition, delayed-retry scheduling, and worker
 lifecycle decisions are authoritative. Export lifecycle and caught-failure
 audit records are secondary: audit failure cannot suppress a retry after its
 state is durably persisted, block composition after optional progress
-degradation, truncate reconciliation, or undo queue drain/shutdown state.
+degradation, truncate reconciliation, or undo queue drain/shutdown state. A
+delayed scheduler start failure rolls back task ownership, emits the sealed
+`export_retry_schedule_failed` degradation, and requests manifest
+reconciliation; it cannot leave a phantom retry that reconciliation skips.
 
 ReasonService repository/workspace mutations are authoritative. Thread and
 step traces plus lifecycle audits are secondary after a successful mutation;

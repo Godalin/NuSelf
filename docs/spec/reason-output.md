@@ -271,11 +271,12 @@ The worker reconstructs the job data path from `thread_id` and `job_id`: `privat
 
 #### Retry model
 
-Retries are scheduled via `threading.Timer` rather than a persistent `next_attempt` field:
+Retries are scheduled through the shared owned delayed-task scheduler rather
+than a persistent `next_attempt` field:
 
 - On failure, the worker checks
   `manifest.attempts < MAX_EXPORT_ATTEMPTS`.
-- If retryable, it starts a `threading.Timer` with exponential backoff (capped at 600s).
+- If retryable, it schedules the job identity with exponential backoff (capped at 600s).
 - When the timer fires, it enqueues a new typed wake-up for the same durable job.
 - If `attempts >= MAX_EXPORT_ATTEMPTS`, the worker updates the manifest status
   to `failed` and does not re-enqueue.
@@ -287,10 +288,12 @@ Retries are scheduled via `threading.Timer` rather than a persistent `next_attem
   retry. Startup reconciliation must not be relied on to recover state that was
   never durably recorded.
 - Once retry state is durably persisted, audit storage failure cannot suppress
-  an otherwise eligible retry timer. Manifest writes and timer construction or
-  start remain authoritative failures; export audit records are projections.
+  an otherwise eligible retry. Scheduler start failure emits
+  `export_retry_schedule_failed`, rolls back the retry identity, and requests
+  online manifest reconciliation so the durable job is not stranded.
 
-This is a purely in-memory retry schedule. On daemon crash, all in-flight retry timers are lost; the reconciliation step (see below) restores them.
+This is a purely in-memory retry schedule. On daemon crash, all delayed tasks
+are lost; the reconciliation step (see below) restores them.
 
 #### File-level locking
 
@@ -327,7 +330,7 @@ directories, while in-memory admission is independently bounded.
 |---|---|---|
 | Job data (manifest, chunks, artifacts) | Per-thread workspace (`jobs/{job_id}/`) | Yes |
 | Queue signal | bounded `JobAdmissionQueue` in daemon process | No (rebuilt from manifests on startup) |
-| Retry timer | `threading.Timer` in daemon process | No (rebuilt from manifest attempts on startup) |
+| Retry delay | owned delayed scheduler in daemon process | No (rebuilt from manifest attempts on startup) |
 | Compose lock | `.lock` file in job subdirectory | Yes (but cleared on startup) |
 
 ## Output Modes
@@ -458,6 +461,7 @@ Daemon-side events:
 | `export_job_state_persist_failed` | `error` | `error` | required | none; runtime context carries thread/job |
 | `export_job_failed` | `error` | `error` | required | attempts |
 | `export_job_retry` | `info` | `retry` | forbidden | attempts/backoff |
+| `export_retry_schedule_failed` | `warning` | `degraded` | required | attempts/backoff |
 | `export_reconciliation_skip` | `warning` | `error` | required | thread/job |
 | `export_queue_reconciled` | `info` | none | forbidden | non-negative replayed job count |
 

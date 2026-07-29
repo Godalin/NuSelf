@@ -47,6 +47,7 @@ from nuself.runtime.jobs import (
     JobMessage,
 )
 from nuself.runtime.job_definitions import JobDefinitionRegistry
+from nuself.runtime.scheduling import DelayedTaskScheduler
 from nuself.storage import write_json_atomic
 from nuself.workspace import PrivateWorkspaceStore
 
@@ -284,9 +285,7 @@ class ReasonExportWorker:
         self._reconciliation_requested = threading.Event()
         self._stopping = threading.Event()
         self._lifecycle_lock = threading.Lock()
-        self._timers: list[threading.Timer] = []
-        self._retry_job_keys: set[tuple[str, str]] = set()
-        self._timers_lock = threading.Lock()
+        self._retry_scheduler = DelayedTaskScheduler()
         self._store: PrivateWorkspaceStore | None = None
         self._service: ReasonOutputService | None = None
 
@@ -322,11 +321,7 @@ class ReasonExportWorker:
         """Cancel retry timers and drain work that cannot be processed."""
 
         self._stopping.set()
-        with self._timers_lock:
-            for timer in self._timers:
-                timer.cancel()
-            self._timers.clear()
-            self._retry_job_keys.clear()
+        self._retry_scheduler.close()
         with self._lifecycle_lock:
             drained = len(self._queue.drain())
         if drained:
@@ -338,8 +333,7 @@ class ReasonExportWorker:
 
     @property
     def pending_retry_count(self) -> int:
-        with self._timers_lock:
-            return len(self._timers)
+        return self._retry_scheduler.pending_count
 
     def run(self) -> None:
         """Reconcile durable jobs, then process queue messages until shutdown."""
@@ -488,46 +482,42 @@ class ReasonExportWorker:
         if self._stopping.is_set() or self._shutdown_requested.is_set():
             return
         backoff = _next_backoff(attempts)
+        if self._stopping.is_set() or self._shutdown_requested.is_set():
+            return
+        retry_message = JobMessage.create(
+            name=REASON_OUTPUT_JOB_NAME,
+            producer="daemon_retry",
+            job_id=job_id,
+            resource_id=thread_id,
+            payload={"attempt": attempts + 1},
+        )
+        retry_key = (thread_id, job_id)
+        retry_metadata: dict[str, object] = {
+            "attempts": attempts,
+            "next_backoff": backoff,
+        }
+        try:
+            scheduled = self._retry_scheduler.schedule(
+                retry_key,
+                backoff,
+                lambda: self.enqueue(retry_message),
+            )
+        except Exception as schedule_error:
+            report_reason_failure(
+                schedule_error,
+                event="export_retry_schedule_failed",
+                project_root=self._project_root,
+                metadata=retry_metadata,
+            )
+            self._reconciliation_requested.set()
+            return
+        if not scheduled:
+            return
         write_reason_audit(
             "export_job_retry",
             project_root=self._project_root,
-            metadata={
-                "attempts": attempts,
-                "next_backoff": backoff,
-            },
+            metadata=retry_metadata,
         )
-        with self._timers_lock:
-            if (
-                self._stopping.is_set()
-                or self._shutdown_requested.is_set()
-            ):
-                return
-            self._timers = [
-                timer for timer in self._timers if timer.is_alive()
-            ]
-            retry_message = JobMessage.create(
-                name=REASON_OUTPUT_JOB_NAME,
-                producer="daemon_retry",
-                job_id=job_id,
-                resource_id=thread_id,
-                payload={"attempt": attempts + 1},
-            )
-            retry_key = (thread_id, job_id)
-            self._retry_job_keys.add(retry_key)
-            timer = threading.Timer(
-                backoff,
-                self._enqueue_retry,
-                args=(retry_message,),
-            )
-            self._timers.append(timer)
-            timer.start()
-
-    def _enqueue_retry(self, message: JobMessage) -> None:
-        with self._timers_lock:
-            self._retry_job_keys.discard(
-                (message.resource_id, message.job_id)
-            )
-        self.enqueue(message)
 
     def _reconcile(self, store: PrivateWorkspaceStore) -> None:
         reconciled = 0
@@ -568,12 +558,9 @@ class ReasonExportWorker:
                     continue
                 if manifest.status in ("complete", "failed"):
                     continue
-                with self._timers_lock:
-                    retry_pending = (
-                        owner_id,
-                        manifest.job_id,
-                    ) in self._retry_job_keys
-                if retry_pending:
+                if self._retry_scheduler.contains(
+                    (owner_id, manifest.job_id)
+                ):
                     continue
                 result = self._admit(
                     JobMessage.create(

@@ -232,6 +232,12 @@ Durable job wake-up owners use `runtime.jobs.JobAdmissionQueue` rather than raw
 ownership, and explicit completion are shared transport mechanics; manifest
 reconciliation and retry policy remain domain-owned.
 
+Delayed callbacks use `runtime.scheduling.DelayedTaskScheduler` rather than
+domain-owned `threading.Timer` collections. Domains supply stable identities,
+delay values, callbacks, diagnostics, and recovery policy; the shared scheduler
+owns atomic start rollback, completion removal, duplicate suppression, and
+close/cancel lifecycle.
+
 ## CLI Module Boundaries
 
 `nuself.cli` is a package whose `__init__.py` remains the composition root and

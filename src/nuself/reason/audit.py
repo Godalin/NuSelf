@@ -54,6 +54,7 @@ ReasonAuditEvent = Literal[
     "export_job_state_persist_failed",
     "export_job_failed",
     "export_job_retry",
+    "export_retry_schedule_failed",
     "export_reconciliation_skip",
     "export_queue_reconciled",
 ]
@@ -71,6 +72,7 @@ ReasonFailureEvent = Literal[
     "export_job_progress_invalid",
     "export_job_state_persist_failed",
     "export_job_failed",
+    "export_retry_schedule_failed",
     "export_reconciliation_skip",
 ]
 
@@ -103,6 +105,7 @@ _DAEMON_EVENTS = frozenset(
         "export_job_state_persist_failed",
         "export_job_failed",
         "export_job_retry",
+        "export_retry_schedule_failed",
         "export_reconciliation_skip",
         "export_queue_reconciled",
     }
@@ -147,6 +150,9 @@ _MESSAGES: dict[ReasonAuditEvent, str] = {
     ),
     "export_job_failed": "Reason export job failed",
     "export_job_retry": "Reason export job retry scheduled",
+    "export_retry_schedule_failed": (
+        "Reason export retry scheduling failed"
+    ),
     "export_reconciliation_skip": "Reason export reconciliation skipped job",
     "export_queue_reconciled": "Reason export queue reconciled",
 }
@@ -557,6 +563,11 @@ def _build_registry() -> AuditDefinitionRegistry:
         ),
         AuditEventDefinition(
             "daemon", "export_job_retry", "info", "retry",
+            metadata_validator=_retry,
+        ),
+        AuditEventDefinition(
+            "daemon", "export_retry_schedule_failed", "warning", "degraded",
+            error_policy="required",
             metadata_validator=_retry,
         ),
         AuditEventDefinition(
