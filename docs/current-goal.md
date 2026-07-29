@@ -131,7 +131,7 @@ trustworthy 0.3.0 release candidate.
   exact tag/project/runtime/changelog agreement.
 - Release-gate and CLI-version tests: 5 passed; `nuself --version` printed
   `nuself 0.3.0rc1`.
-- Full pytest release gate: 2317 passed.
+- Final full pytest release gate after migration/provenance work: 2322 passed.
 - `uv build` produced `nuself-0.3.0rc1.tar.gz` and
   `nuself-0.3.0rc1-py3-none-any.whl` in an isolated temporary directory.
 - A clean uv-managed Python 3.14 environment installed the wheel and all
@@ -148,6 +148,8 @@ trustworthy 0.3.0 release candidate.
   distribution/checksum artifact before one release-upload step.
 - Workflow and release-contract coverage: 6 passed; both workflow files parse
   as YAML.
+- The final `uv build` rerun produced the 0.3.0rc1 sdist and wheel in an
+  isolated temporary output directory.
 - Full pyright remains the only local gate pending after its cache attempted a
   blocked refresh and the explicit retry approval service disconnected.
 - Remaining external findings require fault-injection or contract-level
