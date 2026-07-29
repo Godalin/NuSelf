@@ -5,7 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The multi-model OpenCode Go protocol-matrix goal is complete.
+Idle. The OpenCode Go protocol matrix and Anthropic configuration publication
+are complete.
 
 ## Active Branch
 
@@ -17,16 +18,19 @@ Idle. The multi-model OpenCode Go protocol-matrix goal is complete.
 
 ## Out Of Scope
 
+- No implementation work is active.
 - Live provider tests remain outside default pytest and CI and retain explicit
   network/cost opt-in.
-- The matrix does not load private threads, memory, personas, sources, or
-  runtime prompts.
-- The live catalog is a tested representative subset, not a promise that every
-  model currently listed by OpenCode has identical capabilities.
 - No 0.3.0 release tag until every release-candidate gate is proven.
 
 ## Completion Evidence
 
+- The JSON Schema and example configuration now publish the Anthropic API root
+  used by the adapter while documenting that one trailing `/v1` is accepted
+  and normalized.
+- Schema/config/provider focused coverage reported 48 passed. Locked Pyright
+  reported 0 errors and 0 warnings; final default pytest reported 2363 passed
+  without collecting live-provider tests.
 - OpenCode Go live verification now has an explicit five-model, twenty-case
   matrix spanning OpenAI-compatible and Anthropic Messages transports plus
   structured output, NuSelf chat, and tool-plus-final-response behavior.

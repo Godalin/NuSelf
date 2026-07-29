@@ -19,6 +19,11 @@ def test_config_json_schema_uses_direct_llm_endpoint_list() -> None:
     assert endpoint_properties["anthropic"]["type"] == "boolean"
     assert endpoint_properties["timeout_seconds"]["default"] == 60
     assert endpoint_properties["base_url"]["default"] == "https://api.openai.com/v1"
+    assert "https://api.anthropic.com API root" in (
+        endpoint_properties["base_url"]["description"]
+    )
+    examples = cast(list[list[dict[str, object]]], llm_schema["examples"])
+    assert examples[0][1]["base_url"] == "https://api.anthropic.com"
 
 
 def test_config_json_schema_exposes_chat_request_timeout() -> None:
