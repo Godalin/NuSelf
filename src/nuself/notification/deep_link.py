@@ -29,6 +29,8 @@ class DeepLink:
         parsed = urlparse(url)
         if parsed.scheme != "nuself":
             raise ValueError(f"unsupported deep link scheme: {parsed.scheme}")
+        if parsed.fragment:
+            raise ValueError("deep link fragments are not supported")
         # urlparse may put the first path segment in netloc for non-standard schemes
         path = parsed.path
         if parsed.netloc:

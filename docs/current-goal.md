@@ -109,6 +109,11 @@ trustworthy 0.3.0 release candidate.
 - Focused structured/text/chat endpoint tests: 70 passed. The batch pyright
   rerun remains pending because the tool cache attempted a blocked network
   refresh and the subsequent approval service disconnected.
+- Email delivery now builds messages inside its declared failure boundary,
+  escapes body and link attributes, canonicalizes only supported `nuself`
+  deep links, rejects fragments/external schemes, and rejects configuration
+  header control characters.
+- Focused email, deep-link, and notification-loop tests: 61 passed.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 
@@ -118,4 +123,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-Email content, deep-link, and header safety.
+Shared timeout validation and portable thought-pack names.

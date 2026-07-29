@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Email notifications now escape HTML content, canonicalize and restrict deep
+  links to supported `nuself` actions, reject header control characters, and
+  convert declared message-construction errors into stable delivery failures.
 - Endpoint failover now recognizes structured 408 and transient 5xx provider
   statuses through direct, response, cause, and context fields without parsing
   exception messages.

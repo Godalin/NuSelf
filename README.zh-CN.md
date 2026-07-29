@@ -59,6 +59,8 @@ Memory curator 的短文本 fast gate 现在会识别英文、简繁中文、日
 turn 中的 durable signal，不再由英文 marker 单独决定是否调用模型。
 共享 model endpoint failover 会沿 exception/response chain 分类结构化 timeout、
 rate-limit 和 transient server status，不会匹配 provider error 文本。
+Email notification HTML 会分别转义 body 和 link attribute，只接受 canonical 的
+受支持 `nuself://` deep link，并在连接 SMTP 前拒绝 header injection。
 
 Daemon instance lock 的获取和释放也会同时保留锁操作与句柄关闭错误，避免清理
 故障掩盖真实所有权状态。

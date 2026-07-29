@@ -163,6 +163,20 @@ Log-only delivery, explicit dry runs, and the macOS-unavailable logging
 fallback are different: their log write is the delivery effect itself, so its
 failure remains authoritative and propagates.
 
+Real email delivery constructs the complete `EmailMessage` inside the declared
+adapter failure boundary. Declared `ValueError` from invalid subject/from/to
+headers, MIME construction, or deep-link validation returns `False` and emits
+`email_failed` just like an SMTP failure; it does not escape raw. Unexpected
+implementation `TypeError` remains outside the recovery boundary.
+
+The plain-text part contains the original body. The HTML alternative escapes
+the body as text and escapes the link separately as an HTML attribute. An HTML
+alternative is created only after `DeepLink.parse()` accepts the URL as a
+supported `nuself` action; the adapter uses the parsed link's canonical
+`to_url()` result and rejects HTTP(S), unknown paths, fragments, or malformed
+links. Email configuration rejects control characters in sender and recipient
+headers before an adapter is enabled.
+
 ### Delivery Audit Contract
 
 Notification owns every direct `component=outbox` delivery audit. Adapters use

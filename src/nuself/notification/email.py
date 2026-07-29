@@ -5,10 +5,12 @@ from __future__ import annotations
 import smtplib
 from collections.abc import Mapping
 from email.message import EmailMessage
+from html import escape
 from pathlib import Path
 from typing import cast
 
 from nuself.notification import OutboxEntry
+from nuself.notification.deep_link import DeepLink
 from nuself.notification.audit import (
     report_notification_failure,
     run_notification_observed,
@@ -75,19 +77,8 @@ class EmailNotificationAdapter:
             )
             return False
 
-        msg = EmailMessage()
-        msg["Subject"] = entry.title
-        msg["From"] = self._config["from"]
-        msg["To"] = self._config["to"]
-        msg.set_content(entry.body)
-
-        if entry.deep_link is not None:
-            msg.add_alternative(
-                f'<html><body><p>{entry.body}</p><p><a href="{entry.deep_link}">Open</a></p></body></html>',
-                subtype="html",
-            )
-
         try:
+            msg = _build_email_message(entry, self._config)
             host = str(self._config["host"])
             port = int(self._config["port"])
             with smtplib.SMTP(host, port, timeout=30) as server:
@@ -98,7 +89,7 @@ class EmailNotificationAdapter:
                 if isinstance(user, str) and isinstance(password, str):
                     server.login(user, password)
                 server.send_message(msg)
-        except (OSError, smtplib.SMTPException) as exc:
+        except (OSError, ValueError, smtplib.SMTPException) as exc:
             report_notification_failure(
                 exc,
                 event="email_failed",
@@ -148,12 +139,12 @@ def _decode_email_config(config_path: Path) -> EmailConfig:
 
     config: EmailConfig = {
         "host": _require_nonempty_string(smtp, "host", section="smtp"),
-        "from": _require_nonempty_string(
+        "from": _require_header_string(
             notification,
             "from",
             section="notification",
         ),
-        "to": _require_nonempty_string(
+        "to": _require_header_string(
             notification,
             "to",
             section="notification",
@@ -220,3 +211,40 @@ def _require_nonempty_string(
             f"email configuration {section}.{key} must be a non-empty string"
         )
     return value
+
+
+def _require_header_string(
+    data: Mapping[str, object],
+    key: str,
+    *,
+    section: str,
+) -> str:
+    value = _require_nonempty_string(data, key, section=section)
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        raise EmailConfigError(
+            f"email configuration {section}.{key} contains control characters"
+        )
+    return value
+
+
+def _build_email_message(
+    entry: OutboxEntry,
+    config: EmailConfig,
+) -> EmailMessage:
+    msg = EmailMessage()
+    msg["Subject"] = entry.title
+    msg["From"] = config["from"]
+    msg["To"] = config["to"]
+    msg.set_content(entry.body)
+    if entry.deep_link is not None:
+        canonical_link = DeepLink.parse(entry.deep_link).to_url()
+        escaped_body = escape(entry.body)
+        escaped_link = escape(canonical_link, quote=True)
+        msg.add_alternative(
+            "<html><body>"
+            f"<p>{escaped_body}</p>"
+            f'<p><a href="{escaped_link}">Open</a></p>'
+            "</body></html>",
+            subtype="html",
+        )
+    return msg

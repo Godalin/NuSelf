@@ -69,6 +69,9 @@ English, Simplified/Traditional Chinese, Japanese, and mixed-language turns.
 Shared model endpoint failover classifies structured timeout, rate-limit, and
 transient server statuses through exception/response chains; it never matches
 rendered provider error text.
+Email notification HTML escapes body and link attributes independently, accepts
+only canonical supported `nuself://` deep links, and rejects header injection
+before opening SMTP.
 
 Daemon instance-lock acquire and release likewise preserve simultaneous lock
 operation and handle-close failures, so ownership errors are not hidden by

@@ -104,6 +104,97 @@ def test_send_with_config(tmp_path: Path, entry: OutboxEntry) -> None:
         mock_server.send_message.assert_called_once()
 
 
+def test_html_message_escapes_body_and_canonical_deep_link(
+    tmp_path: Path,
+) -> None:
+    _write_config(tmp_path)
+    entry = OutboxEntry(
+        id="safe-html",
+        title="Safe",
+        body='<script>alert("x")</script> & text',
+        status="pending",
+        idempotency_key="safe-html",
+        deep_link="nuself://new-thread?title=A&message=B",
+    )
+    adapter = EmailNotificationAdapter(tmp_path, dry_run=False)
+
+    with patch("nuself.notification.email.smtplib.SMTP") as smtp:
+        server = MagicMock()
+        server.__enter__.return_value = server
+        smtp.return_value = server
+
+        assert adapter.send(entry) is True
+
+    message = server.send_message.call_args.args[0]
+    html_part = message.get_body(preferencelist=("html",))
+    assert html_part is not None
+    html_content = html_part.get_content()
+    assert "<script>" not in html_content
+    assert "&lt;script&gt;" in html_content
+    assert (
+        'href="nuself://new-thread?title=A&message=B"'
+        not in html_content
+    )
+    assert (
+        'href="nuself://new-thread?title=A&message=B"'.replace(
+            "&", "&amp;"
+        )
+        in html_content
+    )
+
+
+@pytest.mark.parametrize(
+    "deep_link",
+    [
+        "https://example.com/phishing",
+        "nuself://unknown/path",
+        "nuself://new-thread#unexpected",
+    ],
+)
+def test_invalid_deep_link_returns_false_before_smtp(
+    tmp_path: Path,
+    deep_link: str,
+) -> None:
+    _write_config(tmp_path)
+    adapter = EmailNotificationAdapter(tmp_path, dry_run=False)
+    entry = OutboxEntry(
+        id="invalid-link",
+        title="Invalid link",
+        body="Body",
+        status="pending",
+        idempotency_key="invalid-link",
+        deep_link=deep_link,
+    )
+
+    with patch("nuself.notification.email.smtplib.SMTP") as smtp:
+        assert adapter.send(entry) is False
+        smtp.assert_not_called()
+
+    assert read_log_events(
+        project_root=tmp_path,
+        component="outbox",
+    )[-1].event == "email_failed"
+
+
+def test_invalid_subject_header_returns_false_before_smtp(
+    tmp_path: Path,
+    entry: OutboxEntry,
+) -> None:
+    _write_config(tmp_path)
+    adapter = EmailNotificationAdapter(tmp_path, dry_run=False)
+    invalid = OutboxEntry(
+        id=entry.id,
+        title="Subject\nBcc: attacker@example.com",
+        body=entry.body,
+        status=entry.status,
+        idempotency_key=entry.idempotency_key,
+    )
+
+    with patch("nuself.notification.email.smtplib.SMTP") as smtp:
+        assert adapter.send(invalid) is False
+        smtp.assert_not_called()
+
+
 def test_send_failure_returns_false(tmp_path: Path, entry: OutboxEntry) -> None:
     _write_config(tmp_path)
     adapter = EmailNotificationAdapter(tmp_path, dry_run=False)
@@ -211,6 +302,11 @@ def test_load_config_ignores_invalid_port_type(tmp_path: Path, entry: OutboxEntr
             '[smtp]\nhost = "smtp.example.com"\nport = 25\n'
             'user = "user"\n'
             '[notification]\nfrom = "from@example.com"\n'
+            'to = "to@example.com"\n'
+        ),
+        (
+            '[smtp]\nhost = "smtp.example.com"\nport = 25\n'
+            '[notification]\nfrom = "from@example.com\\nBcc: attacker@example.com"\n'
             'to = "to@example.com"\n'
         ),
     ],
