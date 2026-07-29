@@ -53,11 +53,12 @@ during startup; the process must abort startup rather than publish
 - Full suite: 2164 passed.
 - Pyright: 0 errors, 0 warnings.
 - `git diff --check` passed.
+- Development-branch CI run `30433270907` completed successfully.
 
 ## Publication
 
-Worker-backed daemon readiness was implemented in `9729dae`; milestone
-publication is pending this goal update, push, and development-branch CI.
+Worker-backed daemon readiness was implemented in `9729dae` and published
+through `136c125`; the resulting development-branch CI run passed.
 
 ## Next Review Batch
 
