@@ -19,6 +19,10 @@ from nuself.storage_sqlite import (
 )
 
 _PACK_EXPORT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_WINDOWS_DEVICE_NAME = re.compile(
+    r"^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$",
+    re.IGNORECASE,
+)
 
 
 def handle_pack_export(args: argparse.Namespace) -> int:
@@ -34,7 +38,7 @@ def handle_pack_export(args: argparse.Namespace) -> int:
     exports = paths.private_root / "exports"
     ensure_private_directory(exports)
     name = args.name.removesuffix(".sqlite")
-    if _PACK_EXPORT_NAME.fullmatch(name) is None:
+    if not _is_portable_pack_name(name):
         print(
             "Invalid pack name: use letters, digits, '.', '_', or '-' "
             "and start with a letter or digit.",
@@ -50,6 +54,13 @@ def handle_pack_export(args: argparse.Namespace) -> int:
     backend.backup_to(destination)
     print(f"Exported to {destination}")
     return 0
+
+
+def _is_portable_pack_name(name: str) -> bool:
+    if _PACK_EXPORT_NAME.fullmatch(name) is None or name.endswith("."):
+        return False
+    first_component = name.split(".", maxsplit=1)[0]
+    return _WINDOWS_DEVICE_NAME.fullmatch(first_component) is None
 
 
 def handle_pack_import(args: argparse.Namespace) -> int:

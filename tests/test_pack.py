@@ -57,6 +57,12 @@ def test_pack_export_creates_sqlite(tmp_path: Path) -> None:
         ".hidden",
         "..",
         "",
+        "CON",
+        "con.sqlite",
+        "NUL.backup",
+        "COM1",
+        "lpt9.archive",
+        "file.",
     ),
 )
 def test_pack_export_rejects_path_like_names(

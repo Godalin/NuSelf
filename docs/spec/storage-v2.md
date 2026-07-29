@@ -478,7 +478,10 @@ nuself pack inspect [<path>]      → 展示 <path> 或主库的表统计
   `.sqlite` is removed, the name must start with an ASCII letter or digit and
   contain only ASCII letters, digits, `.`, `_`, or `-`. Empty names, hidden
   names, separators, absolute paths, and traversal components are rejected
-  before opening the destination.
+  before opening the destination. Names must not end in `.` and their
+  case-insensitive first component must not be a Windows device name (`CON`,
+  `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, or `LPT1`-`LPT9`), including a reserved
+  name followed by another extension.
 - The destination is always exactly `private/exports/<name>.sqlite`; user input
   cannot select another directory.
 - Export uses SQLite's online backup API through the shared project backend;

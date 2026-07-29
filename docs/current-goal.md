@@ -118,6 +118,10 @@ trustworthy 0.3.0 release candidate.
   non-negative timeout validator; bool, NaN, infinity, and negative cases are
   consistent.
 - Focused runtime job/scheduling/execution/export tests: 63 passed.
+- Thought-pack export validation now rejects trailing dots and
+  case-insensitive Windows device names, including reserved first components
+  followed by another extension.
+- Focused pack tests: 28 passed.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 
@@ -127,4 +131,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-Portable thought-pack names.
+Release/version/platform gates and full validation.

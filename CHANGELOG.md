@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Thought-pack export names now reject Windows device names and trailing dots,
+  matching the documented portable-filename contract.
 - Job admission, delayed scheduling, and owned calls now share exact timeout
   validation that rejects booleans, NaN, infinity, and negative values.
 - Email notifications now escape HTML content, canonicalize and restrict deep

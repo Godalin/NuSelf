@@ -63,6 +63,8 @@ Email notification HTML 会分别转义 body 和 link attribute，只接受 cano
 受支持 `nuself://` deep link，并在连接 SMTP 前拒绝 header injection。
 共享 runtime timeout validator 统一了 job admission、delayed scheduling 和
 owned call 对 bool、NaN、infinity 与负数的拒绝语义。
+Thought-pack export name 现在还会拒绝 Windows device name 与末尾句点，兑现
+portable filename 契约。
 
 Daemon instance lock 的获取和释放也会同时保留锁操作与句柄关闭错误，避免清理
 故障掩盖真实所有权状态。
