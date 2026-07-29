@@ -222,6 +222,11 @@ Middleware order is outer-to-inner registration order, and wrappers must
 preserve the original handler exception identity unless the middleware's
 documented policy explicitly translates it.
 
+Runtime event registration, publication, and filtered subscription all use the
+same `(producer, name)` identity. New internal consumers must subscribe to all
+events intentionally or bind both fields; partial event-name selectors are
+forbidden.
+
 ## CLI Module Boundaries
 
 `nuself.cli` is a package whose `__init__.py` remains the composition root and

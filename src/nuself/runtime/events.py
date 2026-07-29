@@ -71,24 +71,34 @@ class EventPublisher:
         )
         self._publisher_id = uuid4()
         self._next_subscription_id = 1
-        self._subscribers: dict[int, tuple[str | None, EventSubscriber]] = {}
+        self._subscribers: dict[
+            int,
+            tuple[tuple[str, str] | None, EventSubscriber],
+        ] = {}
 
     def subscribe(
         self,
         subscriber: EventSubscriber,
         *,
+        producer: str | None = None,
         name: str | None = None,
     ) -> EventSubscription:
-        """Subscribe to one event name, or all events when name is None."""
+        """Subscribe to one exact event identity, or all registered events."""
 
-        if name == "":
-            raise ValueError("event subscription name must not be empty")
         if not callable(subscriber):
             raise TypeError("event subscriber must be callable")
+        if (producer is None) != (name is None):
+            raise ValueError(
+                "event subscription producer and name must be supplied together"
+            )
+        selector: tuple[str, str] | None = None
+        if producer is not None and name is not None:
+            self._definitions.resolve(producer, name)
+            selector = (producer, name)
         with self._lock:
             subscription_id = self._next_subscription_id
             self._next_subscription_id += 1
-            self._subscribers[subscription_id] = (name, subscriber)
+            self._subscribers[subscription_id] = (selector, subscriber)
         return EventSubscription(self._publisher_id, subscription_id)
 
     def unsubscribe(self, subscription: EventSubscription) -> bool:
@@ -143,8 +153,11 @@ class EventPublisher:
         with self._lock:
             subscribers = tuple(self._subscribers.items())
         failures: list[EventDeliveryFailure] = []
-        for subscription_id, (name, subscriber) in subscribers:
-            if name is not None and name != event.name:
+        for subscription_id, (selector, subscriber) in subscribers:
+            if selector is not None and selector != (
+                event.producer,
+                event.name,
+            ):
                 continue
             try:
                 subscriber(event)

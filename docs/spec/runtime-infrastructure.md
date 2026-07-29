@@ -603,6 +603,13 @@ fail. Delivery failure always uses `internal_event_delivery_failed` with exact
 `event` and `producer` metadata derived from that envelope; callers cannot
 invent subsystem-specific failure projections.
 
+Event subscriptions use the same complete identity as the sealed definition
+registry. A subscriber either receives every registered event or supplies both
+`producer` and `name`; supplying only one field is invalid. Exact selectors are
+resolved during subscription, so unknown identities fail at composition time.
+Name-only and producer-only wildcard subscriptions are not supported. Events
+with the same name but another producer never reach an exact subscriber.
+
 Daemon request dispatch owns a separate sealed audit registry for
 `request_rejected`, `chat_turn_failed`, `chat_turn_completed`, and
 `shutdown_requested`. The registry fixes presentation and validates exact

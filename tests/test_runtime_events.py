@@ -30,10 +30,12 @@ def test_event_publisher_delivers_matching_subscribers_in_order() -> None:
     publisher.subscribe(lambda event: received.append(f"all:{event.name}"))
     publisher.subscribe(
         lambda event: received.append(f"named:{event.name}"),
+        producer="daemon",
         name="worker.started",
     )
     publisher.subscribe(
         lambda event: received.append(f"other:{event.name}"),
+        producer="daemon",
         name="worker.stopped",
     )
 
@@ -108,6 +110,65 @@ def test_event_publisher_rejects_non_callable_subscriber() -> None:
         publisher.subscribe(None)  # type: ignore[arg-type]
 
     publisher.publish(name="worker.started", producer="daemon")
+
+
+@pytest.mark.parametrize(
+    ("producer", "name"),
+    (
+        ("daemon", None),
+        (None, "worker.started"),
+    ),
+)
+def test_event_publisher_rejects_partial_subscription_identity(
+    producer: str | None,
+    name: str | None,
+) -> None:
+    publisher = EventPublisher()
+
+    with pytest.raises(
+        ValueError,
+        match="producer and name must be supplied together",
+    ):
+        publisher.subscribe(
+            lambda _event: None,
+            producer=producer,
+            name=name,
+        )
+
+
+def test_event_publisher_rejects_unknown_exact_subscription() -> None:
+    publisher = EventPublisher()
+
+    with pytest.raises(UnknownEventDefinitionError):
+        publisher.subscribe(
+            lambda _event: None,
+            producer="chat",
+            name="worker.started",
+        )
+
+
+def test_exact_subscription_isolates_same_name_across_producers() -> None:
+    definitions = build_event_definition_registry(
+        (
+            RuntimeEventDefinition(
+                producer="chat",
+                name="worker.started",
+                description="Extension event with a colliding name.",
+            ),
+        )
+    )
+    publisher = EventPublisher(definitions)
+    received: list[tuple[str, str]] = []
+    publisher.subscribe(
+        lambda event: received.append((event.producer, event.name)),
+        producer="daemon",
+        name="worker.started",
+    )
+
+    publisher.publish(name="worker.started", producer="chat")
+    publisher.publish(name="worker.started", producer="daemon")
+
+    assert received == [("daemon", "worker.started")]
 
 
 def test_event_subscription_is_bound_to_one_publisher_lifetime() -> None:

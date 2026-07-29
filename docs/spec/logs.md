@@ -293,6 +293,10 @@ Event-definition, producer, envelope, and payload validation failures occur
 before delivery and propagate to the producer; they must not be mislabeled or
 suppressed as subscriber failures.
 
+Unfiltered runtime log sinks deliberately receive every registered event.
+Filtered `EventPublisher` subscribers must bind the complete registered
+`(producer, name)` identity; event name alone is not an ownership boundary.
+
 Core runtime events that project into logs use one shared typed payload
 contract. The only fields are `message`, `level`, `node`, `duration_ms`,
 `status`, `error`, and `metadata`; unknown fields are rejected rather than
