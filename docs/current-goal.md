@@ -5,9 +5,10 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Separate daemon protocol errors by source. Request envelope decode, direct
-request-payload decode, and registered handler invocation must not share an
-exception classifier merely because they can all raise `ProtocolError`.
+Make memory-backed persona definition fallback observable. A runtime failure
+loading durable persona instructions must still return builtin personas while
+recording one sealed degradation event; diagnostic failure must not replace the
+fallback.
 
 ## Active Branch
 
@@ -15,57 +16,51 @@ exception classifier merely because they can all raise `ProtocolError`.
 
 ## Ordered Work
 
-1. Audit event, log, job, and daemon projection/dispatch exception sources.
-2. Verify structurally wrapped boundaries and identify type-only classifiers.
-3. Reproduce raw `ProtocolError` from a registered daemon handler.
-4. Specify envelope, payload, and invocation phase ownership.
-5. Wrap direct payload codec failures with a typed source error and separate
-   socket envelope decode from handler invocation.
+1. Audit post-commit auxiliary work and response construction.
+2. Distinguish intentionally authoritative follow-up failures from optional
+   projections and fallbacks.
+3. Identify silent fallbacks that bypass shared observability.
+4. Specify a closed Persona audit for durable definition load failure.
+5. Record the failure without changing the builtin fallback.
 6. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No change to daemon wire format or payload schemas.
-- No change to user-facing malformed-payload messages.
-- No suppression of unexpected handler failures.
-- No retry or transport policy change.
+- No change to which repository exceptions trigger fallback.
+- No change to builtin persona contents or ordering.
+- No fallback for malformed successfully loaded persona entries.
+- No persistence of persona instruction payloads in diagnostics.
 
 ## Completion Evidence
 
-- Event publication structurally wraps projection failures in a publisher-owned
-  `EventDeliveryError`; a projection's same-typed exception remains nested.
-- Log observers are caught at the direct invocation point and do not infer
-  source from a domain exception type.
-- Job admission performs no exception translation.
-- Daemon `handle_request(...)` currently catches any `ProtocolError` from the
-  complete registered handler invocation and labels it `request_rejected`.
-- The socket adapter also catches `ProtocolError` around both
-  `DaemonRequest.from_json_line(...)` and `handle_request(...)`, so a raw
-  handler failure can masquerade as malformed request-envelope input.
-- `DaemonRequestPayloadError` now marks only a direct request-specific payload
-  codec rejection and retains the original `ProtocolError` as its cause.
-- Every daemon request handler routes its direct payload decode through the
-  shared typed wrapper; `echo` remains the deliberate arbitrary-object
-  exception.
-- `handle_request(...)` translates only `DaemonRequestPayloadError`. A raw
-  `ProtocolError` raised later by a registered handler preserves its exact
-  identity.
-- Socket request-envelope decoding and handler invocation now have separate
-  lexical catches. A handler `ProtocolError` follows `request_failed`, retains
-  the decoded request ID, and is not classified as malformed envelope input.
-- Focused daemon request, transport, and server tests: 82 passed.
-- Full suite: 2136 passed.
+- Chat trace, audit, reason, memory curator, optimizer, and organizer
+  post-commit projections already use best-effort boundaries with failure
+  injection tests.
+- Reflection repository, schedule-state, and optional outbox writes are
+  explicitly authoritative in the Reflection spec and correctly propagate.
+- `load_persona_definitions(...)` currently catches repository `RuntimeError`
+  and silently returns `BUILTIN_PERSONAS`.
+- The fallback has no audit event, so operators cannot distinguish an empty
+  instruction set from a storage-backed degraded mode.
+- The sealed Persona audit taxonomy now owns
+  `persona_definition_load_failed` with warning level, degraded status,
+  required canonical error, and no metadata.
+- `load_persona_definitions(...)` reports the caught repository failure before
+  returning the unchanged builtin tuple.
+- Tests prove both the structured degradation record and that terminal
+  diagnostic storage failure cannot replace the fallback.
+- Focused Persona audit, instruction, and graph tests: 73 passed.
+- Full suite: 2140 passed.
 - Pyright: 0 errors, 0 warnings.
-- `git diff --check` passed; static search shows payload decoding centralized
-  and each remaining socket `ProtocolError` catch scoped to frame read,
-  envelope decode, or response encode.
+- `git diff --check` passed; the reviewed silent `RuntimeError` fallback no
+  longer returns without observation.
 
 ## Publication
 
-Daemon protocol error source separation was implemented in `d6f86a2`;
+Observable persona definition fallback was implemented in `4a38cee`;
 milestone publication is pending this goal update and push.
 
 ## Next Review Batch
 
-After this boundary is complete, review broad exception scopes around
-post-commit auxiliary work and response construction.
+After this boundary is complete, continue reviewing silent fallback and broad
+exception scopes outside the already-covered agent and storage paths.
