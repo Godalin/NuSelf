@@ -15,10 +15,19 @@ class ActivitySubscriptionNotFound(LookupError):
     """Raised when a subscription is unknown or expired."""
 
 
+@dataclass(frozen=True)
+class ActivityBatch:
+    """One bounded activity read plus loss since the previous read."""
+
+    events: tuple[LogEvent, ...]
+    dropped_count: int
+
+
 @dataclass
 class _ActivitySubscription:
     turn_id: str
     events: deque[LogEvent] = field(default_factory=lambda: deque[LogEvent]())
+    dropped_count: int = 0
     last_access_at: float = field(default_factory=time.monotonic)
 
 
@@ -63,6 +72,7 @@ class ActivityBroker:
                 subscription.events.append(event)
                 while len(subscription.events) > self._max_events:
                     subscription.events.popleft()
+                    subscription.dropped_count += 1
                 delivered = True
             if delivered:
                 self._condition.notify_all()
@@ -73,7 +83,7 @@ class ActivityBroker:
         *,
         timeout_seconds: float,
         limit: int,
-    ) -> tuple[LogEvent, ...]:
+    ) -> ActivityBatch:
         if timeout_seconds < 0:
             raise ValueError("activity timeout must not be negative")
         if limit < 1:
@@ -88,10 +98,16 @@ class ActivityBroker:
                 subscription.last_access_at = time.monotonic()
                 if subscription.events:
                     count = min(limit, len(subscription.events))
-                    return tuple(subscription.events.popleft() for _ in range(count))
+                    events = tuple(
+                        subscription.events.popleft()
+                        for _ in range(count)
+                    )
+                    dropped_count = subscription.dropped_count
+                    subscription.dropped_count = 0
+                    return ActivityBatch(events, dropped_count)
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    return ()
+                    return ActivityBatch((), 0)
                 self._condition.wait(remaining)
 
     def close(self, subscription_id: str) -> bool:

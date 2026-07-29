@@ -11,7 +11,11 @@ from nuself.config import runtime_paths
 from nuself.daemon import client
 from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.client import DaemonApplicationError
-from nuself.daemon.payloads import MessagePayload
+from nuself.daemon.client import ActivityStreamGapError
+from nuself.daemon.payloads import (
+    ActivityEventsResponsePayload,
+    MessagePayload,
+)
 from nuself.daemon.protocol import (
     MAX_DAEMON_FRAME_BYTES,
     DaemonExtraFrameData,
@@ -810,6 +814,35 @@ def test_shutdown_forwards_remaining_timeout(
 
     client.shutdown(tmp_path, timeout=0.125)
     assert captured_timeout == 0.125
+
+
+def test_activity_client_rejects_lossy_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_request(
+        request_type: RequestType,
+        payload: dict[str, JsonValue] | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        del payload, project_root, timeout
+        assert request_type == "activity_next"
+        return DaemonResponse(
+            request_id="activity-request",
+            status="ok",
+            payload=ActivityEventsResponsePayload(
+                (),
+                dropped_count=3,
+            ).to_wire(),
+        )
+
+    monkeypatch.setattr(client, "request", fake_request)
+
+    with pytest.raises(ActivityStreamGapError) as captured:
+        client.next_activity("sub-1", timeout_ms=0)
+
+    assert captured.value.dropped_count == 3
 
 
 def test_typed_response_decoder_distinguishes_application_failure() -> None:

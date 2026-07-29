@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon live-activity overflow is no longer silent: activity batches carry a
+  dropped-event count, and the REPL recovers a detected stream gap from
+  authoritative turn-scoped logs without replaying earlier activity.
 - Chat compression now preserves thread persistence across every ordinary model
   exception by using the local summary, and records the degradation through a
   sealed `chat/compression_fallback` audit without conversation payloads.

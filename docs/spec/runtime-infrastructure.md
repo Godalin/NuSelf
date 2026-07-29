@@ -625,6 +625,14 @@ They are display-only: receiving or replaying activity cannot execute a
 command. Direct/one-shot mode may continue using the local incremental cursor;
 daemon-attached REPL mode must not poll component log files for live activity.
 
+Each activity batch carries exact `events` and `dropped_count` fields. The
+count is a non-negative integer recording events evicted from that subscription
+since its previous read; booleans are invalid. A positive count is a stream
+gap, not a healthy partial batch. The client must not present that batch and
+must switch to the persisted turn-scoped cursor so the authoritative log can
+recover both evicted and retained records without duplicating identities
+already delivered by earlier healthy batches.
+
 Activity delivery is auxiliary to the chat result. Open, poll, final-drain, and
 close failures emit `chat/activity_transport_degraded` through shared
 observability with `stage`, subscription id when allocated, and structured

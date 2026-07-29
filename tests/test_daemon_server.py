@@ -217,9 +217,10 @@ def test_daemon_chat_uses_state_event_publisher(
     )
     activity_lifecycle = [
         event
-        for event in activity
+        for event in activity.events
         if event.event.startswith("turn.")
     ]
+    assert activity.dropped_count == 0
     assert [event.event_id for event in activity_lifecycle] == [
         event.message_id for event in received
     ]

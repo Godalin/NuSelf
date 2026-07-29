@@ -429,13 +429,21 @@ class ActivityOpenResponsePayload:
 @dataclass(frozen=True)
 class ActivityEventsResponsePayload:
     events: tuple[LogEvent, ...]
+    dropped_count: int = 0
+
+    def __post_init__(self) -> None:
+        if type(self.dropped_count) is not int or self.dropped_count < 0:
+            raise ValueError(
+                "activity dropped_count must be a non-negative integer"
+            )
 
     def to_wire(self) -> dict[str, JsonValue]:
         return {
             "events": [
                 cast(JsonValue, event.to_record())
                 for event in self.events
-            ]
+            ],
+            "dropped_count": self.dropped_count,
         }
 
     @classmethod
@@ -445,12 +453,18 @@ class ActivityEventsResponsePayload:
     ) -> ActivityEventsResponsePayload:
         _expect_fields(
             payload,
-            required=frozenset({"events"}),
+            required=frozenset({"events", "dropped_count"}),
         )
         events = payload.get("events")
         if not isinstance(events, list):
             raise ProtocolError(
                 "activity response field 'events' must be a list"
+            )
+        dropped_count = payload.get("dropped_count")
+        if type(dropped_count) is not int or dropped_count < 0:
+            raise ProtocolError(
+                "activity response field 'dropped_count' must be "
+                "a non-negative integer"
             )
         decoded: list[LogEvent] = []
         for index, event in enumerate(events):
@@ -469,7 +483,7 @@ class ActivityEventsResponsePayload:
                     f"activity response event[{index}] is invalid: "
                     f"{diagnostic_exception_message(exc)}"
                 ) from exc
-        return cls(tuple(decoded))
+        return cls(tuple(decoded), dropped_count=dropped_count)
 
 
 @dataclass(frozen=True)

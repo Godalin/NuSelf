@@ -34,12 +34,13 @@ def test_activity_broker_filters_turns_and_bounds_queues() -> None:
     broker.publish(_event("turn-1", "second"))
     broker.publish(_event("turn-1", "third"))
 
-    events = broker.next_events(
+    batch = broker.next_events(
         subscription_id,
         timeout_seconds=0,
         limit=10,
     )
-    assert [event.message for event in events] == ["second", "third"]
+    assert [event.message for event in batch.events] == ["second", "third"]
+    assert batch.dropped_count == 1
 
 
 def test_activity_broker_close_and_expiry() -> None:
@@ -85,6 +86,7 @@ def test_daemon_activity_request_lifecycle(tmp_path: Path) -> None:
     raw_events = received.payload["events"]
     assert isinstance(raw_events, list)
     assert len(raw_events) == 1
+    assert received.payload["dropped_count"] == 0
 
     closed = handle_request(
         DaemonRequest(
@@ -112,8 +114,10 @@ def test_request_scoped_log_projection_reaches_activity_broker(
             turn_id="turn-1",
         )
 
-    assert broker.next_events(
+    batch = broker.next_events(
         subscription_id,
         timeout_seconds=0,
         limit=10,
-    ) == (written,)
+    )
+    assert batch.events == (written,)
+    assert batch.dropped_count == 0

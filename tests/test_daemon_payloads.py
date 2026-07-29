@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import cast
 
 import pytest
 
@@ -209,6 +210,15 @@ def test_activity_response_payloads_round_trip_and_fail_atomically() -> None:
     raw_events.append({"component": "invalid"})
     with pytest.raises(ProtocolError, match=r"event\[1\]"):
         ActivityEventsResponsePayload.from_wire(malformed)
+
+    for dropped_count in (-1, True, "1"):
+        malformed_count = events.to_wire()
+        malformed_count["dropped_count"] = cast(
+            JsonValue,
+            dropped_count,
+        )
+        with pytest.raises(ProtocolError, match="dropped_count"):
+            ActivityEventsResponsePayload.from_wire(malformed_count)
 
 
 def test_activity_payloads_validate_bounds() -> None:

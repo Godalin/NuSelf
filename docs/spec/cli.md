@@ -213,6 +213,9 @@ structured degradation event and switches to the same turn-scoped incremental
 cursor used by local mode. Subscription close failure is also observed but
 does not alter chat success. These failures never trigger a chat retry by
 themselves.
+An activity response with a positive `dropped_count` is a typed stream-gap
+failure and follows the same recovery path; the incomplete response batch is
+not presented.
 
 All human-readable logs use one metadata style: `[component] event key=value ...`. Standard event fields and displayable metadata fields must use this same `key=value` style; they must not mix colon labels, raw JSON blocks, or ad hoc Markdown fields. If a log has body text, render that text starting on the next indented line instead of mixing it into the key/value header.
 

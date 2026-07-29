@@ -264,7 +264,7 @@ def _handle_activity_next(
 ) -> DaemonResponse:
     payload = ActivityNextRequestPayload.from_wire(request.payload)
     try:
-        events = state.activity_broker.next_events(
+        batch = state.activity_broker.next_events(
             payload.subscription_id,
             timeout_seconds=payload.timeout_ms / 1000,
             limit=payload.limit,
@@ -273,7 +273,10 @@ def _handle_activity_next(
         return DaemonResponse.fail_from_exception(request.request_id, exc)
     return DaemonResponse.ok(
         request,
-        ActivityEventsResponsePayload(events).to_wire(),
+        ActivityEventsResponsePayload(
+            batch.events,
+            dropped_count=batch.dropped_count,
+        ).to_wire(),
     )
 
 

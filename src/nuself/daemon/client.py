@@ -84,6 +84,16 @@ class DaemonApplicationError(RuntimeError):
     """Raised when the daemon explicitly rejects a valid request."""
 
 
+class ActivityStreamGapError(DaemonApplicationError):
+    """Raised when bounded live activity lost events before delivery."""
+
+    def __init__(self, dropped_count: int) -> None:
+        super().__init__(
+            f"daemon activity stream dropped {dropped_count} event(s)"
+        )
+        self.dropped_count = dropped_count
+
+
 def request(
     request_type: RequestType,
     payload: dict[str, JsonValue] | None = None,
@@ -300,6 +310,8 @@ def next_activity(
         ActivityEventsResponsePayload.from_wire,
         operation="activity next",
     )
+    if payload.dropped_count:
+        raise ActivityStreamGapError(payload.dropped_count)
     return payload.events
 
 
