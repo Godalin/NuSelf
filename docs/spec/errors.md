@@ -504,6 +504,16 @@ consults exception types and structured status attributes only; it never
 parses the rendered exception message. Protocol and output failures propagate
 without trying a different endpoint.
 
+Structured endpoint status failover includes request timeout/rate limiting and
+transient server availability statuses `408`, `429`, `500`, `502`, `503`, and
+`504`, whether exposed directly on an exception, on its response, or through
+its exception cause/context chain. Existing endpoint-specific authentication,
+permission, and payment statuses `401`, `402`, and `403` remain eligible
+because configured endpoints may own independent credentials or accounts.
+Client request/schema statuses such as `400`, `404`, and `422` are not
+availability failures. Status values must be exact integers, not booleans, and
+message text is never parsed.
+
 The pre-tool classification is shared agent infrastructure, not a chat-only
 rule. Persona activation, contribution, and synthesis use the same policy:
 provider/runtime and validation failures may produce their specified fallback,

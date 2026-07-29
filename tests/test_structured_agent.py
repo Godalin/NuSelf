@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -50,6 +51,12 @@ class _HttpStatusError(RuntimeError):
     def __init__(self, status_code: int) -> None:
         super().__init__("provider failure")
         self.status_code = status_code
+
+
+class _ResponseStatusError(RuntimeError):
+    def __init__(self, status_code: int) -> None:
+        super().__init__("provider failure")
+        self.response = SimpleNamespace(status_code=status_code)
 
 
 def _endpoint(index: int) -> LangChainLLMEndpoint:
@@ -239,6 +246,52 @@ def test_endpoint_availability_does_not_parse_exception_text() -> None:
         RuntimeError("HTTP 429 rate limit")
     )
     assert is_endpoint_availability_error(_HttpStatusError(429))
+
+
+@pytest.mark.parametrize(
+    "status_code",
+    [401, 402, 403, 408, 429, 500, 502, 503, 504],
+)
+def test_endpoint_availability_accepts_structured_failover_statuses(
+    status_code: int,
+) -> None:
+    assert is_endpoint_availability_error(
+        _HttpStatusError(status_code)
+    )
+
+
+@pytest.mark.parametrize("status_code", [400, 404, 422])
+def test_endpoint_availability_rejects_client_statuses(
+    status_code: int,
+) -> None:
+    assert not is_endpoint_availability_error(
+        _HttpStatusError(status_code)
+    )
+
+
+def test_endpoint_availability_rejects_boolean_status() -> None:
+    assert not is_endpoint_availability_error(_HttpStatusError(True))
+
+
+def test_endpoint_availability_reads_response_status() -> None:
+    assert is_endpoint_availability_error(_ResponseStatusError(503))
+
+
+def test_endpoint_availability_reads_cause_status() -> None:
+    error = RuntimeError("outer")
+    error.__cause__ = _HttpStatusError(502)
+
+    assert is_endpoint_availability_error(error)
+
+
+def test_endpoint_availability_reads_context_status() -> None:
+    try:
+        raise _HttpStatusError(504)
+    except _HttpStatusError:
+        try:
+            raise RuntimeError("outer")
+        except RuntimeError as error:
+            assert is_endpoint_availability_error(error)
 
 
 def test_shared_endpoint_runner_uses_model_unavailable_error() -> None:

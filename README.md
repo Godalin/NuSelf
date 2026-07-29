@@ -66,6 +66,9 @@ object, indexes reject booleans, and the absolute next index must exactly match
 the retained message window.
 The memory curator's short-text fast gate recognizes durable signals across
 English, Simplified/Traditional Chinese, Japanese, and mixed-language turns.
+Shared model endpoint failover classifies structured timeout, rate-limit, and
+transient server statuses through exception/response chains; it never matches
+rendered provider error text.
 
 Daemon instance-lock acquire and release likewise preserve simultaneous lock
 operation and handle-close failures, so ownership errors are not hidden by

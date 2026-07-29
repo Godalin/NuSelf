@@ -150,7 +150,9 @@ _ENDPOINT_AVAILABILITY_ERRORS = (
     ConnectionError,
     TimeoutError,
 )
-_ENDPOINT_AVAILABILITY_STATUS_CODES = frozenset({401, 402, 403, 429})
+_ENDPOINT_AVAILABILITY_STATUS_CODES = frozenset(
+    {401, 402, 403, 408, 429, 500, 502, 503, 504}
+)
 
 
 def is_endpoint_availability_error(error: BaseException) -> bool:

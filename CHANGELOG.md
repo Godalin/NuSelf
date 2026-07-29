@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Endpoint failover now recognizes structured 408 and transient 5xx provider
+  statuses through direct, response, cause, and context fields without parsing
+  exception messages.
 - Short Chinese, Traditional Chinese, Japanese, and mixed-language durable
   memory signals now pass the curator fast gate instead of being excluded by
   an English-only marker list.

@@ -102,6 +102,13 @@ trustworthy 0.3.0 release candidate.
   reached and a candidate is staged.
 - Focused memory-curator tests: 41 passed; pyright reported 0 errors and 0
   warnings.
+- Endpoint availability classification now includes structured 408, 500, 502,
+  503, and 504 statuses while retaining endpoint-specific authentication,
+  permission, payment, and rate-limit failover. Direct, response, cause,
+  context, boolean, client-status, and no-message-parsing cases are covered.
+- Focused structured/text/chat endpoint tests: 70 passed. The batch pyright
+  rerun remains pending because the tool cache attempted a blocked network
+  refresh and the subsequent approval service disconnected.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 
@@ -111,4 +118,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-Structured HTTP status failover classification.
+Email content, deep-link, and header safety.
