@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- CLI startup no longer replaces the process-global `warnings.warn` callable;
+  the known LangGraph serializer deprecation is filtered only around the chat
+  adapter import, while unrelated dependency warnings remain visible.
 - Daemon raw process-log rotation failures now use a sealed warning contract
   with only the exception type and a fixed startup-continuation suffix.
 - Agent tool-log callback and failure-reporter terminal diagnostics now use two

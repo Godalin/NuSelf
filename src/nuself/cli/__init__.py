@@ -9,28 +9,23 @@ import warnings
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-_original_warn = warnings.warn
+from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
 
 TYPEWRITER_DELAY_SECONDS = 0.01
 TYPEWRITER_REFRESH_PER_SECOND = 30
 
+from nuself import __version__
 
-def _suppress_startup_warning(
-    message: Warning | str,
-    category: type[Warning] | None = None,
-    stacklevel: int = 1,
-    source: object | None = None,
-) -> None:
-    if "The default value of `allowed_objects` will change in a future version." in str(
-        message
-    ):
-        return
-    _original_warn(message, category=category, stacklevel=stacklevel, source=source)
-
-
-warnings.warn = _suppress_startup_warning
-try:
-    from nuself import __version__
+with warnings.catch_warnings():
+    warnings.filterwarnings(
+        "ignore",
+        message=(
+            r"^The default value of `allowed_objects` will change in a future version\. "
+            r"Pass an explicit value \(e\.g\., allowed_objects='messages' or "
+            r"allowed_objects='core'\) to suppress this warning\.$"
+        ),
+        category=LangChainPendingDeprecationWarning,
+    )
     from nuself.cli.chat import (
         run_memory_curator as _run_memory_curator,
     )
@@ -46,65 +41,64 @@ try:
     from nuself.cli.chat import (
         send_one_shot_chat_interactive as _send_one_shot_chat_interactive,
     )
-    from nuself.cli.entrypoints import (
-        EntrypointCallbacks,
-        EntrypointController,
-    )
-    from nuself.cli.daemon_status import observe_daemon_status
-    from nuself.cli.repl.activity import (
-        print_interactive_activity_events as _print_interactive_activity_events,
-    )
-    from nuself.cli.repl.activity import (
-        read_interactive_activity_events as _interactive_activity_events,
-    )
-    from nuself.cli.commands.reflections import (
-        handle_reflection_archive as handle_reflection_archive,
-    )
-    from nuself.cli.commands.reflections import (
-        handle_reflection_dismiss as handle_reflection_dismiss,
-    )
-    from nuself.cli.commands.reflections import (
-        handle_reflection_list as handle_reflection_list,
-    )
-    from nuself.cli.commands.reflections import (
-        handle_reflection_show as handle_reflection_show,
-    )
-    from nuself.cli.handlers import dispatch_cli
-    from nuself.cli.parser import (
-        EntrypointHandlers,
-    )
-    from nuself.cli.parser import (
-        build_parser as _build_parser,
-    )
-    from nuself.cli.repl.dispatcher import (
-        ReplCommandDispatcher,
-    )
-    from nuself.cli.repl.input import (
-        InteractiveCompleter as _InteractiveCompleter,
-    )
-    from nuself.cli.repl.presentation import SessionHeaderPresenter
-    from nuself.cli.repl.runtime import (
-        ReplCallbacks,
-        run_interactive_loop,
-    )
-    from nuself.cli.repl.session import (
-        InteractiveSession as InteractiveSession,
-    )
-    from nuself.cli.repl.transcript import (
-        auto_save_interactive_transcripts as _auto_save_interactive_transcripts,
-    )
-    from nuself.cli.repl.transcript import (
-        render_chat_transcript as _render_chat_transcript,
-    )
-    from nuself.cli.repl.turns import (
-        send_interactive_chat_turn as _run_interactive_chat_turn,
-    )
-    from nuself.cli.repl.types import InteractiveChatResult
-    from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
-    from nuself.storage import reset_default_backend
-    from nuself.storage_audit import report_cli_cleanup_failure
-finally:
-    warnings.warn = _original_warn
+
+from nuself.cli.commands.reflections import (
+    handle_reflection_archive as handle_reflection_archive,
+)
+from nuself.cli.commands.reflections import (
+    handle_reflection_dismiss as handle_reflection_dismiss,
+)
+from nuself.cli.commands.reflections import (
+    handle_reflection_list as handle_reflection_list,
+)
+from nuself.cli.commands.reflections import (
+    handle_reflection_show as handle_reflection_show,
+)
+from nuself.cli.daemon_status import observe_daemon_status
+from nuself.cli.entrypoints import (
+    EntrypointCallbacks,
+    EntrypointController,
+)
+from nuself.cli.handlers import dispatch_cli
+from nuself.cli.parser import (
+    EntrypointHandlers,
+)
+from nuself.cli.parser import (
+    build_parser as _build_parser,
+)
+from nuself.cli.repl.activity import (
+    print_interactive_activity_events as _print_interactive_activity_events,
+)
+from nuself.cli.repl.activity import (
+    read_interactive_activity_events as _interactive_activity_events,
+)
+from nuself.cli.repl.dispatcher import (
+    ReplCommandDispatcher,
+)
+from nuself.cli.repl.input import (
+    InteractiveCompleter as _InteractiveCompleter,
+)
+from nuself.cli.repl.presentation import SessionHeaderPresenter
+from nuself.cli.repl.runtime import (
+    ReplCallbacks,
+    run_interactive_loop,
+)
+from nuself.cli.repl.session import (
+    InteractiveSession as InteractiveSession,
+)
+from nuself.cli.repl.transcript import (
+    auto_save_interactive_transcripts as _auto_save_interactive_transcripts,
+)
+from nuself.cli.repl.transcript import (
+    render_chat_transcript as _render_chat_transcript,
+)
+from nuself.cli.repl.turns import (
+    send_interactive_chat_turn as _run_interactive_chat_turn,
+)
+from nuself.cli.repl.types import InteractiveChatResult
+from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
+from nuself.storage import reset_default_backend
+from nuself.storage_audit import report_cli_cleanup_failure
 
 __all__ = [
     "_InteractiveCompleter",

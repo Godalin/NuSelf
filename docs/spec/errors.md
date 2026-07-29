@@ -458,6 +458,11 @@ uses fail-safe exception diagnostics, and redacts the complete warning.
 Emission still catches warning-hook and warning-as-error failures, so neither a
 schema/render problem nor warning policy may replace the primary log outcome.
 
+Import-time dependency warnings remain owned by Python's standard warning
+policy. NuSelf must not replace `warnings.warn`; a documented dependency
+warning may use a temporary exact filter around only the import that triggers
+it, while unrelated warnings remain visible.
+
 The shared observed-failure sink fallback resolves the sealed
 `runtime/observability_sink_failed` warning. It records exactly the failed
 audit component/event, the safe observed exception chain, and the safe sink

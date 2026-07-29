@@ -228,6 +228,11 @@ documented policy explicitly translates it.
 public entrypoint. Parser, command, and REPL implementations live beside it
 under the same package.
 
+- Importing the composition root must not replace process-global warning
+  callables. A known third-party import warning may be filtered only with
+  `warnings.catch_warnings()` around the exact dependency-owning adapter import,
+  matching its full message and category. Other warnings remain caller-owned
+  and visible.
 - `cli/parser.py` owns top-level parser construction and accepts only dynamic
   chat launch-policy callbacks through `EntrypointHandlers`; it never imports
   `nuself.cli`.

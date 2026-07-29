@@ -5,8 +5,10 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close daemon process-log rotation terminal warning ownership so the final
-domain warning producer uses a sealed typed contract.
+Remove the CLI composition root's process-global `warnings.warn` replacement.
+The known LangGraph/LangChain import warning must be suppressed only while
+loading the CLI chat adapter, without hiding unrelated warnings or changing the
+warning callable.
 
 ## Active Branch
 
@@ -14,47 +16,25 @@ domain warning producer uses a sealed typed contract.
 
 ## Ordered Work
 
-1. Inventory process-log rotation, startup continuation, safe fields,
-   stacklevel, warning policy, and tests.
-2. Keep raw daemon process-log retention distinct from structured log rotation.
-3. Update log, error, runtime-infrastructure, and development specs first.
-4. Define one sealed `daemon/process_log_rotation_failed` warning with exact
-   exception-type metadata and a fixed startup-continuation suffix.
-5. Route daemon startup through registered rendering without changing rotation,
-   hardening, open, spawn, or readiness behavior.
-6. Remove the final production domain `emit_runtime_warning` call and
-   free-form interpolation without compatibility aliases.
-7. Run focused and full quality gates, commit by functional boundary, and push.
+1. Identify the exact third-party import, warning category, and message.
+2. Update CLI, error, and development specs before implementation.
+3. Replace callable monkeypatching with one exact `catch_warnings` filter around
+   the `cli.chat` import only.
+4. Prove unrelated warnings remain visible and `warnings.warn` identity is
+   unchanged after importing `nuself.cli`.
+5. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No change to retention thresholds, backup order, or rotation operations.
-- No exception message, project path, or process-log content in the warning.
-- No structured diagnostic write or startup retry.
-- No change to daemon status validation, spawn, or readiness semantics.
+- No dependency upgrade or patch to LangGraph/LangChain.
+- No suppression of urllib3, Pydantic, or other import warnings.
+- No lazy-loading redesign of the CLI composition root.
+- No change to CLI commands, output, exit status, or chat runtime behavior.
 
 ## Completion Evidence
 
-- Daemon process-log rotation warning ownership completed in `eb6f76d`.
-- `DAEMON_LIFECYCLE_WARNING_REGISTRY` is sealed and owns the exact
-  `daemon/process_log_rotation_failed` contract.
-- Rotation failure warning retains only `error_type` plus the fixed
-  `continuing startup` suffix and cannot expose its message or path.
-- Full-tree search proves production domain code no longer calls
-  `emit_runtime_warning` directly; only the primitive and registered renderer
-  remain.
-- Focused tests: 363 passed.
-- Full suite: 2069 passed.
-- Pyright: 0 errors, 0 warnings.
-- Static search and `git diff --check`: passed.
+Pending.
 
 ## Publication
 
-Daemon process-log rotation warning ownership was implemented in `eb6f76d`;
-milestone publication is pending this goal update and push.
-
-## Next Review Batch
-
-Remove the CLI import-time global `warnings.warn` monkeypatch next. Warning
-suppression must be scoped to the specific third-party import and must not
-alter process-wide warning behavior after `nuself.cli` loads.
+Pending implementation and validation.

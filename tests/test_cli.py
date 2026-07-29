@@ -68,6 +68,30 @@ class MonkeyPatchFixture(Protocol):
     def delenv(self, name: str, raising: bool = True) -> None: ...
 
 
+def test_cli_import_preserves_process_warning_api() -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-W",
+            "always",
+            "-c",
+            (
+                "import warnings; "
+                "original = warnings.warn; "
+                "import nuself.cli; "
+                "assert warnings.warn is original; "
+                "warnings.warn('post-import-probe', UserWarning)"
+            ),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "allowed_objects" not in completed.stderr
+    assert "post-import-probe" in completed.stderr
+
+
 def _fail_lifecycle_audit_storage(
     monkeypatch: MonkeyPatchFixture,
 ) -> None:

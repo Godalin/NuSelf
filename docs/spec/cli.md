@@ -10,6 +10,15 @@
 6. **JSON mode is a first-class view**: Structured-data commands support `--json`.
 7. **Separate user outcomes from internal audit**: `list` shows meaningful outcomes. `logs` shows the full audit trail.
 
+## Import Boundary
+
+Importing `nuself.cli` must preserve the process warning API and the caller's
+warning policy. The CLI composition root may suppress the known LangGraph
+checkpoint serializer `allowed_objects` deprecation only during the
+`nuself.cli.chat` import, using an exact message, warning category, and
+temporary filter. It must not suppress unrelated dependency warnings or retain
+a filter after that import completes or fails.
+
 ## Exception Presentation
 
 Every caught exception rendered by `nuself.cli` uses the shared safe diagnostic
