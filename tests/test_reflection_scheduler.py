@@ -11,8 +11,9 @@ from typing import Never
 
 import pytest
 from langchain_core.messages import BaseMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
+from nuself.agent.errors import AgentInvalidOutputError, AgentModelUnavailableError
 from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.logs import read_log_events
@@ -98,9 +99,14 @@ class _CandidateAgent:
         messages: Sequence[BaseMessage],
     ) -> CandidateListOutput:
         self.messages.append(messages)
-        return CandidateListOutput.model_validate(
-            {"candidates": self._candidates}
-        )
+        try:
+            return CandidateListOutput.model_validate(
+                {"candidates": self._candidates}
+            )
+        except ValidationError as exc:
+            raise AgentInvalidOutputError(
+                "candidate agent returned invalid structured output"
+            ) from exc
 
 
 class _RelevanceAgent:
@@ -124,12 +130,17 @@ class _RelevanceAgent:
         messages: Sequence[BaseMessage],
     ) -> RelevanceScoreOutput:
         self.messages.append(messages)
-        return RelevanceScoreOutput.model_validate(self._response)
+        try:
+            return RelevanceScoreOutput.model_validate(self._response)
+        except ValidationError as exc:
+            raise AgentInvalidOutputError(
+                "relevance agent returned invalid structured output"
+            ) from exc
 
 
 class _BrokenAgent:
     def invoke(self, messages: Sequence[BaseMessage]) -> Never:
-        raise RuntimeError("simulated LLM failure")
+        raise AgentModelUnavailableError("simulated LLM failure")
 
 
 def _fake_structured_agent(
@@ -695,7 +706,7 @@ def test_generator_invalid_structured_output_returns_empty(
             self,
             messages: Sequence[BaseMessage],
         ) -> CandidateListOutput:
-            raise ValueError("invalid structured output")
+            raise AgentInvalidOutputError("invalid structured output")
 
     _seed_memory(tmp_path)
 
@@ -705,6 +716,31 @@ def test_generator_invalid_structured_output_returns_empty(
     )
     candidates = gen.generate()
     assert candidates == []
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, ValueError])
+def test_generator_propagates_untyped_agent_errors(
+    tmp_path: Path,
+    error_type: type[Exception],
+) -> None:
+    _seed_memory(tmp_path)
+    expected = error_type("raw agent implementation failure")
+
+    class _UntypedFailureAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> CandidateListOutput:
+            raise expected
+
+    generator = IdeaCandidateGenerator(
+        tmp_path,
+        agent=_UntypedFailureAgent(),
+    )
+
+    with pytest.raises(error_type) as caught:
+        generator.generate()
+    assert caught.value is expected
 
 
 @pytest.mark.parametrize(
@@ -888,7 +924,7 @@ def test_relevance_gate_fallback_on_invalid_structured_output(
             self,
             messages: Sequence[BaseMessage],
         ) -> RelevanceScoreOutput:
-            raise ValueError("invalid structured output")
+            raise AgentInvalidOutputError("invalid structured output")
 
     gate = LLMRelevanceGate(
         tmp_path,
@@ -897,6 +933,29 @@ def test_relevance_gate_fallback_on_invalid_structured_output(
     score = gate.score(_make_candidate("Bad json"))
     assert score.passes is False
     assert score.reasons == ("llm_fallback",)
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, ValueError])
+def test_relevance_gate_propagates_untyped_agent_errors(
+    tmp_path: Path,
+    error_type: type[Exception],
+) -> None:
+    from nuself.reflection import LLMRelevanceGate
+
+    expected = error_type("raw agent implementation failure")
+
+    class _UntypedFailureAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> RelevanceScoreOutput:
+            raise expected
+
+    gate = LLMRelevanceGate(tmp_path, agent=_UntypedFailureAgent())
+
+    with pytest.raises(error_type) as caught:
+        gate.score(_make_candidate("Will propagate"))
+    assert caught.value is expected
 
 
 def test_relevance_gate_fallback_on_missing_field(tmp_path: Path) -> None:

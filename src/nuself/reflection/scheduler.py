@@ -10,6 +10,7 @@ from typing import Literal, cast
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import runtime_paths
 from nuself.config import ConfigSystem, ReflectionSettings
@@ -488,28 +489,39 @@ class LLMRelevanceGate:
     def score(self, candidate: IdeaCandidate) -> RelevanceScore:
         cooldown_ok = self._cooldown_ok()
         try:
-            return self._score_with_agent(candidate, cooldown_ok)
-        except (RuntimeError, ValueError) as e:
-            error = diagnostic_exception_message(e)
-            write_reflection_audit(
-                "relevance_gate_fallback",
-                f"Relevance agent failed, using fallback: {error}",
-                project_root=self._project_root,
-            )
-            return self._fallback_score(candidate, cooldown_ok)
+            output = self._invoke_agent(candidate, cooldown_ok)
+        except AgentError as exc:
+            return self._observed_fallback(candidate, cooldown_ok, exc)
+        try:
+            return self._score_from_output(output, cooldown_ok)
+        except ValueError as exc:
+            return self._observed_fallback(candidate, cooldown_ok, exc)
 
     def passes(self, candidate: IdeaCandidate) -> bool:
         return self.score(candidate).passes
 
-    def _score_with_agent(
+    def _invoke_agent(
         self,
         candidate: IdeaCandidate,
         cooldown_ok: bool,
-    ) -> RelevanceScore:
+    ) -> RelevanceScoreOutput:
         recent = self._reflection_repo.list()[:3]
         messages = self._build_prompt(candidate, recent, cooldown_ok)
-        output = self._agent.invoke(messages)
-        return self._score_from_output(output, cooldown_ok)
+        return self._agent.invoke(messages)
+
+    def _observed_fallback(
+        self,
+        candidate: IdeaCandidate,
+        cooldown_ok: bool,
+        error: ValueError | AgentError,
+    ) -> RelevanceScore:
+        detail = diagnostic_exception_message(error)
+        write_reflection_audit(
+            "relevance_gate_fallback",
+            f"Relevance agent failed, using fallback: {detail}",
+            project_root=self._project_root,
+        )
+        return self._fallback_score(candidate, cooldown_ok)
 
     def _build_prompt(
         self,
@@ -654,24 +666,21 @@ class IdeaCandidateGenerator:
             )
             return []
         try:
-            candidates = self._generate_with_agent(context, max_candidates)
-            if not candidates:
-                write_reflection_audit(
-                    "cycle_no_candidates",
-                    "reflection cycle generated no candidates",
-                    project_root=self._project_root,
-                    metadata={"reason": "no_candidates"}
-                )
-            return candidates
-        except (RuntimeError, ValueError) as e:
-            report_reflection_failure(
-                e,
-                event="candidate_generation_failed",
-                message=f"failed to generate candidates: {type(e).__name__}",
+            output = self._invoke_agent(context)
+        except AgentError as exc:
+            return self._observed_generation_failure(exc)
+        try:
+            candidates = self._candidates_from_output(output, max_candidates)
+        except ValueError as exc:
+            return self._observed_generation_failure(exc)
+        if not candidates:
+            write_reflection_audit(
+                "cycle_no_candidates",
+                "reflection cycle generated no candidates",
                 project_root=self._project_root,
-                metadata=None,
+                metadata={"reason": "no_candidates"}
             )
-            return []
+        return candidates
 
     def _collect_context(self) -> _ThinkingContext:
         threads = self._recent_thread_context()
@@ -685,11 +694,10 @@ class IdeaCandidateGenerator:
             sources=sources,
         )
 
-    def _generate_with_agent(
+    def _invoke_agent(
         self,
         context: _ThinkingContext,
-        max_candidates: int,
-    ) -> list[IdeaCandidate]:
+    ) -> CandidateListOutput:
 
         system_prompt = (
             "You are an independent thinker with access to someone's private memory, "
@@ -715,8 +723,20 @@ class IdeaCandidateGenerator:
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_message),
         ]
-        output = self._agent.invoke(messages)
-        return self._candidates_from_output(output, max_candidates)
+        return self._agent.invoke(messages)
+
+    def _observed_generation_failure(
+        self,
+        error: ValueError | AgentError,
+    ) -> list[IdeaCandidate]:
+        report_reflection_failure(
+            error,
+            event="candidate_generation_failed",
+            message=f"failed to generate candidates: {type(error).__name__}",
+            project_root=self._project_root,
+            metadata=None,
+        )
+        return []
 
     def _candidates_from_output(
         self,

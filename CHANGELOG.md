@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reflection relevance scoring and candidate generation now recover only from
+  typed Agent failures or semantic domain-materialization errors; raw Agent
+  implementation `RuntimeError` and `ValueError` failures propagate.
+
 ### Added
 
 - Added `nuself daemon health`, backed by a typed daemon health request, to

@@ -94,6 +94,13 @@ reflection history, and cooldown state, then returns an actual typed
 - `passes` is the LLM's holistic judgment, not a derived formula.
 - Missing or invalid structured output falls back to `passes=false`,
   `composite=0.0`, and `reason="llm_fallback"`. Response text is not reparsed.
+- The invocation boundary falls back only for the shared typed `AgentError`
+  hierarchy. Raw `RuntimeError` or `ValueError` raised by an Agent
+  implementation propagates as a programming or integration failure.
+- Typed output invocation and `RelevanceScore` materialization are separate
+  stages. A semantic `ValueError` while materializing an otherwise valid typed
+  response uses the same observed fallback without widening the invocation
+  boundary.
 - `cooldown_ok` remains L1 deterministic: checked before the LLM call using `config.scheduler.cooldown_seconds`.
 
 ## Candidate Generation Contract
@@ -108,6 +115,10 @@ contains at most three items.
 A malformed item rejects the complete generated batch and produces the
 existing empty result plus `candidate_generation_failed`. Candidate text is
 not parsed, missing fields are not defaulted, and scores are not clamped.
+The invocation stage treats only shared typed `AgentError` failures as a
+recoverable generation failure. Candidate materialization has its own semantic
+`ValueError` boundary. Raw `RuntimeError` or `ValueError` from an Agent
+implementation propagates instead of being reported as a valid empty batch.
 
 ## Gate Thresholds
 
