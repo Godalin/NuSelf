@@ -141,6 +141,17 @@ errors are not degraded and continue to the daemon request backstop.
   mismatch, invalid actions, or an end position beyond the currently known
   thread are corrupt state: report `record_decode_failed` and abort rather than
   calling the model or guessing whether prior candidate effects committed.
+- Curator runtime and operator tooling share one typed plan store for path
+  validation, strict decoding, corruption reporting, and exact-thread delete.
+- `nuself memory plan show <thread>` exposes only operational metadata:
+  thread, source range, observation time, action count, action/type, optional
+  target ID, and deterministic candidate ID. It must not print candidate
+  title/body, tags, or model reason.
+- `nuself memory plan discard <thread> --force` removes exactly that thread's
+  plan and does not alter its cursor or candidates. `--force` is mandatory
+  because discarding an unfinished plan makes the source range eligible for a
+  new model decision. Missing and corrupt plans remain explicitly
+  diagnosable; there is no automatic discard.
 - If `cursor >= next_message_index`, no-op (idempotent).
 - If thread was compressed (`cursor < message_start_index`), log gap and start from `visible_start`.
 - Advance cursor to `visible_end` after processing.

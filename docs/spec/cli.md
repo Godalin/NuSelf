@@ -430,6 +430,11 @@ All memory subcommands follow the same list/detail/empty/error contracts.
 - **Detail**: Same record-block style as list, with full title/body plus tags, temporal metadata, and evidence rendered as indented body sections.
 - `memory show/edit/delete`, `memory review show/accept/reject/edit/merge`, `memory source show/delete/chunks/extract`, and `memory profile show/delete` accept either a stable ID or the 0-based index from their corresponding list command.
 - `memory delete`, `memory review accept`, and `memory review reject` also accept compact batch selections, such as `nuself memory delete 0-43` or `nuself memory review accept 1,3-5,9`.
+- `memory plan show <thread>` prints payload-safe curator recovery metadata and
+  returns non-zero for a missing or corrupt plan.
+- `memory plan discard <thread> --force` deletes only that thread's curator
+  plan. It never advances or rewinds the cursor and requires the explicit
+  `--force` acknowledgement because the source may be modeled again.
 
 ## Discussion Trace Contract
 

@@ -405,7 +405,7 @@ def test_memory_curator_plan_write_fails_before_candidate_effects(
         real_write_json_atomic(path, payload)
 
     monkeypatch.setattr(
-        "nuself.memory.curator.write_json_atomic",
+        "nuself.memory.curator_plan.write_json_atomic",
         fail_plan_write,
     )
     curator = MemoryCurator(

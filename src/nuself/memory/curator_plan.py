@@ -1,0 +1,260 @@
+"""Typed durable recovery plans for memory curation."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
+from pathlib import Path
+from typing import Never, cast
+from uuid import NAMESPACE_URL, uuid5
+
+from nuself.config import runtime_paths
+from nuself.domain.memory import (
+    MemoryTypeRegistry,
+    default_memory_type_registry,
+)
+from nuself.memory.curator_contract import (
+    CuratorActionItem,
+    MemoryAction,
+    action_from_item,
+)
+from nuself.runtime.observability import report_corrupt_record
+from nuself.storage import write_json_atomic
+
+
+@dataclass(frozen=True)
+class MemoryCuratorPlan:
+    """One durable structured decision awaiting cursor completion."""
+
+    thread_id: str
+    source_start: int
+    source_end: int
+    observed_at: str
+    actions: tuple[MemoryAction, ...]
+
+    @property
+    def source_ref(self) -> str:
+        return (
+            f"thread:{self.thread_id}:{self.source_start}-{self.source_end}"
+        )
+
+    def candidate_id(self, action_index: int) -> str:
+        if action_index < 0 or action_index >= len(self.actions):
+            raise IndexError("curator plan action index is out of range")
+        return (
+            f"cand_{uuid5(NAMESPACE_URL, f'{self.source_ref}:{action_index}').hex}"
+        )
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            "thread_id": self.thread_id,
+            "source_start": self.source_start,
+            "source_end": self.source_end,
+            "observed_at": self.observed_at,
+            "actions": [
+                {
+                    "action": action.action,
+                    "title": action.title,
+                    "body": action.body,
+                    "type": action.type,
+                    "tags": list(action.tags),
+                    "entry_id": action.entry_id,
+                    "confidence": action.confidence,
+                    "reason": action.reason,
+                }
+                for action in self.actions
+            ],
+        }
+
+    @classmethod
+    def from_wire(
+        cls,
+        data: dict[str, object],
+        *,
+        expected_thread_id: str,
+        allowed_types: tuple[str, ...],
+    ) -> MemoryCuratorPlan:
+        expected_fields = {
+            "thread_id",
+            "source_start",
+            "source_end",
+            "observed_at",
+            "actions",
+        }
+        if set(data) != expected_fields:
+            raise ValueError("curator plan fields differ from schema")
+        thread_id = data["thread_id"]
+        if thread_id != expected_thread_id:
+            raise ValueError("curator plan thread identity mismatch")
+        source_start = data["source_start"]
+        source_end = data["source_end"]
+        observed_at = data["observed_at"]
+        if (
+            isinstance(source_start, bool)
+            or not isinstance(source_start, int)
+            or isinstance(source_end, bool)
+            or not isinstance(source_end, int)
+            or source_start < 0
+            or source_end <= source_start
+        ):
+            raise ValueError("curator plan source range is invalid")
+        if not isinstance(observed_at, str) or observed_at == "":
+            raise ValueError("curator plan observed_at is invalid")
+        raw_actions = data["actions"]
+        if not isinstance(raw_actions, list) or not raw_actions:
+            raise ValueError(
+                "curator plan actions must be a non-empty list"
+            )
+        action_values = cast(list[object], raw_actions)
+        actions = tuple(
+            action_from_item(
+                CuratorActionItem.model_validate(raw_action),
+                allowed_types=allowed_types,
+            )
+            for raw_action in action_values
+        )
+        return cls(
+            thread_id=expected_thread_id,
+            source_start=source_start,
+            source_end=source_end,
+            observed_at=observed_at,
+            actions=actions,
+        )
+
+
+class MemoryCuratorPlanNotFound(KeyError):
+    """Raised when one thread has no curator recovery plan."""
+
+
+class MemoryCuratorPlanCorruptError(ValueError):
+    """Raised when a curator recovery plan cannot be trusted."""
+
+
+class MemoryCuratorPlanStore:
+    """Typed cursor-adjacent storage for curator recovery plans."""
+
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        *,
+        registry: MemoryTypeRegistry | None = None,
+    ) -> None:
+        self._paths = runtime_paths(project_root)
+        self._registry = registry or default_memory_type_registry()
+
+    def get(self, thread_id: str) -> MemoryCuratorPlan | None:
+        path = self._path(thread_id)
+        try:
+            raw: object = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raise ValueError(
+                    "curator plan record must be a JSON object"
+                )
+            return MemoryCuratorPlan.from_wire(
+                cast(dict[str, object], raw),
+                expected_thread_id=thread_id,
+                allowed_types=self._registry.names(),
+            )
+        except FileNotFoundError:
+            return None
+        except (
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            self._raise_corrupt(thread_id, exc)
+
+    def resumable(
+        self,
+        thread_id: str,
+        *,
+        cursor: int,
+        next_message_index: int,
+    ) -> MemoryCuratorPlan | None:
+        path = self._path(thread_id)
+        try:
+            raw: object = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raise ValueError(
+                    "curator plan record must be a JSON object"
+                )
+            raw_mapping = cast(dict[str, object], raw)
+            stored_thread_id = raw_mapping.get("thread_id")
+            stored_source_end = raw_mapping.get("source_end")
+            if (
+                stored_thread_id == thread_id
+                and not isinstance(stored_source_end, bool)
+                and isinstance(stored_source_end, int)
+                and stored_source_end <= cursor
+            ):
+                return None
+            plan = MemoryCuratorPlan.from_wire(
+                raw_mapping,
+                expected_thread_id=thread_id,
+                allowed_types=self._registry.names(),
+            )
+            if plan.source_start != cursor:
+                raise ValueError(
+                    "curator plan does not start at the durable cursor"
+                )
+            if plan.source_end > next_message_index:
+                raise ValueError(
+                    "curator plan extends beyond the current thread"
+                )
+            return plan
+        except FileNotFoundError:
+            return None
+        except (
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            self._raise_corrupt(thread_id, exc)
+
+    def save(self, plan: MemoryCuratorPlan) -> MemoryCuratorPlan:
+        write_json_atomic(
+            self._path(plan.thread_id),
+            plan.to_wire(),
+        )
+        return plan
+
+    def discard(self, thread_id: str) -> None:
+        path = self._path(thread_id)
+        try:
+            path.unlink()
+        except FileNotFoundError as exc:
+            raise MemoryCuratorPlanNotFound(thread_id) from exc
+
+    def _path(self, thread_id: str) -> Path:
+        validate_curator_thread_id(thread_id)
+        return (
+            self._paths.private_root
+            / "memory"
+            / "plans"
+            / f"{thread_id}.json"
+        )
+
+    def _raise_corrupt(
+        self,
+        thread_id: str,
+        exc: Exception,
+    ) -> Never:
+        report_corrupt_record(
+            exc,
+            component="memory",
+            collection="memory_curator_plans",
+            record_id=thread_id,
+            project_root=self._paths.project_root,
+        )
+        raise MemoryCuratorPlanCorruptError(
+            f"invalid memory curator plan for thread {thread_id!r}; "
+            "inspect with 'nuself memory plan show THREAD' or explicitly "
+            "discard with 'nuself memory plan discard THREAD --force'"
+        ) from exc
+
+
+def validate_curator_thread_id(thread_id: str) -> None:
+    if thread_id == "" or "/" in thread_id or thread_id in {".", ".."}:
+        raise ValueError(f"invalid thread id: {thread_id}")

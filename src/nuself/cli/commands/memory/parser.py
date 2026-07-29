@@ -42,6 +42,10 @@ from nuself.cli.commands.memory.maintenance import (
     handle_memory_optimize,
     handle_memory_update,
 )
+from nuself.cli.commands.memory.plan import (
+    handle_memory_plan_discard,
+    handle_memory_plan_show,
+)
 from nuself.cli.commands.memory.profile import (
     handle_memory_profile_delete,
     handle_memory_profile_list,
@@ -203,6 +207,34 @@ def add_memory_parser(
         memory_subparsers.add_parser("update", help="Run the memory curator once."),
         handle_memory_update,
     )
+    plan_parser = memory_subparsers.add_parser(
+        "plan",
+        help="Inspect or discard curator recovery plans.",
+        description="Inspect or discard curator recovery plans.",
+    )
+    bind_help(plan_parser)
+    plan_subparsers = plan_parser.add_subparsers(
+        dest="plan_command",
+        metavar="<command>",
+    )
+    plan_show_parser = plan_subparsers.add_parser(
+        "show",
+        help="Show payload-safe recovery metadata for one thread.",
+    )
+    plan_show_parser.add_argument("thread_id")
+    bind_handler(plan_show_parser, handle_memory_plan_show)
+    plan_discard_parser = plan_subparsers.add_parser(
+        "discard",
+        help="Discard one thread's recovery plan without changing its cursor.",
+    )
+    plan_discard_parser.add_argument("thread_id")
+    plan_discard_parser.add_argument(
+        "--force",
+        action="store_true",
+        required=True,
+        help="Acknowledge that the source range may be modeled again.",
+    )
+    bind_handler(plan_discard_parser, handle_memory_plan_discard)
     optimize_parser = memory_subparsers.add_parser(
         "optimize", help="Run the memory optimizer once."
     )

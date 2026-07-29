@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # pyright: reportPrivateUsage=false
 
+import json
 import subprocess
 import stat
 import sys
@@ -30,6 +31,11 @@ from nuself.daemon.lifecycle import (
 )
 from nuself.daemon.protocol import DaemonResponse
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
+from nuself.memory.curator_contract import MemoryAction
+from nuself.memory.curator_plan import (
+    MemoryCuratorPlan,
+    MemoryCuratorPlanStore,
+)
 from nuself.memory.intake import IntakeResultOutput
 
 
@@ -1791,6 +1797,12 @@ def test_memory_group_help_describes_nested_commands(capsys: CaptureFixture) -> 
             "closure",
             "Show reachable graph context from one node.",
         ],
+        ("memory", "plan"): [
+            "show",
+            "Show payload-safe recovery metadata for one thread.",
+            "discard",
+            "Discard one thread's recovery plan without changing its cursor.",
+        ],
     }
 
     for argv, snippets in expected.items():
@@ -1801,6 +1813,166 @@ def test_memory_group_help_describes_nested_commands(capsys: CaptureFixture) -> 
         assert f"usage: nuself {' '.join(argv)}" in captured.out
         for snippet in snippets:
             assert snippet in captured.out
+
+
+def test_memory_plan_show_is_payload_safe(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+) -> None:
+    plan = MemoryCuratorPlan(
+        thread_id="default",
+        source_start=2,
+        source_end=5,
+        observed_at="2026-07-29T00:00:00+00:00",
+        actions=(
+            MemoryAction(
+                action="update",
+                type="episode",
+                title="private title",
+                body="private body",
+                tags=("private-tag",),
+                entry_id="mem_target",
+                confidence=0.9,
+                reason="private model reason",
+            ),
+        ),
+    )
+    MemoryCuratorPlanStore(tmp_path).save(plan)
+
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "plan",
+            "show",
+            "default",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert (
+        "Curator plan: thread=default source=2-5 "
+        "observed_at=2026-07-29T00:00:00+00:00 actions=1"
+        in captured.out
+    )
+    assert (
+        f"[0] action=update type=episode "
+        f"candidate_id={plan.candidate_id(0)} target=mem_target"
+        in captured.out
+    )
+    assert "private title" not in captured.out
+    assert "private body" not in captured.out
+    assert "private-tag" not in captured.out
+    assert "private model reason" not in captured.out
+
+
+def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+) -> None:
+    plan_path = (
+        tmp_path
+        / "private"
+        / "memory"
+        / "plans"
+        / "default.json"
+    )
+    plan_path.parent.mkdir(parents=True)
+    plan_path.write_text("{", encoding="utf-8")
+    cursor_path = (
+        tmp_path
+        / "private"
+        / "memory"
+        / "cursors"
+        / "default.json"
+    )
+    cursor_path.parent.mkdir(parents=True)
+    cursor_path.write_text(
+        '{"thread_id":"default","processed_message_count":3}\n',
+        encoding="utf-8",
+    )
+    candidate_repo = MemoryCandidateRepository(tmp_path)
+    candidate = candidate_repo.save(
+        MemoryCandidate(
+            type="episode",
+            title="Retained candidate",
+            body="Plan repair must not mutate candidates.",
+        )
+    )
+
+    show_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "plan",
+            "show",
+            "default",
+        ]
+    )
+    show_output = capsys.readouterr()
+    discard_result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "plan",
+            "discard",
+            "default",
+            "--force",
+        ]
+    )
+    discard_output = capsys.readouterr()
+
+    assert show_result == 1
+    assert "Curator plan unavailable" in show_output.err
+    assert discard_result == 0
+    assert (
+        "Discarded curator plan for thread default. "
+        "Cursor and candidates were not changed."
+        in discard_output.out
+    )
+    assert not plan_path.exists()
+    assert json.loads(cursor_path.read_text(encoding="utf-8")) == {
+        "thread_id": "default",
+        "processed_message_count": 3,
+    }
+    assert candidate_repo.get(candidate.id) == candidate
+
+
+def test_memory_plan_discard_requires_force() -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit) as captured:
+        parser.parse_args(["memory", "plan", "discard", "default"])
+
+    assert captured.value.code == 2
+
+
+def test_memory_plan_show_missing_is_an_explicit_error(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+) -> None:
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "memory",
+            "plan",
+            "show",
+            "missing",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert captured.out == ""
+    assert (
+        captured.err
+        == "Curator plan not found for thread: missing\n"
+    )
 
 
 def test_command_group_help_describes_subcommands(capsys: CaptureFixture) -> None:

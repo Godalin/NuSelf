@@ -5,21 +5,39 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Literal, TypeAlias, cast
-from uuid import NAMESPACE_URL, uuid5
+from typing import cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
+from nuself.domain.memory import (
+    MemoryCandidate,
+    MemoryEntry,
+    MemoryEvidence,
+    MemoryObject,
+    MemoryTypeRegistry,
+    default_memory_type_registry,
+)
 from nuself.memory.audit import (
     run_memory_observed,
     write_curator_audit,
+)
+from nuself.memory.curator_contract import (
+    CuratorActionsOutput,
+    MemoryAction,
+    MemoryActionType,
+    MemoryDecision,
+    actions_from_output as _actions_from_output,
+)
+from nuself.memory.curator_plan import (
+    MemoryCuratorPlan,
+    MemoryCuratorPlanCorruptError,
+    MemoryCuratorPlanStore,
+    validate_curator_thread_id,
 )
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
@@ -27,15 +45,11 @@ from nuself.memory.repository import (
     MemoryEntryNotFound,
     MemoryEntryRepository,
 )
-from nuself.memory.text import looks_like_raw_transcript
 from nuself.profile.repository import ProfileItemRepository
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.observability import report_corrupt_record
 from nuself.storage import write_json_atomic
 from nuself.trace.service import TraceRecorder
-
-MemoryActionType: TypeAlias = Literal["create", "update", "ignore"]
-DecisionStatus: TypeAlias = Literal["ready", "deferred"]
-
 
 @dataclass(frozen=True)
 class MemoryCuratorSettings:
@@ -112,152 +126,6 @@ class MemoryCuratorResult:
         )
 
 
-@dataclass(frozen=True)
-class MemoryAction:
-    """One structured action proposed by the memory curator agent."""
-
-    action: MemoryActionType
-    title: str
-    body: str
-    type: MemoryEntryType = "episode"
-    tags: tuple[str, ...] = ()
-    entry_id: str | None = None
-    confidence: float = 0.6
-    reason: str = ""
-
-
-@dataclass(frozen=True)
-class MemoryDecision:
-    """Structured decision returned by the curator agent."""
-
-    status: DecisionStatus
-    actions: tuple[MemoryAction, ...] = ()
-    reason: str = ""
-
-
-class CuratorActionItem(BaseModel):
-    """One structured memory curation action from the LLM."""
-
-    model_config = ConfigDict(strict=True, extra="forbid")
-
-    action: Literal["create", "update", "ignore"] = Field(description="Memory action type.")
-    title: str = Field(default="", description="Memory entry title.")
-    body: str = Field(default="", description="Memory entry body.")
-    type: str = Field(default="episode", description="Memory entry type.")
-    tags: list[str] = Field(
-        default_factory=lambda: list[str](),
-        max_length=4,
-        description="One to four short tags.",
-    )
-    entry_id: str | None = Field(default=None, description="Existing entry id to update.")
-    confidence: float = Field(
-        default=0.6,
-        ge=0.0,
-        le=1.0,
-        description="Confidence from 0.0 to 1.0.",
-    )
-    reason: str = Field(default="", description="Reason for the action.")
-
-
-class CuratorActionsOutput(BaseModel):
-    """Structured curator actions response from the LLM."""
-
-    model_config = ConfigDict(strict=True, extra="forbid")
-
-    actions: list[CuratorActionItem] = Field(description="Memory curation actions.")
-
-
-@dataclass(frozen=True)
-class MemoryCuratorPlan:
-    """One durable structured decision awaiting cursor completion."""
-
-    thread_id: str
-    source_start: int
-    source_end: int
-    observed_at: str
-    actions: tuple[MemoryAction, ...]
-
-    @property
-    def source_ref(self) -> str:
-        return (
-            f"thread:{self.thread_id}:{self.source_start}-{self.source_end}"
-        )
-
-    def to_wire(self) -> dict[str, object]:
-        return {
-            "thread_id": self.thread_id,
-            "source_start": self.source_start,
-            "source_end": self.source_end,
-            "observed_at": self.observed_at,
-            "actions": [
-                {
-                    "action": action.action,
-                    "title": action.title,
-                    "body": action.body,
-                    "type": action.type,
-                    "tags": list(action.tags),
-                    "entry_id": action.entry_id,
-                    "confidence": action.confidence,
-                    "reason": action.reason,
-                }
-                for action in self.actions
-            ],
-        }
-
-    @classmethod
-    def from_wire(
-        cls,
-        data: dict[str, object],
-        *,
-        expected_thread_id: str,
-        allowed_types: tuple[str, ...],
-    ) -> MemoryCuratorPlan:
-        expected_fields = {
-            "thread_id",
-            "source_start",
-            "source_end",
-            "observed_at",
-            "actions",
-        }
-        if set(data) != expected_fields:
-            raise ValueError("curator plan fields differ from schema")
-        thread_id = data["thread_id"]
-        if thread_id != expected_thread_id:
-            raise ValueError("curator plan thread identity mismatch")
-        source_start = data["source_start"]
-        source_end = data["source_end"]
-        observed_at = data["observed_at"]
-        if (
-            isinstance(source_start, bool)
-            or not isinstance(source_start, int)
-            or isinstance(source_end, bool)
-            or not isinstance(source_end, int)
-            or source_start < 0
-            or source_end <= source_start
-        ):
-            raise ValueError("curator plan source range is invalid")
-        if not isinstance(observed_at, str) or observed_at == "":
-            raise ValueError("curator plan observed_at is invalid")
-        raw_actions = data["actions"]
-        if not isinstance(raw_actions, list) or not raw_actions:
-            raise ValueError("curator plan actions must be a non-empty list")
-        action_values = cast(list[object], raw_actions)
-        actions = tuple(
-            _action_from_item(
-                CuratorActionItem.model_validate(raw_action),
-                allowed_types=allowed_types,
-            )
-            for raw_action in action_values
-        )
-        return cls(
-            thread_id=expected_thread_id,
-            source_start=source_start,
-            source_end=source_end,
-            observed_at=observed_at,
-            actions=actions,
-        )
-
-
 class MemoryCurator:
 
     def __init__(
@@ -272,6 +140,7 @@ class MemoryCurator:
         profile_repository: ProfileItemRepository | None = None,
         registry: MemoryTypeRegistry | None = None,
         trace_recorder: TraceRecorder | None = None,
+        plan_store: MemoryCuratorPlanStore | None = None,
     ) -> None:
         paths = runtime_paths(project_root)
         self._paths = paths
@@ -289,6 +158,10 @@ class MemoryCurator:
             entry_repository=self._repository,
         )
         self._registry = registry or default_memory_type_registry()
+        self._plan_store = plan_store or MemoryCuratorPlanStore(
+            paths.project_root,
+            registry=self._registry,
+        )
         self._trace_recorder = trace_recorder
         self._source_trace_id: str | None = None
 
@@ -372,7 +245,7 @@ class MemoryCurator:
                 observed_at=utc_now_iso(),
                 actions=decision.actions,
             )
-            self._save_plan(plan)
+            self._plan_store.save(plan)
         source_start = plan.source_start
         visible_end = plan.source_end
         source_ref = plan.source_ref
@@ -382,10 +255,7 @@ class MemoryCurator:
         updated = 0
         ignored = 0
         for action_index, action in enumerate(plan.actions):
-            candidate_id = _curator_candidate_id(
-                source_ref,
-                action_index,
-            )
+            candidate_id = plan.candidate_id(action_index)
             if action.action == "create":
                 outcome = self._create_candidate(
                     action,
@@ -770,59 +640,16 @@ class MemoryCurator:
         cursor: int,
         next_message_index: int,
     ) -> MemoryCuratorPlan | None:
-        path = self._plan_path(thread_id)
         try:
-            raw: object = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(raw, dict):
-                raise ValueError("curator plan record must be a JSON object")
-            raw_mapping = cast(dict[str, object], raw)
-            stored_thread_id = raw_mapping.get("thread_id")
-            stored_source_end = raw_mapping.get("source_end")
-            if (
-                stored_thread_id == thread_id
-                and not isinstance(stored_source_end, bool)
-                and isinstance(stored_source_end, int)
-                and stored_source_end <= cursor
-            ):
-                return None
-            plan = MemoryCuratorPlan.from_wire(
-                raw_mapping,
-                expected_thread_id=thread_id,
-                allowed_types=self._registry.names(),
+            return self._plan_store.resumable(
+                thread_id,
+                cursor=cursor,
+                next_message_index=next_message_index,
             )
-            if plan.source_start != cursor:
-                raise ValueError(
-                    "curator plan does not start at the durable cursor"
-                )
-            if plan.source_end > next_message_index:
-                raise ValueError(
-                    "curator plan extends beyond the current thread"
-                )
-            return plan
-        except FileNotFoundError:
-            return None
-        except (
-            json.JSONDecodeError,
-            UnicodeDecodeError,
-            TypeError,
-            ValueError,
-        ) as exc:
-            report_corrupt_record(
-                exc,
-                component="memory",
-                collection="memory_curator_plans",
-                record_id=thread_id,
-                project_root=self._paths.project_root,
-            )
+        except MemoryCuratorPlanCorruptError as exc:
             raise ValueError(
-                f"invalid memory curator plan for thread {thread_id!r}"
+                diagnostic_exception_message(exc)
             ) from exc
-
-    def _save_plan(self, plan: MemoryCuratorPlan) -> None:
-        write_json_atomic(
-            self._plan_path(plan.thread_id),
-            plan.to_wire(),
-        )
 
     def _save_cursor(self, thread_id: str, processed_message_count: int) -> None:
         path = self._cursor_path(thread_id)
@@ -833,18 +660,8 @@ class MemoryCurator:
         write_json_atomic(path, cursor.to_wire())
 
     def _cursor_path(self, thread_id: str) -> Path:
-        if thread_id == "" or "/" in thread_id or thread_id in {".", ".."}:
-            raise ValueError(f"invalid thread id: {thread_id}")
+        validate_curator_thread_id(thread_id)
         return self._paths.private_root / "memory" / "cursors" / f"{thread_id}.json"
-
-    def _plan_path(self, thread_id: str) -> Path:
-        self._cursor_path(thread_id)
-        return (
-            self._paths.private_root
-            / "memory"
-            / "plans"
-            / f"{thread_id}.json"
-        )
 
     def _memory_log_path(self) -> Path:
         return self._paths.logs_dir / "memory.log"
@@ -852,10 +669,6 @@ class MemoryCurator:
 
 def _render_transcript(messages: list[ThreadMessage]) -> str:
     return "\n".join(f"{message.role}: {message.content}" for message in messages)
-
-
-def _curator_candidate_id(source_ref: str, action_index: int) -> str:
-    return f"cand_{uuid5(NAMESPACE_URL, f'{source_ref}:{action_index}').hex}"
 
 
 def _has_memory_worthy_signal(messages: list[ThreadMessage], min_quality_chars: int) -> bool:
@@ -879,66 +692,3 @@ def _has_memory_worthy_signal(messages: list[ThreadMessage], min_quality_chars: 
         "never",
     }
     return any(marker in normalized for marker in durable_markers)
-
-
-def _actions_from_output(
-    output: CuratorActionsOutput,
-    *,
-    allowed_types: tuple[str, ...] | None = None,
-) -> list[MemoryAction]:
-    return [
-        _action_from_item(item, allowed_types=allowed_types)
-        for item in output.actions
-    ]
-
-
-def _action_from_item(
-    item: CuratorActionItem,
-    *,
-    allowed_types: tuple[str, ...] | None = None,
-) -> MemoryAction:
-    title = item.title.strip()
-    body = item.body.strip()
-    if item.action != "ignore" and (title == "" or body == ""):
-        raise ValueError("memory mutation action requires title and body")
-    tags = _normalize_tags(item.tags)
-    if item.action != "ignore" and not tags:
-        raise ValueError("memory mutation action requires tags")
-    if item.action != "ignore" and _looks_like_raw_transcript(body):
-        raise ValueError("memory mutation action body must not be a transcript")
-    if item.action == "update" and (
-        item.entry_id is None or item.entry_id.strip() == ""
-    ):
-        raise ValueError("memory update action requires entry_id")
-    memory_type = _memory_type(item.type, allowed_types=allowed_types)
-    return MemoryAction(
-        action=item.action,
-        type=memory_type,
-        title=title,
-        body=body,
-        tags=tags,
-        entry_id=item.entry_id,
-        confidence=item.confidence,
-        reason=item.reason,
-    )
-
-
-def _memory_type(value: str, *, allowed_types: tuple[str, ...] | None = None) -> MemoryEntryType:
-    names = allowed_types or default_memory_type_registry().names()
-    if value in names:
-        return cast(MemoryEntryType, value)
-    raise ValueError(f"unsupported memory type: {value}")
-
-
-def _normalize_tags(tags: list[str]) -> tuple[str, ...]:
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for tag in tags:
-        clean = tag.strip()
-        if clean == "" or clean in seen:
-            continue
-        normalized.append(clean)
-        seen.add(clean)
-    return tuple(normalized)
-def _looks_like_raw_transcript(text: str) -> bool:
-    return looks_like_raw_transcript(text)
