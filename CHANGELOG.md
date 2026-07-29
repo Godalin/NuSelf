@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Shared SQLite backends now isolate reads from uncommitted writes, immediately
+  observe dynamic columns added by other processes, and reject mismatched
+  record IDs instead of silently rewriting them.
 - Tests now use a domain-oriented hierarchy under `tests/unit/` with concise
   module names; opt-in real-provider checks live alongside them in
   `tests/live/` without entering default pytest or CI collection.

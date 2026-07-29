@@ -21,6 +21,16 @@ same change.
   authoritative memory records. Specify the new index lifecycle, fallback
   behavior, and evaluation criteria before implementation.
 
+## Configuration And Distribution
+
+- [ ] Design a configuration management system that composes global user
+  configuration with directory-local project configuration. Specify discovery,
+  precedence, ownership, secret handling, diagnostics, and migration from the
+  current single project-local file before implementation.
+- [ ] After configuration discovery is stable, publish supported installation
+  flows through PyPI and Homebrew. Define artifact provenance, upgrade and
+  uninstall behavior, platform support, and release automation first.
+
 ## Reasoning And Notifications
 
 - [ ] Define and implement the long-run reason notification policy. Specify

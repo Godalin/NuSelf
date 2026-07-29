@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import sqlite3
 import stat
+import threading
 from typing import cast
 
 import pytest
@@ -206,6 +207,143 @@ def test_create_sqlite_backend_creates_db(tmp_path: Path) -> None:
     backend = create_sqlite_backend(db_path=db_path)
     assert isinstance(backend, SqliteStorageBackend)
     assert db_path.exists()
+
+
+def test_shared_connection_read_waits_for_transaction_commit(
+    tmp_path: Path,
+) -> None:
+    backend = create_sqlite_backend(db_path=tmp_path / "shared.sqlite")
+    collection = backend.collection("memory_entries")
+    write_visible_to_owner = threading.Event()
+    release_transaction = threading.Event()
+    read_finished = threading.Event()
+    observed: list[dict[str, object] | None] = []
+
+    def write() -> None:
+        with backend.transaction():
+            collection.put("pending", {"id": "pending", "value": 1})
+            write_visible_to_owner.set()
+            assert release_transaction.wait(timeout=5)
+
+    def read() -> None:
+        assert write_visible_to_owner.wait(timeout=5)
+        observed.append(collection.get("pending"))
+        read_finished.set()
+
+    writer = threading.Thread(target=write)
+    reader = threading.Thread(target=read)
+    writer.start()
+    reader.start()
+    assert write_visible_to_owner.wait(timeout=5)
+    assert not read_finished.wait(timeout=0.1)
+    release_transaction.set()
+    writer.join(timeout=5)
+    reader.join(timeout=5)
+
+    assert not writer.is_alive()
+    assert not reader.is_alive()
+    assert observed == [{"id": "pending", "value": 1}]
+    backend.close()
+
+
+def test_shared_connection_read_never_observes_rolled_back_write(
+    tmp_path: Path,
+) -> None:
+    backend = create_sqlite_backend(db_path=tmp_path / "rollback.sqlite")
+    collection = backend.collection("memory_entries")
+    write_visible_to_owner = threading.Event()
+    release_transaction = threading.Event()
+    read_finished = threading.Event()
+    observed: list[dict[str, object] | None] = []
+
+    def write() -> None:
+        with pytest.raises(RuntimeError, match="rollback"):
+            with backend.transaction():
+                collection.put(
+                    "rolled-back",
+                    {"id": "rolled-back", "value": 1},
+                )
+                write_visible_to_owner.set()
+                assert release_transaction.wait(timeout=5)
+                raise RuntimeError("rollback")
+
+    def read() -> None:
+        assert write_visible_to_owner.wait(timeout=5)
+        observed.append(collection.get("rolled-back"))
+        read_finished.set()
+
+    writer = threading.Thread(target=write)
+    reader = threading.Thread(target=read)
+    writer.start()
+    reader.start()
+    assert write_visible_to_owner.wait(timeout=5)
+    assert not read_finished.wait(timeout=0.1)
+    release_transaction.set()
+    writer.join(timeout=5)
+    reader.join(timeout=5)
+
+    assert not writer.is_alive()
+    assert not reader.is_alive()
+    assert observed == [None]
+    backend.close()
+
+
+def test_running_backend_reads_columns_added_by_another_backend(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "shared-schema.sqlite"
+    first = create_sqlite_backend(db_path=database)
+    second = create_sqlite_backend(db_path=database)
+    first_collection = first.collection("notification_outbox")
+    second_collection = second.collection("notification_outbox")
+    try:
+        first_collection.put("entry", {"id": "entry", "title": "before"})
+        assert first_collection.get("entry") == {
+            "id": "entry",
+            "title": "before",
+        }
+
+        second_collection.put(
+            "entry",
+            {
+                "id": "entry",
+                "title": "after",
+                "required_adapters": ["email"],
+            },
+        )
+
+        assert first_collection.get("entry") == {
+            "id": "entry",
+            "title": "after",
+            "required_adapters": ["email"],
+        }
+        assert first_collection.list() == (
+            {
+                "id": "entry",
+                "title": "after",
+                "required_adapters": ["email"],
+            },
+        )
+    finally:
+        second.close()
+        first.close()
+
+
+def test_sqlite_put_rejects_record_id_mismatch(
+    tmp_path: Path,
+) -> None:
+    backend = create_sqlite_backend(db_path=tmp_path / "identity.sqlite")
+    collection = backend.collection("memory_entries")
+    try:
+        with pytest.raises(
+            ValueError,
+            match="string matching its key",
+        ):
+            collection.put("expected", {"id": "different"})
+
+        assert collection.get("expected") is None
+    finally:
+        backend.close()
 
 
 def test_default_backend_is_scoped_by_project_root(tmp_path: Path) -> None:

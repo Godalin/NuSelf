@@ -195,6 +195,23 @@ id, not column text or the complete row. The SQLite collection adapter retains
 its project root and collection-to-component ownership so these diagnostics
 flow to the correct structured log.
 
+Every operation on one `SqliteStorageBackend` connection uses the backend's
+single reentrant lock. This includes `get`, `list`, `find`, dynamic-column
+inspection, `collection`, `collection_names`, and `table_info`, as well as
+writes, transactions, backup, and close. An outer transaction retains that
+lock until commit or rollback, so another thread sharing the connection can
+never observe uncommitted writes. Reads inside the owning thread remain valid
+through reentrant acquisition.
+
+Dynamic-column metadata is read from SQLite for each operation rather than
+cached for the backend lifetime. A second process may add a column through a
+different connection; the next read on an already-running backend must
+immediately select and decode that field without a restart.
+
+SQLite and file collections share the same record identity contract. If a
+value passed to `put(key, value)` contains `id`, it must be a string equal to
+`key`; mismatches are producer errors and no database mutation occurs.
+
 ### SQLite Backend Lifecycle
 
 NuSelf-owned database directories use mode `0700`; the main database,

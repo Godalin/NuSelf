@@ -201,7 +201,6 @@ class SqliteCollection:
         conn: sqlite3.Connection,
         table: str,
         lock: _Lock,
-        column_cache: dict[str, tuple[str, ...]],
         transaction_state: _TransactionState,
         *,
         collection_name: str,
@@ -211,9 +210,6 @@ class SqliteCollection:
         self._conn = conn
         self._table = table
         self._lock = lock
-        # Shared across every collection object for this table (they share the
-        # backend connection), so an ALTER by one is seen by all.
-        self._column_cache = column_cache
         self._transaction_state = transaction_state
         self._collection_name = collection_name
         self._component: LogComponent = component
@@ -231,27 +227,18 @@ class SqliteCollection:
                     f"ADD COLUMN {_identifier(k)} TEXT"
                 )
             except sqlite3.OperationalError as exc:
-                self._column_cache.pop(self._table, None)
                 if (
                     "duplicate column name"
                     not in safe_exception_message(exc).lower()
                     or k not in self._columns()
                 ):
                     raise
-            finally:
-                # DDL may have succeeded locally or on a competing connection.
-                self._column_cache.pop(self._table, None)
 
     def _columns(self) -> tuple[str, ...]:
-        cached = self._column_cache.get(self._table)
-        if cached is not None:
-            return cached
         rows = self._conn.execute(
             f"PRAGMA table_info({_identifier(self._table)})"
         ).fetchall()
-        cols = tuple(row[1] for row in rows)
-        self._column_cache[self._table] = cols
-        return cols
+        return tuple(row[1] for row in rows)
 
     def _row_to_dict(self, cols: tuple[str, ...], row: tuple[object, ...]) -> dict[str, object]:
         result: dict[str, object] = {}
@@ -300,16 +287,29 @@ class SqliteCollection:
         return tuple(items)
 
     def get(self, key: str) -> dict[str, object] | None:
-        cols = self._columns()
-        col_list = ", ".join(_identifier(c) for c in cols)
-        row = self._conn.execute(
-            f"SELECT {col_list} FROM {_identifier(self._table)} WHERE id = ?", (key,)
-        ).fetchone()
-        if row is None:
-            return None
-        return self._row_to_dict(cols, row)
+        self._lock.acquire()
+        try:
+            cols = self._columns()
+            col_list = ", ".join(_identifier(c) for c in cols)
+            row = self._conn.execute(
+                f"SELECT {col_list} FROM {_identifier(self._table)} "
+                "WHERE id = ?",
+                (key,),
+            ).fetchone()
+            if row is None:
+                return None
+            return self._row_to_dict(cols, row)
+        finally:
+            self._lock.release()
 
     def put(self, key: str, value: dict[str, object]) -> None:
+        value_id = value.get("id")
+        if value_id is not None and (
+            not isinstance(value_id, str) or value_id != key
+        ):
+            raise ValueError(
+                "storage record id must be a string matching its key"
+            )
         validated = cast(
             dict[str, object],
             thaw_json_value(freeze_json_value(value)),
@@ -366,6 +366,13 @@ class SqliteCollection:
             self._conn.commit()
 
     def list(self) -> tuple[dict[str, object], ...]:
+        self._lock.acquire()
+        try:
+            return self._list_locked()
+        finally:
+            self._lock.release()
+
+    def _list_locked(self) -> tuple[dict[str, object], ...]:
         cols = self._columns()
         if len(cols) <= 1:
             return ()
@@ -376,36 +383,42 @@ class SqliteCollection:
         return self._decode_list_rows(cols, rows)
 
     def find(self, **filters: object) -> tuple[dict[str, object], ...]:
-        if not filters:
-            return self.list()
-        cols = self._columns()
-        if len(cols) <= 1:
-            return ()
-        colset = set(cols)
-        # None filters keep the original Python-side comparison semantics (a stored
-        # null round-trips to an absent key), so only push non-None filters to SQL.
-        if any(expected is None for expected in filters.values()):
-            return tuple(
-                item
-                for item in self.list()
-                if all(item.get(key) == expected for key, expected in filters.items())
-            )
-        where_parts: list[str] = []
-        params: list[object] = []
-        for key, expected in filters.items():
-            if key not in colset:
-                # Filtering on a column that does not exist matches nothing.
+        self._lock.acquire()
+        try:
+            if not filters:
+                return self._list_locked()
+            cols = self._columns()
+            if len(cols) <= 1:
                 return ()
-            where_parts.append(f"{_identifier(key)} = ?")
-            # id is stored raw; every other value is stored as JSON text.
-            params.append(expected if key == "id" else _json(expected))
-        col_list = ", ".join(_identifier(c) for c in cols)
-        sql = (
-            f"SELECT {col_list} FROM {_identifier(self._table)} WHERE "
-            + " AND ".join(where_parts)
-        )
-        rows = self._conn.execute(sql, params).fetchall()
-        return self._decode_list_rows(cols, rows)
+            colset = set(cols)
+            # None retains the original Python comparison semantics.
+            if any(expected is None for expected in filters.values()):
+                return tuple(
+                    item
+                    for item in self._list_locked()
+                    if all(
+                        item.get(key) == expected
+                        for key, expected in filters.items()
+                    )
+                )
+            where_parts: list[str] = []
+            params: list[object] = []
+            for key, expected in filters.items():
+                if key not in colset:
+                    return ()
+                where_parts.append(f"{_identifier(key)} = ?")
+                params.append(
+                    expected if key == "id" else _json(expected)
+                )
+            col_list = ", ".join(_identifier(c) for c in cols)
+            sql = (
+                f"SELECT {col_list} FROM {_identifier(self._table)} WHERE "
+                + " AND ".join(where_parts)
+            )
+            rows = self._conn.execute(sql, params).fetchall()
+            return self._decode_list_rows(cols, rows)
+        finally:
+            self._lock.release()
 
 
 class SqliteStorageBackend:
@@ -432,9 +445,6 @@ class SqliteStorageBackend:
         self._lock = threading.RLock()
         self._transaction_state = _TransactionState()
         self._closed = False
-        # Per-table column cache shared by all SqliteCollection objects, so a
-        # dynamic ALTER by one collection is visible to the others.
-        self._column_cache: dict[str, tuple[str, ...]] = {}
         try:
             self._conn.execute("PRAGMA busy_timeout=5000")
             with _SQLITE_INITIALIZATION_LOCK:
@@ -594,7 +604,6 @@ class SqliteStorageBackend:
                 self._conn.execute(
                     f"ALTER TABLE {_identifier(table)} DROP COLUMN payload"
                 )
-        self._column_cache.clear()
 
     def _backup_before_v2_if_needed(self) -> None:
         has_payload = False
@@ -653,13 +662,11 @@ class SqliteStorageBackend:
         try:
             self._conn.rollback()
         except BaseException as rollback_error:
-            self._column_cache.clear()
             self._reset_transaction_state()
             raise SqliteTransactionCleanupError(
                 primary_error=primary_error,
                 rollback_error=rollback_error,
             ) from primary_error
-        self._column_cache.clear()
         self._reset_transaction_state()
 
     def _reset_transaction_state(self) -> None:
@@ -667,40 +674,43 @@ class SqliteStorageBackend:
         self._transaction_state.rollback_only = False
 
     def collection(self, name: str) -> SqliteCollection:
-        table = _collection_table(name)
-        _verify_table(self._conn, table, name)
-        return SqliteCollection(
-            self._conn,
-            table,
-            self._lock,
-            self._column_cache,
-            self._transaction_state,
-            collection_name=name,
-            component=COLLECTION_LOG_COMPONENTS[name],
-            project_root=self._project_root,
-        )
+        with self._lock:
+            table = _collection_table(name)
+            _verify_table(self._conn, table, name)
+            return SqliteCollection(
+                self._conn,
+                table,
+                self._lock,
+                self._transaction_state,
+                collection_name=name,
+                component=COLLECTION_LOG_COMPONENTS[name],
+                project_root=self._project_root,
+            )
 
     def collection_names(self) -> tuple[str, ...]:
-        result: list[str] = []
-        for name in COLLECTION_NAMES:
-            table = _collection_table(name)
-            row = self._conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
-                (table,),
-            ).fetchone()
-            if row is not None:
-                result.append(name)
-        return tuple(result)
+        with self._lock:
+            result: list[str] = []
+            for name in COLLECTION_NAMES:
+                table = _collection_table(name)
+                row = self._conn.execute(
+                    "SELECT 1 FROM sqlite_master "
+                    "WHERE type='table' AND name=?",
+                    (table,),
+                ).fetchone()
+                if row is not None:
+                    result.append(name)
+            return tuple(result)
 
     def table_info(self, name: str) -> list[tuple[str, str, bool, str | None, bool]]:
-        table = _collection_table(name)
-        rows = self._conn.execute(
-            f"PRAGMA table_info({_identifier(table)})"
-        ).fetchall()
-        return [
-            (row[1], row[2], bool(row[3]), row[4], bool(row[5]))
-            for row in rows
-        ]
+        with self._lock:
+            table = _collection_table(name)
+            rows = self._conn.execute(
+                f"PRAGMA table_info({_identifier(table)})"
+            ).fetchall()
+            return [
+                (row[1], row[2], bool(row[3]), row[4], bool(row[5]))
+                for row in rows
+            ]
 
 
 def _verify_table(conn: sqlite3.Connection, table: str, name: str) -> None:
