@@ -6,7 +6,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 ## Objective
 
 Close shared agent endpoint failover audit ownership so Chat, Memory, Persona,
-and Reason use one exact safe contract without persisting endpoint URLs.
+Reason, and Reflection use one exact safe contract without persisting endpoint
+URLs.
 
 ## Active Branch
 
@@ -15,7 +16,8 @@ and Reason use one exact safe contract without persisting endpoint URLs.
 ## Ordered Work
 
 1. Inventory every shared endpoint runner caller, component, event consumer,
-   retry/failover boundary, metadata, and redaction path.
+   retry/failover boundary, metadata, and redaction path. The inventory found
+   five real caller components: Chat, Memory, Persona, Reason, and Reflection.
 2. Separate per-endpoint failover observations from final aggregate
    capability failure and domain-specific retry events.
 3. Update config, error, log, agent-tool, and development specs before
@@ -38,26 +40,25 @@ and Reason use one exact safe contract without persisting endpoint URLs.
 
 ## Completion Evidence
 
-- Storage cleanup audit ownership completed in `f643a8e`.
-- Backend close and CLI cleanup failure now use one sealed storage operations
-  registry.
-- `runtime.cleanup` owns canonical ordered `{step,error}` projection shared by
-  daemon and storage lifecycle owners.
-- Storage/CLI no longer construct cleanup audit presentation.
-- Initial next-batch inspection finds shared agent failover events for
-  `llm_endpoint_failed_over` and `llm_endpoint_unavailable` emitted across
-  Chat, Memory, Persona, and Reason; metadata currently includes `base_url`.
-- Focused tests: 100 passed.
-- Full suite: 2040 passed.
+- Shared agent endpoint audit ownership completed in `28aaa14`.
+- Chat, Memory, Persona, Reason, and the previously omitted Reflection caller
+  now use one sealed registry containing ten exact component/event contracts.
+- The shared runner retains retry/failover decisions and supplies only the
+  already-decided outcome, non-negative endpoint index, and model.
+- `_report_endpoint_failure` and endpoint base URL metadata were removed
+  without compatibility aliases.
+- Focused tests: 122 passed.
+- Full suite: 2048 passed.
 - Pyright: 0 errors, 0 warnings.
 - Static search and `git diff --check`: passed.
 
 ## Publication
 
-Storage cleanup audit ownership was implemented in `f643a8e`; milestone
+Agent endpoint failover audit ownership was implemented in `28aaa14`; milestone
 publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Continue shared handler/log/message infrastructure review after agent endpoint
-failover audit ownership is verified and published.
+Close the remaining REPL Reason completion diagnostic that bypasses the sealed
+Reason audit registry through a caller-selected `run_observed_best_effort`
+event, then continue the shared handler/log/message infrastructure review.
