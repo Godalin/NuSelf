@@ -1698,10 +1698,7 @@ def test_chat_trace_diagnostics_cannot_replace_completed_answer(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-            "memory/chat_trace_recording_failed: trace store unavailable; "
-            "structured logging failed: audit store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ):
         trace_id = runtime._record_chat_turn_trace(  # pyright: ignore[reportPrivateUsage]
             user_message="hello",

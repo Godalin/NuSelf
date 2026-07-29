@@ -337,10 +337,7 @@ def test_approval_diagnostic_failure_warns_without_masking_tool_exception(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-                "chat/observability_projection_failed: audit store unavailable; "
-                "structured logging failed: diagnostic store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ), pytest.raises(ValueError, match="tool failed"):
         tool()
 

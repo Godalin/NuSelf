@@ -674,7 +674,7 @@ def test_worker_audit_failure_cannot_suppress_durable_retry(
     )
     assert persisted.attempts == 1
     assert any(
-        "daemon/observability_projection_failed" in str(warning.message)
+        "runtime/observability_sink_failed" in str(warning.message)
         for warning in captured
     )
     worker.stop()
@@ -726,8 +726,8 @@ def test_progress_diagnostic_failure_cannot_block_composition(
     assert composed == ["job_1"]
     assert any(
         (
-            "daemon/export_job_progress_invalid: "
-            "Expecting property name enclosed in double quotes"
+            "component=daemon event=export_job_progress_invalid "
+            "observed_error=Expecting property name enclosed in double quotes"
         )
         in str(warning.message)
         for warning in captured
@@ -773,7 +773,8 @@ def test_reconciliation_diagnostic_failure_does_not_truncate_scan(
     assert queued.job_id == "b_good"
     assert queued.resource_id == "thread_1"
     assert any(
-        "daemon/export_reconciliation_skip" in str(warning.message)
+        "component=daemon event=export_reconciliation_skip"
+        in str(warning.message)
         for warning in captured
     )
 
@@ -802,7 +803,7 @@ def test_shutdown_audit_failure_cannot_undo_queue_drain(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/observability_projection_failed",
+        match="runtime/observability_sink_failed",
     ):
         worker.stop()
 

@@ -491,10 +491,7 @@ def test_advance_failure_log_cannot_mask_original_exception(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-            "reasoning/advance_failed: agent failed; "
-            "structured logging failed: audit store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ), pytest.raises(RuntimeError) as captured:
         advancer.advance(thread)
 

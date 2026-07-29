@@ -238,10 +238,7 @@ def test_scheduler_failure_log_cannot_raise_or_undo_cooldown(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-            "reasoning/scheduler_advance_failed: missing tmp; "
-            "structured logging failed: audit store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ):
         result = scheduler.run_once()
 

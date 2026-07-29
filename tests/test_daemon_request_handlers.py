@@ -132,7 +132,7 @@ def test_payload_rejection_survives_logging_failure(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/request_rejected",
+        match="runtime/observability_sink_failed",
     ):
         response = handle_request(
             DaemonRequest(

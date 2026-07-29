@@ -509,7 +509,7 @@ def test_response_encode_diagnostic_failure_cannot_block_fallback(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/response_encode_failed",
+        match="runtime/observability_sink_failed",
     ):
         server_module.RequestHandler.handle(fake)  # type: ignore[arg-type]
 

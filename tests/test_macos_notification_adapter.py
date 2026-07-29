@@ -93,10 +93,7 @@ def test_osascript_failure_diagnostic_preserves_false(
         )
         with pytest.warns(
             RuntimeWarning,
-            match=(
-                "outbox/macos_failed: execution error; "
-                "structured logging failed: audit store unavailable"
-            ),
+            match="runtime/observability_sink_failed",
         ):
             result = adapter.send(entry)
 
@@ -138,10 +135,7 @@ def test_osascript_timeout_diagnostic_preserves_false(
         )
         with pytest.warns(
             RuntimeWarning,
-            match=(
-                "outbox/macos_failed: osascript timed out; "
-                "structured logging failed: audit store unavailable"
-            ),
+            match="runtime/observability_sink_failed",
         ):
             result = adapter.send(entry)
 

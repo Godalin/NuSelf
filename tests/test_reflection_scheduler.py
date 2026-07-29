@@ -357,10 +357,7 @@ def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-            "reflection/trace_recording_failed: trace unavailable; "
-            "structured logging failed: audit store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ):
         result = scheduler.reflect(now)
 
@@ -394,10 +391,7 @@ def test_organizer_diagnostics_cannot_interrupt_best_effort_boundary(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-            "reflection/organizer_failed: organizer unavailable; "
-            "structured logging failed: audit store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ):
         scheduler._organize_pending_reflections()
 
@@ -588,11 +582,7 @@ def test_corrupt_schedule_diagnostics_cannot_change_fail_closed_decision(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-            "reflection/schedule_state_corrupt: "
-            "reflection schedule state is malformed or unsupported; "
-            "structured logging failed: audit store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ):
         result = scheduler.should_reflect(
             datetime(2024, 1, 2, 12, tzinfo=UTC)
@@ -984,11 +974,7 @@ def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-            "reflection/schedule_state_corrupt: "
-            "reflection schedule state is malformed or unsupported; "
-            "structured logging failed: audit store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ):
         result = gate._cooldown_ok()
 

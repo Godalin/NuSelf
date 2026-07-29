@@ -156,7 +156,7 @@ def test_persona_failure_log_cannot_mask_discussion_failure(
 
     with pytest.warns(
         RuntimeWarning,
-        match="persona/persona_discussion_failure",
+        match="runtime/observability_sink_failed",
     ):
         result = orchestrator._run_discussion(  # pyright: ignore[reportPrivateUsage]
             topic="compare",

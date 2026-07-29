@@ -70,11 +70,7 @@ def test_no_config_diagnostic_failure_preserves_false(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-            "outbox/email_no_config: "
-            "email configuration is not available; "
-            "structured logging failed: audit store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ):
         result = adapter.send(entry)
 
@@ -133,10 +129,7 @@ def test_smtp_diagnostic_failure_preserves_false(
         smtp.side_effect = OSError("network error")
         with pytest.warns(
             RuntimeWarning,
-            match=(
-                "outbox/email_failed: network error; "
-                "structured logging failed: audit store unavailable"
-            ),
+            match="runtime/observability_sink_failed",
         ):
             result = adapter.send(entry)
 

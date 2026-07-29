@@ -22,12 +22,15 @@ from nuself.runtime.diagnostics import (
 )
 from nuself.runtime.observability import (
     OBSERVABILITY_FAILURE_REGISTRY,
+    OBSERVABILITY_SINK_FAILED,
+    OBSERVABILITY_TERMINAL_WARNING_REGISTRY,
     decode_observed_record,
     publish_observed_event,
     report_observed_failure,
     run_observed_best_effort,
     write_observed_log_event,
 )
+from nuself.runtime.definitions import DefinitionRegistrySealedError
 
 
 def test_observability_failure_registry_is_complete_and_sealed() -> None:
@@ -43,6 +46,20 @@ def test_observability_failure_registry_is_complete_and_sealed() -> None:
                 status="degraded",
             )
         )
+
+
+def test_observability_terminal_warning_registry_is_complete_and_sealed() -> None:
+    [definition] = OBSERVABILITY_TERMINAL_WARNING_REGISTRY.definitions
+    assert definition.event == OBSERVABILITY_SINK_FAILED
+    assert definition.fields == (
+        "component",
+        "event",
+        "observed_error",
+        "log_error",
+    )
+
+    with pytest.raises(DefinitionRegistrySealedError):
+        OBSERVABILITY_TERMINAL_WARNING_REGISTRY.register(definition)
 
 
 def test_observability_failure_metadata_is_exact() -> None:
@@ -287,7 +304,7 @@ def test_invalid_observed_failure_metadata_uses_terminal_warning(
     with pytest.warns(
         RuntimeWarning,
         match="value is not JSON-safe: object",
-    ):
+    ) as captured:
         report_observed_failure(
             RuntimeError("provider failed"),
             component="chat",
@@ -297,6 +314,12 @@ def test_invalid_observed_failure_metadata_uses_terminal_warning(
             metadata={"context": private_object},
         )
 
+    assert str(captured[0].message) == (
+        "runtime/observability_sink_failed: "
+        "component=chat event=provider_failed "
+        "observed_error=provider failed "
+        "log_error=value is not JSON-safe: object"
+    )
     assert read_log_events(project_root=tmp_path) == []
 
 
@@ -506,7 +529,11 @@ def test_best_effort_warns_when_structured_sink_also_fails(
 
     with pytest.warns(
         RuntimeWarning,
-        match="memory/trace_recording_failed.*primary failed.*disk full",
+        match=(
+            "runtime/observability_sink_failed: "
+            "component=memory event=trace_recording_failed "
+            "observed_error=primary failed log_error=disk full"
+        ),
     ):
         result = run_observed_best_effort(
             lambda: (_ for _ in ()).throw(RuntimeError("primary failed")),

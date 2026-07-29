@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Structured observability sink failures now use the fixed sealed
+  `runtime/observability_sink_failed` terminal warning with exact typed fields
+  instead of dynamically reusing each failed business audit identity.
 - Logging-core terminal diagnostics now resolve through one sealed six-event
   warning taxonomy with exact ordered fields and one credential-safe renderer;
   corrupt-record diagnostics no longer render exceptions directly.

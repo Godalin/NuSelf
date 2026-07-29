@@ -277,7 +277,7 @@ def test_failure_diagnostic_store_cannot_prevent_failed_transition(
 
     with pytest.warns(
         RuntimeWarning,
-        match="outbox/email_no_config",
+        match="runtime/observability_sink_failed",
     ):
         delivered = loop.run_once()
 

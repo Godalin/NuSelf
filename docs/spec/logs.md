@@ -419,11 +419,16 @@ Display name mapping: `persona` → `selves`.
   kind. `write_log_event(...)` is the domain-facing convenience composition of
   those two audit operations.
 - Authoritative log persistence uses `write_log_event(...)` directly.
-  Auxiliary evidence uses
+Auxiliary evidence uses
   `write_observed_log_event(...)`, which mirrors the typed fields, returns the
   event or `None`, never retries the original record, and reports failure as a
   distinct `observability_projection_failed` record with exact
   `failed_event` metadata.
+- If any `report_observed_failure` structured write fails, its terminal
+  fallback is the fixed `runtime/observability_sink_failed` warning. Exact
+  fields retain the failed audit component/event plus the observed and sink
+  error chains. A caller-specific `{component}/{event}` string is not reused as
+  the warning identity.
 - An `EventPublisher` may attach `runtime_event_log_sink(...)`; this projection
   retains the published event's ID and correlation context.
 - Writes are serialized by a per-path process lock and an advisory file lock;

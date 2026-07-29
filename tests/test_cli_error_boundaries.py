@@ -132,8 +132,9 @@ def test_history_keeps_rendered_error_when_diagnostic_sink_fails(
     with pytest.warns(
         RuntimeWarning,
         match=(
-            "chat/interactive_history_load_failed.*history unavailable"
-            ".*log disk full"
+            "runtime/observability_sink_failed.*"
+            "component=chat event=interactive_history_load_failed.*"
+            "history unavailable.*log disk full"
         ),
     ):
         rendered = handle_interactive_history_command(tmp_path, "default")

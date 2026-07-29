@@ -762,6 +762,20 @@ ordered fields, domain validation, and an optional fixed suffix. Rendering is
 canonical and credential-safe. Domain owners compose closed registries and
 pass typed facts; they do not interpolate warning strings at call sites.
 
+Shared observability owns a sealed one-event terminal-warning registry:
+
+| Warning | Exact ordered fields |
+|---|---|
+| `runtime/observability_sink_failed` | `component`, `event`, `observed_error`, `log_error` |
+
+The warning identity describes the infrastructure failure. The component and
+business audit event are facts, not a dynamically constructed warning
+identity. The observed failure retains its canonical compact exception chain.
+The sink failure uses its own fail-safe diagnostic message rather than
+inheriting the active observed exception as context and duplicating it across
+both fields. Sink failure never retries the audit or recursively writes another
+structured diagnostic.
+
 The caller may declare a narrower tuple of recoverable exception classes.
 Only those failures are degraded; undeclared storage, programming, and
 invariant failures continue to propagate. Omitting the tuple retains the

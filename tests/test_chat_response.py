@@ -445,9 +445,12 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
     messages = [str(warning.message) for warning in captured]
     assert provider_secret not in "\n".join(messages)
     assert "api_key=***" in "\n".join(messages)
-    assert any("chat/llm_endpoint_retry" in message for message in messages)
     assert any(
-        "chat/llm_endpoints_exhausted" in message
+        "component=chat event=llm_endpoint_retry" in message
+        for message in messages
+    )
+    assert any(
+        "component=chat event=llm_endpoints_exhausted" in message
         for message in messages
     )
 
@@ -478,10 +481,7 @@ def test_finalize_log_failure_cannot_replace_accepted_response(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-                "chat/observability_projection_failed: audit store unavailable; "
-            "structured logging failed: audit store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ):
         result = synthesizer.finalize(state, draft)
 

@@ -465,10 +465,7 @@ def test_discussion_diagnostic_failure_does_not_replace_scoring_fallback(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-            "persona/persona_discussion_degraded: scoring unavailable; "
-            "structured logging failed: diagnostic store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ):
         result = node(
             ANALYST_PERSONA,

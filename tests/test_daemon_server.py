@@ -294,7 +294,8 @@ def test_chat_failure_diagnostic_cannot_replace_original_response(
     with pytest.warns(
         RuntimeWarning,
         match=(
-            "daemon/chat_turn_failed: "
+            "runtime/observability_sink_failed.*"
+            "component=daemon event=chat_turn_failed.*"
             "conversation graph node 'respond' failed"
         ),
     ):
@@ -328,7 +329,7 @@ def test_chat_completion_audit_cannot_invalidate_response(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/observability_projection_failed",
+        match="runtime/observability_sink_failed",
     ):
         response = handle_request(request, state)
 
@@ -869,7 +870,7 @@ def test_shutdown_audit_failure_cannot_block_accepted_request(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/observability_projection_failed",
+        match="runtime/observability_sink_failed",
     ):
         response = handle_request(request, state)
 

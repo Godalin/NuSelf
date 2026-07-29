@@ -454,6 +454,14 @@ uses fail-safe exception diagnostics, and redacts the complete warning.
 Emission still catches warning-hook and warning-as-error failures, so neither a
 schema/render problem nor warning policy may replace the primary log outcome.
 
+The shared observed-failure sink fallback resolves the sealed
+`runtime/observability_sink_failed` warning. It records exactly the failed
+audit component/event, the safe observed exception chain, and the safe sink
+error message. The sink field excludes the active observed exception context
+so the primary diagnostic is not duplicated. It does not retry the structured
+write, construct a dynamic warning identity, or allow warning rendering or
+emission to replace the caller's result, fallback, or primary exception.
+
 Chat's local response policy is not an exception sink for implementation
 defects. Before any tool executes, the shared policy rejects assertion,
 attribute, import, lookup, memory exhaustion, name resolution, unimplemented

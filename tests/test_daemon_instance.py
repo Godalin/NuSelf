@@ -243,7 +243,7 @@ def test_contended_daemon_preserves_owner_resources(
     try:
         with pytest.warns(
             RuntimeWarning,
-            match="daemon/observability_projection_failed",
+            match="runtime/observability_sink_failed",
         ):
             assert server_module.run_daemon(tmp_path) == 1
     finally:
@@ -376,7 +376,7 @@ def test_recovery_audit_failure_cannot_restore_stale_metadata(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/observability_projection_failed",
+        match="runtime/observability_sink_failed",
     ):
         server_module._reconcile_stale_runtime_metadata(paths)
 
@@ -1041,7 +1041,7 @@ def test_stopped_event_is_written_after_owned_cleanup(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/observability_projection_failed",
+        match="runtime/observability_sink_failed",
     ):
         assert server_module._run_owned_daemon(paths) == 0
     assert stopped_observed is True

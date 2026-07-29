@@ -118,10 +118,7 @@ def test_chunk_failure_log_cannot_mask_runner_exception(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-            "reasoning/reason_output_chunk_failed: runner failed; "
-            "structured logging failed: audit store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ), pytest.raises(RuntimeError) as captured:
         output_service.compose_with_runner(
             thread.id,

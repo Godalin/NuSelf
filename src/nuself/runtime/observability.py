@@ -23,12 +23,17 @@ from nuself.runtime.audit_definitions import (
 from nuself.runtime.audit_types import LOG_COMPONENTS
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
-    emit_runtime_warning,
-    redact_sensitive_text,
+    diagnostic_exception_message,
     sanitize_diagnostic_metadata,
 )
 from nuself.runtime.events import EventDeliveryError, EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
+from nuself.runtime.warning_definitions import (
+    TerminalWarningDefinition,
+    TerminalWarningRegistry,
+    TerminalWarningSchemaError,
+    emit_registered_terminal_warning,
+)
 
 T = TypeVar("T")
 DEFAULT_DECODE_ERRORS: tuple[type[Exception], ...] = (
@@ -39,6 +44,7 @@ DEFAULT_DECODE_ERRORS: tuple[type[Exception], ...] = (
 
 OBSERVABILITY_PROJECTION_FAILED = "observability_projection_failed"
 INTERNAL_EVENT_DELIVERY_FAILED = "internal_event_delivery_failed"
+OBSERVABILITY_SINK_FAILED = "runtime/observability_sink_failed"
 
 
 def _require_exact_metadata(
@@ -95,6 +101,46 @@ def _build_observability_failure_registry() -> AuditDefinitionRegistry:
 
 
 OBSERVABILITY_FAILURE_REGISTRY = _build_observability_failure_registry()
+
+
+def _validate_observability_sink_warning(
+    metadata: Mapping[str, object],
+) -> None:
+    if metadata["component"] not in LOG_COMPONENTS:
+        raise TerminalWarningSchemaError(
+            "observability sink warning component is invalid"
+        )
+    for field in ("event", "observed_error", "log_error"):
+        value = metadata[field]
+        if not isinstance(value, str) or not value.strip():
+            raise TerminalWarningSchemaError(
+                f"observability sink warning {field} must be non-blank"
+            )
+
+
+def _build_observability_terminal_warning_registry(
+) -> TerminalWarningRegistry:
+    return (
+        TerminalWarningRegistry()
+        .register(
+            TerminalWarningDefinition(
+                OBSERVABILITY_SINK_FAILED,
+                (
+                    "component",
+                    "event",
+                    "observed_error",
+                    "log_error",
+                ),
+                _validate_observability_sink_warning,
+            )
+        )
+        .seal()
+    )
+
+
+OBSERVABILITY_TERMINAL_WARNING_REGISTRY = (
+    _build_observability_terminal_warning_registry()
+)
 
 
 def run_observed_best_effort(
@@ -363,11 +409,14 @@ def report_observed_failure(
             metadata=sanitize_diagnostic_metadata(metadata),
         )
     except Exception as log_exc:
-        warning = (
-            f"{component}/{event}: {error}; structured logging failed: "
-            f"{diagnostic_exception_chain(log_exc)}"
-        )
-        emit_runtime_warning(
-            redact_sensitive_text(warning),
+        emit_registered_terminal_warning(
+            OBSERVABILITY_TERMINAL_WARNING_REGISTRY,
+            OBSERVABILITY_SINK_FAILED,
+            {
+                "component": component,
+                "event": event,
+                "observed_error": error,
+                "log_error": diagnostic_exception_message(log_exc),
+            },
             stacklevel=3,
         )

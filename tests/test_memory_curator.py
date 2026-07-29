@@ -752,7 +752,7 @@ def test_curator_audit_failure_cannot_replay_committed_candidate(
     assert curator.run_once().processed_messages == 0
     assert len(agent.calls) == 1
     assert any(
-        "memory/observability_projection_failed" in str(warning.message)
+        "runtime/observability_sink_failed" in str(warning.message)
         for warning in captured
     )
 
@@ -818,7 +818,8 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
     assert curator.run_once().processed_messages == 0
     messages = [str(warning.message) for warning in captured]
     assert any(
-        "memory/trace_recording_failed: trace store unavailable"
+        "component=memory event=trace_recording_failed "
+        "observed_error=trace store unavailable"
         in message
         for message in messages
     )

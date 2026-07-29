@@ -513,10 +513,7 @@ def test_completion_diagnostic_failure_does_not_replace_fallback(
 
     with pytest.warns(
         RuntimeWarning,
-        match=(
-            "persona/persona_completion_failed: simulated LLM failure; "
-            "structured logging failed: diagnostic store unavailable"
-        ),
+        match="runtime/observability_sink_failed",
     ):
         result = node(
             ANALYST_PERSONA,

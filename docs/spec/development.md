@@ -280,6 +280,8 @@ under the same package.
 - `runtime/observability.py` owns the sealed secondary-failure taxonomy.
   Domain audit writers and event publishers provide only the failed primary
   identity; they never define local write/delivery failure event aliases.
+  The same module owns the sealed terminal warning used when its structured
+  sink is unavailable; callers never construct sink-failure warning strings.
 - `agent/endpoint_audit.py` owns the sealed per-endpoint failover/exhaustion
   audit schemas for Chat, Memory, Persona, Reason, and Reflection.
   `agent/failover.py` retains control-flow ownership and supplies only the

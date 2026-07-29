@@ -190,7 +190,10 @@ def test_memory_optimizer_audit_failure_cannot_replace_persisted_candidate(
 
     monkeypatch.setattr(observability, "write_log_event", fail_log_write)
 
-    with pytest.warns(RuntimeWarning, match="structured logging failed"):
+    with pytest.warns(
+        RuntimeWarning,
+        match="runtime/observability_sink_failed",
+    ):
         result = optimizer.run_once()
 
     assert result.updated == 1

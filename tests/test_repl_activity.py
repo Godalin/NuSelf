@@ -517,7 +517,7 @@ def test_activity_degradation_diagnostic_failure_cannot_block_chat(
 
     with pytest.warns(
         RuntimeWarning,
-        match="chat/activity_transport_degraded",
+        match="runtime/observability_sink_failed",
     ):
         result, captured, printed = run_live_activity_send(
             _successful_send,
@@ -620,7 +620,7 @@ def test_send_failure_diagnostic_storage_loss_keeps_repl_failure(
 
     with pytest.warns(
         RuntimeWarning,
-        match="chat/interactive_send_failed",
+        match="runtime/observability_sink_failed",
     ):
         result, captured, printed = run_live_activity_send(
             fail_send,

@@ -306,7 +306,7 @@ def test_cleanup_diagnostic_failure_cannot_replace_lifecycle_error(
 
     with pytest.warns(
         RuntimeWarning,
-        match="chat/interactive_cleanup_failed",
+        match="runtime/observability_sink_failed",
     ):
         with pytest.raises(InteractiveLifecycleError) as captured:
             run_interactive_loop(

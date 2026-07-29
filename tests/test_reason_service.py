@@ -319,12 +319,14 @@ def test_start_projections_cannot_replace_persisted_thread(
     assert service.show_thread(thread.id) == thread
     messages = [str(warning.message) for warning in captured]
     assert any(
-        "reasoning/trace_recording_failed: trace store unavailable"
+        "component=reasoning event=trace_recording_failed "
+        "observed_error=trace store unavailable"
         in message
         for message in messages
     )
     assert any(
-        "reasoning/observability_projection_failed: audit store unavailable"
+        "component=reasoning event=observability_projection_failed "
+        "observed_error=audit store unavailable"
         in message
         for message in messages
     )
@@ -363,7 +365,7 @@ def test_transition_audit_failure_cannot_replace_persisted_status(
 
     with pytest.warns(
         RuntimeWarning,
-        match="reasoning/observability_projection_failed",
+        match="runtime/observability_sink_failed",
     ):
         paused = service.pause_thread(thread.id)
 
@@ -511,12 +513,14 @@ def test_advance_projections_cannot_replace_committed_step(
     assert service.list_steps(thread.id) == [step]
     messages = [str(warning.message) for warning in captured]
     assert any(
-        "reasoning/trace_recording_failed: trace store unavailable"
+        "component=reasoning event=trace_recording_failed "
+        "observed_error=trace store unavailable"
         in message
         for message in messages
     )
     assert any(
-        "reasoning/observability_projection_failed: audit store unavailable"
+        "component=reasoning event=observability_projection_failed "
+        "observed_error=audit store unavailable"
         in message
         for message in messages
     )
@@ -539,7 +543,7 @@ def test_delete_success_audit_failure_cannot_replace_deletion(
 
     with pytest.warns(
         RuntimeWarning,
-        match="reasoning/observability_projection_failed",
+        match="runtime/observability_sink_failed",
     ):
         deleted_id = service.delete_thread(thread.id)
 
