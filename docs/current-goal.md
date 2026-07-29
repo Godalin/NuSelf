@@ -58,11 +58,13 @@ unreviewed or partially promoted entry.
 - Pyright: 0 errors, 0 warnings.
 - `git diff --check` passed.
 - Development-branch CI is already configured for pushes to every `dev/**`
-  branch; publication and remote run confirmation remain pending.
+  branch. Run `30446653041` passed Python 3.12-3.14 type checks, tests, builds,
+  and clean-wheel smoke tests.
 
 ## Publication
 
-Pending implementation, validation, commit, push, and CI.
+Atomic curator auto-accept was implemented and published in `17ee110`;
+development CI run `30446653041` passed.
 
 ## Next Review Batch
 
