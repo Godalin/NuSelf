@@ -327,6 +327,28 @@ are callable delivery effects, not serializable correlation identity.
   that genuinely continues the same live projection must bind that effect
   explicitly; long-lived workers must establish their own ownership.
 
+## Logging-Core Terminal Warnings
+
+Logging core owns one sealed terminal-warning registry for failures that cannot
+safely write another structured log. It contains exactly:
+
+| Warning | Exact ordered fields | Fixed suffix |
+|---|---|---|
+| `logs/lock_cleanup_failed` | `component`, `operation`, `error_type` | none |
+| `logs/append_rollback_failed` | `component`, `error_type` | none |
+| `logs/rotation_failed` | `component`, `error_type` | retention bounds are not guaranteed |
+| `daemon/log_observer_failed` | `observer_error`, `log_error` | none |
+| `logs/corrupt_records_skipped` | `component`, `file`, `count`, `first_error` | none |
+| `logs/event_identity_conflict` | `count`, `first_component`, `first_event` | none |
+
+Definitions validate exact fields and domain values before rendering. One
+canonical renderer fixes field order, rejects booleans as counts, and applies
+credential redaction to the complete warning. Exception messages enter only
+through fail-safe diagnostic formatting; corrupt-record warnings no longer call
+an exception renderer directly. Registry or render failure must remain inside
+the existing non-raising terminal warning boundary and must not trigger a
+structured-log write.
+
 Every persisted audit is a diagnostic projection. At the single runtime
 envelope-to-`LogEvent` boundary, credential-like text is removed from
 `message`, `error`, and recursively from metadata. Sensitive metadata keys are

@@ -756,6 +756,12 @@ warning filters or hooks that promote or fail `RuntimeWarning`, so
 process-global warning policy cannot replace the primary result or exception.
 It does not retry or recursively report its own failure.
 
+`runtime/warning_definitions.py` owns duplicate-safe, sealed terminal-warning
+definitions. A definition fixes one slash-qualified warning identity, exact
+ordered fields, domain validation, and an optional fixed suffix. Rendering is
+canonical and credential-safe. Domain owners compose closed registries and
+pass typed facts; they do not interpolate warning strings at call sites.
+
 The caller may declare a narrower tuple of recoverable exception classes.
 Only those failures are degraded; undeclared storage, programming, and
 invariant failures continue to propagate. Omitting the tuple retains the

@@ -34,7 +34,6 @@ from nuself.runtime.audit_types import (
 )
 from nuself.runtime.diagnostics import (
     diagnostic_exception_message,
-    emit_runtime_warning,
     redact_sensitive_text,
     sanitize_diagnostic_metadata,
 )
@@ -49,6 +48,12 @@ from nuself.runtime.messages import (
     RuntimeEnvelope,
     freeze_json_value,
     thaw_json_value,
+)
+from nuself.runtime.warning_definitions import (
+    TerminalWarningDefinition,
+    TerminalWarningRegistry,
+    TerminalWarningSchemaError,
+    emit_registered_terminal_warning,
 )
 
 LogPersistenceOutcome = Literal[
@@ -106,6 +111,119 @@ def _build_log_infrastructure_audit_registry() -> AuditDefinitionRegistry:
 LOG_INFRASTRUCTURE_AUDIT_REGISTRY = (
     _build_log_infrastructure_audit_registry()
 )
+
+
+def _require_warning_component(
+    metadata: Mapping[str, object],
+    field: str = "component",
+) -> None:
+    if metadata[field] not in LOG_COMPONENTS:
+        raise TerminalWarningSchemaError(
+            f"logging terminal warning {field} is invalid"
+        )
+
+
+def _require_warning_string(
+    metadata: Mapping[str, object],
+    field: str,
+) -> str:
+    value = metadata[field]
+    if not isinstance(value, str) or not value.strip():
+        raise TerminalWarningSchemaError(
+            f"logging terminal warning {field} must be non-blank"
+        )
+    return value
+
+
+def _require_warning_count(metadata: Mapping[str, object]) -> None:
+    count = metadata["count"]
+    if type(count) is not int or count < 1:
+        raise TerminalWarningSchemaError(
+            "logging terminal warning count must be positive"
+        )
+
+
+def _validate_lock_cleanup_warning(
+    metadata: Mapping[str, object],
+) -> None:
+    _require_warning_component(metadata)
+    if metadata["operation"] not in {"unlock", "close"}:
+        raise TerminalWarningSchemaError(
+            "logging terminal warning operation is invalid"
+        )
+    _require_warning_string(metadata, "error_type")
+
+
+def _validate_component_error_warning(
+    metadata: Mapping[str, object],
+) -> None:
+    _require_warning_component(metadata)
+    _require_warning_string(metadata, "error_type")
+
+
+def _validate_observer_warning(metadata: Mapping[str, object]) -> None:
+    _require_warning_string(metadata, "observer_error")
+    _require_warning_string(metadata, "log_error")
+
+
+def _validate_corruption_warning(metadata: Mapping[str, object]) -> None:
+    _require_warning_component(metadata)
+    filename = _require_warning_string(metadata, "file")
+    if Path(filename).name != filename:
+        raise TerminalWarningSchemaError(
+            "logging terminal warning file must be a basename"
+        )
+    _require_warning_count(metadata)
+    _require_warning_string(metadata, "first_error")
+
+
+def _validate_identity_warning(metadata: Mapping[str, object]) -> None:
+    _require_warning_count(metadata)
+    _require_warning_component(metadata, "first_component")
+    _require_warning_string(metadata, "first_event")
+
+
+def _build_log_terminal_warning_registry() -> TerminalWarningRegistry:
+    definitions = (
+        TerminalWarningDefinition(
+            "logs/lock_cleanup_failed",
+            ("component", "operation", "error_type"),
+            _validate_lock_cleanup_warning,
+        ),
+        TerminalWarningDefinition(
+            "logs/append_rollback_failed",
+            ("component", "error_type"),
+            _validate_component_error_warning,
+        ),
+        TerminalWarningDefinition(
+            "logs/rotation_failed",
+            ("component", "error_type"),
+            _validate_component_error_warning,
+            suffix="continuing without guaranteed retention bounds",
+        ),
+        TerminalWarningDefinition(
+            "daemon/log_observer_failed",
+            ("observer_error", "log_error"),
+            _validate_observer_warning,
+        ),
+        TerminalWarningDefinition(
+            "logs/corrupt_records_skipped",
+            ("component", "file", "count", "first_error"),
+            _validate_corruption_warning,
+        ),
+        TerminalWarningDefinition(
+            "logs/event_identity_conflict",
+            ("count", "first_component", "first_event"),
+            _validate_identity_warning,
+        ),
+    )
+    registry = TerminalWarningRegistry()
+    for definition in definitions:
+        registry.register(definition)
+    return registry.seal()
+
+
+LOG_TERMINAL_WARNING_REGISTRY = _build_log_terminal_warning_registry()
 
 
 class LogAppendLifecycleError(RuntimeError):
@@ -609,10 +727,14 @@ def _report_log_lock_cleanup_failure(
     operation: Literal["unlock", "close"],
     exc: OSError,
 ) -> None:
-    emit_runtime_warning(
-        "logs/lock_cleanup_failed: "
-        f"component={component} operation={operation} "
-        f"error_type={type(exc).__name__}",
+    emit_registered_terminal_warning(
+        LOG_TERMINAL_WARNING_REGISTRY,
+        "logs/lock_cleanup_failed",
+        {
+            "component": component,
+            "operation": operation,
+            "error_type": type(exc).__name__,
+        },
         stacklevel=4,
     )
 
@@ -721,9 +843,13 @@ def _rollback_failed_log_append(
         log_file.truncate(record_boundary)
         _sync_log_file(log_file)
     except BaseException as exc:
-        emit_runtime_warning(
-            "logs/append_rollback_failed: "
-            f"component={component} error_type={type(exc).__name__}",
+        emit_registered_terminal_warning(
+            LOG_TERMINAL_WARNING_REGISTRY,
+            "logs/append_rollback_failed",
+            {
+                "component": component,
+                "error_type": type(exc).__name__,
+            },
             stacklevel=4,
         )
         return exc
@@ -734,10 +860,13 @@ def _report_log_rotation_failure(
     component: LogComponent,
     exc: OSError,
 ) -> None:
-    emit_runtime_warning(
-        "logs/rotation_failed: "
-        f"component={component} error_type={type(exc).__name__}; "
-        "continuing without guaranteed retention bounds",
+    emit_registered_terminal_warning(
+        LOG_TERMINAL_WARNING_REGISTRY,
+        "logs/rotation_failed",
+        {
+            "component": component,
+            "error_type": type(exc).__name__,
+        },
         stacklevel=3,
     )
 
@@ -773,9 +902,13 @@ def _report_log_observer_failure(
         except Exception as log_exc:
             observer_error = diagnostic_exception_message(exc)
             log_error = diagnostic_exception_message(log_exc)
-            emit_runtime_warning(
-                "daemon/log_observer_failed: "
-                f"{observer_error}; structured logging failed: {log_error}",
+            emit_registered_terminal_warning(
+                LOG_TERMINAL_WARNING_REGISTRY,
+                "daemon/log_observer_failed",
+                {
+                    "observer_error": observer_error,
+                    "log_error": log_error,
+                },
                 stacklevel=3,
             )
     finally:
@@ -949,12 +1082,16 @@ def _report_log_read_corruptions(
     if not corruptions:
         return
     first = corruptions[0]
-    detail = str(first).strip() or type(first).__name__
-    emit_runtime_warning(
-        "logs/corrupt_records_skipped: "
-        f"component={component} file={path.name} "
-        f"count={len(corruptions)} "
-        f"first_error={type(first).__name__}: {detail}",
+    detail = diagnostic_exception_message(first)
+    emit_registered_terminal_warning(
+        LOG_TERMINAL_WARNING_REGISTRY,
+        "logs/corrupt_records_skipped",
+        {
+            "component": component,
+            "file": path.name,
+            "count": len(corruptions),
+            "first_error": f"{type(first).__name__}: {detail}",
+        },
         stacklevel=3,
     )
 
@@ -1077,11 +1214,14 @@ def _report_log_identity_conflicts(
     if not conflicts:
         return
     first = conflicts[0]
-    emit_runtime_warning(
-        "logs/event_identity_conflict: "
-        f"count={len(conflicts)} "
-        f"first_component={first.component} "
-        f"first_event={first.event}",
+    emit_registered_terminal_warning(
+        LOG_TERMINAL_WARNING_REGISTRY,
+        "logs/event_identity_conflict",
+        {
+            "count": len(conflicts),
+            "first_component": first.component,
+            "first_event": first.event,
+        },
         stacklevel=3,
     )
 

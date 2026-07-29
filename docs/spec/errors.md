@@ -447,6 +447,13 @@ single credential-safe runtime warning remains the terminal diagnostic and
 cannot alter the original audit write, later observer delivery, or business
 operation.
 
+All logging-core terminal warnings resolve through the sealed typed warning
+registry before reaching Python warning policy. They are deliberately
+non-persisting and non-retrying. Rendering validates the exact field schema,
+uses fail-safe exception diagnostics, and redacts the complete warning.
+Emission still catches warning-hook and warning-as-error failures, so neither a
+schema/render problem nor warning policy may replace the primary log outcome.
+
 Chat's local response policy is not an exception sink for implementation
 defects. Before any tool executes, the shared policy rejects assertion,
 attribute, import, lookup, memory exhaustion, name resolution, unimplemented

@@ -34,6 +34,7 @@ from nuself.runtime import (
 from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistrySealedError,
 )
+from nuself.runtime.definitions import DefinitionRegistrySealedError
 
 
 def test_log_infrastructure_audit_registry_is_complete_and_sealed() -> None:
@@ -46,6 +47,63 @@ def test_log_infrastructure_audit_registry_is_complete_and_sealed() -> None:
         logs.LOG_INFRASTRUCTURE_AUDIT_REGISTRY.register(
             logs.LOG_INFRASTRUCTURE_AUDIT_REGISTRY.definitions[0]
         )
+
+
+def test_log_terminal_warning_registry_is_complete_and_sealed() -> None:
+    assert [
+        definition.event
+        for definition in logs.LOG_TERMINAL_WARNING_REGISTRY.definitions
+    ] == [
+        "logs/lock_cleanup_failed",
+        "logs/append_rollback_failed",
+        "logs/rotation_failed",
+        "daemon/log_observer_failed",
+        "logs/corrupt_records_skipped",
+        "logs/event_identity_conflict",
+    ]
+
+    with pytest.raises(DefinitionRegistrySealedError):
+        logs.LOG_TERMINAL_WARNING_REGISTRY.register(
+            logs.LOG_TERMINAL_WARNING_REGISTRY.definitions[0]
+        )
+
+
+@pytest.mark.parametrize(
+    ("event", "metadata"),
+    [
+        (
+            "logs/lock_cleanup_failed",
+            {
+                "component": "chat",
+                "operation": "delete",
+                "error_type": "OSError",
+            },
+        ),
+        (
+            "logs/corrupt_records_skipped",
+            {
+                "component": "chat",
+                "file": "../chat.log",
+                "count": 1,
+                "first_error": "ValueError",
+            },
+        ),
+        (
+            "logs/event_identity_conflict",
+            {
+                "count": True,
+                "first_component": "chat",
+                "first_event": "turn_completed",
+            },
+        ),
+    ],
+)
+def test_log_terminal_warning_registry_rejects_invalid_domain_facts(
+    event: str,
+    metadata: dict[str, object],
+) -> None:
+    with pytest.raises(logs.TerminalWarningSchemaError):
+        logs.LOG_TERMINAL_WARNING_REGISTRY.resolve(event).render(metadata)
 
 
 def test_new_log_events_have_stable_envelope_identity(tmp_path: Path) -> None:
@@ -354,9 +412,9 @@ def test_log_observer_diagnostic_failure_warns_without_affecting_delivery(
     with pytest.warns(
         RuntimeWarning,
         match=(
-            "daemon/log_observer_failed: projection failed api_key=\\*\\*\\*; "
-            "structured logging failed: diagnostic store unavailable "
-            "token=\\*\\*\\*"
+            "daemon/log_observer_failed: "
+            "observer_error=projection failed api_key=\\*\\*\\* "
+            "log_error=diagnostic store unavailable token=\\*\\*\\*"
         ),
     ) as captured:
         with observe_log_events(fail_observer), observe_log_events(
@@ -376,6 +434,37 @@ def test_log_observer_diagnostic_failure_warns_without_affecting_delivery(
     assert delivered == [written]
     assert read_log_events(project_root=tmp_path, component="chat") == [written]
     assert read_log_events(project_root=tmp_path, component="daemon") == []
+
+
+def test_log_corruption_warning_survives_broken_exception_renderer() -> None:
+    class BrokenCorruption(ValueError):
+        def __str__(self) -> str:
+            raise KeyboardInterrupt
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="first_error=BrokenCorruption: BrokenCorruption",
+    ):
+        logs._report_log_read_corruptions(  # pyright: ignore[reportPrivateUsage]
+            Path("chat.log"),
+            "chat",
+            [BrokenCorruption()],
+        )
+
+
+def test_log_corruption_warning_redacts_exception_credentials() -> None:
+    secret = "private-provider-key"
+
+    with pytest.warns(RuntimeWarning) as captured:
+        logs._report_log_read_corruptions(  # pyright: ignore[reportPrivateUsage]
+            Path("chat.log"),
+            "chat",
+            [ValueError(f"invalid record api_key={secret}")],
+        )
+
+    warning = str(captured[0].message)
+    assert secret not in warning
+    assert "api_key=***" in warning
 
 
 def test_log_observers_are_not_inherited_by_new_threads(tmp_path: Path) -> None:

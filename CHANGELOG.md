@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Logging-core terminal diagnostics now resolve through one sealed six-event
+  warning taxonomy with exact ordered fields and one credential-safe renderer;
+  corrupt-record diagnostics no longer render exceptions directly.
 - Process-local log observer failures now use a sealed logging-core audit
   contract; diagnostics no longer persist callable class names or duplicated
   exception type metadata.

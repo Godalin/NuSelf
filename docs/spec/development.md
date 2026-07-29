@@ -288,6 +288,9 @@ under the same package.
   Process-local observer delivery supplies only the caught exception; callable
   identity, presentation, schema, and terminal fallback remain logging-core
   policy.
+- `runtime/warning_definitions.py` owns reusable sealed terminal-warning
+  definition and rendering mechanics. `logs.py` composes its closed six-event
+  taxonomy and supplies typed facts, never free-form warning strings.
   `cli/daemon_lifecycle.py` owns shared observable start/stop/restart
   orchestration and typed transition projection for one-shot, launch, and REPL
   surfaces.
