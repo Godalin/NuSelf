@@ -63,6 +63,16 @@ and release reproducibility gaps identified by the `bd43f1d` external review.
   the complete pytest suite before any build or publication effect.
 - Release/workflow contract coverage: 12 passed; `uv lock --check`, locked
   pyright, and YAML parsing passed.
+- Final locked local gate: Pyright reported 0 errors and 0 warnings; full
+  pytest reported 2341 passed.
+- Final `uv build` produced the 0.3.0rc1 sdist and wheel. A fresh uv-managed
+  Python 3.14 environment installed that wheel and all declared runtime
+  dependencies; CLI/runtime/storage/email imports and installed
+  `nuself --version` passed.
+- The `bd43f1d` external review has been re-audited requirement by requirement:
+  all five release blockers have direct implementation, fault-injection or
+  contract tests, and full-gate evidence. The two explicitly non-blocking
+  ThreadStore follow-ups are recorded in `TODOs.md`.
 - Confirmed: `_FileCollection.get/put/delete` directly interpolate untrusted
   keys into paths and `list` recursively follows nested JSON paths.
 - Confirmed: ThreadStore rename, branch, archive, unarchive, and delete bypass
@@ -188,8 +198,9 @@ and release reproducibility gaps identified by the `bd43f1d` external review.
 
 ## Publication
 
-Work begins from the previously reviewed `bd43f1d`.
+Work begins from the previously reviewed `bd43f1d`; validated closure is
+committed through `b660d38` before the final evidence commit.
 
 ## Next Review Batch
 
-Atomic File-to-SQLite migration.
+Final push and six-platform development-branch CI.
