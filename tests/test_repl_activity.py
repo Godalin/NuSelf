@@ -594,6 +594,56 @@ def test_live_send_reports_callback_exception_without_escaping(
     assert failure.metadata == {}
 
 
+def test_live_send_redacts_callback_exception_from_terminal_and_audit(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    secret = "sk-live-send-secret-value"
+
+    def fail_send(
+        message: str,
+        thread_id: str,
+        turn_id: str | None,
+    ) -> InteractiveChatResult:
+        del message, thread_id, turn_id
+        raise ValueError(f"provider rejected api_key={secret}")
+
+    def read_nothing(
+        project_root: Path | None,
+        log_cursor: InteractiveLogCursor,
+        *,
+        turn_id: str | None = None,
+    ) -> list[LogEvent]:
+        del project_root, log_cursor, turn_id
+        return []
+
+    result, _, _ = run_live_activity_send(
+        fail_send,
+        "hello",
+        "default",
+        "turn-sensitive",
+        tmp_path,
+        InteractiveLogCursor.from_project(tmp_path),
+        printed_logs=False,
+        daemon_activity=False,
+        poll_interval_seconds=0,
+        read_events=read_nothing,
+        present_events=_mark_presented,
+    )
+
+    assert result.code == 1
+    terminal = capsys.readouterr().err
+    assert secret not in terminal
+    assert "api_key=***" in terminal
+    failure = read_log_events(
+        project_root=tmp_path,
+        component="chat",
+    )[-1]
+    assert failure.error is not None
+    assert secret not in failure.error
+    assert "api_key=***" in failure.error
+
+
 def test_send_failure_diagnostic_storage_loss_keeps_repl_failure(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,

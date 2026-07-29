@@ -1118,6 +1118,22 @@ def test_rollback_failure_retains_primary_commit_cause(
     original.rollback()
 
 
+def test_transaction_cleanup_error_redacts_rollback_diagnostic() -> None:
+    secret = "sk-rollback-secret-value"
+    primary_error = RuntimeError("transaction failed")
+    rollback_error = OSError(f"rollback rejected api_key={secret}")
+
+    error = SqliteTransactionCleanupError(
+        primary_error=primary_error,
+        rollback_error=rollback_error,
+    )
+
+    assert error.primary_error is primary_error
+    assert error.rollback_error is rollback_error
+    assert secret not in str(error)
+    assert "api_key=***" in str(error)
+
+
 @pytest.mark.parametrize(
     "primary_error",
     [

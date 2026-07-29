@@ -108,6 +108,9 @@ possible.
 The live-chat send thread observes unexpected ordinary callback failures as
 non-retryable turn failures, while process-control exceptions cross back to the
 main thread unchanged after subscription cleanup.
+Caught callback, projection, protocol-decode, and rollback diagnostics are
+sanitized before entering terminal or wrapper messages while retaining their
+original exception objects for control flow and provenance.
 
 REPL exit runs transcript auto-save and memory curation exactly once each.
 Both cleanup steps are attempted, and named cleanup failures retain any

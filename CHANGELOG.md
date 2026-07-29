@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Redacted caught callback, event-projection, protocol-decode, and rollback
+  diagnostics before terminal or wrapper presentation.
 - Curator runs and plan discard now use the same per-thread cross-process lock,
   preventing duplicate model work and repair races.
 - Added payload-safe `memory plan show` and force-gated `memory plan discard`

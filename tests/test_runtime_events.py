@@ -92,6 +92,25 @@ def test_event_delivery_retains_exception_with_broken_string_renderer() -> None:
     assert "BrokenMessageError: <no message>" in str(exc_info.value)
 
 
+def test_event_delivery_error_redacts_projection_diagnostic() -> None:
+    publisher = EventPublisher()
+    secret = "sk-projection-secret-value"
+
+    def fail(_event: RuntimeEnvelope) -> None:
+        raise RuntimeError(f"provider rejected api_key={secret}")
+
+    publisher.attach_projection(fail)
+
+    with pytest.raises(EventDeliveryError) as captured:
+        publisher.publish(name="worker.started", producer="daemon")
+
+    assert captured.value.failures[0].error.args == (
+        f"provider rejected api_key={secret}",
+    )
+    assert secret not in str(captured.value)
+    assert "api_key=***" in str(captured.value)
+
+
 def test_event_projection_can_be_removed() -> None:
     publisher = EventPublisher()
     received: list[str] = []

@@ -194,7 +194,9 @@ def _decode_json_object(line: bytes) -> dict[str, Any]:
     except UnicodeDecodeError as exc:
         raise ProtocolError("frame is not valid UTF-8") from exc
     except json.JSONDecodeError as exc:
-        raise ProtocolError(f"invalid json: {exc.msg}") from exc
+        raise ProtocolError(
+            f"invalid json: {diagnostic_exception_message(exc)}"
+        ) from exc
     except ProtocolError:
         raise
     except ValueError as exc:

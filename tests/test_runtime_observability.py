@@ -229,6 +229,13 @@ def test_diagnostic_exception_message_is_safe_and_sanitized() -> None:
         diagnostic_exception_message(BrokenMessageError())
         == "BrokenMessageError"
     )
+    assert (
+        diagnostic_exception_message(
+            BrokenMessageError(),
+            empty="<unavailable>",
+        )
+        == "<unavailable>"
+    )
     assert diagnostic_exception_message(
         RuntimeError("failed password=private-value")
     ) == "failed password=***"

@@ -132,10 +132,14 @@ def safe_exception_message(
     return message or fallback
 
 
-def diagnostic_exception_message(exc: BaseException) -> str:
+def diagnostic_exception_message(
+    exc: BaseException,
+    *,
+    empty: str | None = None,
+) -> str:
     """Return safe, credential-sanitized text for one exception."""
 
-    return redact_sensitive_text(safe_exception_message(exc))
+    return redact_sensitive_text(safe_exception_message(exc, empty=empty))
 
 
 def diagnostic_exception_chain(exc: BaseException) -> str:

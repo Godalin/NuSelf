@@ -26,7 +26,10 @@ from nuself.runtime import (
     freeze_json_value,
     thaw_json_value,
 )
-from nuself.runtime.diagnostics import safe_exception_message
+from nuself.runtime.diagnostics import (
+    diagnostic_exception_message,
+    safe_exception_message,
+)
 from nuself.runtime.observability import report_corrupt_record
 from nuself.storage import (
     COLLECTION_LOG_COMPONENTS,
@@ -95,7 +98,8 @@ class SqliteTransactionCleanupError(SqliteTransactionError):
     ) -> None:
         super().__init__(
             "SQLite rollback failed after "
-            f"{type(primary_error).__name__}: {rollback_error}"
+            f"{type(primary_error).__name__}: "
+            f"{diagnostic_exception_message(rollback_error)}"
         )
         self.primary_error = primary_error
         self.rollback_error = rollback_error

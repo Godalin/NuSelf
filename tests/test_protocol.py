@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from nuself.daemon.protocol import (
@@ -48,6 +50,31 @@ def test_request_rejects_malformed_json() -> None:
         assert "invalid json" in str(exc)
         return
     raise AssertionError("expected ProtocolError")
+
+
+def test_json_decode_wrapper_redacts_diagnostic_and_retains_cause(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import nuself.daemon.protocol as protocol_module
+
+    secret = "sk-protocol-secret-value"
+    decode_error = json.JSONDecodeError(
+        f"provider rejected api_key={secret}",
+        "invalid",
+        0,
+    )
+
+    def fail_decode(*args: object, **kwargs: object) -> object:
+        raise decode_error
+
+    monkeypatch.setattr(protocol_module.json, "loads", fail_decode)
+
+    with pytest.raises(ProtocolError) as captured:
+        DaemonRequest.from_json_line(b"invalid\n")
+
+    assert captured.value.__cause__ is decode_error
+    assert secret not in str(captured.value)
+    assert "api_key=***" in str(captured.value)
 
 
 def test_protocol_rejects_missing_newline_and_invalid_utf8() -> None:

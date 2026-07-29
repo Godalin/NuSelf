@@ -14,6 +14,7 @@ from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import client
 from nuself.logs import InteractiveLogCursor, LogEvent
 from nuself.runtime.context import bind_runtime_context
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import OwnedCall
 from nuself.tui.render import render_log_event
 
@@ -196,7 +197,11 @@ def run_live_activity_send(
             event="interactive_send_failed",
             project_root=project_root,
         )
-        print(f"chat turn failed: {error}", file=sys.stderr)
+        print(
+            "chat turn failed: "
+            f"{diagnostic_exception_message(error)}",
+            file=sys.stderr,
+        )
         return InteractiveChatResult(code=1), captured_events, printed_logs
     return (
         (

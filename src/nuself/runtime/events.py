@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from threading import RLock
 from uuid import UUID, uuid4
 
-from nuself.runtime.diagnostics import safe_exception_message
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.event_definitions import (
     EventDefinitionRegistry,
     build_event_definition_registry,
@@ -44,7 +44,10 @@ class EventDeliveryError(RuntimeError):
         details = "; ".join(
             (
                 f"{type(failure.error).__name__}: "
-                f"{safe_exception_message(failure.error, empty='<no message>')}"
+                f"{diagnostic_exception_message(
+                    failure.error,
+                    empty='<no message>',
+                )}"
             )
             for failure in failures
         )

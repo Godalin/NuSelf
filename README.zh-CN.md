@@ -89,6 +89,8 @@ scoped cursor 恢复已持久化的 turn events。
 
 Live-chat send thread 会把意外的普通 callback failure 观测为不可重试的 turn
 失败；process-control exception 则在 subscription cleanup 后原样传回主线程。
+捕获的 callback、projection、protocol decode 与 rollback 诊断在进入终端或
+wrapper message 前会统一脱敏，同时保留原始 exception object 用于控制流和溯源。
 
 REPL 退出时 transcript auto-save 与 memory curation 各执行一次；两个 cleanup
 都会被尝试，命名 cleanup failure 会保留已有 main-loop exception 作为显式 cause。
