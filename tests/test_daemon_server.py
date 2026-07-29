@@ -816,10 +816,14 @@ def test_daemon_worker_join_timeout_is_logged_and_remains_live(
         item for item in supervisor.health() if item.name == "memory_curator"
     )
     assert health.alive is True
-    event = read_log_events(
-        project_root=tmp_path,
-        component="daemon",
-    )[-1]
+    [event] = [
+        item
+        for item in read_log_events(
+            project_root=tmp_path,
+            component="daemon",
+        )
+        if item.event == "thread_timeout"
+    ]
     assert event.event == "thread_timeout"
     assert event.status == "timed_out"
     assert event.metadata == {
