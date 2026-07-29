@@ -65,7 +65,8 @@ candidates, and never call the model twice for the same unfinished range.
 
 ## Publication
 
-Pending implementation, validation, publication, and final-push CI.
+Curator plan recovery and its local validation are committed in `515a804`.
+Publication and final-push CI are the remaining gates.
 
 ## Next Review Batch
 
