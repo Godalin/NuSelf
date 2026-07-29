@@ -257,3 +257,37 @@ def test_worker_readiness_requires_every_registration_alive(
     release.set()
     supervisor.join("first", timeout=1)
     supervisor.join("second", timeout=1)
+
+
+def test_worker_readiness_rejects_requested_shutdown_while_alive(
+    tmp_path: Path,
+) -> None:
+    shutdown_requested = threading.Event()
+    supervisor = DaemonWorkerSupervisor(
+        tmp_path,
+        shutdown_requested,
+        EventPublisher(),
+    )
+    release = threading.Event()
+
+    def wait_for_release() -> None:
+        release.wait()
+
+    supervisor.register(
+        "worker",
+        thread_name="test-worker-shutdown-race",
+        target=wait_for_release,
+    )
+    supervisor.seal()
+    supervisor.start("worker")
+    assert supervisor.snapshot("worker").alive is True
+
+    shutdown_requested.set()
+    with pytest.raises(
+        DaemonWorkerReadinessError,
+        match="shutdown was requested before readiness",
+    ):
+        supervisor.require_all_running()
+
+    release.set()
+    supervisor.join("worker", timeout=1)

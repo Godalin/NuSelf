@@ -258,11 +258,13 @@ Daemon readiness is authoritative only after socket binding, PID publication,
 every worker start operation succeeds, and the sealed supervisor confirms that
 every registered worker is still `running` and alive. A worker that exits
 during startup makes readiness fail even when its thread was spawned
-successfully. The server publishes `started` only after that check and begins
-request handling afterward. A partial worker-start or startup-health failure
-performs full cleanup without publishing either a successful `started` or
-`stopped` record. Failure of the `started` audit itself remains secondary and
-does not undo readiness.
+successfully. Readiness also fails if the shared shutdown event was requested
+at any point before this check; a process already entering shutdown must never
+publish itself ready. The server publishes `started` only after that check and
+begins request handling afterward. A partial worker-start, startup-health, or
+pre-readiness shutdown failure performs full cleanup without publishing either
+a successful `started` or `stopped` record. Failure of the `started` audit
+itself remains secondary and does not undo readiness.
 
 Daemon status observation combines typed ping readiness and instance-lock
 ownership into the phase model in `runtime-infrastructure.md`. Failure to

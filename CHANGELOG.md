@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon startup now refuses readiness when shutdown was requested while
+  background workers were starting.
 - Daemon startup now verifies that every registered background worker remains
   running before publishing readiness or accepting requests.
 - Daemon workers that return before shutdown are now reported as unexpected

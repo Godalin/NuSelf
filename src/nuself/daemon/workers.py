@@ -127,6 +127,10 @@ class DaemonWorkerSupervisor:
         """Require every sealed registration to be running and alive."""
 
         self._require_sealed()
+        if self._shutdown_requested.is_set():
+            raise DaemonWorkerReadinessError(
+                "daemon shutdown was requested before readiness"
+            )
         with self._registration_lock:
             workers = tuple(self._workers.items())
         unavailable: list[tuple[str, str]] = []

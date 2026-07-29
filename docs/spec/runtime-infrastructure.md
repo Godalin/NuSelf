@@ -220,6 +220,9 @@ registration and common lifecycle semantics over the neutral
   typed `DaemonWorkerReadinessError` names the non-running workers and aborts
   startup. A successful `start()` call alone is not readiness evidence because
   the target may already have exited.
+- The same readiness check rejects an already-set daemon shutdown event before
+  inspecting liveness. A signal or internal shutdown request racing with worker
+  startup therefore enters cleanup without publishing readiness.
 - The supervisor owns only common execution semantics. `DaemonState` retains
   subsystem construction, interval values, concrete operations, and worker
   target registration; the process runner retains daemon startup/cleanup
@@ -1036,7 +1039,8 @@ Daemon readiness has one ordered publication boundary:
 1. bind the Unix socket;
 2. publish the current PID;
 3. start every owned background worker;
-4. require every registered worker to remain running and alive;
+4. require shutdown to remain unrequested and every registered worker to remain
+   running and alive;
 5. project `daemon/started` and mark the lifecycle ready;
 6. begin accepting socket requests.
 

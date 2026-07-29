@@ -15,6 +15,7 @@ from nuself.daemon.instance import (
     DaemonInstanceLockCleanupError,
     DaemonInstanceLockContended,
 )
+from nuself.daemon.workers import DaemonWorkerReadinessError
 from nuself.logs import read_log_events
 
 
@@ -417,6 +418,10 @@ class _UnstartedDaemonState:
 
     def require_background_workers_ready(self) -> None:
         self.readiness_checks += 1
+        if self.shutdown_requested.is_set():
+            raise DaemonWorkerReadinessError(
+                "daemon shutdown was requested before readiness"
+            )
 
     def stop_background_memory_curator(self) -> None:
         self.stop_calls.append("memory")
@@ -453,10 +458,6 @@ def test_pid_is_published_only_after_successful_bind(
             )
             super().start_background_memory_curator()
 
-        def start_background_notification_delivery(self) -> None:
-            super().start_background_notification_delivery()
-            self.shutdown_requested.set()
-
     class BoundServer:
         def __init__(
             self,
@@ -465,6 +466,8 @@ def test_pid_is_published_only_after_successful_bind(
             state: object,
         ) -> None:
             assert not paths.pid_path.exists()
+            assert isinstance(state, ExitingState)
+            self.state = state
             self.timeout = 0.0
 
         def __enter__(self) -> BoundServer:
@@ -480,7 +483,7 @@ def test_pid_is_published_only_after_successful_bind(
             return None
 
         def handle_request(self) -> None:
-            raise AssertionError("shutdown was already requested")
+            self.state.shutdown_requested.set()
 
     def make_state(project_root: Path) -> ExitingState:
         return ExitingState(project_root)
@@ -1065,9 +1068,7 @@ def test_stopped_event_is_written_after_owned_cleanup(
     stopped_observed = False
 
     class ExitingState(_UnstartedDaemonState):
-        def start_background_notification_delivery(self) -> None:
-            super().start_background_notification_delivery()
-            self.shutdown_requested.set()
+        pass
 
     class ImmediateServer:
         def __init__(
@@ -1076,6 +1077,8 @@ def test_stopped_event_is_written_after_owned_cleanup(
             handler: object,
             state: object,
         ) -> None:
+            assert isinstance(state, ExitingState)
+            self.state = state
             self.timeout = 0.0
 
         def __enter__(self) -> ImmediateServer:
@@ -1090,7 +1093,7 @@ def test_stopped_event_is_written_after_owned_cleanup(
             return None
 
         def handle_request(self) -> None:
-            raise AssertionError("shutdown was already requested")
+            self.state.shutdown_requested.set()
 
     def make_state(project_root: Path) -> ExitingState:
         state = ExitingState(project_root)
