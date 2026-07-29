@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close the confirmed correctness, persistence, and security gaps that block a
-trustworthy 0.3.0 release candidate.
+Idle. The external 0.3.0 RC correctness, persistence, security, and release
+engineering review is complete.
 
 ## Active Branch
 
@@ -14,25 +14,12 @@ trustworthy 0.3.0 release candidate.
 
 ## Ordered Work
 
-1. Contain every file-backend collection key and reject record/key mismatch.
-2. Serialize ThreadStore lifecycle operations with stable cross-process locks.
-3. Preserve valid zero-valued memory importance and scan analogous defaults.
-4. Define and repair ambiguous file commits plus crash-durable deletion.
-5. Persist notification delivery state per adapter and make idempotent add
-   atomic.
-6. Repair confirmed online recovery, strict decode, failover, multilingual
-   curation, email safety, timeout, and portable-name issues.
-7. Align version/release/platform contracts and add release-candidate gates.
-8. Gate the file-to-SQLite upgrade with frozen 0.2.5 private data.
-9. Run focused fault injection and full quality gates; commit by functional
-   boundary, push, and confirm final development-branch CI.
+1. Discuss and specify the next objective before implementation.
 
 ## Out Of Scope
 
-- No unrelated user feature or new agent capability.
-- No compatibility shim when all in-repository callers can migrate directly.
-- No claim that an external review item is fixed before reproducing it against
-  the current tree.
+- No implementation work is active.
+- Do not infer a new feature scope from the completed review.
 - No 0.3.0 release tag until every release-candidate gate is proven.
 
 ## Completion Evidence
@@ -155,13 +142,15 @@ trustworthy 0.3.0 release candidate.
   2322 passed.
 - The original external review has been re-audited item by item against the
   current tree. All 13 code findings and every RC engineering deliverable have
-  implementation plus focused regression evidence; completion remains
-  intentionally unclaimed until final branch CI passes.
+  implementation plus focused regression evidence.
+- Final code CI run `30462105808` passed all six Linux/macOS and Python
+  3.12-3.14 jobs, including pyright, 2322 tests, distribution builds, and
+  clean-wheel smoke tests.
 
 ## Publication
 
-Work begins after the completed infrastructure review at `c0a82e3`.
+The reviewed implementation is published on `dev/v0.3.x` through `5c9138d`.
 
 ## Next Review Batch
 
-Final push and development-branch CI.
+None selected. Await the next user-directed feature or review objective.
