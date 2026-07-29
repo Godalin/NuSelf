@@ -3328,6 +3328,59 @@ def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -
     assert "Test Notification" in show_output
     assert f"Sent: {entry.id}" in send_output
     assert f"Dismissed: {entry.id}" in dismiss_output
+    dismissed = outbox.get(entry.id)
+    assert dismissed.required_adapters == ("log",)
+    assert dismissed.deliveries["log"].status == "sent"
+
+
+def test_notify_send_preserves_existing_adapter_plan_and_history(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+) -> None:
+    from nuself.notification import NotificationOutbox, OutboxEntry
+
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="existing-plan",
+            title="Existing plan",
+            body="Do not erase adapter history.",
+            status="pending",
+            idempotency_key="existing-plan",
+        )
+    )
+    outbox.prepare_delivery("existing-plan", ("email", "macos"))
+    outbox.record_adapter_result(
+        "existing-plan",
+        "email",
+        success=True,
+    )
+    outbox.record_adapter_result(
+        "existing-plan",
+        "macos",
+        success=False,
+    )
+
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "inbox",
+            "notify",
+            "send",
+            "existing-plan",
+        ]
+    )
+
+    assert result == 1
+    assert "Failed to send: existing-plan" in capsys.readouterr().err
+    preserved = outbox.get("existing-plan")
+    assert preserved.status == "failed"
+    assert preserved.required_adapters == ("email", "macos")
+    assert preserved.deliveries["email"].status == "sent"
+    assert preserved.deliveries["email"].attempts == 1
+    assert preserved.deliveries["macos"].status == "failed"
+    assert preserved.deliveries["macos"].attempts == 1
 
 
 def test_notify_show_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> None:

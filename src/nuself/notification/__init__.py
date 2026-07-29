@@ -265,7 +265,7 @@ class NotificationOutbox:
                 raise ValueError(
                     f"adapter is not required for outbox entry: {adapter_id}"
                 )
-            if state.status == "sent":
+            if state.status != "pending":
                 return entry
             deliveries = dict(entry.deliveries)
             deliveries[adapter_id] = AdapterDelivery(
@@ -287,6 +287,8 @@ class NotificationOutbox:
                 status = "sent"
             else:
                 status = "failed"
+            if status == entry.status:
+                return entry
             updated = replace(
                 entry,
                 status=status,
@@ -296,56 +298,12 @@ class NotificationOutbox:
             self._write_entry(updated)
             return updated
 
-    def mark_sent(self, entry_id: str) -> OutboxEntry:
-        entry = self.get(entry_id)
-        updated = OutboxEntry(
-            id=entry.id,
-            title=entry.title,
-            body=entry.body,
-            status="sent",
-            idempotency_key=entry.idempotency_key,
-            deep_link=entry.deep_link,
-            created_at=entry.created_at,
-            sent_at=utc_now_iso(),
-            attempts=entry.attempts + 1,
-            context=entry.context,
-        )
-        self._write_entry(updated)
-        return updated
-
-    def mark_failed(self, entry_id: str) -> OutboxEntry:
-        entry = self.get(entry_id)
-        updated = OutboxEntry(
-            id=entry.id,
-            title=entry.title,
-            body=entry.body,
-            status="failed",
-            idempotency_key=entry.idempotency_key,
-            deep_link=entry.deep_link,
-            created_at=entry.created_at,
-            sent_at=entry.sent_at,
-            attempts=entry.attempts + 1,
-            context=entry.context,
-        )
-        self._write_entry(updated)
-        return updated
-
     def dismiss(self, entry_id: str) -> OutboxEntry:
-        entry = self.get(entry_id)
-        updated = OutboxEntry(
-            id=entry.id,
-            title=entry.title,
-            body=entry.body,
-            status="dismissed",
-            idempotency_key=entry.idempotency_key,
-            deep_link=entry.deep_link,
-            created_at=entry.created_at,
-            sent_at=entry.sent_at,
-            attempts=entry.attempts,
-            context=entry.context,
-        )
-        self._write_entry(updated)
-        return updated
+        with self._backend.transaction():
+            entry = self.get(entry_id)
+            updated = replace(entry, status="dismissed")
+            self._write_entry(updated)
+            return updated
 
     def clear(self, status: OutboxStatus) -> int:
         removed = 0
@@ -389,8 +347,7 @@ class NotificationDeliveryLoop:
 
     def run_once(self) -> int:
         """Deliver all pending entries. Return count delivered."""
-        adapters = _index_adapters(self._adapters)
-        adapter_ids = tuple(adapters)
+        _index_adapters(self._adapters)
         delivered = 0
         for entry in self._outbox.list(status="pending"):
             delivery_context = replace(
@@ -398,24 +355,41 @@ class NotificationDeliveryLoop:
                 source="daemon.worker.notification_delivery",
             )
             with use_runtime_context(delivery_context):
-                prepared = self._outbox.prepare_delivery(entry.id, adapter_ids)
-                for adapter_id in prepared.required_adapters:
-                    current = self._outbox.get(entry.id)
-                    if current.deliveries[adapter_id].status == "sent":
-                        continue
-                    adapter = adapters.get(adapter_id)
-                    success = adapter.send(current) if adapter is not None else False
-                    self._outbox.record_adapter_result(
-                        entry.id,
-                        adapter_id,
-                        success=success,
-                    )
-                final = self._outbox.finalize_delivery(entry.id)
+                final = deliver_entry_once(
+                    self._outbox,
+                    entry.id,
+                    self._adapters,
+                )
                 if final.status == "sent":
                     delivered += 1
         # Clean up old dismissed entries so the outbox does not grow forever.
         self._outbox.clear_dismissed_older_than(days=7)
         return delivered
+
+
+def deliver_entry_once(
+    outbox: NotificationOutbox,
+    entry_id: str,
+    adapters: list[NotificationAdapter],
+) -> OutboxEntry:
+    """Run or recover one frozen adapter plan without implicit retries."""
+    indexed = _index_adapters(adapters)
+    entry = outbox.get(entry_id)
+    if entry.status != "pending":
+        return entry
+    prepared = outbox.prepare_delivery(entry_id, tuple(indexed))
+    for adapter_id in prepared.required_adapters:
+        current = outbox.get(entry_id)
+        if current.deliveries[adapter_id].status != "pending":
+            continue
+        adapter = indexed.get(adapter_id)
+        success = adapter.send(current) if adapter is not None else False
+        outbox.record_adapter_result(
+            entry_id,
+            adapter_id,
+            success=success,
+        )
+    return outbox.finalize_delivery(entry_id)
 
 
 def _decode_context(data: dict[str, object]) -> RuntimeContext:

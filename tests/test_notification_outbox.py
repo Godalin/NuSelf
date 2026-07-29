@@ -155,34 +155,47 @@ def test_outbox_add_is_idempotent_across_processes(tmp_path: Path) -> None:
     assert entries[0].id == "first"
 
 
-def test_outbox_mark_sent(tmp_path: Path) -> None:
+def test_outbox_terminal_adapter_result_cannot_be_overwritten(
+    tmp_path: Path,
+) -> None:
     outbox = NotificationOutbox(tmp_path)
     outbox.add(
         OutboxEntry(id="e1", title="T", body="B", status="pending", idempotency_key="k")
     )
-    updated = outbox.mark_sent("e1")
-    assert updated.status == "sent"
-    assert updated.attempts == 1
-    assert updated.sent_at is not None
+    outbox.prepare_delivery("e1", ("email",))
+    failed = outbox.record_adapter_result(
+        "e1",
+        "email",
+        success=False,
+    )
+
+    unchanged = outbox.record_adapter_result(
+        "e1",
+        "email",
+        success=True,
+    )
+
+    assert failed.deliveries["email"].status == "failed"
+    assert unchanged.deliveries["email"].status == "failed"
+    assert unchanged.deliveries["email"].attempts == 1
 
 
-def test_outbox_mark_failed(tmp_path: Path) -> None:
+def test_outbox_dismiss_preserves_adapter_history(tmp_path: Path) -> None:
     outbox = NotificationOutbox(tmp_path)
     outbox.add(
         OutboxEntry(id="e1", title="T", body="B", status="pending", idempotency_key="k")
     )
-    updated = outbox.mark_failed("e1")
-    assert updated.status == "failed"
-    assert updated.attempts == 1
+    outbox.prepare_delivery("e1", ("email", "macos"))
+    outbox.record_adapter_result("e1", "email", success=True)
+    outbox.record_adapter_result("e1", "macos", success=False)
+    before = outbox.get("e1")
 
-
-def test_outbox_dismiss(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
-    outbox.add(
-        OutboxEntry(id="e1", title="T", body="B", status="pending", idempotency_key="k")
-    )
     updated = outbox.dismiss("e1")
+
     assert updated.status == "dismissed"
+    assert updated.required_adapters == before.required_adapters
+    assert updated.deliveries == before.deliveries
+    assert updated.attempts == before.attempts
 
 
 def test_outbox_get_missing_raises(tmp_path: Path) -> None:

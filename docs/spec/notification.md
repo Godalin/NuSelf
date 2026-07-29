@@ -42,13 +42,16 @@ atomically on their first subsequent delivery attempt.
 
 ```
 add() ──► pending
-pending ──► sent      [mark_sent]      triggered by: DeliveryLoop, CLI notify send
-pending ──► failed    [mark_failed]    triggered by: DeliveryLoop, CLI notify send
+pending ──► sent      [finalize_delivery] triggered by: DeliveryLoop, CLI notify send
+pending ──► failed    [finalize_delivery] triggered by: DeliveryLoop, CLI notify send
 any     ──► dismissed [dismiss]        triggered by: CLI notify dismiss
 any     ──► deleted   [clear(status)]  triggered by: CLI notify clear
 ```
 
-**No transition guards enforced in code.** Calling `mark_sent` on an already-sent entry is accepted and increments `attempts`.
+There is no legacy whole-entry `mark_sent` or `mark_failed` transition.
+Delivery always freezes a required adapter plan, records each adapter result,
+then derives the compatibility status. `dismiss()` changes only the global
+status and preserves the complete adapter plan and history.
 
 ### Persistence
 
@@ -100,15 +103,22 @@ pending entries.
    `delivery_id` values, then atomically freezes those IDs as the entry's
    required plan if it has no plan yet. Duplicate or invalid IDs fail before
    any adapter side effect.
-4. Iterates the frozen required adapter IDs in order. A previously `sent`
-   adapter is skipped. Each available non-sent adapter is invoked once and its
-   success or failure is persisted immediately before the next adapter runs.
+4. Iterates the frozen required adapter IDs in order. Every adapter with a
+   durable terminal result (`sent` or `failed`) is skipped. Each available
+   `pending` adapter is invoked once and its success or failure is persisted
+   immediately before the next adapter runs.
    A required adapter missing from the current configuration is persisted as
    failed without inventing a replacement identity.
 5. After every required adapter has a durable result, derives and persists the
-   global status. A crash between adapter results leaves the entry `pending`;
-   the next run resumes the plan without repeating adapters already recorded
-   as sent.
+   global status. A crash after a failed result but before finalization leaves
+   the entry globally `pending`; the next run skips both successful and failed
+   terminal adapter states and only finalizes the projection.
+
+The CLI and REPL `notify send` path use this same pipeline with the stable
+`log` adapter. They never directly overwrite global status. If an entry already
+has another frozen adapter plan, the command preserves that plan, records any
+still-pending unavailable adapters as failed, skips prior terminal results, and
+finalizes the projection.
 
 The prior ambient context is restored after each entry even when an adapter
 raises. Delivery logs therefore project the notification's originating
@@ -118,7 +128,9 @@ request/thread/turn/trace fields plus the delivery-owned source.
 
 **No automatic retry after a completed failed attempt.** A globally failed
 entry stays `failed` forever. Crash recovery of an incomplete pending attempt
-is not a retry of adapters already recorded as sent.
+is not a retry of adapters already recorded as sent or failed. A future retry
+feature must explicitly reset selected failed adapter states to `pending`;
+normal delivery and finalization cannot do so.
 
 ### Daemon Integration
 

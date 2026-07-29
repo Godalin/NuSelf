@@ -45,6 +45,10 @@ to callers.
 File-backed collection identifiers are opaque record keys: path syntax,
 record/key mismatches, and symlink redirection are rejected at the shared
 storage boundary.
+`nuself dev migrate` now writes and validates a strict temporary SQLite
+database, then atomically publishes it only after checkpoint, close, and fsync;
+corrupt or ID-mismatched file records abort without exposing a partial
+database.
 Successful file-backed record deletion now includes parent-directory
 synchronization; a visible deletion whose crash durability is unknown is
 reported distinctly instead of being treated as an ordinary failed unlink.
@@ -57,7 +61,9 @@ and notification outbox admission performs idempotency lookup plus insertion
 inside that backend transaction.
 Notification delivery also persists one state per stable adapter (`log`,
 `email`, or `macos`). If a later adapter crashes, recovery skips channels whose
-successful external effect was already recorded instead of sending them again.
+terminal success or failure was already recorded instead of implicitly
+retrying them. CLI/REPL send and dismiss operations preserve that adapter plan
+and history.
 Reason export manifest-write and retry-callback failures schedule bounded,
 delayed online reconciliation, so a durable non-terminal job can recover
 without a daemon restart or an immediate retry loop.

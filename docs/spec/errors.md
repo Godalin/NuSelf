@@ -546,8 +546,10 @@ domain results.
 Notification adapter `False` outcomes for missing email configuration, SMTP
 failure, and osascript failure are authoritative. Their failure diagnostics
 are secondary and cannot leave an entry pending by raising before
-`mark_failed`. Log-only, dry-run, external send, and outbox state writes remain
-authoritative effects.
+`record_adapter_result`. Log-only, dry-run, external send, and outbox state
+writes remain authoritative effects. Once a terminal adapter result is
+persisted, crash recovery may finalize its global projection but cannot invoke
+that adapter again.
 
 ## Atomic File Failure Provenance
 

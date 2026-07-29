@@ -38,6 +38,9 @@ Persona graph 的 LLM 故障会保留确定性的贡献、汇总和激活 fallba
 同时暴露两个错误和残留路径。
 文件后端的 collection identifier 是不透明 record key；共享存储边界会拒绝路径
 语法、record/key identity 不一致以及符号链接重定向。
+`nuself dev migrate` 现在会先写入并严格验证临时 SQLite database，完成
+checkpoint、close 和 fsync 后才原子发布；损坏或 ID 不匹配的 file record 会
+中止迁移，不会暴露部分数据库。
 文件后端 record 删除成功还要求同步 parent directory；若删除已可见但 crash
 durability 未知，系统会用独立 typed error 报告，而不是当作普通 unlink 失败。
 Memory candidate acceptance 对 target 和 review record 使用同一语义：若候选已
@@ -47,8 +50,9 @@ Memory candidate acceptance 对 target 和 review record 使用同一语义：�
 outbox admission 会在同一 backend transaction 中完成 idempotency lookup 和
 insert。
 Notification delivery 还会按稳定 adapter ID（`log`、`email`、`macos`）分别
-持久化状态。若后续 adapter 崩溃，恢复时会跳过已经记录成功外部副作用的通道，
-避免重复发送。
+持久化状态。若后续 adapter 崩溃，恢复时会跳过已经记录 terminal success 或
+failure 的通道，不会隐式重试。CLI/REPL 的 send 与 dismiss 也会保留该 adapter
+plan 和完整历史。
 Reason export 的 manifest 写回或 retry callback 失败时会安排有界、延迟的在线
 reconciliation，使 durable non-terminal job 无需重启 daemon 即可恢复，也不会
 形成即时重试热循环。

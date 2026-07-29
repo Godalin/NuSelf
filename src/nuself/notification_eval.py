@@ -201,8 +201,15 @@ def _evaluate_outbox(
                     ),
                 )
             )
-        elif action_name == "mark_sent":
-            outbox.mark_sent(_required_str(action, "entry_id"))
+        elif action_name == "deliver_success":
+            entry_id = _required_str(action, "entry_id")
+            outbox.prepare_delivery(entry_id, ("eval",))
+            outbox.record_adapter_result(
+                entry_id,
+                "eval",
+                success=True,
+            )
+            outbox.finalize_delivery(entry_id)
         else:
             raise ValueError(f"unknown outbox action: {action_name}")
 

@@ -39,6 +39,13 @@ and release reproducibility gaps identified by the `bd43f1d` external review.
   missing or filename-mismatched IDs instead of isolating or skipping them.
 - Atomic migration, CLI lifecycle, and CLI regression coverage: 333 passed;
   pyright reported 0 errors and 0 warnings.
+- Notification CLI, REPL, evaluator, and daemon delivery now use one frozen
+  adapter-plan pipeline. Whole-entry sent/failed mutation APIs are removed,
+  dismiss retains the complete plan/history, and recovery skips both sent and
+  failed terminal adapter results before finalizing global status.
+- Focused notification and CLI coverage: 349 passed; pyright reported 0
+  errors and 0 warnings. The source scan finds no remaining `mark_sent` or
+  `mark_failed` caller or implementation.
 - Confirmed: `_FileCollection.get/put/delete` directly interpolate untrusted
   keys into paths and `list` recursively follows nested JSON paths.
 - Confirmed: ThreadStore rename, branch, archive, unarchive, and delete bypass

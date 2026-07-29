@@ -124,7 +124,9 @@ def test_outbox_context_round_trip_and_legacy_decode(
     stored = outbox.get(entry.id)
 
     assert stored.context == entry.context
-    assert outbox.mark_sent(entry.id).context == entry.context
+    outbox.prepare_delivery(entry.id, ("log",))
+    outbox.record_adapter_result(entry.id, "log", success=True)
+    assert outbox.finalize_delivery(entry.id).context == entry.context
     assert outbox.dismiss(entry.id).context == entry.context
 
     legacy = entry.to_wire()
@@ -379,6 +381,46 @@ def test_delivery_loop_resumes_without_repeating_sent_adapter(
     assert completed.status == "sent"
     assert completed.deliveries["first"].attempts == 1
     assert completed.deliveries["second"].attempts == 1
+
+
+def test_delivery_loop_finalizes_without_repeating_failed_adapter(
+    tmp_path: Path,
+) -> None:
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="failed-before-finalize",
+            title="Crash recovery",
+            body="A recorded failure is terminal.",
+            status="pending",
+            idempotency_key="failed-before-finalize",
+        )
+    )
+    outbox.prepare_delivery(
+        "failed-before-finalize",
+        ("failed", "remaining"),
+    )
+    outbox.record_adapter_result(
+        "failed-before-finalize",
+        "failed",
+        success=False,
+    )
+    failed = FakeAdapter(succeed=True, delivery_id="failed")
+    remaining = FakeAdapter(succeed=True, delivery_id="remaining")
+
+    delivered = NotificationDeliveryLoop(
+        tmp_path,
+        adapters=[failed, remaining],
+    ).run_once()
+
+    assert delivered == 0
+    assert failed.sent_entries == []
+    assert len(remaining.sent_entries) == 1
+    completed = outbox.get("failed-before-finalize")
+    assert completed.status == "failed"
+    assert completed.deliveries["failed"].status == "failed"
+    assert completed.deliveries["failed"].attempts == 1
+    assert completed.deliveries["remaining"].status == "sent"
 
 
 def test_delivery_loop_rejects_duplicate_adapter_ids_before_sending(

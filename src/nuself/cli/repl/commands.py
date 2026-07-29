@@ -615,19 +615,27 @@ def handle_interactive_notify_show_command(project_root: Path | None, entry_id: 
 
 
 def handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
-    from nuself.notification import NotificationOutbox, LogOnlyNotificationAdapter, OutboxEntryNotFound
+    from nuself.notification import (
+        LogOnlyNotificationAdapter,
+        NotificationOutbox,
+        OutboxEntryNotFound,
+        deliver_entry_once,
+    )
 
     outbox = NotificationOutbox(project_root)
     try:
-        entry = outbox.get(entry_id)
+        outbox.get(entry_id)
     except OutboxEntryNotFound:
         return f"Outbox entry not found: {entry_id}"
     if subcmd == "send":
         adapter = LogOnlyNotificationAdapter(project_root)
-        if adapter.send(entry):
-            outbox.mark_sent(entry_id)
+        updated = deliver_entry_once(
+            outbox,
+            entry_id,
+            [adapter],
+        )
+        if updated.status == "sent":
             return f"Sent: {entry_id}"
-        outbox.mark_failed(entry_id)
         return f"Failed to send: {entry_id}"
     if subcmd == "dismiss":
         outbox.dismiss(entry_id)
