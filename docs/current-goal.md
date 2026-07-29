@@ -5,10 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make auxiliary audit validation and persistence operate on one immutable
-envelope. Producer contract errors must propagate before the best-effort
-boundary, while persistence failure must report degradation without rebuilding
-or retrying the original record.
+Make closed handler catalogs a shared typed sealing contract. Daemon and REPL
+composition must prove exact registered-key coverage through
+`HandlerRegistry`, without local set comparisons or generic `RuntimeError`.
 
 ## Active Branch
 
@@ -16,55 +15,59 @@ or retrying the original record.
 
 ## Ordered Work
 
-1. Inventory auxiliary audit construction, persistence, diagnostics, and
-   caller-visible exception classification.
-2. Correct the active-goal function name from generic
-   `run_observed_best_effort(...)` to `write_observed_log_event(...)`.
-3. Specify one-envelope validation/persistence ownership before code.
-4. Persist the already-created envelope through `write_audit_envelope(...)`.
-5. Prove exact envelope identity, frozen metadata/context, schema propagation,
-   and no retry after uncertain/persisted failure.
+1. Verify whether direct diagnostic audit construction has the duplicate
+   envelope risk fixed in the previous batch.
+2. Inventory shared handler users and local catalog completeness checks.
+3. Correct the runtime spec's stale claim that argparse bypasses
+   `HandlerRegistry`.
+4. Specify typed exact-coverage validation at registry sealing.
+5. Migrate daemon and REPL composition to the shared coverage contract.
 6. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No retry of the original auxiliary audit.
-- No suppression of producer identity, payload, or JSON schema errors.
-- No change to persistence-outcome classification or failure diagnostic schema.
-- No change to generic non-log `run_observed_best_effort(...)`.
+- No replacement of argparse parsing or LangChain tool dispatch.
+- No process-global handler registry.
+- No runtime fallback for incomplete catalogs.
+- No compatibility path preserving local completeness checks.
 
 ## Completion Evidence
 
-- The duplicated path is `write_observed_log_event(...)`;
-  `run_observed_best_effort(...)` does not construct audit envelopes.
-- `write_observed_log_event(...)` currently creates one envelope outside its
-  catch solely for validation, discards it, and calls `write_log_event(...)`,
-  which captures a second message ID, timestamp, context, and payload.
-- Contract errors from the first construction already propagate correctly.
-- Persistence failures from the second construction are degraded and never
-  retry the record, including close failure after a durable append.
-- `write_observed_log_event(...)` now creates one envelope before its
-  persistence boundary and passes that exact instance to
-  `write_audit_envelope(...)`.
-- Tests prove one construction, object identity at persistence, stable message
-  ID and request context, frozen metadata despite caller mutation, producer
-  schema propagation, and no retry after a persisted close failure.
-- Audit-store failure tests now inject envelope persistence and diagnostic
-  persistence independently instead of relying on the removed shared
-  `write_log_event(...)` seam.
-- Focused observability and best-effort tests: 37 passed.
-- Full suite: 2127 passed.
+- `report_observed_failure(...)` already constructs exactly one envelope
+  through `write_log_event(...)`; it has no duplicate identity, context, or
+  mutable-input read.
+- Diagnostic envelope construction and persistence intentionally share one
+  terminal catch because this reporter must not replace an already-decided
+  primary outcome. Moving construction outside would violate that contract.
+- Daemon, CLI, and REPL runtime dispatch already use `HandlerRegistry`.
+- Daemon and REPL nevertheless duplicate exact catalog coverage with local set
+  comparisons and generic `RuntimeError`.
+- `runtime-infrastructure.md` incorrectly says argparse is not routed through
+  the registry, while implementation and `development.md` show parser-local
+  sealed registry dispatch.
+- `HandlerRegistry.seal(expected_keys=...)` now validates exact catalog
+  coverage before publishing the dispatch table and raises typed
+  `HandlerRegistryCoverageError` with immutable `missing` and `extra` sets.
+- Failed coverage leaves an unsealed registry repairable; coverage supplied
+  again after sealing is still validated without changing the compiled
+  dispatch table.
+- Daemon request and REPL command composition now use the shared coverage
+  contract; their local set comparisons and generic `RuntimeError` paths are
+  removed.
+- The runtime spec now accurately describes parser-local CLI registry
+  dispatch and labels the original problem inventory as historical.
+- Focused handler, daemon request, and REPL tests: 29 passed.
+- Full suite: 2132 passed.
 - Pyright: 0 errors, 0 warnings.
-- `git diff --check` passed.
+- `git diff --check` passed; static search finds no migrated local coverage
+  comparison or legacy mismatch message.
 
 ## Publication
 
-Single-envelope auxiliary audit persistence was implemented in `7254128`;
-milestone publication is pending this goal update and push.
+Typed closed-catalog handler sealing was implemented in `c948bf7`; milestone
+publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Review direct diagnostic audit construction next. Failure reporting still uses
-the broad `write_log_event(...)` convenience path, so verify whether diagnostic
-validation and persistence need the same explicit immutable-envelope ownership
-or whether its authoritative failure semantics require a different boundary.
+After this boundary is complete, review handler middleware ownership and
+exception translation for the next shared-infrastructure risk.
