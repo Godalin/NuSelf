@@ -3,11 +3,11 @@ import json
 import pytest
 
 import nuself.decorators as decorators
-from nuself.decorators import approval_required, audit_log
+from nuself.decorators import approval_required
 
 
 def test_decorator_package_has_no_pending_callable_registry() -> None:
-    assert decorators.__all__ == ["approval_required", "audit_log"]
+    assert decorators.__all__ == ["approval_required"]
     assert not hasattr(decorators, "ApprovalManager")
 
 
@@ -16,7 +16,6 @@ def test_approval_interactive(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("builtins.input", lambda prompt="": "y")
 
-    @audit_log("chat")
     @approval_required("chat")
     def quick(x: str) -> str:
         return f"done {x}"
@@ -60,6 +59,44 @@ def test_approval_prompt_is_visible(monkeypatch: pytest.MonkeyPatch, capsys: pyt
     assert payload.get("result") == "done alice"
     assert any(event == "approval_prompted" for _, event, _ in events)
     assert any(event == "service_tool_approved" for _, event, _ in events)
+
+
+def test_approval_decision_is_observed_before_tool_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order: list[str] = []
+    monkeypatch.setattr("builtins.input", lambda: "yes")
+    monkeypatch.setattr(
+        "nuself.decorators.approval.getpass.getuser",
+        lambda: "tester",
+    )
+
+    def capture(
+        _component: str,
+        event: str,
+        _message: str,
+        **_kwargs: object,
+    ) -> object:
+        order.append(event)
+        return object()
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        capture,
+    )
+
+    @approval_required("chat")
+    def tool() -> str:
+        order.append("tool_body")
+        return "ok"
+
+    tool()
+
+    assert order == [
+        "approval_prompted",
+        "service_tool_approved",
+        "tool_body",
+    ]
 
 
 def test_approval_audit_failures_do_not_replace_approved_result(
@@ -116,15 +153,6 @@ def test_approval_audit_failures_do_not_replace_approved_result(
                     "operation": "approval_prompted",
                     "tool": "tool",
                     "audit_event": "approval_prompted",
-                },
-        ),
-        (
-            "approval_audit_failed",
-            "audit store unavailable",
-                {
-                    "operation": "service_tool_executed",
-                    "tool": "tool",
-                    "audit_event": "service_tool_executed",
                 },
         ),
         (
@@ -333,4 +361,4 @@ def test_approval_diagnostic_failure_warns_without_replacing_result(
         payload = json.loads(tool())
 
     assert payload["result"] == "ok"
-    assert len(warnings) == 3
+    assert len(warnings) == 2

@@ -254,11 +254,11 @@ def build_reason_tools(
         )
 
     decorators = import_module("nuself.decorators")
-    composed_propose = decorators.audit_log("reasoning")(
-        decorators.approval_required("reasoning")(reason_propose)
+    composed_propose = decorators.approval_required("reasoning")(
+        reason_propose
     )
-    composed_export = decorators.audit_log("reasoning")(
-        decorators.approval_required("reasoning")(reason_export)
+    composed_export = decorators.approval_required("reasoning")(
+        reason_export
     )
     return (
         tool_from_function(

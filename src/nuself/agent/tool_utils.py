@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
-from typing import Any
+from collections.abc import Iterable
 
 from langchain_core.tools import BaseTool
 
@@ -25,27 +24,6 @@ def index_tool_service_components(
         if service_component is not None:
             components[tool.name] = service_component
     return components
-
-
-def tool_log_metadata(
-    *,
-    args: Mapping[str, Any],
-    result: str | None = None,
-    error: str | None = None,
-    service_component: str,
-    tool_name: str,
-) -> dict[str, object]:
-    """Build structured metadata for a service tool call log."""
-    metadata: dict[str, object] = {
-        "service_component": service_component,
-        "tool": tool_name,
-        "args": dict(args),
-    }
-    if result is not None:
-        metadata["result"] = result
-    if error is not None:
-        metadata["error"] = error
-    return metadata
 
 
 def tool_result_text(result: object) -> str:

@@ -29,10 +29,15 @@ class ToolOutcome:
     error: str | None = None
 
     def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("tool outcome name must not be blank")
         if (self.result is None) == (self.error is None):
             raise ValueError(
                 "tool outcome requires exactly one of result or error"
             )
+        value = self.result if self.result is not None else self.error
+        if value is None or not value.strip():
+            raise ValueError("tool outcome result or error must not be blank")
         frozen = freeze_json_value(dict(self.args))
         if not isinstance(frozen, Mapping):
             raise TypeError("tool outcome args must be a mapping")

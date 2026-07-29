@@ -110,6 +110,21 @@ Rules:
 
 - The first tag is the caller component and determines the log file.
 - The second tag is `metadata.service_component` and names the service being called.
+- `service_tool_called` is an outcome event, not an invocation-intent event. It
+  is emitted exactly once from the framework middleware's immutable completed
+  `ToolOutcome`; decorators and tool implementations must not emit it.
+- One shared tool-outcome projection owns the exact event message, status,
+  top-level error, and metadata shape for both live logs and persisted
+  snapshots. Callers provide only the caller component, resolved service
+  component, and `ToolOutcome`.
+- A successful outcome has `status="completed"`, no top-level error, and
+  metadata containing exactly `service_component`, `tool`, `args`, and
+  `result`. A failed outcome has `status="failed"`, the same error at the
+  top-level and in metadata, and metadata containing exactly
+  `service_component`, `tool`, `args`, and `error`.
+- Tool names and service components must be non-empty strings. Arguments must
+  be a JSON-compatible mapping frozen by `ToolOutcome`; result and error must
+  be non-empty strings.
 - `service_component` is a display tag, not a normal `key=value` header field.
 - Human-readable tool-call headers show `tool=...` before `status=...`; both fields are highlighted when color is enabled.
 - Agent-facing chat tools for memory, reflection, reason, trace, and selves all write `chat/service_tool_called` with the corresponding service tag.
@@ -119,7 +134,11 @@ Rules:
   - `metadata.args` stores the structured tool arguments.
   - `metadata.result` stores the structured result when available, otherwise the result text.
   - `metadata.error` stores the error text when the call failed.
-- The log `message` for newly written `service_tool_called` events is not a display body. Renderers display tool I/O from structured metadata; for persisted pre-structured snapshots, renderers may normalize the legacy `args:` / `result:` / `error:` message body into the same display path so historical reason steps remain inspectable.
+- The log `message` for newly written `service_tool_called` events is the fixed
+  non-display value `Service tool outcome recorded`. Renderers display tool I/O
+  from structured metadata; for persisted pre-structured snapshots, renderers
+  may normalize the legacy `args:` / `result:` / `error:` message body into the
+  same display path so historical reason steps remain inspectable.
 - Renderers should use the same JSON block renderer for `args` and `result`, pretty-print JSON objects and arrays with the opening `{` or `[` on the section header line, expand JSON strings that contain nested JSON, and indent ordinary text consistently.
 
 ### Service Tag Rendering
@@ -130,10 +149,9 @@ All rendering of tool call log events must read `metadata.service_component` fro
 
 Rules:
 
-- The writer (log callback) is responsible for determining the correct
-  `service_component` and writing it into the log event's `metadata`.
-  Framework-tool writers use the shared validated tool metadata resolver and
-  never infer the service from the tool name.
+- The caller resolves the correct `service_component` from framework tool
+  metadata. The shared outcome projection validates it and writes it into the
+  event metadata; neither writer nor renderer infers it from the tool name.
 - The renderer (`_render_service_tool_called`) reads `metadata.service_component` directly. It must NOT re-derive the service from the tool name.
 - No subsystem stores a separate tool-call cache on domain objects. The log event is the record of a tool invocation. Any code that needs to display a past tool call queries the log system.
 

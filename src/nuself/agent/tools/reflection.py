@@ -82,10 +82,8 @@ def build_reflection_tools(
         )
 
     decorators = import_module("nuself.decorators")
-    composed_dismiss = decorators.audit_log("reflection")(
-        decorators.approval_required("reflection")(
-            dismiss_reflection_by_numeric_handle
-        )
+    composed_dismiss = decorators.approval_required("reflection")(
+        dismiss_reflection_by_numeric_handle
     )
     return (
         tool_from_function(

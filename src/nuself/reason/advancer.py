@@ -15,10 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.failover import invoke_agent_endpoint
 from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
+from nuself.agent.tool_audit import ToolOutcomeProjection
 from nuself.agent.structured import require_structured_response
 from nuself.agent.tool_utils import (
     index_tool_service_components,
-    tool_log_metadata,
 )
 
 from nuself.llm import (
@@ -34,9 +34,6 @@ from nuself.reason.domain import (
 from nuself.reason.audit import report_reason_failure
 from nuself.reason.errors import ReasonAdvanceError
 from nuself.runtime import current_runtime_context, runtime_context
-from nuself.runtime.observability import (
-    write_observed_log_event,
-)
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -52,33 +49,18 @@ def _log_tool_outcome(
     *,
     tool_service_map: dict[str, str] | None = None,
     project_root: Path | None,
-) -> None:
+) -> ToolOutcomeProjection:
     """Emit a service_tool_called log event for a reasoning tool invocation."""
     service_component = (
         (tool_service_map or {}).get(outcome.name) or "reason_advancer"
     )
-    write_observed_log_event(
-        "reasoning",
-        "service_tool_called",
-        (
-            f"{outcome.name} "
-            f"{'failed' if outcome.error is not None else 'completed'}"
-        ),
-        project_root=project_root,
-        status="completed" if outcome.error is None else "failed",
-        metadata=tool_log_metadata(
-            args=outcome.args,
-            result=outcome.result,
-            error=outcome.error,
-            service_component=service_component,
-            tool_name=outcome.name,
-        ),
-        failure_event="tool_log_projection_failed",
-        failure_message=(
-            f"Could not project reason tool outcome {outcome.name}"
-        ),
-        failure_metadata={"tool": outcome.name},
+    projection = ToolOutcomeProjection(
+        component="reasoning",
+        service_component=service_component,
+        outcome=outcome,
     )
+    projection.write_observed(project_root=project_root)
+    return projection
 
 
 class TrackedItemOutput(BaseModel):
@@ -356,38 +338,14 @@ class ReasonAdvancer:
     def _project_tool_outcomes(
         self,
     ) -> tuple[dict[str, object], ...]:
-        from nuself.agent.tool_utils import tool_log_metadata
-
         snapshots: list[dict[str, object]] = []
         for outcome in self._captured:
-            args = dict(outcome.args)
-            _log_tool_outcome(
+            projection = _log_tool_outcome(
                 outcome,
                 project_root=self._project_root,
                 tool_service_map=self._tool_service_map,
             )
-            failed = outcome.error is not None
-            snapshots.append(
-                {
-                    "component": "reasoning",
-                    "event": "service_tool_called",
-                    "message": (
-                        f"{outcome.name} "
-                        f"{'failed' if failed else 'completed'}"
-                    ),
-                    "status": "failed" if failed else "completed",
-                    "metadata": tool_log_metadata(
-                        args=args,
-                        result=outcome.result,
-                        error=outcome.error,
-                        service_component=self._tool_service_map.get(
-                            outcome.name,
-                            "",
-                        ),
-                        tool_name=outcome.name,
-                    ),
-                }
-            )
+            snapshots.append(projection.to_snapshot())
         return tuple(snapshots)
 
     def _build_workspace_tools(self) -> tuple[BaseTool, ...]:

@@ -7,7 +7,6 @@ import nuself.runtime.observability as observability
 from nuself.agent.chat.persona import ConversationPersonaOrchestrator
 from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.cli.commands.persona import _record_lifecycle  # pyright: ignore[reportPrivateUsage]
-from nuself.decorators.audit import audit_log
 from nuself.logs import read_log_events
 from nuself.persona import PersonaInput, PersonaTurnState
 from nuself.persona.prompt_repo import PersonaPrompt
@@ -123,36 +122,6 @@ def test_cli_persona_unknown_trace_action_propagates(
             action="unknown",
             persona=prompt,
         )
-
-
-def test_audit_failure_is_observed_without_failing_tool(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    structured_failures: list[tuple[str, str | None]] = []
-
-    def fail_audit_or_capture_failure(
-        component: str,
-        event: str,
-        message: str,
-        **kwargs: object,
-    ) -> None:
-        if event != "audit_log_failed":
-            raise OSError("audit store unavailable")
-        structured_failures.append((event, kwargs.get("error")))  # type: ignore[arg-type]
-
-    monkeypatch.setattr(
-        "nuself.runtime.observability.write_log_event",
-        fail_audit_or_capture_failure,
-    )
-
-    @audit_log("chat")
-    def tool() -> str:
-        return "ok"
-
-    assert tool() == "ok"
-    assert structured_failures == [
-        ("audit_log_failed", "audit store unavailable"),
-    ]
 
 
 def test_persona_failure_log_cannot_mask_discussion_failure(

@@ -541,11 +541,11 @@ Trace tools let the chat agent inspect thought provenance without mutating it.
 
 The detailed tool catalog above should be read as grouped capability blocks, not a flat list of unrelated helpers:
 
-| Family                         | Typical tools                                                                                                                                                                                     | Decorator need               |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Read-only discovery            | `memory_search`, `memory_count`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | `log` only                   |
-| Durable mutation               | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance`                                                                                                          | `log` + sometimes `approval` |
-| Approval-gated proposal/export | `reason_propose`, `reason_export`                                                                                                                                                                 | `log` + `approval`           |
+| Family                         | Typical tools                                                                                                                                                                                     | Decorator need       |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Read-only discovery            | `memory_search`, `memory_count`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | none                 |
+| Durable mutation               | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance`                                                                                                          | sometimes `approval` |
+| Approval-gated proposal/export | `reason_propose`, `reason_export`                                                                                                                                                                 | `approval`           |
 
 Approval-gated tools return structured JSON that records whether the user approved the action and, if approved, the underlying result payload.
 | Internal synthesis      | `selves_consult`                                                                                                                                                                                  | `log` only                   |
@@ -566,21 +566,16 @@ Tool decorators are categorized by intent so the agent builder can combine them 
 
 Standard categories:
 
-- `log` — records `service_tool_called` and other operational audit data. It should not decide whether a tool is allowed to run.
 - `approval` — gates user-confirmed or otherwise durable actions. It may return a pending result, request confirmation, or resume the original callable after approval.
 
 Future categories may exist, such as rate limiting, metrics, caching, or tracing, but they must follow the same composable decorator contract.
 
-The shared ordering rule is: decorators may be stacked, but the builder must keep the approval boundary around the actual side-effecting work and the log boundary around the observable tool invocation. The exact stack order is chosen by the owning subsystem, not by the agent runtime.
-
-The logging decorator is responsible for operational audit. The approval decorator is responsible for user-confirmed state transitions. Neither decorator should live inside the agent graph itself; the agent builder chooses which decorators a tool needs, then passes the already-composed registry into the runtime.
-
-Approval decorators are intended for tools that change durable state or trigger expensive, user-visible actions. Read-only tools should remain undecorated except for shared logging.
-
-Logging and approval decorators accept a declared `LogComponent`, not an
-arbitrary string. Composition must assign each decorated tool to an existing
-domain or shared-infrastructure component; casts must not manufacture unknown
-log files.
+Completed tool execution is captured once by framework middleware and projected
+through the shared `service_tool_called` outcome contract. It is not a
+decorator category. Approval decorators are intended for tools that change
+durable state or trigger expensive, user-visible actions; read-only tools
+remain undecorated. Approval decorators accept a declared `LogComponent`, not
+an arbitrary string.
 
 The current approval decorator is a synchronous request boundary. It owns the
 wrapped callable only through normal decorator composition, prompts and decides
@@ -592,9 +587,11 @@ project, identity, expiry, and idempotency semantics; retaining arbitrary
 Python callables is not such a contract.
 
 The prompt interaction, approval decision, wrapped callable, original callable
-exception, and structured approval result are primary effects. The
-`approval_prompted`, `service_tool_executed`, and `service_tool_approved`
-records are secondary observations and use shared best-effort observability:
+exception, and structured approval result are primary effects.
+`approval_prompted` and `service_tool_approved` are secondary observations and
+use shared best-effort observability. The approval record is written after an
+affirmative decision and before executing the callable; the middleware-owned
+tool outcome records subsequent success or failure:
 
 - prompt rendering and stdout failures propagate unchanged rather than being
   represented as a user decline;

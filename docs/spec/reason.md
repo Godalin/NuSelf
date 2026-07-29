@@ -876,12 +876,21 @@ Tool invocations during step generation are recorded twice, for two different pu
 1. As structured log events with component `"reasoning"` and event `"service_tool_called"`, so daemon logs, exports, and live diagnostics use the same log pipeline as chat and other services.
 2. As explicit `ReasoningStep.tool_logs` snapshots, so a persisted step remains self-contained when rendered later by `reason show` or `reason watch`.
 
-Both forms use the same event shape and MUST render through the shared log rendering tool (`render_log_event`). Reason renderers must not hand-format tool calls or invent a reason-specific tool-log display. The service tag is read from `metadata.service_component`; no code should derive the service tag from the tool name.
+Both forms are generated from the same shared immutable tool-outcome projection
+and MUST render through the shared log rendering tool (`render_log_event`).
+Reason must not rebuild snapshot dictionaries separately from the live event.
+Reason renderers must not hand-format tool calls or invent a reason-specific
+tool-log display. The service tag is read from
+`metadata.service_component`; no code should derive the service tag from the
+tool name.
 
 For the reason subsystem specifically:
 
 - The advancer emits `service_tool_called` log events with `component="reasoning"` for every captured tool invocation during step generation.
 - `ReasoningStep.tool_logs` stores the corresponding log event snapshots as dictionaries, including structured `metadata.args`, `metadata.result`, or `metadata.error`.
+- Live Reason logs and `ReasoningStep.tool_logs` snapshots are projections of
+  the same validated outcome object, so component, event, message, status,
+  error, service, tool, args, and result cannot drift.
 - `ReasoningStep` must not use a legacy `tool_calls` field.
 - Tool logs should not be truncated by the capture layer; user-facing renderers may choose their own display policy, but persisted step snapshots should preserve the full captured result.
 - Any CLI, REPL, transcript, watch, or detail renderer that displays reason tool logs must call the common log renderer so reason output stays visually and semantically consistent with chat, memory, reflection, trace, and daemon service logs.

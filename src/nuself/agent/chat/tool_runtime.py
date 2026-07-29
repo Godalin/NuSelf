@@ -15,12 +15,11 @@ from nuself.agent.skills import (
     render_tool_placeholders,
 )
 from nuself.agent.middleware import ToolOutcome
+from nuself.agent.tool_audit import ToolOutcomeProjection
 from nuself.agent.tool_utils import (
-    tool_log_metadata,
     tool_service_component,
 )
 from nuself.agent.tools import build_langchain_chat_tools
-from nuself.logs import write_log_event
 from nuself.memory.query import MemoryQueryService
 from nuself.reason.output import SectionPlanner
 from nuself.reflection.repository import ReflectionRepository
@@ -75,24 +74,11 @@ class ConversationToolRuntime:
         service_component = tool_service_component(tool)
         if service_component is None:
             return
-        write_log_event(
-            "chat",
-            "service_tool_called",
-            (
-                f"{outcome.name} "
-                f"{'failed' if outcome.error is not None else 'completed'}"
-            ),
-            project_root=self._project_root,
-            status="failed" if outcome.error is not None else "completed",
-            error=outcome.error,
-            metadata=tool_log_metadata(
-                args=outcome.args,
-                result=outcome.result,
-                error=outcome.error,
-                service_component=service_component,
-                tool_name=outcome.name,
-            ),
-        )
+        ToolOutcomeProjection(
+            component="chat",
+            service_component=service_component,
+            outcome=outcome,
+        ).write(project_root=self._project_root)
 
     def report_log_failure(self, exc: Exception) -> None:
         """Report a failed tool-log projection without changing tool execution."""

@@ -162,6 +162,11 @@ Rules:
 - Stateful agent workflows should use LangGraph state graphs or LangChain agents/middleware. NuSelf may own domain state and persistence, but should not duplicate framework runtime concepts.
 - Agent skills, middleware, model invocation, retries, tool execution, and message passing should follow current LangChain documentation. Any deliberate deviation must be documented in the relevant spec with a reason and a migration path.
 - Custom code should focus on NuSelf domain semantics: memory, reflection, reason, trace, private storage, rendering, and logs.
+- Framework middleware owns completed tool outcomes. Domain adapters may resolve
+  service metadata and project those outcomes, but decorators and tool
+  implementations must not create parallel tool-execution audit events.
+- Approval wrappers own approval intent and decision records only. They must
+  not duplicate the middleware-owned completed tool outcome.
 
 ## Subsystem Service Architecture
 

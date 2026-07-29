@@ -67,15 +67,6 @@ def approval_required(
             except EOFError:
                 resp = "n"
             if resp.strip().lower() in {"y", "yes"}:
-                result = fn(*args, **kwargs)
-                _write_approval_audit(
-                    component,
-                    "service_tool_executed",
-                    f"Tool executed interactively: {fn.__name__}",
-                    tool=fn.__name__,
-                    metadata={"tool": fn.__name__},
-                )
-                # Also log an explicit approval record with the approver identity.
                 approver = getpass.getuser()
                 _write_approval_audit(
                     component,
@@ -84,6 +75,7 @@ def approval_required(
                     tool=fn.__name__,
                     metadata={"tool": fn.__name__, "approver": approver},
                 )
+                result = fn(*args, **kwargs)
                 # Return a structured JSON string that preserves the underlying result
                 return json.dumps({"approved": True, "component": component, "approver": approver, "result": result})
             # Cancellation also returns a structured JSON string indicating no approval
