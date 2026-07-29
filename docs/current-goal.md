@@ -152,8 +152,10 @@ trustworthy 0.3.0 release candidate.
   isolated temporary output directory.
 - Full pyright remains the only local gate pending after its cache attempted a
   blocked refresh and the explicit retry approval service disconnected.
-- Remaining external findings require fault-injection or contract-level
-  verification before implementation.
+- The original external review has been re-audited item by item against the
+  current tree. All 13 code findings and every RC engineering deliverable have
+  implementation plus focused regression evidence; completion remains
+  intentionally unclaimed until full pyright and final branch CI pass.
 
 ## Publication
 
