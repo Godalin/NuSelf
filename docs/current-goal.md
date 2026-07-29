@@ -5,10 +5,10 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make synchronous runtime-event latency ownership explicit. Preserve ordered
-log projection before publication returns, while removing the misleading
-general subscriber API that allowed arbitrary slow auxiliary effects to block
-producers without declaring that ownership.
+Remove ad hoc per-turn thread ownership from interactive activity. One-shot
+execution must atomically own start, result/exception handoff, and completion,
+and no poll, presentation, or process-control path may abandon an in-flight
+authoritative send.
 
 ## Active Branch
 
@@ -16,57 +16,61 @@ producers without declaring that ownership.
 
 ## Ordered Work
 
-1. Inventory production event subscribers and publish-return ordering
-   dependencies.
-2. Decide whether log persistence remains synchronous and whether any
-   production auxiliary subscriber requires independent delivery.
-3. Update runtime-infrastructure, logging, and development specs before code.
-4. Replace the general subscriber API with explicit synchronous projection
-   attachment and migrate every caller.
-5. Prove ordering, snapshot mutation, failure isolation, and publisher-scoped
-   detachment semantics under the new API.
+1. Inventory raw threads, join paths, start rollback, exception handoff, and
+   cancellation claims.
+2. Separate long-lived `OwnedWorker` lifecycle from one-shot result execution.
+3. Specify a shared `OwnedCall` with exact start, completion, timeout, and
+   exception-identity contracts.
+4. Migrate live activity send and remove result/error/control side-channel
+   lists.
+5. Prove start rollback, single execution, timeout observation, exact exception
+   transport, and cleanup after poll/presentation/control failures.
 6. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No asynchronous event bus or background projection worker without a concrete
-  independently progressing production consumer.
-- No timeout implemented by abandoning callback threads.
-- No compatibility alias for `subscribe()` or `unsubscribe()`.
-- No change to event identities, payloads, ordering, or failure isolation.
+- No unsafe Python thread termination.
+- No claim that a join timeout cancels model or daemon work.
+- No agent/model cooperative cancellation protocol in this batch.
+- No change to retry, activity rendering, or send-result policy.
 
 ## Completion Evidence
 
-- Production inventory: daemon and standalone chat attach only
-  `runtime_event_log_sink(...)`; no independently progressing production
-  projection exists.
-- Chat tests require completed events to observe already-persisted thread state,
-  and event tests require ordered synchronous snapshot delivery.
-- Runtime events now expose `attach_projection(...)` and
-  `detach_projection(...)`; the old general `subscribe()` / `unsubscribe()`
-  surface and `EventSubscriber` / `EventSubscription` types were removed
-  without compatibility aliases.
-- Specs require every attached projection to be bounded synchronous in-process
-  work. Network calls, retries, unbounded waits, and independently progressing
-  effects must instead own bounded queue and worker lifecycles.
-- Daemon, standalone chat, tests, exports, error details, and exact-identity
-  filtering use the new projection vocabulary and handles.
-- Focused event, observability, chat, daemon worker, and daemon server tests:
-  168 passed.
-- Full suite: 2098 passed.
+- Inventory found one raw production thread in live activity send.
+- Normal completion and main-thread `KeyboardInterrupt` joined it, but
+  unexpected polling or presentation failure could return while it remained
+  alive.
+- The control path waited only 0.5 seconds and then abandoned a still-running
+  daemon thread; this was not real cancellation.
+- Daemon requests have configured socket timeouts, while local one-shot model
+  calls expose no shared cooperative cancellation contract.
+- `runtime.execution.OwnedCall` now owns one non-daemon result-producing thread,
+  duplicate-safe start, atomic start rollback, exact value/error outcome, and
+  finite non-negative wait timeouts.
+- The target transports the same escaping `BaseException` object and traceback;
+  it does not convert process-control state into an ordinary failure.
+- Live activity send uses `OwnedCall`; ad hoc result, error, and control lists
+  plus its raw daemon thread were removed.
+- Unexpected poll/presentation failures and main-thread control exceptions wait
+  for the started send to finish before returning or re-raising. Start failure
+  still closes an opened activity subscription.
+- Static search finds thread construction only inside shared `OwnedWorker` and
+  `OwnedCall` owners.
+- Focused execution, REPL activity, and worker tests: 30 passed.
+- Full suite: 2111 passed.
 - Pyright: 0 errors, 0 warnings.
-- Static search found no old event subscription API or type references;
-  `git diff --check` passed.
+- `git diff --check` passed.
 
 ## Publication
 
-Synchronous projection ownership was implemented in `1181f90`; milestone
-publication is pending this goal update and push.
+Owned one-shot execution was implemented in `b347f10`; milestone publication
+is pending this goal update and push.
 
 ## Next Review Batch
 
-Review ad hoc thread ownership next. The runtime now centralizes long-lived
-workers and delayed callbacks, but interactive activity still creates a raw
-per-turn `threading.Thread` for the blocking daemon chat request. Verify
-start-failure rollback, exception handoff, cancellation, final join, and whether
-the one-shot thread belongs in shared owned execution infrastructure.
+Review process-local log observation next. `observe_log_events(...)` is another
+synchronous callback boundary used to feed daemon live activity. Verify that
+its public semantics distinguish bounded in-process projection from arbitrary
+observation, that nested scope restoration and failure diagnostics cannot
+recurse, and that no slow or reentrant observer can unexpectedly acquire
+authoritative log-write ownership.
