@@ -8,6 +8,7 @@ import pytest
 from langchain_core.messages import BaseMessage
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
+from nuself.agent.errors import AgentModelUnavailableError
 from nuself.domain.memory import (
     MemoryEntry,
     MemoryObject,
@@ -338,7 +339,7 @@ def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None
             self,
             messages: Sequence[BaseMessage],
         ) -> CuratorActionsOutput:
-            raise RuntimeError("LLM unavailable")
+            raise AgentModelUnavailableError("LLM unavailable")
 
     repo = MemoryEntryRepository(tmp_path)
     curator = MemoryCurator(tmp_path, agent=FailingCuratorAgent(), thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
@@ -348,6 +349,54 @@ def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None
     assert result.processed_messages == 0
     assert result.created == 0
     assert repo.list() == []
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RuntimeError("curator implementation failed"),
+        ValueError("curator implementation returned invalid state"),
+    ],
+)
+def test_memory_curator_propagates_untyped_agent_errors(
+    tmp_path: Path,
+    failure: Exception,
+) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "Remember this important preference because it should "
+                        "exercise the curator agent decision boundary."
+                    ),
+                ),
+            ],
+        )
+    )
+
+    class BrokenCuratorAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> CuratorActionsOutput:
+            del messages
+            raise failure
+
+    curator = MemoryCurator(
+        tmp_path,
+        agent=BrokenCuratorAgent(),
+        thread_store=thread_store,
+        settings=MemoryCuratorSettings(auto_accept=False),
+    )
+
+    with pytest.raises(type(failure)) as captured:
+        curator.run_once()
+
+    assert captured.value is failure
 
 
 def test_memory_curator_ignores_trivial_chat_when_agent_says_ignore(tmp_path: Path) -> None:

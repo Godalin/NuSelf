@@ -7,6 +7,7 @@ import pytest
 from langchain_core.messages import BaseMessage
 
 import nuself.runtime.observability as observability
+from nuself.agent.errors import AgentModelUnavailableError
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.logs import read_log_events
@@ -149,7 +150,7 @@ def test_memory_optimizer_defers_without_agent_decision(tmp_path: Path) -> None:
             self,
             messages: Sequence[BaseMessage],
         ) -> OptimizeActionsOutput:
-            raise RuntimeError("LLM unavailable")
+            raise AgentModelUnavailableError("LLM unavailable")
 
     optimizer = MemoryOptimizer(tmp_path, agent=FailingOptimizerAgent(), repository=repo)
 
@@ -163,6 +164,46 @@ def test_memory_optimizer_defers_without_agent_decision(tmp_path: Path) -> None:
     assert event.event == "optimizer_deferred"
     assert event.metadata == {"reviewed": 0}
     assert "LLM unavailable" not in result.log_path.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RuntimeError("optimizer implementation failed"),
+        ValueError("optimizer implementation returned invalid state"),
+    ],
+)
+def test_memory_optimizer_propagates_untyped_agent_errors(
+    tmp_path: Path,
+    failure: Exception,
+) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Keep memory concise",
+            body="The user wants concise memory entries.",
+        )
+    )
+
+    class BrokenOptimizerAgent:
+        def invoke(
+            self,
+            messages: Sequence[BaseMessage],
+        ) -> OptimizeActionsOutput:
+            del messages
+            raise failure
+
+    optimizer = MemoryOptimizer(
+        tmp_path,
+        agent=BrokenOptimizerAgent(),
+        repository=repo,
+    )
+
+    with pytest.raises(type(failure)) as captured:
+        optimizer.run_once()
+
+    assert captured.value is failure
 
 
 def test_memory_optimizer_audit_failure_cannot_replace_persisted_candidate(

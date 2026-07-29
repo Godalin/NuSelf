@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Memory curator and optimizer now defer only typed `AgentError` invocation
+  failures or semantic action-materialization errors; raw agent implementation
+  `RuntimeError` and `ValueError` failures propagate instead of masquerading as
+  valid deferred decisions.
 - Invalid typed reason-export section plans now record a sealed
   `reason_output_section_plan_fallback` degradation before using the
   deterministic plan; diagnostic failure cannot replace that fallback.

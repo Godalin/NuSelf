@@ -153,7 +153,12 @@ errors are not degraded and continue to the daemon request backstop.
   `MemoryAction` before any item is dispatched. The curator must not keep a
   parallel text/dictionary parser or coerce unknown memory types to a fallback
   type.
-- On agent failure or invalid structured output → defer (status `deferred`).
+- A shared typed `AgentError` from `agent.invoke(...)` defers the decision.
+  Invocation and domain materialization are separate exception boundaries:
+  `ValueError` raised while converting a successfully returned typed output
+  also defers the complete decision, but a raw `RuntimeError` or `ValueError`
+  raised by the agent implementation itself propagates as a contract bug.
+  Domain code must not use `(RuntimeError, ValueError)` around both phases.
 - Any invalid action defers the complete decision; valid siblings are not
   partially dispatched. Invalid actions include unknown/extra/coercive fields,
   confidence outside `[0, 1]`, `create`/`update` with blank `title`/`body`,
@@ -228,6 +233,10 @@ errors are not degraded and continue to the daemon request backstop.
 ### No Auto-Accept
 
 Optimizer candidates remain `pending` for manual review.
+
+Optimizer decision classification uses the same split boundary as curator:
+typed `AgentError` from invocation and semantic `ValueError` from action
+materialization defer; raw implementation exceptions preserve their identity.
 
 ### Optimizer Audit Projection
 

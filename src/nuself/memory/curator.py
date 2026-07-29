@@ -11,6 +11,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
+from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
@@ -329,11 +330,20 @@ class MemoryCurator:
         ]
         try:
             output = self._agent.invoke(prompt)
+        except AgentError:
+            return MemoryDecision(
+                status="deferred",
+                reason=(
+                    "curator agent unavailable or returned invalid "
+                    "structured output"
+                ),
+            )
+        try:
             actions = _actions_from_output(
                 output,
                 allowed_types=self._registry.names(),
             )
-        except (RuntimeError, ValueError):
+        except ValueError:
             return MemoryDecision(
                 status="deferred",
                 reason=(
