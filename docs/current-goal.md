@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make memory-backed persona definition fallback observable. A runtime failure
-loading durable persona instructions must still return builtin personas while
+Make reason-output section planning fallback observable. A semantically invalid
+typed agent plan must still return the deterministic section plan while
 recording one sealed degradation event; diagnostic failure must not replace the
 fallback.
 
@@ -16,51 +16,51 @@ fallback.
 
 ## Ordered Work
 
-1. Audit post-commit auxiliary work and response construction.
-2. Distinguish intentionally authoritative follow-up failures from optional
-   projections and fallbacks.
-3. Identify silent fallbacks that bypass shared observability.
-4. Specify a closed Persona audit for durable definition load failure.
-5. Record the failure without changing the builtin fallback.
+1. Scan production exception handlers that return defaults or continue.
+2. Separate normal absence, already-observed fallback, and silent degradation.
+3. Verify curator and optimizer deferred paths already emit structured audits.
+4. Specify a closed Reason audit for section-plan fallback.
+5. Report semantic planner failure without changing deterministic planning.
 6. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No change to which repository exceptions trigger fallback.
-- No change to builtin persona contents or ordering.
-- No fallback for malformed successfully loaded persona entries.
-- No persistence of persona instruction payloads in diagnostics.
+- No fallback for agent runtime/unavailability errors currently propagated for
+  job retry.
+- No change to deterministic section planning.
+- No step contents, generated section text, or prompt data in diagnostics.
+- No process-global planner or audit hook.
 
 ## Completion Evidence
 
-- Chat trace, audit, reason, memory curator, optimizer, and organizer
-  post-commit projections already use best-effort boundaries with failure
-  injection tests.
-- Reflection repository, schedule-state, and optional outbox writes are
-  explicitly authoritative in the Reflection spec and correctly propagate.
-- `load_persona_definitions(...)` currently catches repository `RuntimeError`
-  and silently returns `BUILTIN_PERSONAS`.
-- The fallback has no audit event, so operators cannot distinguish an empty
-  instruction set from a storage-backed degraded mode.
-- The sealed Persona audit taxonomy now owns
-  `persona_definition_load_failed` with warning level, degraded status,
-  required canonical error, and no metadata.
-- `load_persona_definitions(...)` reports the caught repository failure before
-  returning the unchanged builtin tuple.
-- Tests prove both the structured degradation record and that terminal
-  diagnostic storage failure cannot replace the fallback.
-- Focused Persona audit, instruction, and graph tests: 73 passed.
-- Full suite: 2140 passed.
+- Memory curator and optimizer agent/validation fallback returns `deferred` and
+  is already followed by `curator_deferred` or `optimizer_deferred` audit.
+- Expected parser/display defaults and missing-file paths in the scan are
+  documented normal absence, not degraded capabilities.
+- The injected reason section planner catches semantic `ValueError` from plan
+  materialization and silently returns deterministic `plan_sections()`.
+- Existing tests prove complete coverage fallback, but no log distinguishes
+  that fallback from a deliberately deterministic planner.
+- The sealed Reason audit taxonomy now owns
+  `reason_output_section_plan_fallback` with warning level, degraded status,
+  required canonical error, and exact `mode` metadata.
+- Semantic plan materialization failure reports that event before returning the
+  unchanged deterministic plan; agent runtime errors remain authoritative for
+  job retry.
+- Tests prove the record contains no source content and that terminal
+  diagnostic storage failure cannot replace the fallback plan.
+- Focused Reason audit, export recovery, and output subagent tests: 117 passed.
+- Full suite: 2143 passed.
 - Pyright: 0 errors, 0 warnings.
-- `git diff --check` passed; the reviewed silent `RuntimeError` fallback no
-  longer returns without observation.
+- `git diff --check` passed; static search finds no remaining silent
+  `ValueError` return to `fallback_plan`.
 
 ## Publication
 
-Observable persona definition fallback was implemented in `4a38cee`;
+Observable reason section-plan fallback was implemented in `ee9c4c6`;
 milestone publication is pending this goal update and push.
 
 ## Next Review Batch
 
-After this boundary is complete, continue reviewing silent fallback and broad
-exception scopes outside the already-covered agent and storage paths.
+After this boundary is complete, continue reviewing fallback scopes that catch
+multiple error classes under one generic outcome.
