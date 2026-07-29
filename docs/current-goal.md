@@ -5,10 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Bound durable-job wake-up admission independently of request volume while
-preserving manifest authority. Pending and in-flight wake-ups must coalesce by
-durable job identity, and capacity pressure must trigger online reconciliation
-instead of blocking producers or losing work until restart.
+Move delayed retry lifecycle into shared owned scheduling. Timer start,
+execution, completion, and cancellation must update ownership atomically so
+completed timers do not linger and failed starts cannot strand durable jobs.
 
 ## Active Branch
 
@@ -16,51 +15,52 @@ instead of blocking producers or losing work until restart.
 
 ## Ordered Work
 
-1. Inventory initial enqueue, retry timers, startup reconciliation, duplicate
-   wake-ups, in-flight ownership, stop/drain, and manifest authority.
-2. Update durable-job, Reason output, development, and hardcode specs first.
-3. Add a shared bounded identity-deduplicating job admission queue.
-4. Keep identity active through processing and release it explicitly afterward.
-5. On capacity pressure, request online manifest reconciliation after capacity
-   is released; preserve retry backoff ownership.
-6. Prove duplicate, in-flight, full-capacity, recovery, and stop behavior.
+1. Inventory all raw timers, completed-task retention, start failure, callback
+   ownership, daemon shutdown races, and retry observability.
+2. Update runtime-infrastructure, Reason output, error, and development specs.
+3. Add a shared keyed delayed-task scheduler with atomic start rollback.
+4. Remove ownership before callback execution and cancel all owned timers
+   exactly once on close.
+5. Migrate Reason retries; report schedule failure and request durable
+   reconciliation without leaving a phantom retry identity.
+6. Prove execution cleanup, start rollback, duplicate suppression, and close
+   races.
 7. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No persistent queue parallel to the manifest.
-- No blocking producer/request threads on queue capacity.
-- No early execution of jobs waiting on retry backoff timers.
-- No change to deterministic job IDs, retry limits, or composition semantics.
+- No persistent delayed-task store.
+- No change to retry counts or exponential backoff values.
+- No generic retry policy inside the scheduler.
+- No compatibility retention of domain-owned timer lists.
 
 ## Completion Evidence
 
-- Bounded identity-deduplicating job admission completed in `7f3a05b`.
-- `JobAdmissionQueue` coalesces `(name, job_id, resource_id)` across pending and
-  in-flight states and requires explicit completion.
-- Reason export pending wake-ups are capped at 256 without blocking producers.
-- Capacity pressure requests online manifest reconciliation after the worker
-  releases capacity; a focused real-manifest test proves the omitted job is
-  recovered in the same process.
-- Live retry-timer identities are excluded from reconciliation, preserving
-  backoff.
-- Focused job contract, admission, output queue, and export recovery tests:
-  61 passed.
-- Full suite: 2092 passed.
+- Shared delayed scheduling completed in `ccb44e5`.
+- `DelayedTaskScheduler` owns unique task keys, daemon timers, atomic start
+  rollback, completion removal, and idempotent close/cancellation.
+- Completed callbacks observe zero pending ownership; duplicate and post-close
+  schedules do not create timers.
+- Timer start failure removes and cancels the timer before propagating.
+- Reason retry scheduling uses the shared owner; schedule failure emits sealed
+  `daemon/export_retry_schedule_failed`, retains exact attempts/backoff
+  metadata, and requests manifest reconciliation without a phantom retry key.
+- Focused scheduler, Reason retry, export recovery, and audit tests: 115 passed.
+- Full suite: 2098 passed.
 - Pyright: 0 errors, 0 warnings.
-- Static search proves production code no longer owns a `SimpleQueue` or raw
-  `queue.Queue`; `git diff --check` passed.
+- Static search proves `threading.Timer` exists only inside the shared scheduler;
+  `git diff --check` passed.
 
 ## Publication
 
-Bounded durable-job wake-up admission was implemented in `7f3a05b`; milestone
-publication is pending this goal update and push.
+Shared delayed scheduling was implemented in `ccb44e5`; milestone publication
+is pending this goal update and push.
 
 ## Next Review Batch
 
-Review delayed retry scheduling next. Reason export still owns raw
-`threading.Timer` instances, retains completed timers until another retry is
-scheduled, and can strand its retry identity if timer start fails. Inventory
-timer lifecycle, shutdown races, context retention, and failure observability,
-then decide whether delayed wake-ups need a shared owned scheduler rather than
-domain-managed timer lists.
+Review synchronous event subscriber latency ownership next. `EventPublisher`
+isolates raised exceptions but invokes every subscriber inline with no
+latency/timeout contract, so a blocked auxiliary subscriber can still block the
+producer indefinitely. Inventory production subscriber effects and ordering
+requirements before deciding whether log projection remains authoritative
+inline work or needs an owned bounded delivery facility.
