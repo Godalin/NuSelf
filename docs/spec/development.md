@@ -204,6 +204,12 @@ an unsealed registry, so callers cannot observe a partially composed handler
 set or middleware stack. Sealed registries reject all later registration and
 middleware changes.
 
+Registries backed by a closed protocol or command catalog call
+`seal(expected_keys=...)`. The shared registry compares the complete key set
+before publishing its dispatch table and raises
+`HandlerRegistryCoverageError` with immutable missing and extra key sets.
+Daemon and REPL composition must not duplicate catalog coverage checks.
+
 Handlers and middleware, including constructor-provided middleware, must be
 callable and are rejected with `TypeError` at their composition boundary.
 

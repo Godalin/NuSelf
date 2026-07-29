@@ -124,15 +124,7 @@ def _build_repl_command_registry() -> ReplCommandRegistry:
     )
     for name, handler in handlers:
         registry.register(name, handler)
-    expected = set(command_names())
-    actual = set(registry.registered_keys)
-    if actual != expected:
-        raise RuntimeError(
-            "REPL command registry does not match command catalog: "
-            f"missing={sorted(expected - actual)} "
-            f"extra={sorted(actual - expected)}"
-        )
-    return registry.seal()
+    return registry.seal(expected_keys=command_names())
 
 
 def _unknown_command(

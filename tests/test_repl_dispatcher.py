@@ -4,11 +4,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from _pytest.capture import CaptureFixture
+import pytest
 
 from nuself.agent.chat import ThreadState, ThreadStore
+import nuself.cli.repl.dispatcher as dispatcher_module
 from nuself.cli.repl.dispatcher import ReplCommandDispatcher
 from nuself.cli.repl.registry import command_names
 from nuself.cli.repl.session import InteractiveSession
+from nuself.runtime.handlers import HandlerRegistryCoverageError
 
 
 def _session() -> InteractiveSession:
@@ -54,3 +57,21 @@ def test_dispatcher_registry_is_complete_and_sealed() -> None:
     dispatcher = ReplCommandDispatcher()
 
     assert set(dispatcher.registered_commands) == set(command_names())
+
+
+def test_dispatcher_uses_shared_catalog_coverage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        dispatcher_module,
+        "command_names",
+        lambda: tuple(
+            name for name in command_names() if name != "history"
+        ),
+    )
+
+    with pytest.raises(HandlerRegistryCoverageError) as captured:
+        ReplCommandDispatcher()
+
+    assert captured.value.missing == frozenset()
+    assert captured.value.extra == frozenset({"history"})

@@ -7,6 +7,7 @@ import pytest
 from nuself.runtime.handlers import (
     DuplicateHandlerError,
     HandlerRegistry,
+    HandlerRegistryCoverageError,
     HandlerRegistrySealedError,
     HandlerRegistryUnsealedError,
     UnknownHandlerError,
@@ -77,6 +78,53 @@ def test_handler_registry_rejects_duplicate_registration() -> None:
 
     with pytest.raises(DuplicateHandlerError):
         registry.register("echo", lambda value: value)
+
+
+def test_handler_registry_rejects_incomplete_closed_catalog_before_seal(
+) -> None:
+    registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
+    registry.register("present", lambda value: value)
+
+    with pytest.raises(HandlerRegistryCoverageError) as captured:
+        registry.seal(expected_keys=("present", "missing"))
+
+    assert captured.value.missing == frozenset({"missing"})
+    assert captured.value.extra == frozenset()
+    assert not registry.sealed
+    with pytest.raises(HandlerRegistryUnsealedError):
+        registry.dispatch("present", "value")
+
+    registry.register("missing", lambda value: value)
+    registry.seal(expected_keys=("present", "missing"))
+    assert registry.dispatch("present", "value") == "value"
+
+
+def test_handler_registry_rejects_extra_closed_catalog_handler() -> None:
+    registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
+    registry.register("expected", lambda value: value)
+    registry.register("extra", lambda value: value)
+
+    with pytest.raises(HandlerRegistryCoverageError) as captured:
+        registry.seal(expected_keys=("expected",))
+
+    assert captured.value.missing == frozenset()
+    assert captured.value.extra == frozenset({"extra"})
+    assert "missing=[]" in str(captured.value)
+    assert "extra=[\"'extra'\"]" in str(captured.value)
+    assert not registry.sealed
+
+
+def test_handler_registry_revalidates_coverage_after_seal() -> None:
+    registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
+    registry.register("expected", lambda value: value)
+    registry.seal(expected_keys=("expected",))
+
+    with pytest.raises(HandlerRegistryCoverageError) as captured:
+        registry.seal(expected_keys=("different",))
+
+    assert captured.value.missing == frozenset({"different"})
+    assert captured.value.extra == frozenset({"expected"})
+    assert registry.dispatch("expected", "value") == "value"
 
 
 def test_handler_registry_rejects_non_callable_handler() -> None:

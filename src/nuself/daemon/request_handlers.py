@@ -74,14 +74,7 @@ def build_daemon_request_registry() -> DaemonRequestRegistry:
     registry.register("activity_open", _handle_activity_open)
     registry.register("activity_next", _handle_activity_next)
     registry.register("activity_close", _handle_activity_close)
-    if set(registry.registered_keys) != set(REQUEST_TYPES):
-        missing = set(REQUEST_TYPES) - set(registry.registered_keys)
-        extra = set(registry.registered_keys) - set(REQUEST_TYPES)
-        raise RuntimeError(
-            "daemon request registry does not match protocol: "
-            f"missing={sorted(missing)} extra={sorted(extra)}"
-        )
-    return registry.seal()
+    return registry.seal(expected_keys=REQUEST_TYPES)
 
 
 def _daemon_request_scope(

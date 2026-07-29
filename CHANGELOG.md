@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Closed daemon and REPL handler catalogs now prove exact registered-key
+  coverage through the shared sealed `HandlerRegistry`, with typed missing and
+  extra key failures instead of boundary-specific `RuntimeError` checks.
 - Auxiliary structured logs now validate and persist one immutable audit
   envelope, eliminating duplicate identity/context capture and mutable-input
   time-of-check/time-of-use drift while preserving best-effort persistence

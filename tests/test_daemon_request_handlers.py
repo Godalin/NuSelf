@@ -18,6 +18,7 @@ from nuself.daemon.request_handlers import (
 )
 from nuself.logs import LogEvent, write_log_event
 from nuself.runtime.context import RuntimeContext, current_runtime_context
+from nuself.runtime.handlers import HandlerRegistryCoverageError
 
 
 class RecordingActivityBroker:
@@ -46,6 +47,26 @@ def test_daemon_request_registry_builder_isolated() -> None:
 
     assert rebuilt is not DAEMON_REQUEST_HANDLERS
     assert rebuilt.sealed
+
+
+def test_daemon_request_registry_uses_shared_catalog_coverage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        request_handlers,
+        "REQUEST_TYPES",
+        tuple(
+            request_type
+            for request_type in REQUEST_TYPES
+            if request_type != "ping"
+        ),
+    )
+
+    with pytest.raises(HandlerRegistryCoverageError) as captured:
+        build_daemon_request_registry()
+
+    assert captured.value.missing == frozenset()
+    assert captured.value.extra == frozenset({"ping"})
 
 
 def test_daemon_middleware_applies_context_and_activity_observation(

@@ -8,9 +8,9 @@ They need shared infrastructure, but they do not all have the same delivery
 semantics. The shared layer must make those semantics explicit instead of
 building one untyped "message bus".
 
-## Current Review Findings
+## Historical Review Findings
 
-The pre-infrastructure runtime has these recurring problems:
+The pre-infrastructure runtime had these recurring problems:
 
 1. Daemon request dispatch is an `if request.type` chain while argparse and the
    REPL maintain separate registration conventions. Duplicate or missing
@@ -55,6 +55,11 @@ request-dispatch primitive.
   time, including middleware supplied to the registry constructor. Invalid
   components raise `TypeError` before sealing or dispatch.
 - Duplicate registration raises immediately.
+- A closed command catalog seals through
+  `seal(expected_keys=...)`. Coverage is checked atomically before the
+  dispatch table is published; missing or extra registrations raise typed
+  `HandlerRegistryCoverageError` with immutable `missing` and `extra` key
+  sets. Catalog owners must not repeat this comparison locally.
 - Registries are explicitly sealed after composition. Registration after
   sealing raises.
 - Dispatch through an unregistered key raises `UnknownHandlerError`.
@@ -98,9 +103,11 @@ lexical command resolution:
 - unknown input remains a presentation concern and renders interactive help
   without entering the registry.
 
-Argparse continues binding its parsed namespace directly to typed CLI adapters,
-and LangChain continues owning agent-tool dispatch. Neither boundary is routed
-through `HandlerRegistry`.
+Argparse remains responsible for parsing, but stores only a stable command key
+in the parsed namespace. `CliHandlerBindings` owns a parser-local
+`HandlerRegistry`, seals it after parser composition, and `dispatch_cli(...)`
+performs the one-shot typed dispatch. LangChain continues owning agent-tool
+dispatch and is not routed through `HandlerRegistry`.
 
 Daemon dispatch installs one request-scope middleware. Every handler inherits
 the daemon request id and `source="daemon"` through `RuntimeContext`, and log

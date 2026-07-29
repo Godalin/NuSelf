@@ -48,6 +48,24 @@ class HandlerRegistryUnsealedError(HandlerRegistryError):
     """Raised when runtime dispatch starts before composition is sealed."""
 
 
+class HandlerRegistryCoverageError(HandlerRegistryError):
+    """Raised when a closed catalog and its registered handlers differ."""
+
+    def __init__(
+        self,
+        *,
+        missing: frozenset[Hashable],
+        extra: frozenset[Hashable],
+    ) -> None:
+        self.missing = missing
+        self.extra = extra
+        super().__init__(
+            "handler registry coverage differs "
+            f"(missing={_ordered_key_reprs(missing)!r}, "
+            f"extra={_ordered_key_reprs(extra)!r})"
+        )
+
+
 class UnknownHandlerError(HandlerRegistryError):
     """Raised when dispatch targets an unregistered key."""
 
@@ -139,12 +157,28 @@ class HandlerRegistry(
 
         return register_handler
 
-    def seal(self) -> HandlerRegistry[
+    def seal(
+        self,
+        *,
+        expected_keys: Iterable[HandlerKey] | None = None,
+    ) -> HandlerRegistry[
         HandlerKey,
         HandlerParams,
         HandlerResult,
     ]:
+        """Seal after optionally proving exact closed-catalog coverage."""
+
         with self._lock:
+            if expected_keys is not None:
+                expected = frozenset(expected_keys)
+                actual = frozenset(self._handlers)
+                missing = expected - actual
+                extra = actual - expected
+                if missing or extra:
+                    raise HandlerRegistryCoverageError(
+                        missing=frozenset(missing),
+                        extra=frozenset(extra),
+                    )
             if self._sealed:
                 return self
             dispatch_handlers: dict[
@@ -218,3 +252,7 @@ def _wrap_handler(
 def _require_callable(value: object, *, role: str) -> None:
     if not callable(value):
         raise TypeError(f"{role} must be callable")
+
+
+def _ordered_key_reprs(keys: Iterable[Hashable]) -> list[str]:
+    return sorted(repr(key) for key in keys)
