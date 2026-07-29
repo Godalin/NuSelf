@@ -196,6 +196,18 @@ llm:
   #   model: claude-sonnet-4-5
 ```
 
+provider 协议必须显式配置。OpenCode Go 的 MiniMax M2.7 路由兼容 OpenAI：
+
+```yaml
+llm:
+  - base_url: https://opencode.ai/zen/go/v1
+    api_key: ""
+    model: minimax-m2.7
+```
+
+应按照网关为所选模型公布的协议配置；NuSelf 不会根据 URL 或模型名推断协议。
+`nuself dev config` 会显示实际 provider 选择，并脱敏所有 API key。
+
 ### 聊天设置
 
 ```text

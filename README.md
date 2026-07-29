@@ -225,6 +225,20 @@ llm:
   #   model: claude-sonnet-4-5
 ```
 
+Provider protocol is explicit. OpenCode Go's MiniMax M2.7 route is
+OpenAI-compatible:
+
+```yaml
+llm:
+  - base_url: https://opencode.ai/zen/go/v1
+    api_key: ""
+    model: minimax-m2.7
+```
+
+Use the protocol documented by the gateway for the selected model; NuSelf does
+not infer it from the URL or model name. `nuself dev config` prints the
+effective provider selection while redacting every API key.
+
 ### Chat Settings
 
 ```text

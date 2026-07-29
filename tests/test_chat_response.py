@@ -77,14 +77,42 @@ def test_invalid_structured_output_type_is_rejected() -> None:
         )
 
 
-def test_missing_structured_output_does_not_parse_message_state() -> None:
+def test_missing_structured_output_preserves_final_framework_message() -> None:
+    result = _structured_output_from_state(
+        {"messages": [AIMessage(content="Plausible framework answer")]}
+    )
+
+    assert result.answer == "Plausible framework answer"
+    assert result.evidence_references == []
+    assert result.confidence is None
+    assert result.epistemic_status == "inferred"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        AIMessage(content=""),
+        AIMessage(
+            content="pending",
+            tool_calls=[
+                {
+                    "name": "memory_search",
+                    "args": {},
+                    "id": "call-1",
+                    "type": "tool_call",
+                }
+            ],
+        ),
+    ],
+)
+def test_missing_structured_output_rejects_non_final_message(
+    message: AIMessage,
+) -> None:
     with pytest.raises(
         AgentProtocolError,
         match="missing structured_response",
     ):
-        _structured_output_from_state(
-            {"messages": [AIMessage(content="Plausible fallback")]}
-        )
+        _structured_output_from_state({"messages": [message]})
 
 
 def test_tool_protocol_text_is_rejected_in_every_state_path(
@@ -99,7 +127,7 @@ def test_tool_protocol_text_is_rejected_in_every_state_path(
         )
 
 
-def test_endpoint_state_failure_retries_then_uses_local_fallback(
+def test_endpoint_state_failure_retries_then_reports_configured_failure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -139,7 +167,8 @@ def test_endpoint_state_failure_retries_then_uses_local_fallback(
     )
 
     assert endpoint_calls == 2
-    assert "LLM API is not configured yet" in result.answer
+    assert "configured LLM request failed" in result.answer
+    assert "LLM API is not configured yet" not in result.answer
     assert result.answer.endswith("Last message: hello")
 
 
@@ -186,6 +215,7 @@ def test_protocol_failure_retries_same_endpoint_without_failover(
     )
 
     assert endpoint_calls == [0, 0]
+    assert "configured LLM request failed" in result.answer
     assert result.answer.endswith("Last message: hello")
 
 
@@ -382,7 +412,8 @@ def test_tool_outcome_suppresses_retry_before_failure_policy(
         result = synthesizer.complete(
             [HumanMessage(content="mutate once")]
         )
-        assert "LLM API is not configured yet" in result.answer
+        assert "configured LLM request failed" in result.answer
+        assert "LLM API is not configured yet" not in result.answer
         assert result.answer.endswith("Last message: mutate once")
     else:
         with pytest.raises(type(error)) as caught:
@@ -450,7 +481,8 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
         )
 
     assert endpoint_calls == 2
-    assert "LLM API is not configured yet" in result.answer
+    assert "configured LLM request failed" in result.answer
+    assert "LLM API is not configured yet" not in result.answer
     assert result.answer.endswith("Last message: hello")
     messages = [str(warning.message) for warning in captured]
     assert provider_secret not in "\n".join(messages)

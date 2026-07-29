@@ -9,6 +9,7 @@ from typing import Any, Protocol, cast
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain.agents.structured_output import ToolStrategy as _ToolStrategy
 from langchain_core.messages import (
+    AIMessage,
     BaseMessage,
     HumanMessage,
     SystemMessage,
@@ -145,7 +146,7 @@ class ConversationResponseSynthesizer:
                 )
                 if not is_recoverable_agent_failure(exc):
                     raise
-                return _local_response_output(prompt)
+                return _configured_failure_response_output(prompt)
             if not is_recoverable_agent_failure(exc):
                 raise
             report_chat_failure(
@@ -153,7 +154,7 @@ class ConversationResponseSynthesizer:
                 event="llm_endpoints_exhausted",
                 project_root=self._project_root,
             )
-        return _local_response_output(prompt)
+        return _configured_failure_response_output(prompt)
 
     def _log_retry_suppressed(
         self,
@@ -237,12 +238,41 @@ def _endpoint_metadata(
 def _structured_output_from_state(
     result: object,
 ) -> ChatStructuredOutput:
+    compatible = _compatible_final_message(result)
+    if compatible is not None:
+        return compatible
     structured = require_structured_response(
         result,
         ChatStructuredOutput,
     )
     _reject_visible_tool_call(structured)
     return structured
+
+
+def _compatible_final_message(
+    result: object,
+) -> ChatStructuredOutput | None:
+    """Preserve a framework-native final message when structured state is absent."""
+
+    if not isinstance(result, dict) or "structured_response" in result:
+        return None
+    state = cast(dict[str, object], result)
+    messages = state.get("messages")
+    if not isinstance(messages, list):
+        return None
+    message_items = cast(list[object], messages)
+    for message in reversed(message_items):
+        if not isinstance(message, AIMessage):
+            continue
+        if message.tool_calls or message.invalid_tool_calls:
+            return None
+        answer = message.text.strip()
+        if not answer:
+            return None
+        response = ChatStructuredOutput(answer=answer)
+        _reject_visible_tool_call(response)
+        return response
+    return None
 
 
 def _looks_like_tool_call(text: str) -> bool:
@@ -266,6 +296,28 @@ def _local_response_output(
             "local memory/context, but real reasoning needs an API key. "
             f"Last message: {last_user}"
         )
+    )
+
+
+def _configured_failure_response_output(
+    prompt: list[BaseMessage],
+) -> ChatStructuredOutput:
+    last_user = next(
+        (
+            message.text
+            for message in reversed(prompt)
+            if isinstance(message, HumanMessage)
+        ),
+        "",
+    )
+    return ChatStructuredOutput(
+        answer=(
+            "The configured LLM request failed, so I could not generate a "
+            "model-backed reply. Check `nuself dev logs --component chat` "
+            "and the endpoint provider/protocol configuration. "
+            f"Last message: {last_user}"
+        ),
+        epistemic_status="unsupported",
     )
 
 

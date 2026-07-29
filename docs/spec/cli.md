@@ -177,6 +177,10 @@ alias string sets.
 - Default interactive startup prints only the banner, one concise help line, and the session header. It must not also print daemon preamble or a separate tip line.
 - Commands print one leading blank line before their output and do not add a trailing blank line before the next prompt or session header.
 - Chat turns print one leading blank line, then activity logs in chronological order, then one blank line and a `NuSelf:` label before the assistant reply. This keeps the final user-facing reply at the end of the turn so users can skip internal process output when they are not interested. The session header follows the reply without extra blank spacer lines.
+- A configured LLM failure that uses deterministic local fallback is still a
+  visible assistant result. The reply must distinguish provider/protocol
+  exhaustion from missing configuration; neither path may render as an empty
+  successful turn.
 - Interactive chat transport failures, including daemon timeouts, do not exit the REPL. The REPL captures and prints any logs produced before the failure, retries the same user message once, and then returns to the prompt if the retry also fails.
 - The daemon client supplies the transport failure's structural retry decision.
   Local request-encoding failures and malformed typed payloads from a valid

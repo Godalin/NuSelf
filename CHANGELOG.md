@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Chat now preserves a valid final LangChain message from OpenAI-compatible
+  agents that omit optional structured response state. Configured endpoint
+  failures produce accurate fallback guidance instead of claiming that no API
+  was configured.
 - Effective config inspection now recursively flattens endpoint lists and
   redacts every API key instead of exposing aggregate endpoint secrets.
 - `nuself dev migrate` now builds and validates a strict temporary SQLite

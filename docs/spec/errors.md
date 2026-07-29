@@ -498,6 +498,23 @@ further model call. Recoverable failures may use local fallback; sharedly
 classified implementation and process-integrity failures propagate unchanged
 after retry suppression.
 
+Chat fallback text must identify its actual cause. When no configured endpoint
+has a usable API key, it may provide local configuration guidance. When one or
+more configured endpoints were invoked but exhausted by a recoverable model,
+protocol, or output failure, the fallback must instead state that the
+configured LLM request failed and direct the user to diagnostics. It must
+remain non-empty, must not claim the API is unconfigured, and must not expose
+provider response text, credentials, prompts, or endpoint URLs.
+
+Chat response synthesis prefers the exact typed LangChain
+`structured_response`. When an OpenAI-compatible agent successfully returns no
+structured response but does return a final, non-empty, text-only framework
+`AIMessage`, Chat accepts that message as the answer with no evidence
+references, no confidence, and `epistemic_status="inferred"`. It does not parse
+JSON from message text, accept a message with unresolved tool calls, or apply
+this compatibility path to strict structured decision agents owned by memory,
+persona, reflection, or reasoning.
+
 Agent model unavailability, framework protocol violations, and invalid
 generated output have separate shared exception types. Endpoint failover
 consults exception types and structured status attributes only; it never
