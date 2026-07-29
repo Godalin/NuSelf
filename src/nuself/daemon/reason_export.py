@@ -484,7 +484,7 @@ class ReasonExportWorker:
         backoff = _next_backoff(attempts)
         if self._stopping.is_set() or self._shutdown_requested.is_set():
             return
-        retry_message = JobMessage.create(
+        retry_message = self._job_definitions.create(
             name=REASON_OUTPUT_JOB_NAME,
             producer="daemon_retry",
             job_id=job_id,
@@ -563,7 +563,7 @@ class ReasonExportWorker:
                 ):
                     continue
                 result = self._admit(
-                    JobMessage.create(
+                    self._job_definitions.create(
                         name=REASON_OUTPUT_JOB_NAME,
                         producer="daemon_reconciliation",
                         job_id=manifest.job_id,

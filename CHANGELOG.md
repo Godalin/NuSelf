@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Local runtime jobs are now created through their sealed semantic registry;
+  unknown names, disallowed producers, and invalid domain data fail before a
+  `JobMessage` is returned, while queue ingress still revalidates decoded data.
 - Process-local log callbacks now use an explicit bounded projection API.
   Invalid projections fail during scope composition, and attachment-scoped
   reentrancy guards prevent direct or mutual recursive log delivery.

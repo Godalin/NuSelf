@@ -6,6 +6,10 @@ from typing import cast
 
 import pytest
 
+from nuself.reason.job_contracts import (
+    REASON_OUTPUT_JOB_NAME,
+    build_reason_job_definition_registry,
+)
 from nuself.runtime import (
     RUNTIME_SCHEMA_VERSION,
     JobMessage,
@@ -370,9 +374,9 @@ def test_runtime_context_rejects_blank_local_value() -> None:
 
 def test_job_message_correlates_envelope_with_durable_job() -> None:
     with runtime_context(request_id="req-1"):
-        message = JobMessage.create(
-            name="reason.output.export",
-            producer="reasoning",
+        message = build_reason_job_definition_registry().create(
+            name=REASON_OUTPUT_JOB_NAME,
+            producer="daemon_retry",
             job_id="job-1",
             resource_id="thread-1",
             payload={"attempt": 2},
@@ -391,9 +395,9 @@ def test_job_message_correlates_envelope_with_durable_job() -> None:
 
 
 def test_job_message_envelope_round_trip_retains_routing() -> None:
-    original = JobMessage.create(
-        name="reason.output.export",
-        producer="reasoning",
+    original = build_reason_job_definition_registry().create(
+        name=REASON_OUTPUT_JOB_NAME,
+        producer="daemon_retry",
         job_id="job-1",
         resource_id="thread-1",
         payload={"attempt": 3},

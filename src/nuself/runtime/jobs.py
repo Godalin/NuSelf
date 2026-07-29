@@ -6,11 +6,10 @@ import queue
 import time
 from collections import deque
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from threading import Condition
 from typing import Literal, cast
 
-from nuself.runtime.context import current_runtime_context
 from nuself.runtime.messages import RuntimeEnvelope
 
 JobSink = Callable[["JobMessage"], None]
@@ -103,31 +102,6 @@ class JobMessage:
     @property
     def payload(self) -> Mapping[str, object]:
         return self._payload.data
-
-    @classmethod
-    def create(
-        cls,
-        *,
-        name: str,
-        producer: str,
-        job_id: str,
-        resource_id: str,
-        payload: Mapping[str, object] | None = None,
-    ) -> JobMessage:
-        context = replace(current_runtime_context(), job_id=job_id)
-        job_payload = JobPayload(
-            resource_id=resource_id,
-            data={} if payload is None else payload,
-        )
-        envelope = RuntimeEnvelope(
-            kind="job",
-            name=name,
-            producer=producer,
-            context=context,
-            payload=job_payload.to_mapping(),
-        )
-        return cls(envelope=envelope)
-
 
 class JobAdmissionQueue:
     """Bounded wake-up admission with pending and in-flight coalescing."""

@@ -89,3 +89,8 @@ class DefinitionRegistry(Generic[DefinitionKey, Definition]):
     def definitions(self) -> tuple[Definition, ...]:
         with self._lock:
             return tuple(self._definitions.values())
+
+    @property
+    def is_sealed(self) -> bool:
+        with self._lock:
+            return self._sealed

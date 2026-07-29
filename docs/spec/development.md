@@ -238,6 +238,10 @@ Durable job wake-up owners use `runtime.jobs.JobAdmissionQueue` rather than raw
 ownership, and explicit completion are shared transport mechanics; manifest
 reconciliation and retry policy remain domain-owned.
 
+Local job producers use a sealed `JobDefinitionRegistry.create(...)`; they do
+not construct `JobMessage` fields directly. Queue ingress still validates
+messages because decoded or externally supplied envelopes are untrusted.
+
 Result-producing one-shot thread boundaries use `runtime.execution.OwnedCall`.
 They must not reproduce ad hoc value/error boxes, daemonize authoritative work,
 or leave a successfully started call unreaped on an exceptional exit path.

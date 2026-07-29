@@ -17,7 +17,10 @@ from uuid import uuid4
 from nuself.clock import utc_now, utc_now_iso
 from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
 from nuself.reason.errors import ReasonNotFound
-from nuself.reason.job_contracts import REASON_OUTPUT_JOB_NAME
+from nuself.reason.job_contracts import (
+    REASON_OUTPUT_JOB_NAME,
+    build_reason_job_definition_registry,
+)
 from nuself.reason.audit import (
     report_reason_failure,
     write_reason_audit,
@@ -27,7 +30,8 @@ from nuself.runtime.diagnostics import (
     diagnostic_exception_message,
     redact_sensitive_text,
 )
-from nuself.runtime.jobs import JobMessage, JobSink
+from nuself.runtime.jobs import JobSink
+from nuself.runtime.job_definitions import JobDefinitionRegistry
 from nuself.runtime.observability import report_corrupt_record
 from nuself.storage import write_json_atomic, write_text_atomic
 from nuself.private_fs import ensure_private_directory
@@ -369,12 +373,18 @@ class ReasonOutputService:
         reason_service: ReasonService | None = None,
         workspace_store: PrivateWorkspaceStore | None = None,
         job_sink: JobSink | None = None,
+        job_definitions: JobDefinitionRegistry | None = None,
         section_planner: SectionPlanner | None = None,
     ) -> None:
         self._reason_service = reason_service or ReasonService(project_root)
         self._project_root = project_root or self._reason_service._project_root  # pyright: ignore[reportPrivateUsage]
         self._workspace_store = workspace_store or PrivateWorkspaceStore(self._project_root, scope="reason")
         self._job_sink = job_sink
+        self._job_definitions = (
+            job_definitions
+            if job_definitions is not None
+            else build_reason_job_definition_registry()
+        )
         self._section_planner = section_planner
 
     def list_jobs(self, thread_id: str) -> list[ReasonOutputManifest]:
@@ -500,7 +510,7 @@ class ReasonOutputService:
 
         job_sink = self._job_sink
         if job_sink is not None:
-            job_message = JobMessage.create(
+            job_message = self._job_definitions.create(
                 name=REASON_OUTPUT_JOB_NAME,
                 producer="reasoning",
                 job_id=job_id,

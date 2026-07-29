@@ -319,6 +319,12 @@ Both locally constructed and decoded envelopes enforce the same invariants:
   non-blank strings;
 - payload is a mapping with string keys and recursively JSON-safe values.
 
+These are structural envelope invariants, not domain authorization. A decoded
+envelope may still name an unknown event/job, use a disallowed producer, or
+carry semantically invalid domain data. Event, job, and audit owners validate
+those contracts through their own sealed definitions rather than teaching the
+transport envelope every domain vocabulary.
+
 The envelope `schema_version` versions only this transport-neutral wire shape.
 It does not version the meaning of a runtime event name or its payload. A
 compatible payload extension remains governed by that event's registered
@@ -692,12 +698,20 @@ envelope and decoding it again therefore retains every value required to route
 the wake-up. Producers receive a `JobSink` through composition; domain modules
 must not install process-global enqueue callbacks.
 
-Every queue owner validates a `JobMessage` against a sealed
-`JobDefinitionRegistry` before enqueueing it. A job definition owns one dotted
-job name, its allowed producer identities, and an exact validator for the
-domain wake-up `data`. Definitions and registries use the same shared
-`DefinitionRegistry` mechanics as runtime events while remaining distinct
-semantic types:
+Every local producer creates a `JobMessage` through
+`JobDefinitionRegistry.create(...)`; `JobMessage` has no unchecked field-based
+factory. The registry constructs the common envelope and strict routing payload,
+then validates the dotted job name, producer, and domain data before returning.
+Construction on an unsealed registry fails before an envelope is created, so
+runtime producers cannot race with late definition mutation.
+Decoded `JobMessage` values remain structurally representable because an
+external record cannot be trusted merely because it parsed. Every queue owner
+therefore validates again at ingress before mutation.
+
+A job definition owns one dotted job name, its allowed producer identities,
+and an exact validator for the domain wake-up `data`. Definitions and
+registries use the same shared `DefinitionRegistry` mechanics as runtime events
+while remaining distinct semantic types:
 
 - job names use the registered dotted runtime-name grammar;
 - producer identities use the lowercase identity-segment grammar;
@@ -707,11 +721,11 @@ semantic types:
 - workers consume only definition-validated messages and do not retain an
   `if name != ...: ignore` compatibility branch.
 
-`JobMessage` remains responsible for the common envelope and routing payload
-shape. A job definition validates domain meaning rather than duplicating
-`RuntimeEnvelope` or `JobPayload` decoding. Event, job, and audit boundaries
-therefore share one immutable wire envelope while each owner performs exactly
-one semantic validation at its ingress.
+`JobMessage` remains responsible for decoding the common envelope and routing
+payload shape. A job definition validates domain meaning rather than
+duplicating `RuntimeEnvelope` or `JobPayload` decoding. Event, job, and audit
+boundaries therefore share one immutable wire envelope while retaining
+domain-specific construction and trust-boundary validation.
 
 The durable job record is authoritative and queue delivery is a best-effort
 wake-up. If wake-up delivery fails, the producer keeps the durable record,

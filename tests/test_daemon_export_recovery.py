@@ -27,13 +27,53 @@ from nuself.reason.output import (
     ReasonOutputSection,
     ReasonOutputService,
 )
+from nuself.reason.job_contracts import (
+    REASON_OUTPUT_JOB_NAME,
+    build_reason_job_definition_registry,
+)
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.storage import write_json_atomic
+from nuself.runtime import RuntimeContext, RuntimeEnvelope
 from nuself.runtime.jobs import JobMessage
 from nuself.runtime.job_definitions import UnknownJobDefinitionError
 from nuself.runtime.context import runtime_context
 from nuself.runtime.events import EventPublisher
 from nuself.workspace import PrivateWorkspaceStore
+
+
+def _job_message(
+    *,
+    name: str = REASON_OUTPUT_JOB_NAME,
+    producer: str,
+    job_id: str,
+    resource_id: str,
+    payload: dict[str, object] | None = None,
+) -> JobMessage:
+    return build_reason_job_definition_registry().create(
+        name=name,
+        producer=producer,
+        job_id=job_id,
+        resource_id=resource_id,
+        payload=payload,
+    )
+
+
+def _decoded_job_message(
+    *,
+    name: str,
+    producer: str,
+    job_id: str,
+    resource_id: str,
+) -> JobMessage:
+    return JobMessage(
+        RuntimeEnvelope(
+            kind="job",
+            name=name,
+            producer=producer,
+            context=RuntimeContext(job_id=job_id),
+            payload={"resource_id": resource_id, "data": {}},
+        )
+    )
 
 
 def _manifest(
@@ -520,7 +560,7 @@ def test_worker_does_not_compose_corrupt_manifest(
         source="daemon",
     ):
         state.reason_export_worker.enqueue(
-            JobMessage.create(
+            _job_message(
                 name="reason.output.export",
                 producer="reasoning",
                 job_id="job_1",
@@ -546,7 +586,7 @@ def test_worker_rejects_unknown_job_before_queue_mutation(
     tmp_path: Path,
 ) -> None:
     worker = DaemonState(tmp_path).reason_export_worker
-    message = JobMessage.create(
+    message = _decoded_job_message(
         name="unknown.job",
         producer="reasoning",
         job_id="job_1",
@@ -594,7 +634,7 @@ def test_full_export_admission_recovers_from_durable_manifests_online(
     )
     worker.prepare()
     worker.enqueue(
-        JobMessage.create(
+        _job_message(
             name="reason.output.export",
             producer="reasoning",
             job_id="a_first",
@@ -602,7 +642,7 @@ def test_full_export_admission_recovers_from_durable_manifests_online(
         )
     )
     worker.enqueue(
-        JobMessage.create(
+        _job_message(
             name="reason.output.export",
             producer="reasoning",
             job_id="b_second",
@@ -678,7 +718,7 @@ def test_worker_reports_invalid_progress_and_continues(
     monkeypatch.setattr(ReasonOutputService, "compose_with_runner", compose)
     state = DaemonState(tmp_path)
     state.reason_export_worker.enqueue(
-        JobMessage.create(
+        _job_message(
             name="reason.output.export",
             producer="reasoning",
             job_id="job_1",
@@ -755,7 +795,7 @@ def test_worker_audit_failure_cannot_suppress_durable_retry(
     state = DaemonState(tmp_path)
     worker = state.reason_export_worker
     worker.prepare()
-    message = JobMessage.create(
+    message = _job_message(
         name="reason.output.export",
         producer="reasoning",
         job_id="job_1",
@@ -826,7 +866,7 @@ def test_retry_timer_start_failure_rolls_back_and_requests_reconciliation(
     worker = state.reason_export_worker
     worker.prepare()
     worker._process(
-        JobMessage.create(
+        _job_message(
             name="reason.output.export",
             producer="reasoning",
             job_id="job_1",
@@ -882,7 +922,7 @@ def test_progress_diagnostic_failure_cannot_block_composition(
     state = DaemonState(tmp_path)
     worker = state.reason_export_worker
     worker.prepare()
-    message = JobMessage.create(
+    message = _job_message(
         name="reason.output.export",
         producer="reasoning",
         job_id="job_1",
@@ -962,7 +1002,7 @@ def test_shutdown_audit_failure_cannot_undo_queue_drain(
     state = DaemonState(tmp_path)
     worker = state.reason_export_worker
     worker.enqueue(
-        JobMessage.create(
+        _job_message(
             name="reason.output.export",
             producer="reasoning",
             job_id="job_1",
@@ -979,7 +1019,7 @@ def test_shutdown_audit_failure_cannot_undo_queue_drain(
     assert worker._stopping.is_set()
     assert worker._queue.empty()
     worker.enqueue(
-        JobMessage.create(
+        _job_message(
             name="reason.output.export",
             producer="reasoning",
             job_id="job_2",
@@ -1052,7 +1092,7 @@ def test_worker_retry_message_inherits_job_correlation(
         source="daemon",
     ):
         state.reason_export_worker.enqueue(
-            JobMessage.create(
+            _job_message(
                 name="reason.output.export",
                 producer="reasoning",
                 job_id="job_1",

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field
-from typing import Protocol
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from nuself.runtime.jobs import JobMessage
 
 from nuself.runtime.definitions import (
     DefinitionRegistry,
@@ -16,6 +19,8 @@ from nuself.runtime.identities import (
     require_identity_segment,
     require_runtime_event_name,
 )
+from nuself.runtime.context import current_runtime_context
+from nuself.runtime.messages import RuntimeEnvelope
 
 JobDataValidator = Callable[[str, Mapping[str, object]], None]
 
@@ -39,6 +44,10 @@ class DuplicateJobDefinitionError(ValueError):
 
 class JobDefinitionRegistrySealedError(RuntimeError):
     """Raised when a sealed job-definition registry is mutated."""
+
+
+class JobDefinitionRegistryUnsealedError(RuntimeError):
+    """Raised when job construction starts before composition is sealed."""
 
 
 class UnknownJobDefinitionError(LookupError):
@@ -123,11 +132,49 @@ class JobDefinitionRegistry:
             ) from exc
 
     def validate(self, message: JobDefinitionInput) -> None:
+        if not self._registry.is_sealed:
+            raise JobDefinitionRegistryUnsealedError(
+                "job definition registry must be sealed before validation"
+            )
         definition = self.resolve(message.name)
         definition.validate(
             producer=message.producer,
             data=message.payload,
         )
+
+    def create(
+        self,
+        *,
+        name: str,
+        producer: str,
+        job_id: str,
+        resource_id: str,
+        payload: Mapping[str, object] | None = None,
+    ) -> JobMessage:
+        """Create one locally authorized job message."""
+
+        if not self._registry.is_sealed:
+            raise JobDefinitionRegistryUnsealedError(
+                "job definition registry must be sealed before construction"
+            )
+        from nuself.runtime.jobs import JobMessage, JobPayload
+
+        context = replace(current_runtime_context(), job_id=job_id)
+        job_payload = JobPayload(
+            resource_id=resource_id,
+            data={} if payload is None else payload,
+        )
+        message = JobMessage(
+            RuntimeEnvelope(
+                kind="job",
+                name=name,
+                producer=producer,
+                context=context,
+                payload=job_payload.to_mapping(),
+            )
+        )
+        self.validate(message)
+        return message
 
     def seal(self) -> JobDefinitionRegistry:
         self._registry.seal()

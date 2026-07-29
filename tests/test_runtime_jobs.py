@@ -4,6 +4,7 @@ import queue
 
 import pytest
 
+from nuself.runtime import RuntimeContext, RuntimeEnvelope
 from nuself.runtime.jobs import JobAdmissionQueue, JobMessage
 
 
@@ -14,12 +15,17 @@ def _message(
     resource_id: str = "thread-1",
     payload: dict[str, object] | None = None,
 ) -> JobMessage:
-    return JobMessage.create(
-        name="reason.output.export",
-        producer=producer,
-        job_id=job_id,
-        resource_id=resource_id,
-        payload=payload,
+    return JobMessage(
+        RuntimeEnvelope(
+            kind="job",
+            name="reason.output.export",
+            producer=producer,
+            context=RuntimeContext(job_id=job_id),
+            payload={
+                "resource_id": resource_id,
+                "data": {} if payload is None else payload,
+            },
+        )
     )
 
 
