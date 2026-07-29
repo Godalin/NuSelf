@@ -390,9 +390,17 @@ pre-mutation failure:
   must not compensate an already-visible logical commit. It raises a typed
   ambiguous-commit error retaining the original durability error and the
   observed candidate/target state so callers can reconcile or retry safely.
-- Any read-back state that does not prove the intended visible logical commit
-  is compensated where possible. A failed compensation retains both errors in
-  the typed commit error.
+- Once that durability error is reported, destructive compensation is allowed
+  only when a successful candidate read proves the final accepted record is
+  absent or still non-accepted. A candidate read failure, a visibly accepted
+  candidate with an unexpected target, or a target read failure is ambiguous
+  and must not compensate. The typed ambiguous error records `unknown`,
+  `unexpected`, `absent`, or the observed review state without payload content,
+  retains the original durability error, and retains every secondary
+  observation error.
+- A successful read-back proving the candidate is not accepted is compensated
+  where possible. A failed compensation retains both errors in the typed
+  commit error.
 
 An ambiguous commit must never be reported as success, silently retried as a
 new candidate, or converted back to pending by deleting/restoring its target.

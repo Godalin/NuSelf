@@ -401,6 +401,176 @@ def test_accept_preserves_visible_logical_commit_when_candidate_durability_is_un
     assert entry_repo.get(accepted.target_entry_id).title == "Visible"
 
 
+def test_accept_preserves_ambiguous_commit_when_candidate_readback_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    repo = MemoryCandidateRepository(
+        tmp_path,
+        entry_repository=entry_repo,
+    )
+    candidate = repo.save(
+        MemoryCandidate(
+            type="belief",
+            title="Unknown candidate state",
+            body="Do not compensate after observation fails.",
+        )
+    )
+    original_save = repo.save
+    original_get = repo.get
+    durability_error = AtomicWriteDurabilityError(
+        tmp_path / "candidate.json",
+        sync_error=OSError("directory sync failed"),
+    )
+    observation_error = OSError("candidate readback failed")
+
+    def fail_candidate_readback(candidate_id: str) -> MemoryCandidate:
+        del candidate_id
+        raise observation_error
+
+    def save_then_make_readback_fail(
+        updated: MemoryCandidate,
+    ) -> MemoryCandidate:
+        saved = original_save(updated)
+        if updated.review_state == "accepted":
+            monkeypatch.setattr(
+                repo,
+                "get",
+                fail_candidate_readback,
+            )
+            raise durability_error
+        return saved
+
+    monkeypatch.setattr(repo, "save", save_then_make_readback_fail)
+
+    with pytest.raises(MemoryCandidateAmbiguousCommitError) as captured:
+        repo.accept(candidate.id)
+
+    error = captured.value
+    monkeypatch.setattr(repo, "get", original_get)
+    accepted = repo.get(candidate.id)
+    assert error.durability_error is durability_error
+    assert error.observation_errors == (observation_error,)
+    assert error.candidate_state == "unknown"
+    assert error.target_state == "expected"
+    assert accepted.review_state == "accepted"
+    assert accepted.target_entry_id is not None
+    assert entry_repo.get(accepted.target_entry_id).title == (
+        "Unknown candidate state"
+    )
+
+
+def test_accept_preserves_ambiguous_commit_when_target_readback_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    repo = MemoryCandidateRepository(
+        tmp_path,
+        entry_repository=entry_repo,
+    )
+    candidate = repo.save(
+        MemoryCandidate(
+            type="belief",
+            title="Unknown target state",
+            body="Do not delete the visible target.",
+        )
+    )
+    original_save = repo.save
+    original_entry_get = entry_repo.get
+    durability_error = AtomicWriteDurabilityError(
+        tmp_path / "candidate.json",
+        sync_error=OSError("directory sync failed"),
+    )
+    observation_error = OSError("target readback failed")
+
+    def fail_target_readback(entry_id: str) -> MemoryEntry:
+        del entry_id
+        raise observation_error
+
+    def save_then_make_target_readback_fail(
+        updated: MemoryCandidate,
+    ) -> MemoryCandidate:
+        saved = original_save(updated)
+        if updated.review_state == "accepted":
+            monkeypatch.setattr(
+                entry_repo,
+                "get",
+                fail_target_readback,
+            )
+            raise durability_error
+        return saved
+
+    monkeypatch.setattr(
+        repo,
+        "save",
+        save_then_make_target_readback_fail,
+    )
+
+    with pytest.raises(MemoryCandidateAmbiguousCommitError) as captured:
+        repo.accept(candidate.id)
+
+    error = captured.value
+    monkeypatch.setattr(entry_repo, "get", original_entry_get)
+    accepted = repo.get(candidate.id)
+    assert error.observation_errors == (observation_error,)
+    assert error.candidate_state == "accepted"
+    assert error.target_state == "unknown"
+    assert accepted.target_entry_id is not None
+    assert entry_repo.get(accepted.target_entry_id).title == (
+        "Unknown target state"
+    )
+
+
+def test_accept_does_not_compensate_visibly_accepted_unexpected_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    repo = MemoryCandidateRepository(
+        tmp_path,
+        entry_repository=entry_repo,
+    )
+    candidate = repo.save(
+        MemoryCandidate(
+            type="belief",
+            title="Expected target",
+            body="A concurrent visible state must be preserved.",
+        )
+    )
+    original_save = repo.save
+    durability_error = AtomicWriteDurabilityError(
+        tmp_path / "candidate.json",
+        sync_error=OSError("directory sync failed"),
+    )
+
+    def save_then_change_target(
+        updated: MemoryCandidate,
+    ) -> MemoryCandidate:
+        saved = original_save(updated)
+        if updated.review_state == "accepted":
+            target = entry_repo.get(updated.target_entry_id or "")
+            entry_repo.save(target.with_updates(title="Unexpected target"))
+            raise durability_error
+        return saved
+
+    monkeypatch.setattr(repo, "save", save_then_change_target)
+
+    with pytest.raises(MemoryCandidateAmbiguousCommitError) as captured:
+        repo.accept(candidate.id)
+
+    error = captured.value
+    accepted = repo.get(candidate.id)
+    assert error.candidate_state == "accepted"
+    assert error.target_state == "unexpected"
+    assert error.observation_errors == ()
+    assert accepted.target_entry_id is not None
+    assert entry_repo.get(accepted.target_entry_id).title == (
+        "Unexpected target"
+    )
+
+
 def test_accept_compensates_visible_new_target_when_target_durability_is_uncertain(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

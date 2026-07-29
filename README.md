@@ -54,8 +54,10 @@ synchronization; a visible deletion whose crash durability is unknown is
 reported distinctly instead of being treated as an ordinary failed unlink.
 Memory candidate acceptance applies the same distinction across its target and
 review records: a visibly accepted, matching pair is preserved and reported as
-an ambiguous commit when crash durability cannot be proven, while a pending
-candidate still triggers target compensation.
+an ambiguous commit when crash durability cannot be proven; failed read-back
+or an unexpected target remains ambiguous and retains its secondary evidence
+instead of triggering destructive compensation, while a candidate proven
+pending still triggers target compensation.
 File-backed transaction batches now use a stable cross-process advisory lock,
 and notification outbox admission performs idempotency lookup plus insertion
 inside that backend transaction.

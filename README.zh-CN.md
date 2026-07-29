@@ -45,7 +45,9 @@ checkpoint、close 和 fsync 后才原子发布；损坏或 ID 不匹配的 file
 durability 未知，系统会用独立 typed error 报告，而不是当作普通 unlink 失败。
 Memory candidate acceptance 对 target 和 review record 使用同一语义：若候选已
 显示 accepted 且 target 匹配预期，crash durability 无法确认时会保留这对记录并
-报告 ambiguous commit；候选仍为 pending 时则继续补偿 target mutation。
+报告 ambiguous commit；读回失败或 unexpected target 仍保持 ambiguous 并保留
+secondary evidence，不会触发破坏性补偿，只有成功证明候选仍为 pending 才继续
+补偿 target mutation。
 文件后端 transaction batch 现在使用稳定的跨进程 advisory lock；notification
 outbox admission 会在同一 backend transaction 中完成 idempotency lookup 和
 insert。

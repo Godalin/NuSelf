@@ -13,6 +13,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Notification CLI, REPL, and daemon delivery now share one adapter-state
   pipeline; dismiss preserves delivery history, and crash recovery finalizes
   recorded adapter failures without implicitly retrying them.
+- Memory candidate durability-uncertain commits no longer compensate their
+  targets when candidate/target read-back fails or an accepted candidate has
+  an unexpected target; typed ambiguity retains secondary observation errors.
 - File-to-SQLite upgrades now normalize 0.2.x memory relation fields at the
   explicit migration boundary, and the release gate reads a frozen 0.2.5
   private-data fixture through the current repositories.

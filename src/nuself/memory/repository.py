@@ -218,6 +218,7 @@ class MemoryCandidateAmbiguousCommitError(RuntimeError):
         candidate_state: str,
         target_state: str,
         durability_error: BaseException,
+        observation_errors: tuple[BaseException, ...] = (),
     ) -> None:
         super().__init__(
             "memory candidate commit is visible but durability is uncertain: "
@@ -229,6 +230,7 @@ class MemoryCandidateAmbiguousCommitError(RuntimeError):
         self.candidate_state = candidate_state
         self.target_state = target_state
         self.durability_error = durability_error
+        self.observation_errors = observation_errors
 
 
 def _entry_from_wire(data: dict[str, object]) -> MemoryEntry:
@@ -793,22 +795,62 @@ class MemoryCandidateRepository:
         try:
             self.save(accepted)
         except (AtomicWriteDurabilityError, AtomicDeleteDurabilityError) as durability_error:
-            observed_candidate = self.get(accepted.id)
-            observed_target = self._read_target_optional(
-                accepted,
-                accepted.target_entry_id or "",
+            observation_errors: list[BaseException] = []
+            observed_candidate: MemoryCandidate | None = None
+            try:
+                observed_candidate = self.get(accepted.id)
+            except MemoryCandidateNotFound:
+                pass
+            except BaseException as observation_error:
+                observation_errors.append(observation_error)
+
+            if (
+                not observation_errors
+                and (
+                    observed_candidate is None
+                    or observed_candidate.review_state != "accepted"
+                )
+            ):
+                raise
+
+            observed_target: MemoryEntry | ProfileItem | None = None
+            target_observed = False
+            try:
+                observed_target = self._read_target_optional(
+                    accepted,
+                    accepted.target_entry_id or "",
+                )
+                target_observed = True
+            except BaseException as observation_error:
+                observation_errors.append(observation_error)
+
+            candidate_state = (
+                "unknown"
+                if observed_candidate is None and observation_errors
+                else (
+                    "absent"
+                    if observed_candidate is None
+                    else observed_candidate.review_state
+                )
             )
-            target_matches = observed_target == expected_target
-            if observed_candidate == accepted and target_matches:
-                target_state = "absent" if observed_target is None else "expected"
-                raise MemoryCandidateAmbiguousCommitError(
-                    candidate_id=accepted.id,
-                    target_id=accepted.target_entry_id or "",
-                    candidate_state=observed_candidate.review_state,
-                    target_state=target_state,
-                    durability_error=durability_error,
-                ) from durability_error
-            raise
+            if not target_observed:
+                target_state = "unknown"
+            elif observed_target == expected_target:
+                target_state = (
+                    "absent"
+                    if observed_target is None
+                    else "expected"
+                )
+            else:
+                target_state = "unexpected"
+            raise MemoryCandidateAmbiguousCommitError(
+                candidate_id=accepted.id,
+                target_id=accepted.target_entry_id or "",
+                candidate_state=candidate_state,
+                target_state=target_state,
+                durability_error=durability_error,
+                observation_errors=tuple(observation_errors),
+            ) from durability_error
 
     def _read_target_optional(
         self,

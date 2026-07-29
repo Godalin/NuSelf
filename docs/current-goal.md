@@ -46,6 +46,13 @@ and release reproducibility gaps identified by the `bd43f1d` external review.
 - Focused notification and CLI coverage: 349 passed; pyright reported 0
   errors and 0 warnings. The source scan finds no remaining `mark_sent` or
   `mark_failed` caller or implementation.
+- A durability-uncertain final candidate write now permits compensation only
+  after a successful read proves the candidate absent or non-accepted.
+  Candidate/target observation failures and accepted candidates with
+  unexpected targets remain typed ambiguous commits with secondary errors and
+  no destructive rollback.
+- Focused candidate, curator, and optimizer coverage: 93 passed; pyright
+  reported 0 errors and 0 warnings.
 - Confirmed: `_FileCollection.get/put/delete` directly interpolate untrusted
   keys into paths and `list` recursively follows nested JSON paths.
 - Confirmed: ThreadStore rename, branch, archive, unarchive, and delete bypass

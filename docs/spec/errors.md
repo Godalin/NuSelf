@@ -560,6 +560,13 @@ If that cleanup also fails, `AtomicWriteCleanupError` retains the original
 primary error is its explicit cause. Because both persistence and cleanup are
 authoritative, neither failure is degraded into a warning or retried.
 
+After a final memory-candidate write reports visible-but-durability-unknown,
+observation is evidentiary rather than a prerequisite for preserving state.
+`MemoryCandidateAmbiguousCommitError` retains the durability error plus any
+candidate/target observation errors. Observation failure is represented as an
+`unknown` state and cannot fall through to target compensation; compensation
+requires a successful read proving the candidate is not accepted.
+
 The same pre-replace rule applies to file-content synchronization and
 `BaseException` interruption. After atomic replacement, a parent-directory
 sync failure instead raises `AtomicWriteDurabilityError`: the destination
