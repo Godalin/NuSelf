@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close daemon operational audit ownership so worker join timeout and lifecycle
-cleanup failure use one exact validated contract.
+Close shared storage cleanup audit ownership so backend close and CLI cleanup
+failure use one exact validated contract without losing aggregated errors.
 
 ## Active Branch
 
@@ -14,50 +14,49 @@ cleanup failure use one exact validated contract.
 
 ## Ordered Work
 
-1. Inventory worker join timeout and daemon cleanup failure producers,
-   exception types, metadata, ordering, and consumers.
-2. Decide whether the two process-level records belong beside lifecycle
-   definitions or in one dedicated daemon operations registry.
-3. Update error, runtime-infrastructure, log, and development specs before
-   implementation.
-4. Define one sealed daemon operations audit registry with fixed messages and
+1. Inventory default backend close and CLI cleanup failure producers,
+   aggregation, exception identity, metadata, and consumers.
+2. Decide one storage-owned contract that preserves every cleanup error
+   without duplicating primary exception text.
+3. Update storage, error, log, and development specs before implementation.
+4. Define one sealed storage operations audit registry with fixed messages and
    exact per-event metadata.
-5. Route worker/server failure paths through the shared adapter without
-   changing raised exceptions or cleanup ordering.
-6. Remove raw `report_observed_failure` calls, free-form messages/defaults,
-   and compatibility aliases.
+5. Route storage reset and CLI lifecycle cleanup through the shared adapter
+   without changing close attempts, aggregation, or raised exceptions.
+6. Remove raw storage/CLI `report_observed_failure` calls, lossy step-only
+   metadata, and compatibility aliases.
 7. Run focused and full quality gates, commit by functional boundary, and
    push.
 
 ## Out Of Scope
 
-- No change to worker thread start/stop/join mechanics.
-- No change to lifecycle cleanup ordering or exception aggregation.
-- No conversion of primary join/cleanup failures into best-effort success.
-- No change to request, transport, or lifecycle transition audit contracts.
+- No change to backend selection or process-global backend ownership.
+- No change to close/reset ordering or attempt count.
+- No change to `DefaultBackendResetError` or `CliLifecycleError` propagation.
+- No change to daemon cleanup contracts.
 
 ## Completion Evidence
 
-- Daemon transport audit ownership completed in `52afe43`.
-- Socket read, unexpected dispatch, response encoding, and response delivery
-  failures now use one sealed transport registry.
-- `socket_server.py` no longer constructs failure messages or projection
-  defaults.
-- Undecoded requests no longer persist the internal `unknown` sentinel as
-  correlation identity.
-- Initial next-batch inspection finds raw daemon operations events for
-  `thread_timeout` and `shutdown_cleanup_failed`.
-- Focused tests: 55 passed.
-- Full suite: 2029 passed.
+- Daemon operations audit ownership completed in `3b00e68`.
+- Worker join timeout and daemon cleanup failure now use one sealed operations
+  registry.
+- Cleanup diagnostics preserve ordered `{step,error}` records; timeout
+  metadata no longer duplicates `status="timed_out"`.
+- Server/worker owners no longer construct operational audit presentation.
+- Initial next-batch inspection finds raw storage events for
+  `backend_close_failed` and CLI `cli_cleanup_failed`; the latter currently
+  retains only step names rather than nested errors.
+- Focused tests: 58 passed.
+- Full suite: 2035 passed.
 - Pyright: 0 errors, 0 warnings.
 - Static search and `git diff --check`: passed.
 
 ## Publication
 
-Daemon transport audit ownership was implemented in `52afe43`; milestone
+Daemon operations audit ownership was implemented in `3b00e68`; milestone
 publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Continue shared handler/log/message infrastructure review after daemon
-operational audit ownership is verified and published.
+Continue shared handler/log/message infrastructure review after storage
+cleanup audit ownership is verified and published.
