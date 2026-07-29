@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Added an explicit opt-in `live_tests/` suite for real LLM transport,
+  LangChain structured-output, and NuSelf chat-boundary checks. Default pytest
+  and CI never collect these network- and cost-bearing tests.
 - Chat now preserves a valid final LangChain message from OpenAI-compatible
   agents that omit optional structured response state. Configured endpoint
   failures produce accurate fallback guidance instead of claiming that no API

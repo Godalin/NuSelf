@@ -1,0 +1,18 @@
+# Live LLM API Tests
+
+These tests send fixed synthetic prompts to the LLM endpoints configured in
+`private/config.yaml`. They never load NuSelf threads, memory, personas,
+sources, or runtime prompts.
+
+They are outside the default pytest collection root and also require an
+explicit network/cost opt-in:
+
+```bash
+uv run --locked pytest live_tests -m live_api --run-live-api
+```
+
+Running `uv run --locked pytest` or normal CI does not collect this directory.
+The suite checks raw transport, structured output, ordinary NuSelf chat, and
+the production-critical combination of tool calling plus a structured final
+response. Failures are reported through NuSelf's credential-redacting LLM
+diagnostic formatter.

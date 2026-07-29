@@ -38,13 +38,16 @@ filterwarnings = [
     "ignore::langchain_core._api.deprecation.LangChainPendingDeprecationWarning",
     "ignore:Importing Send from langgraph.constants is deprecated",
 ]
+markers = [
+    "live_api: opt-in tests that send fixed synthetic prompts to a configured real LLM endpoint",
+]
 
 [tool.uv]
 required-version = "==0.11.21"
 
 [tool.pyright]
 pythonVersion = "3.12"
-include = ["src", "tests"]
+include = ["src", "tests", "live_tests"]
 typeCheckingMode = "strict"
 venv = ".venv"
 venvPath = "."

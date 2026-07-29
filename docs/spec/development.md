@@ -10,6 +10,17 @@
   them transitively.
 - Built wheel smoke tests must install the artifact into a clean environment
   and import the CLI/runtime boundary.
+- Real-provider tests live under top-level `live_tests/`, outside pytest's
+  default `tests/` collection root. They run only when that path and the
+  explicit `--run-live-api` opt-in are both supplied; every case also carries
+  the `live_api` marker. Live tests may load endpoint
+  credentials from the local private configuration, but must send only fixed
+  synthetic prompts, must not load user threads, memory, persona state, or
+  other private content, and must never print credentials or raw configuration.
+  The suite separately verifies basic model transport, LangChain structured
+  output, NuSelf's final chat response boundary, and tool calling combined
+  with a structured final response so daemon readiness is not mistaken for a
+  working provider.
 - User-facing changes must update both `README.md` and `README.zh-CN.md`.
 - Use [`../current-goal.md`](../current-goal.md) as the single active execution
   board and [`../TODOs.md`](../TODOs.md) for unresolved backlog.

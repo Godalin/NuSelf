@@ -170,6 +170,15 @@ uv run --locked pytest
 uv run --locked pyright
 ```
 
+真实 provider API 检查与默认测试隔离，并且只发送固定的合成 prompt：
+
+```bash
+uv run --locked pytest live_tests -m live_api --run-live-api
+```
+
+该显式命令会产生 provider 流量和费用；普通 pytest 与 CI 不收集
+`live_tests/`。
+
 ## 配置
 
 NuSelf 所有配置都集中在一个 YAML 文件中：

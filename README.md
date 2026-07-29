@@ -199,6 +199,16 @@ uv run --locked pytest
 uv run --locked pyright
 ```
 
+Real-provider API checks are isolated from the default suite and send only
+fixed synthetic prompts:
+
+```bash
+uv run --locked pytest live_tests -m live_api --run-live-api
+```
+
+This explicit command incurs provider traffic and cost. Normal pytest and CI
+do not collect `live_tests/`.
+
 ## Configuration
 
 NuSelf configuration is unified in a single YAML file:
