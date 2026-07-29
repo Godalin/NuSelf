@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Agent tool-log callback and failure-reporter terminal diagnostics now use two
+  sealed warning contracts with exact safe error fields instead of middleware
+  string interpolation.
 - Structured observability sink failures now use the fixed sealed
   `runtime/observability_sink_failed` terminal warning with exact typed fields
   instead of dynamically reusing each failed business audit identity.

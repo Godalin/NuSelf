@@ -762,6 +762,11 @@ ordered fields, domain validation, and an optional fixed suffix. Rendering is
 canonical and credential-safe. Domain owners compose closed registries and
 pass typed facts; they do not interpolate warning strings at call sites.
 
+Agent tool middleware composes two closed warning definitions for an
+unreported tool-log callback failure and for a failure reporter that itself
+fails. These are terminal observation diagnostics, not tool execution events;
+they contain only safe callback/reporter error facts.
+
 Shared observability owns a sealed one-event terminal-warning registry:
 
 | Warning | Exact ordered fields |

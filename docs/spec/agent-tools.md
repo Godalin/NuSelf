@@ -345,12 +345,25 @@ Tool-log projection is a secondary observation effect:
 - the composition root provides a failure reporter backed by shared structured
   observability;
 - if no reporter is configured, or the reporter itself fails, middleware emits
-  a `RuntimeWarning` without changing the primary tool outcome;
+  a registered `RuntimeWarning` without changing the primary tool outcome;
 - captured tool-error text and fallback warnings use the shared safe diagnostic
   formatter. The original tool exception is re-raised unchanged, while its
   secondary projection cannot expose credential-like values or fail because
   exception stringification is broken;
 - no logging or reporting failure triggers a hidden tool retry.
+
+Agent middleware owns one sealed two-event terminal-warning registry:
+
+| Warning | Exact ordered fields |
+|---|---|
+| `agent/tool_log_callback_failed` | `callback_error` |
+| `agent/tool_log_failure_reporter_failed` | `callback_error`, `reporter_error` |
+
+The first event is used only when no failure reporter exists. If a configured
+reporter fails, the second event records both safe diagnostics exactly once.
+Tool name, arguments, result, captured outcome, and primary tool exception
+payload are not added as warning facts. Both warnings use the shared registered
+renderer and cannot change or retry the primary tool execution.
 
 Domain tool adapters also use the shared diagnostic exception formatter when
 returning an expected error result to the model. A repository, validation, or

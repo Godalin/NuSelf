@@ -13,9 +13,52 @@ from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
 from nuself.runtime import encode_json_value, freeze_json_value
-from nuself.runtime.diagnostics import (
-    diagnostic_exception_message,
-    emit_runtime_warning,
+from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.runtime.warning_definitions import (
+    TerminalWarningDefinition,
+    TerminalWarningRegistry,
+    TerminalWarningSchemaError,
+    emit_registered_terminal_warning,
+)
+
+TOOL_LOG_CALLBACK_FAILED = "agent/tool_log_callback_failed"
+TOOL_LOG_FAILURE_REPORTER_FAILED = (
+    "agent/tool_log_failure_reporter_failed"
+)
+
+
+def _validate_callback_warning(metadata: Mapping[str, object]) -> None:
+    for field in metadata:
+        value = metadata[field]
+        if not isinstance(value, str) or not value.strip():
+            raise TerminalWarningSchemaError(
+                f"agent middleware warning {field} must be non-blank"
+            )
+
+
+def _build_agent_middleware_warning_registry() -> TerminalWarningRegistry:
+    return (
+        TerminalWarningRegistry()
+        .register(
+            TerminalWarningDefinition(
+                TOOL_LOG_CALLBACK_FAILED,
+                ("callback_error",),
+                _validate_callback_warning,
+            )
+        )
+        .register(
+            TerminalWarningDefinition(
+                TOOL_LOG_FAILURE_REPORTER_FAILED,
+                ("callback_error", "reporter_error"),
+                _validate_callback_warning,
+            )
+        )
+        .seal()
+    )
+
+
+AGENT_MIDDLEWARE_WARNING_REGISTRY = (
+    _build_agent_middleware_warning_registry()
 )
 
 
@@ -154,17 +197,22 @@ class ToolCaptureMiddleware(AgentMiddleware):
                 self._log_error_callback(exc)
                 return
             except Exception as report_exc:  # noqa: BLE001 - preserve primary outcome
-                emit_runtime_warning(
-                    "tool log callback failed: "
-                    f"{diagnostic_exception_message(exc)}; "
-                    "failure reporter failed: "
-                    f"{diagnostic_exception_message(report_exc)}",
+                emit_registered_terminal_warning(
+                    AGENT_MIDDLEWARE_WARNING_REGISTRY,
+                    TOOL_LOG_FAILURE_REPORTER_FAILED,
+                    {
+                        "callback_error": diagnostic_exception_message(exc),
+                        "reporter_error": diagnostic_exception_message(
+                            report_exc
+                        ),
+                    },
                     stacklevel=3,
                 )
                 return
-        emit_runtime_warning(
-            "tool log callback failed: "
-            f"{diagnostic_exception_message(exc)}",
+        emit_registered_terminal_warning(
+            AGENT_MIDDLEWARE_WARNING_REGISTRY,
+            TOOL_LOG_CALLBACK_FAILED,
+            {"callback_error": diagnostic_exception_message(exc)},
             stacklevel=3,
         )
 

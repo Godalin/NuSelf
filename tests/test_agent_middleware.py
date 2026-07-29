@@ -9,10 +9,32 @@ from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 
 from nuself.agent.middleware import (
+    AGENT_MIDDLEWARE_WARNING_REGISTRY,
+    TOOL_LOG_CALLBACK_FAILED,
+    TOOL_LOG_FAILURE_REPORTER_FAILED,
     ToolCaptureMiddleware,
     ToolOutcome,
     _tool_cache_key,
 )
+from nuself.runtime.definitions import DefinitionRegistrySealedError
+
+
+def test_agent_middleware_warning_registry_is_complete_and_sealed() -> None:
+    assert [
+        (definition.event, definition.fields)
+        for definition in AGENT_MIDDLEWARE_WARNING_REGISTRY.definitions
+    ] == [
+        (TOOL_LOG_CALLBACK_FAILED, ("callback_error",)),
+        (
+            TOOL_LOG_FAILURE_REPORTER_FAILED,
+            ("callback_error", "reporter_error"),
+        ),
+    ]
+
+    with pytest.raises(DefinitionRegistrySealedError):
+        AGENT_MIDDLEWARE_WARNING_REGISTRY.register(
+            AGENT_MIDDLEWARE_WARNING_REGISTRY.definitions[0]
+        )
 
 
 def _message_content(message: ToolMessage) -> str:
@@ -333,7 +355,10 @@ def test_unreported_tool_log_failure_warns_without_changing_result() -> None:
 
     with pytest.warns(
         RuntimeWarning,
-        match="audit unavailable token=\\*\\*\\*",
+        match=(
+            "agent/tool_log_callback_failed: "
+            "callback_error=audit unavailable token=\\*\\*\\*"
+        ),
     ) as captured:
         result = middleware.wrap_tool_call(
             _request({}, call_id="call-1"),
@@ -347,3 +372,44 @@ def test_unreported_tool_log_failure_warns_without_changing_result() -> None:
     assert isinstance(result, ToolMessage)
     assert _message_content(result) == "completed"
     assert audit_secret not in str(captured[0].message)
+
+
+def test_tool_log_failure_reporter_warning_preserves_result() -> None:
+    audit_secret = "audit-secret-value"
+    reporter_secret = "reporter-secret-value"
+
+    def fail_log(*_args: object, **_kwargs: object) -> None:
+        raise OSError(f"audit unavailable token={audit_secret}")
+
+    def fail_reporter(_exc: Exception) -> None:
+        raise RuntimeError(
+            f"reporter unavailable api_key={reporter_secret}"
+        )
+
+    middleware = ToolCaptureMiddleware(
+        log_callback=fail_log,
+        log_error_callback=fail_reporter,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match=(
+            "agent/tool_log_failure_reporter_failed: "
+            "callback_error=audit unavailable token=\\*\\*\\* "
+            "reporter_error=reporter unavailable api_key=\\*\\*\\*"
+        ),
+    ) as captured:
+        result = middleware.wrap_tool_call(
+            _request({}, call_id="call-1"),
+            lambda request: ToolMessage(
+                content="completed",
+                name="memory_count",
+                tool_call_id=request.tool_call["id"] or "",
+            ),
+        )
+
+    assert isinstance(result, ToolMessage)
+    assert _message_content(result) == "completed"
+    warning = str(captured[0].message)
+    assert audit_secret not in warning
+    assert reporter_secret not in warning

@@ -286,6 +286,9 @@ under the same package.
   audit schemas for Chat, Memory, Persona, Reason, and Reflection.
   `agent/failover.py` retains control-flow ownership and supplies only the
   already-decided endpoint outcome plus safe endpoint identity fields.
+- `agent/middleware.py` owns its sealed callback/reporter terminal-warning
+  registry. Tool execution and capture supply only safe caught diagnostics and
+  never construct warning presentation.
 - `logs.py` owns its recursive-sensitive sealed infrastructure audit registry.
   Process-local observer delivery supplies only the caught exception; callable
   identity, presentation, schema, and terminal fallback remain logging-core

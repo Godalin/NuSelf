@@ -462,6 +462,12 @@ so the primary diagnostic is not duplicated. It does not retry the structured
 write, construct a dynamic warning identity, or allow warning rendering or
 emission to replace the caller's result, fallback, or primary exception.
 
+Tool-log callback and callback-failure reporter errors are secondary to the
+tool outcome. Agent middleware resolves one of two sealed terminal warnings
+when structured reporting is absent or fails. Registered rendering and warning
+policy cannot replace a successful `ToolMessage`/`Command`, replace the
+original tool exception, append a partial capture, or trigger a tool retry.
+
 Chat's local response policy is not an exception sink for implementation
 defects. Before any tool executes, the shared policy rejects assertion,
 attribute, import, lookup, memory exhaustion, name resolution, unimplemented
