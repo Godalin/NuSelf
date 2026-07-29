@@ -103,6 +103,10 @@ Rules:
 - `llm` is an ordered list of endpoints. The first item is the default endpoint.
 - Endpoints default to OpenAI-compatible behavior.
 - If an endpoint has `anthropic: true`, NuSelf uses Anthropic Messages API semantics for that endpoint. `base_url` defaults to `https://api.anthropic.com/v1` when omitted.
+- Provider selection is explicit configuration. NuSelf does not infer
+  OpenAI-compatible versus Anthropic semantics from a model name or endpoint
+  URL; gateways that expose different models through different protocols must
+  set `anthropic` per endpoint.
 - Each endpoint may set `timeout_seconds`. It controls the provider HTTP request timeout for that endpoint. If omitted, the default is 60 seconds.
 - The old nested `llm.openai` shape is not part of v0.2.0. Configuration should use the direct `llm` list shape.
 - If every configured endpoint has an empty API key, no LangChain endpoint is
@@ -144,6 +148,12 @@ Rules:
   the model is a non-blank string.
 - Endpoint audit metadata never contains API keys, endpoint base URLs, prompts,
   responses, or raw provider exception text.
+
+`nuself dev config` is a safe effective-configuration projection. It prints
+only flattened scalar leaf values plus explicit derived fields. Secret leaves,
+including every endpoint API key, are redacted. The projection must not retain
+or print aggregate dictionaries, lists, model dumps, or parent container
+values that can bypass leaf-level redaction.
 
 ## Chat Daemon Request Timeout
 

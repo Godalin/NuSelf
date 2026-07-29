@@ -267,24 +267,42 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 
 def _flatten_config(
-    data: dict[str, Any],
+    data: object,
     *,
     prefix: str = "",
 ) -> dict[str, Any]:
-    """Recursively flatten a nested config dict into dotted keys."""
+    """Recursively flatten config containers into scalar dotted keys."""
     result: dict[str, Any] = {}
-    for key, val in data.items():
-        full_key = f"{prefix}.{key}" if prefix else key
-        if isinstance(val, dict):
-            d = cast("dict[str, Any]", val)
-            if d and not any(isinstance(v, dict) for v in d.values()):
-                for sub_key, sub_val in d.items():
-                    result[f"{full_key}.{sub_key}"] = sub_val
-            else:
-                result.update(_flatten_config(d, prefix=full_key))
-        else:
-            result[full_key] = val
+    if isinstance(data, dict):
+        mapping = cast("dict[str, Any]", data)
+        for key, value in mapping.items():
+            full_key = f"{prefix}.{key}" if prefix else key
+            result.update(_flatten_config(value, prefix=full_key))
+        return result
+    if isinstance(data, (list, tuple)):
+        sequence = cast("list[object] | tuple[object, ...]", data)
+        for index, value in enumerate(sequence):
+            full_key = f"{prefix}.{index}" if prefix else str(index)
+            result.update(_flatten_config(value, prefix=full_key))
+        return result
+    if prefix:
+        result[prefix] = data
     return result
+
+
+def _redact_flat_config(flat: dict[str, Any]) -> dict[str, Any]:
+    """Return a scalar effective-config projection with secrets removed."""
+
+    return {
+        key: (
+            "***"
+            if key.rsplit(".", maxsplit=1)[-1] == "api_key" and value
+            else "(not set)"
+            if key.rsplit(".", maxsplit=1)[-1] == "api_key"
+            else value
+        )
+        for key, value in flat.items()
+    }
 
 
 _CONFIG_CACHE: dict[tuple[str, int, int], SystemConfig] = {}
@@ -406,7 +424,7 @@ class ConfigSystem:
     def as_flat_dict(self, config: SystemConfig) -> dict[str, Any]:
         """Return configuration as flat key/value pairs for CLI inspection."""
         raw = config.model_dump(mode="python")
-        flat = _flatten_config(raw)
+        flat = _redact_flat_config(_flatten_config(raw))
 
         flat["llm.count"] = len(config.llm.endpoints)
         if config.llm.endpoints:

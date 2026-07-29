@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Effective config inspection now recursively flattens endpoint lists and
+  redacts every API key instead of exposing aggregate endpoint secrets.
 - `nuself dev migrate` now builds and validates a strict temporary SQLite
   database before atomically publishing it; corrupt or ID-mismatched source
   records abort without exposing a partial database, and in-place `--clear`

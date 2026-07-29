@@ -4556,6 +4556,32 @@ def test_config_command_shows_paths(tmp_path: Path, capsys: CaptureFixture) -> N
     assert "llm.0.api_key:" in captured.out
 
 
+def test_config_command_never_prints_endpoint_secrets(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+) -> None:
+    secret = "provider-secret-must-not-render"
+    private = tmp_path / "private"
+    private.mkdir()
+    (private / "config.yaml").write_text(
+        (
+            "llm:\n"
+            "  - base_url: https://example.invalid/v1\n"
+            f"    api_key: {secret}\n"
+            "    model: example\n"
+        ),
+        encoding="utf-8",
+    )
+
+    result = main(["--project-root", str(tmp_path), "dev", "config"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert secret not in captured.out
+    assert "llm.endpoints:" not in captured.out
+    assert "llm.endpoints.0.api_key: ***" in captured.out
+
+
 def test_memory_list_shows_entries(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.domain.memory import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
