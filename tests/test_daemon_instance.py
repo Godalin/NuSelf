@@ -868,18 +868,36 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     )[-1]
     assert event.event == "shutdown_cleanup_failed"
     assert event.metadata == {
-        "steps": (
-            "worker.memory_curator.stop",
-            "worker.reason_scheduler.stop",
-            "storage.default_backend.reset",
+        "failures": (
+            {
+                "step": "worker.memory_curator.stop",
+                "error": "memory stop failed",
+            },
+            {
+                "step": "worker.reason_scheduler.stop",
+                "error": "reason stop failed",
+            },
+            {
+                "step": "storage.default_backend.reset",
+                "error": "storage reset failed",
+            },
         ),
         "primary_failed": True,
     }
     assert event.to_record()["metadata"] == {
-        "steps": [
-            "worker.memory_curator.stop",
-            "worker.reason_scheduler.stop",
-            "storage.default_backend.reset",
+        "failures": [
+            {
+                "step": "worker.memory_curator.stop",
+                "error": "memory stop failed",
+            },
+            {
+                "step": "worker.reason_scheduler.stop",
+                "error": "reason stop failed",
+            },
+            {
+                "step": "storage.default_backend.reset",
+                "error": "storage reset failed",
+            },
         ],
         "primary_failed": True,
     }

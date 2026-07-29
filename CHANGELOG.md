@@ -36,6 +36,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   delivery failures now use one sealed transport-audit registry. Undecoded
   requests no longer persist the internal `unknown` sentinel as a request
   identity.
+- Daemon worker join timeouts and lifecycle cleanup failures now use one
+  sealed operations-audit registry. Cleanup diagnostics retain every ordered
+  step/error chain, while timeout metadata no longer repeats its
+  `timed_out` status.
 - Internal job wake-ups now resolve through sealed name, producer, and payload
   definitions before queue mutation; Reason export workers reject invalid jobs
   at ingress instead of queueing and later emitting

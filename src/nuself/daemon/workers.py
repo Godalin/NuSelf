@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from nuself.clock import utc_now_iso
 from nuself.daemon.types import WorkerHealth
+from nuself.daemon.operations_audit import report_worker_join_timeout
 from nuself.runtime.context import (
     RuntimeContext,
     runtime_context,
@@ -22,7 +23,6 @@ from nuself.runtime.events import EventPublisher
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
     publish_observed_event,
-    report_observed_failure,
 )
 from nuself.runtime.workers import (
     OwnedWorker,
@@ -195,19 +195,11 @@ class DaemonWorkerSupervisor:
         error = DaemonWorkerJoinTimeoutError(
             f"{name} did not stop within {timeout}s"
         )
-        report_observed_failure(
+        report_worker_join_timeout(
             error,
-            component="daemon",
-            event="thread_timeout",
-            message=f"{name} did not stop within {timeout}s",
             project_root=self._project_root,
-            level="warning",
-            status="timed_out",
-            metadata={
-                "worker": name,
-                "timeout_seconds": timeout,
-                "lifecycle_state": snapshot.state,
-            },
+            worker=name,
+            timeout_seconds=timeout,
         )
         raise error
 

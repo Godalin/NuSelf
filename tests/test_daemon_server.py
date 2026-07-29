@@ -815,7 +815,6 @@ def test_daemon_worker_join_timeout_is_logged_and_remains_live(
     assert event.metadata == {
         "worker": "memory_curator",
         "timeout_seconds": 0,
-        "lifecycle_state": "timed_out",
     }
 
     release.set()

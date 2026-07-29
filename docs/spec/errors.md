@@ -296,6 +296,19 @@ before instance-lock release succeed. Failed cleanup emits
 lifecycle error. Failure of that diagnostic does not alter the retained error
 set.
 
+Daemon process/supervisor failures use one sealed operations audit contract:
+
+| Event | Level | Status | Exact metadata |
+|---|---|---|---|
+| `thread_timeout` | warning | `timed_out` | non-empty `worker`, finite non-negative `timeout_seconds` |
+| `shutdown_cleanup_failed` | error | `error` | non-empty ordered `failures` records containing non-empty `step` and canonical `error`, boolean `primary_failed` |
+
+Both events require a canonical top-level error and forbid duration. Cleanup
+metadata preserves each retained failure because the aggregate lifecycle
+exception intentionally summarizes only the count. The adapter sanitizes each
+failure chain through the shared diagnostic path; callers do not format nested
+errors, messages, levels, or statuses.
+
 Daemon lifecycle operations and their typed transition results are
 authoritative. The server's contention/started/stopped records and the one-shot
 or interactive CLI's requested/completed records are auxiliary projections

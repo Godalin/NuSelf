@@ -17,6 +17,9 @@ from nuself.daemon.instance import (
     DaemonInstanceLock,
     DaemonInstanceLockContended,
 )
+from nuself.daemon.operations_audit import (
+    report_shutdown_cleanup_failure,
+)
 from nuself.daemon.signals import DaemonSignalOwner
 from nuself.daemon.socket_server import (
     NuSelfUnixServer,
@@ -25,7 +28,6 @@ from nuself.daemon.socket_server import (
 from nuself.daemon.state import DaemonState
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.observability import report_observed_failure
 from nuself.storage import write_text_atomic
 
 
@@ -67,18 +69,11 @@ def _finish_daemon_lifecycle(
             cleanup_failures,
             primary_error=primary_error,
         )
-        report_observed_failure(
+        report_shutdown_cleanup_failure(
             lifecycle_error,
-            component="daemon",
-            event="shutdown_cleanup_failed",
-            message="Daemon lifecycle cleanup failed",
             project_root=project_root,
-            metadata={
-                "steps": [failure.step for failure in cleanup_failures],
-                "primary_failed": primary_error is not None,
-            },
-            level="error",
-            status="error",
+            failures=cleanup_failures,
+            primary_failed=primary_error is not None,
         )
         if primary_error is not None:
             raise lifecycle_error from primary_error

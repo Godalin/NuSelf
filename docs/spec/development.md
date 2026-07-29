@@ -266,6 +266,9 @@ under the same package.
 - `daemon/transport_audit.py` owns the sealed socket read/dispatch/encode/write
   failure contract. `daemon/socket_server.py` owns transport control flow but
   never constructs failure log messages or projection defaults.
+- `daemon/operations_audit.py` owns process cleanup and worker join-timeout
+  diagnostics. It preserves ordered cleanup error records while server and
+  supervisor owners retain control flow and exception propagation.
 - `daemon/audit.py` owns the immutable lifecycle event definition registry,
   exact per-event schema validation, and best-effort audit sink boundary.
 - `runtime/definitions.py` owns generic sealed definition-registry mechanics.

@@ -179,7 +179,7 @@ registration and common lifecycle semantics over the neutral
   the schedule. A later successful iteration clears the consecutive failure
   count while retaining a success timestamp.
 - Joining a still-live worker after the caller's timeout emits
-  `daemon/thread_timeout` with worker, timeout, and lifecycle state, then raises
+  `daemon/thread_timeout` with worker and timeout, then raises
   `DaemonWorkerJoinTimeoutError`. The worker remains owned and may be joined
   again after it exits.
 - The supervisor owns only common execution semantics. `DaemonState` retains
@@ -563,6 +563,8 @@ the publisher into `DaemonWorkerSupervisor`.
   prevent the stopped event attempt.
 - Join timeout remains the direct `daemon/thread_timeout` audit record because
   a timed-out worker is still alive and has not emitted a stopped transition.
+  It and `shutdown_cleanup_failed` resolve through the sealed
+  `daemon/operations_audit.py` registry.
 
 Chat-turn lifecycle is the second production event boundary.
 `ConversationGraphRuntime`
