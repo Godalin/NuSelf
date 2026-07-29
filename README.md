@@ -42,6 +42,9 @@ the calling project rather than implicit process state.
 Atomic runtime-file writes preserve the original persistence failure even when
 temporary-file cleanup also fails, exposing both errors and the residual path
 to callers.
+File-backed collection identifiers are opaque record keys: path syntax,
+record/key mismatches, and symlink redirection are rejected at the shared
+storage boundary.
 
 Daemon instance-lock acquire and release likewise preserve simultaneous lock
 operation and handle-close failures, so ownership errors are not hidden by

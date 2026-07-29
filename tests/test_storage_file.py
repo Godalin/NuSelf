@@ -19,6 +19,129 @@ from nuself.storage import (
 
 
 @pytest.mark.parametrize(
+    "key",
+    [
+        "",
+        ".",
+        "..",
+        "../outside",
+        "nested/record",
+        r"nested\record",
+        "/tmp/absolute",
+        "record\0suffix",
+    ],
+)
+@pytest.mark.parametrize("operation", ["get", "put", "delete"])
+def test_file_collection_rejects_path_like_keys(
+    tmp_path: Path,
+    key: str,
+    operation: str,
+) -> None:
+    collection = FileStorageBackend(
+        tmp_path / "private",
+        project_root=tmp_path,
+    ).collection("memory_entries")
+
+    with pytest.raises(ValueError, match="collection key"):
+        if operation == "get":
+            collection.get(key)
+        elif operation == "put":
+            collection.put(key, {"id": key})
+        else:
+            collection.delete(key)
+
+    assert not (tmp_path / "outside.json").exists()
+
+
+@pytest.mark.parametrize("operation", ["get", "put", "delete"])
+def test_file_collection_rejects_symlink_records(
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    directory = tmp_path / "private" / "memory" / "entries"
+    directory.mkdir(parents=True)
+    outside = tmp_path / "outside.json"
+    outside.write_text('{"id":"outside"}', encoding="utf-8")
+    record = directory / "linked.json"
+    record.symlink_to(outside)
+    collection = FileStorageBackend(
+        tmp_path / "private",
+        project_root=tmp_path,
+    ).collection("memory_entries")
+
+    with pytest.raises(ValueError, match="symlink"):
+        if operation == "get":
+            collection.get("linked")
+        elif operation == "put":
+            collection.put("linked", {"id": "linked"})
+        else:
+            collection.delete("linked")
+
+    assert outside.read_text(encoding="utf-8") == '{"id":"outside"}'
+    assert record.is_symlink()
+
+
+def test_file_collection_rejects_symlink_directory(
+    tmp_path: Path,
+) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    collection_dir = tmp_path / "private" / "memory" / "entries"
+    collection_dir.parent.mkdir(parents=True)
+    collection_dir.symlink_to(outside, target_is_directory=True)
+    collection = FileStorageBackend(
+        tmp_path / "private",
+        project_root=tmp_path,
+    ).collection("memory_entries")
+
+    with pytest.raises(ValueError, match="directory.*symlink"):
+        collection.put("record", {"id": "record"})
+
+    assert list(outside.iterdir()) == []
+
+
+@pytest.mark.parametrize("record_id", ["different", None, 7])
+def test_file_collection_put_rejects_record_id_mismatch(
+    tmp_path: Path,
+    record_id: object,
+) -> None:
+    collection = FileStorageBackend(
+        tmp_path / "private",
+        project_root=tmp_path,
+    ).collection("memory_entries")
+
+    with pytest.raises(ValueError, match="id.*collection key"):
+        collection.put("expected", {"id": record_id})
+
+    assert collection.get("expected") is None
+
+
+def test_file_collection_lists_direct_records_only_and_rejects_symlink(
+    tmp_path: Path,
+) -> None:
+    directory = tmp_path / "private" / "memory" / "entries"
+    nested = directory / "nested"
+    nested.mkdir(parents=True)
+    (nested / "hidden.json").write_text(
+        '{"id":"hidden"}',
+        encoding="utf-8",
+    )
+    outside = tmp_path / "outside.json"
+    outside.write_text('{"id":"outside"}', encoding="utf-8")
+    (directory / "linked.json").symlink_to(outside)
+    collection = FileStorageBackend(
+        tmp_path / "private",
+        project_root=tmp_path,
+    ).collection("memory_entries")
+
+    with pytest.raises(ValueError, match="symlink"):
+        collection.list()
+
+    (directory / "linked.json").unlink()
+    assert collection.list() == ()
+
+
+@pytest.mark.parametrize(
     ("raw", "error_type"),
     [
         ("{", json.JSONDecodeError),

@@ -140,6 +140,17 @@ class _FileCollection:
         ...
 ```
 
+File collection keys are opaque stable record identifiers, never paths.
+`get`, `put`, and `delete` reject empty keys, absolute paths, `.`/`..`, NUL,
+and either path separator. The resolved record must be a direct regular-file
+child of the configured collection directory; symlinked collection
+directories or record paths are rejected. `list` scans direct `*.json`
+children only and rejects symlink records rather than traversing them.
+
+When a value written through `put` contains an `id` field, it must be a string
+equal to the collection key. A mismatch is a producer contract error and no
+file is created or replaced.
+
 ### Repository 模式变更（示例）
 
 ```python

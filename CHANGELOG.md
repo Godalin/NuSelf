@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- File-backed collections now reject path-like keys, record/key identity
+  mismatches, symlinked records, and symlinked collection directories.
 - Redacted caught callback, event-projection, protocol-decode, and rollback
   diagnostics before terminal or wrapper presentation.
 - Curator runs and plan discard now use the same per-thread cross-process lock,

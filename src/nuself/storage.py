@@ -253,26 +253,38 @@ class _FileCollection:
         self._project_root = project_root
 
     def get(self, key: str) -> dict[str, object] | None:
-        path = self._dir / f"{key}.json"
+        path = self._record_path(key)
         if not path.exists():
             return None
+        self._require_regular_record(path)
         return _read_json_record(path)
 
     def put(self, key: str, value: dict[str, object]) -> None:
-        ensure_private_directory(self._dir)
-        path = self._dir / f"{key}.json"
+        if "id" in value and value["id"] != key:
+            raise ValueError(
+                "stored record id must equal its collection key"
+            )
+        self._ensure_collection_directory()
+        path = self._record_path(key)
+        if path.is_symlink():
+            raise ValueError("file collection record must not be a symlink")
         write_json_atomic(path, value)
 
     def delete(self, key: str) -> None:
-        path = self._dir / f"{key}.json"
+        path = self._record_path(key)
         if path.exists():
+            self._require_regular_record(path)
             path.unlink()
+        elif path.is_symlink():
+            raise ValueError("file collection record must not be a symlink")
 
     def list(self) -> tuple[dict[str, object], ...]:
         if not self._dir.exists():
             return ()
+        self._require_collection_directory()
         items: list[dict[str, object]] = []
-        for p in sorted(self._dir.rglob("*.json")):
+        for p in sorted(self._dir.glob("*.json")):
+            self._require_regular_record(p)
             obj = _list_json_record(
                 p,
                 collection=self._name,
@@ -282,6 +294,51 @@ class _FileCollection:
             if obj is not None:
                 items.append(obj)
         return tuple(items)
+
+    def _record_path(self, key: str) -> Path:
+        validate_storage_key(key)
+        self._require_collection_directory_if_present()
+        path = self._dir / f"{key}.json"
+        if path.parent != self._dir:
+            raise ValueError(
+                "file collection record must be a direct child"
+            )
+        resolved_parent = path.parent.resolve(strict=False)
+        collection = self._dir.resolve(strict=False)
+        if resolved_parent != collection:
+            raise ValueError(
+                "file collection record escapes its collection"
+            )
+        return path
+
+    def _ensure_collection_directory(self) -> None:
+        self._require_collection_directory_if_present()
+        ensure_private_directory(self._dir)
+        self._require_collection_directory()
+
+    def _require_collection_directory_if_present(self) -> None:
+        if self._dir.is_symlink():
+            raise ValueError(
+                "file collection directory must not be a symlink"
+            )
+        if self._dir.exists() and not self._dir.is_dir():
+            raise ValueError(
+                "file collection path must be a directory"
+            )
+
+    def _require_collection_directory(self) -> None:
+        self._require_collection_directory_if_present()
+        if not self._dir.is_dir():
+            raise ValueError("file collection directory is unavailable")
+
+    @staticmethod
+    def _require_regular_record(path: Path) -> None:
+        if path.is_symlink():
+            raise ValueError("file collection record must not be a symlink")
+        if not path.is_file():
+            raise ValueError(
+                "file collection record must be a regular file"
+            )
 
     def find(self, **filters: object) -> tuple[dict[str, object], ...]:
         items = self.list()
@@ -336,6 +393,20 @@ class FileStorageBackend:
         """
         with self._transaction_lock:
             yield
+
+
+def validate_storage_key(key: str) -> None:
+    """Reject path syntax from one opaque file-collection record key."""
+
+    if (
+        key == ""
+        or key in {".", ".."}
+        or "\0" in key
+        or "/" in key
+        or "\\" in key
+        or Path(key).is_absolute()
+    ):
+        raise ValueError("storage collection key is invalid")
 
 
 # ── Factory helpers ──────────────────────────────────────────────────────
