@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close the remaining 0.3 RC migration, notification-state, ambiguous-commit,
-and release reproducibility gaps identified by the `bd43f1d` external review.
+Idle. The 0.3 RC migration, notification-state, ambiguous-commit, and release
+reproducibility review is complete.
 
 ## Active Branch
 
@@ -14,20 +14,12 @@ and release reproducibility gaps identified by the `bd43f1d` external review.
 
 ## Ordered Work
 
-1. Publish File-to-SQLite migration only through a validated atomic switch.
-2. Preserve adapter history through every notification transition and make
-   crash recovery finalize, rather than retry, recorded failures.
-3. Preserve ambiguous candidate commits when post-write observation fails.
-4. Pin the uv/Pyright toolchain and make release rerun the complete quality
-   gate used by branch CI.
-5. Run focused fault injection and full local gates; push once and confirm the
-   final six-platform CI matrix.
+1. Discuss and specify the next objective before implementation.
 
 ## Out Of Scope
 
-- No unrelated user feature or cognitive capability.
-- Thread lifecycle journaling and constructor cleanup remain non-blocking
-  follow-up work because thread persistence is explicitly semi-durable.
+- No implementation work is active.
+- Do not infer a new feature scope from this completed review.
 - No 0.3.0 release tag until every release-candidate gate is proven.
 
 ## Completion Evidence
@@ -73,6 +65,9 @@ and release reproducibility gaps identified by the `bd43f1d` external review.
   all five release blockers have direct implementation, fault-injection or
   contract tests, and full-gate evidence. The two explicitly non-blocking
   ThreadStore follow-ups are recorded in `TODOs.md`.
+- Final code CI run `30466563141` passed all six Linux/macOS and Python
+  3.12-3.14 jobs, including pinned uv installation, locked Pyright, 2341
+  tests, distribution builds, and clean-wheel smoke tests.
 - Confirmed: `_FileCollection.get/put/delete` directly interpolate untrusted
   keys into paths and `list` recursively follows nested JSON paths.
 - Confirmed: ThreadStore rename, branch, archive, unarchive, and delete bypass
@@ -198,9 +193,8 @@ and release reproducibility gaps identified by the `bd43f1d` external review.
 
 ## Publication
 
-Work begins from the previously reviewed `bd43f1d`; validated closure is
-committed through `b660d38` before the final evidence commit.
+The reviewed implementation is published on `dev/v0.3.x` through `e426587`.
 
 ## Next Review Batch
 
-Final push and six-platform development-branch CI.
+None selected. Await the next user-directed feature or review objective.
