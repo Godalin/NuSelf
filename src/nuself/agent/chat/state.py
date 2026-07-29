@@ -39,9 +39,8 @@ class ConversationStateManager:
                 state.persisted_state.message_start_index
             ),
             next_message_index=(
-                state.persisted_state.next_message_index
+                state.persisted_state.message_start_index
                 + len(state.saved_messages)
-                - len(state.base_messages)
             ),
         )
         return ConversationNodeResult(

@@ -61,6 +61,9 @@ successful external effect was already recorded instead of sending them again.
 Reason export manifest-write and retry-callback failures schedule bounded,
 delayed online reconciliation, so a durable non-terminal job can recover
 without a daemon restart or an immediate retry loop.
+Persisted chat threads are decoded fail-closed: every message must be a valid
+object, indexes reject booleans, and the absolute next index must exactly match
+the retained message window.
 
 Daemon instance-lock acquire and release likewise preserve simultaneous lock
 operation and handle-close failures, so ownership errors are not hidden by

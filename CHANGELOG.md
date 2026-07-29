@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Chat thread decoding now rejects malformed message members, boolean indexes,
+  unknown message fields, and inconsistent absolute message indexes instead of
+  silently dropping or repairing persisted data.
 - Reason export jobs now request delayed online reconciliation when failure
   state persistence or a retry callback fails, avoiding daemon-restart-only
   recovery and immediate storage-failure loops.

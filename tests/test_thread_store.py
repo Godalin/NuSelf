@@ -86,6 +86,84 @@ def test_list_returns_empty_when_no_threads(tmp_path: Path) -> None:
     assert store.list() == []
 
 
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("message_start_index", True),
+        ("next_message_index", False),
+    ],
+)
+def test_thread_state_rejects_boolean_message_indexes(
+    field_name: str,
+    value: object,
+) -> None:
+    wire: dict[str, object] = {
+        "thread_id": "strict",
+        "summary": "",
+        "messages": [],
+        "message_start_index": 0,
+        "next_message_index": 0,
+    }
+    wire[field_name] = value
+
+    with pytest.raises(ValueError, match="index"):
+        ThreadState.from_wire(wire)
+
+
+def test_thread_state_rejects_non_object_message_member() -> None:
+    with pytest.raises(ValueError, match="every thread message"):
+        ThreadState.from_wire(
+            {
+                "thread_id": "strict",
+                "summary": "",
+                "messages": [
+                    {"role": "user", "content": "kept"},
+                    "silently dropped before",
+                ],
+                "message_start_index": 0,
+                "next_message_index": 2,
+            }
+        )
+
+
+def test_thread_state_rejects_inconsistent_absolute_index() -> None:
+    with pytest.raises(ValueError, match="message count"):
+        ThreadState.from_wire(
+            {
+                "thread_id": "strict",
+                "summary": "",
+                "messages": [{"role": "user", "content": "one"}],
+                "message_start_index": 4,
+                "next_message_index": 6,
+            }
+        )
+
+
+def test_thread_state_derives_missing_legacy_next_index() -> None:
+    state = ThreadState.from_wire(
+        {
+            "thread_id": "legacy",
+            "summary": "",
+            "messages": [{"role": "user", "content": "one"}],
+            "message_start_index": 4,
+        }
+    )
+
+    assert state.message_start_index == 4
+    assert state.next_message_index == 5
+
+
+def test_thread_message_rejects_unknown_wire_field() -> None:
+    with pytest.raises(ValueError, match="unsupported fields"):
+        ThreadMessage.from_wire(
+            {
+                "role": "user",
+                "content": "one",
+                "unexpected": "value",
+            }
+        )
+
+
 def test_list_returns_thread_ids(tmp_path: Path) -> None:
     store = ThreadStore(tmp_path)
     store.save(ThreadState.empty("alpha"))

@@ -89,6 +89,13 @@ trustworthy 0.3.0 release candidate.
   callback failures to a domain observer after releasing task ownership.
 - Focused scheduling, export recovery, and Reason audit tests: 122 passed;
   pyright reported 0 errors and 0 warnings.
+- ThreadState now rejects non-object or non-exact messages, boolean indexes,
+  and any explicit next index that differs from start plus retained message
+  count. Runtime state updates now produce that invariant directly; only a
+  missing legacy next index is derived.
+- Thread/chat/curator/CLI/reflection coverage: 500 checks passed across the
+  main run and corrected fixture rerun; pyright reported 0 errors and 0
+  warnings.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 
@@ -98,4 +105,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-Strict ThreadState decoding and absolute-index invariants.
+Multilingual memory-curator signal gating.

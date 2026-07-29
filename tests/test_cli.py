@@ -3786,6 +3786,11 @@ def test_interactive_history_shows_recent_messages(
     state.messages.append(
         ThreadMessage(role="assistant", content="Hi! How can I help?")
     )
+    state = ThreadState(
+        thread_id=state.thread_id,
+        messages=state.messages,
+        next_message_index=2,
+    )
     store.save(state)
 
     monkeypatch.setattr("sys.stdin", _TextInput(":history\n:q\n"))
@@ -3834,6 +3839,11 @@ def test_thread_show_displays_messages(tmp_path: Path, capsys: CaptureFixture) -
     store = ThreadStore(tmp_path)
     state = ThreadState.empty("focus")
     state.messages.append(ThreadMessage(role="user", content="Tell me about memory."))
+    state = ThreadState(
+        thread_id=state.thread_id,
+        messages=state.messages,
+        next_message_index=1,
+    )
     store.save(state)
 
     result = main(["--project-root", str(tmp_path), "thread", "show", "focus"])

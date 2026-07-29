@@ -34,6 +34,9 @@ class ThreadMessage:
 
     @classmethod
     def from_wire(cls, data: dict[str, object]) -> "ThreadMessage":
+        unexpected = set(data) - {"role", "content", "turn_id"}
+        if unexpected:
+            raise ValueError("thread message contains unsupported fields")
         role = data.get("role")
         content = data.get("content")
         turn_id = data.get("turn_id")
@@ -63,8 +66,10 @@ class ThreadState:
     def __post_init__(self) -> None:
         if self.next_message_index == self.message_start_index and self.messages:
             object.__setattr__(self, "next_message_index", self.message_start_index + len(self.messages))
+        self._validate_indexes()
 
     def to_wire(self) -> dict[str, object]:
+        self._validate_indexes()
         return {
             "thread_id": self.thread_id,
             "summary": self.summary,
@@ -72,6 +77,27 @@ class ThreadState:
             "message_start_index": self.message_start_index,
             "next_message_index": self.next_message_index,
         }
+
+    def _validate_indexes(self) -> None:
+        if (
+            type(self.message_start_index) is not int
+            or self.message_start_index < 0
+        ):
+            raise ValueError(
+                "message_start_index must be a non-negative integer"
+            )
+        if (
+            type(self.next_message_index) is not int
+            or self.next_message_index < 0
+        ):
+            raise ValueError(
+                "next_message_index must be a non-negative integer"
+            )
+        if self.next_message_index != self.message_start_index + len(self.messages):
+            raise ValueError(
+                "next_message_index must equal message_start_index plus "
+                "the message count"
+            )
 
     @classmethod
     def empty(cls, thread_id: str) -> "ThreadState":
@@ -90,18 +116,25 @@ class ThreadState:
             raise ValueError("summary must be a string")
         if not isinstance(messages, list):
             raise ValueError("messages must be a list")
-        if not isinstance(message_start_index, int) or message_start_index < 0:
+        if type(message_start_index) is not int or message_start_index < 0:
             raise ValueError("message_start_index must be a non-negative integer")
         message_items = cast(list[object], messages)
+        if any(not isinstance(item, dict) for item in message_items):
+            raise ValueError("every thread message must be an object")
         parsed_messages = [
             ThreadMessage.from_wire(cast(dict[str, object], item))
             for item in message_items
-            if isinstance(item, dict)
         ]
         if next_message_index is None:
             next_message_index = message_start_index + len(parsed_messages)
-        if not isinstance(next_message_index, int) or next_message_index < message_start_index:
-            raise ValueError("next_message_index must be an integer greater than or equal to message_start_index")
+        if type(next_message_index) is not int or next_message_index < 0:
+            raise ValueError("next_message_index must be a non-negative integer")
+        expected_next_index = message_start_index + len(parsed_messages)
+        if next_message_index != expected_next_index:
+            raise ValueError(
+                "next_message_index must equal message_start_index plus "
+                "the message count"
+            )
         return cls(
             thread_id=thread_id,
             summary=summary,

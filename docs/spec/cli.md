@@ -149,6 +149,13 @@ interactive input state.
   operations re-check source and destination state only after acquiring every
   required lock. Lock files are stable coordination inodes and are never
   removed by rename, archive, or delete.
+- Persisted ThreadState decoding is fail-closed. Every `messages` member must
+  be an object accepted by the exact ThreadMessage decoder; malformed members
+  invalidate the complete thread instead of being filtered. Message indexes
+  are non-boolean, non-negative integers and must satisfy
+  `next_message_index == message_start_index + len(messages)`. A legacy record
+  that omits `next_message_index` derives that exact value; an explicitly
+  inconsistent value is corruption and is never repaired during decoding.
 - Every exit path runs transcript auto-save and exit memory curation exactly
   once, in that order. EOF does not perform an additional inline save.
 - Both cleanup steps are attempted even if the first fails. Cleanup failures

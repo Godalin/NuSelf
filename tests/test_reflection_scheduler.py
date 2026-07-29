@@ -682,6 +682,11 @@ def test_generator_produces_ideas_from_threads(tmp_path: Path) -> None:
     store = ThreadStore(tmp_path)
     state = ThreadState.empty("default")
     state.messages.append(ThreadMessage(role="user", content="What is consciousness?"))
+    state = ThreadState(
+        thread_id=state.thread_id,
+        messages=state.messages,
+        next_message_index=1,
+    )
     store.save(state)
 
     gen = IdeaCandidateGenerator(tmp_path, agent=_CandidateAgent())

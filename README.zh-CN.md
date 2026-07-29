@@ -52,6 +52,9 @@ Notification delivery 还会按稳定 adapter ID（`log`、`email`、`macos`）�
 Reason export 的 manifest 写回或 retry callback 失败时会安排有界、延迟的在线
 reconciliation，使 durable non-terminal job 无需重启 daemon 即可恢复，也不会
 形成即时重试热循环。
+持久化 chat thread 现在采用 fail-closed 解码：每条 message 都必须是合法
+object，index 拒绝 bool，absolute next index 必须与保留的 message window
+严格一致。
 
 Daemon instance lock 的获取和释放也会同时保留锁操作与句柄关闭错误，避免清理
 故障掩盖真实所有权状态。
