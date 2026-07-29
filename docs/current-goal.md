@@ -39,6 +39,10 @@ and release reproducibility gaps identified by the `bd43f1d` external review.
   missing or filename-mismatched IDs instead of isolating or skipping them.
 - Atomic migration, CLI lifecycle, and CLI regression coverage: 333 passed;
   pyright reported 0 errors and 0 warnings.
+- Final migration audit now rejects orphan final-name SQLite sidecars and
+  proves `auto_backend()` ignores unpublished `.migrating-*` siblings.
+  Focused file/SQLite/migration coverage: 136 passed; locked pyright reported
+  0 errors and 0 warnings.
 - Notification CLI, REPL, evaluator, and daemon delivery now use one frozen
   adapter-plan pipeline. Whole-entry sent/failed mutation APIs are removed,
   dismiss retains the complete plan/history, and recovery skips both sent and

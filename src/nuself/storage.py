@@ -723,10 +723,22 @@ def migrate_file_backend_atomically(
         if db_path is not None
         else paths.private_root / "nuself.sqlite"
     )
-    if destination_path.exists() or destination_path.is_symlink():
+    conflicting_paths = (
+        destination_path,
+        *(
+            destination_path.with_name(
+                f"{destination_path.name}{suffix}"
+            )
+            for suffix in ("-wal", "-shm", "-journal")
+        ),
+    )
+    if any(
+        path.exists() or path.is_symlink()
+        for path in conflicting_paths
+    ):
         raise FileExistsError(
-            "file migration destination already exists; move or remove it "
-            f"before migrating: {destination_path}"
+            "file migration destination or SQLite sidecar already exists; "
+            f"move or remove it before migrating: {destination_path}"
         )
     ensure_private_directory(destination_path.parent)
     temporary = destination_path.with_name(

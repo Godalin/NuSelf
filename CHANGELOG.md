@@ -9,7 +9,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - `nuself dev migrate` now builds and validates a strict temporary SQLite
   database before atomically publishing it; corrupt or ID-mismatched source
   records abort without exposing a partial database, and in-place `--clear`
-  migration has been removed.
+  migration has been removed. Orphan final-name SQLite sidecars block
+  publication, while unpublished migration siblings never claim authority.
 - Notification CLI, REPL, and daemon delivery now share one adapter-state
   pipeline; dismiss preserves delivery history, and crash recovery finalizes
   recorded adapter failures without implicitly retrying them.

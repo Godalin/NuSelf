@@ -251,6 +251,10 @@ they are never silently skipped. File migration is a one-time authority switch,
 not a database merge: the final destination must not already exist. Operators
 must explicitly move or remove an obsolete destination before retrying; the
 old `--clear` in-place mutation option is not part of the atomic contract.
+Final-name SQLite WAL/SHM/journal sidecars without a main database are also an
+incomplete/conflicting destination and block migration. Conversely,
+`auto_backend()` ignores uniquely named `.migrating-*` siblings: before atomic
+replacement they are never evidence that SQLite owns runtime authority.
 
 `close()` is lock-protected and idempotent after the underlying connection has
 closed successfully. It first requests a truncating WAL checkpoint and always

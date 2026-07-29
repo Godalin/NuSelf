@@ -14,8 +14,10 @@ from nuself.reason.repository import ReasonRepository
 from nuself.storage import (
     AtomicWriteDurabilityError,
     COLLECTION_NAMES,
+    FileStorageBackend,
     StorageMigrationValidationError,
     StorageBackend,
+    auto_backend,
     create_file_backend,
     create_sqlite_backend,
     migrate_file_backend_atomically,
@@ -208,6 +210,36 @@ def test_atomic_file_migration_refuses_existing_destination(
         migrate_file_backend_atomically(tmp_path)
 
     assert destination.read_bytes() == b"existing authoritative bytes"
+
+
+def test_atomic_file_migration_refuses_orphan_final_sidecar(
+    tmp_path: Path,
+) -> None:
+    sidecar = tmp_path / "private" / "nuself.sqlite-wal"
+    sidecar.parent.mkdir(parents=True)
+    sidecar.write_bytes(b"orphaned migration state")
+
+    with pytest.raises(FileExistsError, match="sidecar"):
+        migrate_file_backend_atomically(tmp_path)
+
+    assert sidecar.read_bytes() == b"orphaned migration state"
+    assert not (sidecar.parent / "nuself.sqlite").exists()
+
+
+def test_auto_backend_ignores_unpublished_migration_database(
+    tmp_path: Path,
+) -> None:
+    temporary = (
+        tmp_path
+        / "private"
+        / "nuself.sqlite.migrating-interrupted"
+    )
+    temporary.parent.mkdir(parents=True)
+    temporary.write_bytes(b"not published")
+
+    backend = auto_backend(tmp_path)
+
+    assert isinstance(backend, FileStorageBackend)
 
 
 def test_atomic_file_migration_rejects_missing_record_id(
