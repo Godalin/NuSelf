@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- The development package is now `0.3.0rc1`; release metadata gates enforce
+  tag/package/runtime/changelog agreement, unified `uv build`, clean-wheel
+  smoke tests, checksums, and Linux/macOS CI coverage.
 - Thought-pack export names now reject Windows device names and trailing dots,
   matching the documented portable-filename contract.
 - Job admission, delayed scheduling, and owned calls now share exact timeout

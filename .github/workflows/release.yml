@@ -21,10 +21,19 @@ jobs:
         run: python -m pip install uv
       - name: Run uv sync
         run: uv sync --group dev
+      - name: Verify release metadata
+        run: python scripts/check_release.py --tag "${GITHUB_REF_NAME}"
       - name: Build distributions
+        run: uv build
+      - name: Smoke-test built wheel in a clean environment
         run: |
-          uv pip install build
-          uv run python -m build --sdist --wheel -o dist
+          python -m venv /tmp/nuself-wheel-smoke
+          /tmp/nuself-wheel-smoke/bin/python -m pip install dist/*.whl
+          /tmp/nuself-wheel-smoke/bin/nuself --version
+      - name: Generate SHA256 checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:

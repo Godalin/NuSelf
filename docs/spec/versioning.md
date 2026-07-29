@@ -13,7 +13,9 @@ NuSelf should be stabilizable and shareable as a local tool. Versioning and chan
 
 ## Version Scheme
 
-Use SemVer-like `MAJOR.MINOR.PATCH` versions.
+Use PEP 440 versions with a SemVer-like `MAJOR.MINOR.PATCH` stable core.
+Release-candidate branches may use `MAJOR.MINOR.PATCHrcN`; a stable release tag
+must not point at prerelease metadata.
 
 While `MAJOR=0`, minor versions may contain behavior changes. Patch versions should still be reserved for fixes, compatibility repairs, and documentation corrections.
 
@@ -26,7 +28,7 @@ Guidance:
 Branch intent follows the version line:
 
 - `main` tracks the stable, releasable state.
-- `dev/0.2.x` tracks stabilization work for the current minor line.
+- `dev/v0.3.x` tracks stabilization work for the current minor line.
 - `feature/*` tracks isolated experiments and should not be treated as release candidates until merged into the stabilization or stable branch.
 
 ## Changelog
@@ -69,7 +71,8 @@ It must not start the daemon, load private memory, or emit startup warnings.
 
 TODO before publishing a release:
 
-1. Confirm `uv run pytest`, `uvx pyright`, and `git diff --check`.
+1. Confirm Linux and macOS CI, `uv run pytest`, `uvx pyright`, and
+   `git diff --check`.
 2. Move `CHANGELOG.md` `Unreleased` entries to a dated version section.
 3. Bump `pyproject.toml` version.
 4. Confirm `nuself --version`.
@@ -78,3 +81,10 @@ TODO before publishing a release:
 7. When publishing, push the release commit and tag together.
 
 Release tags must point at release metadata commits, not arbitrary feature commits.
+The release workflow runs `scripts/check_release.py` before building: tag,
+`pyproject.toml`, runtime fallback version, and dated changelog heading must
+agree exactly. CI and release both build with `uv build` and smoke-test the
+wheel in a clean virtual environment. Release assets include SHA256 checksums.
+
+NuSelf supports Linux and macOS. Windows is not supported because runtime
+coordination currently requires POSIX advisory locks and Unix-domain sockets.

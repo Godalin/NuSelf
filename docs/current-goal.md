@@ -122,6 +122,22 @@ trustworthy 0.3.0 release candidate.
   case-insensitive Windows device names, including reserved first components
   followed by another extension.
 - Focused pack tests: 28 passed.
+- Package and runtime fallback metadata now identify `0.3.0rc1`. Versioning
+  names `dev/v0.3.x`, explicitly supports Linux/macOS, and documents Windows
+  as unsupported while POSIX locks and Unix sockets remain required.
+- CI now covers Python 3.12-3.14 on Ubuntu and macOS. Release uses the same
+  `uv build`, a clean-wheel CLI smoke, SHA256 checksums, and a tested gate for
+  exact tag/project/runtime/changelog agreement.
+- Release-gate and CLI-version tests: 5 passed; `nuself --version` printed
+  `nuself 0.3.0rc1`.
+- Full pytest release gate: 2317 passed.
+- `uv build` produced `nuself-0.3.0rc1.tar.gz` and
+  `nuself-0.3.0rc1-py3-none-any.whl` in an isolated temporary directory.
+- A clean uv-managed Python 3.14 environment installed the wheel and all
+  declared runtime dependencies from the package index; import smoke and the
+  installed `nuself --version` command passed.
+- Full pyright remains the only local gate pending after its cache attempted a
+  blocked refresh and the explicit retry approval service disconnected.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 

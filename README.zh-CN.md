@@ -144,8 +144,10 @@ Daemon 与 REPL lifecycle cleanup 共用一个有序 runner，保留具名
 
 ## 环境要求
 
-- Python 3.12 或更新版本。
+- Linux 或 macOS 上的 Python 3.12 或更新版本；当前不支持 Windows。
 - `uv`。
+
+当前开发包版本为 `0.3.0rc1`。
 
 ## 安装和运行
 
