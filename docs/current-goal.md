@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make the durable candidate the curator's authoritative success boundary.
-Auto-accept failures after that point must remain observable without preventing
-cursor advancement and replaying the same source into duplicate candidates.
+Make a curator source range resumable across cursor persistence failure.
+Persist the exact ready decision before candidate effects, reuse deterministic
+candidates, and never call the model twice for the same unfinished range.
 
 ## Active Branch
 
@@ -15,56 +15,59 @@ cursor advancement and replaying the same source into duplicate candidates.
 
 ## Ordered Work
 
-1. Verify candidate audit and memory trace failures are already isolated.
-2. Reproduce an ordinary auto-accept storage failure after candidate save.
-3. Define candidate durability as the authoritative curation boundary.
-4. Degrade ordinary auto-accept exceptions through the registered audit event.
-5. Prove the cursor advances and the source is not sent to the model twice.
+1. Inspect existing receipt, journal, idempotency, and transaction facilities.
+2. Specify a bounded per-thread plan record for the exact ready decision.
+3. Derive candidate identity from source range and action index.
+4. Resume a saved plan before asking the model for a new decision.
+5. Prove cursor failure reuses candidates and leaves later messages unconsumed.
 6. Run focused and full quality gates, commit by functional boundary, push,
    and confirm development-branch CI.
 
 ## Out Of Scope
 
 - No candidate, cursor, or MemoryEntry wire-schema change.
-- No suppression of process-control `BaseException` subclasses.
-- No claim that a double failure leaves the target repaired; it remains
-  observable for operator intervention.
-- No change to candidate acceptance transaction or compensation mechanics.
-- No change to audit/trace best-effort policy, which is already correct.
+- No new StorageBackend collection or SQLite schema migration; the plan is
+  cursor-adjacent curator control state.
+- No replay of a plan whose typed state is corrupt or incompatible with the
+  current thread.
+- No process-crash atomicity claim inside one candidate acceptance operation.
+- No change to candidate acceptance compensation or audit/trace policy.
 
 ## Completion Evidence
 
-- Candidate audit persistence already uses the shared best-effort log
-  projection. Existing failure injection proves audit sink failure cannot
-  replay a committed candidate.
-- Memory trace recording already runs through `run_memory_observed`. Existing
-  failure injection proves trace and diagnostic sink failure cannot replace a
-  reviewed entry or replay its source.
-- The candidate is saved before `_auto_accept`, so it is already a durable,
-  reviewable curation result when auto-accept begins.
-- `_auto_accept` previously caught only `ValueError` and
-  `MemoryEntryNotFound`; an `OSError` prevented cursor persistence and caused
-  the same source range to be modeled again.
-- Auto-accept now degrades every ordinary `Exception` through the registered
-  `auto_accept_failed` event. `BaseException` remains outside that boundary.
-- Regression tests inject both a storage failure and
-  `MemoryCandidateCommitError`; each leaves one pending candidate, advances the
-  cursor, emits the failure event, and calls the model only once.
-- Focused curator tests: 32 passed.
-- Full suite: 2175 passed.
+- The cursor is currently written only after every candidate action and
+  auto-accept attempt complete.
+- If that final atomic cursor write raises, candidate/entry effects remain
+  durable but the next run has no receipt and invokes the model again.
+- Existing notification idempotency and reason export IDs do not retain a
+  curator action batch. Adding a StorageBackend collection would require a
+  SQLite schema-version migration.
+- Chosen design: one typed, atomically replaced plan per thread, stored beside
+  curator cursors. It is written before candidate effects and contains the
+  exact source range and actions.
+- Candidate IDs are deterministic per plan action. Resume checks the candidate
+  repository before resolving conflicts or staging mutations.
+- `MemoryCuratorPlan` strictly round-trips thread identity, absolute source
+  range, stable observation time, and normalized structured actions.
+- A stale plan at or behind the cursor is ignored and can be replaced; an
+  unfinished plan must start exactly at the cursor and cannot extend beyond the
+  thread's known end.
+- Both pending/manual-review and accepted/auto-accepted candidates are reused
+  after an injected cursor write failure. The model is called once for the
+  unfinished range, and messages that arrived during recovery are processed in
+  the following run.
+- A plan write failure occurs before candidate effects. An incompatible plan
+  emits `record_decode_failed` and aborts without a model call.
+- Focused curator tests: 36 passed.
+- Full suite: 2179 passed.
 - Pyright: 0 errors, 0 warnings.
 - `git diff --check` passed.
-- The full gate exposed a pre-existing cross-thread log-order assumption in
-  the daemon join-timeout test. The test now selects the unique
-  `thread_timeout` event by identity; its focused test and the full suite pass.
 
 ## Publication
 
-Daemon test stabilization is committed in `e8dac68`; the curator replay fix and
-local validation are committed in `987cbc5`. Publication and final-push CI are
-the remaining gates.
+Pending implementation, validation, publication, and final-push CI.
 
 ## Next Review Batch
 
-After this boundary is complete, inspect cursor persistence failure itself;
-candidate durability and cursor durability still do not share one transaction.
+After this boundary is complete, inspect plan corruption recovery and operator
+repair ergonomics across CLI and daemon surfaces.

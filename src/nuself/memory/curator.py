@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 from typing import Literal, TypeAlias, cast
+from uuid import NAMESPACE_URL, uuid5
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,7 +21,12 @@ from nuself.memory.audit import (
     run_memory_observed,
     write_curator_audit,
 )
-from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
+from nuself.memory.repository import (
+    MemoryCandidateNotFound,
+    MemoryCandidateRepository,
+    MemoryEntryNotFound,
+    MemoryEntryRepository,
+)
 from nuself.memory.text import looks_like_raw_transcript
 from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime.observability import report_corrupt_record
@@ -161,6 +167,97 @@ class CuratorActionsOutput(BaseModel):
     actions: list[CuratorActionItem] = Field(description="Memory curation actions.")
 
 
+@dataclass(frozen=True)
+class MemoryCuratorPlan:
+    """One durable structured decision awaiting cursor completion."""
+
+    thread_id: str
+    source_start: int
+    source_end: int
+    observed_at: str
+    actions: tuple[MemoryAction, ...]
+
+    @property
+    def source_ref(self) -> str:
+        return (
+            f"thread:{self.thread_id}:{self.source_start}-{self.source_end}"
+        )
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            "thread_id": self.thread_id,
+            "source_start": self.source_start,
+            "source_end": self.source_end,
+            "observed_at": self.observed_at,
+            "actions": [
+                {
+                    "action": action.action,
+                    "title": action.title,
+                    "body": action.body,
+                    "type": action.type,
+                    "tags": list(action.tags),
+                    "entry_id": action.entry_id,
+                    "confidence": action.confidence,
+                    "reason": action.reason,
+                }
+                for action in self.actions
+            ],
+        }
+
+    @classmethod
+    def from_wire(
+        cls,
+        data: dict[str, object],
+        *,
+        expected_thread_id: str,
+        allowed_types: tuple[str, ...],
+    ) -> MemoryCuratorPlan:
+        expected_fields = {
+            "thread_id",
+            "source_start",
+            "source_end",
+            "observed_at",
+            "actions",
+        }
+        if set(data) != expected_fields:
+            raise ValueError("curator plan fields differ from schema")
+        thread_id = data["thread_id"]
+        if thread_id != expected_thread_id:
+            raise ValueError("curator plan thread identity mismatch")
+        source_start = data["source_start"]
+        source_end = data["source_end"]
+        observed_at = data["observed_at"]
+        if (
+            isinstance(source_start, bool)
+            or not isinstance(source_start, int)
+            or isinstance(source_end, bool)
+            or not isinstance(source_end, int)
+            or source_start < 0
+            or source_end <= source_start
+        ):
+            raise ValueError("curator plan source range is invalid")
+        if not isinstance(observed_at, str) or observed_at == "":
+            raise ValueError("curator plan observed_at is invalid")
+        raw_actions = data["actions"]
+        if not isinstance(raw_actions, list) or not raw_actions:
+            raise ValueError("curator plan actions must be a non-empty list")
+        action_values = cast(list[object], raw_actions)
+        actions = tuple(
+            _action_from_item(
+                CuratorActionItem.model_validate(raw_action),
+                allowed_types=allowed_types,
+            )
+            for raw_action in action_values
+        )
+        return cls(
+            thread_id=expected_thread_id,
+            source_start=source_start,
+            source_end=source_end,
+            observed_at=observed_at,
+            actions=actions,
+        )
+
+
 class MemoryCurator:
 
     def __init__(
@@ -209,6 +306,11 @@ class MemoryCurator:
                 ignored=0,
                 log_path=self._memory_log_path(),
             )
+        plan = self._load_plan(
+            thread_id,
+            cursor=cursor,
+            next_message_index=visible_end,
+        )
         if cursor < visible_start:
             write_curator_audit(
                 "curator_history_gap",
@@ -220,45 +322,77 @@ class MemoryCurator:
                     "visible_start": visible_start,
                 },
             )
-        source_start = max(cursor, visible_start)
-        offset = source_start - visible_start
-        new_messages = state.messages[offset:]
-        if not _has_memory_worthy_signal(new_messages, self._settings.min_quality_chars):
-            return MemoryCuratorResult(
-                processed_messages=0,
-                created=0,
-                updated=0,
-                ignored=0,
-                log_path=self._memory_log_path(),
-            )
+        if plan is None:
+            source_start = max(cursor, visible_start)
+            offset = source_start - visible_start
+            new_messages = state.messages[offset:]
+            if not _has_memory_worthy_signal(
+                new_messages,
+                self._settings.min_quality_chars,
+            ):
+                return MemoryCuratorResult(
+                    processed_messages=0,
+                    created=0,
+                    updated=0,
+                    ignored=0,
+                    log_path=self._memory_log_path(),
+                )
 
-        source_ref = f"thread:{thread_id}:{source_start}-{visible_end}"
-        decision = self._decide_actions(thread_id, state, source_start, new_messages)
-        if decision.status == "deferred":
-            write_curator_audit(
-                "curator_deferred",
-                "Memory curator deferred the source range",
-                project_root=self._paths.project_root,
-                metadata={
-                    "thread_id": thread_id,
-                    "source_ref": source_ref,
-                    "processed_messages": 0,
-                },
+            decision = self._decide_actions(
+                thread_id,
+                state,
+                source_start,
+                new_messages,
             )
-            return MemoryCuratorResult(
-                processed_messages=0,
-                created=0,
-                updated=0,
-                ignored=0,
-                log_path=self._memory_log_path(),
+            source_ref = (
+                f"thread:{thread_id}:{source_start}-{visible_end}"
             )
+            if decision.status == "deferred":
+                write_curator_audit(
+                    "curator_deferred",
+                    "Memory curator deferred the source range",
+                    project_root=self._paths.project_root,
+                    metadata={
+                        "thread_id": thread_id,
+                        "source_ref": source_ref,
+                        "processed_messages": 0,
+                    },
+                )
+                return MemoryCuratorResult(
+                    processed_messages=0,
+                    created=0,
+                    updated=0,
+                    ignored=0,
+                    log_path=self._memory_log_path(),
+                )
+            plan = MemoryCuratorPlan(
+                thread_id=thread_id,
+                source_start=source_start,
+                source_end=visible_end,
+                observed_at=utc_now_iso(),
+                actions=decision.actions,
+            )
+            self._save_plan(plan)
+        source_start = plan.source_start
+        visible_end = plan.source_end
+        source_ref = plan.source_ref
+        processed_messages = visible_end - source_start
 
         created = 0
         updated = 0
         ignored = 0
-        for action in decision.actions:
+        for action_index, action in enumerate(plan.actions):
+            candidate_id = _curator_candidate_id(
+                source_ref,
+                action_index,
+            )
             if action.action == "create":
-                outcome = self._create_candidate(action, source_ref)
+                outcome = self._create_candidate(
+                    action,
+                    source_ref,
+                    candidate_id=candidate_id,
+                    observed_at=plan.observed_at,
+                )
                 if outcome == "create":
                     created += 1
                 elif outcome == "update":
@@ -266,7 +400,12 @@ class MemoryCurator:
                 else:
                     ignored += 1
             elif action.action == "update":
-                if self._update_candidate(action, source_ref):
+                if self._update_candidate(
+                    action,
+                    source_ref,
+                    candidate_id=candidate_id,
+                    observed_at=plan.observed_at,
+                ):
                     updated += 1
                 else:
                     ignored += 1
@@ -280,14 +419,14 @@ class MemoryCurator:
             metadata={
                 "thread_id": thread_id,
                 "source_ref": source_ref,
-                "processed_messages": len(new_messages),
+                "processed_messages": processed_messages,
                 "created": created,
                 "updated": updated,
                 "ignored": ignored,
             },
         )
         return MemoryCuratorResult(
-            processed_messages=len(new_messages),
+            processed_messages=processed_messages,
             created=created,
             updated=updated,
             ignored=ignored,
@@ -370,8 +509,24 @@ class MemoryCurator:
             lines.append(f"- id={item.id} type={item.type} title={item.title}{tags}{sources}: {item.body}")
         return "\n".join(lines)
 
-    def _create_candidate(self, action: MemoryAction, source_ref: str) -> MemoryActionType:
-        observed_at = _source_observed_at(source_ref)
+    def _create_candidate(
+        self,
+        action: MemoryAction,
+        source_ref: str,
+        *,
+        candidate_id: str,
+        observed_at: str,
+    ) -> MemoryActionType:
+        staged = self._staged_candidate(
+            candidate_id,
+            source_ref=source_ref,
+        )
+        if staged is not None:
+            return (
+                "update"
+                if staged.action in {"update", "merge"}
+                else "create"
+            )
         incoming = MemoryObject(
             type=action.type,
             payload={"title": action.title, "body": action.body, "tags": list(action.tags)},
@@ -398,6 +553,7 @@ class MemoryCurator:
                     confidence=action.confidence,
                     privacy=existing.privacy,
                     reason=action.reason,
+                    id=candidate_id,
                     target_entry_id=existing.id,
                     observed_at=existing.observed_at or observed_at,
                     valid_from=existing.valid_from,
@@ -435,6 +591,7 @@ class MemoryCurator:
             ],
             confidence=action.confidence,
             reason=action.reason,
+            id=candidate_id,
             observed_at=observed_at,
         )
         self._candidate_repository.save(candidate)
@@ -450,8 +607,19 @@ class MemoryCurator:
         )
         return "create"
 
-    def _update_candidate(self, action: MemoryAction, source_ref: str) -> bool:
-        observed_at = _source_observed_at(source_ref)
+    def _update_candidate(
+        self,
+        action: MemoryAction,
+        source_ref: str,
+        *,
+        candidate_id: str,
+        observed_at: str,
+    ) -> bool:
+        if self._staged_candidate(
+            candidate_id,
+            source_ref=source_ref,
+        ) is not None:
+            return True
         if action.entry_id is None:
             return False
         try:
@@ -476,6 +644,7 @@ class MemoryCurator:
             confidence=action.confidence,
             privacy=existing.privacy,
             reason=action.reason,
+            id=candidate_id,
             target_entry_id=existing.id,
             observed_at=existing.observed_at or observed_at,
             valid_from=existing.valid_from,
@@ -496,6 +665,25 @@ class MemoryCurator:
             },
         )
         return True
+
+    def _staged_candidate(
+        self,
+        candidate_id: str,
+        *,
+        source_ref: str,
+    ) -> MemoryCandidate | None:
+        try:
+            candidate = self._candidate_repository.get(candidate_id)
+        except MemoryCandidateNotFound:
+            return None
+        if candidate.source_refs != (source_ref,):
+            raise ValueError(
+                "curator plan candidate source identity mismatch: "
+                f"{candidate_id}"
+            )
+        if candidate.review_state == "pending":
+            self._auto_accept(candidate)
+        return candidate
 
     def _auto_accept(self, candidate: MemoryCandidate) -> None:
         if not self._settings.auto_accept:
@@ -575,6 +763,67 @@ class MemoryCurator:
             ) from exc
         return cursor.processed_message_count
 
+    def _load_plan(
+        self,
+        thread_id: str,
+        *,
+        cursor: int,
+        next_message_index: int,
+    ) -> MemoryCuratorPlan | None:
+        path = self._plan_path(thread_id)
+        try:
+            raw: object = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raise ValueError("curator plan record must be a JSON object")
+            raw_mapping = cast(dict[str, object], raw)
+            stored_thread_id = raw_mapping.get("thread_id")
+            stored_source_end = raw_mapping.get("source_end")
+            if (
+                stored_thread_id == thread_id
+                and not isinstance(stored_source_end, bool)
+                and isinstance(stored_source_end, int)
+                and stored_source_end <= cursor
+            ):
+                return None
+            plan = MemoryCuratorPlan.from_wire(
+                raw_mapping,
+                expected_thread_id=thread_id,
+                allowed_types=self._registry.names(),
+            )
+            if plan.source_start != cursor:
+                raise ValueError(
+                    "curator plan does not start at the durable cursor"
+                )
+            if plan.source_end > next_message_index:
+                raise ValueError(
+                    "curator plan extends beyond the current thread"
+                )
+            return plan
+        except FileNotFoundError:
+            return None
+        except (
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            report_corrupt_record(
+                exc,
+                component="memory",
+                collection="memory_curator_plans",
+                record_id=thread_id,
+                project_root=self._paths.project_root,
+            )
+            raise ValueError(
+                f"invalid memory curator plan for thread {thread_id!r}"
+            ) from exc
+
+    def _save_plan(self, plan: MemoryCuratorPlan) -> None:
+        write_json_atomic(
+            self._plan_path(plan.thread_id),
+            plan.to_wire(),
+        )
+
     def _save_cursor(self, thread_id: str, processed_message_count: int) -> None:
         path = self._cursor_path(thread_id)
         cursor = MemoryCuratorCursor(
@@ -588,6 +837,15 @@ class MemoryCurator:
             raise ValueError(f"invalid thread id: {thread_id}")
         return self._paths.private_root / "memory" / "cursors" / f"{thread_id}.json"
 
+    def _plan_path(self, thread_id: str) -> Path:
+        self._cursor_path(thread_id)
+        return (
+            self._paths.private_root
+            / "memory"
+            / "plans"
+            / f"{thread_id}.json"
+        )
+
     def _memory_log_path(self) -> Path:
         return self._paths.logs_dir / "memory.log"
 
@@ -596,8 +854,8 @@ def _render_transcript(messages: list[ThreadMessage]) -> str:
     return "\n".join(f"{message.role}: {message.content}" for message in messages)
 
 
-def _source_observed_at(source_ref: str) -> str | None:
-    return utc_now_iso() if source_ref.startswith("thread:") else None
+def _curator_candidate_id(source_ref: str, action_index: int) -> str:
+    return f"cand_{uuid5(NAMESPACE_URL, f'{source_ref}:{action_index}').hex}"
 
 
 def _has_memory_worthy_signal(messages: list[ThreadMessage], min_quality_chars: int) -> bool:

@@ -121,6 +121,26 @@ errors are not degraded and continue to the daemon request backstop.
   payload-safe `record_decode_failed` event and aborts that run; it must not
   reinterpret corruption as cursor zero and replay old messages.
 - Cursor updates use atomic same-directory replacement.
+- Before applying a ready model decision, persist one typed curator plan at
+  `private/memory/plans/{thread_id}.json`. The plan owns the exact source
+  range and structured actions. A plan write failure occurs before any
+  candidate mutation and aborts the run.
+- Candidate IDs produced from a curator plan are deterministic over the plan's
+  source reference and action index. Resuming a plan reuses a repository
+  candidate with that ID; an accepted candidate is not staged or accepted
+  again, while a pending candidate may continue through the configured
+  auto-accept policy.
+- If candidate application completes but cursor persistence fails, the plan
+  remains authoritative. The next run resumes that saved plan without invoking
+  the model, advances only to the plan's original end position, and leaves
+  later thread messages for a subsequent run.
+- One plan file exists per thread. Once its end position is at or behind the
+  durable cursor it is stale and may be atomically replaced by the next ready
+  decision, so plans do not grow without bound.
+- A plan is an authoritative typed record. Invalid JSON, identity/range
+  mismatch, invalid actions, or an end position beyond the currently known
+  thread are corrupt state: report `record_decode_failed` and abort rather than
+  calling the model or guessing whether prior candidate effects committed.
 - If `cursor >= next_message_index`, no-op (idempotent).
 - If thread was compressed (`cursor < message_start_index`), log gap and start from `visible_start`.
 - Advance cursor to `visible_end` after processing.

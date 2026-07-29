@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Curator decisions are now durably resumable: cursor write failures reuse the
+  saved action plan and deterministic candidates without another model call.
 - Curator auto-accept storage failures now preserve the durable candidate,
   advance the source cursor, and avoid generating duplicates on the next run.
 - Curator auto-accept now commits a reviewed MemoryEntry and accepted candidate

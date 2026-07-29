@@ -255,6 +255,253 @@ def test_memory_curator_rejects_corrupt_cursor_without_replay(
     }
 
 
+@pytest.mark.parametrize(
+    ("auto_accept", "candidate_state"),
+    [(False, "pending"), (True, "accepted")],
+)
+def test_memory_curator_resumes_saved_plan_after_cursor_write_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    auto_accept: bool,
+    candidate_state: str,
+) -> None:
+    from nuself.storage import write_json_atomic as real_write_json_atomic
+
+    first_message = ThreadMessage(
+        role="user",
+        content=(
+            "Remember that a failed curator cursor write must resume the "
+            "saved decision without invoking the model again."
+        ),
+    )
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(thread_id="default", messages=[first_message])
+    )
+    agent = _curator_agent(
+        '{"actions":[{"action":"create","type":"episode",'
+        '"title":"Resumable curator plan",'
+        '"body":"Cursor failure resumes the exact saved decision.",'
+        '"tags":["memory"],"confidence":0.9,'
+        '"reason":"explicit replay-safety requirement"}]}'
+    )
+    fail_cursor = True
+
+    def fail_first_cursor_write(
+        path: Path,
+        payload: dict[str, object],
+    ) -> None:
+        nonlocal fail_cursor
+        if path.parent.name == "cursors" and fail_cursor:
+            fail_cursor = False
+            raise OSError("cursor store unavailable")
+        real_write_json_atomic(path, payload)
+
+    monkeypatch.setattr(
+        "nuself.memory.curator.write_json_atomic",
+        fail_first_cursor_write,
+    )
+    curator = MemoryCurator(
+        tmp_path,
+        agent=agent,
+        thread_store=thread_store,
+        settings=MemoryCuratorSettings(auto_accept=auto_accept),
+    )
+
+    with pytest.raises(OSError, match="cursor store unavailable"):
+        curator.run_once()
+
+    candidate_repo = MemoryCandidateRepository(tmp_path)
+    [first_candidate] = candidate_repo.list(include_reviewed=True)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                first_message,
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "Remember that messages arriving during recovery "
+                        "belong to the next curator range."
+                    ),
+                ),
+            ],
+        )
+    )
+
+    resumed = curator.run_once()
+
+    assert resumed.processed_messages == 1
+    assert resumed.created == 1
+    assert len(agent.calls) == 1
+    [resumed_candidate] = candidate_repo.list(include_reviewed=True)
+    assert resumed_candidate == first_candidate
+    assert resumed_candidate.review_state == candidate_state
+    assert resumed_candidate.source_refs == ("thread:default:0-1",)
+    assert len(MemoryEntryRepository(tmp_path).list()) == int(auto_accept)
+    cursor_path = (
+        tmp_path
+        / "private"
+        / "memory"
+        / "cursors"
+        / "default.json"
+    )
+    assert json.loads(cursor_path.read_text(encoding="utf-8")) == {
+        "thread_id": "default",
+        "processed_message_count": 1,
+    }
+
+    later = curator.run_once()
+
+    assert later.processed_messages == 1
+    assert len(agent.calls) == 2
+    candidates = candidate_repo.list(include_reviewed=True)
+    assert len(candidates) == 2
+    assert {candidate.source_refs for candidate in candidates} == {
+        ("thread:default:0-1",),
+        ("thread:default:1-2",),
+    }
+    assert json.loads(cursor_path.read_text(encoding="utf-8")) == {
+        "thread_id": "default",
+        "processed_message_count": 2,
+    }
+
+
+def test_memory_curator_plan_write_fails_before_candidate_effects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.storage import write_json_atomic as real_write_json_atomic
+
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "Remember that a curator plan must be durable before "
+                        "any candidate mutation begins."
+                    ),
+                )
+            ],
+        )
+    )
+    agent = _curator_agent(
+        '{"actions":[{"action":"create","type":"episode",'
+        '"title":"Plan-first commit",'
+        '"body":"The plan is persisted before candidate effects.",'
+        '"tags":["memory"],"confidence":0.9,'
+        '"reason":"explicit commit-order requirement"}]}'
+    )
+
+    def fail_plan_write(
+        path: Path,
+        payload: dict[str, object],
+    ) -> None:
+        if path.parent.name == "plans":
+            raise OSError("plan store unavailable")
+        real_write_json_atomic(path, payload)
+
+    monkeypatch.setattr(
+        "nuself.memory.curator.write_json_atomic",
+        fail_plan_write,
+    )
+    curator = MemoryCurator(
+        tmp_path,
+        agent=agent,
+        thread_store=thread_store,
+        settings=MemoryCuratorSettings(auto_accept=False),
+    )
+
+    with pytest.raises(OSError, match="plan store unavailable"):
+        curator.run_once()
+
+    assert len(agent.calls) == 1
+    assert MemoryCandidateRepository(tmp_path).list() == []
+    assert not (
+        tmp_path
+        / "private"
+        / "memory"
+        / "cursors"
+        / "default.json"
+    ).exists()
+
+
+def test_memory_curator_rejects_incompatible_plan_without_model_replay(
+    tmp_path: Path,
+) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[
+                ThreadMessage(
+                    role="user",
+                    content=(
+                        "Remember that incompatible curator plans require "
+                        "repair instead of speculative model replay."
+                    ),
+                )
+            ],
+        )
+    )
+    plan_path = (
+        tmp_path
+        / "private"
+        / "memory"
+        / "plans"
+        / "default.json"
+    )
+    plan_path.parent.mkdir(parents=True)
+    plan_path.write_text(
+        json.dumps(
+            {
+                "thread_id": "default",
+                "source_start": 0,
+                "source_end": 2,
+                "observed_at": "2026-07-29T00:00:00+00:00",
+                "actions": [
+                    {
+                        "action": "ignore",
+                        "title": "",
+                        "body": "",
+                        "type": "episode",
+                        "tags": [],
+                        "entry_id": None,
+                        "confidence": 0.6,
+                        "reason": "no durable signal",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    agent = _curator_agent('{"actions":[]}')
+    curator = MemoryCurator(
+        tmp_path,
+        agent=agent,
+        thread_store=thread_store,
+        settings=MemoryCuratorSettings(auto_accept=False),
+    )
+
+    with pytest.raises(ValueError, match="invalid memory curator plan"):
+        curator.run_once()
+
+    assert agent.calls == []
+    assert MemoryCandidateRepository(tmp_path).list() == []
+    event = read_log_events(
+        project_root=tmp_path,
+        component="memory",
+    )[-1]
+    assert event.event == "record_decode_failed"
+    assert event.metadata == {
+        "collection": "memory_curator_plans",
+        "record_id": "default",
+    }
+
+
 def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None:
     thread_store = ThreadStore(tmp_path)
     thread_store.save(
