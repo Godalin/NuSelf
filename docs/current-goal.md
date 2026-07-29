@@ -5,10 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Unify local runtime-job construction under sealed semantic definitions.
-Production code must not create unknown or invalid job messages before queue
-ingress, while decoded envelopes remain structurally representable and are
-revalidated at every trust boundary.
+Make sealed definitions a universal runtime-read boundary. No publisher,
+validator, audit adapter, or warning renderer may resolve a registry while its
+identity set remains open to late composition changes.
 
 ## Active Branch
 
@@ -16,68 +15,61 @@ revalidated at every trust boundary.
 
 ## Ordered Work
 
-1. Inventory all event/job/audit envelope construction and first semantic
-   validation points.
-2. Separate transport-envelope structural invariants from domain semantic
-   authorization.
-3. Add registry-owned job construction and remove unchecked
-   `JobMessage.create(...)`.
-4. Give every production job producer a sealed registry and retain queue
-   ingress validation for decoded/untrusted messages.
-5. Prove invalid name, producer, and domain data fail before a message is
-   returned or queue state changes.
+1. Inventory shared definition adapters, resolve calls, and runtime owner
+   construction.
+2. Reproduce lookup and late registration through an EventPublisher-owned
+   unsealed registry.
+3. Make generic `resolve()` reject unsealed state and preserve composition-time
+   definition snapshots.
+4. Translate generic state failures at Event, Job, and Audit semantic adapters;
+   reject unsealed event registries during publisher construction.
+5. Prove late registration cannot change a live owner's identity set.
 6. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No universal factory that merges event, job, and audit semantic registries.
-- No assumption that successful envelope decoding grants domain authorization.
-- No compatibility retention of unchecked `JobMessage.create(...)`.
-- No change to job payload wire shape or durable manifest recovery.
+- No merging of Event, Job, Audit, or terminal-warning definition types.
+- No implicit auto-seal that hides incomplete composition.
+- No compatibility path allowing pre-seal runtime lookup.
+- No change to registered identities, payload schemas, or rendering contracts.
 
 ## Completion Evidence
 
-- Event publication resolves a sealed event definition and validates its
-  payload before constructing the event envelope.
-- Direct audit construction validates component, audit-name grammar, and typed
-  log payload before constructing its envelope; domain audit registries remain
-  separate presentation/metadata contracts.
-- `JobMessage.create(...)` currently constructs unknown job names, disallowed
-  producers, and invalid domain data; only the worker queue ingress rejects
-  them.
-- Reason initial export, retry, and reconciliation are the only production job
-  producers and all use the same closed Reason job definition builder.
-- `JobDefinitionRegistry.create(...)` is now the only field-based local job
-  constructor. It builds the immutable structural envelope, validates the
-  registered name, allowed producer, and exact domain data, then returns the
-  authorized `JobMessage`.
-- `JobMessage.create(...)` was removed without a compatibility alias.
-- `DefinitionRegistry` exposes thread-safe sealed state; job validation and
-  construction reject unsealed registries before entering runtime use.
-- Reason initial export, retry, and reconciliation producers all use their
-  sealed Reason job registry.
-- Structurally decoded messages remain representable and worker ingress still
-  validates them before queue mutation; the unknown-job ingress test uses this
-  explicit untrusted path.
-- Production `RuntimeEnvelope(...)` construction now occurs only inside the
-  event publisher, audit builder, and job definition registry.
-- Focused definition, job, message, Reason contract/output, and export recovery
-  tests: 114 passed.
-- Full suite: 2121 passed.
+- Generic `DefinitionRegistry.resolve()` currently permits lookup before
+  sealing even though registration remains open.
+- `EventPublisher` accepts an arbitrary `EventDefinitionRegistry` without
+  checking sealed state; late registration can therefore expand the supported
+  event set during the publisher lifetime.
+- Job create/validate already perform explicit sealed-state checks.
+- Audit and terminal-warning adapters are built sealed in production but their
+  public resolve paths do not enforce that invariant themselves.
+- `DefinitionRegistry.resolve()` now raises typed
+  `DefinitionRegistryUnsealedError` until composition seals the registry;
+  immutable `definitions` snapshots remain available during composition.
+- Event, Job, Audit, and terminal-warning adapters translate unsealed lookup
+  into domain-specific typed errors.
+- `EventPublisher` requires a sealed event registry during construction, so it
+  cannot retain a definition set that late registration later expands.
+- No registry auto-seals implicitly; incomplete composition remains an explicit
+  caller error.
+- Focused generic definition, Event, Audit, terminal-warning, Job, and daemon
+  audit tests: 94 passed.
+- Full suite: 2126 passed.
 - Pyright: 0 errors, 0 warnings.
-- Static search found no `JobMessage.create(...)` or uncontrolled production
-  envelope construction; `git diff --check` passed.
+- The full suite proves every production definition builder seals before
+  runtime lookup; `git diff --check` passed.
 
 ## Publication
 
-Registry-owned job construction was implemented in `379e328`; milestone
+Sealed runtime definition lookup was implemented in `93a721a`; milestone
 publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Review sealed-definition runtime ownership next. Job registries now reject
-runtime validation/construction before sealing, but `EventPublisher` accepts an
-arbitrary `EventDefinitionRegistry` and the shared definition resolver itself
-permits lookup during composition. Verify whether a publisher can observe late
-event registration or partially composed definitions, and make runtime owners
-require an immutable sealed snapshot consistently.
+Review best-effort audit construction next.
+`run_observed_best_effort(...)` currently calls `create_audit_envelope(...)`
+once outside its failure boundary for validation, discards that envelope, then
+`write_log_event(...)` constructs a second envelope from the caller's mutable
+inputs. Verify duplicate identity/time allocation, context consistency, and
+time-of-check/time-of-use behavior; make validation and persistence operate on
+one immutable envelope without misclassifying producer contract errors.
