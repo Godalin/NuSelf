@@ -5,9 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close shared agent endpoint failover audit ownership so Chat, Memory, Persona,
-Reason, and Reflection use one exact safe contract without persisting endpoint
-URLs.
+Close REPL Reason completion failure audit ownership so the UI caller no longer
+constructs a Reason event outside the sealed Reason registry.
 
 ## Active Branch
 
@@ -15,50 +14,47 @@ URLs.
 
 ## Ordered Work
 
-1. Inventory every shared endpoint runner caller, component, event consumer,
-   retry/failover boundary, metadata, and redaction path. The inventory found
-   five real caller components: Chat, Memory, Persona, Reason, and Reflection.
-2. Separate per-endpoint failover observations from final aggregate
-   capability failure and domain-specific retry events.
-3. Update config, error, log, agent-tool, and development specs before
-   implementation.
-4. Define one sealed endpoint audit registry with fixed messages, statuses,
-   exact safe metadata, and allowed caller components.
-5. Route the shared endpoint runner through the adapter without changing
-   retry/failover decisions or exception identity.
-6. Remove `_report_endpoint_failure`, raw observability calls, endpoint URL
-   metadata, and compatibility aliases.
-7. Run focused and full quality gates, commit by functional boundary, and
-   push.
+1. Inventory dynamic completion failure owners, UI fallback behavior, event
+   schemas, consumers, and tests.
+2. Separate Chat thread completion diagnostics from Reason thread completion
+   diagnostics despite their shared event name.
+3. Update Reason, CLI, log, error, and development specs before implementation.
+4. Register the Reason completion failure with a fixed message, degraded
+   status, required error, and no redundant metadata.
+5. Route the REPL completion loader through `run_reason_observed`.
+6. Remove its direct generic observability import and caller-selected
+   projection without compatibility aliases.
+7. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No change to endpoint ordering or persisted successful-endpoint preference.
-- No change to availability classification or attempts per endpoint.
-- No change to domain-specific retry observers.
-- No change to final raised aggregate failure.
+- No change to completion matching, display text, or repository reads.
+- No change to the empty-suggestion fallback when loading fails.
+- No change to Chat thread or archived-thread completion audit contracts.
+- No promotion of completion failures into authoritative command failures.
 
 ## Completion Evidence
 
-- Shared agent endpoint audit ownership completed in `28aaa14`.
-- Chat, Memory, Persona, Reason, and the previously omitted Reflection caller
-  now use one sealed registry containing ten exact component/event contracts.
-- The shared runner retains retry/failover decisions and supplies only the
-  already-decided outcome, non-negative endpoint index, and model.
-- `_report_endpoint_failure` and endpoint base URL metadata were removed
-  without compatibility aliases.
-- Focused tests: 122 passed.
-- Full suite: 2048 passed.
+- Reason completion audit ownership completed in `82bb51f`.
+- `reasoning/completion_load_failed` now belongs to the sealed Reason registry
+  with a fixed message, warning/degraded projection, required error, and no
+  metadata.
+- REPL completion control flow now calls `run_reason_observed` and no longer
+  imports generic observability or chooses audit presentation.
+- Redundant `completion=reason_threads` metadata was removed without a
+  compatibility alias; Chat completion contracts remain unchanged.
+- Focused tests: 109 passed.
+- Full suite: 2051 passed.
 - Pyright: 0 errors, 0 warnings.
 - Static search and `git diff --check`: passed.
 
 ## Publication
 
-Agent endpoint failover audit ownership was implemented in `28aaa14`; milestone
+Reason completion audit ownership was implemented in `82bb51f`; milestone
 publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Close the remaining REPL Reason completion diagnostic that bypasses the sealed
-Reason audit registry through a caller-selected `run_observed_best_effort`
-event, then continue the shared handler/log/message infrastructure review.
+Close process-local log observer failure audit ownership: `logs.py` currently
+constructs `daemon/log_observer_failed` directly, including free-form observer
+and exception type metadata, outside a sealed infrastructure registry.
