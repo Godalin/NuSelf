@@ -5,9 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close process-local log observer failure audit ownership so logging core uses
-one sealed infrastructure contract without persisting callable or exception
-type names.
+Close logging-core terminal warning ownership so every non-persisting fallback
+uses one sealed typed taxonomy and one credential-safe renderer.
 
 ## Active Branch
 
@@ -15,49 +14,51 @@ type names.
 
 ## Ordered Work
 
-1. Inventory observer delivery, recursion suppression, diagnostic persistence,
-   terminal warning fallback, consumers, metadata, and tests.
-2. Keep observer failure distinct from daemon lifecycle and generic
-   observability projection failures.
-3. Update log, error, and development specs before implementation.
-4. Define a sealed log infrastructure registry with one exact
-   `daemon/log_observer_failed` contract.
-5. Validate the fixed warning/error projection before direct recursive-safe
-   persistence.
-6. Remove callable identity and exception type metadata plus the unused
-   observer parameter without compatibility aliases.
+1. Inventory all logging-core terminal warning producers, fields, control-flow
+   outcomes, safety paths, consumers, and tests.
+2. Cover lock cleanup, append rollback, rotation, observer diagnostic failure,
+   corrupt-record isolation, and event-identity conflict as six distinct
+   definitions.
+3. Update log, error, runtime-infrastructure, and development specs first.
+4. Define reusable sealed terminal-warning definitions with exact ordered
+   fields, validators, fixed suffixes, and one redacting renderer.
+5. Route every logging-core warning through one sealed registry without
+   changing primary outcomes or stacklevel ownership.
+6. Remove free-form warning construction and unsafe direct corruption-error
+   rendering without compatibility aliases.
 7. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No change to observer registration, nesting, order, or context isolation.
-- No change to write-before-observe ordering or later-observer delivery.
-- No change to observer suspension while writing its diagnostic.
-- No change to the single terminal warning when diagnostic persistence fails.
+- No structured-log write or retry from terminal warning paths.
+- No change to append/rollback/rotation or read reconciliation decisions.
+- No change to exception propagation, returned lifecycle errors, or observer
+  delivery.
+- No expansion to non-logging warning producers in this batch.
 
 ## Completion Evidence
 
-- Log observer failure audit ownership completed in `6a15634`.
-- `LOG_INFRASTRUCTURE_AUDIT_REGISTRY` is sealed and owns the sole exact
-  `daemon/log_observer_failed` definition.
-- Observer delivery now supplies only the caught exception while logging core
-  fixes the component, event, message, warning/error projection, error policy,
-  empty metadata schema, and terminal fallback.
-- Callable class and duplicate exception type metadata plus the unused
-  observer reporter parameter were removed without compatibility aliases.
-- Focused tests: 95 passed; final logging-core tests: 69 passed.
-- Full suite: 2052 passed.
+- Logging-core terminal warning ownership completed in `06820f6`.
+- `runtime.warning_definitions` now owns reusable duplicate-safe sealed
+  definitions, exact-field validation, ordered single-line rendering,
+  credential redaction, and a non-raising render-failure fallback.
+- `LOG_TERMINAL_WARNING_REGISTRY` contains exactly six definitions covering
+  every logging-core terminal warning producer.
+- `logs.py` no longer calls `emit_runtime_warning` or interpolates terminal
+  warning strings directly; corrupt-record errors use fail-safe diagnostics.
+- Focused tests: 104 passed; final warning/log tests: 82 passed.
+- Full suite: 2065 passed.
 - Pyright: 0 errors, 0 warnings.
 - Static search and `git diff --check`: passed.
 
 ## Publication
 
-Log observer failure audit ownership was implemented in `6a15634`; milestone
+Logging-core terminal warning ownership was implemented in `06820f6`; milestone
 publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Review logging-core terminal warnings next. Lock cleanup, append rollback,
-rotation, corrupt-record, and event-identity paths still construct independent
-free-form warning strings and repeated field formatting without a sealed typed
-warning taxonomy.
+Close the shared observability sink-failure terminal warning next.
+`runtime/observability.py` still interpolates caller component/event and two
+exception chains directly instead of resolving a sealed typed warning
+definition.
