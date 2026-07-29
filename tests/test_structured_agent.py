@@ -12,8 +12,17 @@ from pydantic import BaseModel, ConfigDict
 from nuself.agent import endpoint_audit
 from nuself.agent import failover as failover_module
 from nuself.agent import structured as structured_module
+from nuself.agent.errors import (
+    AgentInvalidOutputError,
+    AgentModelUnavailableError,
+    AgentProtocolError,
+)
 from nuself.agent.structured import LangChainStructuredAgent
-from nuself.llm import LLMSettings, LangChainLLMEndpoint
+from nuself.llm import (
+    LLMSettings,
+    LangChainLLMEndpoint,
+    is_endpoint_availability_error,
+)
 
 
 class ExampleOutput(BaseModel):
@@ -35,6 +44,12 @@ class StubAgent:
 
     def invoke(self, input: object) -> object:
         return self._invoke(input)
+
+
+class _HttpStatusError(RuntimeError):
+    def __init__(self, status_code: int) -> None:
+        super().__init__("provider failure")
+        self.status_code = status_code
 
 
 def _endpoint(index: int) -> LangChainLLMEndpoint:
@@ -117,7 +132,12 @@ def test_structured_agent_rejects_invalid_framework_state(
         component="memory",
     )
 
-    with pytest.raises(ValueError):
+    expected_error = (
+        AgentProtocolError
+        if state is None or state == {}
+        else AgentInvalidOutputError
+    )
+    with pytest.raises(expected_error):
         runner.invoke([HumanMessage(content="classify")])
 
 
@@ -129,7 +149,7 @@ def test_structured_agent_fails_over_only_for_endpoint_availability(
         (
             StubAgent(
                 lambda input: (_ for _ in ()).throw(
-                    RuntimeError("HTTP 429 rate limit")
+                    _HttpStatusError(429)
                 )
             ),
             StubAgent(lambda input: {"structured_response": expected}),
@@ -206,12 +226,32 @@ def test_structured_agent_does_not_fail_over_protocol_errors(
     )
 
     with pytest.raises(
-        ValueError,
+        AgentProtocolError,
         match="missing structured_response",
     ):
         runner.invoke([HumanMessage(content="classify")])
 
     assert invoked == [0]
+
+
+def test_endpoint_availability_does_not_parse_exception_text() -> None:
+    assert not is_endpoint_availability_error(
+        RuntimeError("HTTP 429 rate limit")
+    )
+    assert is_endpoint_availability_error(_HttpStatusError(429))
+
+
+def test_shared_endpoint_runner_uses_model_unavailable_error() -> None:
+    with pytest.raises(
+        AgentModelUnavailableError,
+        match="no configured LangChain model",
+    ):
+        failover_module.invoke_agent_endpoint(
+            (),
+            lambda endpoint: endpoint,
+            project_root=None,
+            component="memory",
+        )
 
 
 def test_shared_endpoint_runner_rejects_invalid_attempt_count() -> None:

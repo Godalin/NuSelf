@@ -11,6 +11,7 @@ from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
+from nuself.agent.errors import AgentInvalidOutputError, AgentProtocolError
 from nuself.agent.endpoint_audit import AgentEndpointComponent
 from nuself.agent.failover import invoke_agent_endpoint
 from nuself.llm import (
@@ -85,18 +86,18 @@ def require_structured_response(
 ) -> StructuredOutputT:
     """Return the exact framework structured response or reject the state."""
     if not isinstance(result, dict):
-        raise ValueError(
+        raise AgentProtocolError(
             "LangChain agent returned invalid state: "
             f"{type(result).__name__}"
         )
     state = cast(dict[str, object], result)
     if "structured_response" not in state:
-        raise ValueError(
+        raise AgentProtocolError(
             "LangChain agent state is missing structured_response"
         )
     structured = state["structured_response"]
     if not isinstance(structured, schema):
-        raise ValueError(
+        raise AgentInvalidOutputError(
             "LangChain agent returned invalid structured_response: "
             f"{type(structured).__name__}"
         )

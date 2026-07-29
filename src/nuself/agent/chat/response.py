@@ -15,6 +15,7 @@ from langchain_core.messages import (
 )
 from langchain_core.tools import BaseTool
 
+from nuself.agent.errors import AgentInvalidOutputError
 from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
@@ -38,8 +39,6 @@ from nuself.llm import (
     is_endpoint_availability_error,
     redacted_llm_diagnostic,
 )
-from nuself.runtime.diagnostics import safe_exception_message
-
 class ConversationResponseService(Protocol):
     """Typed response capability consumed by the conversation graph."""
 
@@ -129,16 +128,12 @@ class ConversationResponseSynthesizer:
                 retry_if=lambda exc: (
                     not retry_suppressed
                     and is_recoverable_agent_failure(exc)
-                    and not is_endpoint_availability_error(
-                        safe_exception_message(exc)
-                    )
+                    and not is_endpoint_availability_error(exc)
                 ),
                 failover_if=lambda exc: (
                     not retry_suppressed
                     and is_recoverable_agent_failure(exc)
-                    and is_endpoint_availability_error(
-                        safe_exception_message(exc)
-                    )
+                    and is_endpoint_availability_error(exc)
                 ),
                 on_retry=self._log_retry,
             )
@@ -278,7 +273,7 @@ def _reject_visible_tool_call(
     response: ChatStructuredOutput,
 ) -> None:
     if _looks_like_tool_call(response.answer):
-        raise ValueError(
+        raise AgentInvalidOutputError(
             "Agent produced visible tool call text instead of "
             "a structured response"
         )

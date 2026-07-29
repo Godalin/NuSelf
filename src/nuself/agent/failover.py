@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TypeVar
 
+from nuself.agent.errors import AgentModelUnavailableError
 from nuself.agent.endpoint_audit import (
     AgentEndpointComponent,
     report_agent_endpoint_failure,
@@ -16,7 +17,6 @@ from nuself.llm import (
     record_llm_endpoint_success,
     redact_llm_error,
 )
-from nuself.runtime.diagnostics import safe_exception_message
 
 
 ResultT = TypeVar("ResultT")
@@ -56,7 +56,7 @@ def invoke_agent_endpoint(
 ) -> ResultT:
     """Invoke one capability with shared retry and ordered endpoint failover."""
     if not endpoints:
-        raise RuntimeError("no configured LangChain model")
+        raise AgentModelUnavailableError("no configured LangChain model")
     if attempts_per_endpoint < 1:
         raise ValueError("attempts_per_endpoint must be at least 1")
     should_failover = failover_if or _is_availability_failure
@@ -97,11 +97,11 @@ def invoke_agent_endpoint(
                 return result
 
     assert last_error is not None
-    raise RuntimeError(
+    raise AgentModelUnavailableError(
         "all configured LLM endpoints failed: "
         f"{redact_llm_error(last_error)}"
     ) from last_error
 
 
 def _is_availability_failure(exc: Exception) -> bool:
-    return is_endpoint_availability_error(safe_exception_message(exc))
+    return is_endpoint_availability_error(exc)

@@ -121,8 +121,14 @@ Rules:
   configured endpoint order. Because this state is only a rebuildable
   preference, corruption must not prevent LLM use.
 - The saved index is updated only after a successful request.
-- When an endpoint fails with a provider-account availability error, NuSelf tries the next configured endpoint in the same request.
-- Provider-account availability errors include HTTP 401, 402, 403, 429, and response bodies containing subscription, quota, billing, credit, or insufficient-balance indicators.
+- When an endpoint fails with a typed or structurally identified provider
+  availability error, NuSelf tries the next configured endpoint in the same
+  request.
+- Provider availability errors include provider authentication, permission,
+  payment, rate-limit, connection, and timeout exception types, plus structured
+  HTTP status codes 401, 402, 403, and 429.
+- Provider exception messages and response bodies are diagnostic material, not
+  failover classification inputs.
 - Non-account errors, malformed responses, and prompt/protocol errors are not endpoint failover triggers unless explicitly classified later.
 - Endpoint failover observations are owned by one sealed agent endpoint audit
   registry. Only the `chat`, `memory`, `persona`, `reasoning`, and `reflection`

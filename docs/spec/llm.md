@@ -20,6 +20,21 @@ Retry and availability classification may inspect the original provider
 exception; only the diagnostic projection is sanitized. Redaction must retain
 non-sensitive context needed to identify the endpoint failure.
 
+The shared agent boundary exposes distinct failure classes:
+
+- `AgentModelUnavailableError`: no configured endpoint or every eligible
+  endpoint failed availability checks;
+- `AgentProtocolError`: the framework returned a state that does not satisfy
+  the expected response envelope;
+- `AgentInvalidOutputError`: the envelope exists but its generated text or
+  structured value is empty or has the wrong schema.
+
+Provider availability classification uses exception types and structured HTTP
+status attributes across the exception chain. Authentication, permission,
+payment, rate-limit, connection, and timeout failures are eligible. Exception
+message text and response-body substrings are never classification inputs.
+Protocol and invalid-output errors never trigger endpoint failover.
+
 `TextAgent` invokes the LangChain chat model directly because natural-language
 persona conclusions are the intended result. It must not create a fake
 single-field schema merely to reuse structured output, and it rejects an empty

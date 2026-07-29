@@ -11,6 +11,7 @@ from langchain_core.messages import (
 )
 
 from nuself.agent.middleware import ToolOutcome
+from nuself.agent.errors import AgentInvalidOutputError, AgentProtocolError
 from nuself.agent.chat.response import (
     ConversationResponseSynthesizer,
     _LangChainChatSupervisor,
@@ -49,7 +50,10 @@ def test_structured_output_state_is_authoritative() -> None:
 
 
 def test_invalid_structured_output_does_not_fall_back_to_message() -> None:
-    with pytest.raises(ValueError, match="invalid structured_response: dict"):
+    with pytest.raises(
+        AgentInvalidOutputError,
+        match="invalid structured_response: dict",
+    ):
         _structured_output_from_state(
             {
                 "structured_response": {
@@ -62,7 +66,7 @@ def test_invalid_structured_output_does_not_fall_back_to_message() -> None:
 
 def test_invalid_structured_output_type_is_rejected() -> None:
     with pytest.raises(
-        ValueError,
+        AgentInvalidOutputError,
         match="invalid structured_response: NoneType",
     ):
         _structured_output_from_state(
@@ -75,7 +79,7 @@ def test_invalid_structured_output_type_is_rejected() -> None:
 
 def test_missing_structured_output_does_not_parse_message_state() -> None:
     with pytest.raises(
-        ValueError,
+        AgentProtocolError,
         match="missing structured_response",
     ):
         _structured_output_from_state(
@@ -85,7 +89,7 @@ def test_missing_structured_output_does_not_parse_message_state() -> None:
 
 def test_tool_protocol_text_is_rejected_in_every_state_path(
 ) -> None:
-    with pytest.raises(ValueError, match="tool call text"):
+    with pytest.raises(AgentInvalidOutputError, match="tool call text"):
         _structured_output_from_state(
             {
                 "structured_response": ChatStructuredOutput(
@@ -266,7 +270,9 @@ def test_availability_failure_uses_shared_endpoint_failover(
         del prompt
         endpoint_calls.append(self._endpoint.index)
         if self._endpoint.index == 0:
-            raise RuntimeError("HTTP 429 rate limit")
+            error = RuntimeError("provider failure")
+            error.status_code = 429  # type: ignore[attr-defined]
+            raise error
         return ChatStructuredOutput(answer="backup response")
 
     monkeypatch.setattr(

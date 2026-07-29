@@ -487,6 +487,12 @@ further model call. Recoverable failures may use local fallback; sharedly
 classified implementation and process-integrity failures propagate unchanged
 after retry suppression.
 
+Agent model unavailability, framework protocol violations, and invalid
+generated output have separate shared exception types. Endpoint failover
+consults exception types and structured status attributes only; it never
+parses the rendered exception message. Protocol and output failures propagate
+without trying a different endpoint.
+
 The pre-tool classification is shared agent infrastructure, not a chat-only
 rule. Persona activation, contribution, and synthesis use the same policy:
 provider/runtime and validation failures may produce their specified fallback,

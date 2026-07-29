@@ -13,6 +13,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, ConfigDict, Field
 
+from nuself.agent.errors import AgentInvalidOutputError, AgentProtocolError
 from nuself.agent.failover import invoke_agent_endpoint
 from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
 from nuself.agent.tool_audit import ToolOutcomeProjection
@@ -318,7 +319,10 @@ class ReasonAdvancer:
                         result,
                         ReasonStepOutput,
                     )
-                except ValueError as exc:
+                except (
+                    AgentInvalidOutputError,
+                    AgentProtocolError,
+                ) as exc:
                     raise ReasonAdvanceError(
                         "Reason agent did not return ReasonStepOutput"
                     ) from exc

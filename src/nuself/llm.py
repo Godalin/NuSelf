@@ -7,9 +7,23 @@ import json
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from anthropic import (
+    APIConnectionError as AnthropicAPIConnectionError,
+    APITimeoutError as AnthropicAPITimeoutError,
+    AuthenticationError as AnthropicAuthenticationError,
+    PermissionDeniedError as AnthropicPermissionDeniedError,
+    RateLimitError as AnthropicRateLimitError,
+)
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
+from openai import (
+    APIConnectionError as OpenAIAPIConnectionError,
+    APITimeoutError as OpenAIAPITimeoutError,
+    AuthenticationError as OpenAIAuthenticationError,
+    PermissionDeniedError as OpenAIPermissionDeniedError,
+    RateLimitError as OpenAIRateLimitError,
+)
 
 from nuself.config import ConfigSystem
 from nuself.config import runtime_paths
@@ -122,27 +136,47 @@ def record_llm_endpoint_success(project_root: Path | None, endpoint_index: int) 
     )
 
 
-HTTP_AVAILABILITY_STATUS_RE = __import__("re").compile(r"\bhttp\s+(401|402|403|429)\b", __import__("re").IGNORECASE)
-"""Regex matching HTTP availability status codes in error messages."""
+_ENDPOINT_AVAILABILITY_ERRORS = (
+    AnthropicAPIConnectionError,
+    AnthropicAPITimeoutError,
+    AnthropicAuthenticationError,
+    AnthropicPermissionDeniedError,
+    AnthropicRateLimitError,
+    OpenAIAPIConnectionError,
+    OpenAIAPITimeoutError,
+    OpenAIAuthenticationError,
+    OpenAIPermissionDeniedError,
+    OpenAIRateLimitError,
+    ConnectionError,
+    TimeoutError,
+)
+_ENDPOINT_AVAILABILITY_STATUS_CODES = frozenset({401, 402, 403, 429})
 
 
-def is_endpoint_availability_error(message: str) -> bool:
-    """Return whether an LLM error should trigger endpoint failover."""
-    if HTTP_AVAILABILITY_STATUS_RE.search(message):
-        return True
-    lowered = message.lower()
-    indicators = (
-        "invalidsubscription",
-        "subscription",
-        "quota",
-        "billing",
-        "credit",
-        "insufficient",
-        "balance",
-        "rate limit",
-        "too many requests",
-    )
-    return any(indicator in lowered for indicator in indicators)
+def is_endpoint_availability_error(error: BaseException) -> bool:
+    """Classify provider availability without inspecting exception text."""
+
+    seen: set[int] = set()
+    current: BaseException | None = error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, _ENDPOINT_AVAILABILITY_ERRORS):
+            return True
+        status_code = getattr(current, "status_code", None)
+        if (
+            type(status_code) is int
+            and status_code in _ENDPOINT_AVAILABILITY_STATUS_CODES
+        ):
+            return True
+        response = getattr(current, "response", None)
+        response_status = getattr(response, "status_code", None)
+        if (
+            type(response_status) is int
+            and response_status in _ENDPOINT_AVAILABILITY_STATUS_CODES
+        ):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 def redact_llm_error(message: str | BaseException) -> str:

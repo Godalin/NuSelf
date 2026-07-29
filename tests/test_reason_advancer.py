@@ -307,7 +307,9 @@ def test_reason_advancer_fails_over_before_tool_execution(
 
         def invoke(self, _input: object) -> dict[str, object]:
             self.calls += 1
-            raise RuntimeError("HTTP 429 rate limit")
+            error = RuntimeError("provider failure")
+            error.status_code = 429  # type: ignore[attr-defined]
+            raise error
 
     primary = UnavailableAgent()
     secondary = _RecordingAgent()

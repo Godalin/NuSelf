@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Agent invocation now distinguishes model unavailability, framework protocol
+  violations, and invalid generated output. Endpoint failover uses provider
+  exception types and structured HTTP status instead of error-message text.
 - Thought-pack export names are now validated as portable file names, preventing
   absolute paths and traversal outside `private/exports/`.
 - The directly imported `langchain` distribution is now an explicit runtime

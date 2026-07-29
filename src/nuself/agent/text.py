@@ -8,6 +8,7 @@ from typing import Protocol
 
 from langchain_core.messages import BaseMessage
 
+from nuself.agent.errors import AgentInvalidOutputError
 from nuself.agent.endpoint_audit import AgentEndpointComponent
 from nuself.agent.failover import invoke_agent_endpoint
 from nuself.llm import (
@@ -41,7 +42,9 @@ class LangChainTextAgent:
             result = endpoint.model.invoke(list(messages))
             text = result.text.strip()
             if not text:
-                raise ValueError("LangChain model returned empty text")
+                raise AgentInvalidOutputError(
+                    "LangChain model returned empty text"
+                )
             return text
 
         return invoke_agent_endpoint(

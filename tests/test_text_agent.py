@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from nuself.agent import endpoint_audit
 from nuself.agent import failover as failover_module
+from nuself.agent.errors import AgentInvalidOutputError
 from nuself.agent.text import LangChainTextAgent
 from nuself.llm import LLMSettings, LangChainLLMEndpoint
 
@@ -25,6 +26,10 @@ class _FakeModel:
         if isinstance(result, Exception):
             raise result
         return result
+
+
+class _HttpStatusError(RuntimeError):
+    status_code = 429
 
 
 def _endpoint(
@@ -83,7 +88,7 @@ def test_text_agent_rejects_empty_result_without_failover() -> None:
         component="persona",
     )
 
-    with pytest.raises(ValueError, match="empty text"):
+    with pytest.raises(AgentInvalidOutputError, match="empty text"):
         agent.invoke([HumanMessage(content="question")])
 
     assert len(primary.calls) == 1
@@ -93,7 +98,7 @@ def test_text_agent_rejects_empty_result_without_failover() -> None:
 def test_text_agent_uses_shared_endpoint_failover(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    primary = _FakeModel([RuntimeError("HTTP 429 rate limit")])
+    primary = _FakeModel([_HttpStatusError("provider failure")])
     secondary = _FakeModel([AIMessage(content="fallback conclusion")])
     events: list[tuple[str, str]] = []
 
