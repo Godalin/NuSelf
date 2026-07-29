@@ -13,6 +13,7 @@ from nuself.logs import (
     LogLevel,
     LogRetentionPolicy,
     create_audit_envelope,
+    write_audit_envelope,
     write_log_event,
 )
 from nuself.runtime.audit_definitions import (
@@ -195,7 +196,7 @@ def write_observed_log_event(
 ) -> LogEvent | None:
     """Write one auxiliary log without changing its owning operation."""
 
-    create_audit_envelope(
+    envelope = create_audit_envelope(
         component,
         event,
         message,
@@ -213,23 +214,9 @@ def write_observed_log_event(
         metadata=metadata,
     )
     try:
-        return write_log_event(
-            component,
-            event,
-            message,
+        return write_audit_envelope(
+            envelope,
             project_root=project_root,
-            level=level,
-            thread_id=thread_id,
-            request_id=request_id,
-            turn_id=turn_id,
-            job_id=job_id,
-            trace_id=trace_id,
-            source=source,
-            node=node,
-            duration_ms=duration_ms,
-            status=status,
-            error=error,
-            metadata=metadata,
             retention_policy=retention_policy,
         )
     except Exception as exc:  # noqa: BLE001 - auxiliary sink is non-authoritative

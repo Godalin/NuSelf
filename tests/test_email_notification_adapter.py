@@ -66,6 +66,10 @@ def test_no_config_diagnostic_failure_preserves_false(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     adapter = EmailNotificationAdapter(tmp_path, dry_run=False)
 
     with pytest.warns(
@@ -121,6 +125,10 @@ def test_smtp_diagnostic_failure_preserves_false(
 
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
     adapter = EmailNotificationAdapter(tmp_path, dry_run=False)

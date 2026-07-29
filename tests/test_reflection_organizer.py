@@ -123,6 +123,10 @@ def test_organizer_audit_failure_cannot_replace_merged_result(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
 
     with pytest.warns(
         RuntimeWarning,

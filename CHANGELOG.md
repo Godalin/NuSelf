@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Auxiliary structured logs now validate and persist one immutable audit
+  envelope, eliminating duplicate identity/context capture and mutable-input
+  time-of-check/time-of-use drift while preserving best-effort persistence
+  failure reporting.
 - Definition lookup now requires an explicitly sealed registry, and runtime
   owners such as `EventPublisher` reject partially composed registries before
   use so late registration cannot change their supported identity set.

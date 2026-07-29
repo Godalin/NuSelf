@@ -258,6 +258,10 @@ def test_failure_diagnostic_store_cannot_prevent_failed_transition(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     outbox = NotificationOutbox(tmp_path)
     outbox.add(
         OutboxEntry(

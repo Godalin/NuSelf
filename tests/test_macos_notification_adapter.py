@@ -83,6 +83,10 @@ def test_osascript_failure_diagnostic_preserves_false(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
     adapter.has_osascript = True
 
@@ -123,6 +127,10 @@ def test_osascript_timeout_diagnostic_preserves_false(
 
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
     adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)

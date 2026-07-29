@@ -792,6 +792,10 @@ def test_worker_audit_failure_cannot_suppress_durable_retry(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     state = DaemonState(tmp_path)
     worker = state.reason_export_worker
     worker.prepare()
@@ -919,6 +923,10 @@ def test_progress_diagnostic_failure_cannot_block_composition(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     state = DaemonState(tmp_path)
     worker = state.reason_export_worker
     worker.prepare()
@@ -970,6 +978,10 @@ def test_reconciliation_diagnostic_failure_does_not_truncate_scan(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     state = DaemonState(tmp_path)
     worker = state.reason_export_worker
     worker.prepare()
@@ -997,6 +1009,10 @@ def test_shutdown_audit_failure_cannot_undo_queue_drain(
 
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
     state = DaemonState(tmp_path)

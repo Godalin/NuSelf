@@ -128,6 +128,10 @@ def test_history_keeps_rendered_error_when_diagnostic_sink_fails(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
 
     with pytest.warns(
         RuntimeWarning,

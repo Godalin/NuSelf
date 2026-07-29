@@ -4,6 +4,7 @@ import pytest
 
 import nuself.decorators as decorators
 from nuself.decorators import approval_required
+from nuself.runtime.messages import RuntimeEnvelope
 
 
 def test_decorator_package_has_no_pending_callable_registry() -> None:
@@ -33,12 +34,21 @@ def test_approval_prompt_is_visible(monkeypatch: pytest.MonkeyPatch, capsys: pyt
 
     events: list[tuple[str, str, str]] = []
 
-    def fake_write_log_event(component: str, event: str, message: str, **kwargs: object) -> object:
-        events.append((component, event, message))
+    def fake_write_log_event(
+        envelope: RuntimeEnvelope,
+        **_kwargs: object,
+    ) -> object:
+        events.append(
+            (
+                envelope.producer,  # type: ignore[union-attr]
+                envelope.name,  # type: ignore[union-attr]
+                envelope.payload["message"],  # type: ignore[union-attr]
+            )
+        )
         return object()
 
     monkeypatch.setattr(
-        "nuself.runtime.observability.write_log_event",
+        "nuself.runtime.observability.write_audit_envelope",
         fake_write_log_event,
     )
     monkeypatch.setattr("nuself.decorators.approval.getpass.getuser", lambda: "tester")
@@ -71,17 +81,12 @@ def test_approval_decision_is_observed_before_tool_execution(
         lambda: "tester",
     )
 
-    def capture(
-        _component: str,
-        event: str,
-        _message: str,
-        **_kwargs: object,
-    ) -> object:
-        order.append(event)
+    def capture(envelope: RuntimeEnvelope, **_kwargs: object) -> object:
+        order.append(envelope.name)  # type: ignore[union-attr]
         return object()
 
     monkeypatch.setattr(
-        "nuself.runtime.observability.write_log_event",
+        "nuself.runtime.observability.write_audit_envelope",
         capture,
     )
 
@@ -121,9 +126,16 @@ def test_approval_audit_failures_do_not_replace_approved_result(
             )
         )
 
+    def fail_audit_envelope(*_args: object, **_kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_audit_or_capture_failure,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_audit_envelope,
     )
     monkeypatch.setattr("builtins.input", lambda: "yes")
     monkeypatch.setattr(
@@ -175,9 +187,16 @@ def test_approval_prompt_audit_failure_does_not_change_decline(
             raise OSError("audit store unavailable")
         failures.append(kwargs.get("metadata"))
 
+    def fail_audit_envelope(*_args: object, **_kwargs: object) -> None:
+        raise OSError("audit store unavailable")
+
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_audit_or_capture_failure,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_audit_envelope,
     )
     monkeypatch.setattr("builtins.input", lambda: "n")
 
@@ -207,18 +226,13 @@ def test_approval_eof_uses_safe_default_without_executing_tool(
 
     monkeypatch.setattr("builtins.input", end_input)
 
-    def capture(
-        _component: str,
-        event: str,
-        _message: str,
-        **kwargs: object,
-    ) -> object:
-        if event == "approval_decided":
-            decisions.append(kwargs.get("metadata"))
+    def capture(envelope: RuntimeEnvelope, **_kwargs: object) -> object:
+        if envelope.name == "approval_decided":
+            decisions.append(envelope.payload["metadata"])
         return object()
 
     monkeypatch.setattr(
-        "nuself.runtime.observability.write_log_event",
+        "nuself.runtime.observability.write_audit_envelope",
         capture,
     )
 
@@ -329,6 +343,10 @@ def test_approval_diagnostic_failure_warns_without_masking_tool_exception(
         "nuself.runtime.observability.write_log_event",
         fail_audit_and_diagnostic,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_audit_and_diagnostic,
+    )
     monkeypatch.setattr("builtins.input", lambda: "y")
 
     @approval_required("chat")
@@ -358,6 +376,10 @@ def test_approval_diagnostic_failure_warns_without_replacing_result(
 
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_audit_and_diagnostic,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_audit_and_diagnostic,
     )
     monkeypatch.setattr("builtins.input", lambda: "y")

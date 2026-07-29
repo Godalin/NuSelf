@@ -303,6 +303,10 @@ def test_cleanup_diagnostic_failure_cannot_replace_lifecycle_error(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
 
     with pytest.warns(
         RuntimeWarning,

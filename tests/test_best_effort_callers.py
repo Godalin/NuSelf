@@ -144,6 +144,10 @@ def test_persona_failure_log_cannot_mask_discussion_failure(
         "nuself.runtime.observability.write_log_event",
         fail_audit,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_audit,
+    )
     orchestrator = ConversationPersonaOrchestrator.__new__(
         ConversationPersonaOrchestrator
     )

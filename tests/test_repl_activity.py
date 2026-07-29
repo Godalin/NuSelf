@@ -516,6 +516,10 @@ def test_activity_degradation_diagnostic_failure_cannot_block_chat(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
 
     with pytest.warns(
         RuntimeWarning,
@@ -617,6 +621,10 @@ def test_send_failure_diagnostic_storage_loss_keeps_repl_failure(
 
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
 

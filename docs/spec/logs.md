@@ -449,9 +449,10 @@ Display name mapping: `persona` → `selves`.
 - Authoritative log persistence uses `write_log_event(...)` directly.
 Auxiliary evidence uses
   `write_observed_log_event(...)`, which mirrors the typed fields, returns the
-  event or `None`, never retries the original record, and reports failure as a
-  distinct `observability_projection_failed` record with exact
-  `failed_event` metadata.
+  event or `None`, constructs and freezes one audit envelope before the
+  best-effort persistence boundary, never retries or reconstructs the original
+  record, and reports persistence failure as a distinct
+  `observability_projection_failed` record with exact `failed_event` metadata.
 - If any `report_observed_failure` structured write fails, its terminal
   fallback is the fixed `runtime/observability_sink_failed` warning. Exact
   fields retain the failed audit component/event plus the observed and sink

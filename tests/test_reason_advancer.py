@@ -488,6 +488,10 @@ def test_advance_failure_log_cannot_mask_original_exception(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     advancer = _advancer_with_agent(tmp_path, FailingAgent())
     thread = ReasoningThread(id="reason-test", topic="Q")
 

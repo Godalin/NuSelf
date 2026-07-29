@@ -458,6 +458,10 @@ def test_discussion_diagnostic_failure_does_not_replace_scoring_fallback(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     node = AgentBackedScoringPersonaNode(
         _BrokenScoringAgent(),
         project_root=tmp_path,

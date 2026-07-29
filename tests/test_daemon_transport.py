@@ -510,6 +510,10 @@ def test_response_encode_diagnostic_failure_cannot_block_fallback(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
 
     with pytest.warns(
         RuntimeWarning,

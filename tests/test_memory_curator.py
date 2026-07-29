@@ -737,6 +737,10 @@ def test_curator_audit_failure_cannot_replay_committed_candidate(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
@@ -798,6 +802,10 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
     )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
     repository = MemoryEntryRepository(tmp_path)

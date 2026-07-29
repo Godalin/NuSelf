@@ -62,24 +62,19 @@ def test_decision_contract_writes_fixed_projection(
 ) -> None:
     records: list[tuple[str, str, object, object]] = []
 
-    def capture(
-        _component: str,
-        event: str,
-        message: str,
-        **kwargs: object,
-    ) -> object:
+    def capture(envelope: object, **_kwargs: object) -> object:
         records.append(
             (
-                event,
-                message,
-                kwargs.get("status"),
-                kwargs.get("metadata"),
+                envelope.name,  # type: ignore[union-attr]
+                envelope.payload["message"],  # type: ignore[union-attr]
+                envelope.payload["status"],  # type: ignore[union-attr]
+                envelope.payload["metadata"],  # type: ignore[union-attr]
             )
         )
         return object()
 
     monkeypatch.setattr(
-        "nuself.runtime.observability.write_log_event",
+        "nuself.runtime.observability.write_audit_envelope",
         capture,
     )
 

@@ -281,6 +281,10 @@ def test_chat_failure_diagnostic_cannot_replace_original_response(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     state = DaemonState(tmp_path)
     state.conversation_runtime = ConversationGraphRuntime(
         tmp_path,
@@ -318,6 +322,10 @@ def test_chat_completion_audit_cannot_invalidate_response(
 
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
     state = DaemonState(tmp_path)
@@ -860,6 +868,10 @@ def test_shutdown_audit_failure_cannot_block_accepted_request(
 
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
     state = DaemonState(tmp_path)

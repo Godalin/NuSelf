@@ -112,6 +112,10 @@ def test_chunk_failure_log_cannot_mask_runner_exception(
         fail_log,
     )
     monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
+    monkeypatch.setattr(
         "nuself.reason.output.write_reason_audit",
         drop_lifecycle_audit,
     )

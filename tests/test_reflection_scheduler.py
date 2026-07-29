@@ -350,6 +350,10 @@ def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
         fail_log,
     )
     monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
+    monkeypatch.setattr(
         "nuself.reflection.scheduler.write_reflection_audit",
         drop_cycle_log,
     )
@@ -386,6 +390,10 @@ def test_organizer_diagnostics_cannot_interrupt_best_effort_boundary(
     )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
 
@@ -577,6 +585,10 @@ def test_corrupt_schedule_diagnostics_cannot_change_fail_closed_decision(
     )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
 
@@ -969,6 +981,10 @@ def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
     last_path.write_text('{"timestamp":"not-a-date"}', encoding="utf-8")
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
 

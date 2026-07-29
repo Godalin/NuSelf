@@ -102,6 +102,10 @@ def _fail_lifecycle_audit_storage(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
 
 
 class FakeChangedCuratorResult:

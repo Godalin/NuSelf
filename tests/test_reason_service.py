@@ -311,6 +311,10 @@ def test_start_projections_cannot_replace_persisted_thread(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     service = _reason_service(project_root=tmp_path)
 
     with pytest.warns(RuntimeWarning) as captured:
@@ -360,6 +364,10 @@ def test_transition_audit_failure_cannot_replace_persisted_status(
 
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
 
@@ -504,6 +512,10 @@ def test_advance_projections_cannot_replace_committed_step(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
 
     with pytest.warns(RuntimeWarning) as captured:
         advanced = service.advance_thread(thread.id, step=step)
@@ -538,6 +550,10 @@ def test_delete_success_audit_failure_cannot_replace_deletion(
 
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
 

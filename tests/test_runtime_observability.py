@@ -30,6 +30,7 @@ from nuself.runtime.observability import (
     run_observed_best_effort,
     write_observed_log_event,
 )
+from nuself.runtime.context import runtime_context
 from nuself.runtime.definitions import DefinitionRegistrySealedError
 
 
@@ -98,6 +99,62 @@ def test_observed_log_schema_errors_precede_best_effort_sink(
         )
 
     assert calls == []
+
+
+def test_observed_log_persists_the_exact_frozen_envelope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_audit_envelope = observability.create_audit_envelope
+    write_audit_envelope = observability.write_audit_envelope
+    metadata: dict[str, object] = {"phase": "captured"}
+    created: list[object] = []
+    written: list[object] = []
+
+    def capture_create(*args: object, **kwargs: object) -> object:
+        envelope = create_audit_envelope(
+            *args,  # type: ignore[arg-type]
+            **kwargs,  # type: ignore[arg-type]
+        )
+        created.append(envelope)
+        metadata["phase"] = "mutated"
+        return envelope
+
+    def capture_write(envelope: object, **kwargs: object) -> object:
+        written.append(envelope)
+        return write_audit_envelope(
+            envelope,  # type: ignore[arg-type]
+            **kwargs,  # type: ignore[arg-type]
+        )
+
+    monkeypatch.setattr(
+        observability,
+        "create_audit_envelope",
+        capture_create,
+    )
+    monkeypatch.setattr(
+        observability,
+        "write_audit_envelope",
+        capture_write,
+    )
+
+    with runtime_context(request_id="request-before-write"):
+        event = write_observed_log_event(
+            "chat",
+            "turn_observed",
+            "observed",
+            project_root=tmp_path,
+            metadata=metadata,
+        )
+
+    assert event is not None
+    assert len(created) == 1
+    assert written == created
+    assert written[0] is created[0]
+    assert event.event_id == created[0].message_id  # type: ignore[union-attr]
+    assert event.request_id == "request-before-write"
+    assert event.metadata == {"phase": "captured"}
+    assert metadata == {"phase": "mutated"}
 
 
 def test_domains_do_not_rebuild_observed_log_projection() -> None:
@@ -327,36 +384,26 @@ def test_observed_log_reports_persisted_close_failure_without_retrying_record(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    write_log_event = observability.write_log_event
     close_error = OSError("close failed after durable append")
-    calls: list[str] = []
+    calls: list[object] = []
 
-    def fail_original_then_write_diagnostic(
-        component: object,
-        event: str,
-        message: object,
+    def fail_original(
+        envelope: object,
         **kwargs: object,
     ) -> object:
-        del component, message
-        calls.append(event)
-        if len(calls) == 1:
-            raise LogAppendLifecycleError(
-                primary_error=None,
-                rollback_error=None,
-                close_error=close_error,
-                persistence_outcome="persisted",
-            ) from close_error
-        return write_log_event(
-            "reflection",
-            event,
-            "diagnostic",
-            **kwargs,  # type: ignore[arg-type]
-        )
+        del kwargs
+        calls.append(envelope)
+        raise LogAppendLifecycleError(
+            primary_error=None,
+            rollback_error=None,
+            close_error=close_error,
+            persistence_outcome="persisted",
+        ) from close_error
 
     monkeypatch.setattr(
         observability,
-        "write_log_event",
-        fail_original_then_write_diagnostic,
+        "write_audit_envelope",
+        fail_original,
     )
 
     result = write_observed_log_event(
@@ -367,10 +414,8 @@ def test_observed_log_reports_persisted_close_failure_without_retrying_record(
     )
 
     assert result is None
-    assert calls == [
-        "cycle_completed",
-        "observability_projection_failed",
-    ]
+    assert len(calls) == 1
+    assert calls[0].name == "cycle_completed"  # type: ignore[union-attr]
     [diagnostic] = read_log_events(
         project_root=tmp_path,
         component="reflection",
@@ -524,6 +569,10 @@ def test_best_effort_warns_when_structured_sink_also_fails(
 
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
 

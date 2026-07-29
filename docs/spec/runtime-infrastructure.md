@@ -821,6 +821,15 @@ They must not recreate that typed projection by passing a
 `run_observed_best_effort(...)` remains the generic boundary for secondary
 effects that are not themselves structured-log writes.
 
+`write_observed_log_event(...)` constructs exactly one immutable audit envelope
+before entering its persistence-failure boundary. Producer identity, payload,
+and JSON schema errors therefore propagate as caller contract failures. The
+same envelope instance, including its frozen metadata, captured context,
+message ID, and creation time, is then passed to `write_audit_envelope(...)`.
+Only persistence of that already-validated envelope is degraded into
+`observability_projection_failed`; the original envelope is never reconstructed
+or retried.
+
 `nuself.runtime.diagnostics.emit_runtime_warning` is the terminal warning
 primitive for that fallback and other non-authoritative observers. It catches
 warning filters or hooks that promote or fail `RuntimeWarning`, so

@@ -1727,6 +1727,10 @@ def test_chat_trace_diagnostics_cannot_replace_completed_answer(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     runtime = ConversationGraphRuntime.__new__(
         ConversationGraphRuntime
     )

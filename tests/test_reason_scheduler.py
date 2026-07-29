@@ -229,6 +229,10 @@ def test_scheduler_failure_log_cannot_raise_or_undo_cooldown(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     scheduler = ReasonScheduler(
         project_root=tmp_path,
         advancer=cast(ReasonAdvancer, FailingAdvancer()),

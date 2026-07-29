@@ -240,6 +240,10 @@ def test_contended_daemon_preserves_owner_resources(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
     try:
         with pytest.warns(
             RuntimeWarning,
@@ -371,6 +375,10 @@ def test_recovery_audit_failure_cannot_restore_stale_metadata(
 
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
 
@@ -537,12 +545,8 @@ def test_readiness_is_published_after_all_workers_and_before_requests(
         states.append(state)
         return state
 
-    def capture_write(
-        component: object,
-        event: str,
-        message: str,
-        **kwargs: object,
-    ) -> object:
+    def capture_write(envelope: object, **_kwargs: object) -> object:
+        event = envelope.name  # type: ignore[union-attr]
         if event == "started":
             assert states[0].start_calls == [
                 "memory",
@@ -566,7 +570,7 @@ def test_readiness_is_published_after_all_workers_and_before_requests(
     monkeypatch.setattr(server_module, "DaemonState", make_state)
     monkeypatch.setattr(server_module, "NuSelfUnixServer", OneRequestServer)
     monkeypatch.setattr(
-        "nuself.runtime.observability.write_log_event",
+        "nuself.runtime.observability.write_audit_envelope",
         capture_write,
     )
     monkeypatch.setattr(signal, "signal", ignore_signal)
@@ -997,17 +1001,11 @@ def test_stopped_event_is_written_after_owned_cleanup(
         states.append(state)
         return state
 
-    def capture_write(
-        component: object,
-        event: str,
-        message: str,
-        **kwargs: object,
-    ) -> object:
+    def capture_audit(envelope: object, **_kwargs: object) -> object:
         nonlocal stopped_observed
+        event = envelope.name  # type: ignore[union-attr]
         if event == "started":
             raise OSError("audit store unavailable")
-        if event == "observability_projection_failed":
-            raise OSError("diagnostic store unavailable")
         if event == "stopped":
             assert states[0].stop_calls == [
                 "memory",
@@ -1021,6 +1019,9 @@ def test_stopped_event_is_written_after_owned_cleanup(
             stopped_observed = True
         return object()
 
+    def fail_diagnostic(*_args: object, **_kwargs: object) -> None:
+        raise OSError("diagnostic store unavailable")
+
     def ignore_signal(
         signal_number: int,
         handler: object,
@@ -1031,7 +1032,11 @@ def test_stopped_event_is_written_after_owned_cleanup(
     monkeypatch.setattr(server_module, "NuSelfUnixServer", ImmediateServer)
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
-        capture_write,
+        fail_diagnostic,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        capture_audit,
     )
     monkeypatch.setattr(
         signal,

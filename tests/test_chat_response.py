@@ -423,6 +423,10 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
         "nuself.runtime.observability.write_log_event",
         fail_log,
     )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        fail_log,
+    )
 
     endpoint = LangChainLLMEndpoint(
         index=0,
@@ -470,6 +474,10 @@ def test_finalize_log_failure_cannot_replace_accepted_response(
 
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
     synthesizer = ConversationResponseSynthesizer(

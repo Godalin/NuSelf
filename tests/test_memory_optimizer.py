@@ -189,6 +189,7 @@ def test_memory_optimizer_audit_failure_cannot_replace_persisted_candidate(
         raise OSError("log unavailable")
 
     monkeypatch.setattr(observability, "write_log_event", fail_log_write)
+    monkeypatch.setattr(observability, "write_audit_envelope", fail_log_write)
 
     with pytest.warns(
         RuntimeWarning,
