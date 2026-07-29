@@ -5,9 +5,10 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make sealed definitions a universal runtime-read boundary. No publisher,
-validator, audit adapter, or warning renderer may resolve a registry while its
-identity set remains open to late composition changes.
+Make auxiliary audit validation and persistence operate on one immutable
+envelope. Producer contract errors must propagate before the best-effort
+boundary, while persistence failure must report degradation without rebuilding
+or retrying the original record.
 
 ## Active Branch
 
@@ -15,61 +16,55 @@ identity set remains open to late composition changes.
 
 ## Ordered Work
 
-1. Inventory shared definition adapters, resolve calls, and runtime owner
-   construction.
-2. Reproduce lookup and late registration through an EventPublisher-owned
-   unsealed registry.
-3. Make generic `resolve()` reject unsealed state and preserve composition-time
-   definition snapshots.
-4. Translate generic state failures at Event, Job, and Audit semantic adapters;
-   reject unsealed event registries during publisher construction.
-5. Prove late registration cannot change a live owner's identity set.
+1. Inventory auxiliary audit construction, persistence, diagnostics, and
+   caller-visible exception classification.
+2. Correct the active-goal function name from generic
+   `run_observed_best_effort(...)` to `write_observed_log_event(...)`.
+3. Specify one-envelope validation/persistence ownership before code.
+4. Persist the already-created envelope through `write_audit_envelope(...)`.
+5. Prove exact envelope identity, frozen metadata/context, schema propagation,
+   and no retry after uncertain/persisted failure.
 6. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No merging of Event, Job, Audit, or terminal-warning definition types.
-- No implicit auto-seal that hides incomplete composition.
-- No compatibility path allowing pre-seal runtime lookup.
-- No change to registered identities, payload schemas, or rendering contracts.
+- No retry of the original auxiliary audit.
+- No suppression of producer identity, payload, or JSON schema errors.
+- No change to persistence-outcome classification or failure diagnostic schema.
+- No change to generic non-log `run_observed_best_effort(...)`.
 
 ## Completion Evidence
 
-- Generic `DefinitionRegistry.resolve()` currently permits lookup before
-  sealing even though registration remains open.
-- `EventPublisher` accepts an arbitrary `EventDefinitionRegistry` without
-  checking sealed state; late registration can therefore expand the supported
-  event set during the publisher lifetime.
-- Job create/validate already perform explicit sealed-state checks.
-- Audit and terminal-warning adapters are built sealed in production but their
-  public resolve paths do not enforce that invariant themselves.
-- `DefinitionRegistry.resolve()` now raises typed
-  `DefinitionRegistryUnsealedError` until composition seals the registry;
-  immutable `definitions` snapshots remain available during composition.
-- Event, Job, Audit, and terminal-warning adapters translate unsealed lookup
-  into domain-specific typed errors.
-- `EventPublisher` requires a sealed event registry during construction, so it
-  cannot retain a definition set that late registration later expands.
-- No registry auto-seals implicitly; incomplete composition remains an explicit
-  caller error.
-- Focused generic definition, Event, Audit, terminal-warning, Job, and daemon
-  audit tests: 94 passed.
-- Full suite: 2126 passed.
+- The duplicated path is `write_observed_log_event(...)`;
+  `run_observed_best_effort(...)` does not construct audit envelopes.
+- `write_observed_log_event(...)` currently creates one envelope outside its
+  catch solely for validation, discards it, and calls `write_log_event(...)`,
+  which captures a second message ID, timestamp, context, and payload.
+- Contract errors from the first construction already propagate correctly.
+- Persistence failures from the second construction are degraded and never
+  retry the record, including close failure after a durable append.
+- `write_observed_log_event(...)` now creates one envelope before its
+  persistence boundary and passes that exact instance to
+  `write_audit_envelope(...)`.
+- Tests prove one construction, object identity at persistence, stable message
+  ID and request context, frozen metadata despite caller mutation, producer
+  schema propagation, and no retry after a persisted close failure.
+- Audit-store failure tests now inject envelope persistence and diagnostic
+  persistence independently instead of relying on the removed shared
+  `write_log_event(...)` seam.
+- Focused observability and best-effort tests: 37 passed.
+- Full suite: 2127 passed.
 - Pyright: 0 errors, 0 warnings.
-- The full suite proves every production definition builder seals before
-  runtime lookup; `git diff --check` passed.
+- `git diff --check` passed.
 
 ## Publication
 
-Sealed runtime definition lookup was implemented in `93a721a`; milestone
-publication is pending this goal update and push.
+Single-envelope auxiliary audit persistence was implemented in `7254128`;
+milestone publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Review best-effort audit construction next.
-`run_observed_best_effort(...)` currently calls `create_audit_envelope(...)`
-once outside its failure boundary for validation, discards that envelope, then
-`write_log_event(...)` constructs a second envelope from the caller's mutable
-inputs. Verify duplicate identity/time allocation, context consistency, and
-time-of-check/time-of-use behavior; make validation and persistence operate on
-one immutable envelope without misclassifying producer contract errors.
+Review direct diagnostic audit construction next. Failure reporting still uses
+the broad `write_log_event(...)` convenience path, so verify whether diagnostic
+validation and persistence need the same explicit immutable-envelope ownership
+or whether its authoritative failure semantics require a different boundary.
