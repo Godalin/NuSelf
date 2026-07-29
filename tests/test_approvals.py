@@ -111,7 +111,7 @@ def test_approval_audit_failures_do_not_replace_approved_result(
         message: str,
         **kwargs: object,
     ) -> None:
-        if event != "approval_audit_failed":
+        if event != "observability_projection_failed":
             raise OSError("audit store unavailable")
         failures.append(
             (
@@ -147,22 +147,14 @@ def test_approval_audit_failures_do_not_replace_approved_result(
     assert calls == ["called"]
     assert failures == [
         (
-            "approval_audit_failed",
-            "audit store unavailable",
-                {
-                    "event": "approval_prompted",
-                    "tool": "tool",
-                    "audit_event": "approval_prompted",
-                },
+                "observability_projection_failed",
+                "audit store unavailable",
+                {"failed_event": "approval_prompted"},
         ),
         (
-            "approval_audit_failed",
-            "audit store unavailable",
-                {
-                    "event": "approval_decided",
-                    "tool": "tool",
-                    "audit_event": "approval_decided",
-                },
+                "observability_projection_failed",
+                "audit store unavailable",
+                {"failed_event": "approval_decided"},
         ),
     ]
 
@@ -176,7 +168,10 @@ def test_approval_prompt_audit_failure_does_not_change_decline(
         *args: object,
         **kwargs: object,
     ) -> None:
-        if len(args) >= 2 and args[1] != "approval_audit_failed":
+        if (
+            len(args) >= 2
+            and args[1] != "observability_projection_failed"
+        ):
             raise OSError("audit store unavailable")
         failures.append(kwargs.get("metadata"))
 
@@ -196,16 +191,8 @@ def test_approval_prompt_audit_failure_does_not_change_decline(
         "result": None,
     }
     assert failures == [
-        {
-            "event": "approval_prompted",
-            "tool": "tool",
-            "audit_event": "approval_prompted",
-        },
-        {
-            "event": "approval_decided",
-            "tool": "tool",
-            "audit_event": "approval_decided",
-        },
+        {"failed_event": "approval_prompted"},
+        {"failed_event": "approval_decided"},
     ]
 
 
@@ -334,7 +321,7 @@ def test_approval_diagnostic_failure_warns_without_masking_tool_exception(
         **kwargs: object,
     ) -> None:
         del component, message, kwargs
-        if event == "approval_audit_failed":
+        if event == "observability_projection_failed":
             raise RuntimeError("diagnostic store unavailable")
         raise OSError("audit store unavailable")
 
@@ -351,8 +338,8 @@ def test_approval_diagnostic_failure_warns_without_masking_tool_exception(
     with pytest.warns(
         RuntimeWarning,
         match=(
-            "chat/approval_audit_failed: audit store unavailable; "
-            "structured logging failed: diagnostic store unavailable"
+                "chat/observability_projection_failed: audit store unavailable; "
+                "structured logging failed: diagnostic store unavailable"
         ),
     ), pytest.raises(ValueError, match="tool failed"):
         tool()
@@ -368,7 +355,7 @@ def test_approval_diagnostic_failure_warns_without_replacing_result(
         **kwargs: object,
     ) -> None:
         del component, message, kwargs
-        if event == "approval_audit_failed":
+        if event == "observability_projection_failed":
             raise RuntimeError("diagnostic store unavailable")
         raise OSError("audit store unavailable")
 

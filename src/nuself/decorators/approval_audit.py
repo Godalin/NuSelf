@@ -137,9 +137,6 @@ def _write_approval_audit(
         level=definition.level,
         status=definition.status,
         metadata=metadata,
-        failure_event="approval_audit_failed",
-        failure_message="Could not record approval audit event",
-        failure_metadata={"event": event, "tool": metadata["tool"]},
     )
 
 

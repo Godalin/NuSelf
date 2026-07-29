@@ -414,9 +414,8 @@ ownership into parallel string protocols or a separate output-only registry.
 Each definition fixes level, optional status, error policy, duration policy,
 and exact metadata. Producers resolve and validate before entering the
 best-effort sink. Unknown events and invalid payloads are programming errors,
-not audit persistence failures. The domain-specific
-`reason_audit_write_failed` record reports projection failure and remains
-governed by shared observability.
+not audit persistence failures. Sink failure uses the shared
+`observability_projection_failed` diagnostic.
 
 Reasoning-side events:
 

@@ -17,7 +17,7 @@ def test_tool_log_failure_reporter_writes_structured_degradation(
     runtime.report_log_failure(OSError("audit unavailable"))
 
     [event] = read_log_events(project_root=tmp_path, component="chat")
-    assert event.event == "tool_log_projection_failed"
+    assert event.event == "observability_projection_failed"
     assert event.status == "degraded"
     assert event.error == "audit unavailable"
-    assert event.metadata == {}
+    assert event.metadata == {"failed_event": "service_tool_called"}

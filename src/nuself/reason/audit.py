@@ -604,9 +604,6 @@ def write_reason_audit(
         error=error,
         duration_ms=duration_ms,
         metadata=dict(event_metadata),
-        failure_event="reason_audit_write_failed",
-        failure_message="Could not record Reason audit event",
-        failure_metadata={"event": event},
     )
 
 

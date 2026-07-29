@@ -243,9 +243,6 @@ def write_persona_audit(
         level=definition.level,
         status=definition.status,
         metadata=dict(event_metadata),
-        failure_event="persona_audit_write_failed",
-        failure_message="Could not record Persona audit event",
-        failure_metadata={"event": event},
     )
 
 

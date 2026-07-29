@@ -328,7 +328,7 @@ def test_chat_completion_audit_cannot_invalidate_response(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/request_audit_write_failed",
+        match="daemon/observability_projection_failed",
     ):
         response = handle_request(request, state)
 
@@ -631,7 +631,7 @@ def test_worker_error_log_failure_does_not_stop_scheduled_loop(
 
     with pytest.warns(
         RuntimeWarning,
-        match="worker_event_delivery_failed.*worker log unavailable",
+        match="internal_event_delivery_failed.*worker log unavailable",
     ):
         state.start_background_memory_curator()
         state.stop_background_memory_curator()
@@ -870,7 +870,7 @@ def test_shutdown_audit_failure_cannot_block_accepted_request(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/request_audit_write_failed",
+        match="daemon/observability_projection_failed",
     ):
         response = handle_request(request, state)
 

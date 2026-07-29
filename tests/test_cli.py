@@ -3719,7 +3719,7 @@ def test_daemon_restart_stops_then_starts(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/lifecycle_audit_write_failed",
+        match="daemon/observability_projection_failed",
     ):
         result = main(
             ["--project-root", str(tmp_path), "daemon", "restart"]
@@ -3847,7 +3847,7 @@ def test_interactive_restart_restarts_daemon_and_keeps_session(
     with pytest.warns(RuntimeWarning) as captured_warnings:
         result = main(["--project-root", str(tmp_path), "attach"])
     assert any(
-        "daemon/lifecycle_audit_write_failed" in str(warning.message)
+        "daemon/observability_projection_failed" in str(warning.message)
         for warning in captured_warnings
     )
     captured = capsys.readouterr()
@@ -3880,7 +3880,7 @@ def test_daemon_start_with_mocked_lifecycle(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/lifecycle_audit_write_failed",
+        match="daemon/observability_projection_failed",
     ):
         result = main(
             ["--project-root", str(tmp_path), "daemon", "start"]
@@ -4058,7 +4058,7 @@ def test_daemon_stop_with_mocked_lifecycle(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/lifecycle_audit_write_failed",
+        match="daemon/observability_projection_failed",
     ):
         result = main(
             ["--project-root", str(tmp_path), "daemon", "stop"]

@@ -126,7 +126,7 @@ def test_organizer_audit_failure_cannot_replace_merged_result(
 
     with pytest.warns(
         RuntimeWarning,
-        match="reflection/organizer_audit_write_failed",
+        match="reflection/observability_projection_failed",
     ):
         result = ReflectionOrganizer(
             tmp_path,

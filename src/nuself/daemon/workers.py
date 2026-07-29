@@ -294,12 +294,6 @@ class DaemonWorkerSupervisor:
             payload=payload.to_mapping(),
             project_root=self._project_root,
             failure_component="daemon",
-            failure_event="worker_event_delivery_failed",
-            failure_message=f"Could not deliver {name} {event} event",
-            failure_metadata={
-                "worker": name,
-                "lifecycle_event": event,
-            },
         )
 
     def _worker(self, name: str) -> OwnedWorker:

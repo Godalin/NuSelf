@@ -279,7 +279,7 @@ status; restart failure metadata additionally names the failed `stop` or
 Lifecycle audit schema violations are producer programming errors, not sink
 failures. Unknown events, invalid projection combinations, and malformed
 metadata raise before the best-effort persistence boundary; they are never
-reported as `lifecycle_audit_write_failed`. Once a record passes schema
+reported as `observability_projection_failed`. Once a record passes schema
 validation, persistence failure remains secondary and cannot replace the
 authoritative lifecycle result.
 
@@ -294,11 +294,11 @@ after a memory or persona update.
 - Auxiliary structured logs use
   `write_observed_log_event(component, event, message, ...)`, which mirrors the
   typed log fields and returns the written `LogEvent` or `None`. It never
-  retries the original record. On failure it records the stable failure event
-  (default `audit_projection_failed`) with `audit_event` metadata through the
-  same non-recursive reporting boundary.
-- The caller supplies the owning component, a stable failure event name,
-  operation context, and the secondary callable.
+  retries the original record. On sink failure it records the shared
+  `observability_projection_failed` event with exact `failed_event` metadata
+  through the same non-recursive reporting boundary.
+- Callers supply the intended log event only. They cannot choose the secondary
+  failure identity, message, level, status, or metadata.
 - A secondary failure does not fail or roll back the primary operation.
 - The boundary writes a structured warning with the compact exception chain
   and JSON-safe context.

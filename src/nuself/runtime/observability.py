@@ -12,8 +12,15 @@ from nuself.logs import (
     LogEvent,
     LogLevel,
     LogRetentionPolicy,
+    create_audit_envelope,
     write_log_event,
 )
+from nuself.runtime.audit_definitions import (
+    AuditDefinitionRegistry,
+    AuditEventDefinition,
+    AuditSchemaError,
+)
+from nuself.runtime.audit_types import LOG_COMPONENTS
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     emit_runtime_warning,
@@ -29,6 +36,65 @@ DEFAULT_DECODE_ERRORS: tuple[type[Exception], ...] = (
     KeyError,
     TypeError,
 )
+
+OBSERVABILITY_PROJECTION_FAILED = "observability_projection_failed"
+INTERNAL_EVENT_DELIVERY_FAILED = "internal_event_delivery_failed"
+
+
+def _require_exact_metadata(
+    metadata: Mapping[str, object],
+    expected: frozenset[str],
+) -> None:
+    actual = frozenset(metadata)
+    if actual != expected:
+        raise AuditSchemaError(
+            "observability metadata fields differ "
+            f"(missing={sorted(expected - actual)!r}, "
+            f"extra={sorted(actual - expected)!r})"
+        )
+    for field in expected:
+        value = metadata[field]
+        if not isinstance(value, str) or not value.strip():
+            raise AuditSchemaError(
+                f"observability metadata {field} must be a non-blank string"
+            )
+
+
+def _validate_projection_failure(metadata: Mapping[str, object]) -> None:
+    _require_exact_metadata(metadata, frozenset({"failed_event"}))
+
+
+def _validate_delivery_failure(metadata: Mapping[str, object]) -> None:
+    _require_exact_metadata(metadata, frozenset({"event", "producer"}))
+
+
+def _build_observability_failure_registry() -> AuditDefinitionRegistry:
+    registry = AuditDefinitionRegistry()
+    for component in LOG_COMPONENTS:
+        registry.register(
+            AuditEventDefinition(
+                component=component,
+                event=OBSERVABILITY_PROJECTION_FAILED,
+                level="warning",
+                status="degraded",
+                error_policy="required",
+                metadata_validator=_validate_projection_failure,
+            )
+        )
+        registry.register(
+            AuditEventDefinition(
+                component=component,
+                event=INTERNAL_EVENT_DELIVERY_FAILED,
+                level="warning",
+                status="degraded",
+                error_policy="required",
+                metadata_validator=_validate_delivery_failure,
+            )
+        )
+    return registry.seal()
+
+
+OBSERVABILITY_FAILURE_REGISTRY = _build_observability_failure_registry()
 
 
 def run_observed_best_effort(
@@ -80,16 +146,28 @@ def write_observed_log_event(
     error: str | None = None,
     metadata: dict[str, object] | None = None,
     retention_policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION,
-    failure_event: str = "audit_projection_failed",
-    failure_message: str = "Structured audit projection failed",
-    failure_metadata: dict[str, object] | None = None,
 ) -> LogEvent | None:
     """Write one auxiliary log without changing its owning operation."""
 
-    diagnostic_metadata = dict(failure_metadata or {})
-    diagnostic_metadata["audit_event"] = event
-    return run_observed_best_effort(
-        lambda: write_log_event(
+    create_audit_envelope(
+        component,
+        event,
+        message,
+        level=level,
+        thread_id=thread_id,
+        request_id=request_id,
+        turn_id=turn_id,
+        job_id=job_id,
+        trace_id=trace_id,
+        source=source,
+        node=node,
+        duration_ms=duration_ms,
+        status=status,
+        error=error,
+        metadata=metadata,
+    )
+    try:
+        return write_log_event(
             component,
             event,
             message,
@@ -107,12 +185,47 @@ def write_observed_log_event(
             error=error,
             metadata=metadata,
             retention_policy=retention_policy,
-        ),
+        )
+    except Exception as exc:  # noqa: BLE001 - auxiliary sink is non-authoritative
+        report_observability_projection_failure(
+            exc,
+            component=component,
+            failed_event=event,
+            project_root=project_root,
+        )
+        return None
+
+
+def report_observability_projection_failure(
+    exc: Exception,
+    *,
+    component: LogComponent,
+    failed_event: str,
+    project_root: Path | None,
+) -> None:
+    """Report one failed secondary log projection through a fixed contract."""
+
+    metadata: dict[str, object] = {"failed_event": failed_event}
+    definition = OBSERVABILITY_FAILURE_REGISTRY.resolve(
         component=component,
-        event=failure_event,
-        message=failure_message,
+        event=OBSERVABILITY_PROJECTION_FAILED,
+    )
+    error = diagnostic_exception_chain(exc)
+    definition.validate(
+        level=definition.level,
+        status=definition.status,
+        error=error,
+        metadata=metadata,
+    )
+    report_observed_failure(
+        exc,
+        component=component,
+        event=OBSERVABILITY_PROJECTION_FAILED,
+        message="Secondary observability projection failed",
         project_root=project_root,
-        metadata=diagnostic_metadata,
+        metadata=metadata,
+        level=definition.level,
+        status=definition.status or "degraded",
     )
 
 
@@ -124,9 +237,6 @@ def publish_observed_event(
     payload: Mapping[str, object] | None,
     project_root: Path | None,
     failure_component: LogComponent,
-    failure_event: str,
-    failure_message: str,
-    failure_metadata: dict[str, object] | None = None,
 ) -> RuntimeEnvelope:
     """Publish an event without letting subscriber failure alter primary work."""
 
@@ -137,15 +247,47 @@ def publish_observed_event(
             payload=payload,
         )
     except EventDeliveryError as exc:
-        report_observed_failure(
+        report_internal_event_delivery_failure(
             exc,
             component=failure_component,
-            event=failure_event,
-            message=failure_message,
             project_root=project_root,
-            metadata=failure_metadata,
         )
         return exc.event
+
+
+def report_internal_event_delivery_failure(
+    exc: EventDeliveryError,
+    *,
+    component: LogComponent,
+    project_root: Path | None,
+) -> None:
+    """Report subscriber delivery failure from its immutable envelope."""
+
+    metadata: dict[str, object] = {
+        "event": exc.event.name,
+        "producer": exc.event.producer,
+    }
+    definition = OBSERVABILITY_FAILURE_REGISTRY.resolve(
+        component,
+        INTERNAL_EVENT_DELIVERY_FAILED,
+    )
+    error = diagnostic_exception_chain(exc)
+    definition.validate(
+        level=definition.level,
+        status=definition.status,
+        error=error,
+        metadata=metadata,
+    )
+    report_observed_failure(
+        exc,
+        component=component,
+        event=INTERNAL_EVENT_DELIVERY_FAILED,
+        message="Internal event delivery failed",
+        project_root=project_root,
+        metadata=metadata,
+        level=definition.level,
+        status=definition.status or "degraded",
+    )
 
 
 def decode_observed_record(

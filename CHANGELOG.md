@@ -23,6 +23,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   projection policy and exact metadata. Explicit rejection and EOF safe
   rejection are durably distinguished, while approval events no longer imply
   that the approved tool completed successfully.
+- Secondary log persistence and internal event subscriber failures now use two
+  sealed infrastructure diagnostics with exact metadata:
+  `observability_projection_failed` and
+  `internal_event_delivery_failed`. Domain-specific write/delivery failure
+  aliases and free-form failure projections were removed.
 - Internal job wake-ups now resolve through sealed name, producer, and payload
   definitions before queue mutation; Reason export workers reject invalid jobs
   at ingress instead of queueing and later emitting

@@ -68,9 +68,6 @@ class ToolOutcomeProjection:
             status=self.status,
             error=self.outcome.error,
             metadata=self.metadata,
-            failure_event="tool_log_projection_failed",
-            failure_message="Could not project service tool outcome",
-            failure_metadata={"tool": self.outcome.name},
         )
 
     def to_snapshot(self) -> dict[str, object]:

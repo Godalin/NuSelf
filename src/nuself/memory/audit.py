@@ -286,7 +286,6 @@ def _write_memory_audit(
     *,
     project_root: Path | None,
     metadata: dict[str, object] | None,
-    failure_event: str,
 ) -> LogEvent | None:
     definition = MEMORY_AUDIT_REGISTRY.resolve("memory", event)
     event_metadata = metadata or {}
@@ -304,8 +303,6 @@ def _write_memory_audit(
         level=definition.level,
         status=definition.status,
         metadata=dict(event_metadata),
-        failure_event=failure_event,
-        failure_message=f"Could not record memory audit event {event}",
     )
 
 
@@ -323,7 +320,6 @@ def write_curator_audit(
         message,
         project_root=project_root,
         metadata=metadata,
-        failure_event="curator_audit_write_failed",
     )
 
 
@@ -341,7 +337,6 @@ def write_optimizer_audit(
         message,
         project_root=project_root,
         metadata=metadata,
-        failure_event="optimizer_audit_write_failed",
     )
 
 

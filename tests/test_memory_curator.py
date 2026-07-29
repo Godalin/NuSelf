@@ -752,7 +752,7 @@ def test_curator_audit_failure_cannot_replay_committed_candidate(
     assert curator.run_once().processed_messages == 0
     assert len(agent.calls) == 1
     assert any(
-        "memory/curator_audit_write_failed" in str(warning.message)
+        "memory/observability_projection_failed" in str(warning.message)
         for warning in captured
     )
 

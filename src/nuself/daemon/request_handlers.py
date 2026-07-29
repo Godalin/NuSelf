@@ -91,8 +91,6 @@ def _write_request_audit_event(
         duration_ms=duration_ms,
         request_id=request_id,
         metadata=metadata,
-        failure_event="request_audit_write_failed",
-        failure_message=f"Could not record daemon request audit event {event}",
     )
 
 
@@ -165,12 +163,6 @@ def handle_request(
             status="error",
             error=response.error,
             metadata={"request_type": request.type},
-            failure_event="request_rejection_log_failed",
-            failure_message="daemon request rejection log failed",
-            failure_metadata={
-                "request_id": request.request_id,
-                "request_type": request.type,
-            },
         )
         return response
 

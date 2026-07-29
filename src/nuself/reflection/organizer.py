@@ -55,12 +55,6 @@ class ReflectionOrganizer:
                     "merged_groups": result.merged_groups,
                     "archived_entries": result.archived_entries,
                 },
-                failure_event="organizer_audit_write_failed",
-                failure_message="Could not record completed reflection organization",
-                failure_metadata={
-                    "merged_groups": result.merged_groups,
-                    "archived_entries": result.archived_entries,
-                },
             )
         return result
 

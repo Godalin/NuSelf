@@ -503,6 +503,4 @@ def write_lifecycle_audit(
         status=definition.status,
         error=error,
         metadata=dict(audit_metadata) or None,
-        failure_event="lifecycle_audit_write_failed",
-        failure_message=f"Could not record daemon lifecycle audit event {event}",
     )

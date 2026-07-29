@@ -266,6 +266,9 @@ under the same package.
 - `runtime/definitions.py` owns generic sealed definition-registry mechanics.
   Runtime event and daemon audit registries adapt it without sharing semantic
   definition types or transport policy.
+- `runtime/observability.py` owns the sealed secondary-failure taxonomy.
+  Domain audit writers and event publishers provide only the failed primary
+  identity; they never define local write/delivery failure event aliases.
   `cli/daemon_lifecycle.py` owns shared observable start/stop/restart
   orchestration and typed transition projection for one-shot, launch, and REPL
   surfaces.

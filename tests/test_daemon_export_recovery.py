@@ -674,7 +674,7 @@ def test_worker_audit_failure_cannot_suppress_durable_retry(
     )
     assert persisted.attempts == 1
     assert any(
-        "daemon/reason_audit_write_failed" in str(warning.message)
+        "daemon/observability_projection_failed" in str(warning.message)
         for warning in captured
     )
     worker.stop()
@@ -802,7 +802,7 @@ def test_shutdown_audit_failure_cannot_undo_queue_drain(
 
     with pytest.warns(
         RuntimeWarning,
-        match="daemon/reason_audit_write_failed",
+        match="daemon/observability_projection_failed",
     ):
         worker.stop()
 

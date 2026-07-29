@@ -189,9 +189,6 @@ def write_reflection_audit(
     *,
     project_root: Path | None,
     metadata: dict[str, object] | None = None,
-    failure_event: str = "audit_projection_failed",
-    failure_message: str = "Structured audit projection failed",
-    failure_metadata: dict[str, object] | None = None,
 ) -> LogEvent | None:
     """Validate and project one auxiliary Reflection audit."""
 
@@ -211,9 +208,6 @@ def write_reflection_audit(
         level=definition.level,
         status=definition.status,
         metadata=dict(event_metadata),
-        failure_event=failure_event,
-        failure_message=failure_message,
-        failure_metadata=failure_metadata,
     )
 
 

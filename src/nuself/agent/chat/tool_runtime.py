@@ -8,7 +8,6 @@ from typing import cast
 
 from langchain_core.tools import BaseTool, StructuredTool
 
-from nuself.agent.chat.audit import report_chat_failure
 from nuself.agent.skills import (
     AgentSkill,
     load_agent_skills,
@@ -24,6 +23,9 @@ from nuself.memory.query import MemoryQueryService
 from nuself.reason.output import SectionPlanner
 from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.jobs import JobSink
+from nuself.runtime.observability import (
+    report_observability_projection_failure,
+)
 
 
 class ConversationToolRuntime:
@@ -83,9 +85,10 @@ class ConversationToolRuntime:
     def report_log_failure(self, exc: Exception) -> None:
         """Report a failed tool-log projection without changing tool execution."""
 
-        report_chat_failure(
+        report_observability_projection_failure(
             exc,
-            event="tool_log_projection_failed",
+            component="chat",
+            failed_event="service_tool_called",
             project_root=self._project_root,
         )
 

@@ -29,7 +29,6 @@ ChatAuditEvent = Literal[
     "llm_retry_suppressed_after_tool_call",
     "llm_endpoints_exhausted",
     "llm_endpoint_state_write_failed",
-    "tool_log_projection_failed",
     "interactive_history_load_failed",
     "interactive_history_write_failed",
     "completion_load_failed",
@@ -201,10 +200,6 @@ def _build_registry() -> AuditDefinitionRegistry:
             error_policy="required", metadata_validator=_endpoint_index,
         ),
         AuditEventDefinition(
-            "chat", "tool_log_projection_failed", "warning", "degraded",
-            error_policy="required",
-        ),
-        AuditEventDefinition(
             "chat", "interactive_history_load_failed", "error", "error",
             error_policy="required", metadata_validator=_thread,
         ),
@@ -255,7 +250,6 @@ _MESSAGES: dict[ChatAuditEvent, str] = {
     ),
     "llm_endpoints_exhausted": "LLM endpoints exhausted",
     "llm_endpoint_state_write_failed": "LLM endpoint state write failed",
-    "tool_log_projection_failed": "Tool log projection failed",
     "interactive_history_load_failed": "Interactive history load failed",
     "interactive_history_write_failed": "Interactive history write failed",
     "completion_load_failed": "Interactive completion load failed",
@@ -293,9 +287,6 @@ def write_chat_audit(
         metadata=dict(event_metadata),
         thread_id=thread_id,
         request_id=request_id,
-        failure_event="chat_audit_write_failed",
-        failure_message="Could not record Chat audit event",
-        failure_metadata={"event": event},
     )
 
 

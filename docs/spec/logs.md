@@ -61,11 +61,10 @@ restore their ambient context before the next tick.
 Explicit arguments to `write_log_event(...)` override the inherited context for that one event. Context must be reset when the request/turn/job exits; persisted `LogEvent` records are not mutated or deleted as part of context teardown.
 
 Daemon lifecycle audit records are projected through the shared
-`nuself.daemon.audit` boundary. Server ownership events and CLI/REPL
-requested/completed events use the same failure event,
-`daemon/lifecycle_audit_write_failed`, with the intended audit event in
-metadata. A failed sink is observable but cannot alter the lifecycle decision
-that the record describes.
+`nuself.daemon.audit` boundary. A failed sink writes the shared
+`observability_projection_failed` diagnostic with the intended event in
+`metadata.failed_event`; it cannot alter the lifecycle decision that the
+record describes.
 
 Successful CLI lifecycle completion records describe the authoritative typed
 transition result. Start and stop completion metadata includes `outcome`,
@@ -195,7 +194,6 @@ metadata.
 | `llm_retry_suppressed_after_tool_call` | `fallback` | `endpoint_index`, `model` |
 | `llm_endpoints_exhausted` | `fallback` | required error, no metadata |
 | `llm_endpoint_state_write_failed` | `degraded` | required error, `endpoint_index` |
-| `tool_log_projection_failed` | `degraded` | required error, no metadata |
 | `interactive_history_load_failed` | `error` | required error, `thread_id` |
 | `interactive_history_write_failed` | `degraded` | required error, no metadata |
 | `completion_load_failed` | `degraded` | required error, completion kind |
@@ -379,7 +377,8 @@ Display name mapping: `persona` → `selves`.
   Auxiliary evidence uses
   `write_observed_log_event(...)`, which mirrors the typed fields, returns the
   event or `None`, never retries the original record, and reports failure as a
-  distinct `audit_projection_failed` record with `audit_event` metadata.
+  distinct `observability_projection_failed` record with exact
+  `failed_event` metadata.
 - An `EventPublisher` may attach `runtime_event_log_sink(...)`; this projection
   retains the published event's ID and correlation context.
 - Writes are serialized by a per-path process lock and an advisory file lock;

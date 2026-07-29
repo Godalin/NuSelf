@@ -479,7 +479,7 @@ def test_finalize_log_failure_cannot_replace_accepted_response(
     with pytest.warns(
         RuntimeWarning,
         match=(
-            "chat/chat_audit_write_failed: audit store unavailable; "
+                "chat/observability_projection_failed: audit store unavailable; "
             "structured logging failed: audit store unavailable"
         ),
     ):

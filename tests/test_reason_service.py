@@ -324,7 +324,7 @@ def test_start_projections_cannot_replace_persisted_thread(
         for message in messages
     )
     assert any(
-        "reasoning/reason_audit_write_failed: audit store unavailable"
+        "reasoning/observability_projection_failed: audit store unavailable"
         in message
         for message in messages
     )
@@ -363,7 +363,7 @@ def test_transition_audit_failure_cannot_replace_persisted_status(
 
     with pytest.warns(
         RuntimeWarning,
-        match="reasoning/reason_audit_write_failed",
+        match="reasoning/observability_projection_failed",
     ):
         paused = service.pause_thread(thread.id)
 
@@ -516,7 +516,7 @@ def test_advance_projections_cannot_replace_committed_step(
         for message in messages
     )
     assert any(
-        "reasoning/reason_audit_write_failed: audit store unavailable"
+        "reasoning/observability_projection_failed: audit store unavailable"
         in message
         for message in messages
     )
@@ -539,7 +539,7 @@ def test_delete_success_audit_failure_cannot_replace_deletion(
 
     with pytest.warns(
         RuntimeWarning,
-        match="reasoning/reason_audit_write_failed",
+        match="reasoning/observability_projection_failed",
     ):
         deleted_id = service.delete_thread(thread.id)
 

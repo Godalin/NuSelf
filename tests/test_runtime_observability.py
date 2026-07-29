@@ -8,6 +8,12 @@ import nuself.runtime.observability as observability
 from nuself.logs import LogAppendLifecycleError, read_log_events
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.event_definitions import UnknownEventDefinitionError
+from nuself.runtime.audit_definitions import (
+    AuditDefinitionRegistrySealedError,
+    AuditEventDefinition,
+    AuditSchemaError,
+)
+from nuself.runtime.audit_types import LOG_COMPONENTS
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     diagnostic_exception_message,
@@ -15,12 +21,66 @@ from nuself.runtime.diagnostics import (
     sanitize_diagnostic_metadata,
 )
 from nuself.runtime.observability import (
+    OBSERVABILITY_FAILURE_REGISTRY,
     decode_observed_record,
     publish_observed_event,
     report_observed_failure,
     run_observed_best_effort,
     write_observed_log_event,
 )
+
+
+def test_observability_failure_registry_is_complete_and_sealed() -> None:
+    assert len(OBSERVABILITY_FAILURE_REGISTRY.definitions) == (
+        len(LOG_COMPONENTS) * 2
+    )
+    with pytest.raises(AuditDefinitionRegistrySealedError):
+        OBSERVABILITY_FAILURE_REGISTRY.register(
+            AuditEventDefinition(
+                component="chat",
+                event="observability_extra",
+                level="warning",
+                status="degraded",
+            )
+        )
+
+
+def test_observability_failure_metadata_is_exact() -> None:
+    definition = OBSERVABILITY_FAILURE_REGISTRY.resolve(
+        "chat",
+        "observability_projection_failed",
+    )
+    with pytest.raises(AuditSchemaError, match="extra"):
+        definition.validate(
+            level="warning",
+            status="degraded",
+            error="sink unavailable",
+            metadata={
+                "failed_event": "turn.completed",
+                "subsystem": "chat",
+            },
+        )
+
+
+def test_observed_log_schema_errors_precede_best_effort_sink(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def capture(*_args: object, **_kwargs: object) -> object:
+        calls.append("write")
+        return object()
+
+    monkeypatch.setattr(observability, "write_log_event", capture)
+
+    with pytest.raises(ValueError, match="audit event name"):
+        write_observed_log_event(
+            "chat",
+            "InvalidEvent",
+            "invalid",
+        )
+
+    assert calls == []
 
 
 def test_domains_do_not_rebuild_observed_log_projection() -> None:
@@ -281,20 +341,19 @@ def test_observed_log_reports_persisted_close_failure_without_retrying_record(
         "cycle_completed",
         "completed",
         project_root=tmp_path,
-        failure_metadata={"owner": "scheduler"},
     )
 
     assert result is None
-    assert calls == ["cycle_completed", "audit_projection_failed"]
+    assert calls == [
+        "cycle_completed",
+        "observability_projection_failed",
+    ]
     [diagnostic] = read_log_events(
         project_root=tmp_path,
         component="reflection",
     )
-    assert diagnostic.event == "audit_projection_failed"
-    assert diagnostic.metadata == {
-        "audit_event": "cycle_completed",
-        "owner": "scheduler",
-    }
+    assert diagnostic.event == "observability_projection_failed"
+    assert diagnostic.metadata == {"failed_event": "cycle_completed"}
 
 
 def test_observed_event_reports_subscriber_failure_and_returns_envelope(
@@ -314,9 +373,6 @@ def test_observed_event_reports_subscriber_failure_and_returns_envelope(
         payload={"message": "started"},
         project_root=tmp_path,
         failure_component="chat",
-        failure_event="turn_event_delivery_failed",
-        failure_message="Could not deliver turn event",
-        failure_metadata={"lifecycle_event": "turn.started"},
     )
 
     assert result is not None
@@ -325,9 +381,13 @@ def test_observed_event_reports_subscriber_failure_and_returns_envelope(
         project_root=tmp_path,
         component="chat",
     )
-    assert event.event == "turn_event_delivery_failed"
+    assert event.event == "internal_event_delivery_failed"
     assert event.error is not None
     assert "subscriber unavailable" in event.error
+    assert event.metadata == {
+        "event": "turn.started",
+        "producer": "chat",
+    }
 
 
 def test_best_effort_runner_uses_declared_failure_presentation(
@@ -365,8 +425,6 @@ def test_observed_event_producer_contract_failure_propagates(
             payload={"message": "invalid producer"},
             project_root=tmp_path,
             failure_component="chat",
-            failure_event="turn_event_delivery_failed",
-            failure_message="Could not deliver turn event",
         )
 
     assert read_log_events(project_root=tmp_path) == []
@@ -385,8 +443,6 @@ def test_observed_event_payload_validation_failure_propagates(
             payload={"metadata": {"invalid": object()}},
             project_root=tmp_path,
             failure_component="chat",
-            failure_event="turn_event_delivery_failed",
-            failure_message="Could not deliver turn event",
         )
 
     assert read_log_events(project_root=tmp_path) == []

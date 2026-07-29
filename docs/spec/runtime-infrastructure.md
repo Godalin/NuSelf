@@ -586,7 +586,10 @@ subscriber.
 `publish_observed_event(...)` is the shared best-effort event-publication
 boundary used by worker and chat lifecycle owners. It delegates delivery to
 `EventPublisher`, reports delivery failure through structured observability,
-and returns the published envelope only when every subscriber succeeds.
+and returns the immutable published envelope even when one or more subscribers
+fail. Delivery failure always uses `internal_event_delivery_failed` with exact
+`event` and `producer` metadata derived from that envelope; callers cannot
+invent subsystem-specific failure projections.
 
 ## Cross-Process Activity
 
@@ -710,6 +713,18 @@ whose failure must be visible but must not alter an already-successful primary
 operation. It records the failure through the structured log sink and falls
 back to Python warnings only when that sink is unavailable. Domains must not
 implement equivalent broad `try/except/pass` wrappers locally.
+
+It owns two closed infrastructure diagnostics:
+
+| Event | Message | Level/status | Exact metadata |
+|---|---|---|---|
+| `observability_projection_failed` | `Secondary observability projection failed` | warning/degraded, required error | `failed_event` |
+| `internal_event_delivery_failed` | `Internal event delivery failed` | warning/degraded, required error | `event`, `producer` |
+
+Definitions exist for every declared log component and are sealed before
+runtime use. The caught exception is represented once by the canonical
+top-level error chain. Primary schema errors occur before these boundaries and
+must not be relabeled as infrastructure failures.
 
 Auxiliary structured logs must call `write_observed_log_event(...)` directly.
 They must not recreate that typed projection by passing a

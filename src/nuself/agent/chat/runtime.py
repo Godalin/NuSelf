@@ -299,9 +299,6 @@ class ConversationGraphRuntime:
             payload=payload.to_mapping(),
             project_root=self._project_root,
             failure_component="chat",
-            failure_event="turn_event_delivery_failed",
-            failure_message=f"Could not deliver {event} event",
-            failure_metadata={"lifecycle_event": event},
         )
 
     def run_turn(
