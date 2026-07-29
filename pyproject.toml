@@ -22,7 +22,11 @@ dependencies = [
 nuself = "nuself.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8.0", "pytest-cov>=7.1.0"]
+dev = [
+    "pyright==1.1.411",
+    "pytest>=8.0",
+    "pytest-cov>=7.1.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -34,6 +38,9 @@ filterwarnings = [
     "ignore::langchain_core._api.deprecation.LangChainPendingDeprecationWarning",
     "ignore:Importing Send from langgraph.constants is deprecated",
 ]
+
+[tool.uv]
+required-version = "==0.11.21"
 
 [tool.pyright]
 pythonVersion = "3.12"

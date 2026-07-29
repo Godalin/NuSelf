@@ -16,6 +16,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Memory candidate durability-uncertain commits no longer compensate their
   targets when candidate/target read-back fails or an accepted candidate has
   an unexpected target; typed ambiguity retains secondary observation errors.
+- CI and release now require uv `0.11.21` and lockfile-managed Pyright
+  `1.1.411`; release reruns Pyright and the full test suite and rejects
+  lightweight tags or tagged commits outside `main` history before building.
 - File-to-SQLite upgrades now normalize 0.2.x memory relation fields at the
   explicit migration boundary, and the release gate reads a frozen 0.2.5
   private-data fixture through the current repositories.

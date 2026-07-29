@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 
 import pytest
 
-from nuself.release_gate import check_release
+from nuself.release_gate import check_release, check_release_git
 
 
 def _write_release_metadata(
@@ -52,3 +53,67 @@ def test_release_gate_rejects_metadata_mismatch(
 
     with pytest.raises(ValueError, match=message):
         check_release(tmp_path, "v0.3.0")
+
+
+def _git(root: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-C", str(root), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _init_repository(root: Path) -> None:
+    _git(root, "init")
+    _git(root, "config", "user.name", "NuSelf Test")
+    _git(root, "config", "user.email", "test@nuself.invalid")
+    (root / "tracked.txt").write_text("base\n", encoding="utf-8")
+    _git(root, "add", "tracked.txt")
+    _git(root, "commit", "-m", "base")
+    _git(root, "branch", "-M", "main")
+
+
+def test_release_git_gate_accepts_annotated_tag_on_main(
+    tmp_path: Path,
+) -> None:
+    _init_repository(tmp_path)
+    _git(tmp_path, "tag", "-a", "v0.3.0", "-m", "Release 0.3.0")
+
+    check_release_git(
+        tmp_path,
+        "v0.3.0",
+        main_ref="refs/heads/main",
+    )
+
+
+def test_release_git_gate_rejects_lightweight_tag(
+    tmp_path: Path,
+) -> None:
+    _init_repository(tmp_path)
+    _git(tmp_path, "tag", "v0.3.0")
+
+    with pytest.raises(ValueError, match="annotated"):
+        check_release_git(
+            tmp_path,
+            "v0.3.0",
+            main_ref="refs/heads/main",
+        )
+
+
+def test_release_git_gate_rejects_tag_outside_main(
+    tmp_path: Path,
+) -> None:
+    _init_repository(tmp_path)
+    _git(tmp_path, "switch", "-c", "release-candidate")
+    (tmp_path / "tracked.txt").write_text("release\n", encoding="utf-8")
+    _git(tmp_path, "add", "tracked.txt")
+    _git(tmp_path, "commit", "-m", "unmerged release")
+    _git(tmp_path, "tag", "-a", "v0.3.0", "-m", "Release 0.3.0")
+
+    with pytest.raises(ValueError, match="ancestor of main"):
+        check_release_git(
+            tmp_path,
+            "v0.3.0",
+            main_ref="refs/heads/main",
+        )

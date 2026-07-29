@@ -53,6 +53,12 @@ and release reproducibility gaps identified by the `bd43f1d` external review.
   no destructive rollback.
 - Focused candidate, curator, and optimizer coverage: 93 passed; pyright
   reported 0 errors and 0 warnings.
+- Project metadata now requires uv `0.11.21` and dev-locks Pyright `1.1.411`.
+  CI and release use `--locked` sync/run commands; release has a full-history
+  checkout, verifies an annotated tag on main, and reruns locked Pyright plus
+  the complete pytest suite before any build or publication effect.
+- Release/workflow contract coverage: 12 passed; `uv lock --check`, locked
+  pyright, and YAML parsing passed.
 - Confirmed: `_FileCollection.get/put/delete` directly interpolate untrusted
   keys into paths and `list` recursively follows nested JSON paths.
 - Confirmed: ThreadStore rename, branch, archive, unarchive, and delete bypass

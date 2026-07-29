@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from nuself.release_gate import check_release
+from nuself.release_gate import check_release, check_release_git
 
 
 def main() -> int:
@@ -13,7 +13,9 @@ def main() -> int:
     parser.add_argument("--tag", required=True)
     args = parser.parse_args()
     try:
-        check_release(Path(__file__).resolve().parents[1], args.tag)
+        root = Path(__file__).resolve().parents[1]
+        check_release(root, args.tag)
+        check_release_git(root, args.tag)
     except ValueError as exc:
         parser.error(str(exc))
     return 0

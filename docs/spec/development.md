@@ -3,7 +3,7 @@
 ## Code Standard
 
 - Standard Python project managed by `uv`.
-- Type-check with `uvx pyright`.
+- Type-check with the lockfile-managed `uv run --locked pyright`.
 - Sub-components must be individually tested.
 - Packages imported directly by runtime modules must be declared as direct
   project dependencies rather than relying on another dependency to install
@@ -55,7 +55,8 @@ Versioning and changelog rules live in [`versioning.md`](versioning.md). Release
 1. Finish and verify all intended functional commits.
 2. Move relevant `CHANGELOG.md` `Unreleased` entries into a dated version section and create a fresh empty `Unreleased` section.
 3. Bump `pyproject.toml` to the release version. Runtime `nuself.__version__` must continue to resolve to the package metadata version.
-4. Run `uv run pytest`, `uvx pyright`, and `git diff --check`.
+4. Run `uv run --locked pytest`, `uv run --locked pyright`, and
+   `git diff --check`.
 5. Confirm `uv run nuself --version` prints the intended version.
 6. Commit the release metadata with message `release: <version>`.
 7. Create an annotated git tag: `git tag -a v<version> -m "Release <version>"`.

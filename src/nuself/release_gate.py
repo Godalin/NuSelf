@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import subprocess
 import tomllib
 from typing import cast
 
@@ -39,3 +40,50 @@ def check_release(root: Path, tag: str) -> None:
     )
     if heading.search(changelog) is None:
         raise ValueError("changelog lacks the dated release heading")
+
+
+def check_release_git(
+    root: Path,
+    tag: str,
+    *,
+    main_ref: str = "refs/remotes/origin/main",
+) -> None:
+    """Require an annotated release tag whose commit belongs to main."""
+    tag_ref = f"refs/tags/{tag}"
+    object_type = _git_output(root, "cat-file", "-t", tag_ref)
+    if object_type != "tag":
+        raise ValueError("release tag must be an annotated tag object")
+    commit = _git_output(root, "rev-list", "-n", "1", tag_ref)
+    if not commit:
+        raise ValueError("release tag does not peel to a commit")
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "merge-base",
+            "--is-ancestor",
+            commit,
+            main_ref,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError("release tag commit is not an ancestor of main")
+
+
+def _git_output(root: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(root), *args],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(
+            "release Git topology cannot be verified: "
+            + result.stderr.strip()
+        )
+    return result.stdout.strip()

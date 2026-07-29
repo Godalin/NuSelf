@@ -166,8 +166,8 @@ uv run nuself --help
 运行测试：
 
 ```bash
-uv run pytest
-uvx pyright
+uv run --locked pytest
+uv run --locked pyright
 ```
 
 ## 配置
