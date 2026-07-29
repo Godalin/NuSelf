@@ -5,8 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close REPL Reason completion failure audit ownership so the UI caller no longer
-constructs a Reason event outside the sealed Reason registry.
+Close process-local log observer failure audit ownership so logging core uses
+one sealed infrastructure contract without persisting callable or exception
+type names.
 
 ## Active Branch
 
@@ -14,47 +15,49 @@ constructs a Reason event outside the sealed Reason registry.
 
 ## Ordered Work
 
-1. Inventory dynamic completion failure owners, UI fallback behavior, event
-   schemas, consumers, and tests.
-2. Separate Chat thread completion diagnostics from Reason thread completion
-   diagnostics despite their shared event name.
-3. Update Reason, CLI, log, error, and development specs before implementation.
-4. Register the Reason completion failure with a fixed message, degraded
-   status, required error, and no redundant metadata.
-5. Route the REPL completion loader through `run_reason_observed`.
-6. Remove its direct generic observability import and caller-selected
-   projection without compatibility aliases.
+1. Inventory observer delivery, recursion suppression, diagnostic persistence,
+   terminal warning fallback, consumers, metadata, and tests.
+2. Keep observer failure distinct from daemon lifecycle and generic
+   observability projection failures.
+3. Update log, error, and development specs before implementation.
+4. Define a sealed log infrastructure registry with one exact
+   `daemon/log_observer_failed` contract.
+5. Validate the fixed warning/error projection before direct recursive-safe
+   persistence.
+6. Remove callable identity and exception type metadata plus the unused
+   observer parameter without compatibility aliases.
 7. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No change to completion matching, display text, or repository reads.
-- No change to the empty-suggestion fallback when loading fails.
-- No change to Chat thread or archived-thread completion audit contracts.
-- No promotion of completion failures into authoritative command failures.
+- No change to observer registration, nesting, order, or context isolation.
+- No change to write-before-observe ordering or later-observer delivery.
+- No change to observer suspension while writing its diagnostic.
+- No change to the single terminal warning when diagnostic persistence fails.
 
 ## Completion Evidence
 
-- Reason completion audit ownership completed in `82bb51f`.
-- `reasoning/completion_load_failed` now belongs to the sealed Reason registry
-  with a fixed message, warning/degraded projection, required error, and no
-  metadata.
-- REPL completion control flow now calls `run_reason_observed` and no longer
-  imports generic observability or chooses audit presentation.
-- Redundant `completion=reason_threads` metadata was removed without a
-  compatibility alias; Chat completion contracts remain unchanged.
-- Focused tests: 109 passed.
-- Full suite: 2051 passed.
+- Log observer failure audit ownership completed in `6a15634`.
+- `LOG_INFRASTRUCTURE_AUDIT_REGISTRY` is sealed and owns the sole exact
+  `daemon/log_observer_failed` definition.
+- Observer delivery now supplies only the caught exception while logging core
+  fixes the component, event, message, warning/error projection, error policy,
+  empty metadata schema, and terminal fallback.
+- Callable class and duplicate exception type metadata plus the unused
+  observer reporter parameter were removed without compatibility aliases.
+- Focused tests: 95 passed; final logging-core tests: 69 passed.
+- Full suite: 2052 passed.
 - Pyright: 0 errors, 0 warnings.
 - Static search and `git diff --check`: passed.
 
 ## Publication
 
-Reason completion audit ownership was implemented in `82bb51f`; milestone
+Log observer failure audit ownership was implemented in `6a15634`; milestone
 publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Close process-local log observer failure audit ownership: `logs.py` currently
-constructs `daemon/log_observer_failed` directly, including free-form observer
-and exception type metadata, outside a sealed infrastructure registry.
+Review logging-core terminal warnings next. Lock cleanup, append rollback,
+rotation, corrupt-record, and event-identity paths still construct independent
+free-form warning strings and repeated field formatting without a sealed typed
+warning taxonomy.
