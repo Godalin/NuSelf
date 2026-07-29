@@ -18,6 +18,7 @@ from langchain_core.messages import (
 )
 from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
 from nuself.agent.capabilities import AgentCapabilitySnapshot
+from nuself.agent.chat.audit import report_chat_failure
 from nuself.agent.chat.types import (
     ChatAgentSettings,
     ChatResult,
@@ -146,6 +147,11 @@ class ConversationGraphRuntime:
                 )
             ),
             settings=self._settings,
+            report_compression_fallback=lambda exc: report_chat_failure(
+                exc,
+                event="compression_fallback",
+                project_root=self._project_root,
+            ),
         )
         self._persona_orchestrator = ConversationPersonaOrchestrator(
             project_root=project_root,

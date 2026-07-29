@@ -179,6 +179,12 @@ response. Persisting the last successful endpoint is also a derived preference:
 its failure is reported as `llm_endpoint_state_write_failed` without discarding
 the response.
 
+`chat/compression_fallback` is a warning with `status=degraded`, required safe
+error diagnostics, and no metadata. It means optional model compression failed
+and the persisted thread used the deterministic local summary. The event never
+contains conversation text, the previous summary, prompts, model output, or
+endpoint identity.
+
 Shared per-endpoint availability diagnostics are owned by one sealed agent
 endpoint audit registry for the `chat`, `memory`, `persona`, `reasoning`, and
 `reflection` components:

@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Chat compression now preserves thread persistence across every ordinary model
+  exception by using the local summary, and records the degradation through a
+  sealed `chat/compression_fallback` audit without conversation payloads.
 - Agent invocation now distinguishes model unavailability, framework protocol
   violations, and invalid generated output. Endpoint failover uses provider
   exception types and structured HTTP status instead of error-message text.

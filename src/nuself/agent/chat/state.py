@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -21,9 +22,11 @@ class ConversationStateManager:
         *,
         text_agent: TextAgent | None,
         settings: ChatAgentSettings,
+        report_compression_fallback: Callable[[Exception], None],
     ) -> None:
         self._text_agent = text_agent
         self._settings = settings
+        self._report_compression_fallback = report_compression_fallback
 
     def update(
         self, state: ConversationTurnState
@@ -116,18 +119,22 @@ class ConversationStateManager:
                 ),
             ),
         ]
-        try:
-            if self._text_agent is None:
-                raise RuntimeError(
-                    "no configured compression text agent"
-                )
-            summary = self._text_agent.invoke(prompt)
-        except (RuntimeError, ValueError):
+        if self._text_agent is None:
             summary = _local_summary(
                 previous_summary,
                 transcript,
                 self._settings.summary_target_chars,
             )
+        else:
+            try:
+                summary = self._text_agent.invoke(prompt)
+            except Exception as exc:
+                self._report_compression_fallback(exc)
+                summary = _local_summary(
+                    previous_summary,
+                    transcript,
+                    self._settings.summary_target_chars,
+                )
         return summary[: self._settings.summary_target_chars]
 
 

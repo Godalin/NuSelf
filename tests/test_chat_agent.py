@@ -285,6 +285,49 @@ def test_chat_agent_uses_local_summary_without_api_key(tmp_path: Path) -> None:
     assert '"summary":' in text
 
 
+def test_chat_compression_failure_falls_back_and_is_observable(
+    tmp_path: Path,
+) -> None:
+    class _FailingCompressionAgent:
+        def invoke(self, messages: Sequence[BaseMessage]) -> str:
+            del messages
+            raise OSError("compression provider unavailable")
+
+    settings = ChatAgentSettings(
+        recent_messages=2,
+        summary_trigger_messages=4,
+        summary_target_chars=800,
+    )
+    agent = ConversationGraphRuntime(
+        tmp_path,
+        response_service=FakeResponseService(),
+        settings=settings,
+        compression_agent=_FailingCompressionAgent(),
+    )
+
+    agent.respond("one")
+    agent.respond("two")
+    agent.respond("three")
+
+    thread = ThreadStore(tmp_path).load("default")
+    assert thread.summary != ""
+    assert len(thread.messages) == 2
+    events = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="chat",
+        )
+        if event.event == "compression_fallback"
+    ]
+    assert len(events) == 1
+    assert events[0].status == "degraded"
+    assert events[0].metadata == {}
+    assert "one" not in (
+        events[0].message + (events[0].error or "")
+    )
+
+
 def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
     thread_store = ThreadStore(tmp_path)
     thread_store.save(

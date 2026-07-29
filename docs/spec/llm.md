@@ -40,6 +40,13 @@ persona conclusions are the intended result. It must not create a fake
 single-field schema merely to reuse structured output, and it rejects an empty
 or non-text conclusion.
 
+Conversation compression is an auxiliary persistence optimization. When a
+configured compression `TextAgent` raises any `Exception`, the turn must still
+finish persistence using the deterministic local summary. The failure emits
+one `chat/compression_fallback` audit with required safe error diagnostics and
+no metadata. Missing compression-agent configuration uses the same local
+summary but is a normal mode and emits no degradation audit.
+
 ## Overview
 
 This spec defines the behavioral contracts for replacing hardcoded heuristic scoring with LLM-driven contextual decisions across NuSelf. All L2 (judgment-layer) decisions follow the same pattern: the system assembles a structured prompt with full context, calls the LLM with a strict output schema, and uses the returned values as the decision.

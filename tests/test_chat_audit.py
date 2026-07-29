@@ -24,6 +24,7 @@ _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
     ),
     ("llm_endpoints_exhausted", {}),
     ("llm_endpoint_state_write_failed", {"endpoint_index": 0}),
+    ("compression_fallback", {}),
     ("interactive_history_load_failed", {"thread_id": "thread-1"}),
     ("interactive_history_write_failed", {}),
     ("completion_load_failed", {"completion": "threads"}),

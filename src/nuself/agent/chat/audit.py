@@ -29,6 +29,7 @@ ChatAuditEvent = Literal[
     "llm_retry_suppressed_after_tool_call",
     "llm_endpoints_exhausted",
     "llm_endpoint_state_write_failed",
+    "compression_fallback",
     "interactive_history_load_failed",
     "interactive_history_write_failed",
     "completion_load_failed",
@@ -200,6 +201,10 @@ def _build_registry() -> AuditDefinitionRegistry:
             error_policy="required", metadata_validator=_endpoint_index,
         ),
         AuditEventDefinition(
+            "chat", "compression_fallback", "warning", "degraded",
+            error_policy="required",
+        ),
+        AuditEventDefinition(
             "chat", "interactive_history_load_failed", "error", "error",
             error_policy="required", metadata_validator=_thread,
         ),
@@ -250,6 +255,7 @@ _MESSAGES: dict[ChatAuditEvent, str] = {
     ),
     "llm_endpoints_exhausted": "LLM endpoints exhausted",
     "llm_endpoint_state_write_failed": "LLM endpoint state write failed",
+    "compression_fallback": "Conversation compression used local fallback",
     "interactive_history_load_failed": "Interactive history load failed",
     "interactive_history_write_failed": "Interactive history write failed",
     "completion_load_failed": "Interactive completion load failed",
