@@ -5,9 +5,10 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make closed handler catalogs a shared typed sealing contract. Daemon and REPL
-composition must prove exact registered-key coverage through
-`HandlerRegistry`, without local set comparisons or generic `RuntimeError`.
+Separate handler lookup failure from invocation failure at the daemon boundary.
+An `UnknownHandlerError` raised by middleware, a nested registry, or a
+registered handler must preserve its identity instead of being relabeled as an
+unsupported daemon request.
 
 ## Active Branch
 
@@ -15,59 +16,56 @@ composition must prove exact registered-key coverage through
 
 ## Ordered Work
 
-1. Verify whether direct diagnostic audit construction has the duplicate
-   envelope risk fixed in the previous batch.
-2. Inventory shared handler users and local catalog completeness checks.
-3. Correct the runtime spec's stale claim that argparse bypasses
-   `HandlerRegistry`.
-4. Specify typed exact-coverage validation at registry sealing.
-5. Migrate daemon and REPL composition to the shared coverage contract.
+1. Inventory every `HandlerRegistry` middleware and dispatch exception
+   boundary.
+2. Verify middleware chain compilation, ownership, ordering, and exception
+   identity guarantees.
+3. Reproduce a registered daemon handler raising `UnknownHandlerError`.
+4. Specify lookup-versus-invocation exception-source semantics.
+5. Decide unsupported requests from the immutable sealed key set before
+   dispatch and preserve invocation exceptions unchanged.
 6. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No replacement of argparse parsing or LangChain tool dispatch.
-- No process-global handler registry.
-- No runtime fallback for incomplete catalogs.
-- No compatibility path preserving local completeness checks.
+- No wrapping of every handler exception.
+- No change to `ProtocolError` request-payload translation.
+- No change to middleware order or request context/activity scopes.
+- No fallback dispatch for unsupported request keys.
 
 ## Completion Evidence
 
-- `report_observed_failure(...)` already constructs exactly one envelope
-  through `write_log_event(...)`; it has no duplicate identity, context, or
-  mutable-input read.
-- Diagnostic envelope construction and persistence intentionally share one
-  terminal catch because this reporter must not replace an already-decided
-  primary outcome. Moving construction outside would violate that contract.
-- Daemon, CLI, and REPL runtime dispatch already use `HandlerRegistry`.
-- Daemon and REPL nevertheless duplicate exact catalog coverage with local set
-  comparisons and generic `RuntimeError`.
-- `runtime-infrastructure.md` incorrectly says argparse is not routed through
-  the registry, while implementation and `development.md` show parser-local
-  sealed registry dispatch.
-- `HandlerRegistry.seal(expected_keys=...)` now validates exact catalog
-  coverage before publishing the dispatch table and raises typed
-  `HandlerRegistryCoverageError` with immutable `missing` and `extra` sets.
-- Failed coverage leaves an unsealed registry repairable; coverage supplied
-  again after sealing is still validated without changing the compiled
-  dispatch table.
-- Daemon request and REPL command composition now use the shared coverage
-  contract; their local set comparisons and generic `RuntimeError` paths are
-  removed.
-- The runtime spec now accurately describes parser-local CLI registry
-  dispatch and labels the original problem inventory as historical.
-- Focused handler, daemon request, and REPL tests: 29 passed.
-- Full suite: 2132 passed.
+- Only daemon request dispatch installs `HandlerRegistry` middleware; CLI and
+  REPL use the same registry without middleware. LangChain middleware remains
+  framework-owned and is outside this registry.
+- The shared registry compiles middleware once at seal, releases its lock
+  before invocation, preserves registration order, and propagates handler
+  exception identity.
+- Daemon `handle_request(...)` currently catches `UnknownHandlerError` around
+  the complete invocation. A registered handler or nested registry raising
+  that type is therefore indistinguishable from lookup failure and becomes an
+  incorrect `unsupported request type` response.
+- Because daemon catalog coverage is sealed and exact, lookup support can be
+  decided before invocation without a race.
+- `handle_request(...)` now maps unsupported keys from the sealed registry key
+  set before dispatch and no longer catches `UnknownHandlerError` around
+  invocation.
+- A registered handler test raises a specific nested
+  `UnknownHandlerError` instance and proves the exact object propagates.
+- Existing daemon server coverage still proves a genuinely unsupported request
+  returns the transport-level unsupported response.
+- Focused handler, daemon request, and daemon server tests: 55 passed.
+- Full suite: 2133 passed.
 - Pyright: 0 errors, 0 warnings.
-- `git diff --check` passed; static search finds no migrated local coverage
-  comparison or legacy mismatch message.
+- `git diff --check` passed; static search finds no dispatch-wide
+  `UnknownHandlerError` catch.
 
 ## Publication
 
-Typed closed-catalog handler sealing was implemented in `c948bf7`; milestone
-publication is pending this goal update and push.
+Daemon lookup and invocation failure separation was implemented in `47e0603`;
+milestone publication is pending this goal update and push.
 
 ## Next Review Batch
 
-After this boundary is complete, review handler middleware ownership and
-exception translation for the next shared-infrastructure risk.
+After this boundary is complete, review exception-source ambiguity at other
+shared dispatch and projection boundaries.
