@@ -176,8 +176,13 @@ errors are not degraded and continue to the daemon request backstop.
 ### Auto-Accept
 
 - `MemoryCuratorSettings.auto_accept` defaults to `True`.
-- When `auto_accept=True`, immediately call `accept(candidate.id)` after saving.
-  - For `create`/`update`/`merge`: produces `MemoryEntry`, then overwrites `review_state="reviewed"`.
+- When `auto_accept=True`, immediately call
+  `accept(candidate.id, target_review_state="reviewed")` after saving.
+  - For `create`/`update`/`merge`, the target is promoted to `reviewed` before
+    the candidate is committed as accepted, inside the same transaction and
+    compensation boundary.
+  - An unknown memory type that is quarantined during the initial draft save
+    remains `quarantined`; auto-accept does not bypass type recovery.
   - Validation or not-found failures retain the already-durable candidate as
     `pending`, emit `memory/auto_accept_failed` with its identity and compact
     exception chain, and allow the curator cursor to advance so the same source
@@ -287,7 +292,9 @@ correlation rather than duplicating the thread id.
 
 ### Transitions
 
-- **Accept `create`**: Converts to `MemoryEntry` (or `ProfileItem`) with `review_state="draft"`; curator auto-accept overwrites to `reviewed`.
+- **Accept `create`**: Converts to `MemoryEntry` (or `ProfileItem`). Manual
+  review defaults MemoryEntry targets to `draft`; curator auto-accept requests
+  `reviewed` as part of the same logical commit.
 - **Accept `update`/`merge`**: Requires `target_entry_id`. Merges fields into target, preserving `id`/`created_at`, updating `updated_at`. Source refs and evidence concatenated; relations deduplicated.
 - **Accept `delete`**: Requires `target_entry_id`. Deletes target from repository.
 - **Reject**: Flips `review_state` to `rejected`.
@@ -304,6 +311,13 @@ target, or restore a deleted target. After successful compensation the original
 write exception propagates unchanged and the candidate remains pending. If
 compensation also fails, a typed commit error retains both the primary and
 rollback exceptions; it must never report acceptance.
+
+For MemoryEntry targets, `accept` accepts only `draft` or `reviewed` as the
+requested final target state. The initial save still applies quarantine rules;
+only a non-quarantined entry is promoted. Promotion happens before the
+candidate final-state write, so a promotion failure triggers the same create
+deletion or merge restoration compensation and leaves the candidate pending.
+ProfileItem and delete targets have no MemoryEntry review-state transition.
 
 ### Entry Review States
 

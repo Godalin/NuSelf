@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 import json
 from pathlib import Path
+from typing import Literal
 
 import pytest
 from langchain_core.messages import BaseMessage
@@ -1029,7 +1030,12 @@ def test_memory_curator_propagates_unexpected_auto_accept_failure(
     )
     candidate_repo = MemoryCandidateRepository(tmp_path)
 
-    def fail_accept(candidate_id: str) -> MemoryEntry:
+    def fail_accept(
+        candidate_id: str,
+        *,
+        target_review_state: Literal["draft", "reviewed"] = "draft",
+    ) -> MemoryEntry:
+        assert target_review_state == "reviewed"
         raise OSError("candidate storage unavailable")
 
     monkeypatch.setattr(candidate_repo, "accept", fail_accept)

@@ -5,7 +5,12 @@ from typing import cast
 
 import pytest
 
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
+from nuself.domain.memory import (
+    MemoryCandidate,
+    MemoryEntry,
+    MemoryEntryType,
+    MemoryEvidence,
+)
 from nuself.memory.repository import (
     MemoryCandidateCommitError,
     MemoryCandidateNotFound,
@@ -53,6 +58,43 @@ def test_memory_candidate_repository_crud_and_accept_with_temporal_fields(tmp_pa
     assert accepted.target_entry_id == entry.id
     assert repo.list() == []
     assert repo.list(include_reviewed=True)[0].id == candidate.id
+
+
+def test_accept_can_commit_reviewed_entry_with_candidate(tmp_path: Path) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = repo.save(
+        MemoryCandidate(
+            type="belief",
+            title="Reviewed atomically",
+            body="Auto-accept must finalize the target before the candidate.",
+        )
+    )
+
+    entry = repo.accept(candidate.id, target_review_state="reviewed")
+
+    assert isinstance(entry, MemoryEntry)
+    assert entry.review_state == "reviewed"
+    assert MemoryEntryRepository(tmp_path).get(entry.id) == entry
+    assert repo.get(candidate.id).review_state == "accepted"
+
+
+def test_accept_keeps_unknown_type_quarantined_when_reviewed_requested(
+    tmp_path: Path,
+) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = repo.save(
+        MemoryCandidate(
+            type=cast(MemoryEntryType, "future_memory_type"),
+            title="Future type",
+            body="Unknown types must enter recovery instead of bypassing it.",
+        )
+    )
+
+    entry = repo.accept(candidate.id, target_review_state="reviewed")
+
+    assert isinstance(entry, MemoryEntry)
+    assert entry.review_state == "quarantined"
+    assert repo.get(candidate.id).review_state == "accepted"
 
 
 def test_memory_candidate_repository_rejects_candidate(tmp_path: Path) -> None:
@@ -162,6 +204,37 @@ def test_accept_create_rolls_back_target_when_candidate_commit_fails(
     assert ProfileItemRepository(tmp_path).list() == []
 
 
+def test_accept_create_rolls_back_when_review_promotion_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    candidate = repo.save(
+        MemoryCandidate(
+            type="belief",
+            title="Promotion boundary",
+            body="A failed reviewed write must not finalize the candidate.",
+        )
+    )
+    operation_error = OSError("review promotion failed")
+    original_save = entry_repo.save
+
+    def fail_reviewed_save(entry: MemoryEntry) -> MemoryEntry:
+        if entry.review_state == "reviewed":
+            raise operation_error
+        return original_save(entry)
+
+    monkeypatch.setattr(entry_repo, "save", fail_reviewed_save)
+
+    with pytest.raises(OSError) as captured:
+        repo.accept(candidate.id, target_review_state="reviewed")
+
+    assert captured.value is operation_error
+    assert entry_repo.list() == []
+    assert repo.get(candidate.id).review_state == "pending"
+
+
 def test_accept_merge_restores_target_when_candidate_commit_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -200,6 +273,46 @@ def test_accept_merge_restores_target_when_candidate_commit_fails(
 
     with pytest.raises(OSError) as captured:
         repo.accept(candidate.id)
+
+    assert captured.value is operation_error
+    assert entry_repo.get(original.id) == original
+    assert repo.get(candidate.id).review_state == "pending"
+
+
+def test_accept_merge_restores_target_when_review_promotion_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    original = entry_repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Original",
+            body="The exact target must survive a promotion failure.",
+        )
+    )
+    repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    candidate = repo.save(
+        MemoryCandidate(
+            action="update",
+            type="belief",
+            title="Changed",
+            body="This mutation must be compensated.",
+            target_entry_id=original.id,
+        )
+    )
+    operation_error = OSError("review promotion failed")
+    original_save = entry_repo.save
+
+    def fail_reviewed_save(entry: MemoryEntry) -> MemoryEntry:
+        if entry.review_state == "reviewed":
+            raise operation_error
+        return original_save(entry)
+
+    monkeypatch.setattr(entry_repo, "save", fail_reviewed_save)
+
+    with pytest.raises(OSError) as captured:
+        repo.accept(candidate.id, target_review_state="reviewed")
 
     assert captured.value is operation_error
     assert entry_repo.get(original.id) == original

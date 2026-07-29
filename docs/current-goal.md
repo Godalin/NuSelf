@@ -5,10 +5,10 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make Memory candidate acceptance one recoverable logical commit. A failure
-after target create/merge/delete but before candidate `accepted` persistence
-must not leave a pending candidate paired with a silently mutated durable
-target.
+Fold curator auto-accept's `draft` to `reviewed` promotion into the candidate
+acceptance commit. A promotion failure must leave the candidate pending and
+restore the target rather than producing an accepted candidate with an
+unreviewed or partially promoted entry.
 
 ## Active Branch
 
@@ -16,66 +16,55 @@ target.
 
 ## Ordered Work
 
-1. Scan multi-write persistence paths for partial commit behavior.
-2. Reproduce candidate target mutation followed by accepted-state write
-   failure.
-3. Specify transaction and compensation behavior for each candidate action.
-4. Wrap create, merge/update, and delete acceptance in backend transactions.
-5. Compensate file-backed target mutation and retain double failures.
+1. Inspect curator behavior after candidate acceptance succeeds.
+2. Reproduce target reviewed-state persistence outside the acceptance commit.
+3. Specify requested final target review state and quarantine preservation.
+4. Promote non-quarantined targets before candidate accepted-state persistence.
+5. Reuse transaction and compensation for promotion failure.
 6. Run focused and full quality gates, commit by functional boundary, push,
    and confirm development-branch CI.
 
 ## Out Of Scope
 
-- No candidate state or wire-schema change.
-- No process-crash atomicity claim for the multi-file backend.
-- No silent suppression of either the accepted-state write failure or a
-  compensation failure.
-- No change to reject/edit operations, which mutate one candidate record.
-- No change to curator auto-accept policy.
+- No candidate or MemoryEntry wire-schema change.
+- Manual acceptance continues to produce `draft` MemoryEntry targets.
+- ProfileItem targets remain unaffected by MemoryEntry review states.
+- Unknown types remain quarantined rather than being forced to reviewed.
+- No change to cursor or trace best-effort policy.
 
 ## Completion Evidence
 
-- `accept(create)` writes a new MemoryEntry/ProfileItem before the candidate is
-  marked accepted.
-- `accept(update|merge)` overwrites the target before the candidate final-state
-  write; retry can append source references and evidence again.
-- `accept(delete)` deletes the target before the candidate final-state write;
-  retry then fails because the target no longer exists.
-- SQLite transactions can roll these writes back, but the repository does not
-  currently enter one; file-backend transactions only serialize writes and
-  require explicit compensation for in-process failures.
-- Accept create, merge/update, and delete now run inside the shared backend
-  transaction.
-- If the accepted-state write fails, create removes its new target, merge
-  restores the exact prior target, and delete restores its removed target.
-- Successful compensation propagates the original exception unchanged and
-  leaves the candidate pending.
-- `MemoryCandidateCommitError` retains `primary_error` and
-  `compensation_error`, chained from the primary failure, when rollback also
-  fails.
-- Regression tests cover MemoryEntry and ProfileItem creation, entry merge,
-  entry deletion, exact original exception identity, and double failure.
-- Focused candidate repository and curator tests: 51 passed.
-- Full suite: 2170 passed.
+- Candidate acceptance now commits target mutation and candidate final state
+  through one transaction/compensation boundary.
+- Curator currently calls ordinary `accept(candidate.id)`, receives a draft
+  MemoryEntry, then writes a reviewed copy after candidate acceptance is final.
+- If that reviewed write fails, the candidate is already accepted and cannot
+  be retried through the candidate state machine; the cursor remains
+  unadvanced, allowing duplicate candidate generation on the next pass.
+- MemoryEntryRepository quarantine behavior must still run on the initial draft
+  save before any reviewed promotion.
+- `MemoryCandidateRepository.accept` and `merge` now accept an explicit final
+  target review state, defaulting to `draft` for manual review.
+- Curator requests `reviewed`; non-quarantined targets are promoted before the
+  candidate accepted-state write.
+- A failed create promotion removes the new target; a failed merge promotion
+  restores the exact prior target. In both cases the candidate remains pending
+  and the original exception propagates unchanged.
+- Unknown target types remain quarantined even when reviewed was requested.
+- Regression tests cover successful reviewed commit, quarantine preservation,
+  and create/merge promotion failure compensation.
+- Focused candidate repository and curator tests: 55 passed.
+- Full suite: 2174 passed.
 - Pyright: 0 errors, 0 warnings.
 - `git diff --check` passed.
-- Development CI run `30441324777` passed all Python 3.12-3.14 jobs, builds,
-  and clean-wheel smoke tests, but reported that checkout/setup-python v4 use
-  the deprecated Node 20 action runtime.
-- Official current action generations were verified before updating CI and
-  release to `actions/checkout@v7` and `actions/setup-python@v6`.
-- Workflow YAML parsing passed. Development CI run `30445870397` passed all
-  matrix, build, and wheel-smoke jobs on the new actions without the prior
-  Node 20 deprecation annotation.
+- Development-branch CI is already configured for pushes to every `dev/**`
+  branch; publication and remote run confirmation remain pending.
 
 ## Publication
 
-Recoverable Memory candidate acceptance was implemented in `651c134`; current
-action runtimes were adopted in `9fd2e02`. Both were published through
-`afb5f2f`, and the resulting development CI run passed.
+Pending implementation, validation, commit, push, and CI.
 
 ## Next Review Batch
 
-After this boundary is complete, inspect curator auto-accept's post-accept
-review-state promotion for the same partial-success classification.
+After this boundary is complete, inspect candidate audit/trace secondary
+effects for false failure reporting after authoritative persistence.

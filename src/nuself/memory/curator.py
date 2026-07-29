@@ -501,7 +501,10 @@ class MemoryCurator:
         if not self._settings.auto_accept:
             return
         result = run_memory_observed(
-            lambda: self._candidate_repository.accept(candidate.id),
+            lambda: self._candidate_repository.accept(
+                candidate.id,
+                target_review_state="reviewed",
+            ),
             event="auto_accept_failed",
             project_root=self._paths.project_root,
             metadata={
@@ -516,10 +519,8 @@ class MemoryCurator:
             isinstance(result, MemoryEntry)
             and result.review_state != "quarantined"
         ):
-            reviewed = result.with_updates(review_state="reviewed")
-            self._repository.save(reviewed)
             self._record_memory_update_trace(
-                reviewed,
+                result,
                 action=candidate.action,
             )
 

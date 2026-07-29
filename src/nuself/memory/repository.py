@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from dataclasses import asdict
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
@@ -526,7 +526,12 @@ class MemoryCandidateRepository:
             raise MemoryCandidateNotFound(candidate_id)
         self._col.delete(candidate_id)
 
-    def accept(self, candidate_id: str) -> MemoryEntry | ProfileItem:
+    def accept(
+        self,
+        candidate_id: str,
+        *,
+        target_review_state: Literal["draft", "reviewed"] = "draft",
+    ) -> MemoryEntry | ProfileItem:
         candidate = self.get(candidate_id)
         if candidate.review_state != "pending":
             raise ValueError(f"candidate is already {candidate.review_state}: {candidate_id}")
@@ -547,10 +552,15 @@ class MemoryCandidateRepository:
         if candidate.action in {"update", "merge"}:
             if candidate.target_entry_id is None:
                 raise ValueError(f"{candidate.action} candidate requires target_entry_id: {candidate_id}")
-            return self.merge(candidate_id, candidate.target_entry_id)
+            return self.merge(
+                candidate_id,
+                candidate.target_entry_id,
+                target_review_state=target_review_state,
+            )
         with self._backend.transaction():
             entry = self._save_target(candidate)
             try:
+                entry = self._promote_target(entry, target_review_state)
                 self.save(candidate.with_updates(review_state="accepted", target_entry_id=entry.id))
             except BaseException as operation_error:
                 self._compensate_target(
@@ -593,7 +603,13 @@ class MemoryCandidateRepository:
         self.save(updated)
         return updated
 
-    def merge(self, candidate_id: str, entry_id: str) -> MemoryEntry | ProfileItem:
+    def merge(
+        self,
+        candidate_id: str,
+        entry_id: str,
+        *,
+        target_review_state: Literal["draft", "reviewed"] = "draft",
+    ) -> MemoryEntry | ProfileItem:
         candidate = self.get(candidate_id)
         if candidate.review_state != "pending":
             raise ValueError(f"candidate is already {candidate.review_state}: {candidate_id}")
@@ -601,6 +617,7 @@ class MemoryCandidateRepository:
             previous = self._get_target(candidate, entry_id)
             merged = self._merge_target(candidate, entry_id)
             try:
+                merged = self._promote_target(merged, target_review_state)
                 self.save(candidate.with_updates(review_state="accepted", target_entry_id=entry_id))
             except BaseException as operation_error:
                 self._compensate_target(
@@ -609,6 +626,21 @@ class MemoryCandidateRepository:
                 )
                 raise
             return merged
+
+    def _promote_target(
+        self,
+        target: MemoryEntry | ProfileItem,
+        target_review_state: Literal["draft", "reviewed"],
+    ) -> MemoryEntry | ProfileItem:
+        if (
+            isinstance(target, ProfileItem)
+            or target_review_state == "draft"
+            or target.review_state == "quarantined"
+        ):
+            return target
+        return self._entry_repository.save(
+            target.with_updates(review_state="reviewed")
+        )
 
     def _save_target(self, candidate: MemoryCandidate) -> MemoryEntry | ProfileItem:
         if candidate.type == "profile_fact":
