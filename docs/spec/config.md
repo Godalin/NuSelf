@@ -155,6 +155,10 @@ including every endpoint API key, are redacted. The projection must not retain
 or print aggregate dictionaries, lists, model dumps, or parent container
 values that can bypass leaf-level redaction.
 
+In-memory endpoint settings also exclude API keys from `repr`. Test failures,
+debuggers, container representations, and incidental object formatting must
+not reveal a credential merely because they render an endpoint object.
+
 ## Chat Daemon Request Timeout
 
 `chat.request_timeout_seconds` controls how long CLI/REPL chat waits for the daemon to return one chat response.

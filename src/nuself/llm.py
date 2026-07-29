@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -41,7 +41,7 @@ class LLMSettings:
     """Configured model endpoint settings."""
 
     base_url: str
-    api_key: str
+    api_key: str = field(repr=False)
     model: str
     provider: Literal["openai", "anthropic"] = "openai"
     timeout_seconds: float = 60.0

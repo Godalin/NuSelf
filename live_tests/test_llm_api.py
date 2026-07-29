@@ -159,6 +159,6 @@ def test_live_nuself_tool_and_structured_response(
         _fail_live_layer("NuSelf tool and structured response", exc)
 
     assert len(outcomes) == 1
-    assert outcomes[0].tool_name == "_live_echo"
+    assert outcomes[0].name == "_live_echo"
     assert result.answer.strip() == "LIVE_TOOL_CHAT_OK"
     assert "configured LLM request failed" not in result.answer

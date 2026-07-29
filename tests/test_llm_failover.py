@@ -4,6 +4,19 @@ from pathlib import Path
 import pytest
 
 from nuself.logs import read_log_events
+from nuself.llm import LLMSettings
+
+
+def test_llm_settings_repr_excludes_api_key() -> None:
+    secret = "provider-secret-value"
+    settings = LLMSettings(
+        base_url="https://example.invalid/v1",
+        api_key=secret,
+        model="example",
+    )
+
+    assert secret not in repr(settings)
+    assert "api_key" not in repr(settings)
 
 
 @pytest.mark.parametrize(
