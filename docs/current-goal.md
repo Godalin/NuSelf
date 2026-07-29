@@ -58,11 +58,12 @@ workers are starting, the process must enter cleanup rather than publish
 - Full suite: 2165 passed.
 - Pyright: 0 errors, 0 warnings.
 - `git diff --check` passed.
+- Development-branch CI run `30437552038` completed successfully.
 
 ## Publication
 
-Shutdown-aware daemon readiness was implemented in `ce0db53`; milestone
-publication is pending this goal update, push, and development-branch CI.
+Shutdown-aware daemon readiness was implemented in `ce0db53` and published
+through `a72212d`; the resulting development-branch CI run passed.
 
 ## Next Review Batch
 
