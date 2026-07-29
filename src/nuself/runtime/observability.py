@@ -371,7 +371,7 @@ def report_corrupt_record(
 
 
 def report_observed_failure(
-    exc: Exception,
+    exc: BaseException,
     *,
     component: LogComponent,
     event: str,

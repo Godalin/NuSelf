@@ -83,6 +83,12 @@ trustworthy 0.3.0 release candidate.
   duplicate adapter IDs fail before external effects.
 - Focused outbox, delivery-loop, email, and macOS adapter tests: 60 passed;
   pyright reported 0 errors and 0 warnings.
+- Reason export now schedules delayed online reconciliation when composition
+  failure state cannot be persisted or retry enqueue callbacks fail. Shared
+  delayed scheduling invokes callbacks outside its lifecycle lock and exposes
+  callback failures to a domain observer after releasing task ownership.
+- Focused scheduling, export recovery, and Reason audit tests: 122 passed;
+  pyright reported 0 errors and 0 warnings.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 
@@ -92,4 +98,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-Notification delivery state and idempotent outbox admission.
+Strict ThreadState decoding and absolute-index invariants.

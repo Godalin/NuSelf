@@ -49,6 +49,9 @@ insert。
 Notification delivery 还会按稳定 adapter ID（`log`、`email`、`macos`）分别
 持久化状态。若后续 adapter 崩溃，恢复时会跳过已经记录成功外部副作用的通道，
 避免重复发送。
+Reason export 的 manifest 写回或 retry callback 失败时会安排有界、延迟的在线
+reconciliation，使 durable non-terminal job 无需重启 daemon 即可恢复，也不会
+形成即时重试热循环。
 
 Daemon instance lock 的获取和释放也会同时保留锁操作与句柄关闭错误，避免清理
 故障掩盖真实所有权状态。

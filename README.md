@@ -58,6 +58,9 @@ inside that backend transaction.
 Notification delivery also persists one state per stable adapter (`log`,
 `email`, or `macos`). If a later adapter crashes, recovery skips channels whose
 successful external effect was already recorded instead of sending them again.
+Reason export manifest-write and retry-callback failures schedule bounded,
+delayed online reconciliation, so a durable non-terminal job can recover
+without a daemon restart or an immediate retry loop.
 
 Daemon instance-lock acquire and release likewise preserve simultaneous lock
 operation and handle-close failures, so ownership errors are not hidden by

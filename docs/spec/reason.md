@@ -228,6 +228,25 @@ existing durable export attempt/backoff/final-failure state machine; it must
 not produce a successful chunk containing a configuration warning or empty
 body.
 
+### Export Worker Online Recovery
+
+The export queue is a wake-up mechanism; the manifest remains authoritative.
+After every dequeued message, the worker completes queue ownership and checks
+requested reconciliation.
+
+If composition fails but the failure state cannot be written back to the
+manifest, the job is still non-terminal. The worker must schedule a delayed
+reconciliation request rather than waiting for daemon restart or immediately
+re-enqueueing the unchanged manifest. The delay uses the first export backoff
+interval so a persistent storage failure cannot create a hot I/O loop.
+
+Retry timer callbacks enqueue through the normal bounded admission path. If a
+callback raises, the shared delayed scheduler reports that failure to the
+worker after releasing scheduler ownership. The worker records a typed
+`export_retry_callback_failed` diagnostic and schedules the same delayed
+reconciliation fallback. Thus callback failure cannot strand a durable job,
+and reconciliation never bypasses a still-live retry timer.
+
 ### State Transitions
 
 | From                           | Action    | To         |

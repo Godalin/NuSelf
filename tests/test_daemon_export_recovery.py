@@ -153,6 +153,50 @@ class _TextAgent:
         return self.result
 
 
+class _ManualTimer:
+    instances: list["_ManualTimer"] = []
+
+    def __init__(
+        self,
+        interval: float,
+        function: Callable[..., None],
+        args: tuple[object, ...],
+    ) -> None:
+        self.interval = interval
+        self.function = function
+        self.args = args
+        self.daemon = False
+        self.cancelled = False
+        self.__class__.instances.append(self)
+
+    def start(self) -> None:
+        return None
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+    def fire(self) -> None:
+        self.function(*self.args)
+
+
+def _export_supervisor(
+    root: Path,
+    shutdown: threading.Event,
+) -> DaemonWorkerSupervisor:
+    supervisor = DaemonWorkerSupervisor(
+        root,
+        shutdown,
+        EventPublisher(),
+    )
+    supervisor.register(
+        "export_worker",
+        thread_name="test-export-worker",
+        target=lambda: None,
+    )
+    supervisor.seal()
+    return supervisor
+
+
 def _reason_steps() -> tuple[ReasoningStep, ...]:
     return (
         ReasoningStep(
@@ -355,11 +399,7 @@ def test_reason_export_worker_composes_with_injected_text_agent(
     worker = ReasonExportWorker(
         tmp_path,
         shutdown,
-        DaemonWorkerSupervisor(
-            tmp_path,
-            shutdown,
-            EventPublisher(),
-        ),
+        _export_supervisor(tmp_path, shutdown),
         text_agent=agent,
     )
     steps = _reason_steps()
@@ -402,11 +442,7 @@ def test_reason_export_worker_propagates_text_agent_failure(
     worker = ReasonExportWorker(
         tmp_path,
         shutdown,
-        DaemonWorkerSupervisor(
-            tmp_path,
-            shutdown,
-            EventPublisher(),
-        ),
+        _export_supervisor(tmp_path, shutdown),
         text_agent=_FailingTextAgent(),
     )
     steps = _reason_steps()
@@ -678,11 +714,7 @@ def test_full_export_admission_recovers_from_durable_manifests_online(
     worker = ReasonExportWorker(
         tmp_path,
         shutdown,
-        DaemonWorkerSupervisor(
-            tmp_path,
-            shutdown,
-            EventPublisher(),
-        ),
+        _export_supervisor(tmp_path, shutdown),
         text_agent=_TextAgent(),
         queue_capacity=1,
     )
@@ -728,11 +760,7 @@ def test_reconciliation_does_not_bypass_live_retry_timer(
     worker = ReasonExportWorker(
         tmp_path,
         shutdown,
-        DaemonWorkerSupervisor(
-            tmp_path,
-            shutdown,
-            EventPublisher(),
-        ),
+        _export_supervisor(tmp_path, shutdown),
         text_agent=_TextAgent(),
     )
     worker.prepare()
@@ -945,6 +973,76 @@ def test_retry_timer_start_failure_rolls_back_and_requests_reconciliation(
     assert event.status == "degraded"
     assert event.metadata == {"attempts": 1, "next_backoff": 10}
     assert "timer start unavailable" in (event.error or "")
+
+
+def test_retry_callback_failure_requests_delayed_reconciliation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path, progress_path = _job_paths(tmp_path)
+    write_json_atomic(manifest_path, _manifest().to_wire())
+    write_json_atomic(progress_path, _progress().to_wire())
+
+    def compose(
+        self: ReasonOutputService,
+        thread_id: str,
+        job_id: str,
+        runner: object,
+    ) -> ReasonOutputManifest:
+        del self, thread_id, job_id, runner
+        raise RuntimeError("compose failed")
+
+    _ManualTimer.instances.clear()
+    monkeypatch.setattr(ReasonOutputService, "compose_with_runner", compose)
+    monkeypatch.setattr(
+        "nuself.runtime.scheduling.threading.Timer",
+        _ManualTimer,
+    )
+    shutdown = threading.Event()
+    worker = ReasonExportWorker(
+        tmp_path,
+        shutdown,
+        _export_supervisor(tmp_path, shutdown),
+        text_agent=_TextAgent(),
+    )
+    worker.prepare()
+    worker._process(
+        _job_message(
+            name="reason.output.export",
+            producer="reasoning",
+            job_id="job_1",
+            resource_id="thread_1",
+        )
+    )
+    enqueue_error = OSError("queue unavailable")
+
+    def fail_enqueue(message: JobMessage) -> None:
+        del message
+        raise enqueue_error
+
+    monkeypatch.setattr(worker, "enqueue", fail_enqueue)
+    _ManualTimer.instances[0].fire()
+
+    assert worker.pending_retry_count == 1
+    event = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="daemon",
+        )
+        if event.event == "export_retry_callback_failed"
+    ][-1]
+    assert event.error == "queue unavailable"
+    assert event.metadata == {"attempts": 1, "next_backoff": 10}
+
+    _ManualTimer.instances[1].fire()
+    worker._run_requested_reconciliation(
+        PrivateWorkspaceStore(tmp_path, scope="reason")
+    )
+    replayed = worker._queue.get_nowait()
+    assert replayed.job_id == "job_1"
+    worker._queue.complete(replayed)
+    worker.stop()
 
 
 def test_progress_diagnostic_failure_cannot_block_composition(
@@ -1259,7 +1357,7 @@ def test_worker_stop_closes_retry_scheduling_race(
     assert state.reason_export_worker.pending_retry_count == 0
 
 
-def test_worker_logs_state_persistence_failure_without_retry(
+def test_worker_recovers_state_persistence_failure_online(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1286,12 +1384,41 @@ def test_worker_logs_state_persistence_failure_without_retry(
         "nuself.daemon.reason_export.persist_export_failure",
         fail_persist,
     )
-    state = DaemonState(tmp_path)
-    state.start_background_export_worker()
-    event = _wait_for_event(tmp_path, "export_job_state_persist_failed")
-    state.shutdown_requested.set()
-    state.stop_background_export_worker()
+    _ManualTimer.instances.clear()
+    monkeypatch.setattr(
+        "nuself.runtime.scheduling.threading.Timer",
+        _ManualTimer,
+    )
+    shutdown = threading.Event()
+    worker = ReasonExportWorker(
+        tmp_path,
+        shutdown,
+        _export_supervisor(tmp_path, shutdown),
+        text_agent=_TextAgent(),
+    )
+    worker.prepare()
+    worker._process(
+        _job_message(
+            name="reason.output.export",
+            producer="reasoning",
+            job_id="job_1",
+            resource_id="thread_1",
+        )
+    )
 
+    event = _wait_for_event(tmp_path, "export_job_state_persist_failed")
     assert event.error == "disk full <- compose failed"
     assert event.metadata == {}
-    assert state.reason_export_worker.pending_retry_count == 0
+    assert worker.pending_retry_count == 1
+    assert _ManualTimer.instances[0].interval == 10
+    assert not worker._reconciliation_requested.is_set()
+
+    _ManualTimer.instances[0].fire()
+    assert worker._reconciliation_requested.is_set()
+    worker._run_requested_reconciliation(
+        PrivateWorkspaceStore(tmp_path, scope="reason")
+    )
+    replayed = worker._queue.get_nowait()
+    assert replayed.job_id == "job_1"
+    worker._queue.complete(replayed)
+    worker.stop()

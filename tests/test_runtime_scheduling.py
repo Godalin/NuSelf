@@ -70,6 +70,39 @@ def test_delayed_scheduler_removes_ownership_before_callback(
     assert scheduler.pending_count == 0
 
 
+def test_delayed_scheduler_observes_callback_error_after_releasing_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _reset_fake_timer()
+    monkeypatch.setattr(
+        "nuself.runtime.scheduling.threading.Timer",
+        _FakeTimer,
+    )
+    scheduler = DelayedTaskScheduler()
+    callback_error = OSError("callback failed")
+    observed: list[tuple[object, BaseException]] = []
+
+    def fail() -> None:
+        raise callback_error
+
+    def observe(key: object, error: BaseException) -> None:
+        observed.append((key, error))
+        assert scheduler.schedule("replacement", 1, lambda: None)
+
+    assert scheduler.schedule(
+        "original",
+        1,
+        fail,
+        on_callback_error=observe,
+    )
+
+    _FakeTimer.instances[0].fire()
+
+    assert observed == [("original", callback_error)]
+    assert not scheduler.contains("original")
+    assert scheduler.contains("replacement")
+
+
 def test_delayed_scheduler_rolls_back_failed_start(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

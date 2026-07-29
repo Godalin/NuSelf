@@ -285,6 +285,14 @@ Durable job wake-up owners use `runtime.jobs.JobAdmissionQueue` rather than raw
 ownership, and explicit completion are shared transport mechanics; manifest
 reconciliation and retry policy remain domain-owned.
 
+Owned delayed callbacks execute after the scheduler releases its lifecycle
+lock. A scheduled task may define one callback-error observer; callback
+failure removes task ownership first, then invokes that observer with the task
+identity and original `BaseException`. The scheduler must not retain a failed
+task, deadlock a callback that schedules more work, or silently lose callback
+failure. Observer failure remains chained to the callback failure rather than
+being mistaken for successful observation.
+
 Local job producers use a sealed `JobDefinitionRegistry.create(...)`; they do
 not construct `JobMessage` fields directly. Queue ingress still validates
 messages because decoded or externally supplied envelopes are untrusted.

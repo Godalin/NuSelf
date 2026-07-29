@@ -475,6 +475,7 @@ class ReasonExportWorker:
                 project_root=self._project_root,
                 metadata={},
             )
+            self._schedule_delayed_reconciliation(thread_id, job_id)
             return
         attempts = failed_manifest.attempts
         if attempts >= MAX_EXPORT_ATTEMPTS:
@@ -507,6 +508,14 @@ class ReasonExportWorker:
                 retry_key,
                 backoff,
                 lambda: self.enqueue(retry_message),
+                on_callback_error=lambda _key, error: (
+                    self._handle_retry_callback_error(
+                        thread_id,
+                        job_id,
+                        error,
+                        retry_metadata,
+                    )
+                ),
             )
         except Exception as schedule_error:
             report_reason_failure(
@@ -524,6 +533,41 @@ class ReasonExportWorker:
             project_root=self._project_root,
             metadata=retry_metadata,
         )
+
+    def _handle_retry_callback_error(
+        self,
+        thread_id: str,
+        job_id: str,
+        callback_error: BaseException,
+        metadata: dict[str, object],
+    ) -> None:
+        report_reason_failure(
+            callback_error,
+            event="export_retry_callback_failed",
+            project_root=self._project_root,
+            metadata=metadata,
+        )
+        self._schedule_delayed_reconciliation(thread_id, job_id)
+
+    def _schedule_delayed_reconciliation(
+        self,
+        thread_id: str,
+        job_id: str,
+    ) -> None:
+        if self._stopping.is_set() or self._shutdown_requested.is_set():
+            return
+        key = ("reconciliation", thread_id, job_id)
+        try:
+            scheduled = self._retry_scheduler.schedule(
+                key,
+                EXPORT_RETRY_BASE_SECONDS,
+                self._reconciliation_requested.set,
+            )
+        except Exception:
+            self._reconciliation_requested.set()
+            return
+        if not scheduled and not self._retry_scheduler.contains(key):
+            self._reconciliation_requested.set()
 
     def _reconcile(self, store: PrivateWorkspaceStore) -> None:
         reconciled = 0

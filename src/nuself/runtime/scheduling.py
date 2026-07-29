@@ -20,6 +20,8 @@ class DelayedTaskScheduler:
         key: Hashable,
         delay_seconds: float,
         callback: Callable[[], None],
+        *,
+        on_callback_error: Callable[[Hashable, BaseException], None] | None = None,
     ) -> bool:
         """Schedule one unique key, returning false when closed or duplicate."""
 
@@ -33,13 +35,15 @@ class DelayedTaskScheduler:
             )
         if not callable(callback):
             raise TypeError("delayed task callback must be callable")
+        if on_callback_error is not None and not callable(on_callback_error):
+            raise TypeError("delayed task callback error observer must be callable")
         with self._lock:
             if self._closed or key in self._timers:
                 return False
             timer = threading.Timer(
                 delay_seconds,
                 self._run,
-                args=(key, callback),
+                args=(key, callback, on_callback_error),
             )
             timer.daemon = True
             self._timers[key] = timer
@@ -55,12 +59,21 @@ class DelayedTaskScheduler:
         self,
         key: Hashable,
         callback: Callable[[], None],
+        on_callback_error: Callable[[Hashable, BaseException], None] | None,
     ) -> None:
         with self._lock:
             timer = self._timers.pop(key, None)
             if timer is None or self._closed:
                 return
+        try:
             callback()
+        except BaseException as callback_error:
+            if on_callback_error is None:
+                raise
+            try:
+                on_callback_error(key, callback_error)
+            except BaseException as observer_error:
+                raise observer_error from callback_error
 
     def close(self) -> int:
         """Close scheduling, cancel owned timers, and return the cancel count."""
