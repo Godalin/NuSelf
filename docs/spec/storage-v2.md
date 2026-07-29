@@ -151,6 +151,11 @@ When a value written through `put` contains an `id` field, it must be a string
 equal to the collection key. A mismatch is a producer contract error and no
 file is created or replaced.
 
+File collection deletion uses the shared durable-delete boundary. Returning
+from `delete` means the unlink and parent-directory synchronization both
+succeeded; a post-unlink sync failure raises the typed visible-but-uncertain
+delete error rather than reporting a normal failure or silently succeeding.
+
 ### Repository 模式变更（示例）
 
 ```python

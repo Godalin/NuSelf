@@ -10,9 +10,11 @@ import nuself.storage as storage
 from nuself.logs import read_log_events
 from nuself.private_fs import ensure_private_file
 from nuself.storage import (
+    AtomicDeleteDurabilityError,
     AtomicWriteCleanupError,
     AtomicWriteDurabilityError,
     FileStorageBackend,
+    delete_file_durable,
     write_json_atomic,
     write_text_atomic,
 )
@@ -185,6 +187,96 @@ def test_write_text_atomic_replaces_complete_destination(
 
     assert path.read_text(encoding="utf-8") == "new\n"
     assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_delete_file_durable_unlinks_before_directory_sync(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "runtime" / "state.json"
+    path.parent.mkdir()
+    path.write_text("state", encoding="utf-8")
+    operations: list[str] = []
+    original_unlink = Path.unlink
+
+    def record_unlink(
+        target: Path,
+        missing_ok: bool = False,
+    ) -> None:
+        operations.append("unlink")
+        original_unlink(target, missing_ok=missing_ok)
+
+    def record_sync(directory: Path) -> None:
+        assert not path.exists()
+        assert directory == path.parent
+        operations.append("directory_sync")
+
+    monkeypatch.setattr(Path, "unlink", record_unlink)
+    monkeypatch.setattr(storage, "_sync_directory", record_sync)
+
+    assert delete_file_durable(path) is True
+    assert operations == ["unlink", "directory_sync"]
+
+
+def test_delete_file_durable_missing_is_explicit_noop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sync_calls = 0
+
+    def unexpected_sync(directory: Path) -> None:
+        nonlocal sync_calls
+        sync_calls += 1
+
+    monkeypatch.setattr(storage, "_sync_directory", unexpected_sync)
+
+    assert delete_file_durable(tmp_path / "missing.json") is False
+    assert sync_calls == 0
+
+
+def test_delete_file_durable_reports_visible_uncertain_delete(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "state.json"
+    path.write_text("state", encoding="utf-8")
+    sync_error = OSError("directory sync unavailable")
+
+    def fail_sync(directory: Path) -> None:
+        assert directory == tmp_path
+        assert not path.exists()
+        raise sync_error
+
+    monkeypatch.setattr(storage, "_sync_directory", fail_sync)
+
+    with pytest.raises(AtomicDeleteDurabilityError) as captured:
+        delete_file_durable(path)
+
+    assert captured.value.deleted_path == path
+    assert captured.value.sync_error is sync_error
+    assert captured.value.__cause__ is sync_error
+    assert not path.exists()
+
+
+def test_file_collection_delete_propagates_uncertain_durability(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    collection = FileStorageBackend(
+        tmp_path / "private",
+        project_root=tmp_path,
+    ).collection("memory_entries")
+    collection.put("record", {"id": "record"})
+
+    def fail_sync(directory: Path) -> None:
+        raise OSError(f"cannot sync {directory.name}")
+
+    monkeypatch.setattr(storage, "_sync_directory", fail_sync)
+
+    with pytest.raises(AtomicDeleteDurabilityError):
+        collection.delete("record")
+
+    assert collection.get("record") is None
 
 
 def test_write_text_atomic_syncs_content_before_replace_and_directory_after(

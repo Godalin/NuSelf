@@ -60,6 +60,11 @@ trustworthy 0.3.0 release candidate.
 - Focused memory/profile/eval tests: 94 passed; pyright reported 0 errors and 0
   warnings. The source scan finds no remaining optional-number `or default`
   pattern.
+- `delete_file_durable()` now makes file-collection deletion symmetric with
+  atomic replacement: a post-unlink directory-sync failure retains the visible
+  deletion and raises `AtomicDeleteDurabilityError`.
+- Focused storage/candidate/notification deletion tests: 107 passed; pyright
+  reported 0 errors and 0 warnings.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 

@@ -124,6 +124,15 @@ process-visible but its crash durability is uncertain; its `sync_error` is the
 explicit cause. The shared writer performs no hidden write, sync, replace, or
 cleanup retry.
 
+NuSelf-owned file deletion uses `delete_file_durable()`. It unlinks one exact
+non-directory path and then synchronizes its parent directory. A missing path
+is an explicit no-op result. A successful unlink followed by parent-sync
+failure raises `AtomicDeleteDurabilityError`: deletion is process-visible but
+crash durability is uncertain, and the sync failure is its explicit cause.
+The helper never retries or claims that the path remains present. Callers that
+need a logical multi-record transaction must inspect authoritative state
+before choosing compensation after either visible-but-uncertain mutation.
+
 `write_json_atomic()` validates and serializes the complete payload as strict
 JSON before creating its temporary file. Non-string mapping keys, arbitrary
 objects, and non-finite floats fail without touching the destination or
@@ -139,6 +148,12 @@ An explicitly user-selected external export is not a NuSelf-owned runtime
 path. Its parent directory and resulting mode continue to follow the user's
 filesystem and `umask`; internal helpers must not silently chmod that external
 directory.
+
+File-backed collections and any subsystem that promises crash-durable removal
+must use this helper. Temporary cleanup whose outcome is already represented
+by another lifecycle error, retention pruning, ephemeral socket/PID metadata,
+stable lock-file retention, and explicit external user-selected artifacts
+remain separate contracts and document their own deletion semantics.
 
 ### Import Placement Policy
 

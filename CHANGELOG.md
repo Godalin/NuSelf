@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- File-backed collection deletion now synchronizes the parent directory and
+  reports post-unlink durability uncertainty with a typed error.
 - Explicit zero-valued importance and evaluation thresholds now round-trip
   without being replaced by defaults; numeric wire fields reject booleans.
 - Thread rename, branch, archive, unarchive, and delete now coordinate with

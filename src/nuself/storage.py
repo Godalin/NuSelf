@@ -140,6 +140,23 @@ class AtomicWriteDurabilityError(RuntimeError):
         self.sync_error = sync_error
 
 
+class AtomicDeleteDurabilityError(RuntimeError):
+    """An unlink is visible but its directory entry may not be durable."""
+
+    def __init__(
+        self,
+        deleted_path: Path,
+        *,
+        sync_error: BaseException,
+    ) -> None:
+        super().__init__(
+            "atomic destination deleted but directory synchronization failed: "
+            f"{deleted_path}"
+        )
+        self.deleted_path = deleted_path
+        self.sync_error = sync_error
+
+
 def _read_json_record(path: Path) -> dict[str, object]:
     raw = decode_json_value(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -236,6 +253,23 @@ def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
     )
 
 
+def delete_file_durable(path: Path) -> bool:
+    """Unlink one file and durably synchronize its parent directory."""
+
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return False
+    try:
+        _sync_directory(path.parent)
+    except BaseException as sync_error:
+        raise AtomicDeleteDurabilityError(
+            path,
+            sync_error=sync_error,
+        ) from sync_error
+    return True
+
+
 class _FileCollection:
     """One collection backed by a directory of JSON files."""
 
@@ -274,7 +308,7 @@ class _FileCollection:
         path = self._record_path(key)
         if path.exists():
             self._require_regular_record(path)
-            path.unlink()
+            delete_file_durable(path)
         elif path.is_symlink():
             raise ValueError("file collection record must not be a symlink")
 

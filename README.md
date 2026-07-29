@@ -45,6 +45,9 @@ to callers.
 File-backed collection identifiers are opaque record keys: path syntax,
 record/key mismatches, and symlink redirection are rejected at the shared
 storage boundary.
+Successful file-backed record deletion now includes parent-directory
+synchronization; a visible deletion whose crash durability is unknown is
+reported distinctly instead of being treated as an ordinary failed unlink.
 
 Daemon instance-lock acquire and release likewise preserve simultaneous lock
 operation and handle-close failures, so ownership errors are not hidden by

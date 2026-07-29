@@ -38,6 +38,8 @@ Persona graph 的 LLM 故障会保留确定性的贡献、汇总和激活 fallba
 同时暴露两个错误和残留路径。
 文件后端的 collection identifier 是不透明 record key；共享存储边界会拒绝路径
 语法、record/key identity 不一致以及符号链接重定向。
+文件后端 record 删除成功还要求同步 parent directory；若删除已可见但 crash
+durability 未知，系统会用独立 typed error 报告，而不是当作普通 unlink 失败。
 
 Daemon instance lock 的获取和释放也会同时保留锁操作与句柄关闭错误，避免清理
 故障掩盖真实所有权状态。
