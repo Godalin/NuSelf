@@ -68,6 +68,8 @@ Memory curator 活动现在以结构化事件写入 `memory.log`；curator trace
 organizer completion audit 失败不会覆盖已持久化的 memory 或 reflection 结果。
 Curator action batch 会在写 candidate 前完整验证；未知或强转字段、越界 confidence
 和不完整 mutation 会让整个 source range defer，不再部分执行其余有效 action。
+Memory 或 profile 的显式 `importance=0.0` 在 file/SQLite round-trip 后仍保持为零；
+只有 wire field 缺失时才应用默认值。
 
 Email 与 macOS delivery failure 诊断不会覆盖明确的 adapter 失败结果，也不会
 阻止 outbox 持久化失败 attempt。

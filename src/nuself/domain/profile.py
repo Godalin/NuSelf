@@ -26,9 +26,21 @@ def _optional_float(data: dict[str, object], field_name: str) -> float | None:
     value = data.get(field_name)
     if value is None:
         return None
+    if isinstance(value, bool):
+        raise ValueError(f"field '{field_name}' must be a number or null")
     if isinstance(value, int | float):
         return float(value)
     raise ValueError(f"field '{field_name}' must be a number or null")
+
+
+def _optional_float_default(
+    data: dict[str, object],
+    field_name: str,
+    *,
+    default: float,
+) -> float:
+    value = _optional_float(data, field_name)
+    return default if value is None else value
 
 
 def _freeze_str_sequence(
@@ -205,7 +217,11 @@ class ProfileItem:
             tags=_expect_str_list(data, "tags"),
             source_refs=_expect_str_list(data, "source_refs"),
             confidence=_expect_float(data, "confidence"),
-            importance=_optional_float(data, "importance") or 0.5,
+            importance=_optional_float_default(
+                data,
+                "importance",
+                default=0.5,
+            ),
             privacy=_expect_privacy(data, "privacy"),
             created_at=_expect_str(data, "created_at"),
             updated_at=_expect_str(data, "updated_at"),

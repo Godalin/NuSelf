@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from nuself.eval import (
     EvalFixture,
     FixtureExpectations,
@@ -13,6 +15,32 @@ from nuself.eval import (
     score_result,
 )
 from nuself.agent.chat import ChatResult, ChatStructuredOutput
+
+
+def test_fixture_numeric_zero_is_not_treated_as_missing() -> None:
+    expectations = FixtureExpectations.from_wire(
+        {
+            "evidence_references_count_min": 0,
+            "confidence_min": 0.0,
+        }
+    )
+
+    assert expectations.evidence_references_count_min == 0
+    assert expectations.confidence_min == 0.0
+
+
+@pytest.mark.parametrize(
+    "wire",
+    [
+        {"evidence_references_count_min": True},
+        {"confidence_min": False},
+    ],
+)
+def test_fixture_numeric_fields_reject_booleans(
+    wire: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError):
+        FixtureExpectations.from_wire(wire)
 
 
 def test_score_result_passes_all_expectations() -> None:

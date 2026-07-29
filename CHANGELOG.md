@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Explicit zero-valued importance and evaluation thresholds now round-trip
+  without being replaced by defaults; numeric wire fields reject booleans.
 - Thread rename, branch, archive, unarchive, and delete now coordinate with
   chat persistence through stable cross-process lock files.
 - File-backed collections now reject path-like keys, record/key identity

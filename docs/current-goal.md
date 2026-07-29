@@ -53,6 +53,13 @@ trustworthy 0.3.0 release candidate.
   snapshot.
 - Focused ThreadStore/chat/CLI lifecycle tests: 70 passed; pyright reported 0
   errors and 0 warnings.
+- Entry, candidate, generic memory object, profile, and evaluation numeric
+  decoders now distinguish missing fields from zero and reject booleans.
+  Repository round-trips prove `0.0`, interior values, `1.0`, missing defaults,
+  and invalid booleans.
+- Focused memory/profile/eval tests: 94 passed; pyright reported 0 errors and 0
+  warnings. The source scan finds no remaining optional-number `or default`
+  pattern.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 
@@ -62,4 +69,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-Memory numeric default correctness.
+File mutation commit-state and durable-delete semantics.

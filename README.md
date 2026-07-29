@@ -84,6 +84,8 @@ already-persisted memory or reflection results.
 Curator action batches are validated completely before candidate dispatch.
 Unknown or coercive fields, out-of-range confidence, and incomplete mutations
 defer the source range instead of partially applying valid sibling actions.
+An explicit memory or profile importance of `0.0` remains zero across file and
+SQLite round-trips; defaults apply only when the wire field is absent.
 
 Email and macOS delivery-failure diagnostics cannot replace a definitive
 adapter failure or prevent the outbox from persisting the failed attempt.

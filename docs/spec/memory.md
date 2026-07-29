@@ -19,6 +19,10 @@
    `importance`. Its schema uses strict types, forbids unknown fields, requires
    1-4 tags, and constrains confidence and importance from zero through one.
    Invalid values are rejected rather than defaulted, coerced, or clamped.
+   Persisted `importance=0.0` is a valid explicit value and must round-trip
+   unchanged for entries, candidates, and generic memory objects. Defaults
+   apply only when the field is absent, never because a numeric value is
+   falsy; booleans remain invalid.
 8. The generated type must be registered and the normalized title and tags
    must remain non-empty.
 9. Result is written directly to `MemoryEntryRepository` (bypasses candidate

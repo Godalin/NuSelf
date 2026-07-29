@@ -258,7 +258,11 @@ class MemoryEntry:
             tags=_expect_str_list(data, "tags"),
             source_refs=_expect_str_list(data, "source_refs"),
             confidence=_expect_float(data, "confidence"),
-            importance=_optional_float(data, "importance") or 0.5,
+            importance=_optional_float_default(
+                data,
+                "importance",
+                default=0.5,
+            ),
             privacy=_expect_privacy(data, "privacy"),
             review_state=_expect_review_state(data, "review_state"),
             created_at=_expect_str(data, "created_at"),
@@ -484,7 +488,11 @@ class MemoryCandidate:
             tags=_expect_str_list(data, "tags"),
             source_refs=_expect_str_list(data, "source_refs"),
             confidence=_expect_float(data, "confidence"),
-            importance=_optional_float(data, "importance") or 0.5,
+            importance=_optional_float_default(
+                data,
+                "importance",
+                default=0.5,
+            ),
             privacy=_expect_privacy(data, "privacy"),
             review_state=_expect_candidate_review_state(data, "review_state"),
             reason=_optional_str(data, "reason") or "",
@@ -565,7 +573,11 @@ class MemoryObject:
             payload=_expect_dict(data, "payload"),
             metadata=_expect_dict(data, "metadata"),
             confidence=_expect_float(data, "confidence"),
-            importance=_optional_float(data, "importance") or 1.0,
+            importance=_optional_float_default(
+                data,
+                "importance",
+                default=1.0,
+            ),
             source_refs=_expect_str_list(data, "source_refs"),
             review_state=_expect_review_state(data, "review_state"),
             privacy=_expect_privacy(data, "privacy"),
@@ -1196,9 +1208,21 @@ def _optional_float(data: dict[str, object], field_name: str) -> float | None:
     value = data.get(field_name)
     if value is None:
         return None
+    if isinstance(value, bool):
+        raise ValueError(f"field '{field_name}' must be a number or null")
     if isinstance(value, int | float):
         return float(value)
     raise ValueError(f"field '{field_name}' must be a number or null")
+
+
+def _optional_float_default(
+    data: dict[str, object],
+    field_name: str,
+    *,
+    default: float,
+) -> float:
+    value = _optional_float(data, field_name)
+    return default if value is None else value
 
 
 def _optional_dict(data: dict[str, object], field_name: str) -> dict[str, object]:

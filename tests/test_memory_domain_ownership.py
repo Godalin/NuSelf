@@ -132,3 +132,30 @@ def test_candidate_and_open_memory_object_own_collections() -> None:
         "tags": ["open"],
     }
     assert MemoryObject.from_wire(wire) == memory
+
+
+@pytest.mark.parametrize("importance", [0.0, 1.0])
+def test_memory_object_importance_roundtrips_zero_and_one(
+    importance: float,
+) -> None:
+    memory = MemoryObject(
+        type="belief",
+        payload={"title": "Importance", "body": "Explicit value."},
+        importance=importance,
+    )
+
+    assert MemoryObject.from_wire(memory.to_wire()).importance == importance
+
+
+def test_memory_object_importance_defaults_only_when_missing() -> None:
+    wire = MemoryObject(
+        type="belief",
+        payload={"title": "Importance", "body": "Default value."},
+    ).to_wire()
+    del wire["importance"]
+
+    assert MemoryObject.from_wire(wire).importance == 1.0
+
+    wire["importance"] = True
+    with pytest.raises(ValueError, match="number"):
+        MemoryObject.from_wire(wire)

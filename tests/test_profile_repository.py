@@ -134,23 +134,42 @@ def test_profile_item_with_updates_preserves_unmodified_fields(tmp_path: Path) -
     assert loaded.confidence == 0.9
 
 
-def test_profile_item_importance_roundtrip(tmp_path: Path) -> None:
+@pytest.mark.parametrize("importance", [0.0, 0.85, 1.0])
+def test_profile_item_importance_roundtrip(
+    tmp_path: Path,
+    importance: float,
+) -> None:
     repo = ProfileItemRepository(tmp_path)
     item = repo.save(
         ProfileItem(
             type="profile_fact",
             title="Importance test",
             body="This item has custom importance.",
-            importance=0.85,
+            importance=importance,
         )
     )
     loaded = repo.get(item.id)
-    assert loaded.importance == 0.85
+    assert loaded.importance == importance
 
     wire = item.to_wire()
-    assert wire["importance"] == 0.85
+    assert wire["importance"] == importance
     restored = ProfileItem.from_wire(wire)
-    assert restored.importance == 0.85
+    assert restored.importance == importance
+
+
+def test_profile_item_importance_defaults_only_when_missing() -> None:
+    wire = ProfileItem(
+        type="profile_fact",
+        title="Importance default",
+        body="Missing importance uses the schema default.",
+    ).to_wire()
+    del wire["importance"]
+
+    assert ProfileItem.from_wire(wire).importance == 0.5
+
+    wire["importance"] = True
+    with pytest.raises(ValueError, match="number"):
+        ProfileItem.from_wire(wire)
 
 
 @pytest.mark.parametrize("field_name", ["supersedes", "related_memory_ids"])

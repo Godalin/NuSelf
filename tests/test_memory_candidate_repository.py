@@ -484,29 +484,48 @@ def test_memory_candidate_repository_edit_missing_raises(tmp_path: Path) -> None
     raise AssertionError("expected MemoryCandidateNotFound")
 
 
-def test_memory_candidate_importance_roundtrip_and_accept(tmp_path: Path) -> None:
+@pytest.mark.parametrize("importance", [0.0, 0.85, 1.0])
+def test_memory_candidate_importance_roundtrip_and_accept(
+    tmp_path: Path,
+    importance: float,
+) -> None:
     repo = MemoryCandidateRepository(tmp_path)
     candidate = repo.save(
         MemoryCandidate(
             type="belief",
             title="Importance candidate",
             body="This candidate has custom importance.",
-            importance=0.85,
+            importance=importance,
         )
     )
-    assert repo.get(candidate.id).importance == 0.85
+    assert repo.get(candidate.id).importance == importance
 
     wire = candidate.to_wire()
-    assert wire["importance"] == 0.85
+    assert wire["importance"] == importance
     restored = MemoryCandidate.from_wire(wire)
-    assert restored.importance == 0.85
+    assert restored.importance == importance
 
     entry = candidate.to_entry()
-    assert entry.importance == 0.85
+    assert entry.importance == importance
 
     accepted = repo.accept(candidate.id)
     assert isinstance(accepted, MemoryEntry)
-    assert accepted.importance == 0.85
+    assert accepted.importance == importance
+
+
+def test_memory_candidate_importance_defaults_only_when_missing() -> None:
+    wire = MemoryCandidate(
+        type="belief",
+        title="Importance default",
+        body="Missing importance uses the schema default.",
+    ).to_wire()
+    del wire["importance"]
+
+    assert MemoryCandidate.from_wire(wire).importance == 0.5
+
+    wire["importance"] = True
+    with pytest.raises(ValueError, match="number"):
+        MemoryCandidate.from_wire(wire)
 
 
 @pytest.mark.parametrize("field_name", ["supersedes", "related_memory_ids"])

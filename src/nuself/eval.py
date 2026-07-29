@@ -59,7 +59,11 @@ class FixtureExpectations:
     def from_wire(cls, data: dict[str, object]) -> "FixtureExpectations":
         return cls(
             answer_contains=tuple(_optional_str_list(data, "answer_contains")),
-            evidence_references_count_min=_optional_int(data, "evidence_references_count_min") or 0,
+            evidence_references_count_min=_optional_int_default(
+                data,
+                "evidence_references_count_min",
+                default=0,
+            ),
             epistemic_status=_optional_str(data, "epistemic_status"),
             confidence_min=_optional_float(data, "confidence_min"),
             banned_patterns=tuple(_optional_str_list(data, "banned_patterns")),
@@ -259,14 +263,32 @@ def _optional_str(data: dict[str, object], field_name: str) -> str | None:
 
 def _optional_int(data: dict[str, object], field_name: str) -> int | None:
     value = data.get(field_name)
-    return value if isinstance(value, int) else None
+    if value is None:
+        return None
+    if type(value) is int:
+        return value
+    raise ValueError(f"field '{field_name}' must be an integer or null")
+
+
+def _optional_int_default(
+    data: dict[str, object],
+    field_name: str,
+    *,
+    default: int,
+) -> int:
+    value = _optional_int(data, field_name)
+    return default if value is None else value
 
 
 def _optional_float(data: dict[str, object], field_name: str) -> float | None:
     value = data.get(field_name)
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError(f"field '{field_name}' must be a number or null")
     if isinstance(value, int | float):
         return float(value)
-    return None
+    raise ValueError(f"field '{field_name}' must be a number or null")
 
 
 def _optional_str_list(data: dict[str, object], field_name: str) -> list[str]:

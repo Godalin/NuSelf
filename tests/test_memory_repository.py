@@ -277,23 +277,42 @@ def test_memory_entry_rejects_obsolete_relation_fields(
         MemoryEntry.from_wire(wire)
 
 
-def test_memory_entry_importance_roundtrip(tmp_path: Path) -> None:
+@pytest.mark.parametrize("importance", [0.0, 0.9, 1.0])
+def test_memory_entry_importance_roundtrip(
+    tmp_path: Path,
+    importance: float,
+) -> None:
     repo = MemoryEntryRepository(tmp_path)
     entry = repo.save(
         MemoryEntry(
             type="belief",
             title="Importance test",
             body="This entry has custom importance.",
-            importance=0.9,
+            importance=importance,
         )
     )
     loaded = repo.get(entry.id)
-    assert loaded.importance == 0.9
+    assert loaded.importance == importance
 
     wire = entry.to_wire()
-    assert wire["importance"] == 0.9
+    assert wire["importance"] == importance
     restored = MemoryEntry.from_wire(wire)
-    assert restored.importance == 0.9
+    assert restored.importance == importance
+
+
+def test_memory_entry_importance_defaults_only_when_missing() -> None:
+    wire = MemoryEntry(
+        type="belief",
+        title="Importance default",
+        body="Missing importance uses the schema default.",
+    ).to_wire()
+    del wire["importance"]
+
+    assert MemoryEntry.from_wire(wire).importance == 0.5
+
+    wire["importance"] = True
+    with pytest.raises(ValueError, match="number"):
+        MemoryEntry.from_wire(wire)
 
 
 def test_registry_importance_delegates_and_fallbacks() -> None:
