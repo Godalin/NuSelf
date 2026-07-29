@@ -874,6 +874,36 @@ state.
 - Export queue/timer cancellation remains an explicit export-worker cleanup
   performed before join.
 
+## Owned One-Shot Execution
+
+`nuself.runtime.execution.OwnedCall` owns one result-producing thread whose
+callable runs exactly once. It is distinct from `OwnedWorker`: a worker exposes
+long-lived lifecycle state to a supervisor, while a call transports one value
+or one escaping `BaseException` back to its initiating thread.
+
+- Construction rejects a non-callable target.
+- `start()` is duplicate-safe. Thread-start failure atomically restores the
+  unstarted state and propagates the original failure.
+- The target stores either its return value or the same escaping exception
+  object and traceback, then signals completion exactly once.
+- `wait(timeout)` reports completion without consuming the outcome. Timeouts
+  must be finite and non-negative; omitting the timeout waits until completion.
+- `outcome(timeout)` returns one typed value/error record after completion and
+  raises `TimeoutError` while the call is still running.
+- The owned thread is not a daemon thread. Process exit must not silently
+  truncate an in-flight authoritative operation.
+- `OwnedCall` does not invent cancellation. A caller that requires prompt
+  cancellation must provide a domain operation with an explicit cooperative
+  cancellation contract rather than abandoning or attempting to kill a Python
+  thread.
+
+The CLI live-activity boundary uses `OwnedCall` for its blocking send. Every
+exit after a successful start waits for completion before returning or
+re-raising, including unexpected poll/presentation failure and process-control
+exceptions. Activity processing stops immediately after such a primary
+failure, and subscription cleanup still runs. The call outcome cannot replace
+that primary failure.
+
 ## Daemon Instance Ownership
 
 Each project root has at most one daemon owner. Before reading, deleting,

@@ -29,6 +29,7 @@ from nuself.runtime.event_payloads import (
     RuntimeLogEventPayload,
     RuntimeLogLevel,
 )
+from nuself.runtime.execution import CallOutcome, OwnedCall
 from nuself.runtime.events import (
     EventDeliveryError,
     EventDeliveryFailure,
@@ -73,6 +74,7 @@ __all__ = [
     "CORE_EVENT_DEFINITIONS",
     "RUNTIME_SCHEMA_VERSION",
     "CleanupFailure",
+    "CallOutcome",
     "DefinitionRegistry",
     "DefinitionRegistrySealedError",
     "DuplicateDefinitionError",
@@ -99,6 +101,7 @@ __all__ = [
     "JobSink",
     "MessageKind",
     "OwnedWorker",
+    "OwnedCall",
     "RuntimeContext",
     "RuntimeEnvelope",
     "RuntimeEventDefinition",

@@ -238,6 +238,10 @@ Durable job wake-up owners use `runtime.jobs.JobAdmissionQueue` rather than raw
 ownership, and explicit completion are shared transport mechanics; manifest
 reconciliation and retry policy remain domain-owned.
 
+Result-producing one-shot thread boundaries use `runtime.execution.OwnedCall`.
+They must not reproduce ad hoc value/error boxes, daemonize authoritative work,
+or leave a successfully started call unreaped on an exceptional exit path.
+
 Delayed callbacks use `runtime.scheduling.DelayedTaskScheduler` rather than
 domain-owned `threading.Timer` collections. Domains supply stable identities,
 delay values, callbacks, diagnostics, and recovery policy; the shared scheduler

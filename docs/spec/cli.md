@@ -231,19 +231,21 @@ authoritative persona result/trace rather than being copied into Chat logs or
 transcript audit blocks. The final `persona_discussion` record contains stable
 ids, outcome booleans, and counts only.
 
-The live-chat send thread is a continuation of the interactive turn, not an
-independent worker. Its target captures the creating RuntimeContext before the
-thread starts and restores the thread's prior context after completion or
-failure. Long-lived daemon workers follow their separate runtime ownership
-contract and never inherit CLI context.
+The live-chat send call is a continuation of the interactive turn, not an
+independent worker. `OwnedCall` owns its one-shot thread; the target captures
+the creating RuntimeContext before start and restores the thread's prior
+context after completion or failure. Long-lived daemon workers follow their
+separate runtime ownership contract and never inherit CLI context.
 
 An unexpected callback `Exception` becomes a non-retryable failed interactive
 result after final activity drain and subscription close, and emits
 `chat/interactive_send_failed`. A non-`Exception` `BaseException` such as
 `KeyboardInterrupt` or `SystemExit` is process-control state: the main thread
-skips auxiliary final drain, closes the subscription, and re-raises the same
-exception object with its traceback. Control state must not be converted into
-`code=1` or replaced by activity diagnostics.
+stops auxiliary activity processing, waits for the already-started send call to
+finish, skips final drain, closes the subscription, and re-raises the same
+exception object with its traceback. Python threads are not killed or abandoned
+to simulate cancellation. Control state must not be converted into `code=1` or
+replaced by activity diagnostics.
 
 The outer interactive lifecycle retains a main-loop `BaseException` while
 running exit cleanup. If cleanup succeeds, it re-raises the same primary object

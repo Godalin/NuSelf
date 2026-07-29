@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -15,6 +14,7 @@ from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import client
 from nuself.logs import InteractiveLogCursor, LogEvent
 from nuself.runtime.context import bind_runtime_context
+from nuself.runtime.execution import OwnedCall
 from nuself.tui.render import render_log_event
 
 SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
@@ -99,27 +99,18 @@ def run_live_activity_send(
         project_root,
         enabled=daemon_activity,
     )
-    result_box: list[InteractiveChatResult] = []
-    error_box: list[Exception] = []
-    control_box: list[BaseException] = []
-
-    def target() -> None:
-        try:
-            result_box.append(send_message(message, thread_id, turn_id))
-        except Exception as exc:  # pragma: no cover - defensive thread boundary
-            error_box.append(exc)
-        except BaseException as exc:  # pragma: no cover - control boundary
-            control_box.append(exc)
-
-    send_thread = threading.Thread(
-        target=bind_runtime_context(target),
-        daemon=True,
+    send_call = OwnedCall(
+        name="nuself-interactive-send",
+        target=bind_runtime_context(
+            lambda: send_message(message, thread_id, turn_id)
+        ),
     )
     captured_events: list[LogEvent] = []
+    new_events: list[LogEvent] = []
     try:
-        send_thread.start()
+        send_call.start()
         try:
-            while send_thread.is_alive():
+            while send_call.alive:
                 if subscription_id is not None:
                     try:
                         new_events = list(
@@ -165,13 +156,16 @@ def run_live_activity_send(
                         new_events,
                         printed_logs=printed_logs,
                     )
-            send_thread.join()
-        except KeyboardInterrupt:
-            send_thread.join(timeout=0.5)
+        except BaseException:
+            send_call.wait()
             raise
 
-        if control_box:
-            control = control_box[0]
+        outcome = send_call.outcome()
+        if outcome.error is not None and not isinstance(
+            outcome.error,
+            Exception,
+        ):
+            control = outcome.error
             raise control.with_traceback(control.__traceback__)
 
         new_events = _drain_final_activity(
@@ -195,8 +189,8 @@ def run_live_activity_send(
             new_events,
             printed_logs=printed_logs,
         )
-    if error_box:
-        error = error_box[0]
+    if isinstance(outcome.error, Exception):
+        error = outcome.error
         report_chat_failure(
             error,
             event="interactive_send_failed",
@@ -205,7 +199,11 @@ def run_live_activity_send(
         print(f"chat turn failed: {error}", file=sys.stderr)
         return InteractiveChatResult(code=1), captured_events, printed_logs
     return (
-        result_box[0] if result_box else InteractiveChatResult(code=1),
+        (
+            outcome.value
+            if outcome.value is not None
+            else InteractiveChatResult(code=1)
+        ),
         captured_events,
         printed_logs,
     )

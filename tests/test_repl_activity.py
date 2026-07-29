@@ -23,6 +23,7 @@ from nuself.logs import (
     read_log_events,
     write_log_event,
 )
+from nuself.runtime.execution import OwnedCall
 
 
 def _event(
@@ -124,6 +125,7 @@ def test_live_send_drains_and_closes_daemon_subscription(
         return (pending.pop(),)
 
     monkeypatch.setattr(activity.client, "next_activity", next_activity)
+
     def close_activity(
         subscription_id: str,
         *,
@@ -789,6 +791,185 @@ def test_live_send_closes_subscription_on_unexpected_poll_failure(
         )
 
     assert closed == ["sub-1"]
+
+
+def test_live_send_reaps_call_before_reraising_presenter_failure(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    release = threading.Event()
+    finished = threading.Event()
+
+    def wait_send(
+        _message: str,
+        _thread_id: str,
+        _turn_id: str | None,
+    ) -> InteractiveChatResult:
+        release.wait(1)
+        finished.set()
+        return InteractiveChatResult(code=0)
+
+    def next_activity(*_args: object, **_kwargs: object) -> tuple[LogEvent, ...]:
+        return (_event("chat", "service_tool_called"),)
+
+    def fail_present(
+        events: list[LogEvent],
+        *,
+        printed_logs: bool,
+    ) -> bool:
+        del events, printed_logs
+        release.set()
+        raise RuntimeError("renderer unavailable")
+
+    def open_activity(
+        _turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del project_root
+        return "sub-presenter"
+
+    def close_activity(
+        _subscription_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> bool:
+        del project_root
+        return True
+
+    monkeypatch.setattr(activity.client, "next_activity", next_activity)
+    monkeypatch.setattr(activity.client, "open_activity", open_activity)
+    monkeypatch.setattr(activity.client, "close_activity", close_activity)
+
+    with pytest.raises(RuntimeError, match="renderer unavailable"):
+        run_live_activity_send(
+            wait_send,
+            "hello",
+            "default",
+            "turn-presenter",
+            tmp_path,
+            InteractiveLogCursor.from_project(tmp_path),
+            printed_logs=False,
+            daemon_activity=True,
+            poll_interval_seconds=0,
+            read_events=read_interactive_activity_events,
+            present_events=fail_present,
+        )
+
+    assert finished.is_set()
+
+
+def test_live_send_closes_subscription_when_call_start_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    closed: list[str] = []
+    start_error = RuntimeError("thread unavailable")
+
+    def open_activity(
+        _turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del project_root
+        return "sub-start"
+
+    def close_activity(
+        subscription_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> bool:
+        del project_root
+        closed.append(subscription_id)
+        return True
+
+    def fail_start(_call: OwnedCall[InteractiveChatResult]) -> bool:
+        raise start_error
+
+    monkeypatch.setattr(activity.client, "open_activity", open_activity)
+    monkeypatch.setattr(activity.client, "close_activity", close_activity)
+    monkeypatch.setattr(activity.OwnedCall, "start", fail_start)
+
+    with pytest.raises(RuntimeError) as captured:
+        run_live_activity_send(
+            _successful_send,
+            "hello",
+            "default",
+            "turn-start",
+            tmp_path,
+            InteractiveLogCursor.from_project(tmp_path),
+            printed_logs=False,
+            daemon_activity=True,
+            poll_interval_seconds=0,
+            read_events=read_interactive_activity_events,
+            present_events=_mark_presented,
+        )
+
+    assert captured.value is start_error
+    assert closed == ["sub-start"]
+
+
+def test_live_send_reaps_call_before_reraising_main_control(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    release = threading.Event()
+    finished = threading.Event()
+    control = KeyboardInterrupt("stop polling")
+
+    def wait_send(
+        _message: str,
+        _thread_id: str,
+        _turn_id: str | None,
+    ) -> InteractiveChatResult:
+        release.wait(1)
+        finished.set()
+        return InteractiveChatResult(code=0)
+
+    def interrupt_poll(
+        *_args: object,
+        **_kwargs: object,
+    ) -> tuple[LogEvent, ...]:
+        release.set()
+        raise control
+
+    def open_activity(
+        _turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del project_root
+        return "sub-control"
+
+    def close_activity(
+        _subscription_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> bool:
+        del project_root
+        return True
+
+    monkeypatch.setattr(activity.client, "next_activity", interrupt_poll)
+    monkeypatch.setattr(activity.client, "open_activity", open_activity)
+    monkeypatch.setattr(activity.client, "close_activity", close_activity)
+
+    with pytest.raises(KeyboardInterrupt) as captured:
+        run_live_activity_send(
+            wait_send,
+            "hello",
+            "default",
+            "turn-control",
+            tmp_path,
+            InteractiveLogCursor.from_project(tmp_path),
+            printed_logs=False,
+            daemon_activity=True,
+            poll_interval_seconds=0,
+            read_events=read_interactive_activity_events,
+            present_events=_mark_presented,
+        )
+
+    assert captured.value is control
+    assert finished.is_set()
 
 
 def test_live_send_closes_subscription_when_presenter_fails(

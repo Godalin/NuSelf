@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Interactive chat now owns its one-shot send thread through shared execution
+  infrastructure. Polling, rendering, and control-flow failures wait for the
+  in-flight send to finish instead of abandoning a daemon thread.
 - Runtime events now expose explicit synchronous projection attachment instead
   of a general subscriber API. Projection callbacks must be bounded in-process
   work; independently progressing effects require an owned bounded queue.
