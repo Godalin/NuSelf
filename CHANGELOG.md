@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Memory candidate acceptance now distinguishes an already-visible logical
+  commit with uncertain crash durability from a failed commit, preserving the
+  accepted candidate and target for explicit reconciliation instead of
+  rolling one side back.
 - File-backed collection deletion now synchronizes the parent directory and
   reports post-unlink durability uncertainty with a typed error.
 - Explicit zero-valued importance and evaluation thresholds now round-trip

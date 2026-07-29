@@ -40,6 +40,9 @@ Persona graph 的 LLM 故障会保留确定性的贡献、汇总和激活 fallba
 语法、record/key identity 不一致以及符号链接重定向。
 文件后端 record 删除成功还要求同步 parent directory；若删除已可见但 crash
 durability 未知，系统会用独立 typed error 报告，而不是当作普通 unlink 失败。
+Memory candidate acceptance 对 target 和 review record 使用同一语义：若候选已
+显示 accepted 且 target 匹配预期，crash durability 无法确认时会保留这对记录并
+报告 ambiguous commit；候选仍为 pending 时则继续补偿 target mutation。
 
 Daemon instance lock 的获取和释放也会同时保留锁操作与句柄关闭错误，避免清理
 故障掩盖真实所有权状态。

@@ -12,12 +12,14 @@ from nuself.domain.memory import (
     MemoryEvidence,
 )
 from nuself.memory.repository import (
+    MemoryCandidateAmbiguousCommitError,
     MemoryCandidateCommitError,
     MemoryCandidateNotFound,
     MemoryCandidateRepository,
     MemoryEntryRepository,
 )
 from nuself.profile.repository import ProfileItemRepository
+from nuself.storage import AtomicDeleteDurabilityError, AtomicWriteDurabilityError
 
 
 def test_memory_candidate_repository_crud_and_accept_with_temporal_fields(tmp_path: Path) -> None:
@@ -357,6 +359,152 @@ def test_accept_delete_restores_target_when_candidate_commit_fails(
         repo.accept(candidate.id)
 
     assert captured.value is operation_error
+    assert entry_repo.get(original.id) == original
+    assert repo.get(candidate.id).review_state == "pending"
+
+
+def test_accept_preserves_visible_logical_commit_when_candidate_durability_is_uncertain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    candidate = repo.save(
+        MemoryCandidate(type="belief", title="Visible", body="Keep both records.")
+    )
+    original_save = repo.save
+    durability_error = AtomicWriteDurabilityError(
+        tmp_path / "candidate.json",
+        sync_error=OSError("directory sync failed"),
+    )
+
+    def save_then_fail_once(updated: MemoryCandidate) -> MemoryCandidate:
+        saved = original_save(updated)
+        if updated.review_state == "accepted":
+            monkeypatch.setattr(repo, "save", original_save)
+            raise durability_error
+        return saved
+
+    monkeypatch.setattr(repo, "save", save_then_fail_once)
+
+    with pytest.raises(MemoryCandidateAmbiguousCommitError) as captured:
+        repo.accept(candidate.id)
+
+    error = captured.value
+    accepted = repo.get(candidate.id)
+    assert error.durability_error is durability_error
+    assert error.candidate_id == candidate.id
+    assert error.candidate_state == "accepted"
+    assert error.target_state == "expected"
+    assert accepted.review_state == "accepted"
+    assert accepted.target_entry_id is not None
+    assert entry_repo.get(accepted.target_entry_id).title == "Visible"
+
+
+def test_accept_compensates_visible_new_target_when_target_durability_is_uncertain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    candidate = repo.save(
+        MemoryCandidate(type="belief", title="Rollback", body="Remove target.")
+    )
+    original_save = entry_repo.save
+    durability_error = AtomicWriteDurabilityError(
+        tmp_path / "entry.json",
+        sync_error=OSError("directory sync failed"),
+    )
+
+    def save_then_fail_once(entry: MemoryEntry) -> MemoryEntry:
+        original_save(entry)
+        monkeypatch.setattr(entry_repo, "save", original_save)
+        raise durability_error
+
+    monkeypatch.setattr(entry_repo, "save", save_then_fail_once)
+
+    with pytest.raises(AtomicWriteDurabilityError) as captured:
+        repo.accept(candidate.id)
+
+    assert captured.value is durability_error
+    assert entry_repo.list() == []
+    assert repo.get(candidate.id).review_state == "pending"
+
+
+def test_merge_restores_previous_target_when_target_durability_is_uncertain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    original = entry_repo.save(
+        MemoryEntry(type="belief", title="Before", body="Original body.")
+    )
+    repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    candidate = repo.save(
+        MemoryCandidate(
+            action="update",
+            type="belief",
+            title="After",
+            body="Updated body.",
+            target_entry_id=original.id,
+        )
+    )
+    original_save = entry_repo.save
+    durability_error = AtomicWriteDurabilityError(
+        tmp_path / "entry.json",
+        sync_error=OSError("directory sync failed"),
+    )
+
+    def save_then_fail_once(entry: MemoryEntry) -> MemoryEntry:
+        original_save(entry)
+        monkeypatch.setattr(entry_repo, "save", original_save)
+        raise durability_error
+
+    monkeypatch.setattr(entry_repo, "save", save_then_fail_once)
+
+    with pytest.raises(AtomicWriteDurabilityError) as captured:
+        repo.accept(candidate.id)
+
+    assert captured.value is durability_error
+    assert entry_repo.get(original.id) == original
+    assert repo.get(candidate.id).review_state == "pending"
+
+
+def test_delete_restores_target_when_delete_durability_is_uncertain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    original = entry_repo.save(
+        MemoryEntry(type="belief", title="Restore", body="Deletion is uncertain.")
+    )
+    repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    candidate = repo.save(
+        MemoryCandidate(
+            action="delete",
+            type="belief",
+            title=original.title,
+            body=original.body,
+            target_entry_id=original.id,
+        )
+    )
+    original_delete = entry_repo.delete
+    durability_error = AtomicDeleteDurabilityError(
+        tmp_path / "entry.json",
+        sync_error=OSError("directory sync failed"),
+    )
+
+    def delete_then_fail_once(entry_id: str) -> None:
+        original_delete(entry_id)
+        monkeypatch.setattr(entry_repo, "delete", original_delete)
+        raise durability_error
+
+    monkeypatch.setattr(entry_repo, "delete", delete_then_fail_once)
+
+    with pytest.raises(AtomicDeleteDurabilityError) as captured:
+        repo.accept(candidate.id)
+
+    assert captured.value is durability_error
     assert entry_repo.get(original.id) == original
     assert repo.get(candidate.id).review_state == "pending"
 

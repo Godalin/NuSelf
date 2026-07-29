@@ -65,6 +65,12 @@ trustworthy 0.3.0 release candidate.
   deletion and raises `AtomicDeleteDurabilityError`.
 - Focused storage/candidate/notification deletion tests: 107 passed; pyright
   reported 0 errors and 0 warnings.
+- Candidate acceptance now recognizes storage mutations that are already
+  visible but not proven crash-durable. Pending candidates compensate target
+  create/merge/delete mutations; visibly accepted candidates with matching
+  targets raise a typed ambiguous-commit error without destructive rollback.
+- Focused candidate, curator, and optimizer tests: 86 passed; pyright reported
+  0 errors and 0 warnings.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 
@@ -74,4 +80,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-File mutation commit-state and durable-delete semantics.
+Notification delivery state and idempotent outbox admission.

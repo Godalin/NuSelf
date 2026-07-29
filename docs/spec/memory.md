@@ -369,6 +369,29 @@ write exception propagates unchanged and the candidate remains pending. If
 compensation also fails, a typed commit error retains both the primary and
 rollback exceptions; it must never report acceptance.
 
+File replacement and deletion can also fail after the new directory entry is
+already visible but before its parent directory is synchronized. Candidate
+acceptance must distinguish that durability-uncertain result from a
+pre-mutation failure:
+
+- If a target mutation reports a visible-but-durability-uncertain error while
+  the candidate is still pending, acceptance compensates the visible target
+  mutation and propagates the original error after successful compensation.
+- If the final candidate write reports a visible-but-durability-uncertain error,
+  acceptance reads back both records. When the candidate is visibly accepted
+  and the target matches the intended final state (or is absent for delete), it
+  must not compensate an already-visible logical commit. It raises a typed
+  ambiguous-commit error retaining the original durability error and the
+  observed candidate/target state so callers can reconcile or retry safely.
+- Any read-back state that does not prove the intended visible logical commit
+  is compensated where possible. A failed compensation retains both errors in
+  the typed commit error.
+
+An ambiguous commit must never be reported as success, silently retried as a
+new candidate, or converted back to pending by deleting/restoring its target.
+Its error message and structured fields identify record IDs and states only;
+they do not expose candidate or memory content.
+
 For MemoryEntry targets, `accept` accepts only `draft` or `reviewed` as the
 requested final target state. The initial save still applies quarantine rules;
 only a non-quarantined entry is promoted. Promotion happens before the

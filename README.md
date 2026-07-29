@@ -48,6 +48,10 @@ storage boundary.
 Successful file-backed record deletion now includes parent-directory
 synchronization; a visible deletion whose crash durability is unknown is
 reported distinctly instead of being treated as an ordinary failed unlink.
+Memory candidate acceptance applies the same distinction across its target and
+review records: a visibly accepted, matching pair is preserved and reported as
+an ambiguous commit when crash durability cannot be proven, while a pending
+candidate still triggers target compensation.
 
 Daemon instance-lock acquire and release likewise preserve simultaneous lock
 operation and handle-close failures, so ownership errors are not hidden by
