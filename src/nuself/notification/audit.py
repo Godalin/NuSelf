@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Literal, TypeVar
+from typing import Literal
 
 from nuself.logs import LogEvent, write_log_event
 from nuself.runtime.audit_definitions import (
@@ -15,7 +15,6 @@ from nuself.runtime.audit_definitions import (
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
     report_observed_failure,
-    run_observed_best_effort,
 )
 
 NotificationAuditEvent = Literal[
@@ -23,7 +22,6 @@ NotificationAuditEvent = Literal[
     "email_dry_run",
     "email_no_config",
     "email_failed",
-    "email_config_invalid",
     "macos_dry_run",
     "macos_unavailable",
     "macos_failed",
@@ -37,12 +35,8 @@ NotificationSuccessEvent = Literal[
 NotificationFailureEvent = Literal[
     "email_no_config",
     "email_failed",
-    "email_config_invalid",
     "macos_failed",
 ]
-
-T = TypeVar("T")
-
 
 def _exact(metadata: Mapping[str, object], expected: frozenset[str]) -> None:
     fields = set(metadata)
@@ -71,14 +65,6 @@ def _entry_attempt(metadata: Mapping[str, object]) -> None:
         )
 
 
-def _email_config(metadata: Mapping[str, object]) -> None:
-    _exact(metadata, frozenset({"record"}))
-    if _string(metadata, "record") != "email.toml":
-        raise AuditSchemaError(
-            "audit metadata 'record' must identify email.toml"
-        )
-
-
 def _build_registry() -> AuditDefinitionRegistry:
     definitions = (
         AuditEventDefinition(
@@ -98,11 +84,6 @@ def _build_registry() -> AuditDefinitionRegistry:
             "outbox", "email_failed", "warning", "failed",
             error_policy="required",
             metadata_validator=_entry_attempt,
-        ),
-        AuditEventDefinition(
-            "outbox", "email_config_invalid", "warning", "degraded",
-            error_policy="required",
-            metadata_validator=_email_config,
         ),
         AuditEventDefinition(
             "outbox", "macos_dry_run", "debug", "simulated",
@@ -131,7 +112,6 @@ _MESSAGES: dict[NotificationAuditEvent, str] = {
     "email_dry_run": "Email delivery simulated",
     "email_no_config": "Email delivery skipped without configuration",
     "email_failed": "Email delivery failed",
-    "email_config_invalid": "Email configuration is invalid",
     "macos_dry_run": "macOS notification delivery simulated",
     "macos_unavailable": "macOS notification delivery unavailable",
     "macos_failed": "macOS notification delivery failed",
@@ -196,41 +176,6 @@ def report_notification_failure(
         message=_MESSAGES[event],
         project_root=project_root,
         metadata=dict(metadata),
-        level=definition.level,
-        status=status,
-    )
-
-
-def run_notification_observed(
-    operation: Callable[[], T],
-    *,
-    event: Literal["email_config_invalid"],
-    project_root: Path | None,
-    metadata: dict[str, object],
-    errors: tuple[type[Exception], ...],
-) -> T | None:
-    """Run one secondary Notification effect under its registered schema."""
-
-    definition = NOTIFICATION_AUDIT_REGISTRY.resolve("outbox", event)
-    status = definition.status
-    if status is None:
-        raise AuditSchemaError(
-            f"{definition.component}/{definition.event} failure requires status"
-        )
-    definition.validate(
-        level=definition.level,
-        status=status,
-        error="caught failure",
-        metadata=metadata,
-    )
-    return run_observed_best_effort(
-        operation,
-        component=definition.component,
-        event=definition.event,
-        message=_MESSAGES[event],
-        project_root=project_root,
-        metadata=dict(metadata),
-        errors=errors,
         level=definition.level,
         status=status,
     )

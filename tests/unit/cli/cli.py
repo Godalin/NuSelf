@@ -3329,8 +3329,8 @@ def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -
     assert f"Sent: {entry.id}" in send_output
     assert f"Dismissed: {entry.id}" in dismiss_output
     dismissed = outbox.get(entry.id)
-    assert dismissed.required_adapters == ("log",)
-    assert dismissed.deliveries["log"].status == "sent"
+    assert dismissed.required_adapters == ("macos",)
+    assert dismissed.deliveries["macos"].status == "sent"
 
 
 def test_notify_send_preserves_existing_adapter_plan_and_history(
@@ -4582,6 +4582,35 @@ def test_config_command_never_prints_endpoint_secrets(
     assert secret not in captured.out
     assert "llm.endpoints:" not in captured.out
     assert "llm.endpoints.0.api_key: ***" in captured.out
+
+
+def test_config_command_never_prints_smtp_password(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+) -> None:
+    secret = "smtp-secret-must-not-render"
+    private = tmp_path / "private"
+    private.mkdir()
+    (private / "config.yaml").write_text(
+        (
+            "email:\n"
+            "  enabled: true\n"
+            "  smtp:\n"
+            "    host: smtp.example.com\n"
+            "    username: owner\n"
+            f"    password: {secret}\n"
+            "  from_address: from@example.com\n"
+            "  to_address: to@example.com\n"
+        ),
+        encoding="utf-8",
+    )
+
+    result = main(["--project-root", str(tmp_path), "dev", "config"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert secret not in captured.out
+    assert "email.smtp.password: ***" in captured.out
 
 
 def test_memory_list_shows_entries(tmp_path: Path, capsys: CaptureFixture) -> None:

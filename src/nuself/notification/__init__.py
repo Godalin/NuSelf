@@ -444,7 +444,13 @@ class NotificationDeliveryLoop:
         adapters: list[NotificationAdapter] | None = None,
     ) -> None:
         self._outbox = NotificationOutbox(project_root)
-        self._adapters = adapters or [LogOnlyNotificationAdapter(project_root)]
+        if adapters is None:
+            from nuself.notification.composition import (
+                build_notification_adapters,
+            )
+
+            adapters = build_notification_adapters(project_root)
+        self._adapters = adapters
 
     def run_once(self) -> int:
         """Deliver all pending entries. Return count delivered."""

@@ -443,10 +443,9 @@ Recoverable CLI persona lifecycle trace failures are recorded as
 `persona/trace_recording_failed` without reversing the already-successful
 create, enable, or disable mutation.
 
-Missing `private/email.toml` still means email delivery is intentionally
-disabled. If the file exists but is unreadable or invalid, NuSelf records a
-payload-safe `outbox/email_config_invalid` diagnostic rather than silently
-treating it as absent.
+Email delivery now uses only the unified `private/config.yaml` email section.
+SMTP credentials are redacted from effective-config output and object
+representations; the private root and config file are hardened before reading.
 
 `private/threads/default.json` is shared working memory for the current NuSelf mind. Multiple terminal attachments to the same daemon share it. The thread store serializes writes with a lock so concurrent turns do not overwrite each other.
 Rename, branch, archive, restore, and delete use the same stable per-thread
@@ -641,7 +640,10 @@ Notifications include a deep link. Open one directly:
 uv run nuself thread open --deep-link "nuself://thread/reflections"
 ```
 
-The macOS adapter delivers pending entries as system notifications via `osascript`. The email adapter reads SMTP credentials from `private/email.toml` and sends via SMTP. Both support dry-run mode for testing.
+The macOS adapter delivers pending entries through `osascript`. The email
+adapter reads its enabled SMTP, sender, and recipient settings from
+`private/config.yaml`. Daemon, CLI, and REPL use the same configured adapter
+plan.
 
 ## Reflection
 

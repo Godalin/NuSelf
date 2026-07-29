@@ -8,11 +8,11 @@ import time
 
 from nuself.cli.commands.output import print_ansi, resolve_handle
 from nuself.notification import (
-    LogOnlyNotificationAdapter,
     NotificationOutbox,
     OutboxEntryNotFound,
     deliver_entry_once,
 )
+from nuself.notification.composition import build_notification_adapters
 from nuself.tui.render import render_outbox_detail, render_outbox_summary
 
 
@@ -98,11 +98,10 @@ def handle_notify_send(args: argparse.Namespace) -> int:
     except OutboxEntryNotFound:
         print(f"Outbox entry not found: {entry_id}", file=sys.stderr)
         return 1
-    adapter = LogOnlyNotificationAdapter(args.project_root)
     updated = deliver_entry_once(
         outbox,
         entry_id,
-        [adapter],
+        build_notification_adapters(args.project_root),
     )
     if updated.status == "sent":
         print(f"Sent: {entry.id}")

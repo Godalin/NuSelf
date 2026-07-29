@@ -14,7 +14,7 @@
         "properties": {
           "base_url": {
             "type": "string",
-            "default": "https://api.openai.com/v1",
+            "default": "",
             "description": "API endpoint. Anthropic endpoints default to the https://api.anthropic.com API root when omitted; one trailing /v1 prefix is also accepted and normalized."
           },
           "api_key": {
@@ -24,7 +24,7 @@
           },
           "model": {
             "type": "string",
-            "default": "gpt-4.1-mini",
+            "default": "",
             "description": "Model name for completions"
           },
           "anthropic": {
@@ -80,7 +80,7 @@
             },
             "summary_trigger_messages": {
               "type": "integer",
-              "minimum": 1,
+              "minimum": 3,
               "default": 18,
               "description": "When to compress context (messages threshold)"
             },
@@ -171,7 +171,7 @@
           "properties": {
             "interval_seconds": {
               "type": "integer",
-              "minimum": 60,
+              "minimum": 1,
               "default": 3600,
               "description": "Base interval between reflection cycles (seconds)"
             },
@@ -218,14 +218,14 @@
               "type": "number",
               "minimum": 0.0,
               "maximum": 1.0,
-              "default": 0.35,
+              "default": 0.4,
               "description": "Minimum composite score to pass relevance gate"
             },
             "persona_discussion_threshold": {
               "type": "number",
               "minimum": 0.0,
               "maximum": 1.0,
-              "default": 0.55,
+              "default": 0.6,
               "description": "Score threshold to trigger multi-persona discussion"
             }
           }
@@ -306,6 +306,35 @@
       "type": "object",
       "description": "Email notification adapter",
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "then": {
+            "required": [
+              "smtp",
+              "from_address",
+              "to_address"
+            ],
+            "properties": {
+              "from_address": {
+                "minLength": 1
+              },
+              "to_address": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "enabled": {
           "type": "boolean",
@@ -322,6 +351,7 @@
             "port": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 65535,
               "default": 587
             },
             "use_tls": {
@@ -339,6 +369,10 @@
           }
         },
         "from_address": {
+          "type": "string",
+          "default": ""
+        },
+        "to_address": {
           "type": "string",
           "default": ""
         }

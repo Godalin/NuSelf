@@ -11,9 +11,18 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
-from nuself.private_fs import ensure_private_directory
+from nuself.private_fs import (
+    ensure_private_directory,
+    harden_private_file,
+)
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
@@ -72,6 +81,7 @@ def runtime_paths(project_root: Path | None = None) -> RuntimePaths:
 def ensure_runtime_dirs(paths: RuntimePaths) -> None:
     """Create local ignored runtime directories."""
 
+    ensure_private_directory(paths.private_root)
     ensure_private_directory(paths.runtime_dir)
     ensure_private_directory(paths.logs_dir)
 
@@ -81,14 +91,21 @@ def ensure_runtime_dirs(paths: RuntimePaths) -> None:
 # ============================================================================
 
 
-class LlmEndpointConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class _ConfigModel(BaseModel):
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        hide_input_in_errors=True,
+    )
+
+
+class LlmEndpointConfig(_ConfigModel):
 
     base_url: str = ""
-    api_key: str = ""
+    api_key: str = Field(default="", repr=False)
     model: str = ""
     anthropic: bool = False
-    timeout_seconds: float = 60.0
+    timeout_seconds: float = Field(default=60.0, ge=1.0)
 
     @model_validator(mode="after")
     def _fill_anthropic_url(self) -> LlmEndpointConfig:
@@ -97,8 +114,7 @@ class LlmEndpointConfig(BaseModel):
         return self
 
 
-class LlmConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class LlmConfig(_ConfigModel):
 
     endpoints: tuple[LlmEndpointConfig, ...] = (
         LlmEndpointConfig(
@@ -109,48 +125,41 @@ class LlmConfig(BaseModel):
     )
 
 
-class ChatContextConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class ChatContextConfig(_ConfigModel):
 
     recent_messages: int = Field(default=12, ge=1)
     summary_trigger_messages: int = Field(default=18, ge=3)
     summary_target_chars: int = Field(default=2400, ge=100)
 
 
-class ChatConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class ChatConfig(_ConfigModel):
 
     context: ChatContextConfig = ChatContextConfig()
     language_preference: str = "en"
     request_timeout_seconds: float = Field(default=120.0, ge=1.0)
 
 
-class DaemonMemoryCuratorConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class DaemonMemoryCuratorConfig(_ConfigModel):
 
     interval_seconds: int = Field(default=300, ge=1)
 
 
-class DaemonReflectionSchedulerConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class DaemonReflectionSchedulerConfig(_ConfigModel):
 
     check_interval_seconds: int = Field(default=600, ge=1)
 
 
-class DaemonNotificationDeliveryConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class DaemonNotificationDeliveryConfig(_ConfigModel):
 
     interval_seconds: int = Field(default=30, ge=1)
 
 
-class DaemonReasonSchedulerConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class DaemonReasonSchedulerConfig(_ConfigModel):
 
     interval_seconds: int = Field(default=600, ge=1)
 
 
-class DaemonConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class DaemonConfig(_ConfigModel):
 
     memory_curator: DaemonMemoryCuratorConfig = DaemonMemoryCuratorConfig()
     reflection_scheduler: DaemonReflectionSchedulerConfig = DaemonReflectionSchedulerConfig()
@@ -158,8 +167,7 @@ class DaemonConfig(BaseModel):
     reason_scheduler: DaemonReasonSchedulerConfig = DaemonReasonSchedulerConfig()
 
 
-class ReflectionSchedulerConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class ReflectionSchedulerConfig(_ConfigModel):
 
     interval_seconds: int = Field(default=3600, ge=1)
     cooldown_seconds: int = Field(default=300, ge=0)
@@ -169,22 +177,19 @@ class ReflectionSchedulerConfig(BaseModel):
     jitter_percent: int = Field(default=20, ge=0, le=50)
 
 
-class ReflectionGateConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class ReflectionGateConfig(_ConfigModel):
 
     relevance_threshold: float = Field(default=0.4, ge=0.0, le=1.0)
     persona_discussion_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 
 
-class ReflectionModeratorConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class ReflectionModeratorConfig(_ConfigModel):
 
     max_discussion_rounds: int = Field(default=12, ge=1)
     moderator_convergence_patience: int = Field(default=5, ge=1)
 
 
-class ReflectionDiscussionConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class ReflectionDiscussionConfig(_ConfigModel):
 
     blocking_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
     override_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
@@ -194,8 +199,7 @@ class ReflectionDiscussionConfig(BaseModel):
     max_participants: int = Field(default=5, ge=1)
 
 
-class ReflectionSettings(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class ReflectionSettings(_ConfigModel):
 
     scheduler: ReflectionSchedulerConfig = ReflectionSchedulerConfig()
     gate: ReflectionGateConfig = ReflectionGateConfig()
@@ -204,39 +208,64 @@ class ReflectionSettings(BaseModel):
     auto_notify: bool = False
 
 
-class EmailSmtpConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class EmailSmtpConfig(_ConfigModel):
 
     host: str = "smtp.gmail.com"
-    port: int = Field(default=587, ge=1)
+    port: int = Field(default=587, ge=1, le=65_535)
     use_tls: bool = True
     username: str = ""
-    password: str = ""
+    password: str = Field(default="", repr=False)
 
 
-class EmailConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class EmailConfig(_ConfigModel):
 
     enabled: bool = False
     smtp: EmailSmtpConfig = EmailSmtpConfig()
     from_address: str = ""
+    to_address: str = ""
+
+    @field_validator("from_address", "to_address")
+    @classmethod
+    def _validate_header(cls, value: str) -> str:
+        if any(
+            ord(character) < 32 or ord(character) == 127
+            for character in value
+        ):
+            raise ValueError("email address contains control characters")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_enabled_email(self) -> EmailConfig:
+        username = self.smtp.username.strip()
+        password = self.smtp.password.strip()
+        if bool(username) != bool(password):
+            raise ValueError(
+                "email SMTP username and password must be provided together"
+            )
+        if self.enabled and (
+            not self.smtp.host.strip()
+            or not self.from_address.strip()
+            or not self.to_address.strip()
+        ):
+            raise ValueError(
+                "enabled email requires SMTP host, from_address, "
+                "and to_address"
+            )
+        return self
 
 
-class MacosNotificationConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class MacosNotificationConfig(_ConfigModel):
 
     enabled: bool = True
 
 
-class ExperimentalConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class ExperimentalConfig(_ConfigModel):
 
     vector_index: bool = False
 
 
-class SystemConfig(BaseModel):
+class SystemConfig(_ConfigModel):
     """Complete NuSelf system configuration."""
-    model_config = ConfigDict(frozen=True, extra="ignore")
 
     llm: LlmConfig = LlmConfig()
     chat: ChatConfig = ChatConfig()
@@ -296,13 +325,21 @@ def _redact_flat_config(flat: dict[str, Any]) -> dict[str, Any]:
     return {
         key: (
             "***"
-            if key.rsplit(".", maxsplit=1)[-1] == "api_key" and value
+            if _is_sensitive_config_key(key) and value
             else "(not set)"
-            if key.rsplit(".", maxsplit=1)[-1] == "api_key"
+            if _is_sensitive_config_key(key)
             else value
         )
         for key, value in flat.items()
     }
+
+
+def _is_sensitive_config_key(key: str) -> bool:
+    field_name = key.rsplit(".", maxsplit=1)[-1].lower()
+    return field_name == "api_key" or any(
+        marker in field_name
+        for marker in ("password", "token", "secret", "credential")
+    )
 
 
 _CONFIG_CACHE: dict[tuple[str, int, int], SystemConfig] = {}
@@ -365,6 +402,11 @@ class ConfigSystem:
 
         cache_key: tuple[str, int, int] | None = None
         if config_path and config_path.exists():
+            if project_root is not None:
+                ensure_private_directory(
+                    runtime_paths(project_root).private_root
+                )
+            harden_private_file(config_path)
             try:
                 stat = config_path.stat()
                 cache_key = (str(config_path), stat.st_mtime_ns, stat.st_size)
@@ -396,8 +438,17 @@ class ConfigSystem:
         yaml_data: dict[str, Any] = {}
         if config_path and config_path.exists():
             try:
-                raw: Any = yaml.safe_load(config_path.read_text(encoding="utf-8"))  # type: ignore[no-untyped-call]
-                yaml_data = cast(dict[str, Any], raw if isinstance(raw, dict) else {})
+                raw: Any = yaml.safe_load(  # type: ignore[no-untyped-call]
+                    config_path.read_text(encoding="utf-8")
+                )
+                if raw is None:
+                    yaml_data = {}
+                elif not isinstance(raw, dict):
+                    raise ValueError(
+                        "NuSelf configuration root must be an object"
+                    )
+                else:
+                    yaml_data = cast(dict[str, Any], raw)
             except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
                 # A malformed/unreadable config falls back to defaults but must be
                 # visible, not silently indistinguishable from "no config". Any
@@ -414,8 +465,10 @@ class ConfigSystem:
         llm_raw: object = yaml_data.get("llm")
         if isinstance(llm_raw, list):
             yaml_data["llm"] = {"endpoints": llm_raw}
-        elif isinstance(llm_raw, dict) and "endpoints" not in llm_raw:
-            del yaml_data["llm"]
+        elif llm_raw is not None:
+            raise ValueError(
+                "NuSelf configuration 'llm' must be an endpoint list"
+            )
 
         defaults = cls._default_config().model_dump(mode="python")
         merged = _deep_merge(defaults, yaml_data)

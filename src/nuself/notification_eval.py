@@ -204,6 +204,7 @@ def _evaluate_outbox(
         elif action_name == "deliver_success":
             entry_id = _required_str(action, "entry_id")
             outbox.prepare_delivery(entry_id, ("eval",))
+            outbox.begin_adapter_delivery(entry_id, "eval")
             outbox.record_adapter_result(
                 entry_id,
                 "eval",

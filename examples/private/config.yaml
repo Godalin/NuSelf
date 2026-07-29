@@ -79,6 +79,7 @@ email:
     username: ""
     password: ""
   from_address: ""
+  to_address: ""
 
 # macOS Notification Adapter
 macos_notification:

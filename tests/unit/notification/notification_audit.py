@@ -16,7 +16,6 @@ _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
     ("email_dry_run", {"entry_id": "entry-1", "attempt": 0}),
     ("email_no_config", {"entry_id": "entry-1", "attempt": 0}),
     ("email_failed", {"entry_id": "entry-1", "attempt": 1}),
-    ("email_config_invalid", {"record": "email.toml"}),
     ("macos_dry_run", {"entry_id": "entry-1", "attempt": 0}),
     ("macos_unavailable", {"entry_id": "entry-1", "attempt": 0}),
     ("macos_failed", {"entry_id": "entry-1", "attempt": 1}),

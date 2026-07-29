@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from nuself.config import ConfigSystem
 
 
@@ -102,7 +104,7 @@ chat:
     assert ConfigSystem().as_flat_dict(config)["chat.request_timeout_seconds"] == 600
 
 
-def test_llm_nested_openai_object_is_ignored(tmp_path: Path) -> None:
+def test_llm_nested_openai_object_is_rejected(tmp_path: Path) -> None:
     private_dir = tmp_path / "private"
     private_dir.mkdir(parents=True)
     (private_dir / "config.yaml").write_text(
@@ -116,7 +118,5 @@ llm:
         encoding="utf-8",
     )
 
-    config = ConfigSystem.load(project_root=tmp_path)
-
-    assert len(config.llm.endpoints) == 1
-    assert config.llm.endpoints[0].model == "gpt-4.1-mini"
+    with pytest.raises(ValueError, match="endpoint list"):
+        ConfigSystem.load(project_root=tmp_path)

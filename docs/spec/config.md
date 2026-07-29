@@ -17,7 +17,7 @@
 | `chat` | `ChatConfig` | Context compression thresholds, daemon request timeout, and language preference |
 | `daemon` | `DaemonConfig` | Background task intervals |
 | `reflection` | `ReflectionSettings` | Scheduling, gates, moderator |
-| `email` | `EmailSmtpConfig` | SMTP settings |
+| `email` | `EmailConfig` | SMTP delivery settings |
 | `macos_notification` | `MacosNotificationConfig` | macOS notifications toggle |
 | `experimental` | `ExperimentalConfig` | Feature flags |
 
@@ -164,13 +164,36 @@ Rules:
 
 `nuself dev config` is a safe effective-configuration projection. It prints
 only flattened scalar leaf values plus explicit derived fields. Secret leaves,
-including every endpoint API key, are redacted. The projection must not retain
+including every endpoint API key and SMTP password, are redacted. A field name
+containing `password`, `token`, `secret`, or `credential`, plus `api_key`, is
+always treated as sensitive. The projection must not retain
 or print aggregate dictionaries, lists, model dumps, or parent container
 values that can bypass leaf-level redaction.
 
 In-memory endpoint settings also exclude API keys from `repr`. Test failures,
 debuggers, container representations, and incidental object formatting must
 not reveal a credential merely because they render an endpoint object.
+
+All runtime configuration models are frozen, reject unknown fields, and hide
+input values in validation errors. YAML must decode to an object; `llm` must
+use the public endpoint-list shape. Wrong top-level shapes, obsolete nested LLM
+objects, unknown fields, and invalid values fail explicitly rather than being
+silently discarded.
+
+Before reading a present `private/config.yaml`, NuSelf hardens `private/` to
+`0700`, rejects non-regular files and symlinks, and hardens the config file to
+`0600`. Secret values are never read from a permissive or redirected file.
+
+## Email Delivery
+
+Email has one configuration source: `private/config.yaml`. The obsolete
+`private/email.toml` path is not read.
+
+When `email.enabled` is true, `email.smtp.host`, `email.from_address`, and
+`email.to_address` must be non-empty. SMTP `username` and `password` must be
+provided together; `port` is from 1 through 65535. Sender and recipient reject
+header control characters. API keys and SMTP passwords are excluded from model
+`repr`, and all validation diagnostics hide the rejected input.
 
 ## Chat Daemon Request Timeout
 

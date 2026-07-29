@@ -17,11 +17,9 @@ from nuself.daemon.workers import DaemonWorkerSupervisor
 from nuself.logs import runtime_event_log_sink
 from nuself.memory.curator import MemoryCurator
 from nuself.notification import (
-    NotificationAdapter,
     NotificationDeliveryLoop,
 )
-from nuself.notification.email import EmailNotificationAdapter
-from nuself.notification.macos import MacOSNotificationAdapter
+from nuself.notification.composition import build_notification_adapters
 from nuself.reason import ReasonScheduler
 from nuself.reflection import ReflectionScheduler
 from nuself.runtime.events import EventPublisher
@@ -67,14 +65,12 @@ class DaemonState:
             config.daemon.reflection_scheduler.check_interval_seconds
         )
 
-        adapters: list[NotificationAdapter] = []
-        if config.email.enabled:
-            adapters.append(EmailNotificationAdapter(project_root))
-        if config.macos_notification.enabled:
-            adapters.append(MacOSNotificationAdapter(project_root))
         self.notification_delivery_loop = NotificationDeliveryLoop(
             project_root,
-            adapters=adapters if adapters else None,
+            adapters=build_notification_adapters(
+                project_root,
+                config=config,
+            ),
         )
         self.notification_delivery_interval_seconds: float = (
             config.daemon.notification_delivery.interval_seconds

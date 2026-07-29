@@ -2,10 +2,20 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 from pathlib import Path
+import stat
 
 import pytest
+from pydantic import ValidationError
 
-from nuself.config import ConfigSystem, find_project_root, runtime_paths
+from nuself.config import (
+    ConfigSystem,
+    EmailConfig,
+    EmailSmtpConfig,
+    LlmEndpointConfig,
+    SystemConfig,
+    find_project_root,
+    runtime_paths,
+)
 
 
 def test_runtime_paths_are_under_private_root(tmp_path: Path) -> None:
@@ -65,3 +75,104 @@ def test_flat_config_redacts_every_endpoint_key_without_aggregate_values(
         isinstance(value, (dict, list, tuple))
         for value in flat.values()
     )
+
+
+def test_smtp_password_is_absent_from_flat_projection_and_repr() -> None:
+    secret = "smtp-password-must-not-leak"
+    config = SystemConfig(
+        email=EmailConfig(
+            enabled=True,
+            smtp=EmailSmtpConfig(
+                username="owner",
+                password=secret,
+            ),
+            from_address="from@example.com",
+            to_address="to@example.com",
+        )
+    )
+
+    flat = ConfigSystem().as_flat_dict(config)
+
+    assert flat["email.smtp.password"] == "***"
+    assert secret not in repr(flat)
+    assert secret not in repr(config)
+    assert secret not in repr(config.email)
+    assert secret not in repr(config.email.smtp)
+
+
+def test_api_key_is_absent_from_model_repr() -> None:
+    secret = "provider-secret"
+
+    endpoint = LlmEndpointConfig(api_key=secret)
+
+    assert secret not in repr(endpoint)
+
+
+def test_validation_error_hides_secret_input(tmp_path: Path) -> None:
+    secret = "invalid-secret-value"
+    config_path = tmp_path / "private" / "config.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        (
+            "email:\n"
+            "  enabled: true\n"
+            "  smtp:\n"
+            "    username: owner\n"
+            f"    password: {secret}\n"
+            "  from_address: from@example.com\n"
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError) as captured:
+        ConfigSystem.load(project_root=tmp_path)
+
+    assert secret not in str(captured.value)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "- not\n- an\n- object\n",
+        "unknown_section: true\n",
+        "chat:\n  unknown_field: true\n",
+    ],
+)
+def test_invalid_or_unknown_configuration_fails_explicitly(
+    tmp_path: Path,
+    content: str,
+) -> None:
+    config_path = tmp_path / "private" / "config.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(content, encoding="utf-8")
+
+    with pytest.raises((ValueError, ValidationError)):
+        ConfigSystem.load(project_root=tmp_path)
+
+
+def test_config_read_hardens_private_root_and_file(
+    tmp_path: Path,
+) -> None:
+    private = tmp_path / "private"
+    private.mkdir(mode=0o755)
+    private.chmod(0o755)
+    config_path = private / "config.yaml"
+    config_path.write_text("email:\n  enabled: false\n", encoding="utf-8")
+    config_path.chmod(0o644)
+
+    ConfigSystem.load(project_root=tmp_path)
+
+    assert stat.S_IMODE(private.stat().st_mode) == 0o700
+    assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
+
+
+def test_config_read_rejects_symlink(tmp_path: Path) -> None:
+    private = tmp_path / "private"
+    private.mkdir()
+    target = tmp_path / "external.yaml"
+    target.write_text("email:\n  enabled: false\n", encoding="utf-8")
+    config_path = private / "config.yaml"
+    config_path.symlink_to(target)
+
+    with pytest.raises(OSError, match="regular file"):
+        ConfigSystem.load(project_root=tmp_path)

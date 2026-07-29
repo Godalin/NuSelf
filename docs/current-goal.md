@@ -56,5 +56,13 @@ findings identified by external audit.
   notification/CLI regressions passed, plus spawned-process tests proved one
   external effect and dismiss serialization; locked Pyright reported 0 errors
   and 0 warnings.
+- Configuration models now reject unknown fields, hide validation inputs, and
+  match the published JSON Schema across every section and numeric constraint.
+  API keys and SMTP passwords are repr-safe and generically redacted; config
+  reads reject symlinks and harden `private/`/`config.yaml`. Email now consumes
+  the unified YAML model with an explicit recipient, and daemon/CLI/REPL share
+  one adapter builder. Commit-level verification: 438 focused config,
+  notification, daemon, and CLI tests passed; locked Pyright reported 0 errors
+  and 0 warnings.
 - Pending: the remaining external findings need implementation and direct
   regression evidence, followed by the complete stable-release gate.

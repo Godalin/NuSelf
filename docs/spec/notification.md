@@ -126,11 +126,12 @@ pending entries.
    the entry globally `pending`; the next run skips both successful and failed
    terminal adapter states and only finalizes the projection.
 
-The CLI and REPL `notify send` path use this same pipeline with the stable
-`log` adapter. They never directly overwrite global status. If an entry already
-has another frozen adapter plan, the command preserves that plan, records any
-still-pending unavailable adapters as failed, skips prior terminal results, and
-finalizes the projection.
+Daemon, CLI, and REPL build adapters through the same
+`build_notification_adapters(project_root)` composition root, preserving the
+same order and stable IDs. They never directly overwrite global status. If an
+entry already has another frozen adapter plan, the command preserves that
+plan, records any still-pending unavailable adapters as failed, skips prior
+terminal results, and finalizes the projection.
 
 The prior ambient context is restored after each entry even when an adapter
 raises. Delivery logs therefore project the notification's originating
@@ -157,7 +158,7 @@ delivery and finalization cannot do so.
 | Adapter | Preconditions | Dry Run | Failure Mode |
 |---|---|---|---|
 | `LogOnlyNotificationAdapter` | None | N/A | Always returns `True`; writes to `outbox.log` |
-| `EmailNotificationAdapter` | `private/email.toml` with `[smtp]` and `[notification]` sections | `dry_run=True` logs intent | Missing config → `False` + `email_no_config`; invalid config → `email_config_invalid`, then delivery returns `False` + `email_no_config`; SMTP error → `False` + `email_failed` |
+| `EmailNotificationAdapter` | enabled unified `email` configuration | `dry_run=True` logs intent | Disabled config → `False` + `email_no_config`; SMTP error → `False` + `email_failed` |
 | `MacOSNotificationAdapter` | `osascript` on `$PATH` | `dry_run=True` logs intent | Missing `osascript` → returns `True` (graceful degradation); subprocess non-zero → `False` + `macos_failed` |
 
 Built-in stable delivery IDs are `log`, `email`, and `macos`. Third-party
@@ -166,19 +167,9 @@ must never be used as persisted identities.
 
 ### Email Configuration
 
-An absent `private/email.toml` is the normal disabled state and emits no
-configuration diagnostic. When the file exists, decoding is strict:
-
-- `[smtp]` and `[notification]` must be TOML tables;
-- `smtp.host`, `notification.from`, and `notification.to` are required
-  non-empty strings;
-- `smtp.port` is an integer from 1 through 65535, excluding booleans;
-- optional `smtp.use_tls` is a boolean;
-- optional non-empty `smtp.user` and `smtp.password` must be present together.
-
-Read failures, malformed TOML, and schema failures emit one payload-safe
-`outbox/email_config_invalid` warning without raw values or credentials, then
-leave the adapter disabled. Undeclared implementation failures propagate.
+Email consumes the unified, already validated `SystemConfig.email` model.
+There is no adapter-local parser or second credential file. The canonical
+adapter builder includes email only when enabled.
 
 For real delivery failures, the adapter's `False` result is authoritative and
 the associated `email_no_config`, `email_failed`, or `macos_failed` record is
@@ -215,7 +206,6 @@ levels, statuses, or metadata shapes.
 | `email_dry_run` | `debug` | `simulated` | non-empty `entry_id`, non-negative `attempt` |
 | `email_no_config` | `warning` | `failed` | required error, non-empty `entry_id`, non-negative `attempt` |
 | `email_failed` | `warning` | `failed` | required error, non-empty `entry_id`, non-negative `attempt` |
-| `email_config_invalid` | `warning` | `degraded` | required error, fixed config record name |
 | `macos_dry_run` | `debug` | `simulated` | non-empty `entry_id`, non-negative `attempt` |
 | `macos_unavailable` | `info` | `unavailable` | non-empty `entry_id`, non-negative `attempt` |
 | `macos_failed` | `warning` | `failed` | required error, non-empty `entry_id`, non-negative `attempt` |
@@ -246,7 +236,7 @@ Thread IDs are encoded as a single path segment. Query values use standard URL e
 |---|---|---|
 | `notify list [--status]` | `0` | Summary lines or `No outbox entries.` |
 | `notify show <id>` | `0` if found, `1` if missing | Multi-line detail |
-| `notify send <id>` | `0` on success, `1` on failure | Uses **only** `LogOnlyNotificationAdapter` |
+| `notify send <id>` | `0` on success, `1` on failure | Uses the canonical configured adapter plan |
 | `notify dismiss <id>` | `0` if found, `1` if missing | `Dismissed: {id}` |
 | `notify watch [--interval]` | `0` (Ctrl+C) | Polls every N seconds (default `5`, min `1`) |
 | `notify clear` | `0` | Removes all `dismissed` entries |

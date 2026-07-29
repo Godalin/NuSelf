@@ -404,9 +404,9 @@ CLI persona lifecycle trace 遇到可恢复失败时会记录
 `persona/trace_recording_failed`，而不会撤销已经成功的 create、enable 或
 disable mutation。
 
-缺失 `private/email.toml` 仍表示主动关闭 email delivery；如果文件存在但无法
-读取或配置无效，NuSelf 会记录不包含配置内容的
-`outbox/email_config_invalid`，不再静默当作文件缺失。
+email delivery 现在只使用统一的 `private/config.yaml` email 配置。SMTP
+凭据不会出现在 effective-config 输出或对象表示中；读取前会硬化 private
+根目录和配置文件权限。
 
 `private/threads/default.json` 是当前 NuSelf mind 的共享 working memory。多个终端连接同一个 daemon 时会共享它。thread store 会用锁串行化写入，避免并发对话互相覆盖。
 
@@ -572,7 +572,9 @@ uv run nuself inbox notify watch          # 轮询新条目
 uv run nuself thread open --deep-link "nuself://thread/reflections"
 ```
 
-macOS adapter 通过 `osascript` 将 pending 条目投递为系统通知。email adapter 从 `private/email.toml` 读取 SMTP 凭证并通过 SMTP 发送。两者都支持 dry-run 模式用于测试。
+macOS adapter 通过 `osascript` 投递系统通知。email adapter 从
+`private/config.yaml` 读取启用状态、SMTP、发件人和收件人配置；daemon、CLI
+和 REPL 使用同一套 configured adapter plan。
 
 ## 主动反思
 
