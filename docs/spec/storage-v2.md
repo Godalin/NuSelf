@@ -231,6 +231,27 @@ closure to the outer CLI lifecycle. Developer migration and schema inspection
 create temporary SQLite backends for their operation and must close those
 owned connections before returning, including early-return paths.
 
+`nuself dev migrate` must never create or mutate its final database path while
+copying authoritative file data. It writes a uniquely named
+`<database>.migrating-<uuid>` sibling, performs the complete migration inside
+one SQLite transaction, validates the migrated collection IDs and wire values,
+then checkpoints and closes that temporary backend. Only after the temporary
+database file is synchronized may the command atomically replace the final
+path and synchronize its parent directory. A failure before replacement must
+leave an existing final database byte-for-byte unchanged and must remove all
+temporary database files and SQLite sidecars. A failure synchronizing the
+parent after replacement is reported as a visible-but-durability-unknown
+commit.
+
+Migration reads are strict even though ordinary file collection listing
+isolates corrupt neighbors. Every source record must be a direct, non-symlink
+JSON object with a non-empty string `id` matching its filename. Missing or
+invalid IDs, corrupt JSON, nested paths, and symlinks fail the entire migration;
+they are never silently skipped. File migration is a one-time authority switch,
+not a database merge: the final destination must not already exist. Operators
+must explicitly move or remove an obsolete destination before retrying; the
+old `--clear` in-place mutation option is not part of the atomic contract.
+
 `close()` is lock-protected and idempotent after the underlying connection has
 closed successfully. It first requests a truncating WAL checkpoint and always
 attempts to close the connection even if that checkpoint fails. A checkpoint

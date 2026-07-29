@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- `nuself dev migrate` now builds and validates a strict temporary SQLite
+  database before atomically publishing it; corrupt or ID-mismatched source
+  records abort without exposing a partial database, and in-place `--clear`
+  migration has been removed.
 - File-to-SQLite upgrades now normalize 0.2.x memory relation fields at the
   explicit migration boundary, and the release gate reads a frozen 0.2.5
   private-data fixture through the current repositories.

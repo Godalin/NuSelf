@@ -159,6 +159,10 @@ class AtomicDeleteDurabilityError(RuntimeError):
         self.sync_error = sync_error
 
 
+class StorageMigrationValidationError(ValueError):
+    """Authoritative file data cannot be migrated without loss."""
+
+
 def _read_json_record(path: Path) -> dict[str, object]:
     raw = decode_json_value(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -329,6 +333,33 @@ class _FileCollection:
             )
             if obj is not None:
                 items.append(obj)
+        return tuple(items)
+
+    def list_strict_for_migration(self) -> tuple[dict[str, object], ...]:
+        """Read every authoritative record without corrupt-neighbor isolation."""
+        if not self._dir.exists():
+            return ()
+        self._require_collection_directory()
+        items: list[dict[str, object]] = []
+        for path in sorted(self._dir.iterdir()):
+            self._require_regular_record(path)
+            if path.suffix != ".json":
+                raise StorageMigrationValidationError(
+                    "file migration collection contains a non-JSON record: "
+                    f"{path.name}"
+                )
+            item = _read_json_record(path)
+            item_id = item.get("id")
+            if (
+                not isinstance(item_id, str)
+                or not item_id
+                or item_id != path.stem
+            ):
+                raise StorageMigrationValidationError(
+                    "file migration record id must be a non-empty string "
+                    f"matching its filename: {path.name}"
+                )
+            items.append(item)
         return tuple(items)
 
     def _record_path(self, key: str) -> Path:
@@ -581,12 +612,25 @@ def migrate_collection(
             if isinstance(item_id, str):
                 dst_col.delete(item_id)
 
+    source_items = (
+        src_col.list_strict_for_migration()
+        if isinstance(src_col, _FileCollection)
+        else src_col.list()
+    )
     count = 0
-    for item in src_col.list():
+    for item in source_items:
         item_id = item.get("id")
-        if isinstance(item_id, str):
-            dst_col.put(item_id, _upgrade_legacy_wire(name, item))
-            count += 1
+        if not isinstance(item_id, str) or not item_id:
+            raise StorageMigrationValidationError(
+                f"{name} record id must be a non-empty string"
+            )
+        upgraded = _upgrade_legacy_wire(name, item)
+        dst_col.put(item_id, upgraded)
+        if dst_col.get(item_id) != upgraded:
+            raise StorageMigrationValidationError(
+                f"{name} record failed post-write validation: {item_id}"
+            )
+        count += 1
     return count
 
 
@@ -665,3 +709,82 @@ def migrate_all(
         if count:
             result[name] = count
     return result
+
+
+def migrate_file_backend_atomically(
+    project_root: Path | None = None,
+    *,
+    db_path: Path | None = None,
+) -> tuple[dict[str, int], Path]:
+    """Migrate authoritative files and atomically publish one new SQLite DB."""
+    paths = runtime_paths(project_root)
+    destination_path = (
+        db_path
+        if db_path is not None
+        else paths.private_root / "nuself.sqlite"
+    )
+    if destination_path.exists() or destination_path.is_symlink():
+        raise FileExistsError(
+            "file migration destination already exists; move or remove it "
+            f"before migrating: {destination_path}"
+        )
+    ensure_private_directory(destination_path.parent)
+    temporary = destination_path.with_name(
+        f"{destination_path.name}.migrating-{uuid4().hex}"
+    )
+    source = create_file_backend(project_root)
+    destination: SqliteStorageBackend | None = None
+    published = False
+    try:
+        destination = create_sqlite_backend(
+            project_root,
+            db_path=temporary,
+        )
+        with source.transaction(), destination.transaction():
+            result = migrate_all(source, destination)
+        destination.close()
+        destination = None
+        _remove_sqlite_migration_sidecars(temporary)
+        _sync_file(temporary)
+        os.replace(temporary, destination_path)
+        published = True
+        try:
+            _sync_directory(destination_path.parent)
+        except BaseException as sync_error:
+            raise AtomicWriteDurabilityError(
+                destination_path,
+                sync_error=sync_error,
+            ) from sync_error
+        return result, destination_path
+    except BaseException as primary_error:
+        if destination is not None:
+            try:
+                destination.close()
+            except BaseException as close_error:
+                raise AtomicWriteCleanupError(
+                    temporary,
+                    primary_error=primary_error,
+                    cleanup_error=close_error,
+                ) from primary_error
+        if not published:
+            try:
+                _remove_sqlite_migration_artifacts(temporary)
+            except BaseException as cleanup_error:
+                raise AtomicWriteCleanupError(
+                    temporary,
+                    primary_error=primary_error,
+                    cleanup_error=cleanup_error,
+                ) from primary_error
+        raise
+
+
+def _remove_sqlite_migration_sidecars(database: Path) -> None:
+    for suffix in ("-wal", "-shm", "-journal"):
+        database.with_name(f"{database.name}{suffix}").unlink(
+            missing_ok=True
+        )
+
+
+def _remove_sqlite_migration_artifacts(database: Path) -> None:
+    database.unlink(missing_ok=True)
+    _remove_sqlite_migration_sidecars(database)

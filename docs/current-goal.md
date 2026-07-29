@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The external 0.3.0 RC correctness, persistence, security, and release
-engineering review is complete.
+Close the remaining 0.3 RC migration, notification-state, ambiguous-commit,
+and release reproducibility gaps identified by the `bd43f1d` external review.
 
 ## Active Branch
 
@@ -14,16 +14,31 @@ engineering review is complete.
 
 ## Ordered Work
 
-1. Discuss and specify the next objective before implementation.
+1. Publish File-to-SQLite migration only through a validated atomic switch.
+2. Preserve adapter history through every notification transition and make
+   crash recovery finalize, rather than retry, recorded failures.
+3. Preserve ambiguous candidate commits when post-write observation fails.
+4. Pin the uv/Pyright toolchain and make release rerun the complete quality
+   gate used by branch CI.
+5. Run focused fault injection and full local gates; push once and confirm the
+   final six-platform CI matrix.
 
 ## Out Of Scope
 
-- No implementation work is active.
-- Do not infer a new feature scope from the completed review.
+- No unrelated user feature or cognitive capability.
+- Thread lifecycle journaling and constructor cleanup remain non-blocking
+  follow-up work because thread persistence is explicitly semi-durable.
 - No 0.3.0 release tag until every release-candidate gate is proven.
 
 ## Completion Evidence
 
+- `nuself dev migrate` now writes a unique sibling database, holds the file
+  authority lock while one SQLite transaction copies and read-validates every
+  record, then checkpoints, closes, fsyncs, and atomically publishes it.
+  Strict migration reads reject corrupt/non-JSON/symlink/nested records and
+  missing or filename-mismatched IDs instead of isolating or skipping them.
+- Atomic migration, CLI lifecycle, and CLI regression coverage: 333 passed;
+  pyright reported 0 errors and 0 warnings.
 - Confirmed: `_FileCollection.get/put/delete` directly interpolate untrusted
   keys into paths and `list` recursively follows nested JSON paths.
 - Confirmed: ThreadStore rename, branch, archive, unarchive, and delete bypass
@@ -149,8 +164,8 @@ engineering review is complete.
 
 ## Publication
 
-The reviewed implementation is published on `dev/v0.3.x` through `5c9138d`.
+Work begins from the previously reviewed `bd43f1d`.
 
 ## Next Review Batch
 
-None selected. Await the next user-directed feature or review objective.
+Atomic File-to-SQLite migration.

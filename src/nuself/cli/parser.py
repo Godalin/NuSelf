@@ -576,12 +576,6 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         default=None,
         help="Destination database path (default: private/nuself.sqlite)",
     )
-    dev_migrate_parser.add_argument(
-        "--clear",
-        action="store_true",
-        default=False,
-        help="Clear existing data in destination before migration",
-    )
     bind_handler(dev_migrate_parser, handle_dev_migrate)
 
     bind_handler(

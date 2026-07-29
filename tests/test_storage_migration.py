@@ -5,15 +5,20 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 
+import pytest
+
 from nuself.agent.chat import ThreadStore
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.notification import NotificationOutbox
 from nuself.reason.repository import ReasonRepository
 from nuself.storage import (
+    AtomicWriteDurabilityError,
     COLLECTION_NAMES,
+    StorageMigrationValidationError,
     StorageBackend,
     create_file_backend,
     create_sqlite_backend,
+    migrate_file_backend_atomically,
     migrate_all,
     migrate_collection,
 )
@@ -128,6 +133,167 @@ def test_migrate_multiple_items(tmp_path: Path) -> None:
     count = migrate_collection(src, dst, "trace_nodes")
     assert count == 16
     assert len(dst.collection("trace_nodes").list()) == 16
+
+
+def test_atomic_file_migration_publishes_only_validated_database(
+    tmp_path: Path,
+) -> None:
+    source = create_file_backend(tmp_path)
+    source.collection("memory_entries").put(
+        "mem_atomic",
+        {"id": "mem_atomic", "title": "Atomic"},
+    )
+
+    result, database = migrate_file_backend_atomically(tmp_path)
+
+    assert result == {"memory_entries": 1}
+    assert database == tmp_path / "private" / "nuself.sqlite"
+    assert database.is_file()
+    assert not list(database.parent.glob("nuself.sqlite.migrating-*"))
+    destination = create_sqlite_backend(db_path=database)
+    try:
+        assert destination.collection("memory_entries").get(
+            "mem_atomic"
+        ) == {
+            "id": "mem_atomic",
+            "title": "Atomic",
+        }
+    finally:
+        destination.close()
+
+
+def test_atomic_file_migration_failure_never_publishes_partial_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = create_file_backend(tmp_path)
+    source.collection("memory_entries").put(
+        "mem_atomic",
+        {"id": "mem_atomic"},
+    )
+    original = migrate_collection
+
+    def fail_after_first_collection(
+        src: StorageBackend,
+        dst: StorageBackend,
+        name: str,
+        *,
+        clear_dst: bool = False,
+    ) -> int:
+        if name == "memory_candidates":
+            raise OSError("injected migration failure")
+        return original(src, dst, name, clear_dst=clear_dst)
+
+    monkeypatch.setattr(
+        "nuself.storage.migrate_collection",
+        fail_after_first_collection,
+    )
+
+    with pytest.raises(OSError, match="injected migration failure"):
+        migrate_file_backend_atomically(tmp_path)
+
+    private = tmp_path / "private"
+    assert not (private / "nuself.sqlite").exists()
+    assert not list(private.glob("nuself.sqlite.migrating-*"))
+
+
+def test_atomic_file_migration_refuses_existing_destination(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "private" / "nuself.sqlite"
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(b"existing authoritative bytes")
+
+    with pytest.raises(FileExistsError, match="already exists"):
+        migrate_file_backend_atomically(tmp_path)
+
+    assert destination.read_bytes() == b"existing authoritative bytes"
+
+
+def test_atomic_file_migration_rejects_missing_record_id(
+    tmp_path: Path,
+) -> None:
+    source = create_file_backend(tmp_path)
+    source.collection("memory_entries").put(
+        "missing_id",
+        {"title": "Must not be skipped"},
+    )
+
+    with pytest.raises(
+        StorageMigrationValidationError,
+        match="matching its filename",
+    ):
+        migrate_file_backend_atomically(tmp_path)
+
+    private = tmp_path / "private"
+    assert not (private / "nuself.sqlite").exists()
+    assert not list(private.glob("nuself.sqlite.migrating-*"))
+
+
+def test_atomic_file_migration_rejects_corrupt_source_record(
+    tmp_path: Path,
+) -> None:
+    record = tmp_path / "private" / "memory" / "entries" / "corrupt.json"
+    record.parent.mkdir(parents=True)
+    record.write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        migrate_file_backend_atomically(tmp_path)
+
+    assert not (tmp_path / "private" / "nuself.sqlite").exists()
+    assert not list(
+        (tmp_path / "private").glob("nuself.sqlite.migrating-*")
+    )
+
+
+def test_atomic_file_migration_rejects_nested_source_path(
+    tmp_path: Path,
+) -> None:
+    nested = (
+        tmp_path
+        / "private"
+        / "memory"
+        / "entries"
+        / "unexpected-directory"
+    )
+    nested.mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="regular file"):
+        migrate_file_backend_atomically(tmp_path)
+
+    assert not (tmp_path / "private" / "nuself.sqlite").exists()
+
+
+def test_atomic_file_migration_reports_visible_uncertain_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = create_file_backend(tmp_path)
+    source.collection("memory_entries").put(
+        "mem_atomic",
+        {"id": "mem_atomic"},
+    )
+    destination = tmp_path / "private" / "nuself.sqlite"
+
+    def fail_directory_sync(path: Path) -> None:
+        assert path == destination.parent
+        raise OSError("injected directory sync failure")
+
+    monkeypatch.setattr(
+        "nuself.storage._sync_directory",
+        fail_directory_sync,
+    )
+
+    with pytest.raises(
+        AtomicWriteDurabilityError,
+        match="destination replaced but directory synchronization failed",
+    ):
+        migrate_file_backend_atomically(tmp_path)
+
+    assert destination.is_file()
+    assert not list(
+        destination.parent.glob("nuself.sqlite.migrating-*")
+    )
 
 
 def test_migrate_normalizes_legacy_candidate_payload_relations(

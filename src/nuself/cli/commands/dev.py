@@ -6,32 +6,28 @@ import argparse
 from contextlib import closing
 
 from nuself.storage import (
-    create_file_backend,
     create_sqlite_backend,
     get_default_backend,
-    migrate_all,
+    migrate_file_backend_atomically,
 )
 from nuself.storage_sqlite import SqliteStorageBackend
 
 
 def handle_dev_migrate(args: argparse.Namespace) -> int:
-    source = create_file_backend(args.project_root)
-    with closing(
-        create_sqlite_backend(args.project_root, db_path=args.db)
-    ) as destination:
-        result = migrate_all(
-            source, destination, clear_dst=args.clear
-        )
-        if result:
-            for name, count in sorted(result.items()):
-                print(f"  {name}: {count} items")
-        else:
-            print("  (no data to migrate)")
-        total = sum(result.values())
-        print(
-            f"Migrated {total} items across {len(result)} "
-            f"collections to {destination.db_path}"
-        )
+    result, destination_path = migrate_file_backend_atomically(
+        args.project_root,
+        db_path=args.db,
+    )
+    if result:
+        for name, count in sorted(result.items()):
+            print(f"  {name}: {count} items")
+    else:
+        print("  (no data to migrate)")
+    total = sum(result.values())
+    print(
+        f"Migrated {total} items across {len(result)} "
+        f"collections to {destination_path}"
+    )
     return 0
 
 

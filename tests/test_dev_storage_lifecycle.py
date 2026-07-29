@@ -14,67 +14,49 @@ from nuself.storage import FileStorageBackend
 from nuself.storage_sqlite import SqliteStorageBackend
 
 
-def test_dev_migrate_closes_owned_destination(
+def test_dev_migrate_uses_atomic_migration_boundary(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    destination = SqliteStorageBackend(
-        tmp_path / "migration.sqlite",
-        project_root=tmp_path,
-    )
+    destination = tmp_path / "private" / "migration.sqlite"
+    calls: list[tuple[Path | None, Path | None]] = []
 
-    def create_destination(
+    def migrate(
         project_root: Path | None,
         *,
         db_path: Path | None = None,
-    ) -> SqliteStorageBackend:
-        del project_root, db_path
-        return destination
+    ) -> tuple[dict[str, int], Path]:
+        calls.append((project_root, db_path))
+        return {"memory_entries": 2}, destination
 
     monkeypatch.setattr(
-        "nuself.cli.commands.dev.create_sqlite_backend",
-        create_destination,
+        "nuself.cli.commands.dev.migrate_file_backend_atomically",
+        migrate,
     )
 
     assert handle_dev_migrate(
         argparse.Namespace(
             project_root=tmp_path,
-            db=destination.db_path,
-            clear=False,
+            db=destination,
         )
     ) == 0
-    assert getattr(destination, "_closed") is True
+    assert calls == [(tmp_path, destination)]
+    assert "Migrated 2 items across 1 collections" in capsys.readouterr().out
 
 
-def test_dev_migrate_closes_destination_after_failure(
+def test_dev_migrate_propagates_atomic_migration_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    destination = SqliteStorageBackend(
-        tmp_path / "migration.sqlite",
-        project_root=tmp_path,
-    )
-
-    def create_destination(
-        project_root: Path | None,
-        *,
-        db_path: Path | None = None,
-    ) -> SqliteStorageBackend:
-        del project_root, db_path
-        return destination
-
     primary = RuntimeError("migration failed")
-    monkeypatch.setattr(
-        "nuself.cli.commands.dev.create_sqlite_backend",
-        create_destination,
-    )
 
     def fail_migration(*args: object, **kwargs: object) -> object:
         del args, kwargs
         raise primary
 
     monkeypatch.setattr(
-        "nuself.cli.commands.dev.migrate_all",
+        "nuself.cli.commands.dev.migrate_file_backend_atomically",
         fail_migration,
     )
 
@@ -82,13 +64,11 @@ def test_dev_migrate_closes_destination_after_failure(
         handle_dev_migrate(
             argparse.Namespace(
                 project_root=tmp_path,
-                db=destination.db_path,
-                clear=False,
+                db=tmp_path / "migration.sqlite",
             )
         )
 
     assert captured.value is primary
-    assert getattr(destination, "_closed") is True
 
 
 def test_dev_db_schema_closes_backend_on_early_return(
