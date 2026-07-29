@@ -5,9 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make bounded daemon activity delivery loss-aware. Queue overflow must be
-represented in the protocol and force the interactive client onto persisted
-turn-scoped log recovery instead of silently presenting an incomplete stream.
+Make runtime event subscriptions use the same complete `(producer, name)`
+identity as registration and publication. Partial name-only selectors must not
+cross subsystem boundaries when extensions register the same event name.
 
 ## Active Branch
 
@@ -15,47 +15,45 @@ turn-scoped log recovery instead of silently presenting an incomplete stream.
 
 ## Ordered Work
 
-1. Inventory activity queue overflow, protocol payloads, client polling,
-   cursor de-duplication, and fallback tests.
-2. Update runtime-infrastructure, CLI, log, and protocol contracts first.
-3. Track dropped events per subscription and return an exact non-negative count
-   with each activity batch.
-4. Raise a typed client-side stream-gap failure before presenting a partial
-   batch.
-5. Reuse the existing degradation audit and persisted turn-scoped cursor
-   fallback without replaying already delivered event identities.
+1. Inventory definitions, same-named extension events, and every subscriber.
+2. Update runtime-infrastructure, logging, and development contracts first.
+3. Make subscriptions either unfiltered or exact `(producer, name)` selectors.
+4. Reject partial and unregistered selectors at subscription composition time.
+5. Prove same-named events from another producer cannot reach the subscriber.
 6. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No unbounded activity queue.
-- No retry or replay of chat commands.
-- No change to authoritative log persistence or retention.
-- No cross-turn recovery; fallback remains scoped to the active `turn_id`.
+- No wildcard-by-producer or wildcard-by-name selectors.
+- No change to event definition, envelope, payload, or delivery-failure shapes.
+- No asynchronous delivery or subscriber retry.
+- No compatibility support for name-only subscriptions.
 
 ## Completion Evidence
 
-- Loss-aware activity delivery completed in `699a46e`.
-- Each subscription tracks exact evictions since its previous read.
-- `ActivityEventsResponsePayload` requires exact `events` and non-negative
-  integer `dropped_count` fields; booleans and missing/invalid counts fail
-  protocol decoding.
-- `ActivityStreamGapError` retains the dropped count and enters the existing
-  application-degradation recovery path before a partial batch is presented.
-- Focused activity/protocol/transport/REPL tests: 78 passed.
-- Full suite: 2082 passed.
+- Complete event subscription identity completed in `8765c8b`.
+- Filtered subscriptions require both producer and name and resolve the sealed
+  definition during composition.
+- Partial and unknown selectors fail before a subscription is installed.
+- A registered same-name extension event from another producer is proven not
+  to reach the exact subscriber.
+- Production subscribers contain no name-only selector.
+- Focused runtime event, observability, daemon-worker, Chat, and daemon-server
+  tests: 168 passed.
+- Full suite: 2086 passed.
 - Pyright: 0 errors, 0 warnings.
-- `git diff --check`: passed.
+- Static subscription search and `git diff --check`: passed.
 
 ## Publication
 
-Activity stream-gap recovery was implemented in `699a46e`; milestone
+Complete event subscription identity was implemented in `8765c8b`; milestone
 publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Review `EventPublisher` subscription ownership next. Named subscriptions
-currently filter only by event name even though definitions are keyed by
-producer and name; determine whether producer-blind subscriptions can leak
-same-named events across subsystem boundaries, then make subscription selectors
-match the registered event identity rather than a partial string when needed.
+Review durable job admission and backpressure next. The Reason export worker
+uses an unbounded `SimpleQueue` while manifests are already authoritative;
+inventory duplicate enqueue paths, restart reconciliation, cancellation, and
+queue wake-up semantics, then determine whether the in-memory transport should
+be bounded and identity-deduplicated rather than able to grow independently of
+durable state.
