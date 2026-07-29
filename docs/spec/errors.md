@@ -118,6 +118,22 @@ is observed separately as `daemon/response_delivery_failed`. Encoding
 diagnostics retain the decided response status; delivery diagnostics retain
 the frame status and whether the frame was an encoding fallback.
 
+The socket transport owns one sealed failure-audit contract:
+
+| Event | Level | Status | Exact metadata |
+|---|---|---|---|
+| `request_transport_failed` | warning | `error` | none |
+| `request_failed` | error | `error` | none |
+| `response_encode_failed` | warning | `error` | `response_status=ok|error` |
+| `response_delivery_failed` | warning | `error` | `response_status=ok|error`, boolean `fallback` |
+
+Every event requires the canonical top-level error and forbids duration.
+Messages and projection defaults are fixed by the transport audit adapter.
+Missing/extra metadata, invalid response status, non-boolean fallback, unknown
+event, forbidden duration, and missing error fail before the terminal
+best-effort diagnostic boundary. A request ID is correlated only after one was
+decoded; the internal `unknown` sentinel is never persisted as an identity.
+
 Client-side socket failures and invalid response frames share
 `DaemonConnectionError`. The original `OSError` or `ProtocolError` is retained
 as the explicit cause. A response with another request's id is invalid even if

@@ -263,6 +263,9 @@ under the same package.
   already-decided response or shutdown flag. Handlers do not choose request
   audit messages, levels, statuses, error policy, duration policy, or metadata
   shape.
+- `daemon/transport_audit.py` owns the sealed socket read/dispatch/encode/write
+  failure contract. `daemon/socket_server.py` owns transport control flow but
+  never constructs failure log messages or projection defaults.
 - `daemon/audit.py` owns the immutable lifecycle event definition registry,
   exact per-event schema validation, and best-effort audit sink boundary.
 - `runtime/definitions.py` owns generic sealed definition-registry mechanics.

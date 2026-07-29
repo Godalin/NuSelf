@@ -20,40 +20,11 @@ from nuself.daemon.transport import (
     read_socket_frame,
     write_stream_frame,
 )
-from nuself.runtime.context import runtime_context
-from nuself.runtime.observability import report_observed_failure
+from nuself.daemon.transport_audit import (
+    report_daemon_transport_failure,
+)
 
 DAEMON_REQUEST_IO_TIMEOUT_SECONDS = 5.0
-
-
-def _report_response_failure(
-    exc: Exception,
-    *,
-    request_id: str,
-    event: str,
-    message: str,
-    project_root: Path | None,
-    metadata: dict[str, object],
-) -> None:
-    context = (
-        runtime_context(
-            request_id=request_id,
-            source="daemon",
-        )
-        if request_id != "unknown"
-        else runtime_context(source="daemon")
-    )
-    with context:
-        report_observed_failure(
-            exc,
-            component="daemon",
-            event=event,
-            message=message,
-            project_root=project_root,
-            metadata=metadata,
-            level="warning",
-            status="error",
-        )
 
 
 class NuSelfUnixServer(socketserver.ThreadingUnixStreamServer):
@@ -77,7 +48,7 @@ class RequestHandler(socketserver.StreamRequestHandler):
 
     @override
     def handle(self) -> None:
-        request_id = "unknown"
+        request_id: str | None = None
         try:
             self.connection.settimeout(
                 DAEMON_REQUEST_IO_TIMEOUT_SECONDS
@@ -86,20 +57,16 @@ class RequestHandler(socketserver.StreamRequestHandler):
         except DaemonPeerDisconnected:
             return
         except ProtocolError as exc:
-            response = DaemonResponse.fail_from_exception(request_id, exc)
+            response = DaemonResponse.fail_from_exception("unknown", exc)
         except OSError as exc:
-            report_observed_failure(
+            report_daemon_transport_failure(
                 exc,
-                component="daemon",
                 event="request_transport_failed",
-                message="Daemon request transport failed",
                 project_root=self._request_project_root(),
-                metadata=None,
-                level="warning",
-                status="error",
+                request_id=None,
             )
             response = DaemonResponse.fail_from_exception(
-                request_id,
+                "unknown",
                 exc,
                 include_chain=True,
             )
@@ -110,26 +77,18 @@ class RequestHandler(socketserver.StreamRequestHandler):
                 response = handle_request(request, self._daemon_state())
             except ProtocolError as exc:
                 response = DaemonResponse.fail_from_exception(
-                    request_id,
+                    request_id or "unknown",
                     exc,
                 )
             except Exception as exc:
-                with runtime_context(
+                report_daemon_transport_failure(
+                    exc,
+                    event="request_failed",
+                    project_root=self._request_project_root(),
                     request_id=request_id,
-                    source="daemon",
-                ):
-                    report_observed_failure(
-                        exc,
-                        component="daemon",
-                        event="request_failed",
-                        message="Daemon request handling failed",
-                        project_root=self._request_project_root(),
-                        metadata=None,
-                        level="error",
-                        status="error",
-                    )
+                )
                 response = DaemonResponse.fail_from_exception(
-                    request_id,
+                    request_id or "unknown",
                     exc,
                     include_chain=True,
                 )
@@ -138,16 +97,15 @@ class RequestHandler(socketserver.StreamRequestHandler):
         try:
             frame = response.to_json_line()
         except ProtocolError as exc:
-            _report_response_failure(
+            report_daemon_transport_failure(
                 exc,
-                request_id=request_id,
                 event="response_encode_failed",
-                message="Daemon response could not be encoded",
                 project_root=self._request_project_root(),
+                request_id=request_id,
                 metadata={"response_status": response.status},
             )
             response = DaemonResponse.fail(
-                request_id,
+                request_id or "unknown",
                 "daemon response encoding failed",
             )
             frame = response.to_json_line()
@@ -156,12 +114,11 @@ class RequestHandler(socketserver.StreamRequestHandler):
         try:
             write_stream_frame(self.wfile, frame)
         except OSError as exc:
-            _report_response_failure(
+            report_daemon_transport_failure(
                 exc,
-                request_id=request_id,
                 event="response_delivery_failed",
-                message="Daemon response could not be delivered",
                 project_root=self._request_project_root(),
+                request_id=request_id,
                 metadata={
                     "response_status": response.status,
                     "fallback": fallback,

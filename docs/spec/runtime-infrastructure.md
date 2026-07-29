@@ -261,10 +261,15 @@ the typed daemon request registry boundary, encodes one `DaemonResponse`, and
 writes one bounded frame. The module must not import `DaemonState` or the
 daemon process runner.
 
+`nuself.daemon.transport_audit` owns the socket adapter's sealed operational
+failure schemas. `socket_server` supplies only the caught exception, event
+identity, available request correlation, and exact schema metadata; it does
+not construct log presentation.
+
 Transport `ProtocolError` values become failed responses. Request-read
 `OSError`, unexpected handler exceptions, response-encoding failures, and
-response-delivery failures retain distinct observed audit boundaries. A clean
-peer disconnect returns without a response. The daemon process runner owns
+response-delivery failures resolve through the sealed transport audit adapter.
+A clean peer disconnect returns without a response. The daemon process runner owns
 socket path creation, server-loop timing, state construction, signals, workers,
 and cleanup; none of those responsibilities belong to the socket adapter.
 

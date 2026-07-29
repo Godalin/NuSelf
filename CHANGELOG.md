@@ -32,6 +32,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   now resolve through one sealed request-audit registry. Request handlers no
   longer choose audit presentation or schema, and accepted shutdown records
   carry an explicit `accepted` status.
+- Daemon socket read, unexpected dispatch, response encoding, and response
+  delivery failures now use one sealed transport-audit registry. Undecoded
+  requests no longer persist the internal `unknown` sentinel as a request
+  identity.
 - Internal job wake-ups now resolve through sealed name, producer, and payload
   definitions before queue mutation; Reason export workers reject invalid jobs
   at ingress instead of queueing and later emitting
