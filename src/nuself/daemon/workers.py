@@ -38,6 +38,10 @@ class DaemonWorkerJoinTimeoutError(RuntimeError):
     """Raised when an owned daemon worker remains alive after join."""
 
 
+class DaemonWorkerUnexpectedExitError(RuntimeError):
+    """Raised internally when a long-lived worker returns before shutdown."""
+
+
 class DaemonWorkerSupervisor:
     """Own sealed daemon worker registration, health, and execution scopes."""
 
@@ -219,21 +223,15 @@ class DaemonWorkerSupervisor:
                 try:
                     target()
                 except Exception as exc:
-                    error = self.record_failure(name, exc)
-                    self._publish_lifecycle_event(
-                        name,
-                        event="worker.failed",
-                        message=f"{name} worker exited unexpectedly",
-                        level="error",
-                        status="error",
-                        error=error,
-                        metadata={
-                            "operation_event": (
-                                "worker_exited_unexpectedly"
+                    self._record_target_failure(name, exc)
+                else:
+                    if not self._shutdown_requested.is_set():
+                        self._record_target_failure(
+                            name,
+                            DaemonWorkerUnexpectedExitError(
+                                f"{name} returned before daemon shutdown"
                             ),
-                            "error_type": type(exc).__name__,
-                        },
-                    )
+                        )
                 finally:
                     self._publish_lifecycle_event(
                         name,
@@ -243,6 +241,25 @@ class DaemonWorkerSupervisor:
                     )
 
         return run
+
+    def _record_target_failure(
+        self,
+        name: str,
+        error: Exception,
+    ) -> None:
+        chain = self.record_failure(name, error)
+        self._publish_lifecycle_event(
+            name,
+            event="worker.failed",
+            message=f"{name} worker exited unexpectedly",
+            level="error",
+            status="error",
+            error=chain,
+            metadata={
+                "operation_event": "worker_exited_unexpectedly",
+                "error_type": type(error).__name__,
+            },
+        )
 
     def record_success(self, name: str) -> None:
         """Record one successful worker operation."""

@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon workers that return before shutdown are now reported as unexpected
+  exits in worker health and lifecycle logs instead of appearing as ordinary
+  stopped workers.
 - Persona discussion and `persona_think` now recover only from typed Agent
   failures; raw Agent implementation `RuntimeError` and `ValueError` failures
   propagate instead of appearing as normal persona fallback.

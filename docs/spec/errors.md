@@ -166,6 +166,12 @@ unexpected per-iteration exception unless shutdown has been requested.
   context. A target-level exception that escapes initialization or the loop is
   recorded in health and published as `daemon/worker.failed`
   before the owned thread becomes stopped.
+- Daemon worker targets are long-lived. Returning from the complete target
+  before daemon shutdown is requested is an unexpected exit even when no
+  exception escaped. The supervisor records a typed unexpected-exit failure in
+  health and publishes the same `daemon/worker.failed` lifecycle event before
+  `worker.stopped`. Returning after shutdown is requested is graceful and does
+  not create a failure.
 - The structured error write is a secondary reporting effect. If it fails,
   shared observability emits a Python warning; logging failure must not escape
   the iteration boundary or terminate an otherwise recoverable worker.

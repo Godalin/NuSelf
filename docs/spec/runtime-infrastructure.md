@@ -200,6 +200,10 @@ registration and common lifecycle semantics over the neutral
 - Every worker target runs under `source="daemon.worker.<name>"`. An exception
   escaping the complete target updates health and publishes
   `daemon/worker.failed` without escaping the thread.
+- A complete target that returns while daemon shutdown is not requested is
+  treated as a typed unexpected exit: health gains an error and consecutive
+  failure, and `worker.failed` is published before `worker.stopped`. A return
+  after the shared shutdown event is set is the only graceful target return.
 - Every scheduled iteration gets a fresh job id and a context containing only
   that job id and worker source. Ambient request, thread, trace, and job
   identity must not leak into worker iterations.
@@ -928,6 +932,8 @@ state.
   target exit.
 - Daemon composition wraps each target in a supervisor that establishes its
   runtime source context and records any escaping `Exception` in daemon health.
+  It also records a target that returns before daemon shutdown as an unexpected
+  exit rather than a healthy stop.
   `OwnedWorker` itself remains domain-neutral and does not own logging.
 - `join(timeout)` returns a typed snapshot. A live thread after the timeout is
   `timed_out`; later target exit transitions it to `stopped`.

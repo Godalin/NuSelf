@@ -124,6 +124,7 @@ def test_worker_lifecycle_subscriber_failure_does_not_skip_target_or_stop(
 ) -> None:
     publisher = EventPublisher()
     publisher.attach_projection(runtime_event_log_sink(tmp_path))
+    shutdown_requested = threading.Event()
 
     def fail_subscriber(_event: object) -> None:
         raise RuntimeError("subscriber unavailable")
@@ -131,14 +132,19 @@ def test_worker_lifecycle_subscriber_failure_does_not_skip_target_or_stop(
     publisher.attach_projection(fail_subscriber)
     supervisor = DaemonWorkerSupervisor(
         tmp_path,
-        threading.Event(),
+        shutdown_requested,
         publisher,
     )
     ran = threading.Event()
+
+    def graceful_target() -> None:
+        ran.set()
+        shutdown_requested.set()
+
     supervisor.register(
         "worker",
         thread_name="test-worker-events",
-        target=ran.set,
+        target=graceful_target,
     )
     supervisor.seal()
 
@@ -160,3 +166,46 @@ def test_worker_lifecycle_subscriber_failure_does_not_skip_target_or_stop(
     ]
     assert all(event.event_id is not None for event in lifecycle)
     assert all(event.source == "daemon.worker.worker" for event in lifecycle)
+    health = supervisor.health()[0]
+    assert health.last_error is None
+    assert health.consecutive_failures == 0
+
+
+def test_worker_return_before_shutdown_records_unexpected_exit(
+    tmp_path: Path,
+) -> None:
+    supervisor = _supervisor(tmp_path)
+    supervisor.register(
+        "worker",
+        thread_name="test-worker-premature-return",
+        target=lambda: None,
+    )
+    supervisor.seal()
+
+    supervisor.start("worker")
+    supervisor.join("worker", timeout=1)
+
+    health = supervisor.health()[0]
+    assert health.alive is False
+    assert health.last_error == "worker returned before daemon shutdown"
+    assert health.consecutive_failures == 1
+    lifecycle = [
+        event
+        for event in read_log_events(
+            project_root=tmp_path,
+            component="daemon",
+        )
+        if event.event.startswith("worker.")
+    ]
+    assert [event.event for event in lifecycle] == [
+        "worker.started",
+        "worker.failed",
+        "worker.stopped",
+    ]
+    failed = lifecycle[1]
+    assert failed.error == "worker returned before daemon shutdown"
+    assert failed.metadata == {
+        "worker": "worker",
+        "operation_event": "worker_exited_unexpectedly",
+        "error_type": "DaemonWorkerUnexpectedExitError",
+    }
