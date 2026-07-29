@@ -278,6 +278,8 @@ envelope。看起来属于内部协议的输出会被严格解码；损坏的协
 字段不会再作为原始答案显示。
 
 当前聊天使用一个基于 LangGraph 的 conversation runtime。它会检索 memory entries、derived profile items 和 imported source chunks，把对话轮次追加到 `private/threads/default.json`，并在对话增长后把较早上下文压缩成线程摘要。Agent 还可以在对话中调用工具：`search_memory` 进行定向检索，`list_pending_reflections` / `dismiss_reflection` 检视和管理主动想法，`archive_memory` / `update_memory_importance` 整理长期记忆，`list_active_reasoning_threads` / `show_reasoning_thread` 查看长期 reason 状态，`search_trace` / `show_trace` 查看 thought provenance。当前记忆检索是确定性的词法检索，带有 descriptor-aware 类型提示、type/tag filters、基于现有 memory links 的 relation expansion 和排序原因；向量索引和图索引会作为后续派生检索层加入。
+Thread rename、branch、archive、restore 与 delete 会复用 chat persistence
+的稳定 per-thread lock identity，不会再与进行中的对话写入竞态或重建第二个锁 inode。
 
 Chat 生命周期统一发布为已注册的 `turn.started`、`turn.completed`、
 `turn.failed` 和 `turn.reused` event。只有 thread update 持久化成功后才会发布

@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Thread rename, branch, archive, unarchive, and delete now coordinate with
+  chat persistence through stable cross-process lock files.
 - File-backed collections now reject path-like keys, record/key identity
   mismatches, symlinked records, and symlinked collection directories.
 - Redacted caught callback, event-projection, protocol-decode, and rollback

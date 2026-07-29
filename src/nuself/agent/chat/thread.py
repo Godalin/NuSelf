@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 import fcntl
 import json
 from pathlib import Path
-from typing import Literal, TypeVar, cast
+from typing import Generator, Literal, TypeVar, cast
 
 from nuself.config import runtime_paths
 from nuself.private_fs import ensure_private_directory, ensure_private_file
@@ -142,6 +143,19 @@ class ThreadStore:
         ensure_private_directory(self._threads_dir)
         return _ThreadLock(self._lock_path_for(thread_id))
 
+    @contextmanager
+    def _locked_many(
+        self,
+        *thread_ids: str,
+    ) -> Generator[None, None, None]:
+        """Lock distinct logical threads in one deterministic order."""
+
+        ordered = sorted(set(thread_ids))
+        with ExitStack() as stack:
+            for thread_id in ordered:
+                stack.enter_context(self._locked(thread_id))
+            yield
+
     def _load_unlocked(self, thread_id: str) -> ThreadState:
         path = self._path_for(thread_id)
         if not path.exists():
@@ -186,28 +200,28 @@ class ThreadStore:
         return ids
 
     def rename(self, old_thread_id: str, new_thread_id: str) -> None:
-        """Rename a thread file and its lock atomically."""
+        """Rename one latest locked thread snapshot."""
         if old_thread_id == new_thread_id:
             return
-        old_path = self._path_for(old_thread_id)
-        new_path = self._path_for(new_thread_id)
-        if not old_path.exists():
-            raise ValueError(f"thread not found: {old_thread_id}")
-        if new_path.exists():
-            raise ValueError(f"thread already exists: {new_thread_id}")
-        state = self._load_unlocked(old_thread_id)
-        renamed = ThreadState(
-            thread_id=new_thread_id,
-            summary=state.summary,
-            messages=state.messages,
-            message_start_index=state.message_start_index,
-            next_message_index=state.next_message_index,
-        )
-        self._save_unlocked(renamed)
-        old_path.unlink()
-        old_lock = self._lock_path_for(old_thread_id)
-        if old_lock.exists():
-            old_lock.unlink()
+        with self._locked_many(old_thread_id, new_thread_id):
+            old_path = self._path_for(old_thread_id)
+            new_path = self._path_for(new_thread_id)
+            if not old_path.exists():
+                raise ValueError(f"thread not found: {old_thread_id}")
+            if new_path.exists():
+                raise ValueError(
+                    f"thread already exists: {new_thread_id}"
+                )
+            state = self._load_unlocked(old_thread_id)
+            renamed = ThreadState(
+                thread_id=new_thread_id,
+                summary=state.summary,
+                messages=state.messages,
+                message_start_index=state.message_start_index,
+                next_message_index=state.next_message_index,
+            )
+            self._save_unlocked(renamed)
+            old_path.unlink()
 
     def branch(
         self,
@@ -219,64 +233,79 @@ class ThreadStore:
 
         If message_index is None, branches from the current end.
         """
-        source_path = self._path_for(source_thread_id)
-        new_path = self._path_for(new_thread_id)
-        if not source_path.exists():
-            raise ValueError(f"source thread not found: {source_thread_id}")
-        if new_path.exists():
-            raise ValueError(f"thread already exists: {new_thread_id}")
-        source = self._load_unlocked(source_thread_id)
-        if message_index is None:
-            message_index = len(source.messages)
-        if message_index < 0 or message_index > len(source.messages):
-            raise ValueError(
-                f"branch index {message_index} out of range (0..{len(source.messages)})"
+        with self._locked_many(source_thread_id, new_thread_id):
+            source_path = self._path_for(source_thread_id)
+            new_path = self._path_for(new_thread_id)
+            if not source_path.exists():
+                raise ValueError(
+                    f"source thread not found: {source_thread_id}"
+                )
+            if new_path.exists():
+                raise ValueError(
+                    f"thread already exists: {new_thread_id}"
+                )
+            source = self._load_unlocked(source_thread_id)
+            branch_index = (
+                len(source.messages)
+                if message_index is None
+                else message_index
             )
-        branched = ThreadState(
-            thread_id=new_thread_id,
-            summary=source.summary,
-            messages=source.messages[:message_index],
-            message_start_index=source.message_start_index,
-            next_message_index=source.message_start_index + message_index,
-        )
-        self._save_unlocked(branched)
-        return branched
+            if (
+                branch_index < 0
+                or branch_index > len(source.messages)
+            ):
+                raise ValueError(
+                    f"branch index {branch_index} out of range "
+                    f"(0..{len(source.messages)})"
+                )
+            branched = ThreadState(
+                thread_id=new_thread_id,
+                summary=source.summary,
+                messages=source.messages[:branch_index],
+                message_start_index=source.message_start_index,
+                next_message_index=(
+                    source.message_start_index + branch_index
+                ),
+            )
+            self._save_unlocked(branched)
+            return branched
 
     def archive(self, thread_id: str) -> None:
         """Move a thread file to the archived subdirectory."""
-        source_path = self._path_for(thread_id)
-        if not source_path.exists():
-            raise ValueError(f"thread not found: {thread_id}")
-        archived_dir = self._threads_dir / "archived"
-        ensure_private_directory(archived_dir)
-        target_path = archived_dir / f"{thread_id}.json"
-        if target_path.exists():
-            raise ValueError(f"archived thread already exists: {thread_id}")
-        source_path.rename(target_path)
-        old_lock = self._lock_path_for(thread_id)
-        if old_lock.exists():
-            old_lock.unlink()
+        with self._locked(thread_id):
+            source_path = self._path_for(thread_id)
+            if not source_path.exists():
+                raise ValueError(f"thread not found: {thread_id}")
+            archived_dir = self._threads_dir / "archived"
+            ensure_private_directory(archived_dir)
+            target_path = archived_dir / f"{thread_id}.json"
+            if target_path.exists():
+                raise ValueError(
+                    f"archived thread already exists: {thread_id}"
+                )
+            source_path.rename(target_path)
 
     def unarchive(self, thread_id: str) -> None:
         """Move a thread file from the archived subdirectory back to active."""
-        archived_dir = self._threads_dir / "archived"
-        source_path = archived_dir / f"{thread_id}.json"
-        if not source_path.exists():
-            raise ValueError(f"archived thread not found: {thread_id}")
-        target_path = self._path_for(thread_id)
-        if target_path.exists():
-            raise ValueError(f"thread already exists: {thread_id}")
-        source_path.rename(target_path)
+        with self._locked(thread_id):
+            archived_dir = self._threads_dir / "archived"
+            source_path = archived_dir / f"{thread_id}.json"
+            if not source_path.exists():
+                raise ValueError(
+                    f"archived thread not found: {thread_id}"
+                )
+            target_path = self._path_for(thread_id)
+            if target_path.exists():
+                raise ValueError(f"thread already exists: {thread_id}")
+            source_path.rename(target_path)
 
     def delete(self, thread_id: str) -> None:
-        """Permanently delete a thread file and its lock."""
-        path = self._path_for(thread_id)
-        if not path.exists():
-            raise ValueError(f"thread not found: {thread_id}")
-        path.unlink()
-        lock = self._lock_path_for(thread_id)
-        if lock.exists():
-            lock.unlink()
+        """Permanently delete a thread while retaining its stable lock."""
+        with self._locked(thread_id):
+            path = self._path_for(thread_id)
+            if not path.exists():
+                raise ValueError(f"thread not found: {thread_id}")
+            path.unlink()
 
 
 class _ThreadLock:

@@ -1,10 +1,84 @@
+# pyright: reportPrivateUsage=false
 """Tests for ThreadStore thread management operations."""
 
 from __future__ import annotations
 
+import multiprocessing
+from multiprocessing.context import SpawnContext
+from multiprocessing.synchronize import Event
 from pathlib import Path
 
+import pytest
+
 from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
+
+
+def _hold_thread_lock(
+    project_root: str,
+    thread_id: str,
+    ready: Event,
+    release: Event,
+) -> None:
+    store = ThreadStore(Path(project_root))
+    with store._locked(thread_id):
+        ready.set()
+        if not release.wait(timeout=10):
+            raise RuntimeError("parent did not release thread lock")
+
+
+def _hold_thread_update(
+    project_root: str,
+    ready: Event,
+    release: Event,
+) -> None:
+    store = ThreadStore(Path(project_root))
+
+    def update(state: ThreadState) -> tuple[ThreadState, None]:
+        ready.set()
+        if not release.wait(timeout=10):
+            raise RuntimeError("parent did not release thread update")
+        return (
+            ThreadState(
+                thread_id=state.thread_id,
+                summary=state.summary,
+                messages=[
+                    *state.messages,
+                    ThreadMessage(role="user", content="latest"),
+                ],
+                message_start_index=state.message_start_index,
+                next_message_index=state.next_message_index + 1,
+            ),
+            None,
+        )
+
+    store.update("source", update)
+
+
+def _run_thread_lifecycle(
+    project_root: str,
+    operation: str,
+    attempted: Event,
+    done: Event,
+) -> None:
+    store = ThreadStore(Path(project_root))
+    attempted.set()
+    if operation == "rename":
+        store.rename("source", "target")
+    elif operation == "branch":
+        store.branch("source", "target")
+    elif operation == "archive":
+        store.archive("source")
+    elif operation == "unarchive":
+        store.unarchive("source")
+    elif operation == "delete":
+        store.delete("source")
+    else:
+        raise AssertionError(f"unknown lifecycle operation: {operation}")
+    done.set()
+
+
+def _spawn_context() -> SpawnContext:
+    return multiprocessing.get_context("spawn")
 
 
 def test_list_returns_empty_when_no_threads(tmp_path: Path) -> None:
@@ -61,6 +135,50 @@ def test_rename_preserves_messages_and_summary(tmp_path: Path) -> None:
     assert loaded.messages[0].content == "hello"
     assert loaded.message_start_index == 0
     assert loaded.next_message_index == 1
+
+
+def test_rename_waits_for_update_and_moves_latest_snapshot(
+    tmp_path: Path,
+) -> None:
+    store = ThreadStore(tmp_path)
+    store.save(ThreadState.empty("source"))
+    context = _spawn_context()
+    update_ready = context.Event()
+    release_update = context.Event()
+    attempted = context.Event()
+    rename_done = context.Event()
+    updater = context.Process(
+        target=_hold_thread_update,
+        args=(str(tmp_path), update_ready, release_update),
+    )
+    renamer = context.Process(
+        target=_run_thread_lifecycle,
+        args=(str(tmp_path), "rename", attempted, rename_done),
+    )
+    updater.start()
+    assert update_ready.wait(timeout=10)
+    renamer.start()
+    try:
+        assert attempted.wait(timeout=10)
+        assert not rename_done.wait(timeout=0.2)
+    finally:
+        release_update.set()
+        updater.join(timeout=10)
+        renamer.join(timeout=10)
+        for process in (updater, renamer):
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=10)
+
+    assert updater.exitcode == 0
+    assert renamer.exitcode == 0
+    assert store.load("target").messages[-1].content == "latest"
+    assert (
+        tmp_path / "private" / "threads" / "source.lock"
+    ).exists()
+    assert (
+        tmp_path / "private" / "threads" / "target.lock"
+    ).exists()
 
 
 def test_rename_same_id_is_noop(tmp_path: Path) -> None:
@@ -146,6 +264,70 @@ def test_branch_at_zero_index(tmp_path: Path) -> None:
     branched = store.branch("source", "fork", message_index=0)
     assert len(branched.messages) == 0
     assert branched.next_message_index == 3
+
+
+@pytest.mark.parametrize(
+    ("operation", "held_thread_id"),
+    [
+        ("rename", "source"),
+        ("rename", "target"),
+        ("branch", "source"),
+        ("branch", "target"),
+        ("archive", "source"),
+        ("unarchive", "source"),
+        ("delete", "source"),
+    ],
+)
+def test_lifecycle_operations_wait_for_cross_process_thread_locks(
+    tmp_path: Path,
+    operation: str,
+    held_thread_id: str,
+) -> None:
+    store = ThreadStore(tmp_path)
+    store.save(ThreadState.empty("source"))
+    if operation == "unarchive":
+        store.archive("source")
+    context = _spawn_context()
+    lock_ready = context.Event()
+    release_lock = context.Event()
+    attempted = context.Event()
+    done = context.Event()
+    owner = context.Process(
+        target=_hold_thread_lock,
+        args=(
+            str(tmp_path),
+            held_thread_id,
+            lock_ready,
+            release_lock,
+        ),
+    )
+    lifecycle = context.Process(
+        target=_run_thread_lifecycle,
+        args=(str(tmp_path), operation, attempted, done),
+    )
+    owner.start()
+    assert lock_ready.wait(timeout=10)
+    lifecycle.start()
+    try:
+        assert attempted.wait(timeout=10)
+        assert not done.wait(timeout=0.2)
+    finally:
+        release_lock.set()
+        owner.join(timeout=10)
+        lifecycle.join(timeout=10)
+        for process in (owner, lifecycle):
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=10)
+
+    assert owner.exitcode == 0
+    assert lifecycle.exitcode == 0
+    assert (
+        tmp_path
+        / "private"
+        / "threads"
+        / f"{held_thread_id}.lock"
+    ).exists()
 
 
 def test_branch_missing_source_raises(tmp_path: Path) -> None:

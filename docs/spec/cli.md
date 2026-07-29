@@ -142,6 +142,13 @@ interactive input state.
   `reasoning/completion_load_failed` contract with no metadata.
 - Tests and embedded callers may construct two sessions in one process without
   requiring a global reset hook.
+- Thread lifecycle mutations use the same stable per-thread advisory lock
+  identities as chat persistence. Rename and branch acquire source and
+  destination locks in deterministic lexical order; archive, unarchive, and
+  delete hold the active thread lock for their complete mutation. Lifecycle
+  operations re-check source and destination state only after acquiring every
+  required lock. Lock files are stable coordination inodes and are never
+  removed by rename, archive, or delete.
 - Every exit path runs transcript auto-save and exit memory curation exactly
   once, in that order. EOF does not perform an additional inline save.
 - Both cleanup steps are attempted even if the first fails. Cleanup failures

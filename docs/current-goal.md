@@ -47,6 +47,12 @@ trustworthy 0.3.0 release candidate.
   coverage.
 - Focused file-storage, migration, and corrupt-record tests: 61 passed;
   pyright reported 0 errors and 0 warnings.
+- Thread lifecycle operations now lock every source/destination identity in
+  lexical order and never unlink lock files. Spawned-process tests prove
+  source and destination contention plus rename of the latest committed
+  snapshot.
+- Focused ThreadStore/chat/CLI lifecycle tests: 70 passed; pyright reported 0
+  errors and 0 warnings.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 
@@ -56,4 +62,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-ThreadStore lifecycle locking.
+Memory numeric default correctness.
